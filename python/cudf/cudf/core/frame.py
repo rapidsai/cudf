@@ -3255,17 +3255,18 @@ class Frame(libcudf.table.Table):
                 # double-argsort to map back from sorted to unsorted positions
                 df = df.take(index.argsort(ascending=True).argsort())
 
-        cols = {}
         index = index if index is not None else df.index
         names = columns if columns is not None else list(df.columns)
-        for name in names:
-            if name in df._data:
-                cols[name] = df._data[name].copy(deep=deep)
-            else:
-                dtype = dtypes.get(name, np.float64)
-                cols[name] = column_empty(
-                    dtype=dtype, masked=True, row_count=len(index)
-                )
+        cols = {name: (df._data[name].copy(deep=deep)
+                       if name in df._data
+                       else column_empty(
+                           dtype=dtypes.get(name, np.float64),
+                           masked=True,
+                           row_count=len(index)
+                       ))
+                for name in names
+                }
+
         result = self.__class__._from_table(
             Frame(
                 data=cudf.core.column_accessor.ColumnAccessor(

@@ -54,24 +54,22 @@ class _NestedGetItemDict(dict):
         return reduce(dict.__getitem__, key, self)
 
 
+def _to_flat_dict_inner(d, parents=()):
+    for k, v in d.items():
+        if not isinstance(v, d.__class__):
+            if parents:
+                k = parents + (k, )
+            yield (k, v)
+        else:
+            yield from _to_flat_dict_inner(d=v, parents=parents + (k, ))
+
+
 def _to_flat_dict(d):
     """
     Convert the given nested dictionary to a flat dictionary
     with tuple keys.
     """
-
-    def _inner(d, parents=None):
-        if parents is None:
-            parents = []
-        for k, v in d.items():
-            if not isinstance(v, d.__class__):
-                if parents:
-                    k = tuple(parents + [k])
-                yield (k, v)
-            else:
-                yield from _inner(d=v, parents=parents + [k])
-
-    return {k: v for k, v in _inner(d)}
+    return {k: v for k, v in _to_flat_dict_inner(d)}
 
 
 class ColumnAccessor(MutableMapping):
@@ -392,8 +390,11 @@ class ColumnAccessor(MutableMapping):
         self._clear_cache()
 
     def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
+        data = {k: self._grouped_data[k] for k in key}
+        if self.multiindex:
+            data = _to_flat_dict(data)
         return self.__class__(
-            _to_flat_dict({k: self._grouped_data[k] for k in key}),
+            data,
             multiindex=self.multiindex,
             level_names=self.level_names,
         )
@@ -403,7 +404,8 @@ class ColumnAccessor(MutableMapping):
         if isinstance(result, cudf.core.column.ColumnBase):
             return self.__class__({key: result})
         else:
-            result = _to_flat_dict(result)
+            if self.multiindex:
+                result = _to_flat_dict(result)
             if not isinstance(key, tuple):
                 key = (key,)
             return self.__class__(
