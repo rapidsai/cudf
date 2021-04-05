@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,15 @@
  * limitations under the License.
  */
 
-#include <jit/cache.h>
 #include <cudf/utilities/error.hpp>
 
-#include <errno.h>
-#include <fcntl.h>
-#include <pwd.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <boost/filesystem.hpp>
-
 #include <cuda.h>
+#include <boost/filesystem.hpp>
+#include <jitify2.hpp>
 
 namespace cudf {
 namespace jit {
+
 // Get the directory in home to use for storing the cache
 boost::filesystem::path get_user_home_cache_dir()
 {
@@ -62,7 +57,7 @@ boost::filesystem::path get_user_home_cache_dir()
  * are used and if $HOME is not defined, returns an empty path and file
  * caching is not used.
  */
-boost::filesystem::path getCacheDir()
+boost::filesystem::path get_cache_dir()
 {
   // The environment variable always overrides the
   // default/compile-time value of `LIBCUDF_KERNEL_CACHE_PATH`
@@ -98,158 +93,33 @@ boost::filesystem::path getCacheDir()
   return kernel_cache_path;
 }
 
-cudfJitCache::cudfJitCache() {}
-
-cudfJitCache::~cudfJitCache() {}
-
-std::mutex cudfJitCache::_kernel_cache_mutex;
-std::mutex cudfJitCache::_program_cache_mutex;
-
-named_prog<jitify::experimental::Program> cudfJitCache::getProgram(
-  std::string const& prog_name,
-  std::string const& cuda_source,
-  std::vector<std::string> const& given_headers,
-  std::vector<std::string> const& given_options,
-  jitify::experimental::file_callback_type file_callback)
+std::string get_program_cache_dir()
 {
-  // Lock for thread safety
-  std::lock_guard<std::mutex> lock(_program_cache_mutex);
-
-  return getCached(prog_name, program_map, [&]() {
-    CUDF_EXPECTS(not cuda_source.empty(), "Program not found in cache, Needs source string.");
-    return jitify::experimental::Program(cuda_source, given_headers, given_options, file_callback);
-  });
+#if defined(JITIFY_USE_CACHE)
+  return get_cache_dir().string();
+#elif
+  return {};
+#endif
 }
 
-named_prog<jitify::experimental::KernelInstantiation> cudfJitCache::getKernelInstantiation(
-  std::string const& kern_name,
-  named_prog<jitify::experimental::Program> const& named_program,
-  std::vector<std::string> const& arguments)
+jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData preprog)
 {
-  // Lock for thread safety
-  std::lock_guard<std::mutex> lock(_kernel_cache_mutex);
+  static std::mutex caches_mutex{};
+  static std::unordered_map<std::string, std::unique_ptr<jitify2::ProgramCache<>>> caches{};
 
-  std::string prog_name                  = std::get<0>(named_program);
-  jitify::experimental::Program& program = *std::get<1>(named_program);
+  std::lock_guard<std::mutex> caches_lock(caches_mutex);
 
-  // Make instance name e.g. "prog_binop.kernel_v_v_int_int_long int_Add"
-  std::string kern_inst_name = prog_name + '.' + kern_name;
-  for (auto&& arg : arguments) kern_inst_name += '_' + arg;
+  auto existing_cache = caches.find(preprog.name());
 
-  CUcontext c;
-  cuCtxGetCurrent(&c);
+  if (existing_cache == caches.end()) {
+    auto res = caches.insert(
+      {preprog.name(),
+       std::make_unique<jitify2::ProgramCache<>>(100, preprog, nullptr, get_program_cache_dir())});
 
-  auto& kernel_inst_map = kernel_inst_context_map[c];
-
-  return getCached(kern_inst_name, kernel_inst_map, [&]() {
-    return program.kernel(kern_name).instantiate(arguments);
-  });
-}
-
-// Another overload for getKernelInstantiation which might be useful to get
-// kernel instantiations in one step
-// ------------------------------------------------------------------------
-/*
-jitify::experimental::KernelInstantiation cudfJitCache::getKernelInstantiation(
-    std::string const& kern_name,
-    std::string const& prog_name,
-    std::string const& cuda_source = "",
-    std::vector<std::string> const& given_headers = {},
-    std::vector<std::string> const& given_options = {},
-    file_callback_type file_callback = nullptr)
-{
-    auto program = getProgram(prog_name,
-                              cuda_source,
-                              given_headers,
-                              given_options,
-                              file_callback);
-    return getKernelInstantiation(kern_name, program);
-}
-*/
-
-cudfJitCache::cacheFile::cacheFile(std::string file_name) : _file_name{file_name} {}
-
-cudfJitCache::cacheFile::~cacheFile() {}
-
-std::string cudfJitCache::cacheFile::read()
-{
-  // Open file (duh)
-  int fd = open(_file_name.c_str(), O_RDWR);
-  if (fd == -1) {
-    successful_read = false;
-    return std::string();
+    existing_cache = res.first;
   }
 
-  // Create args for file locking
-  flock fl{};
-  fl.l_type   = F_RDLCK;  // Shared lock for reading
-  fl.l_whence = SEEK_SET;
-
-  // Lock the file descriptor. Only reading is allowed now
-  if (fcntl(fd, F_SETLKW, &fl) == -1) {
-    successful_read = false;
-    return std::string();
-  }
-
-  // Get file descriptor from file pointer
-  FILE* fp = fdopen(fd, "rb");
-
-  // Get file length
-  fseek(fp, 0L, SEEK_END);
-  size_t file_size = ftell(fp);
-  rewind(fp);
-
-  // Allocate memory of file length size
-  std::string content;
-  content.resize(file_size);
-  char* buffer = &content[0];
-
-  // Copy file into buffer
-  if (fread(buffer, file_size, 1, fp) != 1) {
-    successful_read = false;
-    fclose(fp);
-    free(buffer);
-    return std::string();
-  }
-  fclose(fp);
-  successful_read = true;
-
-  return content;
-}
-
-void cudfJitCache::cacheFile::write(std::string content)
-{
-  // Open file and create if it doesn't exist, with access 0600
-  int fd = open(_file_name.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
-  if (fd == -1) {
-    successful_write = false;
-    return;
-  }
-
-  // Create args for file locking
-  flock fl{};
-  fl.l_type   = F_WRLCK;  // Exclusive lock for writing
-  fl.l_whence = SEEK_SET;
-
-  // Lock the file descriptor. we the only ones now
-  if (fcntl(fd, F_SETLKW, &fl) == -1) {
-    successful_write = false;
-    return;
-  }
-
-  // Get file descriptor from file pointer
-  FILE* fp = fdopen(fd, "wb");
-
-  // Copy string into file
-  if (fwrite(content.c_str(), content.length(), 1, fp) != 1) {
-    successful_write = false;
-    fclose(fp);
-    return;
-  }
-  fclose(fp);
-
-  successful_write = true;
-  return;
+  return *(existing_cache->second);
 }
 
 }  // namespace jit
