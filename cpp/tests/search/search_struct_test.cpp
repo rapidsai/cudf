@@ -116,61 +116,61 @@ TYPED_TEST(TypedStructSearchTest, SimpleInputWithNullsTests)
     })}.release();
 
   // Sorted asc, nulls first
-  auto child_col_t1 =
+  auto child_col_t =
     col_wrapper{{XXX, null, 0, 1, 2, 2, 2, 2, 3, 3, 4},
                 cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
-  auto const structs_t1 = structs_col{
-    {child_col_t1}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+  auto structs_t = structs_col{
+    {child_col_t}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return i != 0;
     })}.release();
 
   auto results =
-    search_bounds(structs_t1, structs_values, {cudf::order::ASCENDING}, {cudf::null_order::BEFORE});
+    search_bounds(structs_t, structs_values, {cudf::order::ASCENDING}, {cudf::null_order::BEFORE});
   auto expected_lower_bound = int32s_col{3, 1, 11, 0, 4, 11};
   auto expected_upper_bound = int32s_col{4, 2, 11, 1, 8, 11};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), print_all);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), print_all);
 
   // Sorted asc, nulls last
-  auto child_col_t2 =
+  child_col_t =
     col_wrapper{{0, 1, 2, 2, 2, 2, 3, 3, 4, null, XXX},
                 cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 9; })};
-  auto const structs_t2 = structs_col{
-    {child_col_t2}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+  structs_t = structs_col{
+    {child_col_t}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return i != 10;
     })}.release();
   results =
-    search_bounds(structs_t2, structs_values, {cudf::order::ASCENDING}, {cudf::null_order::AFTER});
+    search_bounds(structs_t, structs_values, {cudf::order::ASCENDING}, {cudf::null_order::AFTER});
   expected_lower_bound = int32s_col{1, 0, 10, 10, 2, 10};
   expected_upper_bound = int32s_col{1, 0, 10, 11, 6, 10};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), print_all);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), print_all);
 
   // Sorted dsc, nulls first
-  auto child_col_t3 =
+  child_col_t =
     col_wrapper{{XXX, null, 4, 3, 3, 2, 2, 2, 2, 1, 0},
                 cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 1; })};
-  auto const structs_t3 = structs_col{
-    {child_col_t3}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+  structs_t = structs_col{
+    {child_col_t}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return i != 0;
     })}.release();
   results =
-    search_bounds(structs_t2, structs_values, {cudf::order::ASCENDING}, {cudf::null_order::AFTER});
+    search_bounds(structs_t, structs_values, {cudf::order::ASCENDING}, {cudf::null_order::AFTER});
   expected_lower_bound = int32s_col{1, 0, 10, 10, 2, 10};
   expected_upper_bound = int32s_col{1, 0, 10, 11, 6, 10};
   //  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), print_all);
   //  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), print_all);
 
   // Sorted dsc, nulls last
-  auto child_col_t4 =
+  child_col_t =
     col_wrapper{{4, 3, 3, 2, 2, 2, 2, 1, 0, null, XXX},
                 cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 9; })};
-  auto const structs_t4 = structs_col{
-    {child_col_t4}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+  structs_t = structs_col{
+    {child_col_t}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
       return i != 10;
     })}.release();
   results =
-    search_bounds(structs_t2, structs_values, {cudf::order::ASCENDING}, {cudf::null_order::AFTER});
+    search_bounds(structs_t, structs_values, {cudf::order::ASCENDING}, {cudf::null_order::AFTER});
   expected_lower_bound = int32s_col{1, 0, 10, 10, 2, 10};
   expected_upper_bound = int32s_col{1, 0, 10, 11, 6, 10};
   //  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), print_all);
