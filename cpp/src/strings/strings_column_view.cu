@@ -76,16 +76,18 @@ std::pair<rmm::device_uvector<char>, rmm::device_uvector<size_type>> create_offs
                     [d_offsets] __device__(int32_t offset) {
                       return static_cast<size_type>(offset - d_offsets[0]);
                     });
-  // copy the chars column data
+
+  // get the input chars column byte offset
   auto const bytes = offsets.element(count, stream);
   auto const chars_offset =
     cudf::detail::get_value<offset_type>(strings.offsets(), strings.offset(), stream);
   stream.synchronize();
 
-  // bytes -= first;
+  // copy the chars column data
   const char* d_chars = strings.chars().data<char>() + chars_offset;
   rmm::device_uvector<char> chars(bytes, stream);
   CUDA_TRY(cudaMemcpyAsync(chars.data(), d_chars, bytes, cudaMemcpyDefault, stream.value()));
+
   // return offsets and chars
   return std::make_pair(std::move(chars), std::move(offsets));
 }
