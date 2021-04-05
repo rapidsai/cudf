@@ -16,9 +16,7 @@
 
 #pragma once
 
-#include <rolling/jit/code/code.h>
 #include <rolling/rolling_detail.hpp>
-#include <rolling/rolling_jit_detail.hpp>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -44,12 +42,11 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <jit/launcher.h>
-#include <jit/parser.h>
-#include <jit/type.h>
-#include <jit/bit.hpp.jit>
-#include <jit/rolling_jit_detail.hpp.jit>
-#include <jit/types.hpp.jit>
+#include <jit/cache.hpp>
+#include <jit/parser.hpp>
+#include <jit/type.hpp>
+
+#include <jit_preprocessed_files/rolling/jit/kernel.cu.jit.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
@@ -1270,19 +1267,15 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   std::string cuda_source;
   switch (udf_agg->kind) {
     case aggregation::Kind::PTX:
-      cuda_source = cudf::rolling::jit::code::kernel_headers;
       cuda_source +=
         cudf::jit::parse_single_function_ptx(udf_agg->_source,
                                              udf_agg->_function_name,
                                              cudf::jit::get_type_name(udf_agg->_output_type),
                                              {0, 5});  // args 0 and 5 are pointers.
-      cuda_source += cudf::rolling::jit::code::kernel;
       break;
     case aggregation::Kind::CUDA:
-      cuda_source = cudf::rolling::jit::code::kernel_headers;
       cuda_source +=
         cudf::jit::parse_single_function_cuda(udf_agg->_source, udf_agg->_function_name);
-      cuda_source += cudf::rolling::jit::code::kernel;
       break;
     default: CUDF_FAIL("Unsupported UDF type.");
   }
@@ -1293,37 +1286,26 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   auto output_view = output->mutable_view();
   rmm::device_scalar<size_type> device_valid_count{0, stream};
 
-  const std::vector<std::string> compiler_flags{"-std=c++14",
-                                                // Have jitify prune unused global variables
-                                                "-remove-unused-globals",
-                                                // suppress all NVRTC warnings
-                                                "-w"};
+  std::string kernel_name =
+    jitify2::reflection::Template("cudf::rolling::jit::gpu_rolling_new")  //
+      .instantiate(cudf::jit::get_type_name(input.type()),  // list of template arguments
+                   cudf::jit::get_type_name(output->type()),
+                   udf_agg->_operator_name,
+                   preceding_window_str.c_str(),
+                   following_window_str.c_str());
 
-  // Launch the jitify kernel
-  cudf::jit::launcher(hash,
-                      cuda_source,
-                      {cudf_types_hpp,
-                       cudf_utilities_bit_hpp,
-                       cudf::rolling::jit::code::operation_h,
-                       ___src_rolling_rolling_jit_detail_hpp},
-                      compiler_flags,
-                      nullptr,
-                      stream)
-    .set_kernel_inst("gpu_rolling_new",  // name of the kernel we are launching
-                     {cudf::jit::get_type_name(input.type()),  // list of template arguments
-                      cudf::jit::get_type_name(output->type()),
-                      udf_agg->_operator_name,
-                      preceding_window_str.c_str(),
-                      following_window_str.c_str()})
-    .launch(input.size(),
-            cudf::jit::get_data_ptr(input),
-            input.null_mask(),
-            cudf::jit::get_data_ptr(output_view),
-            output_view.null_mask(),
-            device_valid_count.data(),
-            preceding_window,
-            following_window,
-            min_periods);
+  cudf::jit::get_program_cache(*rolling_jit_kernel_cu_jit)
+    .get_kernel(kernel_name, {}, {{"rolling/jit/operation-udf.hpp", cuda_source}})  //
+    ->configure_1d_max_occupancy(0, 0, 0, stream.value())                           //
+    ->launch(input.size(),
+             cudf::jit::get_data_ptr(input),
+             input.null_mask(),
+             cudf::jit::get_data_ptr(output_view),
+             output_view.null_mask(),
+             device_valid_count.data(),
+             preceding_window,
+             following_window,
+             min_periods);
 
   output->set_null_count(output->size() - device_valid_count.value(stream));
 
