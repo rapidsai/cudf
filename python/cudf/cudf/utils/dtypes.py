@@ -306,7 +306,7 @@ def cudf_dtype_to_pa_type(dtype):
 
 
 def cudf_dtype_from_pa_type(typ):
-    """ Given a cuDF Python dtype, converts it into the equivalent
+    """ Given a cuDF pyarrow dtype, converts it into the equivalent
         cudf pandas dtype.
     """
     if pa.types.is_list(typ):

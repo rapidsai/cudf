@@ -125,7 +125,9 @@ class StructMethods(ColumnMethodsMixin):
 
         Parameters
         ----------
-        index : int
+        key: int or str
+            index/position or field name of the respective
+            struct column
 
         Returns
         -------
@@ -135,6 +137,10 @@ class StructMethods(ColumnMethodsMixin):
         --------
         >>> s = cudf.Series([{'a': 1, 'b': 2}, {'a': 3, 'b': 4}])
         >>> s.struct.field(0)
+        0    1
+        1    3
+        dtype: int64
+        >>> s.struct.field('a')
         0    1
         1    3
         dtype: int64
