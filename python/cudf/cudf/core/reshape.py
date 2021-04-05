@@ -217,32 +217,22 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
         if ignore_index:
             if axis == 1:
-                index = obj.index.copy(deep=True)
-                columns = pd.RangeIndex(len(obj._data.names))
+                result = cudf.DataFrame(data=obj._data.copy(deep=True),
+                                        index=obj.index.copy(deep=True))
+                # The DataFrame constructor for dict-like data (such as the
+                # ColumnAccessor given by obj._data here) will drop any columns
+                # in the data that are not in `columns`, so we have to rename
+                # after construction.
+                result.columns = pd.RangeIndex(len(obj._data.names))
             elif axis == 0:
                 # TODO: This will disagree with pandas when the input object is
                 # a Series, it will upcast.
-                index = cudf.RangeIndex(len(obj))
-                columns = None
-            result = cudf.DataFrame(data=obj._data.copy(deep=True),
-                                    index=index, columns=columns)
+                result = cudf.DataFrame(data=obj._data.copy(deep=True),
+                                        index=cudf.RangeIndex(len(obj)))
         else:
             result = obj.copy()
 
-        if sort:
-            if axis == 0:
-                return result.sort_index()
-            elif not result.columns.is_monotonic:
-                # TODO: The below TODO should be addressable now, need to
-                # determine how to sort the columns.
-                # TODO: Sorting by columns can be done
-                # once the following issue is fixed:
-                # https://github.com/rapidsai/cudf/issues/6821
-                raise NotImplementedError(
-                    "Sorting by columns is not yet supported"
-                )
-        else:
-            return result
+        return result.sort_index(axis=axis) if sort else result
 
     # Retrieve the base types of `objs`. In order to support sub-types
     # and object wrappers, we use `isinstance()` instead of comparing
