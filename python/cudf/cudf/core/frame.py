@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import functools
 import warnings
 from collections import OrderedDict, abc as abc
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, TypeVar, Union
@@ -13,7 +12,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
-from pandas.api.types import is_dict_like, is_dtype_equal
+from pandas.api.types import is_dict_like
 
 import cudf
 from cudf import _lib as libcudf
@@ -21,11 +20,8 @@ from cudf._typing import ColumnLike, DataFrameOrSeries
 from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.core.join import merge
 from cudf.utils.dtypes import (
-    is_categorical_dtype,
     is_column_like,
-    is_numerical_dtype,
     is_scalar,
-    min_scalar_type,
 )
 
 T = TypeVar("T", bound="Frame")
@@ -292,195 +288,6 @@ class Frame(libcudf.table.Table):
             new_frame._index = None
 
         return new_frame
-
-    @classmethod
-    @annotate("CONCAT", color="orange", domain="cudf_python")
-    def _concat(
-        cls, objs, axis=0, join="outer", ignore_index=False, sort=False
-    ):
-        # shallow-copy the input DFs in case the same DF instance
-        # is concatenated with itself
-
-        # flag to indicate at least one empty input frame also has an index
-        empty_has_index = False
-        # length of output frame's RangeIndex if all input frames are empty,
-        # and at least one has an index
-        result_index_length = 0
-        # the number of empty input frames
-        num_empty_input_frames = 0
-
-        for i, obj in enumerate(objs):
-            objs[i] = obj.copy(deep=False)
-            if ignore_index:
-                # If ignore_index is true, determine if
-                # all or some objs are empty(and have index).
-                # 1. If all objects are empty(and have index), we
-                # should set the index separately using RangeIndex.
-                # 2. If some objects are empty(and have index), we
-                # create empty columns later while populating `columns`
-                # variable. Detailed explanation of second case before
-                # allocation of `columns` variable below.
-                if obj.empty:
-                    num_empty_input_frames += 1
-                    result_index_length += len(obj)
-                    empty_has_index = empty_has_index or len(obj) > 0
-
-        if join == "inner":
-            all_columns_list = [obj._column_names for obj in objs]
-            # get column names present in ALL objs
-            intersecting_columns = functools.reduce(
-                np.intersect1d, all_columns_list
-            )
-            # get column names not present in all objs
-            union_of_columns = functools.reduce(
-                pd.Index.union, [obj.columns for obj in objs]
-            )
-            non_intersecting_columns = union_of_columns.symmetric_difference(
-                intersecting_columns
-            )
-            names = OrderedDict.fromkeys(intersecting_columns).keys()
-
-            if axis == 0:
-                if ignore_index and (
-                    num_empty_input_frames > 0
-                    or len(intersecting_columns) == 0
-                ):
-                    # When ignore_index is True and if there is
-                    # at least 1 empty dataframe and no
-                    # intersecting columns are present, an empty dataframe
-                    # needs to be returned just with an Index.
-                    empty_has_index = True
-                    num_empty_input_frames = len(objs)
-                    result_index_length = sum(len(obj) for obj in objs)
-
-                objs = [obj.copy(deep=False) for obj in objs]
-                # remove columns not present in all objs
-                for obj in objs:
-                    obj.drop(
-                        columns=non_intersecting_columns,
-                        inplace=True,
-                        errors="ignore",
-                    )
-        elif join == "outer":
-            # Get a list of the unique table column names
-            names = [name for f in objs for name in f._column_names]
-            names = OrderedDict.fromkeys(names).keys()
-
-        else:
-            raise ValueError(
-                "Only can inner (intersect) or outer (union) when joining"
-                "the other axis"
-            )
-
-        try:
-            if sort:
-                names = list(sorted(names))
-            else:
-                names = list(names)
-        except TypeError:
-            names = list(names)
-
-        # Combine the index and table columns for each Frame into a list of
-        # [...index_cols, ...table_cols].
-        #
-        # If any of the input frames have a non-empty index, include these
-        # columns in the list of columns to concatenate, even if the input
-        # frames are empty and `ignore_index=True`.
-        columns = [
-            (
-                []
-                if (ignore_index and not empty_has_index)
-                else list(f._index._data.columns)
-            )
-            + [f._data[name] if name in f._data else None for name in names]
-            for i, f in enumerate(objs)
-        ]
-
-        # Get a list of the combined index and table column indices
-        indices = list(range(functools.reduce(max, map(len, columns))))
-        # The position of the first table colum in each
-        # combined index + table columns list
-        first_data_column_position = len(indices) - len(names)
-
-        # Get the non-null columns and their dtypes
-        non_null_cols, dtypes = _get_non_null_cols_and_dtypes(indices, columns)
-
-        # Infer common dtypes between numeric columns
-        # and combine CategoricalColumn categories
-        categories = _find_common_dtypes_and_categories(non_null_cols, dtypes)
-
-        # Cast all columns to a common dtype, assign combined categories,
-        # and back-fill missing columns with all-null columns
-        _cast_cols_to_common_dtypes(indices, columns, dtypes, categories)
-
-        # Construct input tables with the index and data columns in the same
-        # order. This strips the given index/column names and replaces the
-        # names with their integer positions in the `cols` list
-        tables = []
-        for cols in columns:
-            table_index = None
-            if 1 == first_data_column_position:
-                table_index = cudf.core.index.as_index(cols[0])
-            elif first_data_column_position > 1:
-                table_index = libcudf.table.Table(
-                    data=dict(
-                        zip(
-                            indices[:first_data_column_position],
-                            cols[:first_data_column_position],
-                        )
-                    )
-                )
-            tables.append(
-                libcudf.table.Table(
-                    data=dict(
-                        zip(
-                            indices[first_data_column_position:],
-                            cols[first_data_column_position:],
-                        )
-                    ),
-                    index=table_index,
-                )
-            )
-
-        # Concatenate the Tables
-        out = cls._from_table(
-            libcudf.concat.concat_tables(tables, ignore_index=ignore_index)
-        )
-
-        # If ignore_index is True, all input frames are empty, and at
-        # least one input frame has an index, assign a new RangeIndex
-        # to the result frame.
-        if empty_has_index and num_empty_input_frames == len(objs):
-            out._index = cudf.RangeIndex(result_index_length)
-        # Reassign the categories for any categorical table cols
-        _reassign_categories(
-            categories, out._data, indices[first_data_column_position:]
-        )
-
-        # Reassign the categories for any categorical index cols
-        if not isinstance(out._index, cudf.RangeIndex):
-            _reassign_categories(
-                categories,
-                out._index._data,
-                indices[:first_data_column_position],
-            )
-            if not isinstance(
-                out._index, cudf.MultiIndex
-            ) and is_categorical_dtype(out._index._values.dtype):
-                out = out.set_index(
-                    cudf.core.index.as_index(out.index._values)
-                )
-
-        # Reassign index and column names
-        if isinstance(objs[0].columns, pd.MultiIndex):
-            out.columns = objs[0].columns
-        else:
-            out.columns = names
-        if not ignore_index:
-            out._index.name = objs[0]._index.name
-            out._index.names = objs[0]._index.names
-
-        return out
 
     def equals(self, other, **kwargs):
         """
@@ -3443,104 +3250,6 @@ def _get_dictionary_array(array):
         return pa.array([], type=pa.null())
     else:
         return array
-
-
-# Create a dictionary of the common, non-null columns
-def _get_non_null_cols_and_dtypes(col_idxs, list_of_columns):
-    # A mapping of {idx: np.dtype}
-    dtypes = dict()
-    # A mapping of {idx: [...columns]}, where `[...columns]`
-    # is a list of columns with at least one valid value for each
-    # column name across all input frames
-    non_null_columns = dict()
-    for idx in col_idxs:
-        for cols in list_of_columns:
-            # Skip columns not in this frame
-            if idx >= len(cols) or cols[idx] is None:
-                continue
-            # Store the first dtype we find for a column, even if it's
-            # all-null. This ensures we always have at least one dtype
-            # for each name. This dtype will be overwritten later if a
-            # non-null Column with the same name is found.
-            if idx not in dtypes:
-                dtypes[idx] = cols[idx].dtype
-            if cols[idx].valid_count > 0:
-                if idx not in non_null_columns:
-                    non_null_columns[idx] = [cols[idx]]
-                else:
-                    non_null_columns[idx].append(cols[idx])
-    return non_null_columns, dtypes
-
-
-def _find_common_dtypes_and_categories(non_null_columns, dtypes):
-    # A mapping of {idx: categories}, where `categories` is a
-    # column of all the unique categorical values from each
-    # categorical column across all input frames
-    categories = dict()
-    for idx, cols in non_null_columns.items():
-        # default to the first non-null dtype
-        dtypes[idx] = cols[0].dtype
-        # If all the non-null dtypes are int/float, find a common dtype
-        if all(is_numerical_dtype(col.dtype) for col in cols):
-            dtypes[idx] = np.find_common_type([col.dtype for col in cols], [])
-        # If all categorical dtypes, combine the categories
-        elif all(
-            isinstance(col, cudf.core.column.CategoricalColumn) for col in cols
-        ):
-            # Combine and de-dupe the categories
-            categories[idx] = (
-                cudf.concat([col.cat().categories for col in cols])
-                .to_series()
-                .drop_duplicates(ignore_index=True)
-                ._column
-            )
-            # Set the column dtype to the codes' dtype. The categories
-            # will be re-assigned at the end
-            dtypes[idx] = min_scalar_type(len(categories[idx]))
-        # Otherwise raise an error if columns have different dtypes
-        elif not all(is_dtype_equal(c.dtype, dtypes[idx]) for c in cols):
-            raise ValueError("All columns must be the same type")
-    return categories
-
-
-def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
-    # Cast all columns to a common dtype, assign combined categories,
-    # and back-fill missing columns with all-null columns
-    for idx in col_idxs:
-        dtype = dtypes[idx]
-        for cols in list_of_columns:
-            # If column not in this df, fill with an all-null column
-            if idx >= len(cols) or cols[idx] is None:
-                n = len(next(x for x in cols if x is not None))
-                cols[idx] = column_empty(row_count=n, dtype=dtype, masked=True)
-            else:
-                # If column is categorical, rebase the codes with the
-                # combined categories, and cast the new codes to the
-                # min-scalar-sized dtype
-                if idx in categories:
-                    cols[idx] = (
-                        cols[idx]
-                        .cat()
-                        ._set_categories(
-                            cols[idx].cat().categories,
-                            categories[idx],
-                            is_unique=True,
-                        )
-                        .codes
-                    )
-                cols[idx] = cols[idx].astype(dtype)
-
-
-def _reassign_categories(categories, cols, col_idxs):
-    for name, idx in zip(cols, col_idxs):
-        if idx in categories:
-            cols[name] = build_categorical_column(
-                categories=categories[idx],
-                codes=as_column(cols[name].base_data, dtype=cols[name].dtype),
-                mask=cols[name].base_mask,
-                offset=cols[name].offset,
-                size=cols[name].size,
-            )
 
 
 def _is_series(obj):
