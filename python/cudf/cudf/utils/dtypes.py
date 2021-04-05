@@ -111,6 +111,7 @@ SCALAR_TYPES = (
     | DATETIME_TYPES
 )
 
+
 def np_to_pa_dtype(dtype):
     """Util to convert numpy dtype to PyArrow dtype.
     """

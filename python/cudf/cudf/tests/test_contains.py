@@ -1,5 +1,6 @@
 from datetime import datetime as dt
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -7,6 +8,7 @@ from cudf import Series
 from cudf.core.index import RangeIndex, as_index
 from cudf.tests.utils import assert_eq
 from cudf.utils.dtypes import SCALAR_TYPES
+
 
 def cudf_date_series(start, stop, freq):
     return Series(pd.date_range(start, stop, freq=freq, name="times"))
@@ -72,6 +74,7 @@ def test_index_contains(values, item, expected):
 def test_rangeindex_contains():
     assert_eq(True, 9 in RangeIndex(start=0, stop=10, name="Index"))
     assert_eq(False, 10 in RangeIndex(start=0, stop=10, name="Index"))
+
 
 @pytest.mark.parametrize("dtype", SCALAR_TYPES)
 def test_lists_contains(dtype):
