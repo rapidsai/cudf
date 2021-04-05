@@ -145,7 +145,10 @@ def extract_element(Column col, size_type index):
     return result
 
 
-def contains_scalar(Column col, DeviceScalar search_key):
+def contains_scalar(Column col, object py_search_key):
+
+    cdef DeviceScalar search_key = py_search_key.device_value
+
     cdef shared_ptr[lists_column_view] list_view = (
         make_shared[lists_column_view](col.view())
     )
