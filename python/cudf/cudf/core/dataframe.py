@@ -2526,34 +2526,38 @@ class DataFrame(Frame, Serializable):
 
         for i, obj in enumerate(objs):
             objs[i] = obj.copy(deep=False)
-            if ignore_index:
-                # If ignore_index is true, determine if
-                # all or some objs are empty(and have index).
-                # 1. If all objects are empty(and have index), we
-                # should set the index separately using RangeIndex.
-                # 2. If some objects are empty(and have index), we
-                # create empty columns later while populating `columns`
-                # variable. Detailed explanation of second case before
-                # allocation of `columns` variable below.
-                if obj.empty:
-                    num_empty_input_frames += 1
-                    result_index_length += len(obj)
-                    empty_has_index = empty_has_index or len(obj) > 0
+
+            # If ignore_index is true, determine if
+            # all or some objs are empty(and have index).
+            # 1. If all objects are empty(and have index), we
+            # should set the index separately using RangeIndex.
+            # 2. If some objects are empty(and have index), we
+            # create empty columns later while populating `columns`
+            # variable. Detailed explanation of second case before
+            # allocation of `columns` variable below.
+            if ignore_index and obj.empty:
+                num_empty_input_frames += 1
+                result_index_length += len(obj)
+                empty_has_index = empty_has_index or len(obj) > 0
 
         if join == "inner":
-            all_columns_list = [obj._column_names for obj in objs]
-            # get column names present in ALL objs
+            sets_of_column_names = [set(obj._column_names) for obj in objs]
+
             intersecting_columns = functools.reduce(
-                np.intersect1d, all_columns_list
-            )
-            # get column names not present in all objs
+                set.intersection, sets_of_column_names)
             union_of_columns = functools.reduce(
-                pd.Index.union, [obj.columns for obj in objs]
-            )
+                set.union, sets_of_column_names)
             non_intersecting_columns = union_of_columns.symmetric_difference(
                 intersecting_columns
             )
-            names = OrderedDict.fromkeys(intersecting_columns).keys()
+
+            # Get an ordered list of the intersecting columns to preserve input
+            # order, which is promised by pandas for inner joins.
+            ordered_intersecting_columns = [
+                name for obj in objs for name in obj._column_names
+                if name in intersecting_columns]
+
+            names = OrderedDict.fromkeys(ordered_intersecting_columns).keys()
 
             if axis == 0:
                 if ignore_index and (
@@ -2568,7 +2572,6 @@ class DataFrame(Frame, Serializable):
                     num_empty_input_frames = len(objs)
                     result_index_length = sum(len(obj) for obj in objs)
 
-                objs = [obj.copy(deep=False) for obj in objs]
                 # remove columns not present in all objs
                 for obj in objs:
                     obj.drop(
@@ -2587,12 +2590,14 @@ class DataFrame(Frame, Serializable):
                 "the other axis"
             )
 
-        try:
-            if sort:
-                names = list(sorted(names))
-            else:
+        if sort:
+            try:
+                # Sorted always returns a list, but will fail to sort if names
+                # include different types that are not comparable.
+                names = sorted(names)
+            except TypeError:
                 names = list(names)
-        except TypeError:
+        else:
             names = list(names)
 
         # Combine the index and table columns for each Frame into a list of
@@ -2608,7 +2613,7 @@ class DataFrame(Frame, Serializable):
                 else list(f._index._data.columns)
             )
             + [f._data[name] if name in f._data else None for name in names]
-            for i, f in enumerate(objs)
+            for f in objs
         ]
 
         # Get a list of the combined index and table column indices
