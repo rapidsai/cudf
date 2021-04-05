@@ -138,6 +138,15 @@ enum class nan_policy : bool {
 };
 
 /**
+ * @brief Enum to consider different elements (of floating point types) holding NaN value as equal
+ * or unequal
+ */
+enum class nan_equality /*unspecified*/ {
+  ALL_EQUAL,  ///< All NaNs compare equal, regardless of sign
+  UNEQUAL     ///< All NaNs compare unequal (IEEE754 behavior)
+};
+
+/**
  * @brief
  */
 enum class null_equality : bool {
@@ -329,6 +338,11 @@ enum class hash_id {
   HASH_SERIAL_MURMUR3,  ///< Serial Murmur3 hash function
   HASH_SPARK_MURMUR3    ///< Spark Murmur3 hash function
 };
+
+/**
+ * @brief The default seed value for hash functions
+ */
+static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 
 /** @} */
 }  // namespace cudf

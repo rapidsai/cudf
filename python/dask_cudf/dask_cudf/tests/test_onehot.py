@@ -3,9 +3,9 @@ import pytest
 
 from dask import dataframe as dd
 
-import dask_cudf
-
 import cudf
+
+import dask_cudf
 
 
 def test_get_dummies_cat():
@@ -100,4 +100,23 @@ def test_get_dummies_large():
         dd.get_dummies(ddf).compute(),
         dd.get_dummies(gddf).compute(),
         check_dtype=False,
+    )
+
+
+def test_get_dummies_categorical():
+    # https://github.com/rapidsai/cudf/issues/7111
+    gdf = cudf.DataFrame({"A": ["a", "b", "b"], "B": [1, 2, 3]})
+    pdf = gdf.to_pandas()
+
+    gddf = dask_cudf.from_cudf(gdf, npartitions=1)
+    gddf = gddf.categorize(columns=["B"])
+
+    pddf = dd.from_pandas(pdf, npartitions=1)
+    pddf = pddf.categorize(columns=["B"])
+
+    expect = dd.get_dummies(pddf, columns=["B"])
+    got = dd.get_dummies(gddf, columns=["B"])
+
+    dd.assert_eq(
+        expect, got,
     )
