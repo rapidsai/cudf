@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
+#include "rolling_detail.cuh"
+#include "rolling_jit_detail.hpp"
+
 #include <cudf/detail/iterator.cuh>
 #include <cudf/unary.hpp>
-#include "rolling_detail.cuh"
 
 namespace cudf {
 
