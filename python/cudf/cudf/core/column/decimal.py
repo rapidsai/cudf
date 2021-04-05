@@ -113,8 +113,7 @@ class DecimalColumn(ColumnBase):
                 scale=scale, precision=Decimal64Dtype.MAX_PRECISION
             )  # precision will be ignored, libcudf has no notion of precision
             result = libcudf.binaryop.binaryop(self, other, op, output_type)
-            result_precision = _binop_precision(self.dtype, other.dtype, op)
-            result.dtype.precision = result_precision
+            result.dtype.precision = _binop_precision(self.dtype, other.dtype, op)
         elif op in ("eq", "lt", "gt", "le", "ge"):
             if not isinstance(
                 other,
