@@ -32,7 +32,7 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/detail/column_utilities.hpp>
 
-#include <jit/type.h>
+#include <jit/type.hpp>
 
 #include <rmm/exec_policy.hpp>
 
