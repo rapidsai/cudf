@@ -175,10 +175,12 @@ ConfigureBench(BINARYOP_BENCH binaryop/binaryop_benchmark.cu)
 ###################################################################################################
 # - nvtext benchmark -------------------------------------------------------------------
 ConfigureBench(TEXT_BENCH
+  text/ngrams_benchmark.cpp
   text/normalize_benchmark.cpp
   text/normalize_spaces_benchmark.cpp
-  text/tokenize_benchmark.cpp
-  text/subword_benchmark.cpp)
+  text/replace_benchmark.cpp
+  text/subword_benchmark.cpp
+  text/tokenize_benchmark.cpp)
 
 ###################################################################################################
 # - strings benchmark -------------------------------------------------------------------
@@ -200,3 +202,8 @@ ConfigureBench(STRINGS_BENCH
   string/substring_benchmark.cpp
   string/translate_benchmark.cpp
   string/url_decode_benchmark.cpp)
+
+###################################################################################################
+# - json benchmark -------------------------------------------------------------------
+ConfigureBench(JSON_BENCH
+  string/json_benchmark.cpp)

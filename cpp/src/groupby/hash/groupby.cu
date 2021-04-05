@@ -110,7 +110,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   data_type result_type;
   cudf::detail::result_cache* sparse_results;
   cudf::detail::result_cache* dense_results;
-  rmm::device_vector<size_type> const& gather_map;
+  device_span<size_type const> gather_map;
   size_type const map_size;
   Map const& map;
   bitmask_type const* __restrict__ row_bitmask;
@@ -122,7 +122,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
                               column_view col,
                               cudf::detail::result_cache* sparse_results,
                               cudf::detail::result_cache* dense_results,
-                              rmm::device_vector<size_type> const& gather_map,
+                              device_span<size_type const> gather_map,
                               size_type map_size,
                               Map const& map,
                               bitmask_type const* row_bitmask,
@@ -272,7 +272,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
 
 // flatten aggs to filter in single pass aggs
 std::tuple<table_view, std::vector<aggregation::Kind>, std::vector<size_t>>
-flatten_single_pass_aggs(std::vector<aggregation_request> const& requests)
+flatten_single_pass_aggs(host_span<aggregation_request const> requests)
 {
   std::vector<column_view> columns;
   std::vector<aggregation::Kind> agg_kinds;
@@ -311,10 +311,10 @@ flatten_single_pass_aggs(std::vector<aggregation_request> const& requests)
  */
 template <typename Map>
 void sparse_to_dense_results(table_view const& keys,
-                             std::vector<aggregation_request> const& requests,
+                             host_span<aggregation_request const> requests,
                              cudf::detail::result_cache* sparse_results,
                              cudf::detail::result_cache* dense_results,
-                             rmm::device_vector<size_type> const& gather_map,
+                             device_span<size_type const> gather_map,
                              size_type map_size,
                              Map const& map,
                              bool keys_have_nulls,
@@ -421,7 +421,7 @@ auto create_sparse_results_table(table_view const& flattened_values,
  */
 template <bool keys_have_nulls, typename Map>
 void compute_single_pass_aggs(table_view const& keys,
-                              std::vector<aggregation_request> const& requests,
+                              host_span<aggregation_request const> requests,
                               cudf::detail::result_cache* sparse_results,
                               Map& map,
                               null_policy include_null_keys,
@@ -469,10 +469,10 @@ void compute_single_pass_aggs(table_view const& keys,
  * `map`.
  */
 template <typename Map>
-std::pair<rmm::device_vector<size_type>, size_type> extract_populated_keys(
+std::pair<rmm::device_uvector<size_type>, size_type> extract_populated_keys(
   Map map, size_type num_keys, rmm::cuda_stream_view stream)
 {
-  rmm::device_vector<size_type> populated_keys(num_keys);
+  rmm::device_uvector<size_type> populated_keys(num_keys, stream);
 
   auto get_key = [] __device__(auto const& element) {
     size_type key, value;
@@ -520,7 +520,7 @@ std::pair<rmm::device_vector<size_type>, size_type> extract_populated_keys(
  */
 template <bool keys_have_nulls>
 std::unique_ptr<table> groupby_null_templated(table_view const& keys,
-                                              std::vector<aggregation_request> const& requests,
+                                              host_span<aggregation_request const> requests,
                                               cudf::detail::result_cache* cache,
                                               null_policy include_null_keys,
                                               rmm::cuda_stream_view stream,
@@ -539,9 +539,9 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
 
   // Extract the populated indices from the hash map and create a gather map.
   // Gathering using this map from sparse results will give dense results.
-  rmm::device_vector<size_type> gather_map;
-  size_type map_size;
-  std::tie(gather_map, map_size) = extract_populated_keys(*map, keys.num_rows(), stream);
+  auto map_and_size = extract_populated_keys(*map, keys.num_rows(), stream);
+  rmm::device_uvector<size_type> gather_map{std::move(map_and_size.first)};
+  size_type const map_size = map_and_size.second;
 
   // Compact all results from sparse_results and insert into cache
   sparse_to_dense_results(keys,
@@ -576,7 +576,7 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
  * @return true A hash-based groupby should be used
  * @return false A hash-based groupby should not be used
  */
-bool can_use_hash_groupby(table_view const& keys, std::vector<aggregation_request> const& requests)
+bool can_use_hash_groupby(table_view const& keys, host_span<aggregation_request const> requests)
 {
   return std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
     return std::all_of(r.aggregations.begin(), r.aggregations.end(), [](auto const& a) {
@@ -588,7 +588,7 @@ bool can_use_hash_groupby(table_view const& keys, std::vector<aggregation_reques
 // Hash-based groupby
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   table_view const& keys,
-  std::vector<aggregation_request> const& requests,
+  host_span<aggregation_request const> requests,
   null_policy include_null_keys,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)

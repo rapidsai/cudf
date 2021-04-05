@@ -1,22 +1,85 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
-import itertools
+from __future__ import annotations
 
-import pandas as pd
+import functools
+from collections import namedtuple
+from typing import TYPE_CHECKING, Callable, Tuple
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.join import compute_result_col_names
-from cudf.core.join.casting_logic import (
-    _input_to_libcudf_castrules_any,
-    _libcudf_to_output_castrules,
+from cudf.core.join._join_helpers import (
+    _coerce_to_tuple,
+    _frame_select_by_indexers,
+    _Indexer,
+    _match_join_keys,
 )
+
+if TYPE_CHECKING:
+    from cudf.core.frame import Frame
+
+
+def merge(
+    lhs,
+    rhs,
+    *,
+    on,
+    left_on,
+    right_on,
+    left_index,
+    right_index,
+    how,
+    sort,
+    method,
+    indicator,
+    suffixes,
+):
+    if how in {"leftsemi", "leftanti"}:
+        merge_cls = MergeSemi
+    else:
+        merge_cls = Merge
+    mergeobj = merge_cls(
+        lhs,
+        rhs,
+        on=on,
+        left_on=left_on,
+        right_on=right_on,
+        left_index=left_index,
+        right_index=right_index,
+        how=how,
+        sort=sort,
+        method=method,
+        indicator=indicator,
+        suffixes=suffixes,
+    )
+    return mergeobj.perform_merge()
+
+
+_JoinKeys = namedtuple("JoinKeys", ["left", "right"])
 
 
 class Merge(object):
+    # A namedtuple of indexers representing the left and right keys
+    _keys: _JoinKeys
+
+    # The joiner function must have the following signature:
+    #
+    #     def joiner(
+    #         lhs: Frame,
+    #         rhs: Frame
+    #     ) -> Tuple[Optional[Column], Optional[Column]]:
+    #          ...
+    #
+    # where `lhs` and `rhs` are Frames composed of the left and right
+    # join key. The `joiner` returns a tuple of two Columns
+    # representing the rows to gather from the left- and right- side
+    # tables respectively.
+    _joiner: Callable
+
     def __init__(
         self,
         lhs,
         rhs,
+        *,
         on,
         left_on,
         right_on,
@@ -24,8 +87,6 @@ class Merge(object):
         right_index,
         how,
         sort,
-        lsuffix,
-        rsuffix,
         method,
         indicator,
         suffixes,
@@ -60,140 +121,263 @@ class Merge(object):
         sort : bool
             Boolean flag indicating if the output Frame is to be
             sorted on the output's join keys, in left to right order.
-        lsuffix : string
-            The suffix to be appended to left hand column names that
-            are found to exist in the right frame, but are not specified
-            as join keys themselves.
-        rsuffix : string
-            The suffix to be appended to right hand column names that
-            are found to exist in the left frame, but are not specified
-            as join keys themselves.
         suffixes : list like
             Left and right suffixes specified together, unpacked into lsuffix
             and rsuffix.
         """
-        self.lhs = lhs
-        self.rhs = rhs
-        self.left_index = left_index
-        self.right_index = right_index
-        self.method = method
-        self.sort = sort
-
-        # check that the merge is valid
-
-        self.validate_merge_cfg(
+        self._validate_merge_params(
             lhs,
             rhs,
-            on,
-            left_on,
-            right_on,
-            left_index,
-            right_index,
-            how,
-            lsuffix,
-            rsuffix,
-            suffixes,
+            on=on,
+            left_on=left_on,
+            right_on=right_on,
+            left_index=left_index,
+            right_index=right_index,
+            how=how,
+            suffixes=suffixes,
         )
+        self._joiner = functools.partial(libcudf.join.join, how=how)
+
+        self.lhs = lhs
+        self.rhs = rhs
+        self.on = on
+        self.left_on = left_on
+        self.right_on = right_on
+        self.left_index = left_index
+        self.right_index = right_index
         self.how = how
-        self.preprocess_merge_params(
-            on, left_on, right_on, lsuffix, rsuffix, suffixes
-        )
+        self.sort = sort
+        if suffixes:
+            self.lsuffix, self.rsuffix = suffixes
+        self._compute_join_keys()
 
-    def perform_merge(self):
-        """
-        Call libcudf to perform a merge between the operands. If
-        necessary, cast the input key columns to compatible types.
-        Potentially also cast the output back to categorical.
-        """
-        output_dtypes = self.compute_output_dtypes()
-        self.typecast_input_to_libcudf()
-        libcudf_result = libcudf.join.join(
-            self.lhs,
-            self.rhs,
-            self.how,
-            self.method,
-            left_on=self.left_on,
-            right_on=self.right_on,
-            left_index=self.left_index,
-            right_index=self.right_index,
-        )
-        result = self.out_class._from_table(libcudf_result)
-        result = self.typecast_libcudf_to_output(result, output_dtypes)
-        if isinstance(result, cudf.Index):
-            return result
-        else:
-            return result[
-                compute_result_col_names(self.lhs, self.rhs, self.how)
-            ]
+    @property
+    def _out_class(self):
+        # type of the result
+        out_class = cudf.DataFrame
 
-    def preprocess_merge_params(
-        self, on, left_on, right_on, lsuffix, rsuffix, suffixes
-    ):
-        """
-        Translate a valid configuration of user input parameters into
-        the subset of input configurations handled by the cython layer.
-        Apply suffixes to columns.
-        """
-
-        self.out_class = cudf.DataFrame
         if isinstance(self.lhs, cudf.MultiIndex) or isinstance(
             self.rhs, cudf.MultiIndex
         ):
-            self.out_class = cudf.MultiIndex
+            out_class = cudf.MultiIndex
         elif isinstance(self.lhs, cudf.Index):
-            self.out_class = self.lhs.__class__
+            out_class = self.lhs.__class__
+        return out_class
 
-        if on:
-            on = [on] if isinstance(on, str) else list(on)
-            left_on = right_on = on
-        else:
-            if left_on:
-                left_on = (
-                    [left_on] if isinstance(left_on, str) else list(left_on)
-                )
-            if right_on:
-                right_on = (
-                    [right_on] if isinstance(right_on, str) else list(right_on)
-                )
+    def perform_merge(self) -> Frame:
+        lhs, rhs = self._match_key_dtypes(self.lhs, self.rhs)
 
-        same_named_columns = set(self.lhs._data.keys()) & set(
-            self.rhs._data.keys()
+        left_table = _frame_select_by_indexers(lhs, self._keys.left)
+        right_table = _frame_select_by_indexers(rhs, self._keys.right)
+
+        left_rows, right_rows = self._joiner(
+            left_table, right_table, how=self.how,
         )
-        if not (left_on or right_on) and not (
-            self.left_index and self.right_index
+        lhs, rhs = self._restore_categorical_keys(lhs, rhs)
+
+        left_result = cudf.core.frame.Frame()
+        right_result = cudf.core.frame.Frame()
+
+        gather_index = self.left_index or self.right_index
+        if left_rows is not None:
+            left_result = lhs._gather(
+                left_rows, nullify=True, keep_index=gather_index
+            )
+        if right_rows is not None:
+            right_result = rhs._gather(
+                right_rows, nullify=True, keep_index=gather_index
+            )
+
+        result = self._merge_results(left_result, right_result)
+
+        if self.sort:
+            result = self._sort_result(result)
+        return result
+
+    def _compute_join_keys(self):
+        # Computes self._keys
+        left_keys = []
+        right_keys = []
+        if (
+            self.left_index
+            or self.right_index
+            or self.left_on
+            or self.right_on
         ):
-            left_on = right_on = list(same_named_columns)
+            if self.left_index:
+                left_keys.extend(
+                    [
+                        _Indexer(name=on, index=True)
+                        for on in self.lhs.index.names
+                    ]
+                )
+            if self.left_on:
+                # TODO: require left_on or left_index to be specified
+                left_keys.extend(
+                    [
+                        _Indexer(name=on, column=True)
+                        for on in _coerce_to_tuple(self.left_on)
+                    ]
+                )
+            if self.right_index:
+                right_keys.extend(
+                    [
+                        _Indexer(name=on, index=True)
+                        for on in self.rhs.index.names
+                    ]
+                )
+            if self.right_on:
+                # TODO: require right_on or right_index to be specified
+                right_keys.extend(
+                    [
+                        _Indexer(name=on, column=True)
+                        for on in _coerce_to_tuple(self.right_on)
+                    ]
+                )
+        elif self.on:
+            on_names = _coerce_to_tuple(self.on)
+            for on in on_names:
+                # If `on` is provided, Merge on columns if present,
+                # otherwise default to indexes.
+                if on in self.lhs._data:
+                    left_keys.append(_Indexer(name=on, column=True))
+                else:
+                    left_keys.append(_Indexer(name=on, index=True))
+                if on in self.rhs._data:
+                    right_keys.append(_Indexer(name=on, column=True))
+                else:
+                    right_keys.append(_Indexer(name=on, index=True))
 
-        no_suffix_cols = []
-        if left_on and right_on:
-            no_suffix_cols = [
-                left_name
-                for left_name, right_name in zip(left_on, right_on)
-                if left_name == right_name and left_name in same_named_columns
+        else:
+            # if `on` is not provided and we're not merging
+            # index with column or on both indexes, then use
+            # the intersection  of columns in both frames
+            on_names = set(self.lhs._data) & set(self.rhs._data)
+            left_keys = [_Indexer(name=on, column=True) for on in on_names]
+            right_keys = [_Indexer(name=on, column=True) for on in on_names]
+
+        if len(left_keys) != len(right_keys):
+            raise ValueError(
+                "Merge operands must have same number of join key columns"
+            )
+
+        self._keys = _JoinKeys(left=left_keys, right=right_keys)
+
+    def _merge_results(self, left_result: Frame, right_result: Frame) -> Frame:
+        # Merge the Frames `left_result` and `right_result` into a single
+        # `Frame`, suffixing column names if necessary.
+
+        # If two key columns have the same name, a single output column appears
+        # in the result. For all other join types, the key column from the rhs
+        # is simply dropped. For outer joins, the two key columns are combined
+        # by filling nulls in the left key column with corresponding values
+        # from the right key column:
+        if self.how == "outer":
+            for lkey, rkey in zip(*self._keys):
+                if lkey.name == rkey.name:
+                    # fill nulls in lhs from values in the rhs
+                    lkey.set(
+                        left_result,
+                        lkey.get(left_result).fillna(rkey.get(right_result)),
+                        validate=False,
+                    )
+
+        # Compute the result column names:
+        # left_names and right_names will be a mappings of input column names
+        # to the corresponding names in the final result.
+        left_names = dict(zip(left_result._data, left_result._data))
+        right_names = dict(zip(right_result._data, right_result._data))
+
+        # For any columns from left_result and right_result that have the same
+        # name:
+        # - if they are key columns, keep only the left column
+        # - if they are not key columns, use suffixes to differentiate them
+        #   in the final result
+        common_names = set(left_names) & set(right_names)
+
+        if self.on:
+            key_columns_with_same_name = self.on
+        else:
+            key_columns_with_same_name = [
+                lkey.name
+                for lkey, rkey in zip(*self._keys)
+                if (
+                    (lkey.index, rkey.index) == (False, False)
+                    and lkey.name == rkey.name
+                )
             ]
+        for name in common_names:
+            if name not in key_columns_with_same_name:
+                left_names[name] = f"{name}{self.lsuffix}"
+                right_names[name] = f"{name}{self.rsuffix}"
+            else:
+                del right_names[name]
 
-        if suffixes:
-            lsuffix, rsuffix = suffixes
-        for name in same_named_columns:
-            if name not in no_suffix_cols:
-                self.lhs.rename(
-                    {name: f"{name}{lsuffix}"}, inplace=True, axis=1
-                )
-                self.rhs.rename(
-                    {name: f"{name}{rsuffix}"}, inplace=True, axis=1
-                )
-                if left_on and name in left_on:
-                    left_on[left_on.index(name)] = f"{name}{lsuffix}"
-                if right_on and name in right_on:
-                    right_on[right_on.index(name)] = f"{name}{rsuffix}"
+        # Assemble the data columns of the result:
+        data = left_result._data.__class__()
 
-        self.left_on = left_on if left_on is not None else []
-        self.right_on = right_on if right_on is not None else []
-        self.lsuffix = lsuffix
-        self.rsuffix = rsuffix
+        for lcol in left_names:
+            data.set_by_label(
+                left_names[lcol], left_result._data[lcol], validate=False
+            )
+        for rcol in right_names:
+            data.set_by_label(
+                right_names[rcol], right_result._data[rcol], validate=False
+            )
+
+        # Index of the result:
+        if self.left_index and self.right_index:
+            index = left_result._index
+        elif self.left_index:
+            # left_index and right_on
+            index = right_result._index
+        elif self.right_index:
+            # right_index and left_on
+            index = left_result._index
+        else:
+            index = None
+
+        # Construct result from data and index:
+        result = self._out_class._from_data(data=data, index=index)
+
+        return result
+
+    def _sort_result(self, result: Frame) -> Frame:
+        # Pandas sorts on the key columns in the
+        # same order as given in 'on'. If the indices are used as
+        # keys, the index will be sorted. If one index is specified,
+        # the key columns on the other side will be used to sort.
+        if self.on:
+            if isinstance(result, cudf.Index):
+                sort_order = result._get_sorted_inds()
+            else:
+                # need a list instead of a tuple here because
+                # _get_sorted_inds calls down to ColumnAccessor.get_by_label
+                # which handles lists and tuples differently
+                sort_order = result._get_sorted_inds(
+                    list(_coerce_to_tuple(self.on))
+                )
+            return result._gather(sort_order, keep_index=False)
+        by = []
+        if self.left_index and self.right_index:
+            if result._index is not None:
+                by.extend(result._index._data.columns)
+        if self.left_on:
+            by.extend(
+                [result._data[col] for col in _coerce_to_tuple(self.left_on)]
+            )
+        if self.right_on:
+            by.extend(
+                [result._data[col] for col in _coerce_to_tuple(self.right_on)]
+            )
+        if by:
+            to_sort = cudf.DataFrame._from_columns(by)
+            sort_order = to_sort.argsort()
+            result = result._gather(sort_order)
+        return result
 
     @staticmethod
-    def validate_merge_cfg(
+    def _validate_merge_params(
         lhs,
         rhs,
         on,
@@ -202,24 +386,25 @@ class Merge(object):
         left_index,
         right_index,
         how,
-        lsuffix,
-        rsuffix,
         suffixes,
     ):
         """
         Error for various invalid combinations of merge input parameters
         """
-
         # must actually support the requested merge type
         if how not in {"left", "inner", "outer", "leftanti", "leftsemi"}:
             raise NotImplementedError(f"{how} merge not supported yet")
 
-        # Passing 'on' with 'left_on' or 'right_on' is ambiguous
-        if on and (left_on or right_on):
-            raise ValueError(
-                'Can only pass argument "on" OR "left_on" '
-                'and "right_on", not a combination of both.'
-            )
+        if on:
+            if left_on or right_on:
+                # Passing 'on' with 'left_on' or 'right_on' is ambiguous
+                raise ValueError(
+                    'Can only pass argument "on" OR "left_on" '
+                    'and "right_on", not a combination of both.'
+                )
+            else:
+                # the validity of 'on' being checked by _Indexer
+                return
 
         # Can't merge on unnamed Series
         if (isinstance(lhs, cudf.Series) and not lhs.name) or (
@@ -227,52 +412,8 @@ class Merge(object):
         ):
             raise ValueError("Can not merge on unnamed Series")
 
-        # Keys need to be in their corresponding operands
-        if on:
-            if isinstance(on, str):
-                on_keys = [on]
-            elif isinstance(on, tuple):
-                on_keys = list(on)
-            else:
-                on_keys = on
-            for key in on_keys:
-                if not (key in lhs._data.keys() and key in rhs._data.keys()):
-                    raise KeyError(f"on key {on} not in both operands")
-        elif left_on and right_on:
-            left_on_keys = (
-                [left_on] if not isinstance(left_on, list) else left_on
-            )
-            right_on_keys = (
-                [right_on] if not isinstance(right_on, list) else right_on
-            )
-
-            for key in left_on_keys:
-                if key not in lhs._data.keys():
-                    raise KeyError(f'Key "{key}" not in left operand')
-            for key in right_on_keys:
-                if key not in rhs._data.keys():
-                    raise KeyError(f'Key "{key}" not in right operand')
-
-        # Require same total number of columns to join on in both operands
-        len_left_on = 0
-        len_right_on = 0
-        if left_on:
-            len_left_on += (
-                len(left_on) if pd.api.types.is_list_like(left_on) else 1
-            )
-        if right_on:
-            len_right_on += (
-                len(right_on) if pd.api.types.is_list_like(right_on) else 1
-            )
-        if not (len_left_on + left_index * lhs._num_indices) == (
-            len_right_on + right_index * rhs._num_indices
-        ):
-            raise ValueError(
-                "Merge operands must have same number of join key columns"
-            )
-
         # If nothing specified, must have common cols to use implicitly
-        same_named_columns = set(lhs._data.keys()) & set(rhs._data.keys())
+        same_named_columns = set(lhs._data) & set(rhs._data)
         if (
             not (left_index or right_index)
             and not (left_on or right_on)
@@ -280,8 +421,7 @@ class Merge(object):
         ):
             raise ValueError("No common columns to perform merge on")
 
-        if suffixes:
-            lsuffix, rsuffix = suffixes
+        lsuffix, rsuffix = suffixes
         for name in same_named_columns:
             if name == left_on == right_on:
                 continue
@@ -297,134 +437,59 @@ class Merge(object):
                         "lsuffix and rsuffix are not defined"
                     )
 
-    def typecast_input_to_libcudf(self):
-        """
-        Check each pair of join keys in the left and right hand
-        operands and apply casting rules to match their types
-        before passing the result to libcudf.
-        """
-        lhs_keys, rhs_keys, lhs_cols, rhs_cols = [], [], [], []
-        if self.left_index:
-            lhs_keys.append(self.lhs.index._data.keys())
-            lhs_cols.append(self.lhs.index)
-        if self.right_index:
-            rhs_keys.append(self.rhs.index._data.keys())
-            rhs_cols.append(self.rhs.index)
-        if self.left_on:
-            lhs_keys.append(self.left_on)
-            lhs_cols.append(self.lhs)
-        if self.right_on:
-            rhs_keys.append(self.right_on)
-            rhs_cols.append(self.rhs)
-
-        for l_key_grp, r_key_grp, l_col_grp, r_col_grp in zip(
-            lhs_keys, rhs_keys, lhs_cols, rhs_cols
-        ):
-            for l_key, r_key in zip(l_key_grp, r_key_grp):
-                to_dtype = _input_to_libcudf_castrules_any(
-                    l_col_grp._data[l_key], r_col_grp._data[r_key], self.how
-                )
-                l_col_grp._data[l_key] = l_col_grp._data[l_key].astype(
-                    to_dtype
-                )
-                r_col_grp._data[r_key] = r_col_grp._data[r_key].astype(
-                    to_dtype
-                )
-
-    def compute_output_dtypes(self):
-        """
-        Determine what datatypes should be applied to the result
-        of a libcudf join, baesd on the original left and right
-        frames.
-        """
-
-        index_dtypes = {}
-        l_data_join_cols = {}
-        r_data_join_cols = {}
-
-        data_dtypes = {
-            name: col.dtype
-            for name, col in itertools.chain(
-                self.lhs._data.items(), self.rhs._data.items()
+    def _match_key_dtypes(self, lhs: Frame, rhs: Frame) -> Tuple[Frame, Frame]:
+        # Match the dtypes of the key columns from lhs and rhs
+        out_lhs = lhs.copy(deep=False)
+        out_rhs = rhs.copy(deep=False)
+        for left_key, right_key in zip(*self._keys):
+            lcol, rcol = left_key.get(lhs), right_key.get(rhs)
+            lcol_casted, rcol_casted = _match_join_keys(
+                lcol, rcol, how=self.how
             )
-        }
+            if lcol is not lcol_casted:
+                left_key.set(out_lhs, lcol_casted, validate=False)
+            if rcol is not rcol_casted:
+                right_key.set(out_rhs, rcol_casted, validate=False)
+        return out_lhs, out_rhs
 
-        if self.left_index and self.right_index:
-            l_idx_join_cols = list(self.lhs.index._data.values())
-            r_idx_join_cols = list(self.rhs.index._data.values())
-        elif self.left_on and self.right_index:
-            # Keep the orignal dtypes in the LEFT index if possible
-            # should trigger a bunch of no-ops
-            l_idx_join_cols = list(self.lhs.index._data.values())
-            r_idx_join_cols = list(self.lhs.index._data.values())
-            for i, name in enumerate(self.left_on):
-                l_data_join_cols[name] = self.lhs._data[name]
-                r_data_join_cols[name] = list(self.rhs.index._data.values())[i]
+    def _restore_categorical_keys(
+        self, lhs: Frame, rhs: Frame
+    ) -> Tuple[Frame, Frame]:
+        # For inner joins, any categorical keys in `self.lhs` and `self.rhs`
+        # were casted to their category type to produce `lhs` and `rhs`.
+        # Here, we cast them back.
+        out_lhs = lhs.copy(deep=False)
+        out_rhs = rhs.copy(deep=False)
+        if self.how == "inner":
+            for left_key, right_key in zip(*self._keys):
+                if isinstance(
+                    left_key.get(self.lhs).dtype, cudf.CategoricalDtype
+                ) and isinstance(
+                    right_key.get(self.rhs).dtype, cudf.CategoricalDtype
+                ):
+                    left_key.set(
+                        out_lhs,
+                        left_key.get(out_lhs).astype("category"),
+                        validate=False,
+                    )
+                    right_key.set(
+                        out_rhs,
+                        right_key.get(out_rhs).astype("category"),
+                        validate=False,
+                    )
+        return out_lhs, out_rhs
 
-        elif self.left_index and self.right_on:
-            # see above
-            l_idx_join_cols = list(self.rhs.index._data.values())
-            r_idx_join_cols = list(self.rhs.index._data.values())
-            for i, name in enumerate(self.right_on):
-                l_data_join_cols[name] = list(self.lhs.index._data.values())[i]
-                r_data_join_cols[name] = self.rhs._data[name]
 
-        if self.left_on and self.right_on:
-            l_data_join_cols = self.lhs._data
-            r_data_join_cols = self.rhs._data
+class MergeSemi(Merge):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._joiner = functools.partial(
+            libcudf.join.semi_join, how=kwargs["how"]
+        )
 
-        if self.left_index or self.right_index:
-            for i in range(len(self.lhs.index._data.items())):
-                index_dtypes[i] = _libcudf_to_output_castrules(
-                    l_idx_join_cols[i], r_idx_join_cols[i], self.how
-                )
-
-        for name in itertools.chain(self.left_on, self.right_on):
-            if name in self.left_on and name in self.right_on:
-                data_dtypes[name] = _libcudf_to_output_castrules(
-                    l_data_join_cols[name], r_data_join_cols[name], self.how
-                )
-        return (index_dtypes, data_dtypes)
-
-    def typecast_libcudf_to_output(self, output, output_dtypes):
-        """
-        Apply precomputed output index and data column data types
-        to the output of a libcudf join.
-        """
-
-        index_dtypes, data_dtypes = output_dtypes
-        if output._index and len(index_dtypes) > 0:
-            for index_dtype, index_col_lbl, index_col in zip(
-                index_dtypes.values(),
-                output._index._data.keys(),
-                output._index._data.values(),
-            ):
-                if index_dtype:
-                    output._index._data[
-                        index_col_lbl
-                    ] = self._build_output_col(index_col, index_dtype)
-            # reconstruct the Index object as the underlying data types
-            # have changed:
-            output._index = cudf.core.index.Index._from_table(output._index)
-
-        for data_col_lbl, data_col in output._data.items():
-            data_dtype = data_dtypes[data_col_lbl]
-            if data_dtype:
-                output._data[data_col_lbl] = self._build_output_col(
-                    data_col, data_dtype
-                )
-        return output
-
-    def _build_output_col(self, col, dtype):
-        if isinstance(
-            dtype, (cudf.core.dtypes.CategoricalDtype, pd.CategoricalDtype)
-        ):
-            outcol = cudf.core.column.build_categorical_column(
-                categories=dtype.categories,
-                codes=col.set_mask(None),
-                mask=col.base_mask,
-                ordered=dtype.ordered,
-            )
+    def _merge_results(self, lhs: Frame, rhs: Frame) -> Frame:
+        # semi-join result includes only lhs columns
+        if issubclass(self._out_class, cudf.Index):
+            return self._out_class._from_data(lhs._data)
         else:
-            outcol = col.astype(dtype)
-        return outcol
+            return self._out_class._from_data(lhs._data, index=lhs._index)

@@ -347,6 +347,7 @@ add_library(cudf
     src/strings/find.cu
     src/strings/find_multiple.cu
     src/strings/padding.cu
+    src/strings/json/json_path.cu
     src/strings/regex/regcomp.cpp
     src/strings/regex/regexec.cu
     src/strings/replace/backref_re.cu
@@ -390,6 +391,7 @@ add_library(cudf
     src/transform/jit/code/kernel.cpp
     src/transform/mask_to_bools.cu
     src/transform/nans_to_nulls.cu
+    src/transform/row_bit_count.cu
     src/transform/transform.cpp
     src/transpose/transpose.cu
     src/unary/cast_ops.cu
@@ -555,12 +557,6 @@ if(CUDF_BUILD_BENCHMARKS)
         GIT_SHALLOW     TRUE
         OPTIONS         "BENCHMARK_ENABLE_TESTING OFF"
                         "BENCHMARK_ENABLE_INSTALL OFF")
-    if(benchmark_ADDED)
-        install(TARGETS benchmark
-                        benchmark_main
-            DESTINATION lib
-            EXPORT cudf-targets)
-    endif()
     add_subdirectory(benchmarks)
 endif()
 
@@ -588,7 +584,14 @@ install(DIRECTORY
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf)
 
 install(DIRECTORY ${Thrust_SOURCE_DIR}/
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust)
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust
+  PATTERN "*.py" EXCLUDE
+  PATTERN "benchmark" EXCLUDE
+  PATTERN "build" EXCLUDE
+  PATTERN "doc" EXCLUDE
+  PATTERN "examples" EXCLUDE
+  PATTERN "test" EXCLUDE
+  PATTERN "testing" EXCLUDE)
 
 include(CMakePackageConfigHelpers)
 
@@ -634,6 +637,15 @@ elseif(TARGET arrow_static)
         export(TARGETS arrow_static arrow_cuda_static
             FILE ${CUDF_BINARY_DIR}/cudf-arrow-targets.cmake
             NAMESPACE   cudf::)
+    endif()
+endif()
+
+if(TARGET gtest)
+    get_target_property(gtest_is_imported gtest IMPORTED)
+    if(NOT gtest_is_imported)
+        export(TARGETS gtest gmock gtest_main gmock_main
+            FILE ${CUDF_BINARY_DIR}/cudf-gtesting-targets.cmake
+            NAMESPACE   GTest::)
     endif()
 endif()
 

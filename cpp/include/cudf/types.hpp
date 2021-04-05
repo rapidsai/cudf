@@ -89,6 +89,7 @@ class mutable_table_view;
 using size_type    = int32_t;
 using bitmask_type = uint32_t;
 using valid_type   = uint8_t;
+using offset_type  = int32_t;
 
 /**
  * @brief Similar to `std::distance` but returns `cudf::size_type` and performs `static_cast`
@@ -134,6 +135,15 @@ enum class null_policy : bool {
 enum class nan_policy : bool {
   NAN_IS_NULL,  ///< treat nans as null elements
   NAN_IS_VALID  ///< treat nans as valid elements (non-null)
+};
+
+/**
+ * @brief Enum to consider different elements (of floating point types) holding NaN value as equal
+ * or unequal
+ */
+enum class nan_equality /*unspecified*/ {
+  ALL_EQUAL,  ///< All NaNs compare equal, regardless of sign
+  UNEQUAL     ///< All NaNs compare unequal (IEEE754 behavior)
 };
 
 /**
@@ -260,12 +270,12 @@ class data_type {
   /**
    * @brief Returns the type identifier
    */
-  CUDA_HOST_DEVICE_CALLABLE type_id id() const noexcept { return _id; }
+  constexpr type_id id() const noexcept { return _id; }
 
   /**
    * @brief Returns the scale (for fixed_point types)
    */
-  CUDA_HOST_DEVICE_CALLABLE int32_t scale() const noexcept { return _fixed_point_scale; }
+  constexpr int32_t scale() const noexcept { return _fixed_point_scale; }
 
  private:
   type_id _id{type_id::EMPTY};
@@ -287,7 +297,7 @@ class data_type {
  * @return true `lhs` is equal to `rhs`
  * @return false `lhs` is not equal to `rhs`
  */
-inline bool operator==(data_type const& lhs, data_type const& rhs)
+constexpr bool operator==(data_type const& lhs, data_type const& rhs)
 {
   // use std::tie in the future, breaks JITIFY currently
   return lhs.id() == rhs.id() && lhs.scale() == rhs.scale();
@@ -328,6 +338,11 @@ enum class hash_id {
   HASH_SERIAL_MURMUR3,  ///< Serial Murmur3 hash function
   HASH_SPARK_MURMUR3    ///< Spark Murmur3 hash function
 };
+
+/**
+ * @brief The default seed value for hash functions
+ */
+static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 
 /** @} */
 }  // namespace cudf

@@ -320,7 +320,7 @@ flag. Below is a list of the available arguments and their purpose:
 | `PYARROW_VERSION` | 1.0.1 | Not supported | set pyarrow version |
 | `CMAKE_VERSION` | newest | >=3.14 | set cmake version |
 | `CYTHON_VERSION` | 0.29 | Not supported | set Cython version |
-| `PYTHON_VERSION` | 3.6 | 3.7 | set python version |
+| `PYTHON_VERSION` | 3.7 | 3.8 | set python version |
 
 ---
 

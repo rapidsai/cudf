@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf_test/file_utilities.hpp>
 #include <io/utilities/file_io_utilities.hpp>
 
 #include <rmm/device_buffer.hpp>
@@ -26,93 +25,67 @@ namespace cudf {
 namespace io {
 namespace detail {
 
+size_t get_file_size(int file_descriptor)
+{
+  struct stat st;
+  CUDF_EXPECTS(fstat(file_descriptor, &st) != -1, "Cannot query file size");
+  return static_cast<size_t>(st.st_size);
+}
+
 file_wrapper::file_wrapper(std::string const &filepath, int flags)
-  : fd(open(filepath.c_str(), flags))
+  : fd(open(filepath.c_str(), flags)), _size{get_file_size(fd)}
 {
   CUDF_EXPECTS(fd != -1, "Cannot open file " + filepath);
 }
 
 file_wrapper::file_wrapper(std::string const &filepath, int flags, mode_t mode)
-  : fd(open(filepath.c_str(), flags, mode))
+  : fd(open(filepath.c_str(), flags, mode)), _size{get_file_size(fd)}
 {
   CUDF_EXPECTS(fd != -1, "Cannot open file " + filepath);
 }
 
 file_wrapper::~file_wrapper() { close(fd); }
 
-long file_wrapper::size() const
+std::string getenv_or(std::string const &env_var_name, std::string const &default_val)
 {
-  if (_size < 0) {
-    struct stat st;
-    CUDF_EXPECTS(fstat(fd, &st) != -1, "Cannot query file size");
-    _size = static_cast<size_t>(st.st_size);
-  }
-  return _size;
+  auto const env_val = std::getenv(env_var_name.c_str());
+  return (env_val == nullptr) ? default_val : std::string(env_val);
 }
 
 #ifdef CUFILE_FOUND
 
-/**
- * @brief Class that manages cuFile configuration.
- */
-class cufile_config {
-  std::string const default_policy    = "OFF";
-  std::string const json_path_env_var = "CUFILE_ENV_PATH_JSON";
+cufile_config::cufile_config() : policy{getenv_or("LIBCUDF_CUFILE_POLICY", default_policy)}
+{
+  if (is_enabled()) {
+    // Modify the config file based on the policy
+    auto const config_file_path = getenv_or(json_path_env_var, "/etc/cufile.json");
+    std::ifstream user_config_file(config_file_path);
+    // Modified config file is stored in a temporary directory
+    auto const cudf_config_path = tmp_config_dir.path() + "/cufile.json";
+    std::ofstream cudf_config_file(cudf_config_path);
 
-  std::string const policy = default_policy;
-  temp_directory tmp_config_dir{"cudf_cufile_config"};
-
-  std::string getenv_or(std::string const &env_var_name, std::string const &default_val)
-  {
-    auto const env_val = std::getenv(env_var_name.c_str());
-    return (env_val == nullptr) ? default_val : std::string(env_val);
-  }
-
-  cufile_config() : policy{getenv_or("LIBCUDF_CUFILE_POLICY", default_policy)}
-  {
-    if (is_enabled()) {
-      // Modify the config file based on the policy
-      auto const config_file_path = getenv_or(json_path_env_var, "/etc/cufile.json");
-      std::ifstream user_config_file(config_file_path);
-      // Modified config file is stored in a temporary directory
-      auto const cudf_config_path = tmp_config_dir.path() + "/cufile.json";
-      std::ofstream cudf_config_file(cudf_config_path);
-
-      std::string line;
-      while (std::getline(user_config_file, line)) {
-        std::string const tag = "\"allow_compat_mode\"";
-        if (line.find(tag) != std::string::npos) {
-          // TODO: only replace the true/false value
-          // Enable compatiblity mode when cuDF does not fall back to host path
-          cudf_config_file << tag << ": " << (is_required() ? "true" : "false") << ",\n";
-        } else {
-          cudf_config_file << line << '\n';
-        }
-
-        // Point libcufile to the modified config file
-        CUDF_EXPECTS(setenv(json_path_env_var.c_str(), cudf_config_path.c_str(), 0) == 0,
-                     "Failed to set the cuFile config file environment variable.");
+    std::string line;
+    while (std::getline(user_config_file, line)) {
+      std::string const tag = "\"allow_compat_mode\"";
+      if (line.find(tag) != std::string::npos) {
+        // TODO: only replace the true/false value
+        // Enable compatiblity mode when cuDF does not fall back to host path
+        cudf_config_file << tag << ": " << (is_required() ? "true" : "false") << ",\n";
+      } else {
+        cudf_config_file << line << '\n';
       }
+
+      // Point libcufile to the modified config file
+      CUDF_EXPECTS(setenv(json_path_env_var.c_str(), cudf_config_path.c_str(), 0) == 0,
+                   "Failed to set the cuFile config file environment variable.");
     }
   }
-
- public:
-  /**
-   * @brief Returns true when cuFile use is enabled.
-   */
-  bool is_enabled() const { return policy == "ALWAYS" or policy == "GDS"; }
-
-  /**
-   * @brief Returns true when cuDF should not fall back to host IO.
-   */
-  bool is_required() const { return policy == "ALWAYS"; }
-
-  static cufile_config const *instance()
-  {
-    static cufile_config _instance;
-    return &_instance;
-  }
-};
+}
+cufile_config const *cufile_config::instance()
+{
+  static cufile_config _instance;
+  return &_instance;
+}
 
 /**
  * @brief Class that dynamically loads the cuFile library and manages the cuFile driver.
