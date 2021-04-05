@@ -106,8 +106,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   // 0-table_view, 1-column_order, 2-null_precedence, 3-validity_columns
   auto flattened_t =
     structs::detail::flatten_nested_columns(matched.second.front(), column_order, null_precedence);
-  auto flattened_values =
-    structs::detail::flatten_nested_columns(matched.second.back(), column_order, null_precedence);
+  auto flattened_values = structs::detail::flatten_nested_columns(matched.second.back(), {}, {});
 
   auto d_t      = table_device_view::create(std::get<0>(flattened_t), stream);
   auto d_values = table_device_view::create(std::get<0>(flattened_values), stream);
