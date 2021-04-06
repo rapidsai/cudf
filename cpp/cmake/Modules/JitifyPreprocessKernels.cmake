@@ -33,7 +33,7 @@ function(jit_preprocess_files)
                           )
 
     foreach(ARG_FILE ${ARG_FILES})
-        set(ARG_OUTPUT ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files/${ARG_FILE}.jit)
+        set(ARG_OUTPUT ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files/${ARG_FILE}.jit.hpp)
         list(APPEND JIT_PREPROCESSED_FILES "${ARG_OUTPUT}")
         add_custom_command(WORKING_DIRECTORY ${ARG_SOURCE_DIRECTORY}
                            DEPENDS jitify_preprocess
