@@ -104,18 +104,18 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   auto matched = dictionary::detail::match_dictionaries({t, values}, stream);
 
   // 0-table_view, 1-column_order, 2-null_precedence, 3-validity_columns
-  auto f_flattened =
+  auto t_flattened =
     structs::detail::flatten_nested_columns(matched.second.front(), column_order, null_precedence);
   auto values_flattened = structs::detail::flatten_nested_columns(matched.second.back(), {}, {});
 
-  auto t_d      = table_device_view::create(std::get<0>(f_flattened), stream);
+  auto t_d      = table_device_view::create(std::get<0>(t_flattened), stream);
   auto values_d = table_device_view::create(std::get<0>(values_flattened), stream);
   auto count_it = thrust::make_counting_iterator<size_type>(0);
 
-  rmm::device_vector<order> column_order_dv(std::get<1>(f_flattened).begin(),
-                                            std::get<1>(f_flattened).end());
-  rmm::device_vector<null_order> null_precedence_dv(std::get<2>(f_flattened).begin(),
-                                                    std::get<2>(f_flattened).end());
+  rmm::device_vector<order> column_order_dv(std::get<1>(t_flattened).begin(),
+                                            std::get<1>(t_flattened).end());
+  rmm::device_vector<null_order> null_precedence_dv(std::get<2>(t_flattened).begin(),
+                                                    std::get<2>(t_flattened).end());
 
   if (has_nulls(t) or has_nulls(values)) {
     auto ineq_op =
