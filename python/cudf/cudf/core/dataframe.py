@@ -639,15 +639,24 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         return list(o)
 
     def __setattr__(self, key, col):
-        # Default set keys corresponding to internal attributes
-        if key in self._PROTECTED_KEYS:
+        try:
+            # Preexisting attributes may be set. We cannot rely on checking the
+            # `_PROTECTED_KEYS` because we must also allow for settable
+            # properties, and we must call object.__getattribute__ to bypass
+            # the `__getitem__` behavior inherited from `GetAttrGetItemMixin`.
+            object.__getattribute__(self, key)
             super().__setattr__(key, col)
-        # Existing columns can be reset. Check is deferred to after the
-        # PROTECTED_KEYS lookup for speed in the most common cases (setting
-        # _data or _index). Bypass __getitem__ and check self._data for speed.
-        elif key in self._data:
-            self[key] = col
-        else:
+        except AttributeError:
+            if key not in self._PROTECTED_KEYS:
+                try:
+                    # If a column already exists, set it.
+                    self[key]  # __getitem__ to verify key exists
+                    self[key] = col
+                    return
+                except KeyError:
+                    pass
+
+            # Set a new attribute that is not already a column.
             super().__setattr__(key, col)
 
     @annotate("DATAFRAME_GETITEM", color="blue", domain="cudf_python")
