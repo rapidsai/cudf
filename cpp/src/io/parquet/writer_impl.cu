@@ -727,24 +727,21 @@ void writer::impl::init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::Pa
 }
 
 void writer::impl::gather_fragment_statistics(
-  statistics_chunk *frag_stats_chunk,
-  cudf::detail::device_2dspan<gpu::PageFragment const> frag,
-  hostdevice_vector<gpu::parquet_column_device_view> &col_desc,
+  device_2dspan<statistics_chunk> frag_stats_chunk,
+  device_2dspan<gpu::PageFragment const> frag,
+  device_span<gpu::parquet_column_device_view const> col_desc,
   uint32_t num_columns,
   uint32_t num_fragments,
   uint32_t fragment_size)
 {
   rmm::device_uvector<statistics_group> frag_stats_group(num_fragments * num_columns, stream);
+  auto frag_stats_group_2dview =
+    device_2dspan<statistics_group>(frag_stats_group.data(), num_columns, num_fragments);
 
-  gpu::InitFragmentStatistics(frag_stats_group.data(),
-                              frag,
-                              col_desc.device_ptr(),
-                              num_fragments,
-                              num_columns,
-                              fragment_size,
-                              stream);
+  gpu::InitFragmentStatistics(
+    frag_stats_group_2dview, frag, col_desc, num_fragments, num_columns, fragment_size, stream);
   GatherColumnStatistics(
-    frag_stats_chunk, frag_stats_group.data(), num_fragments * num_columns, stream);
+    frag_stats_chunk.data(), frag_stats_group.data(), num_fragments * num_columns, stream);
   stream.synchronize();
 }
 
@@ -1035,9 +1032,11 @@ void writer::impl::write(table_view const &table)
   rmm::device_uvector<statistics_chunk> frag_stats(0, stream);
   if (stats_granularity_ != statistics_freq::STATISTICS_NONE) {
     frag_stats.resize(num_fragments * num_columns, stream);
+    auto frag_stats_2dview =
+      device_2dspan<statistics_chunk>(frag_stats.data(), num_columns, num_fragments);
     if (frag_stats.size() != 0) {
       gather_fragment_statistics(
-        frag_stats.data(), fragments, col_desc, num_columns, num_fragments, fragment_size);
+        frag_stats_2dview, fragments, col_desc, num_columns, num_fragments, fragment_size);
     }
   }
   // Initialize row groups and column chunks

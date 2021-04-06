@@ -40,6 +40,7 @@ namespace cudf {
 namespace io {
 namespace parquet {
 
+using cudf::detail::device_2dspan;
 /**
  * @brief Struct representing an input column in the file.
  */
@@ -453,7 +454,7 @@ dremel_data get_dremel_data(column_view h_col,
  * @param[in] num_rows Number of rows per column
  * @param[in] stream CUDA stream to use, default 0
  */
-void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
+void InitPageFragments(device_2dspan<PageFragment> frag,
                        const parquet_column_device_view *col_desc,
                        uint32_t fragment_size,
                        uint32_t num_rows,
@@ -470,9 +471,9 @@ void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
  * @param[in] fragment_size Max size of each fragment in rows
  * @param[in] stream CUDA stream to use, default 0
  */
-void InitFragmentStatistics(statistics_group *groups,
-                            cudf::detail::device_2dspan<PageFragment const> fragments,
-                            const parquet_column_device_view *col_desc,
+void InitFragmentStatistics(device_2dspan<statistics_group> groups,
+                            device_2dspan<PageFragment const> fragments,
+                            device_span<gpu::parquet_column_device_view const> col_desc,
                             int32_t num_fragments,
                             int32_t num_columns,
                             uint32_t fragment_size,

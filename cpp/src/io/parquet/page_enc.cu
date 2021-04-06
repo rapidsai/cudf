@@ -114,7 +114,7 @@ inline __device__ uint32_t uint64_init_hash(uint64_t v)
 // blockDim {512,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  gpuInitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
+  gpuInitPageFragments(device_2dspan<PageFragment> frag,
                        const parquet_column_device_view *col_desc,
                        uint32_t fragment_size,
                        uint32_t max_num_rows)
@@ -380,9 +380,9 @@ __global__ void __launch_bounds__(block_size)
 
 // blockDim {128,1,1}
 __global__ void __launch_bounds__(128)
-  gpuInitFragmentStats(statistics_group *groups,
-                       cudf::detail::device_2dspan<PageFragment const> fragments,
-                       const parquet_column_device_view *col_desc,
+  gpuInitFragmentStats(device_2dspan<statistics_group> groups,
+                       device_2dspan<PageFragment const> fragments,
+                       device_span<gpu::parquet_column_device_view const> col_desc,
                        int32_t num_fragments,
                        uint32_t fragment_size)
 {
@@ -399,7 +399,7 @@ __global__ void __launch_bounds__(128)
     g->num_rows  = fragments[column_id][frag_id].num_leaf_values;
   }
   __syncthreads();
-  if (frag_id < num_fragments and lane_id == 0) groups[column_id * num_fragments + frag_id] = *g;
+  if (frag_id < num_fragments and lane_id == 0) groups[column_id][frag_id] = *g;
 }
 
 // blockDim {128,1,1}
@@ -2088,7 +2088,7 @@ dremel_data get_dremel_data(column_view h_col,
  * @param[in] num_columns Number of columns
  * @param[in] stream CUDA stream to use, default 0
  */
-void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
+void InitPageFragments(device_2dspan<PageFragment> frag,
                        const parquet_column_device_view *col_desc,
                        uint32_t fragment_size,
                        uint32_t num_rows,
@@ -2112,9 +2112,9 @@ void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
  * @param[in] fragment_size Max size of each fragment in rows
  * @param[in] stream CUDA stream to use, default 0
  */
-void InitFragmentStatistics(statistics_group *groups,
-                            cudf::detail::device_2dspan<PageFragment const> fragments,
-                            const parquet_column_device_view *col_desc,
+void InitFragmentStatistics(device_2dspan<statistics_group> groups,
+                            device_2dspan<PageFragment const> fragments,
+                            device_span<gpu::parquet_column_device_view const> col_desc,
                             int32_t num_fragments,
                             int32_t num_columns,
                             uint32_t fragment_size,

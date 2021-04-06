@@ -48,6 +48,7 @@ struct parquet_column_view;
 
 using namespace cudf::io::parquet;
 using namespace cudf::io;
+using cudf::detail::hostdevice_2dvector;
 
 /**
  * @brief Implementation for parquet writer
@@ -129,7 +130,7 @@ class writer::impl {
    * @param num_rows Total number of rows
    * @param fragment_size Number of rows per fragment
    */
-  void init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::PageFragment>& frag,
+  void init_page_fragments(hostdevice_2dvector<gpu::PageFragment>& frag,
                            hostdevice_vector<gpu::parquet_column_device_view>& col_desc,
                            uint32_t num_rows,
                            uint32_t fragment_size);
@@ -144,9 +145,9 @@ class writer::impl {
    * @param num_fragments Total number of fragments per column
    * @param fragment_size Number of rows per fragment
    */
-  void gather_fragment_statistics(statistics_chunk* dst_stats,
-                                  cudf::detail::device_2dspan<gpu::PageFragment const> frag,
-                                  hostdevice_vector<gpu::parquet_column_device_view>& col_desc,
+  void gather_fragment_statistics(device_2dspan<statistics_chunk> dst_stats,
+                                  device_2dspan<gpu::PageFragment const> frag,
+                                  device_span<gpu::parquet_column_device_view const> col_desc,
                                   uint32_t num_columns,
                                   uint32_t num_fragments,
                                   uint32_t fragment_size);
