@@ -76,7 +76,7 @@ def test_rangeindex_contains():
     assert_eq(False, 10 in RangeIndex(start=0, stop=10, name="Index"))
 
 
-@pytest.mark.parametrize("dtype", SCALAR_TYPES)
+@pytest.mark.parametrize("dtype", list(SCALAR_TYPES))
 def test_lists_contains(dtype):
     dtype = np.dtype(dtype)
     inner_data = np.array([1, 2, 3], dtype=dtype)
