@@ -75,7 +75,7 @@ std::unique_ptr<table> build_table(
 
   if (position_array) {
     size_type position_size = position_array->size();
-    // the null mask for position matches the exploded column's gather map, so copy it over
+    // build the null mask for position based on invalid entries in gather map
     auto nullmask = explode_col_gather_map ? valid_if(
                                                explode_col_gather_map->begin(),
                                                explode_col_gather_map->end(),
