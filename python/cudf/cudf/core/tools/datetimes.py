@@ -479,7 +479,10 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
                 f"Keyword arguments '{','.join(list(wrong_kwargs))}'"
                 " are not yet supported in cuDF DateOffsets"
             )
-        self._scalars = _DateOffsetScalars(scalars)
+        # pandas DateOffset objects are made immutable by disabling
+        # `__setattr__`, but this class adds the _scalars attribute (also
+        # immutable after construction), so we bypass `DateOffset.__setattr__`.
+        object.__setattr__(self, "_scalars", _DateOffsetScalars(scalars))
 
     def _generate_column(self, size, op):
         months = self._scalars._gpu_scalars["months"]
