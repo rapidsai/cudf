@@ -30,6 +30,7 @@
 #include <hash/unordered_multiset.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
@@ -77,15 +78,13 @@ std::unique_ptr<column> search_ordered(table_view const& t,
                                        rmm::mr::device_memory_resource* mr)
 {
   // Allocate result column
-  std::unique_ptr<column> result = make_numeric_column(
+  auto result = make_numeric_column(
     data_type{type_to_id<size_type>()}, values.num_rows(), mask_state::UNALLOCATED, stream, mr);
-
-  mutable_column_view result_view = result.get()->mutable_view();
+  auto const result_out = result->mutable_view().data<size_type>();
 
   // Handle empty inputs
   if (t.num_rows() == 0) {
-    CUDA_TRY(cudaMemsetAsync(
-      result_view.data<size_type>(), 0, values.num_rows() * sizeof(size_type), stream.value()));
+    CUDA_TRY(cudaMemsetAsync(result_out, 0, values.num_rows() * sizeof(size_type), stream.value()));
     return result;
   }
 
@@ -101,54 +100,48 @@ std::unique_ptr<column> search_ordered(table_view const& t,
 
   // This utility will ensure all corresponding dictionary columns have matching keys.
   // It will return any new dictionary columns created as well as updated table_views.
-  auto matched = dictionary::detail::match_dictionaries({t, values}, stream);
+  auto const matched = dictionary::detail::match_dictionaries({t, values}, stream);
 
   // 0-table_view, 1-column_order, 2-null_precedence, 3-validity_columns
-  auto t_flattened =
+  auto const t_flattened =
     structs::detail::flatten_nested_columns(matched.second.front(), column_order, null_precedence);
-  auto values_flattened = structs::detail::flatten_nested_columns(matched.second.back(), {}, {});
+  auto const values_flattened =
+    structs::detail::flatten_nested_columns(matched.second.back(), {}, {});
 
-  auto t_d      = table_device_view::create(std::get<0>(t_flattened), stream);
-  auto values_d = table_device_view::create(std::get<0>(values_flattened), stream);
-  auto count_it = thrust::make_counting_iterator<size_type>(0);
+  auto const t_d      = table_device_view::create(std::get<0>(t_flattened), stream);
+  auto const values_d = table_device_view::create(std::get<0>(values_flattened), stream);
 
-  rmm::device_vector<order> column_order_dv(std::get<1>(t_flattened).begin(),
-                                            std::get<1>(t_flattened).end());
-  rmm::device_vector<null_order> null_precedence_dv(std::get<2>(t_flattened).begin(),
-                                                    std::get<2>(t_flattened).end());
+  auto const column_order_flattened    = std::get<1>(t_flattened);
+  auto const null_precedence_flattened = std::get<2>(t_flattened);
+
+  rmm::device_uvector<order> column_order_dv(column_order_flattened.size(), stream);
+  rmm::device_uvector<null_order> null_precedence_dv(null_precedence_flattened.size(), stream);
+
+  CUDA_TRY(cudaMemcpyAsync(column_order_dv.data(),
+                           column_order_flattened.data(),
+                           sizeof(order) * column_order_flattened.size(),
+                           cudaMemcpyDefault,
+                           stream.value()));
+  CUDA_TRY(cudaMemcpyAsync(null_precedence_dv.data(),
+                           null_precedence_flattened.data(),
+                           sizeof(null_order) * null_precedence_flattened.size(),
+                           cudaMemcpyDefault,
+                           stream.value()));
+
+  auto const& lhs     = find_first ? *t_d : *values_d;
+  auto const& rhs     = find_first ? *values_d : *t_d;
+  auto const count_it = thrust::make_counting_iterator<size_type>(0);
 
   if (has_nulls(t) or has_nulls(values)) {
-    auto ineq_op =
-      (find_first)
-        ? row_lexicographic_comparator<true>(
-            *t_d, *values_d, column_order_dv.data().get(), null_precedence_dv.data().get())
-        : row_lexicographic_comparator<true>(
-            *values_d, *t_d, column_order_dv.data().get(), null_precedence_dv.data().get());
-
-    launch_search(count_it,
-                  count_it,
-                  t.num_rows(),
-                  values.num_rows(),
-                  result_view.data<size_type>(),
-                  ineq_op,
-                  find_first,
-                  stream);
+    auto const comp = row_lexicographic_comparator<true>(
+      lhs, rhs, column_order_dv.data(), null_precedence_dv.data());
+    launch_search(
+      count_it, count_it, t.num_rows(), values.num_rows(), result_out, comp, find_first, stream);
   } else {
-    auto ineq_op =
-      (find_first)
-        ? row_lexicographic_comparator<false>(
-            *t_d, *values_d, column_order_dv.data().get(), null_precedence_dv.data().get())
-        : row_lexicographic_comparator<false>(
-            *values_d, *t_d, column_order_dv.data().get(), null_precedence_dv.data().get());
-
-    launch_search(count_it,
-                  count_it,
-                  t.num_rows(),
-                  values.num_rows(),
-                  result_view.data<size_type>(),
-                  ineq_op,
-                  find_first,
-                  stream);
+    auto const comp = row_lexicographic_comparator<false>(
+      lhs, rhs, column_order_dv.data(), null_precedence_dv.data());
+    launch_search(
+      count_it, count_it, t.num_rows(), values.num_rows(), result_out, comp, find_first, stream);
   }
 
   return result;
