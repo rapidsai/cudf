@@ -137,8 +137,8 @@ include(cmake/thirdparty/CUDF_GetDLPack.cmake)
 include(cmake/thirdparty/CUDF_GetLibcudacxx.cmake)
 # find or install GoogleTest
 include(cmake/thirdparty/CUDF_GetGTest.cmake)
-# Stringify libcudf and libcudacxx headers used in JIT operations
-include(cmake/Modules/StringifyJITHeaders.cmake)
+# preprocess jitify-able kernels
+include(cmake/Modules/JitifyPreprocessKernels.cmake)
 # find cuFile
 include(cmake/Modules/FindcuFile.cmake)
 
@@ -153,9 +153,6 @@ add_library(cudf
     src/ast/transform.cu
     src/binaryop/binaryop.cpp
     src/binaryop/compiled/binary_ops.cu
-    src/binaryop/jit/code/kernel.cpp
-    src/binaryop/jit/code/operation.cpp
-    src/binaryop/jit/code/traits.cpp
     src/labeling/label_bins.cu
     src/bitmask/null_mask.cu
     src/column/column.cu
@@ -256,7 +253,6 @@ add_library(cudf
     src/io/utilities/parsing_utils.cu
     src/io/utilities/type_conversion.cpp
     src/jit/cache.cpp
-    src/jit/launcher.cpp
     src/jit/parser.cpp
     src/jit/type.cpp
     src/join/cross_join.cu
@@ -302,8 +298,6 @@ add_library(cudf
     src/reshape/interleave_columns.cu
     src/reshape/tile.cu
     src/rolling/grouped_rolling.cu
-    src/rolling/jit/code/kernel.cpp
-    src/rolling/jit/code/operation.cpp
     src/rolling/rolling.cu
     src/rolling/range_window_bounds.cpp
     src/round/round.cu
@@ -388,7 +382,6 @@ add_library(cudf
     src/text/tokenize.cu
     src/transform/bools_to_mask.cu
     src/transform/encode.cu
-    src/transform/jit/code/kernel.cpp
     src/transform/mask_to_bools.cu
     src/transform/nans_to_nulls.cu
     src/transform/row_bit_count.cu
@@ -403,6 +396,7 @@ add_library(cudf
 
 set_target_properties(cudf
     PROPERTIES BUILD_RPATH                         "\$ORIGIN"
+               INSTALL_RPATH                       "\$ORIGIN"
                # set target compile options
                CXX_STANDARD                        14
                CXX_STANDARD_REQUIRED               ON
@@ -466,7 +460,7 @@ endif()
 target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM_LOGGING_LEVEL}")
 
 # Compile stringified JIT sources first
-add_dependencies(cudf stringify_run)
+add_dependencies(cudf jitify_preprocess_run)
 
 # Specify the target module library dependencies
 target_link_libraries(cudf
@@ -477,9 +471,9 @@ target_link_libraries(cudf
                   rmm::rmm)
 
 if(CUDA_STATIC_RUNTIME)
-    target_link_libraries(cudf PUBLIC CUDA::nvrtc CUDA::cudart_static CUDA::cuda_driver)
+    target_link_libraries(cudf PUBLIC CUDA::cudart_static CUDA::cuda_driver)
 else()
-    target_link_libraries(cudf PUBLIC CUDA::nvrtc CUDA::cudart CUDA::cuda_driver)
+    target_link_libraries(cudf PUBLIC CUDA::cudart CUDA::cuda_driver)
 endif()
 
 # Add cuFile interface if available
