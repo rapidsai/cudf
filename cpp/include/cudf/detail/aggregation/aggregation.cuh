@@ -314,22 +314,11 @@ struct update_target_element<dictionary32, aggregation::SUM, target_has_nulls, s
   }
 };
 
-// This code will segfault in nvcc/ptxas 10.2 only
-// https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317
-// Enabling only for 2 types does not segfault. Using for unit tests.
-#if (__CUDACC_VER_MAJOR__ == 10) and (__CUDACC_VER_MINOR__ == 2)
-template <typename T>
-constexpr bool is_product_supported()
-{
-  return std::is_floating_point<T>::value or std::is_same<T, int64_t>::value;
-}
-#else
 template <typename T>
 constexpr bool is_product_supported()
 {
   return is_numeric<T>();
 }
-#endif
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
 struct update_target_element<Source,
