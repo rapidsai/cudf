@@ -88,24 +88,6 @@ def initfunc(f):
     return wrapper
 
 
-def get_null_series(size, dtype=np.bool_):
-    """
-    Creates a null series of provided dtype and size
-
-    Parameters
-    ----------
-    size:  length of series
-    dtype: dtype of series to create; defaults to bool.
-
-    Returns
-    -------
-    a null cudf series of provided `size` and `dtype`
-    """
-
-    empty_col = column.column_empty(size, dtype, True)
-    return cudf.Series(empty_col)
-
-
 # taken from dask array
 # https://github.com/dask/dask/blob/master/dask/array/utils.py#L352-L363
 def _is_nep18_active():
@@ -161,6 +143,8 @@ class cached_property:
     To force re-evaluation of a cached_property, simply delete
     it with `del`.
     """
+    # TODO: Can be replaced with functools.cached_property when we drop support
+    # for Python 3.7.
 
     def __init__(self, func):
         self.func = func
@@ -230,24 +214,6 @@ def to_nested_dict(d):
     return NestedOrderedDict(d)
 
 
-def time_col_replace_nulls(input_col):
-
-    null = column.column_empty_like(input_col, masked=True, newsize=1)
-    out_col = cudf._lib.replace.replace(
-        input_col,
-        column.as_column(
-            Buffer(
-                np.array(
-                    [input_col.default_na_value()], dtype=input_col.dtype
-                ).view("|u1")
-            ),
-            dtype=input_col.dtype,
-        ),
-        null,
-    )
-    return out_col
-
-
 def raise_iteration_error(obj):
     raise TypeError(
         f"{obj.__class__.__name__} object is not iterable. "
@@ -268,7 +234,8 @@ def pa_mask_buffer_to_mask(mask_buf, size):
     return Buffer(mask_buf)
 
 
-def isnat(val):
+def _isnat(val):
+    """Wraps np.isnat to return False instead of error on invalid inputs."""
     if not isinstance(val, (np.datetime64, np.timedelta64, str)):
         return False
     else:

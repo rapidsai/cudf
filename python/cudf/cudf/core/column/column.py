@@ -1772,6 +1772,24 @@ def build_interval_column(
     )
 
 
+def _time_col_replace_nulls(input_col):
+    """Replace NaN values in datetime-like columns with nulls."""
+    null = column_empty_like(input_col, masked=True, newsize=1)
+    out_col = cudf._lib.replace.replace(
+        input_col,
+        as_column(
+            Buffer(
+                np.array(
+                    [input_col.default_na_value()], dtype=input_col.dtype
+                ).view("|u1")
+            ),
+            dtype=input_col.dtype,
+        ),
+        null,
+    )
+    return out_col
+
+
 def as_column(
     arbitrary: Any,
     nan_as_null: bool = None,
@@ -1875,7 +1893,7 @@ def as_column(
                 col = col.set_mask(mask)
         elif np.issubdtype(col.dtype, np.datetime64):
             if nan_as_null or (mask is None and nan_as_null is None):
-                col = utils.time_col_replace_nulls(col)
+                col = _time_col_replace_nulls(col)
         return col
 
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
@@ -1996,7 +2014,7 @@ def as_column(
                 data = as_column(
                     buffer, dtype=arbitrary.dtype, nan_as_null=nan_as_null
                 )
-                data = utils.time_col_replace_nulls(data)
+                data = _time_col_replace_nulls(data)
                 mask = data.mask
 
             data = cudf.core.column.datetime.DatetimeColumn(
@@ -2016,7 +2034,7 @@ def as_column(
                 data = as_column(
                     buffer, dtype=arbitrary.dtype, nan_as_null=nan_as_null
                 )
-                data = utils.time_col_replace_nulls(data)
+                data = _time_col_replace_nulls(data)
                 mask = data.mask
 
             data = cudf.core.column.timedelta.TimeDeltaColumn(
