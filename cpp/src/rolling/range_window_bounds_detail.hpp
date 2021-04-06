@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/durations.hpp>

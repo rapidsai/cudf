@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
+#include "range_window_bounds_detail.hpp"
 #include "rolling_detail.cuh"
 #include "rolling_jit_detail.hpp"
-#include "range_window_bounds_detail.hpp"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/rolling/range_window_bounds.hpp>
