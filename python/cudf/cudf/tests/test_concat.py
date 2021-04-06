@@ -1207,10 +1207,10 @@ def test_concat_join_empty_dataframes_axis_1(
 
 def test_concat_preserve_order():
     """Ensure that order is preserved on 'inner' concatenations."""
-    df = pd.DataFrame([['d', 3, 4.0], ['c', 4, 5.0]], columns=['c', 'b', 'a'])
+    df = pd.DataFrame([["d", 3, 4.0], ["c", 4, 5.0]], columns=["c", "b", "a"])
     dfs = [df, df]
 
     assert_eq(
         pd.concat(dfs, join="inner"),
-        gd.concat([gd.DataFrame(df) for df in dfs], join="inner")
+        gd.concat([gd.DataFrame(df) for df in dfs], join="inner"),
     )

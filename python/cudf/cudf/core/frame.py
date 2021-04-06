@@ -291,7 +291,8 @@ class Frame(libcudf.table.Table):
 
     def _concat(self, *args, **kwargs):
         raise NotImplementedError(
-            "This method must be implemented by subclasses of Frame.")
+            "This method must be implemented by subclasses of Frame."
+        )
 
     def equals(self, other, **kwargs):
         """

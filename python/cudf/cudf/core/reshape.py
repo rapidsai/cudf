@@ -219,8 +219,10 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
         if ignore_index:
             if axis == 1:
-                result = cudf.DataFrame(data=obj._data.copy(deep=True),
-                                        index=obj.index.copy(deep=True))
+                result = cudf.DataFrame(
+                    data=obj._data.copy(deep=True),
+                    index=obj.index.copy(deep=True),
+                )
                 # The DataFrame constructor for dict-like data (such as the
                 # ColumnAccessor given by obj._data here) will drop any columns
                 # in the data that are not in `columns`, so we have to rename
@@ -228,11 +230,15 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 result.columns = pd.RangeIndex(len(obj._data.names))
             elif axis == 0:
                 if isinstance(obj, (pd.Series, cudf.Series)):
-                    result = cudf.Series(data=obj._data.copy(deep=True),
-                                         index=cudf.RangeIndex(len(obj)))
+                    result = cudf.Series(
+                        data=obj._data.copy(deep=True),
+                        index=cudf.RangeIndex(len(obj)),
+                    )
                 else:
-                    result = cudf.DataFrame(data=obj._data.copy(deep=True),
-                                            index=cudf.RangeIndex(len(obj)))
+                    result = cudf.DataFrame(
+                        data=obj._data.copy(deep=True),
+                        index=cudf.RangeIndex(len(obj)),
+                    )
         else:
             result = obj.copy()
 
@@ -294,7 +300,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 df[name] = col
 
         result_columns = objs[0].columns.append(
-            [obj.columns for obj in objs[1:]])
+            [obj.columns for obj in objs[1:]]
+        )
 
         if ignore_index:
             # with ignore_index the column names change to numbers

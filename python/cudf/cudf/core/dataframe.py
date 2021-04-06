@@ -435,7 +435,8 @@ class DataFrame(Frame, Serializable):
             if len(columns) != len(data):
                 raise ValueError(
                     f"Shape of passed values is ({len(index)}, {len(data)}), "
-                    f"indices imply ({len(index)}, {len(columns)}).")
+                    f"indices imply ({len(index)}, {len(columns)})."
+                )
 
             self.columns = columns
 
@@ -460,7 +461,8 @@ class DataFrame(Frame, Serializable):
                 data = {
                     key: cudf.core.column.column_empty(
                         row_count=len(next(iter(data.values()))),
-                        dtype=None, masked=True,
+                        dtype=None,
+                        masked=True,
                     )
                     for key in extra_cols
                 }
@@ -2543,9 +2545,11 @@ class DataFrame(Frame, Serializable):
             sets_of_column_names = [set(obj._column_names) for obj in objs]
 
             intersecting_columns = functools.reduce(
-                set.intersection, sets_of_column_names)
+                set.intersection, sets_of_column_names
+            )
             union_of_columns = functools.reduce(
-                set.union, sets_of_column_names)
+                set.union, sets_of_column_names
+            )
             non_intersecting_columns = union_of_columns.symmetric_difference(
                 intersecting_columns
             )
@@ -2553,8 +2557,11 @@ class DataFrame(Frame, Serializable):
             # Get an ordered list of the intersecting columns to preserve input
             # order, which is promised by pandas for inner joins.
             ordered_intersecting_columns = [
-                name for obj in objs for name in obj._column_names
-                if name in intersecting_columns]
+                name
+                for obj in objs
+                for name in obj._column_names
+                if name in intersecting_columns
+            ]
 
             names = OrderedDict.fromkeys(ordered_intersecting_columns).keys()
 
