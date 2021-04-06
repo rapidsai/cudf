@@ -19,15 +19,18 @@ Here are some guidelines to help the review process go smoothly.
    noted here: https://help.github.com/articles/closing-issues-using-keywords/
 
 5. If your pull request is not ready for review but you want to make use of the
-   continuous integration testing facilities please label it with `[WIP]`.
+   continuous integration testing facilities please mark your pull request as Draft.
+   https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/changing-the-stage-of-a-pull-request#converting-a-pull-request-to-a-draft
 
 6. If your pull request is ready to be reviewed without requiring additional
-   work on top of it, then remove the `[WIP]` label (if present) and replace
-   it with `[REVIEW]`. If assistance is required to complete the functionality,
-   for example when the C/C++ code of a feature is complete but Python bindings
-   are still required, then add the label `[HELP-REQ]` so that others can triage
-   and assist. The additional changes then can be implemented on top of the
-   same PR. If the assistance is done by members of the rapidsAI team, then no
+   work on top of it, then remove it from "Draft" and make it "Ready for Review".
+   https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/changing-the-stage-of-a-pull-request#marking-a-pull-request-as-ready-for-review
+
+   If assistance is required to complete the functionality, for example when the
+   C/C++ code of a feature is complete but Python bindings are still required,
+   then add the label `help wanted` so that others can triage and assist.
+   The additional changes then can be implemented on top of the same PR.
+   If the assistance is done by members of the rapidsAI team, then no
    additional actions are required by the creator of the original PR for this,
    otherwise the original author of the PR needs to give permission to the
    person(s) assisting to commit to their personal fork of the project. If that
@@ -39,10 +42,10 @@ Here are some guidelines to help the review process go smoothly.
    features or make changes out of the scope of those requested by the reviewer
    (doing this just add delays as already reviewed code ends up having to be
    re-reviewed/it is hard to tell what is new etc!). Further, please do not
-   rebase your branch on main/force push/rewrite history, doing any of these
-   causes the context of any comments made by reviewers to be lost. If
-   conflicts occur against main they should be resolved by merging main
-   into the branch used for making the pull request.
+   rebase your branch on the target branch, force push, or rewrite history.
+   Doing any of these causes the context of any comments made by reviewers to be lost.
+   If conflicts occur against the target branch they should be resolved by
+   merging the target branch into the branch used for making the pull request.
 
 Many thanks in advance for your cooperation!
 

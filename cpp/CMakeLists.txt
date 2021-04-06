@@ -395,6 +395,7 @@ add_library(cudf
 
 set_target_properties(cudf
     PROPERTIES BUILD_RPATH                         "\$ORIGIN"
+               INSTALL_RPATH                       "\$ORIGIN"
                # set target compile options
                CXX_STANDARD                        14
                CXX_STANDARD_REQUIRED               ON
