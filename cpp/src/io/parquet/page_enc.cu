@@ -381,12 +381,12 @@ __global__ void __launch_bounds__(block_size)
 // blockDim {128,1,1}
 __global__ void __launch_bounds__(128)
   gpuInitFragmentStats(statistics_group *groups,
-                       const PageFragment *fragments,
+                       cudf::detail::device_2dspan<PageFragment const> fragments,
                        const parquet_column_device_view *col_desc,
                        int32_t num_fragments,
-                       int32_t num_columns,
                        uint32_t fragment_size)
 {
+  // TODO: why not 1 block per warp?
   __shared__ __align__(8) statistics_group group_g[4];
 
   uint32_t lane_id          = threadIdx.x & 0x1f;
@@ -395,8 +395,8 @@ __global__ void __launch_bounds__(128)
   statistics_group *const g = &group_g[threadIdx.x >> 5];
   if (!lane_id && frag_id < num_fragments) {
     g->col       = &col_desc[column_id];
-    g->start_row = fragments[column_id * num_fragments + frag_id].start_value_idx;
-    g->num_rows  = fragments[column_id * num_fragments + frag_id].num_leaf_values;
+    g->start_row = fragments[column_id][frag_id].start_value_idx;
+    g->num_rows  = fragments[column_id][frag_id].num_leaf_values;
   }
   __syncthreads();
   if (frag_id < num_fragments and lane_id == 0) groups[column_id * num_fragments + frag_id] = *g;
@@ -2113,7 +2113,7 @@ void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
  * @param[in] stream CUDA stream to use, default 0
  */
 void InitFragmentStatistics(statistics_group *groups,
-                            const PageFragment *fragments,
+                            cudf::detail::device_2dspan<PageFragment const> fragments,
                             const parquet_column_device_view *col_desc,
                             int32_t num_fragments,
                             int32_t num_columns,
@@ -2122,7 +2122,7 @@ void InitFragmentStatistics(statistics_group *groups,
 {
   dim3 dim_grid(num_columns, (num_fragments + 3) >> 2);  // 1 warp per fragment
   gpuInitFragmentStats<<<dim_grid, 128, 0, stream.value()>>>(
-    groups, fragments, col_desc, num_fragments, num_columns, fragment_size);
+    groups, fragments, col_desc, num_fragments, fragment_size);
 }
 
 /**

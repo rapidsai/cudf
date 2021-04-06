@@ -145,7 +145,7 @@ class writer::impl {
    * @param fragment_size Number of rows per fragment
    */
   void gather_fragment_statistics(statistics_chunk* dst_stats,
-                                  gpu::PageFragment* frag,
+                                  cudf::detail::device_2dspan<gpu::PageFragment const> frag,
                                   hostdevice_vector<gpu::parquet_column_device_view>& col_desc,
                                   uint32_t num_columns,
                                   uint32_t num_fragments,

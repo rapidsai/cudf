@@ -471,7 +471,7 @@ void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
  * @param[in] stream CUDA stream to use, default 0
  */
 void InitFragmentStatistics(statistics_group *groups,
-                            const PageFragment *fragments,
+                            cudf::detail::device_2dspan<PageFragment const> fragments,
                             const parquet_column_device_view *col_desc,
                             int32_t num_fragments,
                             int32_t num_columns,
