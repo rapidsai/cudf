@@ -103,13 +103,6 @@ OTHER_TYPES = {"bool", "category", "str"}
 STRING_TYPES = {"object"}
 BOOL_TYPES = {"bool"}
 ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
-SCALAR_TYPES = (
-    NUMERIC_TYPES
-    | BOOL_TYPES
-    | STRING_TYPES
-    | TIMEDELTA_TYPES
-    | DATETIME_TYPES
-)
 
 
 def np_to_pa_dtype(dtype):
