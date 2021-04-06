@@ -40,7 +40,7 @@ function(jit_preprocess_files)
                                     -o ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files
                                     -i
                                     -m
-                                    -std=c++14
+                                    -std=c++17
                                     -remove-unused-globals
                                     -D__CUDACC_RTC__
                                     -I${CUDF_SOURCE_DIR}/include
