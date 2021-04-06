@@ -51,6 +51,9 @@ class _NestedGetItemDict(dict):
 
     def __getitem__(self, key):
         """Recursively apply dict.__getitem__ to get nested elements of d."""
+        # Don't reduce over characters in a single string key, just get.
+        if isinstance(key, str):
+            return super().__getitem__(key)
         return reduce(dict.__getitem__, key, self)
 
 
