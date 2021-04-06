@@ -65,3 +65,13 @@ def test_ucx_seriesgroupby():
             dask_df_g = dask_df.groupby(["a"]).b.sum().compute()
 
             assert dask_df_g.name == "b"
+
+
+def test_str_series_roundtrip():
+    with dask_cuda.LocalCUDACluster(n_workers=1) as cluster:
+        with Client(cluster):
+            expected = cudf.Series(["hi", "hello", None])
+            dask_series = dask_cudf.from_cudf(expected, npartitions=2)
+
+            actual = dask_series.compute()
+            assert_eq(actual, expected)

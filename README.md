@@ -4,6 +4,17 @@
 
 **NOTE:** For the latest stable [README.md](https://github.com/rapidsai/cudf/blob/main/README.md) ensure you are on the `main` branch.
 
+## Resources
+
+- [cuDF Reference Documentation](https://docs.rapids.ai/api/cudf/stable/): Python API reference, tutorials, and topic guides.
+- [libcudf Reference Documentation](https://docs.rapids.ai/api/libcudf/stable/): C/C++ CUDA library API reference.
+- [Getting Started](https://rapids.ai/start.html): Instructions for installing cuDF.
+- [RAPIDS Community](https://rapids.ai/community.html): Get help, contribute, and collaborate.
+- [GitHub repository](https://github.com/rapidsai/cudf): Download the cuDF source code.
+- [Issue tracker](https://github.com/rapidsai/cudf/issues): Report issues or request features.
+
+## Overview
+
 Built based on the [Apache Arrow](http://arrow.apache.org/) columnar memory format, cuDF is a GPU DataFrame library for loading, joining, aggregating, filtering, and otherwise manipulating data.
 
 cuDF provides a pandas-like API that will be familiar to data engineers & data scientists, so they can use it to easily accelerate their workflows without going into the details of CUDA programming.
@@ -54,15 +65,15 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 
 cuDF can be installed with conda ([miniconda](https://conda.io/miniconda.html), or the full [Anaconda distribution](https://www.anaconda.com/download)) from the `rapidsai` channel:
 
-For `cudf version == 0.18` :
+For `cudf version == 0.19` :
 ```bash
 # for CUDA 10.1
 conda install -c rapidsai -c nvidia -c numba -c conda-forge \
-    cudf=0.18 python=3.7 cudatoolkit=10.1
+    cudf=0.19 python=3.7 cudatoolkit=10.1
 
 # or, for CUDA 10.2
 conda install -c rapidsai -c nvidia -c numba -c conda-forge \
-    cudf=0.18 python=3.7 cudatoolkit=10.2
+    cudf=0.19 python=3.7 cudatoolkit=10.2
 
 ```
 

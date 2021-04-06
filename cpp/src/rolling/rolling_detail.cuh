@@ -16,9 +16,7 @@
 
 #pragma once
 
-#include <rolling/jit/code/code.h>
 #include <rolling/rolling_detail.hpp>
-#include <rolling/rolling_jit_detail.hpp>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -44,12 +42,11 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <jit/launcher.h>
-#include <jit/parser.h>
-#include <jit/type.h>
-#include <jit/bit.hpp.jit>
-#include <jit/rolling_jit_detail.hpp.jit>
-#include <jit/types.hpp.jit>
+#include <jit/cache.hpp>
+#include <jit/parser.hpp>
+#include <jit/type.hpp>
+
+#include <jit_preprocessed_files/rolling/jit/kernel.cu.jit.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
@@ -315,7 +312,7 @@ template <typename InputType,
           std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value and
                            !(op == aggregation::COUNT_VALID || op == aggregation::COUNT_ALL ||
                              op == aggregation::ROW_NUMBER || op == aggregation::LEAD ||
-                             op == aggregation::LAG || op == aggregation::COLLECT)>* = nullptr>
+                             op == aggregation::LAG || op == aggregation::COLLECT_LIST)>* = nullptr>
 bool __device__ process_rolling_window(column_device_view input,
                                        column_device_view ignored_default_outputs,
                                        mutable_column_device_view output,
@@ -814,7 +811,7 @@ struct rolling_window_launcher {
             typename PrecedingWindowIterator,
             typename FollowingWindowIterator>
   std::enable_if_t<!(op == aggregation::MEAN || op == aggregation::LEAD || op == aggregation::LAG ||
-                     op == aggregation::COLLECT),
+                     op == aggregation::COLLECT_LIST),
                    std::unique_ptr<column>>
   operator()(column_view const& input,
              column_view const& default_outputs,
@@ -897,11 +894,11 @@ struct rolling_window_launcher {
   }
 
   /**
-   * @brief Creates the offsets child of the result of the `COLLECT` window aggregation
+   * @brief Creates the offsets child of the result of the `COLLECT_LIST` window aggregation
    *
    * Given the input column, the preceding/following window bounds, and `min_periods`,
    * the sizes of each list row may be computed. These values can then be used to
-   * calculate the offsets for the result of `COLLECT`.
+   * calculate the offsets for the result of `COLLECT_LIST`.
    *
    * Note: If `min_periods` exceeds the number of observations for a window, the size
    * is set to `0` (since the result is `null`).
@@ -945,7 +942,7 @@ struct rolling_window_launcher {
   }
 
   /**
-   * @brief Generate mapping of each row in the COLLECT result's child column
+   * @brief Generate mapping of each row in the COLLECT_LIST result's child column
    * to the index of the row it belongs to.
    *
    *  If
@@ -1030,7 +1027,7 @@ struct rolling_window_launcher {
 
   /**
    * @brief Create gather map to generate the child column of the result of
-   * the `COLLECT` window aggregation.
+   * the `COLLECT_LIST` window aggregation.
    */
   template <typename PrecedingIter>
   std::unique_ptr<column> create_collect_gather_map(column_view const& child_offsets,
@@ -1064,7 +1061,7 @@ struct rolling_window_launcher {
   }
 
   /**
-   * @brief Count null entries in result of COLLECT.
+   * @brief Count null entries in result of COLLECT_LIST.
    */
   size_type count_child_nulls(column_view const& input,
                               std::unique_ptr<column> const& gather_map,
@@ -1139,7 +1136,7 @@ struct rolling_window_launcher {
   }
 
   template <aggregation::Kind op, typename PrecedingIter, typename FollowingIter>
-  std::enable_if_t<(op == aggregation::COLLECT), std::unique_ptr<column>> operator()(
+  std::enable_if_t<(op == aggregation::COLLECT_LIST), std::unique_ptr<column>> operator()(
     column_view const& input,
     column_view const& default_outputs,
     PrecedingIter preceding_begin_raw,
@@ -1150,7 +1147,7 @@ struct rolling_window_launcher {
     rmm::mr::device_memory_resource* mr)
   {
     CUDF_EXPECTS(default_outputs.is_empty(),
-                 "COLLECT window function does not support default values.");
+                 "COLLECT_LIST window function does not support default values.");
 
     if (input.is_empty()) return empty_like(input);
 
@@ -1270,19 +1267,15 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   std::string cuda_source;
   switch (udf_agg->kind) {
     case aggregation::Kind::PTX:
-      cuda_source = cudf::rolling::jit::code::kernel_headers;
       cuda_source +=
         cudf::jit::parse_single_function_ptx(udf_agg->_source,
                                              udf_agg->_function_name,
                                              cudf::jit::get_type_name(udf_agg->_output_type),
                                              {0, 5});  // args 0 and 5 are pointers.
-      cuda_source += cudf::rolling::jit::code::kernel;
       break;
     case aggregation::Kind::CUDA:
-      cuda_source = cudf::rolling::jit::code::kernel_headers;
       cuda_source +=
         cudf::jit::parse_single_function_cuda(udf_agg->_source, udf_agg->_function_name);
-      cuda_source += cudf::rolling::jit::code::kernel;
       break;
     default: CUDF_FAIL("Unsupported UDF type.");
   }
@@ -1293,37 +1286,26 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   auto output_view = output->mutable_view();
   rmm::device_scalar<size_type> device_valid_count{0, stream};
 
-  const std::vector<std::string> compiler_flags{"-std=c++14",
-                                                // Have jitify prune unused global variables
-                                                "-remove-unused-globals",
-                                                // suppress all NVRTC warnings
-                                                "-w"};
+  std::string kernel_name =
+    jitify2::reflection::Template("cudf::rolling::jit::gpu_rolling_new")  //
+      .instantiate(cudf::jit::get_type_name(input.type()),  // list of template arguments
+                   cudf::jit::get_type_name(output->type()),
+                   udf_agg->_operator_name,
+                   preceding_window_str.c_str(),
+                   following_window_str.c_str());
 
-  // Launch the jitify kernel
-  cudf::jit::launcher(hash,
-                      cuda_source,
-                      {cudf_types_hpp,
-                       cudf_utilities_bit_hpp,
-                       cudf::rolling::jit::code::operation_h,
-                       ___src_rolling_rolling_jit_detail_hpp},
-                      compiler_flags,
-                      nullptr,
-                      stream)
-    .set_kernel_inst("gpu_rolling_new",  // name of the kernel we are launching
-                     {cudf::jit::get_type_name(input.type()),  // list of template arguments
-                      cudf::jit::get_type_name(output->type()),
-                      udf_agg->_operator_name,
-                      preceding_window_str.c_str(),
-                      following_window_str.c_str()})
-    .launch(input.size(),
-            cudf::jit::get_data_ptr(input),
-            input.null_mask(),
-            cudf::jit::get_data_ptr(output_view),
-            output_view.null_mask(),
-            device_valid_count.data(),
-            preceding_window,
-            following_window,
-            min_periods);
+  cudf::jit::get_program_cache(*rolling_jit_kernel_cu_jit)
+    .get_kernel(kernel_name, {}, {{"rolling/jit/operation-udf.hpp", cuda_source}})  //
+    ->configure_1d_max_occupancy(0, 0, 0, stream.value())                           //
+    ->launch(input.size(),
+             cudf::jit::get_data_ptr(input),
+             input.null_mask(),
+             cudf::jit::get_data_ptr(output_view),
+             output_view.null_mask(),
+             device_valid_count.data(),
+             preceding_window,
+             following_window,
+             min_periods);
 
   output->set_null_count(output->size() - device_valid_count.value(stream));
 
@@ -1370,6 +1352,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   auto input_col = cudf::is_dictionary(input.type())
                      ? dictionary_column_view(input).get_indices_annotated()
                      : input;
+
   auto output = cudf::type_dispatcher(input_col.type(),
                                       dispatch_rolling{},
                                       input_col,

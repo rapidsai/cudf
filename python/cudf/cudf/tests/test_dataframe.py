@@ -4996,13 +4996,13 @@ def test_cov_nans():
 @pytest.mark.parametrize(
     "gsr",
     [
-        cudf.Series([1, 2, 3]),
-        cudf.Series([1, 2, 3], index=["a", "b", "c"]),
-        cudf.Series([1, 2, 3], index=["a", "b", "d"]),
-        cudf.Series([1, 2], index=["a", "b"]),
-        cudf.Series([1, 2, 3], index=cudf.core.index.RangeIndex(0, 3)),
+        cudf.Series([4, 2, 3]),
+        cudf.Series([4, 2, 3], index=["a", "b", "c"]),
+        cudf.Series([4, 2, 3], index=["a", "b", "d"]),
+        cudf.Series([4, 2], index=["a", "b"]),
+        cudf.Series([4, 2, 3], index=cudf.core.index.RangeIndex(0, 3)),
         pytest.param(
-            cudf.Series([1, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"]),
+            cudf.Series([4, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"]),
             marks=pytest.mark.xfail,
         ),
     ],
@@ -5017,32 +5017,32 @@ def test_cov_nans():
         operator.truediv,
         operator.mod,
         operator.pow,
-        # comparison ops will temporarily XFAIL
-        # see PR  https://github.com/rapidsai/cudf/pull/7491
-        pytest.param(operator.eq, marks=pytest.mark.xfail()),
-        pytest.param(operator.lt, marks=pytest.mark.xfail()),
-        pytest.param(operator.le, marks=pytest.mark.xfail()),
-        pytest.param(operator.gt, marks=pytest.mark.xfail()),
-        pytest.param(operator.ge, marks=pytest.mark.xfail()),
-        pytest.param(operator.ne, marks=pytest.mark.xfail()),
+        operator.eq,
+        operator.lt,
+        operator.le,
+        operator.gt,
+        operator.ge,
+        operator.ne,
     ],
 )
 def test_df_sr_binop(gsr, colnames, op):
-    data = [[0, 2, 5], [3, None, 5], [6, 7, np.nan]]
+    data = [[3.0, 2.0, 5.0], [3.0, None, 5.0], [6.0, 7.0, np.nan]]
     data = dict(zip(colnames, data))
 
-    gdf = cudf.DataFrame(data)
-    pdf = pd.DataFrame.from_dict(data)
+    gsr = gsr.astype("float64")
 
-    psr = gsr.to_pandas()
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas(nullable=True)
+
+    psr = gsr.to_pandas(nullable=True)
 
     expect = op(pdf, psr)
-    got = op(gdf, gsr)
-    assert_eq(expect.astype(float), got.astype(float))
+    got = op(gdf, gsr).to_pandas(nullable=True)
+    assert_eq(expect, got, check_dtype=False)
 
     expect = op(psr, pdf)
-    got = op(psr, pdf)
-    assert_eq(expect.astype(float), got.astype(float))
+    got = op(gsr, gdf).to_pandas(nullable=True)
+    assert_eq(expect, got, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -5222,7 +5222,7 @@ def test_memory_usage_multi():
 def test_setitem_diff_size_list(list_input, key):
     gdf = cudf.datasets.randomdata(5)
     with pytest.raises(
-        ValueError, match=("All values must be of equal length")
+        ValueError, match=("All columns must be of equal length")
     ):
         gdf[key] = list_input
 
@@ -8216,9 +8216,6 @@ def test_agg_for_dataframe_with_string_columns(aggs):
     "overwrite", [True, False],
 )
 @pytest.mark.parametrize(
-    "filter_func", [None],
-)
-@pytest.mark.parametrize(
     "errors", ["ignore"],
 )
 @pytest.mark.parametrize(
@@ -8262,19 +8259,17 @@ def test_agg_for_dataframe_with_string_columns(aggs):
         },
     ],
 )
-def test_update_for_dataframes(
-    data, data2, join, overwrite, filter_func, errors
-):
+def test_update_for_dataframes(data, data2, join, overwrite, errors):
     pdf = pd.DataFrame(data)
     gdf = cudf.DataFrame(data)
 
     other_pd = pd.DataFrame(data2)
     other_gd = cudf.DataFrame(data2)
 
-    expect = pdf.update(other_pd, join, overwrite, filter_func, errors)
-    got = gdf.update(other_gd, join, overwrite, filter_func, errors)
+    pdf.update(other=other_pd, join=join, overwrite=overwrite, errors=errors)
+    gdf.update(other=other_gd, join=join, overwrite=overwrite, errors=errors)
 
-    assert_eq(expect, got)
+    assert_eq(pdf, gdf, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -8442,3 +8437,77 @@ def test_rename_for_level_is_None_MC():
     got = gdf.rename(columns={"a": "f"}, level=None)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            [[1, 2, 3], 11, "a"],
+            [None, 22, "e"],
+            [[4], 33, "i"],
+            [[], 44, "o"],
+            [[5, 6], 55, "u"],
+        ],  # nested
+        [
+            [1, 11, "a"],
+            [2, 22, "e"],
+            [3, 33, "i"],
+            [4, 44, "o"],
+            [5, 55, "u"],
+        ],  # non-nested
+    ],
+)
+@pytest.mark.parametrize(
+    ("labels", "label_to_explode"),
+    [
+        (None, 0),
+        (pd.Index(["a", "b", "c"]), "a"),
+        (
+            pd.MultiIndex.from_tuples(
+                [(0, "a"), (0, "b"), (1, "a")], names=["l0", "l1"]
+            ),
+            (0, "a"),
+        ),
+    ],
+)
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize(
+    "p_index",
+    [
+        None,
+        ["ia", "ib", "ic", "id", "ie"],
+        pd.MultiIndex.from_tuples(
+            [(0, "a"), (0, "b"), (0, "c"), (1, "a"), (1, "b")]
+        ),
+    ],
+)
+def test_explode(data, labels, ignore_index, p_index, label_to_explode):
+    pdf = pd.DataFrame(data, index=p_index, columns=labels)
+    gdf = cudf.from_pandas(pdf)
+
+    expect = pdf.explode(label_to_explode, ignore_index)
+    got = gdf.explode(label_to_explode, ignore_index)
+
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "df,ascending,expected",
+    [
+        (
+            cudf.DataFrame({"a": [10, 0, 2], "b": [-10, 10, 1]}),
+            True,
+            cudf.Series([1, 2, 0], dtype="int32"),
+        ),
+        (
+            cudf.DataFrame({"a": [10, 0, 2], "b": [-10, 10, 1]}),
+            False,
+            cudf.Series([0, 2, 1], dtype="int32"),
+        ),
+    ],
+)
+def test_dataframe_argsort(df, ascending, expected):
+    actual = df.argsort(ascending=ascending)
+
+    assert_eq(actual, expected)

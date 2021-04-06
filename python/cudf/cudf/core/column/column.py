@@ -41,7 +41,7 @@ from cudf._lib.transform import bools_to_mask
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
-from cudf.core.dtypes import CategoricalDtype
+from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
     NUMERIC_TYPES,
@@ -427,6 +427,8 @@ class ColumnBase(Column, Serializable):
             array.type, pd.core.arrays._arrow_utils.ArrowIntervalType
         ):
             return cudf.core.column.IntervalColumn.from_arrow(array)
+        elif isinstance(array.type, pa.Decimal128Type):
+            return cudf.core.column.DecimalColumn.from_arrow(array)
 
         return libcudf.interop.from_arrow(data, data.column_names)._data[
             "None"
@@ -828,7 +830,12 @@ class ColumnBase(Column, Serializable):
     def median(self, skipna: bool = None) -> ScalarLike:
         raise TypeError(f"cannot perform median with type {self.dtype}")
 
-    def take(self: T, indices: ColumnBase, keep_index: bool = True) -> T:
+    def take(
+        self: T,
+        indices: ColumnBase,
+        keep_index: bool = True,
+        nullify: bool = False,
+    ) -> T:
         """Return Column by taking values from the corresponding *indices*.
         """
         # Handle zero size
@@ -837,7 +844,7 @@ class ColumnBase(Column, Serializable):
         try:
             return (
                 self.as_frame()
-                ._gather(indices, keep_index=keep_index)
+                ._gather(indices, keep_index=keep_index, nullify=nullify)
                 ._as_column()
             )
         except RuntimeError as e:
@@ -1005,7 +1012,9 @@ class ColumnBase(Column, Serializable):
         ascending: bool = True,
         na_position: builtins.str = "last",
     ) -> Tuple[ColumnBase, "cudf.core.column.NumericalColumn"]:
-        col_inds = self.as_frame()._get_sorted_inds(ascending, na_position)
+        col_inds = self.as_frame()._get_sorted_inds(
+            ascending=ascending, na_position=na_position
+        )
         col_keys = self.take(col_inds)
         return col_keys, col_inds
 
@@ -1017,8 +1026,13 @@ class ColumnBase(Column, Serializable):
             raise NotImplementedError(msg)
         return cpp_distinct_count(self, ignore_nulls=dropna)
 
+    def can_cast_safely(self, to_dtype: Dtype) -> bool:
+        raise NotImplementedError()
+
     def astype(self, dtype: Dtype, **kwargs) -> ColumnBase:
-        if is_categorical_dtype(dtype):
+        if is_numerical_dtype(dtype):
+            return self.as_numerical_column(dtype)
+        elif is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
         elif pd.api.types.pandas_dtype(dtype).type in {
             np.str_,
@@ -1033,11 +1047,7 @@ class ColumnBase(Column, Serializable):
                 )
             return self
         elif is_interval_dtype(self.dtype):
-            if not self.dtype == dtype:
-                raise NotImplementedError(
-                    "Casting interval columns not currently supported"
-                )
-            return self
+            return self.as_interval_column(dtype, **kwargs)
         elif is_decimal_dtype(dtype):
             return self.as_decimal_column(dtype, **kwargs)
         elif np.issubdtype(dtype, np.datetime64):
@@ -1098,6 +1108,11 @@ class ColumnBase(Column, Serializable):
     def as_datetime_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DatetimeColumn":
+        raise NotImplementedError
+
+    def as_interval_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.IntervalColumn":
         raise NotImplementedError
 
     def as_timedelta_column(
@@ -1401,6 +1416,8 @@ class ColumnBase(Column, Serializable):
           of `other`  and the categories of `self`.
         * when both `self` and `other` are StructColumns, rename the fields
           of `other` to the field names of `self`.
+        * when both `self` and `other` are DecimalColumns, copy the precision
+          from self.dtype to other.dtype
         * when `self` and `other` are nested columns of the same type,
           recursively apply this function on the children of `self` to the
           and the children of `other`.
@@ -1423,6 +1440,11 @@ class ColumnBase(Column, Serializable):
             self, cudf.core.column.StructColumn
         ):
             other = other._rename_fields(self.dtype.fields.keys())
+
+        if isinstance(other, cudf.core.column.DecimalColumn) and isinstance(
+            self, cudf.core.column.DecimalColumn
+        ):
+            other.dtype.precision = self.dtype.precision
 
         if type(self) is type(other):
             if self.base_children and other.base_children:
@@ -1499,7 +1521,7 @@ def column_empty(
                 dtype="int32",
             ),
         )
-    elif dtype.kind in "OU":
+    elif dtype.kind in "OU" and not is_decimal_dtype(dtype):
         data = None
         children = (
             full(row_count + 1, 0, dtype="int32"),
@@ -1549,6 +1571,16 @@ def build_column(
     """
     dtype = pd.api.types.pandas_dtype(dtype)
 
+    if is_numerical_dtype(dtype):
+        assert data is not None
+        return cudf.core.column.NumericalColumn(
+            data=data,
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            null_count=null_count,
+        )
     if is_categorical_dtype(dtype):
         if not len(children) == 1:
             raise ValueError(
@@ -1603,6 +1635,15 @@ def build_column(
             null_count=null_count,
             children=children,
         )
+    elif is_interval_dtype(dtype):
+        return cudf.core.column.IntervalColumn(
+            dtype=dtype,
+            mask=mask,
+            size=size,
+            offset=offset,
+            children=children,
+            null_count=null_count,
+        )
     elif is_struct_dtype(dtype):
         if size is None:
             raise TypeError("Must specify size")
@@ -1620,6 +1661,7 @@ def build_column(
         return cudf.core.column.DecimalColumn(
             data=data,
             size=size,
+            offset=offset,
             dtype=dtype,
             mask=mask,
             null_count=null_count,
@@ -1635,15 +1677,7 @@ def build_column(
             children=children,
         )
     else:
-        assert data is not None
-        return cudf.core.column.NumericalColumn(
-            data=data,
-            dtype=dtype,
-            mask=mask,
-            size=size,
-            offset=offset,
-            null_count=null_count,
-        )
+        raise TypeError(f"Unrecognized dtype: {dtype}")
 
 
 def build_categorical_column(
@@ -1689,6 +1723,52 @@ def build_categorical_column(
         children=(codes,),
     )
     return cast("cudf.core.column.CategoricalColumn", result)
+
+
+def build_interval_column(
+    left_col,
+    right_col,
+    mask=None,
+    size=None,
+    offset=0,
+    null_count=None,
+    closed="right",
+):
+    """
+    Build an IntervalColumn
+
+    Parameters
+    ----------
+    left_col : Column
+        Column of values representing the left of the interval
+    right_col : Column
+        Column of representing the right of the interval
+    mask : Buffer
+        Null mask
+    size : int, optional
+    offset : int, optional
+    closed : {"left", "right", "both", "neither"}, default "right"
+            Whether the intervals are closed on the left-side, right-side,
+            both or neither.
+    """
+    left = as_column(left_col)
+    right = as_column(right_col)
+    if closed not in {"left", "right", "both", "neither"}:
+        closed = "right"
+    if type(left_col) is not list:
+        dtype = IntervalDtype(left_col.dtype, closed)
+    else:
+        dtype = IntervalDtype("int64", closed)
+    size = len(left)
+    return build_column(
+        data=None,
+        dtype=dtype,
+        mask=mask,
+        size=size,
+        offset=offset,
+        null_count=null_count,
+        children=(left, right),
+    )
 
 
 def as_column(
@@ -1833,10 +1913,14 @@ def as_column(
                 cupy.asarray(arbitrary), nan_as_null=nan_as_null, dtype=dtype
             )
         else:
-            data = as_column(
-                pa.array(arbitrary, from_pandas=nan_as_null),
-                dtype=arbitrary.dtype,
-            )
+            pyarrow_array = pa.array(arbitrary, from_pandas=nan_as_null)
+            if isinstance(pyarrow_array.type, pa.Decimal128Type):
+                pyarrow_type = cudf.Decimal64Dtype.from_arrow(
+                    pyarrow_array.type
+                )
+            else:
+                pyarrow_type = arbitrary.dtype
+            data = as_column(pyarrow_array, dtype=pyarrow_type)
         if dtype is not None:
             data = data.astype(dtype)
 
@@ -2075,7 +2159,7 @@ def as_column(
                     data = as_column(sr, nan_as_null=nan_as_null)
                 elif is_interval_dtype(dtype):
                     sr = pd.Series(arbitrary, dtype="interval")
-                    data = as_column(sr, nan_as_null=nan_as_null)
+                    data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
                 else:
                     data = as_column(
                         _construct_array(arbitrary, dtype),

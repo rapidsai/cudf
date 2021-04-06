@@ -7,6 +7,7 @@ from libcpp cimport bool
 from libcpp.string cimport string
 
 from cudf._lib.cpp.types cimport data_type
+from cudf._lib.cpp.wrappers.decimals cimport scale_type
 
 cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
     cdef cppclass scalar:
@@ -51,3 +52,11 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         string_scalar(string st, bool is_valid) except +
         string_scalar(string_scalar other) except +
         string to_string() except +
+
+    cdef cppclass fixed_point_scalar[T](scalar):
+        fixed_point_scalar() except +
+        fixed_point_scalar(int64_t value,
+                           scale_type scale,
+                           bool is_valid) except +
+        int64_t value() except +
+        # TODO: Figure out how to add an int32 overload of value()

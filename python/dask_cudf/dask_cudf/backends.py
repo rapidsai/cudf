@@ -1,4 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -6,7 +7,11 @@ import pyarrow as pa
 
 from dask.dataframe.categorical import categorical_dtype_dispatch
 from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
-from dask.dataframe.methods import concat_dispatch, tolist_dispatch
+from dask.dataframe.methods import (
+    concat_dispatch,
+    is_categorical_dtype_dispatch,
+    tolist_dispatch,
+)
 from dask.dataframe.utils import (
     UNKNOWN_CATEGORIES,
     _nonempty_scalar,
@@ -205,8 +210,16 @@ def concat_cudf(
     filter_warning=True,
     sort=None,
     ignore_index=False,
+    **kwargs,
 ):
     assert join == "outer"
+
+    ignore_order = kwargs.get("ignore_order", False)
+    if ignore_order:
+        raise NotImplementedError(
+            "ignore_order parameter is not yet supported in dask-cudf"
+        )
+
     return cudf.concat(dfs, axis=axis, ignore_index=ignore_index)
 
 
@@ -218,6 +231,13 @@ def categorical_dtype_cudf(categories=None, ordered=None):
 @tolist_dispatch.register((cudf.Series, cudf.Index))
 def tolist_cudf(obj):
     return obj.to_arrow().to_pylist()
+
+
+@is_categorical_dtype_dispatch.register(
+    (cudf.Series, cudf.Index, cudf.CategoricalDtype, Series)
+)
+def is_categorical_dtype_cudf(obj):
+    return cudf.utils.dtypes.is_categorical_dtype(obj)
 
 
 try:

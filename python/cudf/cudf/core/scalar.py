@@ -1,9 +1,11 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+import decimal
 
 import numpy as np
 
 from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
 from cudf.core.column.column import ColumnBase
+from cudf.core.dtypes import Decimal64Dtype
 from cudf.core.index import Index
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
@@ -56,7 +58,14 @@ class Scalar(object):
         self._host_value = None
         self._host_dtype = None
         self._device_value = None
-        if isinstance(value, DeviceScalar):
+
+        if isinstance(value, Scalar):
+            if value._is_host_value_current:
+                self._host_value = value._host_value
+                self._host_dtype = value._host_dtype
+            else:
+                self._device_value = value._device_value
+        elif isinstance(value, DeviceScalar):
             self._device_value = value
         else:
             self._host_value, self._host_dtype = self._preprocess_host_value(
@@ -105,29 +114,44 @@ class Scalar(object):
         self._host_value = self._device_value._to_host_scalar()
 
     def _preprocess_host_value(self, value, dtype):
+        if isinstance(dtype, Decimal64Dtype):
+            # TODO: Support coercion from decimal.Decimal to different dtype
+            # TODO: Support coercion from integer to Decimal64Dtype
+            raise NotImplementedError(
+                "dtype as cudf.Decimal64Dtype is not supported. Pass a "
+                "decimal.Decimal to construct a DecimalScalar."
+            )
+        if isinstance(value, decimal.Decimal) and dtype is not None:
+            raise TypeError(f"Can not coerce decimal to {dtype}")
+
         value = to_cudf_compatible_scalar(value, dtype=dtype)
         valid = not _is_null_host_scalar(value)
 
-        if dtype is None:
-            if not valid:
-                if isinstance(value, (np.datetime64, np.timedelta64)):
-                    unit, _ = np.datetime_data(value)
-                    if unit == "generic":
-                        raise TypeError(
-                            "Cant convert generic NaT to null scalar"
-                        )
-                    else:
-                        dtype = value.dtype
-                else:
-                    raise TypeError(
-                        "dtype required when constructing a null scalar"
-                    )
-            else:
-                dtype = value.dtype
-        dtype = np.dtype(dtype)
+        if isinstance(value, decimal.Decimal):
+            # 0.0042 -> Decimal64Dtype(2, 4)
+            dtype = Decimal64Dtype._from_decimal(value)
 
-        # temporary
-        dtype = np.dtype("object") if dtype.char == "U" else dtype
+        else:
+            if dtype is None:
+                if not valid:
+                    if isinstance(value, (np.datetime64, np.timedelta64)):
+                        unit, _ = np.datetime_data(value)
+                        if unit == "generic":
+                            raise TypeError(
+                                "Cant convert generic NaT to null scalar"
+                            )
+                        else:
+                            dtype = value.dtype
+                    else:
+                        raise TypeError(
+                            "dtype required when constructing a null scalar"
+                        )
+                else:
+                    dtype = value.dtype
+            dtype = np.dtype(dtype)
+
+            # temporary
+            dtype = np.dtype("object") if dtype.char == "U" else dtype
 
         if not valid:
             value = NA
@@ -248,7 +272,10 @@ class Scalar(object):
     def __repr__(self):
         # str() fixes a numpy bug with NaT
         # https://github.com/numpy/numpy/issues/17552
-        return f"Scalar({str(self.value)}, dtype={self.dtype})"
+        return (
+            f"{self.__class__.__name__}"
+            f"({str(self.value)}, dtype={self.dtype})"
+        )
 
     def _binop_result_dtype_or_error(self, other, op):
         if op in {"__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"}:
@@ -331,7 +358,7 @@ class Scalar(object):
         return getattr(self.value, op)()
 
     def astype(self, dtype):
-        return Scalar(self.device_value, dtype)
+        return Scalar(self.value, dtype)
 
 
 class _NAType(object):

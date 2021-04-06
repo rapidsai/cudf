@@ -70,8 +70,6 @@ from cudf._lib.strings.char_types import (
     is_alpha as cpp_is_alpha,
     is_decimal as cpp_is_decimal,
     is_digit as cpp_is_digit,
-    is_float as cpp_is_float,
-    is_integer as cpp_is_integer,
     is_lower as cpp_is_lower,
     is_numeric as cpp_is_numeric,
     is_space as cpp_isspace,
@@ -88,6 +86,10 @@ from cudf._lib.strings.contains import (
 )
 from cudf._lib.strings.convert.convert_fixed_point import (
     to_decimal as cpp_to_decimal,
+)
+from cudf._lib.strings.convert.convert_floats import is_float as cpp_is_float
+from cudf._lib.strings.convert.convert_integers import (
+    is_integer as cpp_is_integer,
 )
 from cudf._lib.strings.convert.convert_urls import (
     url_decode as cpp_url_decode,
@@ -4758,10 +4760,7 @@ class StringColumn(column.ColumnBase):
         if len(self.base_children) == 0:
             return 0
         else:
-            return int(
-                (self.base_children[0].size - 1)
-                / self.base_children[0].dtype.itemsize
-            )
+            return self.base_children[0].size - 1
 
     @property
     def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
