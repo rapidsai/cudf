@@ -14,10 +14,7 @@
 # limitations under the License.
 #=============================================================================
 
-cmake_minimum_required(VERSION 3.18)
-
 # Create `jitify_preprocess` executable
-project(jitify_preprocess VERSION 2.0 LANGUAGES CXX CUDA)
 add_executable(jitify_preprocess "${JITIFY_INCLUDE_DIR}/jitify2_preprocess.cpp")
 
 target_link_libraries(jitify_preprocess CUDA::cudart ${CMAKE_DL_LIBS})
