@@ -50,11 +50,15 @@ class _NestedGetItemDict(dict):
         return obj
 
     def __getitem__(self, key):
-        """Recursively apply dict.__getitem__ to get nested elements of d."""
-        # Don't reduce over characters in a single string key, just get.
-        if isinstance(key, str):
-            return super().__getitem__(key)
-        return reduce(dict.__getitem__, key, self)
+        """Recursively apply dict.__getitem__ for nested elements."""
+        # As described in the pandas docs
+        # https://pandas.pydata.org/pandas-docs/stable/user_guide/advanced.html#advanced-indexing-with-hierarchical-index  # noqa: E501
+        # accessing nested elements of a multiindex must be done using a tuple.
+        # Lists and other sequences are treated as accessing multiple elements
+        # at the top level of the index.
+        if isinstance(key, tuple):
+            reduce(dict.__getitem__, key, self)
+        return super().__getitem__(key)
 
 
 def _to_flat_dict_inner(d, parents=()):
