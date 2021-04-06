@@ -2513,9 +2513,6 @@ class DataFrame(Frame, Serializable):
     def _concat(
         cls, objs, axis=0, join="outer", ignore_index=False, sort=False
     ):
-        # shallow-copy the input DFs in case the same DF instance
-        # is concatenated with itself
-
         # flag to indicate at least one empty input frame also has an index
         empty_has_index = False
         # length of output frame's RangeIndex if all input frames are empty,
@@ -2525,6 +2522,8 @@ class DataFrame(Frame, Serializable):
         num_empty_input_frames = 0
 
         for i, obj in enumerate(objs):
+            # shallow-copy the input DFs in case the same DF instance
+            # is concatenated with itself
             objs[i] = obj.copy(deep=False)
 
             # If ignore_index is true, determine if
