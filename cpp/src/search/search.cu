@@ -104,26 +104,26 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   auto matched = dictionary::detail::match_dictionaries({t, values}, stream);
 
   // 0-table_view, 1-column_order, 2-null_precedence, 3-validity_columns
-  auto flattened_t =
+  auto f_flattened =
     structs::detail::flatten_nested_columns(matched.second.front(), column_order, null_precedence);
-  auto flattened_values = structs::detail::flatten_nested_columns(matched.second.back(), {}, {});
+  auto values_flattened = structs::detail::flatten_nested_columns(matched.second.back(), {}, {});
 
-  auto d_t      = table_device_view::create(std::get<0>(flattened_t), stream);
-  auto d_values = table_device_view::create(std::get<0>(flattened_values), stream);
+  auto t_d      = table_device_view::create(std::get<0>(f_flattened), stream);
+  auto values_d = table_device_view::create(std::get<0>(values_flattened), stream);
   auto count_it = thrust::make_counting_iterator<size_type>(0);
 
-  rmm::device_vector<order> d_column_order(std::get<1>(flattened_t).begin(),
-                                           std::get<1>(flattened_t).end());
-  rmm::device_vector<null_order> d_null_precedence(std::get<2>(flattened_t).begin(),
-                                                   std::get<2>(flattened_t).end());
+  rmm::device_vector<order> column_order_dv(std::get<1>(f_flattened).begin(),
+                                            std::get<1>(f_flattened).end());
+  rmm::device_vector<null_order> null_precedence_dv(std::get<2>(f_flattened).begin(),
+                                                    std::get<2>(f_flattened).end());
 
   if (has_nulls(t) or has_nulls(values)) {
     auto ineq_op =
       (find_first)
         ? row_lexicographic_comparator<true>(
-            *d_t, *d_values, d_column_order.data().get(), d_null_precedence.data().get())
+            *t_d, *values_d, column_order_dv.data().get(), null_precedence_dv.data().get())
         : row_lexicographic_comparator<true>(
-            *d_values, *d_t, d_column_order.data().get(), d_null_precedence.data().get());
+            *values_d, *t_d, column_order_dv.data().get(), null_precedence_dv.data().get());
 
     launch_search(count_it,
                   count_it,
@@ -137,9 +137,9 @@ std::unique_ptr<column> search_ordered(table_view const& t,
     auto ineq_op =
       (find_first)
         ? row_lexicographic_comparator<false>(
-            *d_t, *d_values, d_column_order.data().get(), d_null_precedence.data().get())
+            *t_d, *values_d, column_order_dv.data().get(), null_precedence_dv.data().get())
         : row_lexicographic_comparator<false>(
-            *d_values, *d_t, d_column_order.data().get(), d_null_precedence.data().get());
+            *values_d, *t_d, column_order_dv.data().get(), null_precedence_dv.data().get());
 
     launch_search(count_it,
                   count_it,
