@@ -61,7 +61,8 @@ from cudf.utils.dtypes import (
     min_unsigned_type,
     np_to_pa_dtype,
 )
-from cudf.utils.utils import mask_dtype
+from cudf.utils.utils import mask_dtype, _mask_bitsize
+
 
 T = TypeVar("T", bound="ColumnBase")
 
@@ -2196,6 +2197,11 @@ def _construct_array(
     return arbitrary
 
 
+@njit
+def _mask_get(mask, pos):
+    return (mask[pos // _mask_bitsize] >> (pos % _mask_bitsize)) & 1
+
+
 def column_applymap(
     udf: Callable[[ScalarLike], ScalarLike],
     column: ColumnBase,
@@ -2222,17 +2228,17 @@ def column_applymap(
     if column.nullable:
         # For masked columns
         @cuda.jit
-        def kernel_masked(values, masks, results):
+        def _kernel_masked(values, masks, results):
             i = cuda.grid(1)
             # in range?
             if i < values.size:
                 # valid?
-                if utils.mask_get(masks, i):
+                if _mask_get(masks, i):
                     # call udf
                     results[i] = core(values[i])
 
         masks = column.mask_array_view
-        kernel_masked.forall(len(column))(values, masks, results)
+        _kernel_masked.forall(len(column))(values, masks, results)
     else:
         # For non-masked columns
         @cuda.jit

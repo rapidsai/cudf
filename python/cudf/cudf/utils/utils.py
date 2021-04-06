@@ -3,12 +3,10 @@
 import functools
 from collections import OrderedDict
 from collections.abc import Sequence
-from math import floor, isinf, isnan
 
 import cupy as cp
 import numpy as np
 import pandas as pd
-from numba import njit
 
 import rmm
 
@@ -17,8 +15,10 @@ from cudf.core import column
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import to_cudf_compatible_scalar
 
+# The size of the mask in bytes
 mask_dtype = np.dtype(np.int32)
-mask_bitsize = mask_dtype.itemsize * 8
+_mask_bitsize = mask_dtype.itemsize * 8
+
 
 _EQUALITY_OPS = {
     "eq",
@@ -34,46 +34,6 @@ _EQUALITY_OPS = {
     "__le__",
     "__ge__",
 }
-
-
-@njit
-def mask_get(mask, pos):
-    return (mask[pos // mask_bitsize] >> (pos % mask_bitsize)) & 1
-
-
-@njit
-def check_equals_float(a, b):
-    return (
-        a == b
-        or (isnan(a) and isnan(b))
-        or ((isinf(a) and a < 0) and (isinf(b) and b < 0))
-        or ((isinf(a) and a > 0) and (isinf(b) and b > 0))
-    )
-
-
-@njit
-def rint(x):
-    """Round to the nearest integer.
-
-    Returns
-    -------
-    The nearest integer, as a float.
-    """
-    y = floor(x)
-    r = x - y
-
-    if r > 0.5:
-        y += 1.0
-    if r == 0.5:
-        r = y - 2.0 * floor(0.5 * y)
-        if r == 1.0:
-            y += 1.0
-    return y
-
-
-@njit
-def check_equals_int(a, b):
-    return a == b
 
 
 def scalar_broadcast_to(scalar, size, dtype=None):
@@ -109,19 +69,6 @@ def scalar_broadcast_to(scalar, size, dtype=None):
         if out_col.size != 0:
             out_col.data_array_view[:] = scalar
         return out_col
-
-
-def normalize_index(index, size, doraise=True):
-    """Normalize negative index
-    """
-    if index < 0:
-        index = size + index
-    if doraise and not (0 <= index < size):
-        raise IndexError("out-of-bound")
-    return min(index, size)
-
-
-list_types_tuple = (list, np.array)
 
 
 def get_result_name(left, right):

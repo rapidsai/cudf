@@ -1734,8 +1734,9 @@ class RangeIndex(Index):
         return len(range(self._start, self._stop, self._step))
 
     def __getitem__(self, index):
+        len_self = len(self)
         if isinstance(index, slice):
-            sl_start, sl_stop, sl_step = index.indices(len(self))
+            sl_start, sl_stop, sl_step = index.indices(len_self)
 
             lo = self._start + sl_start * self._step
             hi = self._start + sl_stop * self._step
@@ -1743,7 +1744,11 @@ class RangeIndex(Index):
             return RangeIndex(start=lo, stop=hi, step=st, name=self._name)
 
         elif isinstance(index, Number):
-            index = utils.normalize_index(index, len(self))
+            if index < 0:
+                index = len_self + index
+            if not (0 <= index < len_self):
+                raise IndexError("out-of-bound")
+            index = min(index, len_self)
             index = self._start + index * self._step
             return index
         else:

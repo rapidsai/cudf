@@ -4,10 +4,10 @@ from pickle import dumps
 import cachetools
 import cupy
 import numpy as np
-from numba import cuda
+from numba import cuda, jit
+import math
 
 import cudf
-from cudf.utils.utils import check_equals_float, check_equals_int
 
 try:
     # Numba >= 0.49
@@ -77,10 +77,21 @@ def gpu_diff(in_col, out_col, out_mask, N):
 def gpu_mark_found_int(arr, val, out, not_found):
     i = cuda.grid(1)
     if i < arr.size:
-        if check_equals_int(arr[i], val):
+        if arr[i] == val:
             out[i] = i
         else:
             out[i] = not_found
+
+
+@jit
+def _check_equals_float(a, b):
+    """Check float equality with support for nans and infs."""
+    return (
+        a == b
+        or (math.isnan(a) and math.isnan(b))
+        or ((math.isinf(a) and a < 0) and (math.isinf(b) and b < 0))
+        or ((math.isinf(a) and a > 0) and (math.isinf(b) and b > 0))
+    )
 
 
 @cuda.jit
@@ -92,7 +103,7 @@ def gpu_mark_found_float(arr, val, out, not_found):
         # at 0.51.1, this will have a very slight
         # performance improvement. Related
         # discussion in : https://github.com/rapidsai/cudf/pull/6073
-        if check_equals_float(arr[i], float(val)):
+        if _check_equals_float(arr[i], float(val)):
             out[i] = i
         else:
             out[i] = not_found
