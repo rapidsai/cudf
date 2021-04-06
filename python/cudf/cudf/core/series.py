@@ -1183,9 +1183,10 @@ class Series(Frame, Serializable):
     def __getitem__(self, arg):
         if isinstance(arg, slice):
             return self.iloc[arg]
-        else:
+        elif isinstance(arg, str):
             return self.loc[arg]
-
+        else:
+            return self.iloc[arg]
 
     def __iter__(self):
         cudf.utils.utils.raise_iteration_error(obj=self)
