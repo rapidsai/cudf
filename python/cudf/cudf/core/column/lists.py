@@ -237,9 +237,10 @@ class ListMethods(ColumnMethodsMixin):
         Series([False, True, True])
         dtype: bool
         """
+        search_key = cudf.Scalar(search_key)
         try:
             res = self._return_or_inplace(
-                contains_scalar(self._column, search_key.device_value)
+                contains_scalar(self._column, search_key)
             )
         except RuntimeError as e:
             if (
