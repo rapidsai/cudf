@@ -2,7 +2,6 @@
 from pickle import dumps
 
 import cachetools
-import cupy
 import numpy as np
 from numba import cuda, jit
 import math
@@ -15,33 +14,6 @@ try:
 except ImportError:
     # Numba <= 0.49
     from numba import numpy_support
-
-
-# GPU array type casting
-
-
-def as_contiguous(arr):
-    assert arr.ndim == 1
-    cupy_dtype = arr.dtype
-    if np.issubdtype(cupy_dtype, np.datetime64):
-        cupy_dtype = np.dtype("int64")
-        arr = arr.view("int64")
-    out = cupy.ascontiguousarray(cupy.asarray(arr))
-    return cuda.as_cuda_array(out).view(arr.dtype)
-
-
-# Mask utils
-
-
-def full(size, value, dtype):
-    cupy_dtype = dtype
-    if np.issubdtype(cupy_dtype, np.datetime64):
-        time_unit, _ = np.datetime_data(cupy_dtype)
-        cupy_dtype = np.int64
-        value = np.datetime64(value, time_unit).view(cupy_dtype)
-
-    out = cupy.full(size, value, cupy_dtype)
-    return cuda.as_cuda_array(out).view(dtype)
 
 
 #
