@@ -71,59 +71,6 @@ def scalar_broadcast_to(scalar, size, dtype=None):
         return out_col
 
 
-def get_result_name(left, right):
-    """
-    This function will give appropriate name for the operations
-    involving two Series, Index's or combination of both.
-
-    Parameters
-    ----------
-    left : {Series, Index}
-    right : object
-
-    Returns
-    -------
-    name : object {string or None}
-    """
-
-    if isinstance(right, (cudf.Series, cudf.Index, pd.Series, pd.Index)):
-        name = compare_and_get_name(left, right)
-    else:
-        name = left.name
-    return name
-
-
-def compare_and_get_name(a, b):
-    """
-    If both a & b have name attribute, and they are
-    same return the common name.
-    Else, return either one of the name of a or b,
-    whichever is present.
-
-    Parameters
-    ----------
-    a : object
-    b : object
-
-    Returns
-    -------
-    name : str or None
-    """
-    a_has = hasattr(a, "name")
-    b_has = hasattr(b, "name")
-
-    if a_has and b_has:
-        if a.name == b.name:
-            return a.name
-        else:
-            return None
-    elif a_has:
-        return a.name
-    elif b_has:
-        return b.name
-    return None
-
-
 def initfunc(f):
     """
     Decorator for initialization functions that should

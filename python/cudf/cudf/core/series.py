@@ -1504,7 +1504,6 @@ class Series(Frame, Serializable):
         if isinstance(other, cudf.DataFrame):
             return NotImplemented
 
-        result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
             if not can_reindex and fn in cudf.utils.utils._EQUALITY_OPS:
                 if not self.index.equals(other.index):
@@ -1543,8 +1542,19 @@ class Series(Frame, Serializable):
                     rhs = rhs.fillna(fill_value)
 
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
-        result = lhs._copy_construct(data=outcol, name=result_name)
-        return result
+
+        # Get the appropriate name for output operations involving two objects that
+        # are a mix of pandas and cudf Series and Index. All of these object
+        if isinstance(other, (cudf.Series, cudf.Index, pd.Series, pd.Index)):
+            if self.name == other.name:
+                result_name = self.name
+            else:
+                result_name = None
+        else:
+            result_name = self.name
+
+        return lhs._copy_construct(data=outcol, name=result_name)
+
 
     def add(self, other, fill_value=None, axis=0):
         """
