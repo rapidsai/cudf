@@ -21,6 +21,7 @@ from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.core.join import merge
 from cudf.utils.dtypes import (
     is_column_like,
+    is_numerical_dtype,
     is_scalar,
 )
 
