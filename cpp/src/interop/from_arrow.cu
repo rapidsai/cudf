@@ -207,18 +207,15 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal64>(
   auto every_other = [] __device__(size_type i) { return 2 * i; };
   auto gather_map  = cudf::detail::make_counting_transform_iterator(0, every_other);
 
-  thrust::gather(rmm::exec_policy(stream),
-                 gather_map,  //
-                 gather_map + num_rows,
-                 buf.data(),
-                 out_buf.data());
+  thrust::gather(
+    rmm::exec_policy(stream), gather_map, gather_map + num_rows, buf.data(), out_buf.data());
 
   auto null_mask = [&] {
     if (not skip_mask and array.null_bitmap_data()) {
       auto temp_mask = get_mask_buffer(array, stream, mr);
       // If array is sliced, we have to copy whole mask and then take copy.
       return (num_rows == static_cast<size_type>(data_buffer->size() / sizeof(DeviceType)))
-               ? std::move(*temp_mask.release())
+               ? *temp_mask.release()
                : cudf::detail::copy_bitmask(static_cast<bitmask_type*>(temp_mask->data()),
                                             array.offset(),
                                             array.offset() + num_rows,
