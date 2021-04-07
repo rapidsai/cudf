@@ -179,7 +179,6 @@ def make_gpu_parse_arrow_cats_batch():
 
 
 def test_gpu_parse_arrow_cats():
-    pytest.xfail(reason="need dictionary mapping in libcudf from_arrow")
     batch = make_gpu_parse_arrow_cats_batch()
 
     stream = pa.BufferOutputStream()
