@@ -507,12 +507,20 @@ orc_streams::orc_stream_offsets orc_streams::compute_offsets(
   size_t rle_data_size = 0;
   for (size_t i = 0; i < streams.size(); ++i) {
     const auto &stream = streams[i];
-    const auto &column = columns[stream.column - 1];
 
-    if (((stream.kind == DICTIONARY_DATA || stream.kind == LENGTH) &&
-         (column.orc_encoding() == DICTIONARY_V2)) ||
-        ((stream.kind == DATA) &&
-         (column.orc_kind() == TypeKind::STRING && column.orc_encoding() == DIRECT_V2))) {
+    auto const is_str_data = [&]() {
+      // First stream is an index stream
+      if (stream.column == 0) return false;
+
+      auto const &column = columns[stream.column - 1];
+      if (column.orc_kind() != TypeKind::STRING) return false;
+
+      // Dictionary encoded string column dictionary characters or
+      // directly encoded string column characters
+      return ((stream.kind == DICTIONARY_DATA && column.orc_encoding() == DICTIONARY_V2) ||
+              (stream.kind == DATA && column.orc_encoding() == DIRECT_V2));
+    }();
+    if (is_str_data) {
       strm_offsets[i] = str_data_size;
       str_data_size += stream.length;
     } else {
@@ -588,14 +596,13 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
   }
   for (auto &cnt_in : validity_check_inputs) {
     auto const valid_counts = segmented_count_set_bits(cnt_in.second.mask, cnt_in.second.indices);
-    CUDF_EXPECTS(std::none_of(valid_counts.cbegin(),
-                              valid_counts.cend(),
-                              [](auto valid_count) { return valid_count % 8; }),
-                 "There's currently a bug in encoding boolean columns. Suggested workaround "
-                 "is to convert "
-                 "to "
-                 "int8 type. Please see https://github.com/rapidsai/cudf/issues/6763 for "
-                 "more information.");
+    CUDF_EXPECTS(
+      std::none_of(valid_counts.cbegin(),
+                   valid_counts.cend(),
+                   [](auto valid_count) { return valid_count % 8; }),
+      "There's currently a bug in encoding boolean columns. Suggested workaround is to convert "
+      "to "
+      "int8 type. Please see https://github.com/rapidsai/cudf/issues/6763 for more information.");
   }
 
   for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
@@ -634,11 +641,11 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
               }
             } else if (strm_type == gpu::CI_DATA && ck.type_kind == TypeKind::STRING &&
                        ck.encoding_kind == DIRECT_V2) {
-              strm.lengths[strm_type] = column.host_dict_chunk(rg_idx)->string_char_count;
-              auto const &prev_strm   = col_streams[rg_idx - 1];
-              strm.data_ptrs[strm_type] =
-                (rg_idx == 0) ? encoded_data.data() + stream_offsets.offsets[strm_id]
-                              : (prev_strm.data_ptrs[strm_type] + prev_strm.lengths[strm_type]);
+              strm.lengths[strm_type]   = column.host_dict_chunk(rg_idx)->string_char_count;
+              strm.data_ptrs[strm_type] = (rg_idx == 0)
+                                            ? encoded_data.data() + stream_offsets.offsets[strm_id]
+                                            : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
+                                               col_streams[rg_idx - 1].lengths[strm_type]);
             } else if (strm_type == gpu::CI_DATA && streams[strm_id].length == 0 &&
                        (ck.type_kind == DOUBLE || ck.type_kind == FLOAT)) {
               // Pass-through
@@ -1169,8 +1176,7 @@ void writer::impl::write(table_view const &table)
     StripeFooter sf;
     sf.streams = streams;
     sf.columns.resize(num_columns + 1);
-    sf.columns[0].kind           = DIRECT;
-    sf.columns[0].dictionarySize = 0;
+    sf.columns[0].kind = DIRECT;
     for (size_t i = 1; i < sf.columns.size(); ++i) {
       sf.columns[i].kind           = orc_columns[i - 1].orc_encoding();
       sf.columns[i].dictionarySize = (sf.columns[i].kind == DICTIONARY_V2)
