@@ -67,6 +67,7 @@ def read_csv(
     if na_values is not None and is_scalar(na_values):
         na_values = [na_values]
 
+
     return libcudf.csv.read_csv(
         filepath_or_buffer,
         lineterminator=lineterminator,
