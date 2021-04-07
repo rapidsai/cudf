@@ -41,7 +41,6 @@ function(jit_preprocess_files)
                            VERBATIM
                            COMMAND jitify_preprocess ${ARG_FILE}
                                     -o ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files
-                                    -v
                                     -i
                                     -m
                                     -std=c++14
