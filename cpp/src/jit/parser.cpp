@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,16 @@
  * limitations under the License.
  */
 
+#include "parser.hpp"
+
+#include <cudf/utilities/error.hpp>
+
 #include <algorithm>
 #include <cctype>
-#include <cudf/utilities/error.hpp>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
-
-#include "parser.h"
 
 namespace cudf {
 namespace jit {

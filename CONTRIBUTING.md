@@ -131,13 +131,13 @@ run each time you commit changes.
 
 Compiler requirements:
 
-* `gcc`     version 5.4+
-* `nvcc`    version 10.0+
-* `cmake`   version 3.14.0+
+* `gcc`     version 7.1+
+* `nvcc`    version 10.1+
+* `cmake`   version 3.18.0+
 
 CUDA/GPU requirements:
 
-* CUDA 10.0+
+* CUDA 10.1+
 * NVIDIA driver 410.48+
 * Pascal architecture or better
 
