@@ -12,7 +12,7 @@ from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
 )
-
+import pyarrow as pa
 
 class Scalar(object):
     def __init__(self, value, dtype=None):
@@ -114,15 +114,19 @@ class Scalar(object):
         self._host_value = self._device_value._to_host_scalar()
 
     def _preprocess_host_value(self, value, dtype):
-        if isinstance(dtype, Decimal64Dtype):
+
+        if isinstance(value, decimal.Decimal) and dtype is not None:
+            value = pa.scalar(value, type=pa.decimal128(dtype.precision, dtype.scale)).as_py()
+            return value, dtype
+
+        elif isinstance(dtype, Decimal64Dtype):
             # TODO: Support coercion from decimal.Decimal to different dtype
             # TODO: Support coercion from integer to Decimal64Dtype
             raise NotImplementedError(
                 "dtype as cudf.Decimal64Dtype is not supported. Pass a "
                 "decimal.Decimal to construct a DecimalScalar."
             )
-        if isinstance(value, decimal.Decimal) and dtype is not None:
-            raise TypeError(f"Can not coerce decimal to {dtype}")
+
 
         value = to_cudf_compatible_scalar(value, dtype=dtype)
         valid = not _is_null_host_scalar(value)
