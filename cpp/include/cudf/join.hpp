@@ -41,7 +41,7 @@ namespace cudf {
  * the matched row indices from the right table.
  *
  * @code{.pseudo}
- * Left: {{0, 1, 2}}
+ * Left:  {{0, 1, 2}}
  * Right: {{1, 2, 3}}
  * Result: {{1, 2}, {0, 1}}
  *
