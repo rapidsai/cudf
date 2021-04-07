@@ -188,7 +188,6 @@ auto make_null_replacement_iterator(column_device_view const& column,
  * @return auto Iterator that returns valid column elements, and validity of the
  * element in a thrust::optional
  */
-/**@{*/
 template <typename Element>
 auto make_optional_iterator(column_device_view const& column,
                             contains_nulls::DYNAMIC,
@@ -196,13 +195,6 @@ auto make_optional_iterator(column_device_view const& column,
 {
   return column.optional_begin<Element>(contains_nulls::DYNAMIC{}, has_nulls);
 }
-template <typename Element>
-auto make_optional_iterator(column_device_view const& column,
-                            contains_nulls::DYNAMIC)
-{
-  return column.optional_begin<Element>(contains_nulls::DYNAMIC{});
-}
-/**@}*/
 
 /**
  * @brief Constructs an optional iterator over a column's values and its validity.
@@ -470,11 +462,6 @@ struct scalar_optional_accessor<Element, cudf::contains_nulls::DYNAMIC>
   using value_type = thrust::optional<Element>;
   bool has_nulls;
 
-  scalar_optional_accessor(scalar const& scalar_value)
-    : scalar_value_accessor<Element>(scalar_value), has_nulls{scalar_value.is_valid()}
-  {
-  }
-
   scalar_optional_accessor(scalar const& scalar_value, bool with_nulls)
     : scalar_value_accessor<Element>(scalar_value), has_nulls{with_nulls}
   {
@@ -607,7 +594,6 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
  * @return auto Iterator that returns scalar elements, and validity of the
  * element in a thrust::optional
  */
-/**@{*/
 template <typename Element>
 auto inline make_optional_iterator(scalar const& scalar_value,
                                    contains_nulls::DYNAMIC, bool has_nulls)
@@ -618,17 +604,6 @@ auto inline make_optional_iterator(scalar const& scalar_value,
     thrust::make_constant_iterator<size_type>(0),
     scalar_optional_accessor<Element, contains_nulls::DYNAMIC>{scalar_value, has_nulls});
 }
-template <typename Element>
-auto inline make_optional_iterator(scalar const& scalar_value,
-                                   contains_nulls::DYNAMIC)
-{
-  CUDF_EXPECTS(type_id_matches_device_storage_type<Element>(scalar_value.type().id()),
-               "the data type mismatch");
-  return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
-                                         scalar_optional_accessor<Element, contains_nulls::DYNAMIC>{
-                                           scalar_value});
-}
-/**@}*/
 
 
 /**

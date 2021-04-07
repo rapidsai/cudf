@@ -549,20 +549,12 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *         the user has stated nulls exist
    * @throws cudf::logic_error if column datatype and Element type mismatch.
    */
-  /**@{*/
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   auto optional_begin(contains_nulls::DYNAMIC, bool has_nulls) const
   {
     return const_optional_iterator<T, contains_nulls::DYNAMIC>{
       count_it{0}, detail::optional_accessor<T, contains_nulls::DYNAMIC>{*this, has_nulls}};
   }
-  template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  auto optional_begin(contains_nulls::DYNAMIC) const
-  {
-    return const_optional_iterator<T, contains_nulls::DYNAMIC>{
-      count_it{0}, detail::optional_accessor<T, contains_nulls::DYNAMIC>{*this}};
-  }
-  /**@}*/
 
   /**
    * @brief Return an optional iterator to the first element of the column.
@@ -682,20 +674,12 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *         the user has stated nulls exist
    * @throws cudf::logic_error if column datatype and Element type mismatch.
    */
-  /**@{*/
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   auto optional_end(contains_nulls::DYNAMIC, bool has_nulls) const
   {
     return const_optional_iterator<T, contains_nulls::DYNAMIC>{
       count_it{size()}, detail::optional_accessor<T, contains_nulls::DYNAMIC>{*this, has_nulls}};
   }
-  template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  auto optional_end(contains_nulls::DYNAMIC) const
-  {
-    return const_optional_iterator<T, contains_nulls::DYNAMIC>{
-      count_it{size()}, detail::optional_accessor<T, contains_nulls::DYNAMIC>{*this}};
-  }
-  /**@}*/
 
   /**
    * @brief Return an optional iterator to the element following the last element of
@@ -1231,16 +1215,6 @@ template <typename T>
 struct optional_accessor<T, contains_nulls::DYNAMIC> {
   column_device_view const col;  ///< column view of column in device
   bool has_nulls;
-
-  /**
-   * @brief constructor
-   * @param[in] _col column device view of cudf column
-   */
-  optional_accessor(column_device_view const& _col)
-    : col{_col}, has_nulls{_col.nullable()}
-  {
-    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
-  }
 
   /**
    * @brief constructor

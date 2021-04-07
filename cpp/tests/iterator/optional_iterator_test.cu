@@ -187,9 +187,6 @@ TYPED_TEST(IteratorTest, null_optional_iterator)
   this->iterator_test_thrust(optional_values,
                              d_col->optional_begin<T>(cudf::contains_nulls::DYNAMIC{}, true),
                              host_values.size());
-  this->iterator_test_thrust(optional_values,
-                             d_col->optional_begin<T>(cudf::contains_nulls::DYNAMIC{}),
-                             host_values.size());
 
   this->iterator_test_thrust(
     optional_values, d_col->optional_begin<T>(cudf::contains_nulls::YES{}), host_values.size());
