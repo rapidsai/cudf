@@ -22,8 +22,8 @@ from cudf.testing._utils import (
     NUMERIC_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    assert_join_results_equal,
 )
-from cudf.tests.test_joining import assert_join_results_equal
 from cudf.utils import dtypes as dtypeutils
 
 data_list = [

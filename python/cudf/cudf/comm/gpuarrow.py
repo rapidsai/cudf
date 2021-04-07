@@ -1,5 +1,4 @@
-# Copyright (c) 2019-2021, NVIDIA CORPORATION.
-
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 from collections import OrderedDict
 from collections.abc import Sequence
 
@@ -10,7 +9,7 @@ import pyarrow as pa
 from cudf._lib.gpuarrow import (
     CudaRecordBatchStreamReader as _CudaRecordBatchStreamReader,
 )
-from cudf.core import DataFrame, Series, column
+from cudf.core import Series, column
 from cudf.utils.utils import mask_bitsize, mask_dtype
 
 
@@ -34,25 +33,19 @@ class CudaRecordBatchStreamReader(_CudaRecordBatchStreamReader):
 
 class GpuArrowReader(Sequence):
     def __init__(self, schema, dev_ary):
-        table = CudaRecordBatchStreamReader(dev_ary, schema).read_all()
-        self._df = DataFrame.from_arrow(table)
-        self._schema = pa.Schema.from_pandas(self._df)
+        self._table = CudaRecordBatchStreamReader(dev_ary, schema).read_all()
 
     def __len__(self):
-        return len(self._df._data.names)
+        return self._table.num_columns
 
     def __getitem__(self, idx):
-        return GpuArrowNodeReader(
-            schema=self._schema,
-            field=self._schema[idx],
-            series=self._df._data.columns[idx],
-        )
+        return GpuArrowNodeReader(self._table, idx)
 
     def schema(self):
         """
         Return a pyarrow schema
         """
-        return self._schema
+        return self._table.schema
 
     def to_dict(self):
         """
@@ -65,10 +58,10 @@ class GpuArrowReader(Sequence):
 
 
 class GpuArrowNodeReader(object):
-    def __init__(self, schema, field, series):
-        self._schema = schema
-        self._field = field
-        self._series = Series(column.as_column(series))
+    def __init__(self, table, index):
+        self._table = table
+        self._field = table.schema[index]
+        self._series = Series(column.as_column(table.column(index)))
         self._series.name = self.name
 
     def __len__(self):
@@ -76,7 +69,7 @@ class GpuArrowNodeReader(object):
 
     @property
     def schema(self):
-        return self._schema
+        return self._table.schema
 
     @property
     def field_schema(self):

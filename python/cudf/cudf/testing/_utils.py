@@ -15,6 +15,8 @@ from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils import dtypes as dtypeutils
 
+_JOIN_TYPES = ("left", "inner", "outer", "right", "leftanti", "leftsemi")
+
 supported_numpy_dtypes = [
     "bool",
     "int8",
@@ -299,3 +301,34 @@ def gen_rand_series(dtype, size, **kwargs):
 @contextmanager
 def does_not_raise():
     yield
+
+
+def assert_join_results_equal(expect, got, how, **kwargs):
+    if how not in _JOIN_TYPES:
+        raise ValueError(f"Unrecognized join type {how}")
+    if how == "right":
+        got = got[expect.columns]
+
+    if isinstance(expect, (pd.Series, cudf.Series)):
+        return assert_eq(
+            expect.sort_values().reset_index(drop=True),
+            got.sort_values().reset_index(drop=True),
+            **kwargs,
+        )
+    elif isinstance(expect, (pd.DataFrame, cudf.DataFrame)):
+        if not len(
+            expect.columns
+        ):  # can't sort_values() on a df without columns
+            return assert_eq(expect, got, **kwargs)
+
+        assert_eq(
+            expect.sort_values(expect.columns.to_list()).reset_index(
+                drop=True
+            ),
+            got.sort_values(got.columns.to_list()).reset_index(drop=True),
+            **kwargs,
+        )
+    elif isinstance(expect, (pd.Index, cudf.Index)):
+        return assert_eq(expect.sort_values(), got.sort_values(), **kwargs)
+    else:
+        raise ValueError(f"Not a join result: {type(expect).__name__}")

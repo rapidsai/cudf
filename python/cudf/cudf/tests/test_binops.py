@@ -2037,7 +2037,7 @@ def test_binops_decimal(args):
         ),
     ],
 )
-@pytest.mark.parametrize("integer_dtype", cudf.tests.utils.INTEGER_TYPES)
+@pytest.mark.parametrize("integer_dtype", utils.INTEGER_TYPES)
 @pytest.mark.parametrize("reflected", [True, False])
 def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
     """

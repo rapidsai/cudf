@@ -12,6 +12,7 @@ from cudf.testing._utils import (
     NUMERIC_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    assert_join_results_equal,
 )
 
 _JOIN_TYPES = ("left", "inner", "outer", "right", "leftanti", "leftsemi")
@@ -69,37 +70,6 @@ def pd_odd_joins(left, right, join_type):
         return left[~left.index.isin(right.index)][left.columns]
     elif join_type == "leftsemi":
         return left[left.index.isin(right.index)][left.columns]
-
-
-def assert_join_results_equal(expect, got, how, **kwargs):
-    if how not in _JOIN_TYPES:
-        raise ValueError(f"Unrecognized join type {how}")
-    if how == "right":
-        got = got[expect.columns]
-
-    if isinstance(expect, (pd.Series, cudf.Series)):
-        return assert_eq(
-            expect.sort_values().reset_index(drop=True),
-            got.sort_values().reset_index(drop=True),
-            **kwargs,
-        )
-    elif isinstance(expect, (pd.DataFrame, cudf.DataFrame)):
-        if not len(
-            expect.columns
-        ):  # can't sort_values() on a df without columns
-            return assert_eq(expect, got, **kwargs)
-
-        assert_eq(
-            expect.sort_values(expect.columns.to_list()).reset_index(
-                drop=True
-            ),
-            got.sort_values(got.columns.to_list()).reset_index(drop=True),
-            **kwargs,
-        )
-    elif isinstance(expect, (pd.Index, cudf.Index)):
-        return assert_eq(expect.sort_values(), got.sort_values(), **kwargs)
-    else:
-        raise ValueError(f"Not a join result: {type(expect).__name__}")
 
 
 @pytest.mark.parametrize("aa,bb,how,method", make_params())
