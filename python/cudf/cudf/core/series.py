@@ -1555,7 +1555,6 @@ class Series(Frame, Serializable):
 
         return lhs._copy_construct(data=outcol, name=result_name)
 
-
     def add(self, other, fill_value=None, axis=0):
         """
         Addition of series and other, element-wise

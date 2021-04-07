@@ -30,7 +30,7 @@ from cudf.core.column import (
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import Frame
-from cudf.utils import ioutils, utils
+from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     find_common_type,

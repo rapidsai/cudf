@@ -61,7 +61,7 @@ from cudf.utils.dtypes import (
     min_unsigned_type,
     np_to_pa_dtype,
 )
-from cudf.utils.utils import mask_dtype, _mask_bitsize
+from cudf.utils.utils import mask_dtype, mask_bitsize
 
 
 T = TypeVar("T", bound="ColumnBase")
@@ -2217,7 +2217,7 @@ def _construct_array(
 
 @njit
 def _mask_get(mask, pos):
-    return (mask[pos // _mask_bitsize] >> (pos % _mask_bitsize)) & 1
+    return (mask[pos // mask_bitsize] >> (pos % mask_bitsize)) & 1
 
 
 def column_applymap(

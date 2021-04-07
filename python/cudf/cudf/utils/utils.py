@@ -17,7 +17,7 @@ from cudf.utils.dtypes import to_cudf_compatible_scalar
 
 # The size of the mask in bytes
 mask_dtype = np.dtype(np.int32)
-_mask_bitsize = mask_dtype.itemsize * 8
+mask_bitsize = mask_dtype.itemsize * 8
 
 
 _EQUALITY_OPS = {
@@ -147,6 +147,7 @@ class cached_property:
     To force re-evaluation of a cached_property, simply delete
     it with `del`.
     """
+
     # TODO: Can be replaced with functools.cached_property when we drop support
     # for Python 3.7.
 
