@@ -1239,9 +1239,9 @@ struct TypedCollectSetTest : public CollectSetTest {
 };
 
 using TypesForSetTest = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
-  cudf::test::FloatingPointTypes,
-  cudf::test::DurationTypes,
-  cudf::test::FixedPointTypes>;
+                                           cudf::test::FloatingPointTypes,
+                                           cudf::test::DurationTypes,
+                                           cudf::test::FixedPointTypes>;
 
 TYPED_TEST_CASE(TypedCollectSetTest, TypesForSetTest);
 
@@ -1335,11 +1335,11 @@ TYPED_TEST(TypedCollectSetTest, RollingWindowHonoursMinPeriods)
   auto const input_column = fixed_width_column_wrapper<T, int32_t>{0, 1, 2, 2, 4, 5};
   auto const num_elements = static_cast<column_view>(input_column).size();
 
-  auto preceding    = 2;
-  auto following    = 1;
-  auto min_periods  = 3;
-  auto const result = rolling_window(
-    input_column, preceding, following, min_periods, make_collect_set_aggregation());
+  auto preceding   = 2;
+  auto following   = 1;
+  auto min_periods = 3;
+  auto const result =
+    rolling_window(input_column, preceding, following, min_periods, make_collect_set_aggregation());
 
   auto const expected_result = lists_column_wrapper<T, int32_t>{
     {{}, {0, 1, 2}, {1, 2}, {2, 4}, {2, 4, 5}, {}},
@@ -1362,8 +1362,8 @@ TYPED_TEST(TypedCollectSetTest, RollingWindowHonoursMinPeriods)
   following   = 2;
   min_periods = 4;
 
-  auto result_2 = rolling_window(
-    input_column, preceding, following, min_periods, make_collect_set_aggregation());
+  auto result_2 =
+    rolling_window(input_column, preceding, following, min_periods, make_collect_set_aggregation());
   auto expected_result_2 = lists_column_wrapper<T, int32_t>{
     {{}, {0, 1, 2}, {1, 2, 4}, {2, 4, 5}, {}, {}},
     cudf::detail::make_counting_transform_iterator(0, [num_elements](auto i) {
@@ -1394,11 +1394,11 @@ TEST_F(CollectSetTest, RollingWindowHonoursMinPeriodsOnStrings)
   auto const input_column = strings_column_wrapper{"0", "1", "2", "2", "4", "4"};
   auto const num_elements = static_cast<column_view>(input_column).size();
 
-  auto preceding    = 2;
-  auto following    = 1;
-  auto min_periods  = 3;
-  auto const result = rolling_window(
-    input_column, preceding, following, min_periods, make_collect_set_aggregation());
+  auto preceding   = 2;
+  auto following   = 1;
+  auto min_periods = 3;
+  auto const result =
+    rolling_window(input_column, preceding, following, min_periods, make_collect_set_aggregation());
 
   auto const expected_result = lists_column_wrapper<string_view>{
     {{}, {"0", "1", "2"}, {"1", "2"}, {"2", "4"}, {"2", "4"}, {}},
@@ -1421,8 +1421,8 @@ TEST_F(CollectSetTest, RollingWindowHonoursMinPeriodsOnStrings)
   following   = 2;
   min_periods = 4;
 
-  auto result_2 = rolling_window(
-    input_column, preceding, following, min_periods, make_collect_set_aggregation());
+  auto result_2 =
+    rolling_window(input_column, preceding, following, min_periods, make_collect_set_aggregation());
   auto expected_result_2 = lists_column_wrapper<string_view>{
     {{}, {"0", "1", "2"}, {"1", "2", "4"}, {"2", "4"}, {}, {}},
     cudf::detail::make_counting_transform_iterator(0, [num_elements](auto i) {
@@ -1551,16 +1551,10 @@ TYPED_TEST(TypedCollectSetTest, BasicGroupedRollingWindow)
                                              min_periods,
                                              make_collect_set_aggregation());
 
-  auto const expected_result = lists_column_wrapper<T, int32_t>{
-    {10, 11},
-    {10, 11},
-    {11, 13},
-    {11, 13},
-    {13},
-    {20, 21},
-    {20, 21},
-    {20, 21, 23},
-    {20, 23}}.release();
+  auto const expected_result =
+    lists_column_wrapper<T, int32_t>{
+      {10, 11}, {10, 11}, {11, 13}, {11, 13}, {13}, {20, 21}, {20, 21}, {20, 21, 23}, {20, 23}}
+      .release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
@@ -1622,8 +1616,8 @@ TYPED_TEST(TypedCollectSetTest, BasicGroupedRollingWindowWithNulls)
                                                min_periods,
                                                make_collect_set_aggregation(null_policy::EXCLUDE));
 
-    auto expected_child = fixed_width_column_wrapper<T, int32_t>{
-      10, 10, 13, 13, 13, 20, 20, 21, 21, 23, 21, 23};
+    auto expected_child =
+      fixed_width_column_wrapper<T, int32_t>{10, 10, 13, 13, 13, 20, 20, 21, 21, 23, 21, 23};
 
     auto expected_offsets = fixed_width_column_wrapper<int32_t>{0, 1, 2, 3, 4, 5, 6, 8, 10, 12};
 
