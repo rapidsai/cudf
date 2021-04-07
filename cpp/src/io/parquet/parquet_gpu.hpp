@@ -265,26 +265,6 @@ struct PageFragment {
   uint16_t num_dict_vals;    //!< Number of unique dictionary entries
 };
 
-/**
- * @brief Struct describing an encoder data page
- */
-struct EncPage {
-  uint8_t *page_data;        //!< Ptr to uncompressed page
-  uint8_t *compressed_data;  //!< Ptr to compressed page
-  uint16_t num_fragments;    //!< Number of fragments in page
-  PageType page_type;        //!< Page type
-  uint8_t dict_bits_plus1;   //!< 0=plain, nonzero:bits to encoding dictionary indices + 1
-  uint32_t chunk_id;         //!< Index in chunk array
-  uint32_t hdr_size;         //!< Size of page header
-  uint32_t max_hdr_size;     //!< Maximum size of page header
-  uint32_t max_data_size;    //!< Maximum size of coded page data (excluding header)
-  uint32_t start_row;        //!< First row of page
-  uint32_t num_rows;         //!< Rows in page
-  uint32_t num_leaf_values;  //!< Values in page. Different from num_rows in case of nested types
-  uint32_t num_values;  //!< Number of def/rep level values in page. Includes null/empty elements in
-                        //!< non-leaf levels
-};
-
 /// Size of hash used for building dictionaries
 constexpr unsigned int kDictHashBits = 16;
 constexpr size_t kDictScratchSize    = (1 << kDictHashBits) * sizeof(uint32_t);
@@ -316,11 +296,11 @@ inline size_t __device__ __host__ GetMaxCompressedBfrSize(size_t uncomp_size,
  * @brief Struct describing an encoder column chunk
  */
 struct EncColumnChunk {
-  const parquet_column_device_view *col_desc;  //!< Column description
+  parquet_column_device_view const *col_desc;  //!< Column description
   PageFragment *fragments;                     //!< First fragment in chunk
   uint8_t *uncompressed_bfr;                   //!< Uncompressed page data
   uint8_t *compressed_bfr;                     //!< Compressed page data
-  const statistics_chunk *stats;               //!< Fragment statistics
+  statistics_chunk const *stats;               //!< Fragment statistics
   uint32_t bfr_size;                           //!< Uncompressed buffer size
   uint32_t compressed_size;                    //!< Compressed buffer size
   uint32_t start_row;                          //!< First row of chunk
@@ -336,6 +316,27 @@ struct EncColumnChunk {
   uint32_t dictionary_size;     //!< Size of dictionary
   uint32_t total_dict_entries;  //!< Total number of entries in dictionary
   uint32_t ck_stat_size;        //!< Size of chunk-level statistics (included in 1st page header)
+};
+
+/**
+ * @brief Struct describing an encoder data page
+ */
+struct EncPage {
+  uint8_t *page_data;        //!< Ptr to uncompressed page
+  uint8_t *compressed_data;  //!< Ptr to compressed page
+  uint16_t num_fragments;    //!< Number of fragments in page
+  PageType page_type;        //!< Page type
+  uint8_t dict_bits_plus1;   //!< 0=plain, nonzero:bits to encoding dictionary indices + 1
+  EncColumnChunk *chunk;     //!< Index in chunk array
+  uint32_t chunk_id;         //!< Index in chunk array
+  uint32_t hdr_size;         //!< Size of page header
+  uint32_t max_hdr_size;     //!< Maximum size of page header
+  uint32_t max_data_size;    //!< Maximum size of coded page data (excluding header)
+  uint32_t start_row;        //!< First row of page
+  uint32_t num_rows;         //!< Rows in page
+  uint32_t num_leaf_values;  //!< Values in page. Different from num_rows in case of nested types
+  uint32_t num_values;  //!< Number of def/rep level values in page. Includes null/empty elements in
+                        //!< non-leaf levels
 };
 
 /**
@@ -539,7 +540,6 @@ void DecideCompression(EncColumnChunk *chunks,
  * @brief Launches kernel to encode page headers
  *
  * @param[in,out] pages Device array of EncPages
- * @param[in,out] chunks Column chunks
  * @param[in] num_pages Number of pages
  * @param[in] start_page First page to encode in page array
  * @param[in] comp_out Compressor status or nullptr if no compression
@@ -548,7 +548,6 @@ void DecideCompression(EncColumnChunk *chunks,
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePageHeaders(EncPage *pages,
-                       EncColumnChunk *chunks,
                        uint32_t num_pages,
                        uint32_t start_page                  = 0,
                        const gpu_inflate_status_s *comp_out = nullptr,

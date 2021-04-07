@@ -454,6 +454,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(device_2dspan<EncColumnChunk
         page_g.num_fragments   = 0;
         page_g.page_type       = PageType::DICTIONARY_PAGE;
         page_g.dict_bits_plus1 = 0;
+        page_g.chunk           = &chunks[blockIdx.y][blockIdx.x];
         page_g.chunk_id        = blockIdx.y * num_columns + blockIdx.x;
         page_g.hdr_size        = 0;
         page_g.max_hdr_size    = 32;
@@ -531,6 +532,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(device_2dspan<EncColumnChunk
         }
         if (!t) {
           page_g.num_fragments   = fragments_in_chunk - page_start;
+          page_g.chunk           = &chunks[blockIdx.y][blockIdx.x];
           page_g.chunk_id        = blockIdx.y * num_columns + blockIdx.x;
           page_g.page_type       = PageType::DATA_PAGE;
           page_g.dict_bits_plus1 = dict_bits_plus1;
@@ -939,7 +941,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
 
   if (t == 0) {
     s->page = pages[start_page + blockIdx.x];
-    s->ck   = chunks[s->page.chunk_id];
+    s->ck   = *s->page.chunk;
     s->col  = *s->ck.col_desc;
     s->cur  = s->page.page_data + s->page.max_hdr_size;
   }
@@ -1479,12 +1481,12 @@ __device__ uint8_t *EncodeStatistics(uint8_t *start,
 
 // blockDim(128, 1, 1)
 __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
-                                                            EncColumnChunk *chunks,
                                                             const gpu_inflate_status_s *comp_out,
                                                             const statistics_chunk *page_stats,
                                                             const statistics_chunk *chunk_stats,
                                                             uint32_t start_page)
 {
+  // When this whole kernel becomes single thread,
   __shared__ __align__(8) parquet_column_device_view col_g;
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
@@ -1497,13 +1499,13 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
     uint32_t compressed_page_size, uncompressed_page_size;
 
     page_g = pages[start_page + blockIdx.x];
-    ck_g   = chunks[page_g.chunk_id];
+    ck_g   = *page_g.chunk;
     col_g  = *ck_g.col_desc;
 
     if (chunk_stats && start_page + blockIdx.x == ck_g.first_page) {
       hdr_start = (ck_g.is_compressed) ? ck_g.compressed_bfr : ck_g.uncompressed_bfr;
       hdr_end   = EncodeStatistics(hdr_start, &chunk_stats[page_g.chunk_id], &col_g, fp_scratch);
-      chunks[page_g.chunk_id].ck_stat_size = static_cast<uint32_t>(hdr_end - hdr_start);
+      page_g.chunk->ck_stat_size = static_cast<uint32_t>(hdr_end - hdr_start);
     }
     uncompressed_page_size = page_g.max_data_size;
     if (ck_g.is_compressed) {
@@ -2202,7 +2204,6 @@ void DecideCompression(EncColumnChunk *chunks,
  * @brief Launches kernel to encode page headers
  *
  * @param[in,out] pages Device array of EncPages
- * @param[in,out] chunks Column chunks
  * @param[in] num_pages Number of pages
  * @param[in] start_page First page to encode in page array
  * @param[in] comp_out Compressor status or nullptr if no compression
@@ -2211,7 +2212,6 @@ void DecideCompression(EncColumnChunk *chunks,
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePageHeaders(EncPage *pages,
-                       EncColumnChunk *chunks,
                        uint32_t num_pages,
                        uint32_t start_page,
                        const gpu_inflate_status_s *comp_out,
@@ -2219,8 +2219,10 @@ void EncodePageHeaders(EncPage *pages,
                        const statistics_chunk *chunk_stats,
                        rmm::cuda_stream_view stream)
 {
+  // TODO: single thread task. No need for 128 threads/block. Earlier it used to employ rest of the
+  // threads to coop load structs
   gpuEncodePageHeaders<<<num_pages, 128, 0, stream.value()>>>(
-    pages, chunks, comp_out, page_stats, chunk_stats, start_page);
+    pages, comp_out, page_stats, chunk_stats, start_page);
 }
 
 /**

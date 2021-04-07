@@ -829,7 +829,6 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks
                     comp_out,
                     stream);
   EncodePageHeaders(pages,
-                    chunks_ptr,
                     pages_in_batch,
                     first_page_in_batch,
                     comp_out,
@@ -1163,6 +1162,8 @@ void writer::impl::write(table_view const &table)
   rmm::device_uvector<gpu_inflate_input_s> comp_in(max_comp_pages, stream);
   rmm::device_uvector<gpu_inflate_status_s> comp_out(max_comp_pages, stream);
   rmm::device_uvector<gpu::EncPage> pages(num_pages, stream);
+
+  // This contains stats for both the pages and the rowgroups. WTF. Just make them separate.
   rmm::device_uvector<statistics_chunk> page_stats(num_stats_bfr, stream);
   for (uint32_t b = 0, r = 0; b < (uint32_t)batch_list.size(); b++) {
     uint8_t *bfr   = static_cast<uint8_t *>(uncomp_bfr.data());
