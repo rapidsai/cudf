@@ -37,6 +37,7 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
+#include <cudf/lists/detail/drop_list_duplicates.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/types.hpp>
@@ -315,7 +316,8 @@ template <typename InputType,
           std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value and
                            !(op == aggregation::COUNT_VALID || op == aggregation::COUNT_ALL ||
                              op == aggregation::ROW_NUMBER || op == aggregation::LEAD ||
-                             op == aggregation::LAG || op == aggregation::COLLECT_LIST)>* = nullptr>
+                             op == aggregation::LAG || op == aggregation::COLLECT_LIST ||
+                             op == aggregation::COLLECT_SET)>* = nullptr>
 bool __device__ process_rolling_window(column_device_view input,
                                        column_device_view ignored_default_outputs,
                                        mutable_column_device_view output,
@@ -814,7 +816,7 @@ struct rolling_window_launcher {
             typename PrecedingWindowIterator,
             typename FollowingWindowIterator>
   std::enable_if_t<!(op == aggregation::MEAN || op == aggregation::LEAD || op == aggregation::LAG ||
-                     op == aggregation::COLLECT_LIST),
+                     op == aggregation::COLLECT_LIST || op == aggregation::COLLECT_SET),
                    std::unique_ptr<column>>
   operator()(column_view const& input,
              column_view const& default_outputs,
@@ -1138,8 +1140,8 @@ struct rolling_window_launcher {
       std::move(new_gather_map), std::move(new_offsets));
   }
 
-  template <aggregation::Kind op, typename PrecedingIter, typename FollowingIter>
-  std::enable_if_t<(op == aggregation::COLLECT_LIST), std::unique_ptr<column>> operator()(
+  template <typename PrecedingIter, typename FollowingIter>
+  std::unique_ptr<column> collect_list(
     column_view const& input,
     column_view const& default_outputs,
     PrecedingIter preceding_begin_raw,
@@ -1160,9 +1162,9 @@ struct rolling_window_launcher {
     // column boundaries.
     // `grouped_rolling_window()` and `time_range_based_grouped_rolling_window() do.
     auto preceding_begin = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<size_type>(0), [preceding_begin_raw] __device__(auto i) {
-        return thrust::min(preceding_begin_raw[i], i + 1);
-      });
+    thrust::make_counting_iterator<size_type>(0), [preceding_begin_raw] __device__(auto i) {
+      return thrust::min(preceding_begin_raw[i], i + 1);
+    });
     auto following_begin = thrust::make_transform_iterator(
       thrust::make_counting_iterator<size_type>(0),
       [following_begin_raw, size = input.size()] __device__(auto i) {
@@ -1214,6 +1216,52 @@ struct rolling_window_launcher {
                              std::move(null_mask),
                              stream,
                              mr);
+  }
+
+  template <aggregation::Kind op, typename PrecedingIter, typename FollowingIter>
+  std::enable_if_t<(op == aggregation::COLLECT_LIST), std::unique_ptr<column>> operator()(
+    column_view const& input,
+    column_view const& default_outputs,
+    PrecedingIter preceding_begin_raw,
+    FollowingIter following_begin_raw,
+    size_type min_periods,
+    std::unique_ptr<aggregation> const& agg,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
+  {
+    return collect_list(input,
+                        default_outputs,
+                        preceding_begin_raw,
+                        following_begin_raw,
+                        min_periods,
+                        agg,
+                        stream,
+                        mr);
+  }
+
+  template <aggregation::Kind op, typename PrecedingIter, typename FollowingIter>
+  std::enable_if_t<(op == aggregation::COLLECT_SET), std::unique_ptr<column>> operator()(
+    column_view const& input,
+    column_view const& default_outputs,
+    PrecedingIter preceding_begin_raw,
+    FollowingIter following_begin_raw,
+    size_type min_periods,
+    std::unique_ptr<aggregation> const& agg,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
+  {
+    auto collect_result = collect_list(input,
+                                       default_outputs,
+                                       preceding_begin_raw,
+                                       following_begin_raw,
+                                       min_periods,
+                                       agg,
+                                       stream,
+                                       mr);
+
+    return lists::detail::drop_list_duplicates(
+      lists_column_view(collect_result->view()),
+      null_equality::EQUAL, nan_equality::ALL_EQUAL, stream, mr);
   }
 };
 
