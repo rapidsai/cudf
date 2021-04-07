@@ -746,7 +746,7 @@ void writer::impl::gather_fragment_statistics(
 }
 
 void writer::impl::build_chunk_dictionaries(
-  hostdevice_vector<gpu::EncColumnChunk> &chunks,
+  hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
   hostdevice_vector<gpu::parquet_column_device_view> &col_desc,
   uint32_t num_rowgroups,
   uint32_t num_columns,
@@ -756,23 +756,17 @@ void writer::impl::build_chunk_dictionaries(
   auto dict_scratch        = cudf::detail::make_zeroed_device_uvector_async<uint32_t>(
     dict_scratch_size / sizeof(uint32_t), stream);
   chunks.host_to_device(stream);
-  gpu::BuildChunkDictionaries(chunks.device_ptr(),
-                              dict_scratch.data(),
-                              dict_scratch_size,
-                              num_rowgroups * num_columns,
-                              stream);
-  gpu::InitEncoderPages(chunks.device_ptr(),
-                        nullptr,
-                        col_desc.device_ptr(),
-                        num_rowgroups,
-                        num_columns,
-                        nullptr,
-                        nullptr,
-                        stream);
+
+  // TODO: obviously remove this
+  auto chunks_ptr = static_cast<device_2dspan<gpu::EncColumnChunk>>(chunks).data();
+  gpu::BuildChunkDictionaries(
+    chunks_ptr, dict_scratch.data(), dict_scratch_size, num_rowgroups * num_columns, stream);
+  gpu::InitEncoderPages(
+    chunks, nullptr, col_desc.device_ptr(), num_rowgroups, num_columns, nullptr, nullptr, stream);
   chunks.device_to_host(stream, true);
 }
 
-void writer::impl::init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
+void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
                                       hostdevice_vector<gpu::parquet_column_device_view> &col_desc,
                                       gpu::EncPage *pages,
                                       statistics_chunk *page_stats,
@@ -784,7 +778,7 @@ void writer::impl::init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk> &ch
 {
   rmm::device_uvector<statistics_merge_group> page_stats_mrg(num_stats_bfr, stream);
   chunks.host_to_device(stream);
-  InitEncoderPages(chunks.device_ptr(),
+  InitEncoderPages(chunks,
                    pages,
                    col_desc.device_ptr(),
                    num_rowgroups,
@@ -805,7 +799,7 @@ void writer::impl::init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk> &ch
   stream.synchronize();
 }
 
-void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
+void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
                                 gpu::EncPage *pages,
                                 uint32_t num_columns,
                                 uint32_t pages_in_batch,
@@ -817,8 +811,9 @@ void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
                                 const statistics_chunk *page_stats,
                                 const statistics_chunk *chunk_stats)
 {
+  auto chunks_ptr = static_cast<device_2dspan<gpu::EncColumnChunk>>(chunks).data();
   gpu::EncodePages(
-    pages, chunks.device_ptr(), pages_in_batch, first_page_in_batch, comp_in, comp_out, stream);
+    pages, chunks_ptr, pages_in_batch, first_page_in_batch, comp_in, comp_out, stream);
   switch (compression_) {
     case parquet::Compression::SNAPPY:
       CUDA_TRY(gpu_snap(comp_in, comp_out, pages_in_batch, stream));
@@ -827,26 +822,26 @@ void writer::impl::encode_pages(hostdevice_vector<gpu::EncColumnChunk> &chunks,
   }
   // TBD: Not clear if the official spec actually allows dynamically turning off compression at the
   // chunk-level
-  DecideCompression(chunks.device_ptr() + first_rowgroup * num_columns,
+  DecideCompression(chunks_ptr + first_rowgroup * num_columns,
                     pages,
                     rowgroups_in_batch * num_columns,
                     first_page_in_batch,
                     comp_out,
                     stream);
   EncodePageHeaders(pages,
-                    chunks.device_ptr(),
+                    chunks_ptr,
                     pages_in_batch,
                     first_page_in_batch,
                     comp_out,
                     page_stats,
                     chunk_stats,
                     stream);
-  GatherPages(chunks.device_ptr() + first_rowgroup * num_columns,
-              pages,
-              rowgroups_in_batch * num_columns,
-              stream);
-  CUDA_TRY(cudaMemcpyAsync(&chunks[first_rowgroup * num_columns],
-                           chunks.device_ptr() + first_rowgroup * num_columns,
+  GatherPages(
+    chunks_ptr + first_rowgroup * num_columns, pages, rowgroups_in_batch * num_columns, stream);
+
+  auto chunks_hostptr = static_cast<host_2dspan<gpu::EncColumnChunk>>(chunks).data();
+  CUDA_TRY(cudaMemcpyAsync(&chunks_hostptr[first_rowgroup * num_columns],
+                           chunks_ptr + first_rowgroup * num_columns,
                            rowgroups_in_batch * num_columns * sizeof(gpu::EncColumnChunk),
                            cudaMemcpyDeviceToHost,
                            stream.value()));
@@ -1041,7 +1036,7 @@ void writer::impl::write(table_view const &table)
   }
   // Initialize row groups and column chunks
   uint32_t num_chunks = num_rowgroups * num_columns;
-  hostdevice_vector<gpu::EncColumnChunk> chunks(num_chunks, stream);
+  hostdevice_2dvector<gpu::EncColumnChunk> chunks(num_rowgroups, num_columns, stream);
   uint32_t num_dictionaries = 0;
   for (uint32_t r = 0, global_r = global_rowgroup_base, f = 0, start_row = 0; r < num_rowgroups;
        r++, global_r++) {
@@ -1050,7 +1045,7 @@ void writer::impl::write(table_view const &table)
     md.row_groups[global_r].total_byte_size = 0;
     md.row_groups[global_r].columns.resize(num_columns);
     for (int i = 0; i < num_columns; i++) {
-      gpu::EncColumnChunk *ck = &chunks[r * num_columns + i];
+      gpu::EncColumnChunk *ck = &chunks[r][i];
       bool dict_enable        = false;
 
       ck->col_desc         = col_desc.device_ptr() + i;
@@ -1129,7 +1124,7 @@ void writer::impl::write(table_view const &table)
     size_t rowgroup_size = 0;
     if (r < num_rowgroups) {
       for (int i = 0; i < num_columns; i++) {
-        gpu::EncColumnChunk *ck = &chunks[r * num_columns + i];
+        gpu::EncColumnChunk *ck = &chunks[r][i];
         ck->first_page          = num_pages;
         num_pages += ck->num_pages;
         pages_in_batch += ck->num_pages;
@@ -1174,7 +1169,7 @@ void writer::impl::write(table_view const &table)
     uint8_t *bfr_c = static_cast<uint8_t *>(comp_bfr.data());
     for (uint32_t j = 0; j < batch_list[b]; j++, r++) {
       for (int i = 0; i < num_columns; i++) {
-        gpu::EncColumnChunk *ck = &chunks[r * num_columns + i];
+        gpu::EncColumnChunk *ck = &chunks[r][i];
         ck->uncompressed_bfr    = bfr;
         ck->compressed_bfr      = bfr_c;
         bfr += ck->bfr_size;
@@ -1202,9 +1197,9 @@ void writer::impl::write(table_view const &table)
        b++) {
     // Count pages in this batch
     uint32_t rnext               = r + batch_list[b];
-    uint32_t first_page_in_batch = chunks[r * num_columns].first_page;
+    uint32_t first_page_in_batch = chunks[r][0].first_page;
     uint32_t first_page_in_next_batch =
-      (rnext < num_rowgroups) ? chunks[rnext * num_columns].first_page : num_pages;
+      (rnext < num_rowgroups) ? chunks[rnext][0].first_page : num_pages;
     uint32_t pages_in_batch = first_page_in_next_batch - first_page_in_batch;
     encode_pages(
       chunks,
@@ -1221,7 +1216,7 @@ void writer::impl::write(table_view const &table)
                                                                : nullptr);
     for (; r < rnext; r++, global_r++) {
       for (auto i = 0; i < num_columns; i++) {
-        gpu::EncColumnChunk *ck = &chunks[r * num_columns + i];
+        gpu::EncColumnChunk *ck = &chunks[r][i];
         uint8_t *dev_bfr;
         if (ck->is_compressed) {
           md.row_groups[global_r].columns[i].meta_data.codec = compression_;

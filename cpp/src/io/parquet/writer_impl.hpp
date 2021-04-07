@@ -48,6 +48,8 @@ struct parquet_column_view;
 
 using namespace cudf::io::parquet;
 using namespace cudf::io;
+using cudf::detail::device_2dspan;
+using cudf::detail::host_2dspan;
 using cudf::detail::hostdevice_2dvector;
 
 /**
@@ -160,7 +162,7 @@ class writer::impl {
    * @param num_columns Total number of columns
    * @param num_dictionaries Total number of dictionaries
    */
-  void build_chunk_dictionaries(hostdevice_vector<gpu::EncColumnChunk>& chunks,
+  void build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                                 hostdevice_vector<gpu::parquet_column_device_view>& col_desc,
                                 uint32_t num_rowgroups,
                                 uint32_t num_columns,
@@ -176,7 +178,7 @@ class writer::impl {
    * @param num_pages Total number of pages
    * @param num_stats_bfr Number of statistics buffers
    */
-  void init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk>& chunks,
+  void init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                           hostdevice_vector<gpu::parquet_column_device_view>& col_desc,
                           gpu::EncPage* pages,
                           statistics_chunk* page_stats,
@@ -200,7 +202,7 @@ class writer::impl {
    * @param page_stats optional page-level statistics (nullptr if none)
    * @param chunk_stats optional chunk-level statistics (nullptr if none)
    */
-  void encode_pages(hostdevice_vector<gpu::EncColumnChunk>& chunks,
+  void encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                     gpu::EncPage* pages,
                     uint32_t num_columns,
                     uint32_t pages_in_batch,

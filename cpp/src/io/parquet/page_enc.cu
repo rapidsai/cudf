@@ -40,6 +40,8 @@ constexpr bool enable_bool_rle = true;
 constexpr bool enable_bool_rle = false;
 #endif
 
+using ::cudf::detail::device_2dspan;
+
 constexpr int init_hash_bits       = 12;
 constexpr uint32_t rle_buffer_size = (1 << 9);
 
@@ -403,7 +405,7 @@ __global__ void __launch_bounds__(128)
 }
 
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
+__global__ void __launch_bounds__(128) gpuInitPages(device_2dspan<EncColumnChunk> chunks,
                                                     EncPage *pages,
                                                     const parquet_column_device_view *col_desc,
                                                     statistics_merge_group *page_grstats,
@@ -421,7 +423,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
 
   if (t == 0) {
     col_g = col_desc[blockIdx.x];
-    ck_g  = chunks[blockIdx.y * num_columns + blockIdx.x];
+    ck_g  = chunks[blockIdx.y][blockIdx.x];
   }
   __syncthreads();
   if (t < 32) {
@@ -611,7 +613,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
   }
   __syncthreads();
   if (t == 0) {
-    chunks[blockIdx.y * num_columns + blockIdx.x] = ck_g;
+    chunks[blockIdx.y][blockIdx.x] = ck_g;
     if (chunk_grstats) chunk_grstats[blockIdx.y * num_columns + blockIdx.x] = pagestats_g;
   }
 }
@@ -2137,7 +2139,7 @@ void InitFragmentStatistics(device_2dspan<statistics_group> groups,
  * @param[out] chunk_grstats Setup for chunk-level stats
  * @param[in] stream CUDA stream to use, default 0
  */
-void InitEncoderPages(EncColumnChunk *chunks,
+void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                       EncPage *pages,
                       const parquet_column_device_view *col_desc,
                       int32_t num_rowgroups,
@@ -2163,7 +2165,7 @@ void InitEncoderPages(EncColumnChunk *chunks,
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePages(EncPage *pages,
-                 const EncColumnChunk *chunks,
+                 EncColumnChunk const *chunks,
                  uint32_t num_pages,
                  uint32_t start_page,
                  gpu_inflate_input_s *comp_in,
