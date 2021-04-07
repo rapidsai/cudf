@@ -19,7 +19,7 @@
  * @brief cuDF-IO CSV writer class implementation
  */
 
-#include <io/csv/writer_impl.hpp>
+#include "writer_impl.hpp"
 
 #include <strings/utilities.cuh>
 

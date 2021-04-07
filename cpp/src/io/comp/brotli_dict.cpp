@@ -48,7 +48,7 @@ THE SOFTWARE.
 
 */
 
-#include <io/comp/brotli_dict.h>
+#include "brotli_dict.h"
 #include <stdint.h>
 
 namespace cudf {

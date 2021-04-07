@@ -19,7 +19,7 @@
  * @brief cuDF-IO ORC writer class implementation
  */
 
-#include <io/orc/writer_impl.hpp>
+#include "writer_impl.hpp"
 
 #include <io/utilities/column_utils.cuh>
 

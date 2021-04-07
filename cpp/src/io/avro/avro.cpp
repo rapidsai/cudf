@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <io/avro/avro.h>
+#include "avro.h"
 #include <string.h>
 #include <unordered_map>
 

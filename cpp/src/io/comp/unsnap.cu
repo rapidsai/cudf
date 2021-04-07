@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <io/comp/gpuinflate.h>
+#include "gpuinflate.h"
 
 #include <io/utilities/block_utils.cuh>
 

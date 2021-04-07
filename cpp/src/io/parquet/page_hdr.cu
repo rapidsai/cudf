@@ -15,8 +15,8 @@
  */
 
 #include <thrust/tuple.h>
-#include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
+#include "parquet_gpu.hpp"
 
 #include <rmm/cuda_stream_view.hpp>
 

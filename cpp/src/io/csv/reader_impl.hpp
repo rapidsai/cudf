@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <io/csv/csv.h>
-#include <io/csv/csv_gpu.h>
+#include "csv_common.h"
+#include "csv_gpu.h"
 
 #include <cudf/detail/utilities/trie.cuh>
 #include <io/utilities/column_buffer.hpp>

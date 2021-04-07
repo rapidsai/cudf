@@ -18,9 +18,9 @@
 
 #include <io/comp/gpuinflate.h>
 #include <io/statistics/column_stats.h>
-#include <io/parquet/parquet_common.hpp>
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
+#include "parquet_common.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>

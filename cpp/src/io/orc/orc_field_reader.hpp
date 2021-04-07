@@ -15,8 +15,8 @@
  */
 #pragma once
 
-#include <io/orc/orc.h>
 #include <string>
+#include "orc.h"
 
 /**
  * @file orc_field_reader.hpp

@@ -19,7 +19,7 @@
  * @brief cuDF-IO CSV reader class implementation
  */
 
-#include <io/csv/reader_impl.hpp>
+#include "reader_impl.hpp"
 
 #include <io/comp/io_uncomp.h>
 #include <io/utilities/parsing_utils.cuh>

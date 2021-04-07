@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <io/statistics/column_stats.h>
+#include "column_stats.h"
 
 #include <cudf/strings/string_view.cuh>
 

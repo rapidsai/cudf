@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <io/orc/orc_common.h>
-#include <io/orc/orc_gpu.h>
+#include "orc_common.h"
+#include "orc_gpu.h"
 
 #include <io/utilities/block_utils.cuh>
 

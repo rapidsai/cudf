@@ -19,7 +19,7 @@
  * @brief cuDF-IO column_buffer class implementation
  */
 
-#include <io/utilities/column_buffer.hpp>
+#include "column_buffer.hpp"
 
 namespace cudf {
 namespace io {

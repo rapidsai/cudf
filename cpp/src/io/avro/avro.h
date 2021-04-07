@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <io/avro/avro_common.h>
+#include "avro_common.h"
 
 #include <stddef.h>
 #include <stdint.h>
