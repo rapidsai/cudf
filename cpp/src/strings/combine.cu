@@ -427,8 +427,8 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                          string_view const d_str = d_column.is_null(ridx)
                                                      ? col_rep.value()
                                                      : d_column.element<string_view>(ridx);
-                         d_buffer       = detail::copy_string(d_buffer, d_str);
-                         colval_written = true;
+                         d_buffer                = detail::copy_string(d_buffer, d_str);
+                         colval_written          = true;
                        }
                      });
 
@@ -472,6 +472,46 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   CUDF_FUNC_RANGE();
   return detail::concatenate(
     strings_columns, separators, separator_narep, col_narep, rmm::cuda_stream_default, mr);
+}
+
+namespace detail {
+std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_columns,
+                                    strings_column_view const& separators,
+                                    string_scalar const& separator_narep,
+                                    string_scalar const& string_narep,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
+{
+  return detail::make_empty_strings_column(stream, mr);
+}
+
+std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_columns,
+                                    string_scalar const& separator,
+                                    string_scalar const& narep,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
+{
+  return detail::make_empty_strings_column(stream, mr);
+}
+}  // namespace detail
+
+std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_columns,
+                                    strings_column_view const& separators,
+                                    string_scalar const& separator_narep,
+                                    string_scalar const& string_narep,
+                                    rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::concatenate(
+    lists_strings_columns, separators, separator_narep, string_narep, rmm::cuda_stream_default, mr);
+}
+std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_columns,
+                                    string_scalar const& separator,
+                                    string_scalar const& narep,
+                                    rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::concatenate(lists_strings_columns, separator, narep, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings
