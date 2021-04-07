@@ -6,6 +6,7 @@ from decimal import Decimal
 import numpy as np
 import pandas as pd
 import pytest
+import pyarrow as pa
 
 import cudf
 from cudf import Scalar as pycudf_scalar
@@ -194,14 +195,9 @@ def test_scalar_roundtrip(value):
     + TEST_DECIMAL_TYPES,
 )
 def test_null_scalar(dtype):
-    if isinstance(dtype, cudf.Decimal64Dtype):
-        with pytest.raises(NotImplementedError):
-            s = cudf.Scalar(None, dtype=dtype)
-        return
-
     s = cudf.Scalar(None, dtype=dtype)
     assert s.value is cudf.NA
-    assert s.dtype == np.dtype(dtype)
+    assert s.dtype == (np.dtype(dtype) if not isinstance(dtype, cudf.Decimal64Dtype) else dtype)
     assert s.is_valid() is False
 
 
@@ -229,8 +225,13 @@ def test_nat_to_null_scalar_succeeds(value):
     "value", [None, np.datetime64("NaT"), np.timedelta64("NaT")]
 )
 def test_generic_null_scalar_construction_fails(value):
-    with pytest.raises(TypeError):
+    if value is None:
+        error = TypeError
+    else:
+        error = pa.lib.ArrowNotImplementedError
+    with pytest.raises(error):
         cudf.Scalar(value)
+
 
 
 @pytest.mark.parametrize(
@@ -242,14 +243,9 @@ def test_generic_null_scalar_construction_fails(value):
     + TEST_DECIMAL_TYPES,
 )
 def test_scalar_dtype_and_validity(dtype):
-    if isinstance(dtype, cudf.Decimal64Dtype):
-        with pytest.raises(NotImplementedError):
-            s = cudf.Scalar(None, dtype=dtype)
-        return
-
     s = cudf.Scalar(1, dtype=dtype)
 
-    assert s.dtype == np.dtype(dtype)
+    assert s.dtype == (np.dtype(dtype) if not isinstance(dtype, cudf.Decimal64Dtype) else dtype)
     assert s.is_valid() is True
 
 

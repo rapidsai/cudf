@@ -2,6 +2,8 @@
 import decimal
 
 import numpy as np
+from pandas._libs.tslibs.timestamps import Timestamp as pd_timestamp
+from pandas._libs.tslibs.timedeltas import Timedelta as pd_timedelta
 
 from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
 from cudf.core.column.column import ColumnBase
@@ -11,6 +13,10 @@ from cudf.core.series import Series
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
+    is_string_dtype,
+    is_decimal_dtype,
+    is_datetime_dtype,
+    is_timedelta_dtype
 )
 import pyarrow as pa
 
@@ -112,55 +118,43 @@ class Scalar(object):
 
     def _device_value_to_host(self):
         self._host_value = self._device_value._to_host_scalar()
-
+    
     def _preprocess_host_value(self, value, dtype):
+        pa_scalar = pa.scalar(
+            value if type(value) is not np.bool_
+            else bool(value)
+        )
+        valid = pa_scalar.is_valid
 
-        if isinstance(value, decimal.Decimal) and dtype is not None:
-            value = pa.scalar(value, type=pa.decimal128(dtype.precision, dtype.scale)).as_py()
-            return value, dtype
-
-        elif isinstance(dtype, Decimal64Dtype):
-            # TODO: Support coercion from decimal.Decimal to different dtype
-            # TODO: Support coercion from integer to Decimal64Dtype
-            raise NotImplementedError(
-                "dtype as cudf.Decimal64Dtype is not supported. Pass a "
-                "decimal.Decimal to construct a DecimalScalar."
-            )
-
-
-        value = to_cudf_compatible_scalar(value, dtype=dtype)
-        valid = not _is_null_host_scalar(value)
-
-        if isinstance(value, decimal.Decimal):
-            # 0.0042 -> Decimal64Dtype(2, 4)
-            dtype = Decimal64Dtype._from_decimal(value)
-
-        else:
+        # decimal handling
+        if isinstance(value, decimal.Decimal) or is_decimal_dtype(dtype):
             if dtype is None:
-                if not valid:
-                    if isinstance(value, (np.datetime64, np.timedelta64)):
-                        unit, _ = np.datetime_data(value)
-                        if unit == "generic":
-                            raise TypeError(
-                                "Cant convert generic NaT to null scalar"
-                            )
-                        else:
-                            dtype = value.dtype
-                    else:
-                        raise TypeError(
-                            "dtype required when constructing a null scalar"
-                        )
+                # value must be a decimal, derive the dtype
+                dtype = Decimal64Dtype._from_decimal(value)
+            
+            # arrow coerces a decimal to a difference precision/scale
+            # or an int to a decimal with certain precision/scale
+            # and errors if the incoming object cannot be coerced
+            # it also cleanly handles None
+            value = pa.scalar(
+                value, type=pa.decimal128(dtype.precision, dtype.scale)
+            ).as_py()
+        else:
+            value = to_cudf_compatible_scalar(value, dtype=dtype)
+            if dtype is None:
+                if not valid and not isinstance(pa_scalar.type, (pa.TimestampType, pa.DurationType)):
+                    raise TypeError(
+                        "dtype required when constructing a null scalar"
+                    )
                 else:
                     dtype = value.dtype
-            dtype = np.dtype(dtype)
 
+            dtype = np.dtype(dtype)
             # temporary
             dtype = np.dtype("object") if dtype.char == "U" else dtype
 
-        if not valid:
-            value = NA
+        return value if valid else NA, dtype
 
-        return value, dtype
 
     def _sync(self):
         """

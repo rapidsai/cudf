@@ -206,3 +206,32 @@ def test_typecast_from_decimal(data, from_dtype, to_dtype):
 
     assert_eq(got, expected)
     assert_eq(got.dtype, expected.dtype)
+
+def _decimal_series(input, dtype):
+    return cudf.Series(
+        [x if x is None else Decimal(x) for x in input], dtype=dtype,
+    )
+
+@pytest.mark.parametrize('args', [
+    # TODO: add way more test cases
+    (
+    ['1', '2', '3'],
+    Decimal64Dtype(1, 0),
+    Decimal(5),
+    1, 
+    ['1', '5', '3']
+    )
+])
+def test_series_setitem_decimal(args):
+    # TODO - improve this a lot
+    data, dtype, item, to, expect = args
+    data = _decimal_series(data, dtype)
+
+    if isinstance(expect, Exception):
+        with pytest.raises(expect):
+            data[to] = item
+        return
+    else:
+        expect = _decimal_series(expect, dtype)
+        data[to] = item
+        assert_eq(data, expect)
