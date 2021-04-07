@@ -113,8 +113,8 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   auto const& lhs     = find_first ? *t_d : *values_d;
   auto const& rhs     = find_first ? *values_d : *t_d;
 
-  auto const column_order_flattened    = std::get<1>(t_flattened);
-  auto const null_precedence_flattened = std::get<2>(t_flattened);
+  auto const& column_order_flattened    = std::get<1>(t_flattened);
+  auto const& null_precedence_flattened = std::get<2>(t_flattened);
   rmm::device_uvector<order> column_order_dv(column_order_flattened.size(), stream);
   rmm::device_uvector<null_order> null_precedence_dv(null_precedence_flattened.size(), stream);
   CUDA_TRY(cudaMemcpyAsync(column_order_dv.data(),
