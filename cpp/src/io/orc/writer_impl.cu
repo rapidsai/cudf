@@ -348,8 +348,10 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
                                          host_span<stripe_rowgroups const> stripe_bounds)
 {
   // First n + 1 streams are row index streams, including 'column 0'
-  std::vector<Stream> streams{{ROW_INDEX, 0, 0}};  // TODO: Separate index and data streams?
-  streams.resize(columns.size() + 1);
+  std::vector<Stream> streams(columns.size() + 1);  // TODO: Separate index and data streams?
+  thrust::tabulate(streams.begin(), streams.end(), [](auto const &idx) {
+    return Stream{ROW_INDEX, static_cast<uint32_t>(idx)};
+  });
   std::vector<int32_t> ids(columns.size() * gpu::CI_NUM_STREAMS, -1);
 
   for (auto &column : columns) {
@@ -467,13 +469,8 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
     // Initialize the column's metadata (this is the only reason columns is in/out param)
     column.set_orc_encoding(encoding_kind);
 
-    // Initialize the column's index stream
-    const auto id      = static_cast<uint32_t>(1 + column.id());
-    streams[id].column = id;
-    streams[id].kind   = ROW_INDEX;
-    streams[id].length = 0;
-
     // Initialize the column's data stream(s)
+    const auto id   = static_cast<uint32_t>(1 + column.id());
     const auto base = column.id() * gpu::CI_NUM_STREAMS;
     if (present_stream_size != 0) {
       auto len                    = static_cast<uint64_t>(present_stream_size);
