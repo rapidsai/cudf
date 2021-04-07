@@ -482,6 +482,10 @@ std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_colum
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(lists_strings_columns.child().type().id() == type_id::STRING,
+               "The input column must be a column of lists of strings");
+  CUDF_EXPECTS(lists_strings_columns.size() == separators.size(),
+               "Separators column should be the same size as the lists columns");
   return detail::make_empty_strings_column(stream, mr);
 }
 
@@ -491,6 +495,10 @@ std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_colum
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(lists_strings_columns.child().type().id() == type_id::STRING,
+               "The input column must be a column of lists of strings");
+  CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be a valid string_scalar");
+
   return detail::make_empty_strings_column(stream, mr);
 }
 }  // namespace detail
