@@ -14,12 +14,7 @@
 # limitations under the License.
 #=============================================================================
 
-cmake_minimum_required(VERSION 3.18)
-
-file(MAKE_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files")
-
 # Create `jitify_preprocess` executable
-project(jitify_preprocess VERSION 2.0 LANGUAGES CXX CUDA)
 add_executable(jitify_preprocess "${JITIFY_INCLUDE_DIR}/jitify2_preprocess.cpp")
 
 target_link_libraries(jitify_preprocess CUDA::cudart ${CMAKE_DL_LIBS})
@@ -33,12 +28,14 @@ function(jit_preprocess_files)
                           )
 
     foreach(ARG_FILE ${ARG_FILES})
-        set(ARG_OUTPUT ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files/${ARG_FILE}.jit)
+        set(ARG_OUTPUT ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files/${ARG_FILE}.jit.hpp)
+        get_filename_component(jit_output_directory "${ARG_OUTPUT}" DIRECTORY )
         list(APPEND JIT_PREPROCESSED_FILES "${ARG_OUTPUT}")
         add_custom_command(WORKING_DIRECTORY ${ARG_SOURCE_DIRECTORY}
-                           DEPENDS jitify_preprocess
+                           DEPENDS jitify_preprocess "${ARG_SOURCE_DIRECTORY}/${ARG_FILE}"
                            OUTPUT ${ARG_OUTPUT}
                            VERBATIM
+                           COMMAND ${CMAKE_COMMAND} -E make_directory "${jit_output_directory}"
                            COMMAND jitify_preprocess ${ARG_FILE}
                                     -o ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files
                                     -v
