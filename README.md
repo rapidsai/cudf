@@ -65,15 +65,15 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 
 cuDF can be installed with conda ([miniconda](https://conda.io/miniconda.html), or the full [Anaconda distribution](https://www.anaconda.com/download)) from the `rapidsai` channel:
 
-For `cudf version == 0.18` :
+For `cudf version == 0.19` :
 ```bash
 # for CUDA 10.1
 conda install -c rapidsai -c nvidia -c numba -c conda-forge \
-    cudf=0.18 python=3.7 cudatoolkit=10.1
+    cudf=0.19 python=3.7 cudatoolkit=10.1
 
 # or, for CUDA 10.2
 conda install -c rapidsai -c nvidia -c numba -c conda-forge \
-    cudf=0.18 python=3.7 cudatoolkit=10.2
+    cudf=0.19 python=3.7 cudatoolkit=10.2
 
 ```
 
