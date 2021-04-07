@@ -191,6 +191,7 @@ std::unique_ptr<column> concatenate(
  * r2 is ['aa::bb::cc', null,  '!dd', 'ee*_', 'ff:gg']
  * @endcode
  *
+ * @throw cudf::logic_error if input column is not lists of strings column.
  * @throw cudf::logic_error if the number of rows from `separators` and `lists_strings_columns` do
  * not match
  *
@@ -235,6 +236,7 @@ std::unique_ptr<column> concatenate(
  * r2 is ['aa:bb:cc', null,  ':dd', 'ee:_', 'ff']
  * @endcode
  *
+ * @throw cudf::logic_error if input column is not lists of strings column.
  * @throw cudf::logic_error if separator is not valid.
  *
  * @param lists_strings_columns  Column containing lists of strings to concatenate
