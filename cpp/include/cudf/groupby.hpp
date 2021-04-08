@@ -222,6 +222,45 @@ class groupby {
     host_span<aggregation_request const> requests,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+   * @brief Performs grouped shifts for specified values.
+   *
+   * TBA
+   *
+   *
+   * Example:
+   * ```
+   * Input:
+   * keys:     {1 1 1 1 2 2 2}
+   * request:
+   *   values: {3 1 4 7 9 2 5}
+   *   offset: 2
+   *   fill_value: @
+   *   result: {@ @ 3 1 @ @ 9}
+   * -------------------------------------------------
+   * Input:
+   * keys:     {1 1 1 1 2 2 2}
+   * request:
+   *   values: {3 1 4 7 9 2 5}
+   *   offset: -2
+   *   fill_value: -1
+   *   result: {4 7 -1 -1 5 -1 -1}
+   * ```
+   *
+   * @param values Column to be shifted
+   * @param offset The off set by which to shift the input
+   * @param fill_value Fill value for indeterminable outputs
+   * @param mr Device memory resource used to allocate the returned table and columns' device memory
+   * @return Column shifted
+   *
+   * @throws cudf::logic_error if @p fill_value dtype does not match @p input dtype
+   */
+  std::unique_ptr<column> shift(
+    column_view const& values,
+    size_type offset,
+    scalar const& fill_value,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
   /**
    * @brief The grouped data corresponding to a groupby operation on a set of values.
    *
@@ -292,6 +331,14 @@ class groupby {
     host_span<aggregation_request const> requests,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr);
+
+  // Other sort-based algorithms
+  std::unique_ptr<column> shift_detail(
+    column_view const& values,
+    size_type offset,
+    scalar const& fill_value,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 };
 /** @} */
 }  // namespace groupby
