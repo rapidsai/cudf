@@ -37,13 +37,6 @@ using char_utf8 = uint32_t;  ///< UTF-8 characters are 1-4 bytes
 constexpr cudf::size_type UNKNOWN_STRING_LENGTH{-1};
 
 /**
- * @brief The char width is initialized to this value as a place-holder.
- *
- * The byte-width of the characters in a string is computed on-demand.
- */
-constexpr int8_t UNKNOWN_CHAR_WIDTH{-1};
-
-/**
  * @brief This value is assigned to the _char_width member if the string
  * contains characters of different widths.
  */
