@@ -74,6 +74,9 @@ fi
 cd $WORKSPACE/java
 mvn -B clean package $BUILD_ARG
 
+###### Sanity test: fail if static cudart found ######
+find . -name '*.so' | xargs -I{} readelf -Ws {} | grep cuInit && echo "Found statically linked CUDA runtime, this is currently not tested" && exit 1
+
 ###### Stash Jar files ######
 rm -rf $OUT_PATH
 mkdir -p $OUT_PATH
