@@ -38,10 +38,9 @@ function(jit_preprocess_files)
                            COMMAND ${CMAKE_COMMAND} -E make_directory "${jit_output_directory}"
                            COMMAND jitify_preprocess ${ARG_FILE}
                                     -o ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files
-                                    -v
                                     -i
                                     -m
-                                    -std=c++14
+                                    -std=c++17
                                     -remove-unused-globals
                                     -D__CUDACC_RTC__
                                     -I${CUDF_SOURCE_DIR}/include

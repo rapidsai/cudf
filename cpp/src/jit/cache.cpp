@@ -97,7 +97,7 @@ std::string get_program_cache_dir()
 {
 #if defined(JITIFY_USE_CACHE)
   return get_cache_dir().string();
-#elif
+#else
   return {};
 #endif
 }
