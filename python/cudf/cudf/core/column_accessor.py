@@ -57,7 +57,7 @@ class _NestedGetItemDict(dict):
         # Lists and other sequences are treated as accessing multiple elements
         # at the top level of the index.
         if isinstance(key, tuple):
-            reduce(dict.__getitem__, key, self)
+            return reduce(dict.__getitem__, key, self)
         return super().__getitem__(key)
 
 
