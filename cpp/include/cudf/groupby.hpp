@@ -225,8 +225,9 @@ class groupby {
   /**
    * @brief Performs grouped shifts for specified values.
    *
-   * TBA
-   *
+   * For each group, `i`th element is determined by the `i - offset`th element
+   * of the group. If `i - offset < 0 or >= group_size`, the value is determined by
+   * @p fill_value .
    *
    * Example:
    * ```
@@ -251,7 +252,7 @@ class groupby {
    * @param offset The off set by which to shift the input
    * @param fill_value Fill value for indeterminable outputs
    * @param mr Device memory resource used to allocate the returned table and columns' device memory
-   * @return Column shifted
+   * @return Column group shifted
    *
    * @throws cudf::logic_error if @p fill_value dtype does not match @p input dtype
    */

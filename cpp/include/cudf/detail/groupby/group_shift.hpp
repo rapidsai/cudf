@@ -28,10 +28,14 @@ namespace groupby {
 namespace detail {
 
 /**
- * @copydoc TBA
+ * @copydoc cudf::groupby::groupby::shift(column_view const&, size_type, scalar const&,
+ * rmm::mr::device_memory_resource)
+ *
+ * @param sorted_values values to be shifted, sorted by keys
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> group_shift(
-  column_view const& values,
+  column_view const& sorted_values,
   size_type offset,
   scalar const& fill_value,
   device_span<size_type const> group_offsets,

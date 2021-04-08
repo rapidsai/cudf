@@ -224,7 +224,7 @@ std::unique_ptr<column> groupby::shift(column_view const& values,
 
   auto stream = rmm::cuda_stream_default;
   return detail::group_shift(
-    values, offset, fill_value, helper().group_offsets(stream), stream, mr);
+    helper().sorted_keys(stream), offset, fill_value, helper().group_offsets(stream), stream, mr);
 }
 
 }  // namespace groupby
