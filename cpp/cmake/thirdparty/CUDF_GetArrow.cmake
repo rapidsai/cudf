@@ -43,6 +43,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
         GIT_SHALLOW     TRUE
         SOURCE_SUBDIR   cpp
         OPTIONS         "CMAKE_VERBOSE_MAKEFILE ON"
+                        "CUDA_USE_STATIC_CUDA_RUNTIME ${CUDA_STATIC_RUNTIME}"
                         "ARROW_IPC ON"
                         "ARROW_CUDA ON"
                         "ARROW_DATASET ON"
