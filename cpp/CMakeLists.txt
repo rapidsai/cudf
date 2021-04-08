@@ -397,9 +397,9 @@ set_target_properties(cudf
     PROPERTIES BUILD_RPATH                         "\$ORIGIN"
                INSTALL_RPATH                       "\$ORIGIN"
                # set target compile options
-               CXX_STANDARD                        14
+               CXX_STANDARD                        17
                CXX_STANDARD_REQUIRED               ON
-               CUDA_STANDARD                       14
+               CUDA_STANDARD                       17
                CUDA_STANDARD_REQUIRED              ON
                POSITION_INDEPENDENT_CODE           ON
                INTERFACE_POSITION_INDEPENDENT_CODE ON
@@ -470,8 +470,14 @@ target_link_libraries(cudf
                   rmm::rmm)
 
 if(CUDA_STATIC_RUNTIME)
+    # Tell CMake what CUDA language runtime to use
+    set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Static)
+    # Make sure to export to consumers what runtime we used
     target_link_libraries(cudf PUBLIC CUDA::cudart_static CUDA::cuda_driver)
 else()
+    # Tell CMake what CUDA language runtime to use
+    set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
+    # Make sure to export to consumers what runtime we used
     target_link_libraries(cudf PUBLIC CUDA::cudart CUDA::cuda_driver)
 endif()
 
@@ -511,7 +517,7 @@ target_compile_options(cudftestutil
 )
 
 target_compile_features(cudftestutil
-    PUBLIC cxx_std_14 $<BUILD_INTERFACE:cuda_std_14>)
+    PUBLIC cxx_std_17 $<BUILD_INTERFACE:cuda_std_17>)
 
 target_link_libraries(cudftestutil
                PUBLIC GTest::gmock
