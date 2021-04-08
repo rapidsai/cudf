@@ -541,12 +541,14 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *
    * optional_begin with mode `DYNAMIC` defers the assumption of nullability to
    * runtime, with the user stating on construction of the iterator if column has nulls.
+   * `DYNAMIC` mode is nice when an algorithm is going to execute on mutliple
+   * iterators and you don't want to compile all the combinations of iterator types
    *
    * Example:
    *
    * \code{.cpp}
    * template<typename T>
-   * void some_function( cudf::column_view<T> const& col_view, bool has_nulls){
+   * void some_function(cudf::column_view<T> const& col_view, bool has_nulls){
    *    auto d_col = cudf::column_device_view::create(col_view);
    *    // Create a `DYNAMIC` optional iterator
    *    auto optional_iterator = d_col->optional_begin<T>(cudf::contains_nulls::DYNAMIC{}, has_nulls);
@@ -578,6 +580,22 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * optional_begin with mode `YES` means that the column supports nulls and
    * potentially has null values, therefore the optional might not contain a value
    *
+   * Example:
+   *
+   * \code{.cpp}
+   * template<typename T, bool has_nulls>
+   * void some_function(cudf::column_view<T> const& col_view){
+   *    auto d_col = cudf::column_device_view::create(col_view);
+   *    if constexpr(has_nulls) {
+   *      auto optional_iterator = d_col->optional_begin<T>(cudf::contains_nulls::YES{});
+   *      //use optional_iterator
+   *    } else {
+   *      auto optional_iterator = d_col->optional_begin<T>(cudf::contains_nulls::NO{});
+   *      //use optional_iterator
+   *    }
+   * }
+   * \endcode
+   *
    * This function does not participate in overload resolution if
    * `column_device_view::has_element_accessor<T>()` is false.
    *
@@ -601,6 +619,22 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *
    * optional_begin with mode `NO` means that the column has no null values,
    * therefore the optional will always contain a value.
+   *
+   * Example:
+   *
+   * \code{.cpp}
+   * template<typename T, bool has_nulls>
+   * void some_function(cudf::column_view<T> const& col_view){
+   *    auto d_col = cudf::column_device_view::create(col_view);
+   *    if constexpr(has_nulls) {
+   *      auto optional_iterator = d_col->optional_begin<T>(cudf::contains_nulls::YES{});
+   *      //use optional_iterator
+   *    } else {
+   *      auto optional_iterator = d_col->optional_begin<T>(cudf::contains_nulls::NO{});
+   *      //use optional_iterator
+   *    }
+   * }
+   * \endcode
    *
    * This function does not participate in overload resolution if
    * `column_device_view::has_element_accessor<T>()` is false.
