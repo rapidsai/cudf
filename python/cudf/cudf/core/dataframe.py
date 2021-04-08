@@ -453,16 +453,15 @@ class DataFrame(Frame, Serializable):
                 data = {key: data[key] for key in keys}
                 data.update({key: None for key in extra_cols})
             else:
-                # if keys is empty,
-                # it means that none of the actual keys in `data`
-                # matches with `columns`.
-                # Hence only assign `data` with `columns` as keys
-                # and their values as empty columns.
+                # If keys is empty, none of the data keys match the columns, so
+                # we need to create an empty DataFrame. To match pandas, the
+                # size of the dataframe must match the provided index, so we
+                # need to return a masked array of nulls if an index is given.
+                row_count = 0 if index is None else len(index)
+                masked = index is not None
                 data = {
                     key: cudf.core.column.column_empty(
-                        row_count=len(next(iter(data.values()))),
-                        dtype=None,
-                        masked=True,
+                        row_count=row_count, dtype=None, masked=masked,
                     )
                     for key in extra_cols
                 }
