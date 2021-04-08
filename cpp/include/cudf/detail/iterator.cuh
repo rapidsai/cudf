@@ -187,7 +187,8 @@ auto make_null_replacement_iterator(column_device_view const& column,
  * void some_function(cudf::column_view<T> const& col_view, bool has_nulls){
  *    auto d_col = cudf::column_device_view::create(col_view);
  *    // Create a `DYNAMIC` optional iterator
- *    auto optional_iterator = cudf::detail::make_optional_iterator<T>(d_col, cudf::contains_nulls::DYNAMIC{}, has_nulls);
+ *    auto optional_iterator = cudf::detail::make_optional_iterator<T>(d_col,
+ *                                                cudf::contains_nulls::DYNAMIC{}, has_nulls);
  * }
  * \endcode
  *
@@ -227,10 +228,12 @@ auto make_optional_iterator(column_device_view const& column,
  * void some_function(cudf::column_view<T> const& col_view){
  *    auto d_col = cudf::column_device_view::create(col_view);
  *    if constexpr(has_nulls) {
- *      auto optional_iterator = cudf::detail::make_optional_iterator<T>(d_col, cudf::contains_nulls::YES{});
+ *      auto optional_iterator = cudf::detail::make_optional_iterator<T>(d_col,
+ *                                                  cudf::contains_nulls::YES{});
  *      //use optional_iterator
  *    } else {
- *      auto optional_iterator = cudf::detail::make_optional_iterator<T>(d_col, cudf::contains_nulls::NO{});
+ *      auto optional_iterator = cudf::detail::make_optional_iterator<T>(d_col,
+ *                                                  cudf::contains_nulls::NO{});
  *      //use optional_iterator
  *    }
  * }
@@ -269,10 +272,12 @@ auto make_optional_iterator(column_device_view const& column, contains_nulls::YE
  * void some_function(cudf::column_view<T> const& col_view){
  *    auto d_col = cudf::column_device_view::create(col_view);
  *    if constexpr(has_nulls) {
- *      auto optional_iterator = cudf::detail::make_optional_iterator<T>(d_col, cudf::contains_nulls::YES{});
+ *      auto optional_iterator = cudf::detail::make_optional_iterator<T>(d_col,
+ *                                                  cudf::contains_nulls::YES{});
  *      //use optional_iterator
  *    } else {
- *      auto optional_iterator = cudf::detail::make_optional_iterator<T>(d_col, cudf::contains_nulls::NO{});
+ *      auto optional_iterator = cudf::detail::make_optional_iterator<T>(d_col,
+ *                                                  cudf::contains_nulls::NO{});
  *      //use optional_iterator
  *    }
  * }
@@ -636,8 +641,10 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
  *                    scalar const& scalar_value,
  *                    bool col_has_nulls){
  *    auto d_col = cudf::column_device_view::create(col_view);
- *    auto column_iterator = cudf::detail::make_optional_iterator<T>(d_col, cudf::contains_nulls::DYNAMIC{}, col_has_nulls);
- *    auto scalar_iterator = cudf::detail::make_optional_iterator<T>(scalar_value, cudf::contains_nulls::DYNAMIC{}, scalar_value.is_valid());
+ *    auto column_iterator = cudf::detail::make_optional_iterator<T>(d_col,
+                                      cudf::contains_nulls::DYNAMIC{}, col_has_nulls);
+ *    auto scalar_iterator = cudf::detail::make_optional_iterator<T>(scalar_value,
+                                      cudf::contains_nulls::DYNAMIC{}, scalar_value.is_valid());
  *    //use iterators
  * }
  * \endcode
@@ -686,12 +693,16 @@ auto inline make_optional_iterator(scalar const& scalar_value,
  * void some_function(cudf::column_view<T> const& col_view, scalar const& scalar_value){
  *    auto d_col = cudf::column_device_view::create(col_view);
  *    if constexpr(any_nulls) {
- *      auto column_iterator = cudf::detail::make_optional_iterator<T>(d_col, cudf::contains_nulls::YES{});
- *      auto scalar_iterator = cudf::detail::make_optional_iterator<T>(scalar_value, cudf::contains_nulls::YES{});
+ *      auto column_iterator = cudf::detail::make_optional_iterator<T>(d_col,
+ *                                                cudf::contains_nulls::YES{});
+ *      auto scalar_iterator = cudf::detail::make_optional_iterator<T>(scalar_value,
+ *                                                cudf::contains_nulls::YES{});
  *      //use iterators
  *    } else {
- *      auto column_iterator = cudf::detail::make_optional_iterator<T>(d_col, cudf::contains_nulls::NO{});
- *      auto scalar_iterator = cudf::detail::make_optional_iterator<T>(scalar_value, cudf::contains_nulls::NO{});
+ *      auto column_iterator = cudf::detail::make_optional_iterator<T>(d_col,
+ *                                                cudf::contains_nulls::NO{});
+ *      auto scalar_iterator = cudf::detail::make_optional_iterator<T>(scalar_value,
+ *                                                cudf::contains_nulls::NO{});
  *      //use iterators
  *    }
  * }
@@ -735,12 +746,16 @@ auto inline make_optional_iterator(scalar const& scalar_value, contains_nulls::Y
  * void some_function(cudf::column_view<T> const& col_view, scalar const& scalar_value){
  *    auto d_col = cudf::column_device_view::create(col_view);
  *    if constexpr(any_nulls) {
- *      auto column_iterator = cudf::detail::make_optional_iterator<T>(d_col, cudf::contains_nulls::YES{});
- *      auto scalar_iterator = cudf::detail::make_optional_iterator<T>(scalar_value, cudf::contains_nulls::YES{});
+ *      auto column_iterator = cudf::detail::make_optional_iterator<T>(d_col,
+ *                                                cudf::contains_nulls::YES{});
+ *      auto scalar_iterator = cudf::detail::make_optional_iterator<T>(scalar_value,
+ *                                                cudf::contains_nulls::YES{});
  *      //use iterators
  *    } else {
- *      auto column_iterator = cudf::detail::make_optional_iterator<T>(d_col, cudf::contains_nulls::NO{});
- *      auto scalar_iterator = cudf::detail::make_optional_iterator<T>(scalar_value, cudf::contains_nulls::NO{});
+ *      auto column_iterator = cudf::detail::make_optional_iterator<T>(d_col,
+ *                                                cudf::contains_nulls::NO{});
+ *      auto scalar_iterator = cudf::detail::make_optional_iterator<T>(scalar_value,
+ *                                                cudf::contains_nulls::NO{});
  *      //use iterators
  *    }
  * }
