@@ -26,7 +26,6 @@
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/utilities.hpp>
-#include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
@@ -38,8 +37,6 @@
 #include <thrust/logical.h>
 #include <thrust/transform_reduce.h>
 #include <thrust/transform_scan.h>
-
-#include <algorithm>
 
 namespace cudf {
 namespace strings {
@@ -475,35 +472,126 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 }
 
 namespace detail {
-std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_columns,
+std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_column,
                                     strings_column_view const& separators,
                                     string_scalar const& separator_narep,
                                     string_scalar const& string_narep,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(lists_strings_columns.child().type().id() == type_id::STRING,
+  CUDF_EXPECTS(lists_strings_column.child().type().id() == type_id::STRING,
                "The input column must be a column of lists of strings");
-  CUDF_EXPECTS(lists_strings_columns.size() == separators.size(),
+  CUDF_EXPECTS(lists_strings_column.size() == separators.size(),
                "Separators column should be the same size as the lists columns");
+
+  auto const num_rows = lists_strings_column.size();
+  if (num_rows == 0) { return detail::make_empty_strings_column(stream, mr); }
+
+  auto const lists_dv_ptr    = column_device_view::create(lists_strings_column.parent(), stream);
+  auto const lists_dv        = *lists_dv_ptr;
+  auto const strings_col     = strings_column_view(lists_strings_column.get_sliced_child(stream));
+  auto const strings_dv_ptr  = column_device_view::create(strings_col.parent(), stream);
+  auto const strings_dv      = *strings_dv_ptr;
+  auto const sep_dv_ptr      = column_device_view::create(separators.parent(), stream);
+  auto const sep_dv          = *sep_dv_ptr;
+  auto const sep_narep_dv    = get_scalar_device_view(const_cast<string_scalar&>(separator_narep));
+  auto const string_narep_dv = get_scalar_device_view(const_cast<string_scalar&>(string_narep));
+
+  // Convert the offsets of lists into offsets of strings in the child strings column
+  //
+  // For example:
+  //  lists_strings_column  = [ {"a", "bc"}, NULL, {null, "def", "ghijk"} ]
+  //  lists_offsets         = [0, 2, 2, 5]
+  //  strings_col           = [ "a", "bc", NULL, "def", "ghijk"]
+  //  strings_col_offsets   = [0, 1, 3, 3, 6, 11]
+  //            ===> output = [0, 3, 3, 11]
+  rmm::device_uvector<offset_type> lists_child_offsets(lists_strings_column.size(), stream, mr);
+  thrust::transform(rmm::exec_policy(stream),
+                    lists_strings_column.offsets_begin(),
+                    lists_strings_column.offsets_end(),
+                    lists_child_offsets.begin(),
+                    [offsets = strings_col.offsets().begin<offset_type>()] __device__(
+                      auto const idx) { return offsets[idx]; });
+
+  // Build offsets of the output column by computing size of each string in the output column
+
+  // Compute sizes of strings in the output column along with their validity
+  // An invalid size will be returned to indicate that the corresponding row is null
+  static constexpr auto invalid_size = std::numeric_limits<size_type>::lowest();
+  auto const string_element_comp     = [lists_offsets = lists_strings_column.offsets_begin(),
+                                    lists_dv,
+                                    strings_dv,
+                                    sep_dv,
+                                    sep_narep_dv,
+                                    string_narep_dv,
+                                    stream] __device__(size_type lidx) -> size_type {
+    if (lists_dv.is_null(lidx) || (sep_dv.is_null(lidx) && !sep_narep_dv.is_valid())) {
+      return invalid_size;
+    }
+
+    auto const separator_str =
+      sep_dv.is_valid(lidx) ? sep_dv.element<string_view>(lidx) : sep_narep_dv.value();
+    auto const count_it = thrust::make_counting_iterator<size_type>(0);
+
+    // This will be called inside another `thrust::transform` call, thus we will run it sequentially
+    auto const size_bytes = thrust::transform_reduce(
+      thrust::seq,
+      count_it + lists_offsets[lidx],
+      count_it + lists_offsets[lidx + 1],
+      [strings_dv, string_narep_dv, separator_str] __device__(auto const str_idx) -> size_type {
+        if (strings_dv.is_null(str_idx) && !string_narep_dv.is_valid()) { return invalid_size; }
+        return separator_str.size_bytes() +
+               (strings_dv.is_null(str_idx)
+                      ? string_narep_dv.size()
+                      : strings_dv.element<string_view>(str_idx).size_bytes());
+      },
+      size_type{0},
+      thrust::plus<size_type>());
+
+    // Null/empty separator and strings don't produce a non-empty string
+    assert(size_bytes == invalid_size || size_bytes > 0 ||
+           (size_bytes == 0 && separator_str.size_bytes() == 0));
+
+    // Separator is inserted only in between strings
+    return size_bytes != invalid_size
+                 ? static_cast<size_type>(size_bytes - separator_str.size_bytes())
+                 : invalid_size;
+  };
+
+  // Create resulting null mask
+  auto const count_it                = thrust::make_counting_iterator<size_type>(0);
+  auto const [null_mask, null_count] = cudf::detail::valid_if(
+    count_it,
+    count_it + num_rows,
+    [lists_dv, sep_dv, sep_narep_dv, string_narep_dv] __device__(size_type idx) {
+      if (!sep_dv.is_valid(idx) && !sep_narep_dv.is_valid()) { return false; }
+      return lists_dv.is_valid(idx) ? true : string_narep_dv.is_valid();
+    },
+    stream,
+    mr);
+  auto const null_str = string_view{nullptr, 0};
+
   return detail::make_empty_strings_column(stream, mr);
 }
 
-std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_columns,
+std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_column,
                                     string_scalar const& separator,
                                     string_scalar const& narep,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(lists_strings_columns.child().type().id() == type_id::STRING,
+  CUDF_EXPECTS(lists_strings_column.child().type().id() == type_id::STRING,
                "The input column must be a column of lists of strings");
   CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be a valid string_scalar");
+
+  auto const num_rows = lists_strings_column.size();
+  if (num_rows == 0) { return detail::make_empty_strings_column(stream, mr); }
 
   return detail::make_empty_strings_column(stream, mr);
 }
 }  // namespace detail
 
-std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_columns,
+std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_column,
                                     strings_column_view const& separators,
                                     string_scalar const& separator_narep,
                                     string_scalar const& string_narep,
@@ -511,15 +599,15 @@ std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_colum
 {
   CUDF_FUNC_RANGE();
   return detail::concatenate(
-    lists_strings_columns, separators, separator_narep, string_narep, rmm::cuda_stream_default, mr);
+    lists_strings_column, separators, separator_narep, string_narep, rmm::cuda_stream_default, mr);
 }
-std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_columns,
+std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_column,
                                     string_scalar const& separator,
                                     string_scalar const& narep,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(lists_strings_columns, separator, narep, rmm::cuda_stream_default, mr);
+  return detail::concatenate(lists_strings_column, separator, narep, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings
