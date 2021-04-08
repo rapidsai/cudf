@@ -43,14 +43,7 @@ struct sum_if_not_null {
   CUDA_HOST_DEVICE_CALLABLE thrust::optional<T> operator()(const thrust::optional<T>& lhs,
                                                            const thrust::optional<T>& rhs)
   {
-    if (lhs.has_value() and rhs.has_value())
-      return thrust::optional<T>{*lhs + *rhs};
-    else if (lhs.has_value())
-      return lhs;
-    else if (rhs.has_value())
-      return rhs;
-    else
-      return thrust::optional<T>{};
+    return lhs.value_or(T{0}) + rhs.value_or(T{0});
   }
 };
 
