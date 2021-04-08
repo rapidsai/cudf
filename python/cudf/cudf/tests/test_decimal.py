@@ -87,7 +87,6 @@ def test_typecast_from_float_to_decimal(data, from_dtype, to_dtype):
     got = got.astype(to_dtype)
 
     assert_eq(got, expected)
-    assert_eq(got.dtype, expected.dtype)
 
 
 @pytest.mark.parametrize(
@@ -128,7 +127,6 @@ def test_typecast_from_int_to_decimal(data, from_dtype, to_dtype):
     got = got.astype(to_dtype)
 
     assert_eq(got, expected)
-    assert_eq(got.dtype, expected.dtype)
 
 
 @pytest.mark.parametrize(
@@ -169,7 +167,6 @@ def test_typecast_to_from_decimal(data, from_dtype, to_dtype):
     got = got.astype(to_dtype)
 
     assert_eq(got, expected)
-    assert_eq(got.dtype, expected.dtype)
 
 
 @pytest.mark.parametrize(
@@ -204,4 +201,3 @@ def test_typecast_from_decimal(data, from_dtype, to_dtype):
     expected = cudf.Series(NumericalColumn.from_arrow(pa_arr))
 
     assert_eq(got, expected)
-    assert_eq(got.dtype, expected.dtype)

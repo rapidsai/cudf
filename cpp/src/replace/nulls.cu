@@ -424,7 +424,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
   CUDF_EXPECTS(replacement.size() == input.size(), "Column size mismatch");
 
   if (input.is_empty()) { return cudf::empty_like(input); }
-  if (!input.has_nulls()) { return std::make_unique<cudf::column>(input); }
+  if (!input.has_nulls()) { return std::make_unique<cudf::column>(input, stream, mr); }
 
   return cudf::type_dispatcher<dispatch_storage_type>(
     input.type(), replace_nulls_column_kernel_forwarder{}, input, replacement, stream, mr);

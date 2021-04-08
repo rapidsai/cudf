@@ -142,7 +142,11 @@ void gather_helper(InputItr source_itr,
 // Error case when no other overload or specialization is available
 template <typename Element, typename Enable = void>
 struct column_gatherer_impl {
-  std::unique_ptr<column> operator()(...) { CUDF_FAIL("Unsupported type in gather."); }
+  template <typename... Args>
+  std::unique_ptr<column> operator()(Args&&...)
+  {
+    CUDF_FAIL("Unsupported type in gather.");
+  }
 };
 
 /**
@@ -466,15 +470,20 @@ struct column_gatherer_impl<struct_view> {
                                                                          mr);
                    });
 
-    gather_bitmask(
-      // Table view of struct column.
-      cudf::table_view{
-        std::vector<cudf::column_view>{structs_column.child_begin(), structs_column.child_end()}},
-      gather_map_begin,
-      output_struct_members,
-      nullify_out_of_bounds ? gather_bitmask_op::NULLIFY : gather_bitmask_op::DONT_CHECK,
-      stream,
-      mr);
+    auto const nullable = std::any_of(structs_column.child_begin(),
+                                      structs_column.child_end(),
+                                      [](auto const& col) { return col.nullable(); });
+    if (nullable) {
+      gather_bitmask(
+        // Table view of struct column.
+        cudf::table_view{
+          std::vector<cudf::column_view>{structs_column.child_begin(), structs_column.child_end()}},
+        gather_map_begin,
+        output_struct_members,
+        nullify_out_of_bounds ? gather_bitmask_op::NULLIFY : gather_bitmask_op::DONT_CHECK,
+        stream,
+        mr);
+    }
 
     return cudf::make_structs_column(
       gather_map_size,
@@ -652,11 +661,15 @@ std::unique_ptr<table> gather(
                                                    mr));
   }
 
-  gather_bitmask_op const op = bounds_policy == out_of_bounds_policy::NULLIFY
-                                 ? gather_bitmask_op::NULLIFY
-                                 : gather_bitmask_op::DONT_CHECK;
-
-  gather_bitmask(source_table, gather_map_begin, destination_columns, op, stream, mr);
+  auto const nullable = bounds_policy == out_of_bounds_policy::NULLIFY ||
+                        std::any_of(source_table.begin(), source_table.end(), [](auto const& col) {
+                          return col.nullable();
+                        });
+  if (nullable) {
+    auto const op = bounds_policy == out_of_bounds_policy::NULLIFY ? gather_bitmask_op::NULLIFY
+                                                                   : gather_bitmask_op::DONT_CHECK;
+    gather_bitmask(source_table, gather_map_begin, destination_columns, op, stream, mr);
+  }
 
   return std::make_unique<table>(std::move(destination_columns));
 }

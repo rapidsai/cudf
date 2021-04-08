@@ -1,8 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
- *
- * Copyright 2018-2019 BlazingDB, Inc.
- *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,15 +16,13 @@
 
 #pragma once
 
-namespace cudf {
-namespace binops {
-namespace jit {
-namespace code {
-extern const char* kernel;
-extern const char* traits;
-extern const char* operation;
+#include <jitify2.hpp>
+#include <memory>
 
-}  // namespace code
+namespace cudf {
+namespace jit {
+
+jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData preprog);
+
 }  // namespace jit
-}  // namespace binops
 }  // namespace cudf

@@ -923,6 +923,42 @@ def test_series_pipe_error():
 
 @pytest.mark.parametrize(
     "data",
+    [cudf.Series([1, 2, 3]), cudf.Series([10, 11, 12], index=[1, 2, 3])],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        cudf.Series([4, 5, 6]),
+        cudf.Series([4, 5, 6, 7, 8]),
+        cudf.Series([4, np.nan, 6], nan_as_null=False),
+        [4, np.nan, 6],
+        {1: 9},
+    ],
+)
+def test_series_update(data, other):
+    gs = data.copy(deep=True)
+    if isinstance(other, cudf.Series):
+        g_other = other.copy(deep=True)
+        p_other = g_other.to_pandas()
+    else:
+        g_other = other
+        p_other = other
+
+    ps = gs.to_pandas()
+
+    gs_column_before = gs._column
+    gs.update(g_other)
+    gs_column_after = gs._column
+
+    assert_eq(gs_column_before.to_array(), gs_column_after.to_array())
+
+    ps.update(p_other)
+
+    assert_eq(gs, ps)
+
+
+@pytest.mark.parametrize(
+    "data",
     [
         [1, None, 11, 2.0, np.nan],
         [np.nan],
@@ -940,6 +976,19 @@ def test_fillna_with_nan(data, nan_as_null, fill_value):
     actual = gs.fillna(fill_value)
 
     assert_eq(expected, actual)
+
+
+def test_series_mask_mixed_dtypes_error():
+    s = cudf.Series(["a", "b", "c"])
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "cudf does not support mixed types, please type-cast "
+            "the column of dataframe/series and other "
+            "to same dtypes."
+        ),
+    ):
+        s.where([True, False, True], [1, 2, 3])
 
 
 @pytest.mark.parametrize(

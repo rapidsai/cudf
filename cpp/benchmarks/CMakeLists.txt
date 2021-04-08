@@ -17,7 +17,7 @@
 find_package(Threads REQUIRED)
 
 add_library(cudf_datagen STATIC common/generate_benchmark_input.cpp)
-target_compile_features(cudf_datagen PUBLIC cxx_std_14 cuda_std_14)
+target_compile_features(cudf_datagen PUBLIC cxx_std_17 cuda_std_17)
 
 target_compile_options(cudf_datagen
             PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
@@ -202,3 +202,8 @@ ConfigureBench(STRINGS_BENCH
   string/substring_benchmark.cpp
   string/translate_benchmark.cpp
   string/url_decode_benchmark.cpp)
+
+###################################################################################################
+# - json benchmark -------------------------------------------------------------------
+ConfigureBench(JSON_BENCH
+  string/json_benchmark.cpp)

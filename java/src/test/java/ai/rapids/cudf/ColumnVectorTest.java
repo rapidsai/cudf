@@ -491,6 +491,25 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testSerial32BitMurmur3HashStruct() {
+    try (ColumnVector strings = ColumnVector.fromStrings(
+        "a", "B\n", "dE\"\u0100\t\u0101 \ud720\ud721",
+        "A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
+            "in the MD5 hash function. This string needed to be longer.",
+        null, null);
+         ColumnVector integers = ColumnVector.fromBoxedInts(0, 100, -100, Integer.MIN_VALUE, Integer.MAX_VALUE, null);
+         ColumnVector doubles = ColumnVector.fromBoxedDoubles(
+             0.0, 100.0, -100.0, POSITIVE_DOUBLE_NAN_LOWER_RANGE, POSITIVE_DOUBLE_NAN_UPPER_RANGE, null);
+         ColumnVector floats = ColumnVector.fromBoxedFloats(
+             0f, 100f, -100f, NEGATIVE_FLOAT_NAN_LOWER_RANGE, NEGATIVE_FLOAT_NAN_UPPER_RANGE, null);
+         ColumnVector bools = ColumnVector.fromBoxedBooleans(true, false, null, false, true, null);
+         ColumnVector result = ColumnVector.serial32BitMurmurHash3(1868, new ColumnVector[]{strings, integers, doubles, floats, bools});
+         ColumnVector expected = ColumnVector.fromBoxedInts(387200465, 1988790727, 774895031, 814731646, -1073686048, 1868)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
   void testSpark32BitMurmur3HashStrings() {
     try (ColumnVector v0 = ColumnVector.fromStrings(
            "a", "B\nc",  "dE\"\u0100\t\u0101 \ud720\ud721\\Fg2\'",
@@ -529,6 +548,8 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testSpark32BitMurmur3HashTimestamps() {
+    // The hash values were derived from Apache Spark in a manner similar to the one documented at
+    // https://github.com/rapidsai/cudf/blob/aa7ca46dcd9e/cpp/tests/hashing/hash_test.cpp#L281-L307
     try (ColumnVector v = ColumnVector.timestampMicroSecondsFromBoxedLongs(
         0L, null, 100L, -100L, 0x123456789abcdefL, null, -0x123456789abcdefL);
          ColumnVector result = ColumnVector.spark32BitMurmurHash3(42, new ColumnVector[]{v});
@@ -539,6 +560,8 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testSpark32BitMurmur3HashDecimal64() {
+    // The hash values were derived from Apache Spark in a manner similar to the one documented at
+    // https://github.com/rapidsai/cudf/blob/aa7ca46dcd9e/cpp/tests/hashing/hash_test.cpp#L281-L307
     try (ColumnVector v = ColumnVector.decimalFromLongs(-7,
         0L, 100L, -100L, 0x123456789abcdefL, -0x123456789abcdefL);
          ColumnVector result = ColumnVector.spark32BitMurmurHash3(42, new ColumnVector[]{v});
@@ -549,6 +572,8 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testSpark32BitMurmur3HashDecimal32() {
+    // The hash values were derived from Apache Spark in a manner similar to the one documented at
+    // https://github.com/rapidsai/cudf/blob/aa7ca46dcd9e/cpp/tests/hashing/hash_test.cpp#L281-L307
     try (ColumnVector v = ColumnVector.decimalFromInts(-3,
         0, 100, -100, 0x12345678, -0x12345678);
          ColumnVector result = ColumnVector.spark32BitMurmurHash3(42, new ColumnVector[]{v});
@@ -559,6 +584,8 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testSpark32BitMurmur3HashDates() {
+    // The hash values were derived from Apache Spark in a manner similar to the one documented at
+    // https://github.com/rapidsai/cudf/blob/aa7ca46dcd9e/cpp/tests/hashing/hash_test.cpp#L281-L307
     try (ColumnVector v = ColumnVector.timestampDaysFromBoxedInts(
         0, null, 100, -100, 0x12345678, null, -0x12345678);
          ColumnVector result = ColumnVector.spark32BitMurmurHash3(42, new ColumnVector[]{v});
@@ -587,7 +614,6 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector result = ColumnVector.spark32BitMurmurHash3(0, new ColumnVector[]{v0, v1});
          ColumnVector expected = ColumnVector.fromBoxedInts(0, -1589400010, -239939054, -68075478, 593689054, -1194558265)) {
       assertColumnsAreEqual(expected, result);
-
     }
   }
 
@@ -606,6 +632,26 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector bools = ColumnVector.fromBoxedBooleans(true, false, null, false, true, null);
          ColumnVector result = ColumnVector.spark32BitMurmurHash3(1868, new ColumnVector[]{strings, integers, doubles, floats, bools});
          ColumnVector expected = ColumnVector.fromBoxedInts(1936985022, 720652989, 339312041, 1400354989, 769988643, 1868)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testSpark32BitMurmur3HashStruct() {
+    try (ColumnVector strings = ColumnVector.fromStrings(
+        "a", "B\n", "dE\"\u0100\t\u0101 \ud720\ud721",
+        "A very long (greater than 128 bytes/char string) to test a multi hash-step data point " +
+            "in the MD5 hash function. This string needed to be longer.",
+        null, null);
+         ColumnVector integers = ColumnVector.fromBoxedInts(0, 100, -100, Integer.MIN_VALUE, Integer.MAX_VALUE, null);
+         ColumnVector doubles = ColumnVector.fromBoxedDoubles(
+             0.0, 100.0, -100.0, POSITIVE_DOUBLE_NAN_LOWER_RANGE, POSITIVE_DOUBLE_NAN_UPPER_RANGE, null);
+         ColumnVector floats = ColumnVector.fromBoxedFloats(
+             0f, 100f, -100f, NEGATIVE_FLOAT_NAN_LOWER_RANGE, NEGATIVE_FLOAT_NAN_UPPER_RANGE, null);
+         ColumnVector bools = ColumnVector.fromBoxedBooleans(true, false, null, false, true, null);
+         ColumnView structs = ColumnView.makeStructView(strings, integers, doubles, floats, bools);
+         ColumnVector result = ColumnVector.spark32BitMurmurHash3(1868, new ColumnView[]{structs});
+         ColumnVector expected = ColumnVector.spark32BitMurmurHash3(1868, new ColumnVector[]{strings, integers, doubles, floats, bools})) {
       assertColumnsAreEqual(expected, result);
     }
   }
@@ -4129,6 +4175,50 @@ public class ColumnVectorTest extends CudfTestBase {
         ColumnVector expected =
             ColumnVector.fromInts(10, 11, 12, 13, 16, 12, 14, 15, 0, 7, 3, 4, 2)) {
       assertColumnsAreEqual(expected, copiedChildCv);
+    }
+  }
+
+  @Test
+  void testGetJSONObject() {
+    String jsonString = "{ \"store\": {\n" +
+        "    \"book\": [\n" +
+        "      { \"category\": \"reference\",\n" +
+        "        \"author\": \"Nigel Rees\",\n" +
+        "        \"title\": \"Sayings of the Century\",\n" +
+        "        \"price\": 8.95\n" +
+        "      },\n" +
+        "      { \"category\": \"fiction\",\n" +
+        "        \"author\": \"Evelyn Waugh\",\n" +
+        "        \"title\": \"Sword of Honour\",\n" +
+        "        \"price\": 12.99\n" +
+        "      },\n" +
+        "      { \"category\": \"fiction\",\n" +
+        "        \"author\": \"Herman Melville\",\n" +
+        "        \"title\": \"Moby Dick\",\n" +
+        "        \"isbn\": \"0-553-21311-3\",\n" +
+        "        \"price\": 8.99\n" +
+        "      },\n" +
+        "      { \"category\": \"fiction\",\n" +
+        "        \"author\": \"J. R. R. Tolkien\",\n" +
+        "        \"title\": \"The Lord of the Rings\",\n" +
+        "        \"isbn\": \"0-395-19395-8\",\n" +
+        "        \"price\": 22.99\n" +
+        "      }\n" +
+        "    ],\n" +
+        "    \"bicycle\": {\n" +
+        "      \"color\": \"red\",\n" +
+        "      \"price\": 19.95\n" +
+        "    }\n" +
+        "  }\n" +
+        "}";
+
+    try (ColumnVector json = ColumnVector.fromStrings(jsonString, jsonString);
+         ColumnVector expectedAuthors = ColumnVector.fromStrings("[\"Nigel Rees\",\"Evelyn " +
+             "Waugh\",\"Herman Melville\",\"J. R. R. Tolkien\"]", "[\"Nigel Rees\",\"Evelyn " +
+             "Waugh\",\"Herman Melville\",\"J. R. R. Tolkien\"]");
+         Scalar path = Scalar.fromString("$.store.book[*].author");
+         ColumnVector gotAuthors = json.getJSONObject(path)) {
+      assertColumnsAreEqual(expectedAuthors, gotAuthors);
     }
   }
 
