@@ -43,7 +43,7 @@ from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
-from cudf.utils import cudautils, docutils, ioutils, utils
+from cudf.utils import cudautils, docutils, ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
@@ -1543,8 +1543,9 @@ class Series(Frame, Serializable):
 
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
 
-        # Get the appropriate name for output operations involving two objects that
-        # are a mix of pandas and cudf Series and Index. All of these object
+        # Get the appropriate name for output operations involving two objects
+        # that are a mix of pandas and cudf Series and Index. If the two inputs
+        # are identically named, the output shares this name.
         if isinstance(other, (cudf.Series, cudf.Index, pd.Series, pd.Index)):
             if self.name == other.name:
                 result_name = self.name
