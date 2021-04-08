@@ -30,13 +30,14 @@ namespace detail {
 /**
  * TBA
  */
- std::unique_ptr<column> group_shift_impl(column_view const& values,
-                                     size_type offset,
-                                     cudf::device_span<size_type const> group_offsets,
-                                     cudf::device_span<size_type const> group_sizes,
-                                     cudf::scalar const& fill_value,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> group_shift_impl(
+  column_view const& values,
+  size_type offset,
+  cudf::device_span<size_type const> group_offsets,
+  cudf::device_span<size_type const> group_sizes,
+  cudf::scalar const& fill_value,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @copydoc TBA
@@ -45,10 +46,9 @@ std::unique_ptr<column> group_shift(
   column_view const& values,
   size_type offset,
   scalar const& fill_value,
-  sort::sort_groupby_helper &helper,
+  sort::sort_groupby_helper& helper,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
 
 }  // namespace detail
 }  // namespace groupby

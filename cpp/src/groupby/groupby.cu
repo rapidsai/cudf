@@ -21,8 +21,8 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby.hpp>
-#include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/groupby/group_shift.hpp>
+#include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
@@ -213,17 +213,17 @@ detail::sort::sort_groupby_helper& groupby::helper()
   return *_helper;
 };
 
-std::unique_ptr<column> groupby::shift(
-  column_view const& values,
-  size_type offset,
-  scalar const& fill_value,
-  rmm::mr::device_memory_resource* mr)
-  {
-    CUDF_FUNC_RANGE();
-    CUDF_EXPECTS(values.type() == fill_value.type(), "values and fill_value should have the same type.");
+std::unique_ptr<column> groupby::shift(column_view const& values,
+                                       size_type offset,
+                                       scalar const& fill_value,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(values.type() == fill_value.type(),
+               "values and fill_value should have the same type.");
 
-    return detail::group_shift(values, offset, fill_value, helper(), rmm::cuda_stream_default, mr);
-  }
+  return detail::group_shift(values, offset, fill_value, helper(), rmm::cuda_stream_default, mr);
+}
 
 }  // namespace groupby
 }  // namespace cudf

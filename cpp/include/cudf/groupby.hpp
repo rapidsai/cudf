@@ -222,7 +222,7 @@ class groupby {
     host_span<aggregation_request const> requests,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-/**
+  /**
    * @brief Performs grouped shifts for specified values.
    *
    * TBA
