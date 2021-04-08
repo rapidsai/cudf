@@ -25,7 +25,7 @@
 #include <cudf/lists/detail/copying.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
-#include <cudf/strings/copying.hpp>
+#include <cudf/strings/detail/copying.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -193,7 +193,7 @@ struct create_column_from_view {
   std::unique_ptr<column> operator()()
   {
     cudf::strings_column_view sview(view);
-    return cudf::strings::detail::copy_slice(sview, 0, view.size(), 1, stream, mr);
+    return cudf::strings::detail::copy_slice(sview, 0, view.size(), stream, mr);
   }
 
   template <typename ColumnType,

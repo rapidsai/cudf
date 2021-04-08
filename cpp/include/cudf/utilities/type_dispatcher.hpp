@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -189,6 +189,19 @@ CUDF_TYPE_MAPPING(cudf::list_view, type_id::LIST);
 CUDF_TYPE_MAPPING(numeric::decimal32, type_id::DECIMAL32);
 CUDF_TYPE_MAPPING(numeric::decimal64, type_id::DECIMAL64);
 CUDF_TYPE_MAPPING(cudf::struct_view, type_id::STRUCT);
+
+/**
+ * @brief Use this specialization on `type_dispatcher` whenever you only need to operate on the
+ * underlying stored type.
+ *
+ * For example, `cudf::sort` in sort.cu uses `cudf::type_dispatcher<dispatch_storage_type>(...)`.
+ * `cudf::gather` in gather.cuh also uses `cudf::type_dispatcher<dispatch_storage_type>(...)`.
+ * However, reductions needs both `data_type` and underlying type, so cannot use this.
+ */
+template <cudf::type_id Id>
+struct dispatch_storage_type {
+  using type = device_storage_type_t<typename id_to_type_impl<Id>::type>;
+};
 
 template <typename T>
 struct type_to_scalar_type_impl {
@@ -488,7 +501,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported type_id.");
 #else
-      release_assert(false && "Unsupported type_id.");
+      cudf_assert(false && "Unsupported type_id.");
 
       // The following code will never be reached, but the compiler generates a
       // warning if there isn't a return value.

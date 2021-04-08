@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <cudf/lists/list_view.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/structs/struct_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -42,7 +43,7 @@
 
 using namespace ::cudf::io;
 
-using cudf::detail::device_span;
+using cudf::device_span;
 
 namespace cudf {
 namespace io {
@@ -195,7 +196,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
       } else if (serialized_trie_contains(opts.trie_true, {field_start, field_len}) ||
                  serialized_trie_contains(opts.trie_false, {field_start, field_len})) {
         atomicAdd(&d_columnData[actual_col].bool_count, 1);
-      } else if (cudf::io::gpu::is_infinity(field_start, next_delimiter)) {
+      } else if (cudf::io::is_infinity(field_start, next_delimiter)) {
         atomicAdd(&d_columnData[actual_col].float_count, 1);
       } else {
         long countNumber   = 0;
@@ -276,7 +277,7 @@ __inline__ __device__ T decode_value(char const *begin,
                                      char const *end,
                                      parse_options_view const &opts)
 {
-  return cudf::io::gpu::parse_numeric<T, base>(begin, end, opts);
+  return cudf::io::parse_numeric<T, base>(begin, end, opts);
 }
 
 template <typename T>
@@ -284,7 +285,7 @@ __inline__ __device__ T decode_value(char const *begin,
                                      char const *end,
                                      parse_options_view const &opts)
 {
-  return cudf::io::gpu::parse_numeric<T>(begin, end, opts);
+  return cudf::io::parse_numeric<T>(begin, end, opts);
 }
 
 template <>

@@ -32,7 +32,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 
 namespace cudf {
 namespace io {
@@ -108,7 +108,10 @@ struct column_buffer {
     size = _size;
 
     switch (type.id()) {
-      case type_id::STRING: _strings.resize(size); break;
+      case type_id::STRING:
+        _strings = std::make_unique<rmm::device_uvector<str_pair>>(size, stream);
+        cudaMemsetAsync(_strings->data(), 0, size * sizeof(str_pair), stream.value());
+        break;
 
       // list columns store a buffer of int32's as offsets to represent
       // their individual rows
@@ -125,8 +128,8 @@ struct column_buffer {
     }
   }
 
-  auto data() { return _strings.size() ? _strings.data().get() : _data.data(); }
-  auto data_size() { return std::max(_data.size(), _strings.size() * sizeof(str_pair)); }
+  auto data() { return _strings ? _strings->data() : _data.data(); }
+  auto data_size() const { return _strings ? _strings->size() : _data.size(); }
 
   template <typename T = uint32_t>
   auto null_mask()
@@ -137,7 +140,7 @@ struct column_buffer {
 
   auto& null_count() { return _null_count; }
 
-  rmm::device_vector<str_pair> _strings;
+  std::unique_ptr<rmm::device_uvector<str_pair>> _strings;
   rmm::device_buffer _data{};
   rmm::device_buffer _null_mask{};
   size_type _null_count{0};
@@ -178,7 +181,7 @@ std::unique_ptr<column> make_column(
         schema_info->children.push_back(column_name_info{"offsets"});
         schema_info->children.push_back(column_name_info{"chars"});
       }
-      return make_strings_column(buffer._strings, stream, mr);
+      return make_strings_column(*buffer._strings, stream, mr);
 
     case type_id::LIST: {
       // make offsets column

@@ -237,7 +237,7 @@ TEST(TextSubwordTest, TokenizeFromVocabStruct)
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   auto vocab  = nvtext::load_vocabulary_file(hash_file);
   auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
-                                         vocab,
+                                         *vocab,
                                          8,
                                          6,
                                          true,  // do_lower_case
@@ -307,7 +307,7 @@ TEST(TextSubwordTest, TokenizeWithSpecialTokens)
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   auto vocab  = nvtext::load_vocabulary_file(hash_file);
   auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
-                                         vocab,
+                                         *vocab,
                                          8,
                                          6,
                                          true,  // do_lower_case

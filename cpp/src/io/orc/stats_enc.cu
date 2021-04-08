@@ -51,7 +51,7 @@ __global__ void __launch_bounds__(init_threads_per_block)
   uint32_t t              = threadIdx.x;
   statistics_group *group = &group_g[threadIdx.y];
   if (chunk_id < num_rowgroups and t == 0) {
-    uint32_t num_rows = cols[col_id].num_rows;
+    uint32_t num_rows = cols[col_id].leaf_column->size();
     group->col        = &cols[col_id];
     group->start_row  = chunk_id * row_index_stride;
     group->num_rows = min(num_rows - min(chunk_id * row_index_stride, num_rows), row_index_stride);
@@ -371,7 +371,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
  * @param[in] num_columns Number of columns
  * @param[in] num_rowgroups Number of rowgroups
  * @param[in] row_index_stride Rowgroup size in rows
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void orc_init_statistics_groups(statistics_group *groups,
                                 const stats_column_desc *cols,
@@ -392,7 +392,7 @@ void orc_init_statistics_groups(statistics_group *groups,
  * @param[in,out] groups Statistics merge groups
  * @param[in] chunks Statistics chunks
  * @param[in] statistics_count Number of statistics buffers to encode
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void orc_init_statistics_buffersize(statistics_merge_group *groups,
                                     const statistics_chunk *chunks,

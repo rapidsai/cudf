@@ -18,19 +18,13 @@
  */
 
 #include "compiled/binary_ops.hpp"
-#include "jit/code/code.h"
 #include "jit/util.hpp"
 
-#include <jit/launcher.h>
-#include <jit/parser.h>
-#include <jit/type.h>
+#include <jit_preprocessed_files/binaryop/jit/kernel.cu.jit.hpp>
 
-#include <jit/bit.hpp.jit>
-#include <jit/common_headers.hpp>
-#include <jit/durations.hpp.jit>
-#include <jit/fixed_point.hpp.jit>
-#include <jit/timestamps.hpp.jit>
-#include <jit/types.hpp.jit>
+#include <jit/cache.hpp>
+#include <jit/parser.hpp>
+#include <jit/type.hpp>
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -42,6 +36,7 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/unary.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -55,6 +50,7 @@ namespace cudf {
 
 namespace binops {
 namespace detail {
+
 /**
  * @brief Computes output valid mask for op between a column and a scalar
  */
@@ -77,69 +73,47 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
 
 namespace jit {
 
-const std::string hash = "prog_binop";
-
-const std::vector<std::string> header_names{"operation.h",
-                                            "traits.h",
-                                            cudf_types_hpp,
-                                            cudf_utilities_bit_hpp,
-                                            cudf_wrappers_timestamps_hpp,
-                                            cudf_wrappers_durations_hpp,
-                                            cudf_fixed_point_fixed_point_hpp};
-
-std::istream* headers_code(std::string filename, std::iostream& stream)
-{
-  if (filename == "operation.h") {
-    stream << code::operation;
-    return &stream;
-  }
-  if (filename == "traits.h") {
-    stream << code::traits;
-    return &stream;
-  }
-  auto it = cudf::jit::stringified_headers.find(filename);
-  if (it != cudf::jit::stringified_headers.end()) {
-    return cudf::jit::send_stringified_header(stream, it->second);
-  }
-  return nullptr;
-}
-
 void binary_operation(mutable_column_view& out,
-                      scalar const& lhs,
-                      column_view const& rhs,
+                      column_view const& lhs,
+                      scalar const& rhs,
                       binary_operator op,
+                      OperatorType op_type,
                       rmm::cuda_stream_view stream)
 {
   if (is_null_dependent(op)) {
-    cudf::jit::launcher(
-      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
-      .set_kernel_inst("kernel_v_s_with_validity",             // name of the kernel we are
-                                                               // launching
-                       {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                        cudf::jit::get_type_name(rhs.type()),
-                        cudf::jit::get_type_name(lhs.type()),
-                        get_operator_name(op, OperatorType::Reverse)})
-      .launch(out.size(),
-              cudf::jit::get_data_ptr(out),
-              cudf::jit::get_data_ptr(rhs),
-              cudf::jit::get_data_ptr(lhs),
-              out.null_mask(),
-              rhs.null_mask(),
-              rhs.offset(),
-              lhs.is_valid());
+    std::string kernel_name =
+      jitify2::reflection::Template("cudf::binops::jit::kernel_v_s_with_validity")  //
+        .instantiate(cudf::jit::get_type_name(out.type()),  // list of template arguments
+                     cudf::jit::get_type_name(lhs.type()),
+                     cudf::jit::get_type_name(rhs.type()),
+                     get_operator_name(op, op_type));
+
+    cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+      .get_kernel(kernel_name)                               //
+      ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
+      ->launch(out.size(),
+               cudf::jit::get_data_ptr(out),
+               cudf::jit::get_data_ptr(lhs),
+               cudf::jit::get_data_ptr(rhs),
+               out.null_mask(),
+               lhs.null_mask(),
+               lhs.offset(),
+               rhs.is_valid());
   } else {
-    cudf::jit::launcher(
-      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
-      .set_kernel_inst("kernel_v_s",                           // name of the kernel we are
-                                                               // launching
-                       {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                        cudf::jit::get_type_name(rhs.type()),
-                        cudf::jit::get_type_name(lhs.type()),
-                        get_operator_name(op, OperatorType::Reverse)})
-      .launch(out.size(),
-              cudf::jit::get_data_ptr(out),
-              cudf::jit::get_data_ptr(rhs),
-              cudf::jit::get_data_ptr(lhs));
+    std::string kernel_name =
+      jitify2::reflection::Template("cudf::binops::jit::kernel_v_s")  //
+        .instantiate(cudf::jit::get_type_name(out.type()),            // list of template arguments
+                     cudf::jit::get_type_name(lhs.type()),
+                     cudf::jit::get_type_name(rhs.type()),
+                     get_operator_name(op, op_type));
+
+    cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+      .get_kernel(kernel_name)                               //
+      ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
+      ->launch(out.size(),
+               cudf::jit::get_data_ptr(out),
+               cudf::jit::get_data_ptr(lhs),
+               cudf::jit::get_data_ptr(rhs));
   }
 }
 
@@ -149,37 +123,16 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
 {
-  if (is_null_dependent(op)) {
-    cudf::jit::launcher(
-      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
-      .set_kernel_inst("kernel_v_s_with_validity",             // name of the kernel we are
-                                                               // launching
-                       {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                        cudf::jit::get_type_name(lhs.type()),
-                        cudf::jit::get_type_name(rhs.type()),
-                        get_operator_name(op, OperatorType::Direct)})
-      .launch(out.size(),
-              cudf::jit::get_data_ptr(out),
-              cudf::jit::get_data_ptr(lhs),
-              cudf::jit::get_data_ptr(rhs),
-              out.null_mask(),
-              lhs.null_mask(),
-              lhs.offset(),
-              rhs.is_valid());
-  } else {
-    cudf::jit::launcher(
-      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
-      .set_kernel_inst("kernel_v_s",                           // name of the kernel we are
-                                                               // launching
-                       {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                        cudf::jit::get_type_name(lhs.type()),
-                        cudf::jit::get_type_name(rhs.type()),
-                        get_operator_name(op, OperatorType::Direct)})
-      .launch(out.size(),
-              cudf::jit::get_data_ptr(out),
-              cudf::jit::get_data_ptr(lhs),
-              cudf::jit::get_data_ptr(rhs));
-  }
+  return binary_operation(out, lhs, rhs, op, OperatorType::Direct, stream);
+}
+
+void binary_operation(mutable_column_view& out,
+                      scalar const& lhs,
+                      column_view const& rhs,
+                      binary_operator op,
+                      rmm::cuda_stream_view stream)
+{
+  return binary_operation(out, rhs, lhs, op, OperatorType::Reverse, stream);
 }
 
 void binary_operation(mutable_column_view& out,
@@ -189,36 +142,40 @@ void binary_operation(mutable_column_view& out,
                       rmm::cuda_stream_view stream)
 {
   if (is_null_dependent(op)) {
-    cudf::jit::launcher(
-      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
-      .set_kernel_inst("kernel_v_v_with_validity",             // name of the kernel we are
-                                                               // launching
-                       {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                        cudf::jit::get_type_name(lhs.type()),
-                        cudf::jit::get_type_name(rhs.type()),
-                        get_operator_name(op, OperatorType::Direct)})
-      .launch(out.size(),
-              cudf::jit::get_data_ptr(out),
-              cudf::jit::get_data_ptr(lhs),
-              cudf::jit::get_data_ptr(rhs),
-              out.null_mask(),
-              lhs.null_mask(),
-              rhs.offset(),
-              rhs.null_mask(),
-              rhs.offset());
+    std::string kernel_name =
+      jitify2::reflection::Template("cudf::binops::jit::kernel_v_v_with_validity")  //
+        .instantiate(cudf::jit::get_type_name(out.type()),  // list of template arguments
+                     cudf::jit::get_type_name(lhs.type()),
+                     cudf::jit::get_type_name(rhs.type()),
+                     get_operator_name(op, OperatorType::Direct));
+
+    cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+      .get_kernel(kernel_name)                               //
+      ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
+      ->launch(out.size(),
+               cudf::jit::get_data_ptr(out),
+               cudf::jit::get_data_ptr(lhs),
+               cudf::jit::get_data_ptr(rhs),
+               out.null_mask(),
+               lhs.null_mask(),
+               rhs.offset(),
+               rhs.null_mask(),
+               rhs.offset());
   } else {
-    cudf::jit::launcher(
-      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
-      .set_kernel_inst("kernel_v_v",                           // name of the kernel we are
-                                                               // launching
-                       {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                        cudf::jit::get_type_name(lhs.type()),
-                        cudf::jit::get_type_name(rhs.type()),
-                        get_operator_name(op, OperatorType::Direct)})
-      .launch(out.size(),
-              cudf::jit::get_data_ptr(out),
-              cudf::jit::get_data_ptr(lhs),
-              cudf::jit::get_data_ptr(rhs));
+    std::string kernel_name =
+      jitify2::reflection::Template("cudf::binops::jit::kernel_v_v")  //
+        .instantiate(cudf::jit::get_type_name(out.type()),            // list of template arguments
+                     cudf::jit::get_type_name(lhs.type()),
+                     cudf::jit::get_type_name(rhs.type()),
+                     get_operator_name(op, OperatorType::Direct));
+
+    cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+      .get_kernel(kernel_name)                               //
+      ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
+      ->launch(out.size(),
+               cudf::jit::get_data_ptr(out),
+               cudf::jit::get_data_ptr(lhs),
+               cudf::jit::get_data_ptr(rhs));
   }
 }
 
@@ -231,23 +188,24 @@ void binary_operation(mutable_column_view& out,
   std::string const output_type_name = cudf::jit::get_type_name(out.type());
 
   std::string ptx_hash =
-    hash + "." + std::to_string(std::hash<std::string>{}(ptx + output_type_name));
+    "prog_binop." + std::to_string(std::hash<std::string>{}(ptx + output_type_name));
   std::string cuda_source =
-    "\n#include <cudf/types.hpp>\n" +
-    cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type_name) + code::kernel;
+    cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type_name);
 
-  cudf::jit::launcher(
-    ptx_hash, cuda_source, header_names, cudf::jit::compiler_flags, headers_code, stream)
-    .set_kernel_inst("kernel_v_v",       // name of the kernel
-                                         // we are launching
-                     {output_type_name,  // list of template arguments
-                      cudf::jit::get_type_name(lhs.type()),
-                      cudf::jit::get_type_name(rhs.type()),
-                      get_operator_name(binary_operator::GENERIC_BINARY, OperatorType::Direct)})
-    .launch(out.size(),
-            cudf::jit::get_data_ptr(out),
-            cudf::jit::get_data_ptr(lhs),
-            cudf::jit::get_data_ptr(rhs));
+  std::string kernel_name =
+    jitify2::reflection::Template("cudf::binops::jit::kernel_v_v")  //
+      .instantiate(output_type_name,                                // list of template arguments
+                   cudf::jit::get_type_name(lhs.type()),
+                   cudf::jit::get_type_name(rhs.type()),
+                   get_operator_name(binary_operator::GENERIC_BINARY, OperatorType::Direct));
+
+  cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+    .get_kernel(kernel_name, {}, {{"binaryop/jit/operation-udf.hpp", cuda_source}})  //
+    ->configure_1d_max_occupancy(0, 0, 0, stream.value())                            //
+    ->launch(out.size(),
+             cudf::jit::get_data_ptr(out),
+             cudf::jit::get_data_ptr(lhs),
+             cudf::jit::get_data_ptr(rhs));
 }
 
 }  // namespace jit
@@ -378,25 +336,7 @@ bool is_comparison_binop(binary_operator op)
  */
 bool is_supported_fixed_point_binop(binary_operator op)
 {
-  return is_basic_arithmetic_binop(op) or is_comparison_binop(op) or
-         op == binary_operator::TRUE_DIV;
-}
-
-/**
- * @brief Computes the scale for a `fixed_point` number based on given binary operator `op`
- *
- * @param op The binary_operator used for two `fixed_point` numbers
- * @param left_scale Scale of left `fixed_point` number
- * @param right_scale Scale of right `fixed_point` number
- * @return int32_t The resulting `scale` of the computed `fixed_point` number
- */
-int32_t compute_scale_for_binop(binary_operator op, int32_t left_scale, int32_t right_scale)
-{
-  CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation.");
-  if (op == binary_operator::TRUE_DIV) CUDF_FAIL("TRUE_DIV scale cannot be computed.");
-  if (op == binary_operator::MUL) return left_scale + right_scale;
-  if (op == binary_operator::DIV) return left_scale - right_scale;
-  return std::min(left_scale, right_scale);
+  return is_basic_arithmetic_binop(op) or is_comparison_binop(op);
 }
 
 /**
@@ -409,6 +349,26 @@ int32_t compute_scale_for_binop(binary_operator op, int32_t left_scale, int32_t 
 bool is_same_scale_necessary(binary_operator op)
 {
   return op != binary_operator::MUL && op != binary_operator::DIV;
+}
+
+template <typename Lhs, typename Rhs>
+void fixed_point_binary_operation_validation(binary_operator op,
+                                             Lhs lhs,
+                                             Rhs rhs,
+                                             thrust::optional<cudf::data_type> output_type = {})
+{
+  CUDF_EXPECTS(is_fixed_point(lhs), "Input must have fixed_point data_type.");
+  CUDF_EXPECTS(is_fixed_point(rhs), "Input must have fixed_point data_type.");
+  CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
+  CUDF_EXPECTS(lhs.id() == rhs.id(), "Data type mismatch");
+  if (output_type.has_value()) {
+    if (is_comparison_binop(op))
+      CUDF_EXPECTS(output_type == cudf::data_type{type_id::BOOL8},
+                   "Comparison operations require boolean output type.");
+    else
+      CUDF_EXPECTS(is_fixed_point(output_type.value()),
+                   "fixed_point binary operations require fixed_point output type.");
+  }
 }
 
 /**
@@ -424,52 +384,24 @@ bool is_same_scale_necessary(binary_operator op)
 std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
                                                      column_view const& rhs,
                                                      binary_operator op,
-                                                     thrust::optional<cudf::data_type> output_type,
+                                                     cudf::data_type output_type,
                                                      rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource* mr)
 {
   using namespace numeric;
 
-  CUDF_EXPECTS(is_fixed_point(lhs.type()), "Input must have fixed_point data_type.");
-  CUDF_EXPECTS(is_fixed_point(rhs.type()), "Input must have fixed_point data_type.");
-  CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
-  CUDF_EXPECTS(lhs.type().id() == rhs.type().id(), "Data type mismatch");
-  if (op == binary_operator::TRUE_DIV)
-    CUDF_EXPECTS(output_type.has_value(), "TRUE_DIV requires result_type.");
+  fixed_point_binary_operation_validation(op, lhs.type(), rhs.type(), output_type);
 
-  auto const scale = op == binary_operator::TRUE_DIV
-                       ? output_type.value().scale()
-                       : compute_scale_for_binop(op, lhs.type().scale(), rhs.type().scale());
+  if (rhs.is_empty())
+    return make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
 
-  auto const out_type = output_type.value_or(
-    is_comparison_binop(op) ? data_type{type_id::BOOL8} : data_type{lhs.type().id(), scale});
-
-  auto out = make_fixed_width_column_for_output(lhs, rhs, op, out_type, stream, mr);
-
-  if (rhs.is_empty()) return out;
-
+  auto const scale = binary_operation_fixed_point_scale(op, lhs.type().scale(), rhs.type().scale());
+  auto const type =
+    is_comparison_binop(op) ? data_type{type_id::BOOL8} : cudf::data_type{rhs.type().id(), scale};
+  auto out      = make_fixed_width_column_for_output(lhs, rhs, op, type, stream, mr);
   auto out_view = out->mutable_view();
 
-  if (op == binary_operator::TRUE_DIV) {
-    // Adjust scalar so lhs has the scale needed to get desired output data_type (scale)
-    auto const diff         = (lhs.type().scale() - rhs.type().scale()) - scale;
-    auto const unused_scale = scale_type{0};  // scale of out_view already set
-    if (lhs.type().id() == type_id::DECIMAL32) {
-      auto const factor       = numeric::detail::ipow<int32_t, Radix::BASE_10>(std::abs(diff));
-      auto const val          = static_cast<fixed_point_scalar<decimal32> const&>(lhs).value();
-      auto const scaled_value = diff < 0 ? val / factor : val * factor;
-      auto const scalar       = make_fixed_point_scalar<decimal32>(scaled_value, unused_scale);
-      binops::jit::binary_operation(out_view, *scalar, rhs, binary_operator::DIV, stream);
-      return out;
-    } else {
-      auto const factor       = numeric::detail::ipow<int64_t, Radix::BASE_10>(std::abs(diff));
-      auto const val          = static_cast<fixed_point_scalar<decimal64> const&>(lhs).value();
-      auto const scaled_value = diff < 0 ? val / factor : val * factor;
-      auto const scalar       = make_fixed_point_scalar<decimal64>(scaled_value, unused_scale);
-      binops::jit::binary_operation(out_view, *scalar, rhs, binary_operator::DIV, stream);
-      return out;
-    }
-  } else if (lhs.type().scale() != rhs.type().scale() && is_same_scale_necessary(op)) {
+  if (lhs.type().scale() != rhs.type().scale() && is_same_scale_necessary(op)) {
     // Adjust scalar/column so they have they same scale
     if (rhs.type().scale() < lhs.type().scale()) {
       auto const diff = lhs.type().scale() - rhs.type().scale();
@@ -479,7 +411,6 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
         auto const scale  = scale_type{rhs.type().scale()};
         auto const scalar = make_fixed_point_scalar<decimal32>(val * factor, scale);
         binops::jit::binary_operation(out_view, *scalar, rhs, op, stream);
-        return out;
       } else {
         CUDF_EXPECTS(lhs.type().id() == type_id::DECIMAL64, "Unexpected DTYPE");
         auto const factor = numeric::detail::ipow<int64_t, Radix::BASE_10>(diff);
@@ -487,31 +418,27 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
         auto const scale  = scale_type{rhs.type().scale()};
         auto const scalar = make_fixed_point_scalar<decimal64>(val * factor, scale);
         binops::jit::binary_operation(out_view, *scalar, rhs, op, stream);
-        return out;
       }
     } else {
       auto const diff   = rhs.type().scale() - lhs.type().scale();
       auto const result = [&] {
         if (lhs.type().id() == type_id::DECIMAL32) {
           auto const factor = numeric::detail::ipow<int32_t, Radix::BASE_10>(diff);
-          auto const scalar =
-            make_fixed_point_scalar<decimal32>(factor, scale_type{rhs.type().scale()});
+          auto const scalar = make_fixed_point_scalar<decimal32>(factor, scale_type{-diff});
           return binary_operation(*scalar, rhs, binary_operator::MUL, lhs.type(), stream, mr);
         } else {
           CUDF_EXPECTS(lhs.type().id() == type_id::DECIMAL64, "Unexpected DTYPE");
           auto const factor = numeric::detail::ipow<int64_t, Radix::BASE_10>(diff);
-          auto const scalar =
-            make_fixed_point_scalar<decimal64>(factor, scale_type{rhs.type().scale()});
+          auto const scalar = make_fixed_point_scalar<decimal64>(factor, scale_type{-diff});
           return binary_operation(*scalar, rhs, binary_operator::MUL, lhs.type(), stream, mr);
         }
       }();
       binops::jit::binary_operation(out_view, lhs, result->view(), op, stream);
-      return out;
     }
   } else {
     binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
-    return out;
   }
+  return output_type.scale() != scale ? cudf::cast(out_view, output_type) : std::move(out);
 }
 
 /**
@@ -527,52 +454,24 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
 std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
                                                      scalar const& rhs,
                                                      binary_operator op,
-                                                     thrust::optional<cudf::data_type> output_type,
+                                                     cudf::data_type output_type,
                                                      rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource* mr)
 {
   using namespace numeric;
 
-  CUDF_EXPECTS(is_fixed_point(lhs.type()), "Input must have fixed_point data_type.");
-  CUDF_EXPECTS(is_fixed_point(rhs.type()), "Input must have fixed_point data_type.");
-  CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
-  CUDF_EXPECTS(lhs.type().id() == rhs.type().id(), "Data type mismatch");
-  if (op == binary_operator::TRUE_DIV)
-    CUDF_EXPECTS(output_type.has_value(), "TRUE_DIV requires result_type.");
+  fixed_point_binary_operation_validation(op, lhs.type(), rhs.type(), output_type);
 
-  auto const scale = op == binary_operator::TRUE_DIV
-                       ? output_type.value().scale()
-                       : compute_scale_for_binop(op, lhs.type().scale(), rhs.type().scale());
+  if (lhs.is_empty())
+    return make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
 
-  auto const out_type = output_type.value_or(
-    is_comparison_binop(op) ? data_type{type_id::BOOL8} : data_type{lhs.type().id(), scale});
-
-  auto out = make_fixed_width_column_for_output(lhs, rhs, op, out_type, stream, mr);
-
-  if (lhs.is_empty()) return out;
-
+  auto const scale = binary_operation_fixed_point_scale(op, lhs.type().scale(), rhs.type().scale());
+  auto const type =
+    is_comparison_binop(op) ? data_type{type_id::BOOL8} : cudf::data_type{lhs.type().id(), scale};
+  auto out      = make_fixed_width_column_for_output(lhs, rhs, op, type, stream, mr);
   auto out_view = out->mutable_view();
 
-  if (op == binary_operator::TRUE_DIV) {
-    // Adjust columns so lhs has the scale needed to get desired output data_type (scale)
-    auto const diff         = (lhs.type().scale() - rhs.type().scale()) - scale;
-    auto const interim_op   = diff < 0 ? binary_operator::DIV : binary_operator::MUL;
-    auto const scalar_scale = scale_type{rhs.type().scale() + scale};
-    auto const result       = [&] {
-      if (lhs.type().id() == type_id::DECIMAL32) {
-        auto const factor = numeric::detail::ipow<int32_t, Radix::BASE_10>(std::abs(diff));
-        auto const scalar = make_fixed_point_scalar<decimal32>(factor, scalar_scale);
-        return binary_operation(lhs, *scalar, interim_op, {}, stream, mr);
-      } else {
-        CUDF_EXPECTS(lhs.type().id() == type_id::DECIMAL64, "Unexpected DTYPE");
-        auto const factor = numeric::detail::ipow<int64_t, Radix::BASE_10>(std::abs(diff));
-        auto const scalar = make_fixed_point_scalar<decimal64>(factor, scalar_scale);
-        return binary_operation(lhs, *scalar, interim_op, {}, stream, mr);
-      }
-    }();
-    binops::jit::binary_operation(out_view, result->view(), rhs, binary_operator::DIV, stream);
-    return out;
-  } else if (lhs.type().scale() != rhs.type().scale() && is_same_scale_necessary(op)) {
+  if (lhs.type().scale() != rhs.type().scale() && is_same_scale_necessary(op)) {
     // Adjust scalar/column so they have they same scale
     if (rhs.type().scale() > lhs.type().scale()) {
       auto const diff = rhs.type().scale() - lhs.type().scale();
@@ -582,7 +481,6 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
         auto const scale  = scale_type{lhs.type().scale()};
         auto const scalar = make_fixed_point_scalar<decimal32>(val * factor, scale);
         binops::jit::binary_operation(out_view, lhs, *scalar, op, stream);
-        return out;
       } else {
         CUDF_EXPECTS(rhs.type().id() == type_id::DECIMAL64, "Unexpected DTYPE");
         auto const factor = numeric::detail::ipow<int64_t, Radix::BASE_10>(diff);
@@ -590,31 +488,27 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
         auto const scale  = scale_type{rhs.type().scale()};
         auto const scalar = make_fixed_point_scalar<decimal64>(val * factor, scale);
         binops::jit::binary_operation(out_view, lhs, *scalar, op, stream);
-        return out;
       }
     } else {
       auto const diff   = lhs.type().scale() - rhs.type().scale();
       auto const result = [&] {
         if (rhs.type().id() == type_id::DECIMAL32) {
           auto const factor = numeric::detail::ipow<int32_t, Radix::BASE_10>(diff);
-          auto const scalar =
-            make_fixed_point_scalar<decimal32>(factor, scale_type{lhs.type().scale()});
+          auto const scalar = make_fixed_point_scalar<decimal32>(factor, scale_type{-diff});
           return binary_operation(*scalar, lhs, binary_operator::MUL, rhs.type(), stream, mr);
         } else {
           CUDF_EXPECTS(rhs.type().id() == type_id::DECIMAL64, "Unexpected DTYPE");
           auto const factor = numeric::detail::ipow<int64_t, Radix::BASE_10>(diff);
-          auto const scalar =
-            make_fixed_point_scalar<decimal64>(factor, scale_type{lhs.type().scale()});
+          auto const scalar = make_fixed_point_scalar<decimal64>(factor, scale_type{-diff});
           return binary_operation(*scalar, lhs, binary_operator::MUL, rhs.type(), stream, mr);
         }
       }();
       binops::jit::binary_operation(out_view, result->view(), rhs, op, stream);
-      return out;
     }
   } else {
     binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
-    return out;
   }
+  return output_type.scale() != scale ? cudf::cast(out_view, output_type) : std::move(out);
 }
 
 /**
@@ -630,94 +524,59 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
 std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
                                                      column_view const& rhs,
                                                      binary_operator op,
-                                                     thrust::optional<cudf::data_type> output_type,
+                                                     cudf::data_type output_type,
                                                      rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource* mr)
 {
   using namespace numeric;
 
-  CUDF_EXPECTS(is_fixed_point(lhs.type()), "Input must have fixed_point data_type.");
-  CUDF_EXPECTS(is_fixed_point(rhs.type()), "Input must have fixed_point data_type.");
-  CUDF_EXPECTS(is_supported_fixed_point_binop(op), "Unsupported fixed_point binary operation");
-  CUDF_EXPECTS(lhs.type().id() == rhs.type().id(), "Data type mismatch");
-  if (op == binary_operator::TRUE_DIV)
-    CUDF_EXPECTS(output_type.has_value(), "TRUE_DIV requires result_type.");
+  fixed_point_binary_operation_validation(op, lhs.type(), rhs.type(), output_type);
 
-  auto const scale = op == binary_operator::TRUE_DIV
-                       ? output_type.value().scale()
-                       : compute_scale_for_binop(op, lhs.type().scale(), rhs.type().scale());
+  if (lhs.is_empty() or rhs.is_empty())
+    return make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
 
-  auto const out_type = output_type.value_or(
-    is_comparison_binop(op) ? data_type{type_id::BOOL8} : data_type{lhs.type().id(), scale});
-
-  auto out = make_fixed_width_column_for_output(lhs, rhs, op, out_type, stream, mr);
-
-  if (lhs.is_empty() or rhs.is_empty()) return out;
-
+  auto const scale = binary_operation_fixed_point_scale(op, lhs.type().scale(), rhs.type().scale());
+  auto const type =
+    is_comparison_binop(op) ? data_type{type_id::BOOL8} : cudf::data_type{lhs.type().id(), scale};
+  auto out      = make_fixed_width_column_for_output(lhs, rhs, op, type, stream, mr);
   auto out_view = out->mutable_view();
 
-  if (op == binary_operator::TRUE_DIV) {
-    // Adjust columns so lhs has the scale needed to get desired output data_type (scale)
-    auto const diff         = (lhs.type().scale() - rhs.type().scale()) - scale;
-    auto const interim_op   = diff < 0 ? binary_operator::DIV : binary_operator::MUL;
-    auto const scalar_scale = scale_type{rhs.type().scale() + scale};
-    auto const result       = [&] {
-      if (lhs.type().id() == type_id::DECIMAL32) {
-        auto const factor = numeric::detail::ipow<int32_t, Radix::BASE_10>(std::abs(diff));
-        auto const scalar = make_fixed_point_scalar<decimal32>(factor, scalar_scale);
-        return binary_operation(lhs, *scalar, interim_op, {}, stream, mr);
-      } else {
-        CUDF_EXPECTS(lhs.type().id() == type_id::DECIMAL64, "Unexpected DTYPE");
-        auto const factor = numeric::detail::ipow<int64_t, Radix::BASE_10>(std::abs(diff));
-        auto const scalar = make_fixed_point_scalar<decimal64>(factor, scalar_scale);
-        return binary_operation(lhs, *scalar, interim_op, {}, stream, mr);
-      }
-    }();
-    binops::jit::binary_operation(out_view, result->view(), rhs, binary_operator::DIV, stream);
-    return out;
-  } else if (lhs.type().scale() != rhs.type().scale() && is_same_scale_necessary(op)) {
-    // Adjust columns so they have they same scale TODO modify comment
+  if (lhs.type().scale() != rhs.type().scale() && is_same_scale_necessary(op)) {
     if (rhs.type().scale() < lhs.type().scale()) {
       auto const diff   = lhs.type().scale() - rhs.type().scale();
       auto const result = [&] {
         if (lhs.type().id() == type_id::DECIMAL32) {
           auto const factor = numeric::detail::ipow<int32_t, Radix::BASE_10>(diff);
-          auto const scalar =
-            make_fixed_point_scalar<decimal32>(factor, scale_type{lhs.type().scale()});
+          auto const scalar = make_fixed_point_scalar<decimal32>(factor, scale_type{-diff});
           return binary_operation(*scalar, lhs, binary_operator::MUL, rhs.type(), stream, mr);
         } else {
           CUDF_EXPECTS(lhs.type().id() == type_id::DECIMAL64, "Unexpected DTYPE");
           auto const factor = numeric::detail::ipow<int64_t, Radix::BASE_10>(diff);
-          auto const scalar =
-            make_fixed_point_scalar<decimal64>(factor, scale_type{lhs.type().scale()});
+          auto const scalar = make_fixed_point_scalar<decimal64>(factor, scale_type{-diff});
           return binary_operation(*scalar, lhs, binary_operator::MUL, rhs.type(), stream, mr);
         }
       }();
       binops::jit::binary_operation(out_view, result->view(), rhs, op, stream);
-      return out;
     } else {
       auto const diff   = rhs.type().scale() - lhs.type().scale();
       auto const result = [&] {
         if (lhs.type().id() == type_id::DECIMAL32) {
           auto const factor = numeric::detail::ipow<int32_t, Radix::BASE_10>(diff);
-          auto const scalar =
-            make_fixed_point_scalar<decimal32>(factor, scale_type{rhs.type().scale()});
+          auto const scalar = make_fixed_point_scalar<decimal32>(factor, scale_type{-diff});
           return binary_operation(*scalar, rhs, binary_operator::MUL, lhs.type(), stream, mr);
         } else {
           CUDF_EXPECTS(lhs.type().id() == type_id::DECIMAL64, "Unexpected DTYPE");
           auto const factor = numeric::detail::ipow<int64_t, Radix::BASE_10>(diff);
-          auto const scalar =
-            make_fixed_point_scalar<decimal64>(factor, scale_type{rhs.type().scale()});
+          auto const scalar = make_fixed_point_scalar<decimal64>(factor, scale_type{-diff});
           return binary_operation(*scalar, rhs, binary_operator::MUL, lhs.type(), stream, mr);
         }
       }();
       binops::jit::binary_operation(out_view, lhs, result->view(), op, stream);
-      return out;
     }
   } else {
     binops::jit::binary_operation(out_view, lhs, rhs, op, stream);
-    return out;
   }
+  return output_type.scale() != scale ? cudf::cast(out_view, output_type) : std::move(out);
 }
 
 std::unique_ptr<column> binary_operation(scalar const& lhs,
@@ -730,11 +589,8 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, stream, mr);
 
-  if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type())) {
-    auto const type =
-      op == binary_operator::TRUE_DIV ? output_type : thrust::optional<data_type>{thrust::nullopt};
-    return fixed_point_binary_operation(lhs, rhs, op, type, stream, mr);
-  }
+  if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
+    return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
 
   // Check for datatype
   CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
@@ -760,11 +616,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, stream, mr);
 
-  if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type())) {
-    auto const type =
-      op == binary_operator::TRUE_DIV ? output_type : thrust::optional<data_type>{thrust::nullopt};
-    return fixed_point_binary_operation(lhs, rhs, op, type, stream, mr);
-  }
+  if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
+    return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
 
   // Check for datatype
   CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
@@ -792,11 +645,8 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, stream, mr);
 
-  if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type())) {
-    auto const type =
-      op == binary_operator::TRUE_DIV ? output_type : thrust::optional<data_type>{thrust::nullopt};
-    return fixed_point_binary_operation(lhs, rhs, op, type, stream, mr);
-  }
+  if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
+    return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
 
   // Check for datatype
   CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
@@ -844,6 +694,27 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 }
 
 }  // namespace detail
+
+int32_t binary_operation_fixed_point_scale(binary_operator op,
+                                           int32_t left_scale,
+                                           int32_t right_scale)
+{
+  CUDF_EXPECTS(cudf::detail::is_supported_fixed_point_binop(op),
+               "Unsupported fixed_point binary operation.");
+  if (op == binary_operator::MUL) return left_scale + right_scale;
+  if (op == binary_operator::DIV) return left_scale - right_scale;
+  return std::min(left_scale, right_scale);
+}
+
+cudf::data_type binary_operation_fixed_point_output_type(binary_operator op,
+                                                         cudf::data_type const& lhs,
+                                                         cudf::data_type const& rhs)
+{
+  cudf::detail::fixed_point_binary_operation_validation(op, lhs, rhs);
+
+  auto const scale = binary_operation_fixed_point_scale(op, lhs.scale(), rhs.scale());
+  return cudf::data_type{lhs.id(), scale};
+}
 
 std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          column_view const& rhs,

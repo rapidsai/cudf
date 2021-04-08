@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <algorithm>
+
 namespace cudf {
 namespace {
 
@@ -36,6 +38,22 @@ namespace {
 bool md5_type_check(data_type dt)
 {
   return !is_chrono(dt) && (is_fixed_width(dt) || (dt.id() == type_id::STRING));
+}
+
+template <typename IterType>
+std::vector<column_view> to_leaf_columns(IterType iter_begin, IterType iter_end)
+{
+  std::vector<column_view> leaf_columns;
+  std::for_each(iter_begin, iter_end, [&leaf_columns](column_view const& col) {
+    if (is_nested(col.type())) {
+      CUDF_EXPECTS(col.type().id() == type_id::STRUCT, "unsupported nested type");
+      auto child_columns = to_leaf_columns(col.child_begin(), col.child_end());
+      leaf_columns.insert(leaf_columns.end(), child_columns.begin(), child_columns.end());
+    } else {
+      leaf_columns.emplace_back(col);
+    }
+  });
+  return leaf_columns;
 }
 
 }  // namespace
@@ -133,10 +151,11 @@ std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
 
   if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }
 
-  auto const device_input = table_device_view::create(input, stream);
+  table_view const leaf_table(to_leaf_columns(input.begin(), input.end()));
+  auto const device_input = table_device_view::create(leaf_table, stream);
   auto output_view        = output->mutable_view();
 
-  if (has_nulls(input)) {
+  if (has_nulls(leaf_table)) {
     thrust::tabulate(rmm::exec_policy(stream),
                      output_view.begin<int32_t>(),
                      output_view.end<int32_t>(),

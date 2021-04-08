@@ -36,7 +36,7 @@ namespace detail {
 /**
  * @copydoc cudf::structs::detail::concatenate
  */
-std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
+std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
@@ -49,7 +49,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
   std::transform(ordered_children.begin(),
                  ordered_children.end(),
                  std::back_inserter(children),
-                 [mr, stream](std::vector<column_view> const& cols) {
+                 [mr, stream](host_span<column_view const> cols) {
                    return cudf::detail::concatenate(cols, stream, mr);
                  });
 
@@ -57,7 +57,7 @@ std::unique_ptr<column> concatenate(std::vector<column_view> const& columns,
 
   // if any of the input columns have nulls, construct the output mask
   bool const has_nulls =
-    std::any_of(columns.cbegin(), columns.cend(), [](auto const& col) { return col.has_nulls(); });
+    std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
   rmm::device_buffer null_mask =
     create_null_mask(total_length, has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED);
   if (has_nulls) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@
 #include <thrust/detail/copy.h>
 #include <thrust/find.h>
 
-using cudf::detail::device_span;
+using cudf::device_span;
 
 namespace cudf {
 namespace io {
@@ -114,7 +114,7 @@ __inline__ __device__ T decode_value(const char *begin,
                                      uint64_t end,
                                      parse_options_view const &opts)
 {
-  return cudf::io::gpu::parse_numeric<T, base>(begin, end, opts);
+  return cudf::io::parse_numeric<T, base>(begin, end, opts);
 }
 
 /**
@@ -131,7 +131,7 @@ __inline__ __device__ T decode_value(const char *begin,
                                      const char *end,
                                      parse_options_view const &opts)
 {
-  return cudf::io::gpu::parse_numeric<T>(begin, end, opts);
+  return cudf::io::parse_numeric<T>(begin, end, opts);
 }
 
 /**

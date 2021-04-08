@@ -25,9 +25,9 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
@@ -54,7 +54,7 @@ struct reduce_functor {
   std::enable_if_t<is_supported<T>(), std::unique_ptr<column>> operator()(
     column_view const& values,
     size_type num_groups,
-    rmm::device_vector<cudf::size_type> const& group_labels,
+    cudf::device_span<size_type const> group_labels,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr)
   {
@@ -87,7 +87,7 @@ struct reduce_functor {
                          values.size(),
                          [d_values     = *valuesview,
                           d_result     = *resultview,
-                          dest_indices = group_labels.data().get()] __device__(auto i) {
+                          dest_indices = group_labels.data()] __device__(auto i) {
                            cudf::detail::update_target_element<DeviceType, K, true, true>{}(
                              d_result, dest_indices[i], d_values, i);
                          });
@@ -97,7 +97,7 @@ struct reduce_functor {
                          values.size(),
                          [d_values     = *valuesview,
                           d_result     = *resultview,
-                          dest_indices = group_labels.data().get()] __device__(auto i) {
+                          dest_indices = group_labels.data()] __device__(auto i) {
                            cudf::detail::update_target_element<dictionary32, K, true, true>{}(
                              d_result, dest_indices[i], d_values, i);
                          });

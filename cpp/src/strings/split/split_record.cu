@@ -243,9 +243,9 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& strings,
   // last entry is the total number of tokens to be generated
   auto total_tokens = cudf::detail::get_value<int32_t>(offsets->view(), strings_count, stream);
   // split each string into an array of index-pair values
-  rmm::device_vector<string_index_pair> tokens(total_tokens);
+  rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
   reader.d_token_offsets = d_offsets;
-  reader.d_tokens        = tokens.data().get();
+  reader.d_tokens        = tokens.data();
   thrust::for_each_n(
     rmm::exec_policy(stream), thrust::make_counting_iterator<size_type>(0), strings_count, reader);
   // convert the index-pairs into one big strings column

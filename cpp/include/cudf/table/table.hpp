@@ -111,6 +111,27 @@ class table {
   std::vector<std::unique_ptr<column>> release();
 
   /**
+   * @brief Returns a table_view built from a range of column indices.
+   *
+   * @throws std::out_of_range
+   * If any index is outside [0, num_columns())
+   *
+   * @param begin Beginning of the range
+   * @param end Ending of the range
+   * @return A table_view consisting of columns from the original table
+   * specified by the elements of `column_indices`
+   */
+
+  template <typename InputIterator>
+  table_view select(InputIterator begin, InputIterator end) const
+  {
+    std::vector<column_view> columns(std::distance(begin, end));
+    std::transform(
+      begin, end, columns.begin(), [this](auto index) { return _columns.at(index)->view(); });
+    return table_view(columns);
+  }
+
+  /**
    * @brief Returns a table_view with set of specified columns.
    *
    * @throws std::out_of_range
@@ -120,7 +141,10 @@ class table {
    * @return A table_view consisting of columns from the original table
    * specified by the elements of `column_indices`
    */
-  table_view select(std::vector<cudf::size_type> const& column_indices) const;
+  table_view select(std::vector<cudf::size_type> const& column_indices) const
+  {
+    return select(column_indices.begin(), column_indices.end());
+  };
 
   /**
    * @brief Returns a reference to the specified column

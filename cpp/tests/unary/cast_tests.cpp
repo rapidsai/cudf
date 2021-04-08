@@ -537,6 +537,9 @@ inline auto make_fixed_point_data_type(int32_t scale)
   return cudf::data_type{cudf::type_to_id<T>(), scale};
 }
 
+struct FixedPointTestSingleType : public cudf::test::BaseFixture {
+};
+
 template <typename T>
 struct FixedPointTests : public cudf::test::BaseFixture {
 };
@@ -587,6 +590,18 @@ TYPED_TEST(FixedPointTests, CastToInt32)
 
   auto const input    = fp_wrapper{{1729, 17290, 172900, 1729000}, scale_type{-3}};
   auto const expected = fw_wrapper{1, 17, 172, 1729};
+  auto const result   = cudf::cast(input, make_data_type<int32_t>());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(FixedPointTestSingleType, CastDecimal64ToInt32)
+{
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<int32_t>;
+
+  auto const input    = fp_wrapper{{7246212000}, numeric::scale_type{-5}};
+  auto const expected = fw_wrapper{72462};
   auto const result   = cudf::cast(input, make_data_type<int32_t>());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
@@ -655,6 +670,18 @@ TYPED_TEST(FixedPointTests, CastFromInt)
   auto const input    = fw_wrapper{1729, 172, 17, 1};
   auto const expected = fp_wrapper{{17, 1, 0, 0}, scale_type{2}};
   auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(2));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(FixedPointTestSingleType, CastInt32ToDecimal64)
+{
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<int32_t>;
+
+  auto const input    = fw_wrapper{-48938};
+  auto const expected = fp_wrapper{{-4893800000LL}, numeric::scale_type{-5}};
+  auto const result   = cudf::cast(input, make_fixed_point_data_type<numeric::decimal64>(-5));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }

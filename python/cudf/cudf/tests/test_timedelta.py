@@ -1,4 +1,5 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 import datetime
 import operator
 import re
@@ -9,6 +10,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_120
 from cudf.tests import utils as utils
 from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
@@ -423,7 +425,8 @@ def test_timedelta_dataframe_ops(df, op):
         pytest.param(
             np.timedelta64("nat"),
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/35529"
+                condition=not PANDAS_GE_120,
+                reason="https://github.com/pandas-dev/pandas/issues/35529",
             ),
         ),
         np.timedelta64(1, "s"),
@@ -443,7 +446,8 @@ def test_timedelta_dataframe_ops(df, op):
         pytest.param(
             "floordiv",
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/35529"
+                condition=not PANDAS_GE_120,
+                reason="https://github.com/pandas-dev/pandas/issues/35529",
             ),
         ),
     ],
@@ -521,14 +525,16 @@ def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
         datetime.timedelta(microseconds=7),
         np.timedelta64(4, "s"),
         pytest.param(
-            np.timedelta64("nat"),
+            np.timedelta64("nat", "s"),
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/35529"
+                condition=not PANDAS_GE_120,
+                reason="https://github.com/pandas-dev/pandas/issues/35529",
             ),
         ),
         np.timedelta64(1, "s"),
         np.timedelta64(1, "ms"),
         np.timedelta64(1, "us"),
+        np.timedelta64("nat", "ns"),
         np.timedelta64(1, "ns"),
     ],
 )
@@ -543,7 +549,8 @@ def test_timedelta_series_ops_with_scalars(data, other_scalars, dtype, op):
         pytest.param(
             "floordiv",
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/35529"
+                condition=not PANDAS_GE_120,
+                reason="https://github.com/pandas-dev/pandas/issues/35529",
             ),
         ),
     ],
@@ -597,18 +604,8 @@ def test_timedelta_series_ops_with_cudf_scalars(data, cpu_scalar, dtype, op):
         [1000000, 200000, 3000000],
         [1000000, 200000, None],
         [],
-        pytest.param(
-            [None],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/35644"
-            ),
-        ),
-        pytest.param(
-            [None, None, None, None, None],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/35644"
-            ),
-        ),
+        [None],
+        [None, None, None, None, None],
         [12, 12, 22, 343, 4353534, 435342],
         np.array([10, 20, 30, None, 100]),
         cp.asarray([10, 20, 30, 100]),
@@ -872,7 +869,7 @@ def test_timedelta_index_ops_with_scalars(data, other_scalars, dtype, op):
         pytest.param(
             "floordiv",
             marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/35529"
+                reason="https://github.com/rapidsai/cudf/issues/5938"
             ),
         ),
     ],

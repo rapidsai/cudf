@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,93 +17,18 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/valid_if.cuh>
-#include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
 #include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_vector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/for_each.h>
-#include <thrust/transform_reduce.h>
-
 namespace cudf {
 
-// Create a strings-type column from vector of pointer/size pairs
-std::unique_ptr<column> make_strings_column(
-  const rmm::device_vector<thrust::pair<const char*, size_type>>& strings,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  size_type strings_count = strings.size();
-  if (strings_count == 0) return strings::detail::make_empty_strings_column(stream, mr);
-
-  auto d_strings = strings.data().get();
-
-  // check total size is not too large for cudf column
-  auto size_checker = [d_strings] __device__(size_t idx) {
-    auto item = d_strings[idx];
-    return (item.first != nullptr) ? item.second : 0;
-  };
-  size_t bytes = thrust::transform_reduce(rmm::exec_policy(stream),
-                                          thrust::make_counting_iterator<size_t>(0),
-                                          thrust::make_counting_iterator<size_t>(strings_count),
-                                          size_checker,
-                                          0,
-                                          thrust::plus<size_t>());
-  CUDF_EXPECTS(bytes < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
-               "total size of strings is too large for cudf column");
-
-  // build offsets column from the strings sizes
-  auto offsets_transformer = [d_strings] __device__(size_type idx) {
-    thrust::pair<const char*, size_type> item = d_strings[idx];
-    return (item.first != nullptr ? static_cast<int32_t>(item.second) : 0);
-  };
-  auto offsets_transformer_itr = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0), offsets_transformer);
-  auto offsets_column = strings::detail::make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-  auto offsets_view = offsets_column->view();
-  auto d_offsets    = offsets_view.data<int32_t>();
-
-  // create null mask
-  auto new_nulls = detail::valid_if(
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(strings_count),
-    [d_strings] __device__(size_type idx) { return d_strings[idx].first != nullptr; },
-    stream,
-    mr);
-  auto null_count = new_nulls.second;
-  rmm::device_buffer null_mask{0, stream, mr};
-  if (null_count > 0) null_mask = std::move(new_nulls.first);
-
-  // build chars column
-  auto chars_column =
-    strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
-  auto chars_view = chars_column->mutable_view();
-  auto d_chars    = chars_view.data<char>();
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     strings_count,
-                     [d_strings, d_offsets, d_chars] __device__(size_type idx) {
-                       // place individual strings
-                       auto item = d_strings[idx];
-                       if (item.first != nullptr)
-                         memcpy(d_chars + d_offsets[idx], item.first, item.second);
-                     });
-
-  return make_strings_column(strings_count,
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
-}
-
+namespace {
 struct string_view_to_pair {
   string_view null_placeholder;
   string_view_to_pair(string_view n) : null_placeholder(n) {}
@@ -115,89 +40,74 @@ struct string_view_to_pair {
   }
 };
 
-// Create a strings-type column from vector of string_view
-std::unique_ptr<column> make_strings_column(const rmm::device_vector<string_view>& string_views,
-                                            const string_view null_placeholder,
+}  // namespace
+
+// Create a strings-type column from vector of pointer/size pairs
+std::unique_ptr<column> make_strings_column(
+  device_span<thrust::pair<const char*, size_type> const> strings,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+
+  return cudf::strings::detail::make_strings_column(strings.begin(), strings.end(), stream, mr);
+}
+
+std::unique_ptr<column> make_strings_column(
+  device_span<char> chars,
+  device_span<size_type> offsets,
+  size_type null_count,
+  rmm::device_buffer&& null_mask,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  CUDF_FUNC_RANGE();
+
+  return cudf::strings::detail::make_strings_column(chars.begin(),
+                                                    chars.end(),
+                                                    offsets.begin(),
+                                                    offsets.end(),
+                                                    null_count,
+                                                    std::move(null_mask),
+                                                    stream,
+                                                    mr);
+}
+
+std::unique_ptr<column> make_strings_column(device_span<string_view const> string_views,
+                                            string_view null_placeholder,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
+
   auto it_pair =
     thrust::make_transform_iterator(string_views.begin(), string_view_to_pair{null_placeholder});
-  const rmm::device_vector<thrust::pair<const char*, size_type>> dev_strings(
-    it_pair, it_pair + string_views.size());
-  return make_strings_column(dev_strings, stream, mr);
+  return cudf::strings::detail::make_strings_column(
+    it_pair, it_pair + string_views.size(), stream, mr);
 }
 
 // Create a strings-type column from device vector of chars and vector of offsets.
-std::unique_ptr<column> make_strings_column(const rmm::device_vector<char>& strings,
-                                            const rmm::device_vector<size_type>& offsets,
-                                            const rmm::device_vector<bitmask_type>& valid_mask,
+std::unique_ptr<column> make_strings_column(cudf::device_span<char const> strings,
+                                            cudf::device_span<size_type const> offsets,
+                                            cudf::device_span<bitmask_type const> valid_mask,
                                             size_type null_count,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  size_type num_strings = offsets.size() - 1;
-  if (num_strings == 0) return strings::detail::make_empty_strings_column(stream, mr);
 
-  CUDF_EXPECTS(null_count < num_strings, "null strings column not yet supported");
-  if (null_count > 0) {
-    CUDF_EXPECTS(!valid_mask.empty(), "Cannot have null elements without a null mask.");
-  }
-
-  size_type bytes = offsets.back();
-  CUDF_EXPECTS(bytes >= 0, "invalid offsets vector");
-
-  // build offsets column -- this is the number of strings + 1
-  auto offsets_column = make_numeric_column(
-    data_type{type_id::INT32}, num_strings + 1, mask_state::UNALLOCATED, stream, mr);
-  auto offsets_view = offsets_column->mutable_view();
-  thrust::transform(rmm::exec_policy(stream),
-                    offsets.begin(),
-                    offsets.end(),
-                    offsets_view.data<int32_t>(),
-                    [] __device__(auto offset) { return static_cast<int32_t>(offset); });
   // build null bitmask
   rmm::device_buffer null_mask{
-    valid_mask.data().get(),
-    valid_mask.size() *
-      sizeof(bitmask_type)};  // Or this works too: sizeof(typename
-                              // std::remove_reference_t<decltype(valid_mask)>::value_type)
-  // Following give the incorrect value of 8 instead of 4 because of smart references:
-  // sizeof(valid_mask[0]), sizeof(decltype(valid_mask.front()))
+    valid_mask.data(), valid_mask.size() * sizeof(bitmask_type), stream, mr};
 
-  // build chars column
-  auto chars_column =
-    strings::detail::create_chars_child_column(num_strings, null_count, bytes, stream, mr);
-  auto chars_view = chars_column->mutable_view();
-  CUDA_TRY(cudaMemcpyAsync(chars_view.data<char>(),
-                           strings.data().get(),
-                           bytes,
-                           cudaMemcpyDeviceToDevice,
-                           stream.value()));
-
-  return make_strings_column(num_strings,
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
-}
-
-// Create strings column from host vectors
-std::unique_ptr<column> make_strings_column(const std::vector<char>& strings,
-                                            const std::vector<size_type>& offsets,
-                                            const std::vector<bitmask_type>& null_mask,
-                                            size_type null_count,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
-{
-  rmm::device_vector<char> d_strings{strings};
-  rmm::device_vector<size_type> d_offsets{offsets};
-  rmm::device_vector<bitmask_type> d_null_mask{null_mask};
-
-  return make_strings_column(d_strings, d_offsets, d_null_mask, null_count, stream, mr);
+  return cudf::strings::detail::make_strings_column(strings.begin(),
+                                                    strings.end(),
+                                                    offsets.begin(),
+                                                    offsets.end(),
+                                                    null_count,
+                                                    std::move(null_mask),
+                                                    stream,
+                                                    mr);
 }
 
 //
@@ -209,6 +119,8 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
+
   if (null_count > 0) CUDF_EXPECTS(null_mask.size() > 0, "Column with nulls must be nullable.");
   CUDF_EXPECTS(num_strings == offsets_column->size() - 1,
                "Invalid offsets column size for strings column.");

@@ -13,7 +13,7 @@ from cudf._lib.replace import replace_nulls
 from cudf._lib.scalar import as_device_scalar
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.types import np_to_cudf_types
-from cudf._lib.types cimport underlying_type_t_type_id
+from cudf._lib.types cimport underlying_type_t_type_id, dtype_to_data_type
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.scalar.scalar cimport scalar
@@ -93,6 +93,9 @@ class BinaryOperation(IntEnum):
     GENERIC_BINARY = (
         <underlying_type_t_binary_operator> binary_operator.GENERIC_BINARY
     )
+    NULL_EQUALS = (
+        <underlying_type_t_binary_operator> binary_operator.NULL_EQUALS
+    )
 
 
 cdef binaryop_v_v(Column lhs, Column rhs,
@@ -154,17 +157,6 @@ cdef binaryop_s_v(DeviceScalar lhs, Column rhs,
     return Column.from_unique_ptr(move(c_result))
 
 
-def handle_null_for_string_column(Column input_col, op):
-    if op in ('eq', 'lt', 'le', 'gt', 'ge'):
-        return replace_nulls(input_col, DeviceScalar(False, 'bool'))
-
-    elif op == 'ne':
-        return replace_nulls(input_col, DeviceScalar(True, 'bool'))
-
-    # Nothing needs to be done
-    return input_col
-
-
 def binaryop(lhs, rhs, op, dtype):
     """
     Dispatches a binary op call to the appropriate libcudf function:
@@ -174,15 +166,8 @@ def binaryop(lhs, rhs, op, dtype):
     cdef binary_operator c_op = <binary_operator> (
         <underlying_type_t_binary_operator> op
     )
-    cdef type_id tid = (
-        <type_id> (
-            <underlying_type_t_type_id> (
-                np_to_cudf_types[np.dtype(dtype)]
-            )
-        )
-    )
 
-    cdef data_type c_dtype = data_type(tid)
+    cdef data_type c_dtype = dtype_to_data_type(dtype)
 
     if is_scalar(lhs) or lhs is None:
         is_string_col = is_string_dtype(rhs.dtype)
@@ -212,11 +197,7 @@ def binaryop(lhs, rhs, op, dtype):
             c_op,
             c_dtype
         )
-
-    if is_string_col is True:
-        return handle_null_for_string_column(result, op.name.lower())
-    else:
-        return result
+    return result
 
 
 def binaryop_udf(Column lhs, Column rhs, udf_ptx, dtype):

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,9 +28,10 @@
 #include <type_traits>
 
 namespace cudf {
-namespace detail {
 
 constexpr std::size_t dynamic_extent = std::numeric_limits<std::size_t>::max();
+
+namespace detail {
 
 /**
  * @brief C++20 std::span with reduced feature set.
@@ -100,6 +101,8 @@ class span_base {
   size_type _size;
 };
 
+}  // namespace detail
+
 // ===== host_span =================================================================================
 
 template <typename T>
@@ -116,20 +119,45 @@ struct is_host_span_supported_container<  //
   thrust::host_vector<T, Alloc>> : std::true_type {
 };
 
-template <typename T, std::size_t Extent = dynamic_extent>
-struct host_span : public span_base<T, Extent, host_span<T, Extent>> {
+template <typename T, std::size_t Extent = cudf::dynamic_extent>
+struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent>> {
   using base = cudf::detail::span_base<T, Extent, host_span<T, Extent>>;
   using base::base;
 
   constexpr host_span() noexcept : base() {}  // required to compile on centos
 
-  template <typename C, std::enable_if_t<is_host_span_supported_container<C>::value>* = nullptr>
+  // Constructor from container
+  template <
+    typename C,
+    // Only supported containers of types convertible to T
+    std::enable_if_t<is_host_span_supported_container<C>::value &&
+                     std::is_convertible<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
+                                           std::declval<C&>().data()))> (*)[],
+                                         T (*)[]>::value>* = nullptr>
   constexpr host_span(C& in) : base(in.data(), in.size())
   {
   }
 
-  template <typename C, std::enable_if_t<is_host_span_supported_container<C>::value>* = nullptr>
+  // Constructor from const container
+  template <
+    typename C,
+    // Only supported containers of types convertible to T
+    std::enable_if_t<is_host_span_supported_container<C>::value &&
+                     std::is_convertible<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
+                                           std::declval<C&>().data()))> (*)[],
+                                         T (*)[]>::value>* = nullptr>
   constexpr host_span(C const& in) : base(in.data(), in.size())
+  {
+  }
+
+  // Copy construction to support const conversion
+  template <typename OtherT,
+            std::size_t OtherExtent,
+            typename std::enable_if<(Extent == OtherExtent || Extent == dynamic_extent) &&
+                                      std::is_convertible<OtherT (*)[], T (*)[]>::value,
+                                    void>::type* = nullptr>
+  constexpr host_span(const host_span<OtherT, OtherExtent>& other) noexcept
+    : base(other.data(), other.size())
   {
   }
 };
@@ -155,23 +183,111 @@ struct is_device_span_supported_container<  //
   rmm::device_uvector<T>> : std::true_type {
 };
 
-template <typename T, std::size_t Extent = dynamic_extent>
-struct device_span : public span_base<T, Extent, device_span<T, Extent>> {
+template <typename T, std::size_t Extent = cudf::dynamic_extent>
+struct device_span : public cudf::detail::span_base<T, Extent, device_span<T, Extent>> {
   using base = cudf::detail::span_base<T, Extent, device_span<T, Extent>>;
   using base::base;
 
   constexpr device_span() noexcept : base() {}  // required to compile on centos
 
-  template <typename C, std::enable_if_t<is_device_span_supported_container<C>::value>* = nullptr>
+  template <
+    typename C,
+    // Only supported containers of types convertible to T
+    std::enable_if_t<is_device_span_supported_container<C>::value &&
+                     std::is_convertible<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
+                                           std::declval<C&>().data()))> (*)[],
+                                         T (*)[]>::value>* = nullptr>
   constexpr device_span(C& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
 
-  template <typename C, std::enable_if_t<is_device_span_supported_container<C>::value>* = nullptr>
+  template <
+    typename C,
+    // Only supported containers of types convertible to T
+    std::enable_if_t<is_device_span_supported_container<C>::value &&
+                     std::is_convertible<std::remove_pointer_t<decltype(thrust::raw_pointer_cast(
+                                           std::declval<C&>().data()))> (*)[],
+                                         T (*)[]>::value>* = nullptr>
   constexpr device_span(C const& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
+
+  template <typename OtherT,
+            std::size_t OtherExtent,
+            typename std::enable_if<(Extent == OtherExtent || Extent == dynamic_extent) &&
+                                      std::is_convertible<OtherT (*)[], T (*)[]>::value,
+                                    void>::type* = nullptr>
+  constexpr device_span(const device_span<OtherT, OtherExtent>& other) noexcept
+    : base(other.data(), other.size())
+  {
+  }
 };
+
+namespace detail {
+
+/**
+ * @brief Generic class for row-major 2D spans. Not compliant with STL container semantics/syntax.
+ *
+ * The index operator returns the corresponding row.
+ */
+template <typename T, template <typename, std::size_t> typename RowType>
+class base_2dspan {
+ public:
+  using size_type = std::pair<size_t, size_t>;
+
+  constexpr base_2dspan() noexcept = default;
+  constexpr base_2dspan(T* data, size_t rows, size_t columns) noexcept
+    : _data{data}, _size{rows, columns}
+  {
+  }
+  base_2dspan(T* data, size_type size) noexcept : _data{data}, _size{size} {}
+
+  constexpr auto data() const noexcept { return _data; }
+  constexpr auto size() const noexcept { return _size; }
+  constexpr auto count() const noexcept { return size().first * size().second; }
+  constexpr bool is_empty() const noexcept { return count() == 0; }
+
+  static constexpr size_t flatten_index(size_t row, size_t column, size_type size) noexcept
+  {
+    return row * size.second + column;
+  }
+
+  constexpr RowType<T, dynamic_extent> operator[](size_t row)
+  {
+    return {this->data() + flatten_index(row, 0, this->size()), this->size().second};
+  }
+
+  template <typename OtherT,
+            template <typename, size_t>
+            typename OtherRowType,
+            typename std::enable_if<std::is_convertible<OtherRowType<OtherT, dynamic_extent>,
+                                                        RowType<T, dynamic_extent>>::value,
+                                    void>::type* = nullptr>
+  constexpr base_2dspan(base_2dspan<OtherT, OtherRowType> const& other) noexcept
+    : _data{other.data()}, _size{other.size()}
+  {
+  }
+
+ protected:
+  T* _data = nullptr;
+  size_type _size{0, 0};
+};
+
+/**
+ * @brief Alias for the 2D span for host data.
+ *
+ * Index operator returns rows as `host_span`.
+ */
+template <class T>
+using host_2dspan = base_2dspan<T, host_span>;
+
+/**
+ * @brief Alias for the 2D span for device data.
+ *
+ * Index operator returns rows as `device_span`.
+ */
+template <class T>
+using device_2dspan = base_2dspan<T, device_span>;
 
 }  // namespace detail
 }  // namespace cudf

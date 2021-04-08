@@ -296,3 +296,24 @@ def test_deserialize_cudf_0_16(datadir):
     actual = pickle.load(open(fname, "rb"))
 
     assert_eq(expected, actual)
+
+
+def test_serialize_sliced_string():
+    # https://github.com/rapidsai/cudf/issues/7735
+    data = ["hi", "hello", None]
+    pd_series = pd.Series(data, dtype=pd.StringDtype())
+    gd_series = cudf.Series(data, dtype="str")
+    sliced = gd_series[0:3]
+    serialized_gd_series = gd_series.serialize()
+    serialized_sliced = sliced.serialize()
+
+    # validate frames are equal or not
+    # because both should be identical
+    for i in range(3):
+        assert_eq(
+            serialized_gd_series[1][i].to_host_array(),
+            serialized_sliced[1][i].to_host_array(),
+        )
+
+    recreated = cudf.Series.deserialize(*sliced.serialize())
+    assert_eq(recreated.to_pandas(nullable=True), pd_series)

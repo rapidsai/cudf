@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/transform.h>
@@ -54,28 +54,26 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
-  auto strings_count  = strings.size();
+  // create output column
+  auto results   = make_numeric_column(data_type{type_id::INT32},
+                                     strings.size(),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                     strings.null_count(),
+                                     stream,
+                                     mr);
+  auto d_lengths = results->mutable_view().data<int32_t>();
+  // input column device view
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
-  // create output column
-  auto results = std::make_unique<cudf::column>(
-    cudf::data_type{type_id::INT32},
-    strings_count,
-    rmm::device_buffer(strings_count * sizeof(int32_t), stream, mr),
-    cudf::detail::copy_bitmask(strings.parent(), stream, mr),  // copy the null mask
-    strings.null_count());
-  auto results_view = results->mutable_view();
-  auto d_lengths    = results_view.data<int32_t>();
   // fill in the lengths
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<cudf::size_type>(0),
-                    thrust::make_counting_iterator<cudf::size_type>(strings_count),
+                    thrust::make_counting_iterator<cudf::size_type>(strings.size()),
                     d_lengths,
                     [d_strings, ufn] __device__(size_type idx) {
-                      int32_t length = 0;
-                      if (!d_strings.is_null(idx))
-                        length = static_cast<int32_t>(ufn(d_strings.element<string_view>(idx)));
-                      return length;
+                      return d_strings.is_null(idx)
+                               ? 0
+                               : static_cast<int32_t>(ufn(d_strings.element<string_view>(idx)));
                     });
   results->set_null_count(strings.null_count());  // reset null count
   return results;
@@ -140,23 +138,23 @@ std::unique_ptr<column> code_points(
   auto d_column       = *strings_column;
 
   // create offsets vector to account for each string's character length
-  rmm::device_vector<size_type> offsets(strings.size() + 1);
-  size_type* d_offsets = offsets.data().get();
+  rmm::device_uvector<size_type> offsets(strings.size() + 1, stream);
   thrust::transform_inclusive_scan(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings.size()),
-    d_offsets + 1,
+    offsets.begin() + 1,
     [d_column] __device__(size_type idx) {
       size_type length = 0;
       if (!d_column.is_null(idx)) length = d_column.element<string_view>(idx).length();
       return length;
     },
     thrust::plus<size_type>());
-  CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(size_type), stream.value()));
+  size_type const zero = 0;
+  offsets.set_element_async(0, zero, stream);
 
   // the total size is the number of characters in the entire column
-  size_type num_characters = offsets.back();
+  size_type num_characters = offsets.back_element(stream);
   // create output column with no nulls
   auto results = make_numeric_column(
     data_type{type_id::INT32}, num_characters, mask_state::UNALLOCATED, stream, mr);
@@ -167,7 +165,7 @@ std::unique_ptr<column> code_points(
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings.size(),
-                     code_points_fn{d_column, d_offsets, d_results});
+                     code_points_fn{d_column, offsets.data(), d_results});
 
   results->set_null_count(0);
   return results;

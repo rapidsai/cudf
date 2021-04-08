@@ -105,8 +105,7 @@ TEST_F(SetBitmaskTest, error_range)
   std::vector<size_pair> begin_end_fail{
     {-1, size},  // begin>=0
     {-2, -1},    // begin>=0
-    {8, 8},      // begin<end
-    {9, 8},      // begin<end
+    {9, 8},      // begin<=end
   };
   for (auto begin_end : begin_end_fail) {
     auto begin = begin_end.first, end = begin_end.second;
@@ -116,8 +115,9 @@ TEST_F(SetBitmaskTest, error_range)
   std::vector<size_pair> begin_end_pass{
     {0, size},         // begin>=0
     {0, 1},            // begin>=0
-    {8, 9},            // begin<end
-    {size - 1, size},  // begin<end
+    {8, 8},            // begin==end
+    {8, 9},            // begin<=end
+    {size - 1, size},  // begin<=end
   };
   for (auto begin_end : begin_end_pass) {
     auto begin = begin_end.first, end = begin_end.second;

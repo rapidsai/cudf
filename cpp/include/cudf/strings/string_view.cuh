@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/strings/string_view.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <thrust/count.h>
 #include <thrust/find.h>
@@ -43,8 +44,49 @@ __device__ inline size_type characters_in_string(const char* str, size_type byte
   return thrust::count_if(
     thrust::seq, ptr, ptr + bytes, [](uint8_t chr) { return is_begin_utf8_char(chr); });
 }
+
+/**
+ * @brief string value for sentinel which is used in min, max reduction
+ * operators
+ *
+ * This sentinel string value is the highest possible valid UTF-8 encoded
+ * character. This serves as identity value for maximum operator on string
+ * values. Also, this char pointer serves as valid device pointer of identity
+ * value for minimum operator on string values.
+ */
+static __constant__ char max_string_sentinel[5]{"\xF7\xBF\xBF\xBF"};
 }  // namespace detail
 }  // namespace strings
+
+/**
+ * @brief Return minimum value associated with the string type
+ *
+ * This function is needed to be host callable because it is called by a host
+ * callable function DeviceMax::identity<string_view>()
+ *
+ * @return An empty string
+ */
+CUDA_HOST_DEVICE_CALLABLE string_view string_view::min() { return string_view(); }
+
+/**
+ * @brief Return maximum value associated with the string type
+ *
+ * This function is needed to be host callable because it is called by a host
+ * callable function DeviceMin::identity<string_view>()
+ *
+ * @return A string value which represents the highest possible valid UTF-8 encoded
+ * character.
+ */
+CUDA_HOST_DEVICE_CALLABLE string_view string_view::max()
+{
+  const char* psentinel{nullptr};
+#if defined(__CUDA_ARCH__)
+  psentinel = &cudf::strings::detail::max_string_sentinel[0];
+#else
+  CUDA_TRY(cudaGetSymbolAddress((void**)&psentinel, cudf::strings::detail::max_string_sentinel));
+#endif
+  return string_view(psentinel, 4);
+}
 
 __device__ inline size_type string_view::length() const
 {

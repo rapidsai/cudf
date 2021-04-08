@@ -21,10 +21,12 @@
 #include <cudf/ast/operators.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -56,10 +58,19 @@ struct row_output {
    * @param row_index Row index of data column.
    * @param result Value to assign to output.
    */
-  template <typename Element>
+  template <typename Element, CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
   __device__ void resolve_output(detail::device_data_reference device_data_reference,
                                  cudf::size_type row_index,
                                  Element result) const;
+  // Definition below after row_evaluator is a complete type
+
+  template <typename Element, CUDF_ENABLE_IF(not is_rep_layout_compatible<Element>())>
+  __device__ void resolve_output(detail::device_data_reference device_data_reference,
+                                 cudf::size_type row_index,
+                                 Element result) const
+  {
+    cudf_assert(false && "Invalid type in resolve_output.");
+  }
 
  private:
   row_evaluator const& evaluator;
@@ -88,7 +99,7 @@ struct unary_row_output : public row_output {
                              Input input,
                              detail::device_data_reference output) const
   {
-    release_assert(false && "Invalid unary dispatch operator for the provided input.");
+    cudf_assert(false && "Invalid unary dispatch operator for the provided input.");
   }
 };
 
@@ -117,7 +128,7 @@ struct binary_row_output : public row_output {
                              RHS rhs,
                              detail::device_data_reference output) const
   {
-    release_assert(false && "Invalid binary dispatch operator for the provided input.");
+    cudf_assert(false && "Invalid binary dispatch operator for the provided input.");
   }
 };
 
@@ -168,7 +179,7 @@ struct row_evaluator {
    * @param row_index Row index of data column.
    * @return Element
    */
-  template <typename Element>
+  template <typename Element, CUDF_ENABLE_IF(column_device_view::has_element_accessor<Element>())>
   __device__ Element resolve_input(detail::device_data_reference device_data_reference,
                                    cudf::size_type row_index) const
   {
@@ -186,6 +197,15 @@ struct row_evaluator {
       memcpy(&tmp, &intermediate, sizeof(Element));
       return tmp;
     }
+  }
+
+  template <typename Element,
+            CUDF_ENABLE_IF(not column_device_view::has_element_accessor<Element>())>
+  __device__ Element resolve_input(detail::device_data_reference device_data_reference,
+                                   cudf::size_type row_index) const
+  {
+    cudf_assert(false && "Unsupported type in resolve_input.");
+    return {};
   }
 
   /**
@@ -240,7 +260,7 @@ struct row_evaluator {
                              detail::device_data_reference rhs,
                              detail::device_data_reference output) const
   {
-    release_assert(false && "Invalid binary dispatch operator for the provided input.");
+    cudf_assert(false && "Invalid binary dispatch operator for the provided input.");
   }
 
  private:
@@ -250,7 +270,7 @@ struct row_evaluator {
   mutable_column_device_view* output_column;
 };
 
-template <typename Element>
+template <typename Element, std::enable_if_t<is_rep_layout_compatible<Element>()>*>
 __device__ void row_output::resolve_output(detail::device_data_reference device_data_reference,
                                            cudf::size_type row_index,
                                            Element result) const
@@ -313,7 +333,7 @@ __device__ void evaluate_row_expression(detail::row_evaluator const& evaluator,
                       output,
                       op);
     } else {
-      release_assert(false && "Invalid operator arity.");
+      cudf_assert(false && "Invalid operator arity.");
     }
   }
 }

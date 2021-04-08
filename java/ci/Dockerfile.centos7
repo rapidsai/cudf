@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ FROM nvidia/cuda:$CUDA_VERSION-devel-centos7
 
 ### Install basic requirements
 RUN yum install -y centos-release-scl
-RUN yum install -y devtoolset-7 epel-release
+RUN yum install -y devtoolset-8 epel-release
 RUN yum install -y git zlib-devel maven tar wget patch
 
 ## pre-create the CMAKE_INSTALL_PREFIX folder, set writable by any user for Jenkins
@@ -34,7 +34,7 @@ RUN mkdir /usr/local/rapids && mkdir /rapids && chmod 777 /usr/local/rapids && c
 RUN cd /rapids/ && wget https://dl.bintray.com/boostorg/release/1.72.0/source/boost_1_72_0.tar.gz && \
    tar zxf boost_1_72_0.tar.gz && \
    cd boost_1_72_0 && \
-   scl enable devtoolset-7 "./bootstrap.sh --prefix=/usr && ./b2 install --with-filesystem threading=multi link=static cxxflags=-fPIC; exit 0"
+   scl enable devtoolset-8 "./bootstrap.sh --prefix=/usr && ./b2 install --with-filesystem threading=multi link=static cxxflags=-fPIC; exit 0"
 
 RUN cd /usr/local/ && wget --quiet https://github.com/Kitware/CMake/releases/download/v3.19.0/cmake-3.19.0-Linux-x86_64.tar.gz && \
    tar zxf cmake-3.19.0-Linux-x86_64.tar.gz

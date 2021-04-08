@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -256,10 +256,10 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   uint32_t max_rows_tensor,
                                   rmm::mr::device_memory_resource* mr)
 {
-  hashed_vocabulary vocab_table = load_vocabulary_file(filename_hashed_vocabulary, mr);
+  auto vocab_table = load_vocabulary_file(filename_hashed_vocabulary, mr);
   CUDF_FUNC_RANGE();
   return detail::subword_tokenize(strings,
-                                  vocab_table,
+                                  *vocab_table,
                                   max_sequence_length,
                                   stride,
                                   do_lower_case,

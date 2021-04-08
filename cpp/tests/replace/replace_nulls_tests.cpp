@@ -1,5 +1,5 @@
 /*
- * Copyright 2019, NVIDIA CORPORATION.
+ * Copyright 2019-2021, NVIDIA CORPORATION.
  *
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Alexander Ocsa <cristhian@blazingdb.com>
@@ -23,6 +23,7 @@
 
 #include <cudf/dictionary/detail/replace.hpp>
 #include <cudf/dictionary/encode.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/error.hpp>
@@ -435,6 +436,151 @@ TYPED_TEST(ReplaceNullsPolicyTest, FollowingFillTrailingNulls)
     cudf::test::fixed_width_column_wrapper<TypeParam>(
       expect_col.begin(), expect_col.end(), expect_mask.begin()),
     cudf::replace_policy::FOLLOWING);
+}
+
+template <typename T>
+struct ReplaceNullsFixedPointTest : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(ReplaceNullsFixedPointTest, cudf::test::FixedPointTypes);
+
+TYPED_TEST(ReplaceNullsFixedPointTest, ReplaceColumn)
+{
+  auto const scale = numeric::scale_type{0};
+  auto const sz    = std::size_t{1000};
+  auto data_begin  = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    return TypeParam{i, scale};
+  });
+  auto valid_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 3 ? 1 : 0; });
+  auto replace_begin  = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    return TypeParam{-2, scale};
+  });
+  auto expected_begin = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    int val = i % 3 ? static_cast<int>(i) : -2;
+    return TypeParam{val, scale};
+  });
+
+  ReplaceNullsColumn<TypeParam>(
+    cudf::test::fixed_width_column_wrapper<TypeParam>(data_begin, data_begin + sz, valid_begin),
+    cudf::test::fixed_width_column_wrapper<TypeParam>(replace_begin, replace_begin + sz),
+    cudf::test::fixed_width_column_wrapper<TypeParam>(expected_begin, expected_begin + sz));
+}
+
+TYPED_TEST(ReplaceNullsFixedPointTest, ReplaceColumn_Empty)
+{
+  ReplaceNullsColumn<TypeParam>(cudf::test::fixed_width_column_wrapper<TypeParam>{},
+                                cudf::test::fixed_width_column_wrapper<TypeParam>{},
+                                cudf::test::fixed_width_column_wrapper<TypeParam>{});
+}
+
+TYPED_TEST(ReplaceNullsFixedPointTest, ReplaceScalar)
+{
+  auto const scale = numeric::scale_type{0};
+  auto const sz    = std::size_t{1000};
+  auto data_begin  = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    return TypeParam{i, scale};
+  });
+  auto valid_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 3 ? 1 : 0; });
+  auto expected_begin = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    int val = i % 3 ? static_cast<int>(i) : -2;
+    return TypeParam{val, scale};
+  });
+
+  cudf::fixed_point_scalar<TypeParam> replacement{-2, scale};
+
+  ReplaceNullsScalar<TypeParam>(
+    cudf::test::fixed_width_column_wrapper<TypeParam>(data_begin, data_begin + sz, valid_begin),
+    replacement,
+    cudf::test::fixed_width_column_wrapper<TypeParam>(expected_begin, expected_begin + sz));
+}
+
+TYPED_TEST(ReplaceNullsFixedPointTest, ReplacementHasNulls)
+{
+  auto const scale = numeric::scale_type{0};
+  auto const sz    = std::size_t{1000};
+  auto data_begin  = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    return TypeParam{i, scale};
+  });
+  auto data_valid_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 3 ? 1 : 0; });
+  auto replace_begin = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    return TypeParam{-2, scale};
+  });
+  auto replace_valid_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 2 ? 1 : 0; });
+  auto expected_begin = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    int val = i % 3 ? static_cast<int>(i) : -2;
+    return TypeParam{val, scale};
+  });
+  auto expected_valid_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 6 ? 1 : 0; });
+
+  ReplaceNullsColumn<TypeParam>(cudf::test::fixed_width_column_wrapper<TypeParam>(
+                                  data_begin, data_begin + sz, data_valid_begin),
+                                cudf::test::fixed_width_column_wrapper<TypeParam>(
+                                  replace_begin, replace_begin + sz, replace_valid_begin),
+                                cudf::test::fixed_width_column_wrapper<TypeParam>(
+                                  expected_begin, expected_begin + sz, expected_valid_begin));
+}
+
+template <typename T>
+struct ReplaceNullsPolicyFixedPointTest : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(ReplaceNullsPolicyFixedPointTest, cudf::test::FixedPointTypes);
+
+TYPED_TEST(ReplaceNullsPolicyFixedPointTest, PrecedingFill)
+{
+  using fp     = TypeParam;
+  auto const s = numeric::scale_type{0};
+  auto col     = cudf::test::fixed_width_column_wrapper<TypeParam>(
+    {fp{42, s}, fp{2, s}, fp{1, s}, fp{-10, s}, fp{20, s}, fp{-30, s}}, {1, 0, 0, 1, 0, 1});
+  auto expect_col = cudf::test::fixed_width_column_wrapper<TypeParam>(
+    {fp{42, s}, fp{42, s}, fp{42, s}, fp{-10, s}, fp{-10, s}, fp{-30, s}}, {1, 1, 1, 1, 1, 1});
+
+  TestReplaceNullsWithPolicy(
+    std::move(col), std::move(expect_col), cudf::replace_policy::PRECEDING);
+}
+
+TYPED_TEST(ReplaceNullsPolicyFixedPointTest, FollowingFill)
+{
+  using fp     = TypeParam;
+  auto const s = numeric::scale_type{0};
+  auto col     = cudf::test::fixed_width_column_wrapper<TypeParam>(
+    {fp{42, s}, fp{2, s}, fp{1, s}, fp{-10, s}, fp{20, s}, fp{-30, s}}, {1, 0, 0, 1, 0, 1});
+  auto expect_col = cudf::test::fixed_width_column_wrapper<TypeParam>(
+    {fp{42, s}, fp{-10, s}, fp{-10, s}, fp{-10, s}, fp{-30, s}, fp{-30, s}}, {1, 1, 1, 1, 1, 1});
+
+  TestReplaceNullsWithPolicy(
+    std::move(col), std::move(expect_col), cudf::replace_policy::FOLLOWING);
+}
+
+TYPED_TEST(ReplaceNullsPolicyFixedPointTest, PrecedingFillLeadingNulls)
+{
+  using fp     = TypeParam;
+  auto const s = numeric::scale_type{0};
+  auto col     = cudf::test::fixed_width_column_wrapper<TypeParam>(
+    {fp{1, s}, fp{2, s}, fp{3, s}, fp{4, s}, fp{5, s}}, {0, 0, 1, 0, 1});
+  auto expect_col = cudf::test::fixed_width_column_wrapper<TypeParam>(
+    {fp{1, s}, fp{2, s}, fp{3, s}, fp{3, s}, fp{5, s}}, {0, 0, 1, 1, 1});
+
+  TestReplaceNullsWithPolicy(
+    std::move(col), std::move(expect_col), cudf::replace_policy::PRECEDING);
+}
+
+TYPED_TEST(ReplaceNullsPolicyFixedPointTest, FollowingFillTrailingNulls)
+{
+  using fp     = TypeParam;
+  auto const s = numeric::scale_type{0};
+  auto col     = cudf::test::fixed_width_column_wrapper<TypeParam>(
+    {fp{1, s}, fp{2, s}, fp{3, s}, fp{4, s}, fp{5, s}}, {1, 0, 1, 0, 0});
+  auto expect_col = cudf::test::fixed_width_column_wrapper<TypeParam>(
+    {fp{1, s}, fp{3, s}, fp{3, s}, fp{4, s}, fp{5, s}}, {1, 1, 1, 0, 0});
+
+  TestReplaceNullsWithPolicy(
+    std::move(col), std::move(expect_col), cudf::replace_policy::FOLLOWING);
 }
 
 struct ReplaceDictionaryTest : public cudf::test::BaseFixture {
