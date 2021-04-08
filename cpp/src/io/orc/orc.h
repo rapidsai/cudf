@@ -16,19 +16,21 @@
 
 #pragma once
 
+#include "orc_common.h"
+
+#include <io/comp/io_uncomp.h>
+#include <cudf/io/datasource.hpp>
+#include <cudf/io/orc_metadata.hpp>
+#include <cudf/utilities/error.hpp>
+
+#include <thrust/optional.h>
+
 #include <stddef.h>
 #include <stdint.h>
 #include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
-
-#include <cudf/utilities/error.hpp>
-
-#include <io/comp/io_uncomp.h>
-#include <cudf/io/datasource.hpp>
-#include <cudf/io/orc_metadata.hpp>
-#include "orc_common.h"
 
 namespace cudf {
 namespace io {
@@ -80,8 +82,30 @@ struct FileFooter {
 
 struct Stream {
   StreamKind kind = INVALID_STREAM_KIND;
-  uint32_t column = ~0;  // the column id
-  uint64_t length = 0;   // the number of bytes in the file
+  uint64_t length = 0;  // the number of bytes in the file
+
+  // 'column 0' has id 0, table columns have ids [1,...,n]
+  Stream(StreamKind kind, uint32_t column_index, uint64_t length)
+    : kind{kind}, length{length}, _column_id{column_index + 1}
+  {
+  }
+  Stream(StreamKind kind = INVALID_STREAM_KIND) : kind{kind} {}
+
+  // Needs to be a non-const reference because of the `ProtobufReader`
+  auto &column_id() noexcept { return _column_id; }
+  auto const &column_id() const noexcept { return _column_id; }
+
+  // Returns index of the column in the table, if any
+  // Stream of the 'column 0' does not have a corresponding column in the table
+  thrust::optional<uint32_t> column_index() const noexcept
+  {
+    return _column_id > 0 ? thrust::optional<uint32_t>{_column_id - 1} : thrust::nullopt;
+  }
+
+ private:
+  // ORC column id (different from column index in the table!)
+  // Zero means no corresponding column in the table
+  uint32_t _column_id = 0;
 };
 
 struct ColumnEncoding {
