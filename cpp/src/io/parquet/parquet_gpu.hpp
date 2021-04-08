@@ -529,7 +529,6 @@ void EncodePages(EncPage *pages,
  */
 void DecideCompression(device_span<EncColumnChunk> chunks,
                        const EncPage *pages,
-                       uint32_t num_chunks,
                        uint32_t start_page,
                        const gpu_inflate_status_s *comp_out = nullptr,
                        rmm::cuda_stream_view stream         = rmm::cuda_stream_default);
@@ -562,9 +561,8 @@ void EncodePageHeaders(EncPage *pages,
  * @param[in] comp_out Compressor status
  * @param[in] stream CUDA stream to use, default 0
  */
-void GatherPages(EncColumnChunk *chunks,
+void GatherPages(device_span<EncColumnChunk> chunks,
                  const EncPage *pages,
-                 uint32_t num_chunks,
                  rmm::cuda_stream_view stream);
 
 /**

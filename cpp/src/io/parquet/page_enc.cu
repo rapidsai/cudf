@@ -1565,7 +1565,8 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
 }
 
 // blockDim(1024, 1, 1)
-__global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, const EncPage *pages)
+__global__ void __launch_bounds__(1024)
+  gpuGatherPages(device_span<EncColumnChunk> chunks, const EncPage *pages)
 {
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
@@ -2182,19 +2183,18 @@ void EncodePages(EncPage *pages,
  *
  * @param[in,out] chunks Column chunks
  * @param[in] pages Device array of EncPages (unordered)
- * @param[in] num_chunks Number of column chunks
  * @param[in] start_page First page to encode in page array
  * @param[in] comp_out Compressor status
  * @param[in] stream CUDA stream to use, default 0
  */
 void DecideCompression(device_span<EncColumnChunk> chunks,
                        const EncPage *pages,
-                       uint32_t num_chunks,
                        uint32_t start_page,
                        const gpu_inflate_status_s *comp_out,
                        rmm::cuda_stream_view stream)
 {
-  gpuDecideCompression<<<num_chunks, 128, 0, stream.value()>>>(chunks, pages, comp_out, start_page);
+  gpuDecideCompression<<<chunks.size(), 128, 0, stream.value()>>>(
+    chunks, pages, comp_out, start_page);
 }
 
 /**
@@ -2230,12 +2230,11 @@ void EncodePageHeaders(EncPage *pages,
  * @param[in] num_chunks Number of column chunks
  * @param[in] stream CUDA stream to use, default 0
  */
-void GatherPages(EncColumnChunk *chunks,
+void GatherPages(device_span<EncColumnChunk> chunks,
                  const EncPage *pages,
-                 uint32_t num_chunks,
                  rmm::cuda_stream_view stream)
 {
-  gpuGatherPages<<<num_chunks, 1024, 0, stream.value()>>>(chunks, pages);
+  gpuGatherPages<<<chunks.size(), 1024, 0, stream.value()>>>(chunks, pages);
 }
 
 }  // namespace gpu
