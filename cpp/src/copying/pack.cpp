@@ -17,6 +17,8 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace detail {
 
@@ -216,7 +218,7 @@ table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 packed_columns pack(cudf::table_view const& input, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::pack(input, 0, mr);
+  return detail::pack(input, rmm::cuda_stream_default, mr);
 }
 
 /**

@@ -23,7 +23,6 @@
 #include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
 #include <rmm/exec_policy.hpp>
 
 namespace cudf {
