@@ -100,21 +100,19 @@ std::unique_ptr<column> search_ordered(table_view const& t,
 
   // This utility will ensure all corresponding dictionary columns have matching keys.
   // It will return any new dictionary columns created as well as updated table_views.
-  auto const matched = dictionary::detail::match_dictionaries({t, values}, stream);
+  auto const [_, t_vals_matched] = dictionary::detail::match_dictionaries({t, values}, stream);
 
   // 0-table_view, 1-column_order, 2-null_precedence, 3-validity_columns
-  auto const t_flattened =
-    structs::detail::flatten_nested_columns(matched.second.front(), column_order, null_precedence);
-  auto const values_flattened =
-    structs::detail::flatten_nested_columns(matched.second.back(), {}, {});
+  auto const [t_flattened, column_order_flattened, null_precedence_flattened, t_validity] =
+    structs::detail::flatten_nested_columns(t_vals_matched.front(), column_order, null_precedence);
+  auto const [values_flattened, __, ___, ____] =
+    structs::detail::flatten_nested_columns(t_vals_matched.back(), {}, {});
 
-  auto const t_d      = table_device_view::create(std::get<0>(t_flattened), stream);
-  auto const values_d = table_device_view::create(std::get<0>(values_flattened), stream);
+  auto const t_d      = table_device_view::create(t_flattened, stream);
+  auto const values_d = table_device_view::create(values_flattened, stream);
   auto const& lhs     = find_first ? *t_d : *values_d;
   auto const& rhs     = find_first ? *values_d : *t_d;
 
-  auto const& column_order_flattened    = std::get<1>(t_flattened);
-  auto const& null_precedence_flattened = std::get<2>(t_flattened);
   rmm::device_uvector<order> column_order_dv(column_order_flattened.size(), stream);
   rmm::device_uvector<null_order> null_precedence_dv(null_precedence_flattened.size(), stream);
   CUDA_TRY(cudaMemcpyAsync(column_order_dv.data(),
