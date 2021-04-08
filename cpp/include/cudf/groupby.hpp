@@ -252,11 +252,11 @@ class groupby {
    * @param offset The off set by which to shift the input
    * @param fill_value Fill value for indeterminable outputs
    * @param mr Device memory resource used to allocate the returned table and columns' device memory
-   * @return Column group shifted
+   * @return Pair containing the table with each group's key and the column shifted
    *
    * @throws cudf::logic_error if @p fill_value dtype does not match @p input dtype
    */
-  std::unique_ptr<column> shift(
+  std::pair<std::unique_ptr<table>, std::unique_ptr<column>> shift(
     column_view const& values,
     size_type offset,
     scalar const& fill_value,

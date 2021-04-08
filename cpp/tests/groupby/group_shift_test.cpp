@@ -45,8 +45,7 @@ void test_groupby_shift(cudf::test::fixed_width_column_wrapper<int32_t> const& k
 {
   groupby::groupby gb_obj(table_view({key}));
   auto got = gb_obj.shift(value, offset, fill_value);
-  cudf::test::print(got->view());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got.second, expected);
 }
 
 TYPED_TEST(GroupByShiftTest, ForwardShiftNullScalar)

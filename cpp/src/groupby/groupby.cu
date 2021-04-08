@@ -213,18 +213,24 @@ detail::sort::sort_groupby_helper& groupby::helper()
   return *_helper;
 };
 
-std::unique_ptr<column> groupby::shift(column_view const& values,
-                                       size_type offset,
-                                       scalar const& fill_value,
-                                       rmm::mr::device_memory_resource* mr)
+std::pair<std::unique_ptr<table>, std::unique_ptr<column>> groupby::shift(
+  column_view const& values,
+  size_type offset,
+  scalar const& fill_value,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(values.type() == fill_value.type(),
                "values and fill_value should have the same type.");
 
-  auto stream = rmm::cuda_stream_default;
-  return detail::group_shift(
-    helper().sorted_keys(stream), offset, fill_value, helper().group_offsets(stream), stream, mr);
+  auto stream        = rmm::cuda_stream_default;
+  auto sorted_keys   = helper().sorted_keys(stream);
+  auto sorted_values = helper().sorted_values(values, stream, mr);
+
+  return std::make_pair(
+    std::move(sorted_keys),
+    std::move(detail::group_shift(
+      sorted_values->view(), offset, fill_value, helper().group_offsets(stream), stream, mr)));
 }
 
 }  // namespace groupby
