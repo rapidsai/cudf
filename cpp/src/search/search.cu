@@ -102,9 +102,9 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   // It will return any new dictionary columns created as well as updated table_views.
   auto const [_, t_vals_matched] = dictionary::detail::match_dictionaries({t, values}, stream);
 
-  auto const [t_flattened, column_order_flattened, null_precedence_flattened, t_validity] =
+  auto const [t_flattened, column_order_flattened, null_precedence_flattened, __] =
     structs::detail::flatten_nested_columns(t_vals_matched.front(), column_order, null_precedence);
-  auto const [values_flattened, __, ___, ____] =
+  auto const [values_flattened, ___, ____, _____] =
     structs::detail::flatten_nested_columns(t_vals_matched.back(), {}, {});
 
   auto const t_d      = table_device_view::create(t_flattened, stream);
