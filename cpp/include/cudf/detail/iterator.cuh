@@ -628,6 +628,20 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
  * make_optional_iterator with mode `DYNAMIC` defers the assumption of nullability to
  * runtime, with the user stating on construction of the iterator if scalar has nulls.
  *
+ * Example:
+ *
+ * \code{.cpp}
+ * template<typename T>
+ * void some_function(cudf::column_view<T> const& col_view,
+ *                    scalar const& scalar_value,
+ *                    bool col_has_nulls){
+ *    auto d_col = cudf::column_device_view::create(col_view);
+ *    auto column_iterator = cudf::detail::make_optional_iterator<T>(d_col, cudf::contains_nulls::DYNAMIC{}, col_has_nulls);
+ *    auto scalar_iterator = cudf::detail::make_optional_iterator<T>(scalar_value, cudf::contains_nulls::DYNAMIC{}, scalar_value.is_valid());
+ *    //use iterators
+ * }
+ * \endcode
+ *
  * @throws cudf::logic_error if the scalar is not nullable, and `DYNAMIC` mode used and
  *         the user has stated nulls exist
  * @throws cudf::logic_error if scalar datatype and Element type mismatch.
@@ -663,12 +677,30 @@ auto inline make_optional_iterator(scalar const& scalar_value,
  *
  * make_optional_iterator ith mode `YES` means that the scalar supports nulls and
  * potentially has null values, therefore the optional might not contain a value
+ * therefore the optional will always contain a value.
+ *
+ * Example:
+ *
+ * \code{.cpp}
+ * template<typename T, bool any_nulls>
+ * void some_function(cudf::column_view<T> const& col_view, scalar const& scalar_value){
+ *    auto d_col = cudf::column_device_view::create(col_view);
+ *    if constexpr(any_nulls) {
+ *      auto column_iterator = cudf::detail::make_optional_iterator<T>(d_col, cudf::contains_nulls::YES{});
+ *      auto scalar_iterator = cudf::detail::make_optional_iterator<T>(scalar_value, cudf::contains_nulls::YES{});
+ *      //use iterators
+ *    } else {
+ *      auto column_iterator = cudf::detail::make_optional_iterator<T>(d_col, cudf::contains_nulls::NO{});
+ *      auto scalar_iterator = cudf::detail::make_optional_iterator<T>(scalar_value, cudf::contains_nulls::NO{});
+ *      //use iterators
+ *    }
+ * }
+ * \endcode
  *
  * @throws cudf::logic_error if the scalar is not nullable, and `YES` mode used
  * @throws cudf::logic_error if scalar datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the scalar
- * @tparam mode The has_nulls mode of the iterator
  * @param scalar_value The scalar to iterate
  * @return auto Iterator that returns scalar elements, and validity of the
  * element in a thrust::optional
@@ -696,10 +728,27 @@ auto inline make_optional_iterator(scalar const& scalar_value, contains_nulls::Y
  * make_optional_iterator with mode `NO` means that the scalar has no null values,
  * therefore the optional will always contain a value.
  *
+ * Example:
+ *
+ * \code{.cpp}
+ * template<typename T, bool any_nulls>
+ * void some_function(cudf::column_view<T> const& col_view, scalar const& scalar_value){
+ *    auto d_col = cudf::column_device_view::create(col_view);
+ *    if constexpr(any_nulls) {
+ *      auto column_iterator = cudf::detail::make_optional_iterator<T>(d_col, cudf::contains_nulls::YES{});
+ *      auto scalar_iterator = cudf::detail::make_optional_iterator<T>(scalar_value, cudf::contains_nulls::YES{});
+ *      //use iterators
+ *    } else {
+ *      auto column_iterator = cudf::detail::make_optional_iterator<T>(d_col, cudf::contains_nulls::NO{});
+ *      auto scalar_iterator = cudf::detail::make_optional_iterator<T>(scalar_value, cudf::contains_nulls::NO{});
+ *      //use iterators
+ *    }
+ * }
+ * \endcode
+ *
  * @throws cudf::logic_error if scalar datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the scalar
- * @tparam mode The has_nulls mode of the iterator
  * @param scalar_value The scalar to iterate
  * @return auto Iterator that returns scalar elements, and validity of the
  * element in a thrust::optional
