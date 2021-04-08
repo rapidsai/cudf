@@ -596,7 +596,8 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
  */
 template <typename Element>
 auto inline make_optional_iterator(scalar const& scalar_value,
-                                   contains_nulls::DYNAMIC, bool has_nulls)
+                                   contains_nulls::DYNAMIC,
+                                   bool has_nulls)
 {
   CUDF_EXPECTS(type_id_matches_device_storage_type<Element>(scalar_value.type().id()),
                "the data type mismatch");
@@ -604,7 +605,6 @@ auto inline make_optional_iterator(scalar const& scalar_value,
     thrust::make_constant_iterator<size_type>(0),
     scalar_optional_accessor<Element, contains_nulls::DYNAMIC>{scalar_value, has_nulls});
 }
-
 
 /**
  * @brief Constructs an optional iterator over a scalar's values and its validity.
