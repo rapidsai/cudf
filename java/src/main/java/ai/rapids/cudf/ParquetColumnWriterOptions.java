@@ -25,6 +25,32 @@ import java.util.List;
  * Per column settings for writing Parquet files.
  */
 public class ParquetColumnWriterOptions {
+  private boolean isTimestampTypeInt96;
+  private int precision;
+  private boolean isNullable;
+  private String columName;
+  private ParquetColumnWriterOptions[] childColumnOptions = {};
+
+  // This child is needed as the first child of a List column meta due to how cudf has been
+  // implemented. Cudf drops the first child from the meta if a column is a LIST. This is done
+  // this way due to some complications in the parquet reader. There was change to fix this here:
+  // https://github.com/rapidsai/cudf/pull/7461/commits/5ce33b40abb87cc7b76b5efeb0a3a0215f9ef6fb
+  // but it was reverted later on here:
+  // https://github.com/rapidsai/cudf/pull/7461/commits/f248eb7265de995a95f998d46d897fb0ae47f53e
+  public static ParquetColumnWriterOptions DUMMY_CHILD = simpleColumnBuilder("DUMMY").build();
+
+  public static class ParquetStructColumnWriterOptions extends ParquetColumnWriterOptions {
+    protected ParquetStructColumnWriterOptions(StructBuilder builder) {
+      super(builder);
+    }
+  }
+
+  public static class ParquetListColumnWriterOptions extends ParquetColumnWriterOptions {
+    protected ParquetListColumnWriterOptions(String name, ParquetColumnWriterOptions child,
+                                             boolean nullable) {
+      super(name, child, nullable);
+    }
+  }
 
   public static class Builder {
     private String columnName;
@@ -33,14 +59,8 @@ public class ParquetColumnWriterOptions {
     private boolean isNullable = true;
     private List<ParquetColumnWriterOptions> childColumnOptions = new ArrayList<>();
 
-    /**
-     * Name of this column
-     * @param name
-     * @return this for chaining.
-     */
-    public Builder withColumnName(String name) {
+    public Builder(String name) {
       this.columnName = name;
-      return this;
     }
 
     /**
@@ -57,7 +77,7 @@ public class ParquetColumnWriterOptions {
      * Set whether the timestamps should be written in INT96
      * @return this for chaining.
      */
-    public Builder withTimestampInt96(boolean int96) {
+    Builder withTimestampInt96(boolean int96) {
       this.isTimestampTypeInt96 = int96;
       return this;
     }
@@ -66,17 +86,8 @@ public class ParquetColumnWriterOptions {
      * @param precision a value for this column if decimal
      * @return this for chaining.
      */
-    public Builder withDecimalPrecision(int precision) {
+    Builder withDecimalPrecision(int precision) {
       this.precision = precision;
-      return this;
-    }
-
-    /**
-     * Create a column with these options
-     * @return this for chaining
-     */
-    public Builder withColumnOptions(ParquetColumnWriterOptions columnOptions) {
-      childColumnOptions.add(columnOptions);
       return this;
     }
 
@@ -85,18 +96,260 @@ public class ParquetColumnWriterOptions {
     }
   }
 
-  public static Builder builder() {
-    return new Builder();
+  private static class NestedBuilder {
+    protected String name;
+    protected boolean nullable = true;
+
+
+    protected ParquetColumnWriterOptions withColumnName(String name) {
+      return ParquetColumnWriterOptions.simpleColumnBuilder(name).build();
+    }
+
+    protected ParquetColumnWriterOptions withDecimal(String name, int precision) {
+      return ParquetColumnWriterOptions.simpleColumnBuilder(name)
+          .withDecimalPrecision(precision)
+          .build();
+    }
+
+    protected ParquetColumnWriterOptions withTimestamp(String name, boolean isInt96) {
+      return ParquetColumnWriterOptions.simpleColumnBuilder(name)
+          .withTimestampInt96(isInt96)
+          .build();
+    }
   }
 
-  private ParquetColumnWriterOptions(Builder builder) {
+  public static class StructBuilder extends NestedBuilder {
+
+    private List<ParquetColumnWriterOptions> children = new ArrayList<>();
+
+    /**
+     * Builder specific to build a Struct meta
+     * @param name
+     */
+    public StructBuilder(String name) {
+      this.name = name;
+    }
+
+    /**
+     * Set whether this struct column going to have nulls
+     * @param nullable
+     * @return this for chaining.
+     */
+    public StructBuilder withNullable(boolean nullable) {
+      this.nullable = nullable;
+      return this;
+    }
+
+    /**
+     * Set the list column meta.
+     * Lists should have only one child in ColumnVector, but the metadata expects a
+     * LIST column to have two children and the first child to be the
+     * {@link ParquetColumnWriterOptions#DUMMY_CHILD}.
+     * This is the current behavior in cudf and will change in future
+     * @param child
+     * @return this for chaining.
+     */
+    public StructBuilder withListChildColumn(ParquetListColumnWriterOptions child) {
+      assert (child.getChildColumnOptions().length == 2) : "Lists can only have two children";
+      if (child.getChildColumnOptions()[0] != DUMMY_CHILD) {
+        throw new IllegalArgumentException("First child in the list has to be DUMMY_CHILD");
+      }
+      if (child.getChildColumnOptions()[1].getColumName().isEmpty()) {
+        throw new IllegalArgumentException("Column name can't be empty");
+      }
+      children.add(child);
+      return this;
+    }
+
+    /**
+     * Set a child struct meta data
+     * @param child
+     * @return this for chaining.
+     */
+    public StructBuilder withStructChildColumn(ParquetStructColumnWriterOptions child) {
+      for (ParquetColumnWriterOptions opt: child.getChildColumnOptions()) {
+        if (opt.getColumName().isEmpty()) {
+          throw new IllegalArgumentException("Column name can't be empty");
+        }
+      }
+      children.add(child);
+      return this;
+    }
+
+    /**
+     * Set a simple child meta data
+     * @param name
+     * @return this for chaining.
+     */
+    public StructBuilder withSimpleChildColumn(String name) {
+      children.add(withColumnName(name));
+      return this;
+    }
+
+    /**
+     * Set a Decimal child meta data
+     * @param name
+     * @param precision
+     * @return this for chaining.
+     */
+    public StructBuilder withDecimalChildColumn(String name, int precision) {
+      children.add(withDecimal(name, precision));
+      return this;
+    }
+
+    /**
+     * Set a timestamp child meta data
+     * @param name
+     * @param isInt96
+     * @return this for chaining.
+     */
+    public StructBuilder withTimestampChildColumn(String name, boolean isInt96) {
+      children.add(withTimestamp(name, isInt96));
+      return this;
+    }
+
+    public ParquetStructColumnWriterOptions build() {
+      return new ParquetStructColumnWriterOptions(this);
+    }
+  }
+
+  public static class ListBuilder extends NestedBuilder {
+
+    private ParquetColumnWriterOptions child = null;
+
+    public ListBuilder(String name) {
+      this.name = name;
+    }
+
+    /**
+     * Set whether this list column is going to have nulls
+     * @param nullable
+     * @return this for chaining.
+     */
+    public ListBuilder withNullable(boolean nullable) {
+      this.nullable = nullable;
+      return this;
+    }
+
+    /**
+     * Will set the struct child of this list column
+     * Warning: this will over write the previous value as a list can only have one child
+     * @param child
+     * @return this for chaining
+     */
+    public ListBuilder withStructChildColumn(ParquetStructColumnWriterOptions child) {
+      for (ParquetColumnWriterOptions opt: child.getChildColumnOptions()) {
+        if (opt.getColumName().isEmpty()) {
+          throw new IllegalArgumentException("Column name can't be empty");
+        }
+      }
+      this.child = child;
+      return this;
+    }
+
+    /**
+     * Will set the list child meta data of this list column
+     * Lists should have only one child in ColumnVector, but the metadata expects a
+     * LIST column to have two children and the first child to be the
+     * {@link ParquetColumnWriterOptions#DUMMY_CHILD}.
+     * This is the current behavior in cudf and will change in future
+     * Warning: this will over write the previous value as a list can only have one child
+     * @param child
+     * @return this for chaining
+     */
+    public ListBuilder withListChildColumn(ParquetListColumnWriterOptions child) {
+      assert (child.getChildColumnOptions().length == 2) : "Lists can only have two children";
+      if (child.getChildColumnOptions()[0] != DUMMY_CHILD) {
+        throw new IllegalArgumentException("First child in the list has to be DUMMY_CHILD");
+      }
+      if (child.getChildColumnOptions()[1].getColumName().isEmpty()) {
+        throw new IllegalArgumentException("Column name can't be empty");
+      }
+      this.child = child;
+      return this;
+    }
+
+    /**
+     * Will set the simple child meta data of this list column
+     * Warning: this will over write the previous value as a list can only have one child
+     * @param name
+     * @return this for chaining
+     */
+    public ListBuilder withSimpleChildColumn(String name) {
+      child = withColumnName(name);
+      return this;
+    }
+
+    /**
+     * Will set the Decimal child meta data of this list column
+     * Warning: this will over write the previous value as a list can only have one child
+     * @param name
+     * @param precision
+     * @return this for chaining
+     */
+    public ListBuilder withDecimalChildColumn(String name, int precision) {
+      child = withDecimal(name, precision);
+      return this;
+    }
+
+    /**
+     * Will set the timestamp child meta data of this list column
+     * Warning: this will over write the previous value as a list can only have one child
+     * @param name
+     * @param isInt96
+     * @return this for chaining
+     */
+    public ListBuilder withTimestampChildColumn(String name, boolean isInt96) {
+      child = withTimestamp(name, isInt96);
+      return this;
+    }
+
+    public ParquetListColumnWriterOptions build() {
+      return new ParquetListColumnWriterOptions(name, child, nullable);
+    }
+  }
+
+  static Builder simpleColumnBuilder(String name) {
+    return new Builder(name);
+  }
+
+  public static ListBuilder listBuilder(String name) {
+    return new ListBuilder(name);
+  }
+
+  public static StructBuilder structBuilder(String name) {
+    return new StructBuilder(name);
+  }
+
+  private ParquetColumnWriterOptions(StructBuilder builder) {
+    this.columName = builder.name;
+    this.isNullable = builder.nullable;
+    this.childColumnOptions = builder.children
+        .toArray(new ParquetColumnWriterOptions[builder.children.size()]);
+  }
+
+  /**
+   * Constructor used for list
+   * @param child
+   */
+  private ParquetColumnWriterOptions(String name, ParquetColumnWriterOptions child,
+                                     boolean nullable) {
+    this.columName = name;
+    this.isNullable = nullable;
+    // we are adding the child twice even though lists have one child only because the way the cudf
+    // has implemented this it requires two children to be set for the list, but it drops the
+    // first one. This is something that is a lower priority and might be fixed in future
+    this.childColumnOptions =
+        new ParquetColumnWriterOptions[]{DUMMY_CHILD, child};
+  }
+
+  protected ParquetColumnWriterOptions(Builder builder) {
     this.isTimestampTypeInt96 = builder.isTimestampTypeInt96;
     this.precision = builder.precision;
     this.isNullable = builder.isNullable;
     this.columName = builder.columnName;
-    this.childColumnOptions = builder.childColumnOptions
-        .toArray(new ParquetColumnWriterOptions[builder.childColumnOptions.size()]);
   }
+
   /**
    * Return if the column can have null values
    */
@@ -173,14 +426,4 @@ public class ParquetColumnWriterOptions {
   public ParquetColumnWriterOptions[] getChildColumnOptions() {
     return childColumnOptions;
   }
-
-  private boolean isTimestampTypeInt96;
-
-  private int precision;
-
-  private boolean isNullable;
-
-  private String columName;
-
-  private ParquetColumnWriterOptions[] childColumnOptions;
 }
