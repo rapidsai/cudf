@@ -1039,7 +1039,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
   try {
     std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
         new cudf::jni::jni_writer_data_sink(env, consumer));
-
+    
     using namespace cudf::io;
     sink_info sink{data_sink.get()};
     table_input_metadata metadata;
@@ -1053,9 +1053,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
             .build();
-
     auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
-
     cudf::jni::native_parquet_writer_handle *ret =
         new cudf::jni::native_parquet_writer_handle(std::move(writer_ptr), std::move(data_sink));
     return reinterpret_cast<jlong>(ret);
