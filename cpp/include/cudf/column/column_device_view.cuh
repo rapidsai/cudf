@@ -542,6 +542,17 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * optional_begin with mode `DYNAMIC` defers the assumption of nullability to
    * runtime, with the user stating on construction of the iterator if column has nulls.
    *
+   * Example:
+   *
+   * \code{.cpp}
+   * template<typename T>
+   * void some_function( cudf::column_view<T> const& col_view, bool has_nulls){
+   *    auto d_col = cudf::column_device_view::create(col_view);
+   *    // Create a `DYNAMIC` optional iterator
+   *    auto optional_iterator = d_col->optional_begin<T>(cudf::contains_nulls::DYNAMIC{}, has_nulls);
+   * }
+   * \endcode
+   *
    * This function does not participate in overload resolution if
    * `column_device_view::has_element_accessor<T>()` is false.
    *
