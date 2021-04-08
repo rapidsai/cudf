@@ -68,9 +68,9 @@ struct group_shift_fill_functor {
 template <bool ForwardShift, typename EdgeIterator>
 std::unique_ptr<column> group_shift_impl(column_view const& values,
                                          size_type offset,
+                                         cudf::scalar const& fill_value,
                                          EdgeIterator group_edges_begin,
                                          std::size_t num_groups,
-                                         cudf::scalar const& fill_value,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
@@ -115,12 +115,12 @@ std::unique_ptr<column> group_shift(column_view const& values,
 
   if (offset > 0) {
     return group_shift_impl<true>(
-      values, offset, group_offsets.begin(), group_offsets.size() - 1, fill_value, stream, mr);
+      values, offset, fill_value, group_offsets.begin(), group_offsets.size() - 1, stream, mr);
   } else {
     auto redge_iter = thrust::make_transform_iterator(group_offsets.begin() + 1,
                                                       [] __device__(auto i) { return i - 1; });
     return group_shift_impl<false>(
-      values, offset, redge_iter, group_offsets.size() - 1, fill_value, stream, mr);
+      values, offset, fill_value, redge_iter, group_offsets.size() - 1, stream, mr);
   }
 }
 
