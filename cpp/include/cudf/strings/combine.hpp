@@ -192,10 +192,10 @@ std::unique_ptr<column> concatenate(
  * @endcode
  *
  * @throw cudf::logic_error if input column is not lists of strings column.
- * @throw cudf::logic_error if the number of rows from `separators` and `lists_strings_columns` do
+ * @throw cudf::logic_error if the number of rows from `separators` and `lists_strings_column` do
  * not match
  *
- * @param lists_strings_columns  Column containing lists of strings to concatenate
+ * @param lists_strings_column   Column containing lists of strings to concatenate
  * @param separators             Strings column that provides separators for concatenation
  * @param separator_narep        String that should be used to replace null separator, default is an
  * invalid-scalar denoting that rows containing null separator will result in null string in the
@@ -208,7 +208,7 @@ std::unique_ptr<column> concatenate(
  * @return                       New strings column with concatenated results
  */
 std::unique_ptr<column> concatenate(
-  lists_column_view const& lists_strings_columns,
+  lists_column_view const& lists_strings_column,
   strings_column_view const& separators,
   string_scalar const& separator_narep = string_scalar("", false),
   string_scalar const& string_narep    = string_scalar("", false),
@@ -239,7 +239,7 @@ std::unique_ptr<column> concatenate(
  * @throw cudf::logic_error if input column is not lists of strings column.
  * @throw cudf::logic_error if separator is not valid.
  *
- * @param lists_strings_columns  Column containing lists of strings to concatenate
+ * @param lists_strings_column   Column containing lists of strings to concatenate
  * @param separator              String that should inserted between strings of each list row,
  * default is an empty string
  * @param narep                  String that should be used to replace null strings in any non-null
@@ -250,7 +250,7 @@ std::unique_ptr<column> concatenate(
  * @return                       New strings column with concatenated results
  */
 std::unique_ptr<column> concatenate(
-  lists_column_view const& lists_strings_columns,
+  lists_column_view const& lists_strings_column,
   string_scalar const& separator      = string_scalar(""),
   string_scalar const& narep          = string_scalar("", false),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
