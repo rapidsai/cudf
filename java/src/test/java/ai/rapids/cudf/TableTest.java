@@ -50,6 +50,8 @@ import java.util.stream.Collectors;
 import static ai.rapids.cudf.Aggregate.max;
 import static ai.rapids.cudf.Aggregate.first;
 import static ai.rapids.cudf.Aggregate.last;
+import static ai.rapids.cudf.ParquetColumnWriterOptions.listBuilder;
+import static ai.rapids.cudf.ParquetColumnWriterOptions.structBuilder;
 import static ai.rapids.cudf.Table.TestBuilder;
 import static ai.rapids.cudf.Table.count;
 import static ai.rapids.cudf.Table.mean;
@@ -4244,17 +4246,43 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testParquetWriteToBufferChunkedWithNested() {
+    ParquetWriterOptions options = ParquetWriterOptions.builder()
+        .withColumn("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
+        .withStructColumn(structBuilder("_c7")
+            .withSimpleChildColumn("_c7-1")
+            .withSimpleChildColumn("_c7-2")
+            .build())
+        .withListColumn(listBuilder("_c8")
+            .withSimpleChildColumn("c8-1").withNullable(false).build())
+        .withListColumn(listBuilder("c9")
+            .withStructChildColumn(structBuilder("c9-1")
+                .withSimpleChildColumn("c9-1-1")
+                .withSimpleChildColumn("c9-1-2").build())
+            .build())
+        .build();
+    try (Table table0 = getExpectedFileTable(true);
+         MyBufferConsumer consumer = new MyBufferConsumer()) {
+      try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
+        writer.write(table0);
+        writer.write(table0);
+        writer.write(table0);
+      }
+      try (Table table1 = Table.readParquet(ParquetOptions.DEFAULT, consumer.buffer, 0,
+          consumer.offset);
+           Table concat = Table.concatenate(table0, table0, table0)) {
+        assertTablesAreEqual(concat, table1);
+      }
+    }
+  }
+
+  @Test
   void testParquetWriteToBufferChunked() {
     ParquetWriterOptions options = ParquetWriterOptions.builder()
         .withColumn("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
-        .withColumn(ParquetColumnWriterOptions.builder()
-            .withColumnName("_c7")
-            .withColumnOptions(ParquetColumnWriterOptions.builder()
-                .withColumnName("_c7-1")
-                .build())
-            .withColumnOptions(ParquetColumnWriterOptions.builder()
-                .withColumnName("_c7-2")
-                .build())
+        .withStructColumn(structBuilder("_c7")
+            .withSimpleChildColumn("_c7-1")
+            .withSimpleChildColumn("_c7-2")
             .build())
         .build();
     try (Table table0 = getExpectedFileTable(true, false);

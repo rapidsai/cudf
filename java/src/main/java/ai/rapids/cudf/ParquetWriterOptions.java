@@ -18,15 +18,21 @@
 
 package ai.rapids.cudf;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.IntStream;
 
 /**
- * Settings for writing Parquet files.
+ * This class represents settings for writing Parquet files. It includes meta data information
+ * that will be used by the Parquet writer to write the file
  */
 public class ParquetWriterOptions {
   private final CompressionType compressionType;
   private final Map<String, String> metadata;
+  private final StatisticsFrequency statsGranularity;
+  private final List<ParquetColumnWriterOptions> columnOptions;
 
   public enum StatisticsFrequency {
     /** Do not generate statistics */
@@ -106,49 +112,88 @@ public class ParquetWriterOptions {
      */
     public Builder withColumn(String... name) {
       IntStream.range(0, name.length).forEach(
-          i -> columnOptions.add(ParquetColumnWriterOptions.builder()
-                  .withColumnName(name[i])
+          i -> columnOptions.add(ParquetColumnWriterOptions.simpleColumnBuilder(name[i])
                   .build())
       );
       return this;
     }
 
     /**
-     * Set the decimal precision
+     * Set decimal column meta data
      * @param name
      * @param precision
      */
     public Builder withDecimalColumn(String name, int precision) {
-      columnOptions.add(ParquetColumnWriterOptions.builder()
-          .withColumnName(name)
-          .withDecimalPrecision(precision).build());
+      columnOptions.add(ParquetColumnWriterOptions.simpleColumnBuilder(name)
+          .withDecimalPrecision(precision)
+          .withNullable(false)
+          .build());
       return this;
     }
 
     /**
-     * Set the nullable decimal precision
+     * Set nullable decimal column meta data
      * @param name
      * @param precision
      */
     public Builder withNullableDecimalColumn(String name, int precision) {
-      columnOptions.add(ParquetColumnWriterOptions.builder()
-          .withColumnName(name)
+      columnOptions.add(ParquetColumnWriterOptions.simpleColumnBuilder(name)
+          .withDecimalPrecision(precision)
           .withNullable(true)
-          .withDecimalPrecision(precision).build());
+          .build());
       return this;
     }
 
     /**
-     * Set nullable column name
+     * Set nullable column meta data
      * @param name
      */
     public Builder withNullableColumn(String... name) {
       IntStream.range(0, name.length).forEach(
-          i -> columnOptions.add(ParquetColumnWriterOptions.builder()
+          i -> columnOptions.add(ParquetColumnWriterOptions.simpleColumnBuilder(name[i])
               .withNullable(true)
-              .withColumnName(name[i])
               .build())
       );
+      return this;
+    }
+
+    /**
+     * Create a timestamp column meta data
+     * @param name
+     * @param isInt96
+     */
+    public Builder withTimestampColumn(String name, boolean isInt96) {
+      columnOptions.add(ParquetColumnWriterOptions.simpleColumnBuilder(name)
+          .withTimestampInt96(isInt96)
+          .withNullable(false)
+          .build());
+      return this;
+    }
+
+    /**
+     * Create a nullable timestamp column meta data
+     * @param name
+     * @param isInt96
+     */
+    public Builder withNullableTimestampColumn(String name, boolean isInt96) {
+      columnOptions.add(ParquetColumnWriterOptions.simpleColumnBuilder(name)
+          .withTimestampInt96(isInt96)
+          .withNullable(true)
+          .build());
+      return this;
+    }
+
+    /**
+     * Set a struct column with these options
+     * @param option
+     */
+    public Builder withStructColumn(ParquetColumnWriterOptions.ParquetStructColumnWriterOptions option) {
+      for (ParquetColumnWriterOptions opt: option.getChildColumnOptions()) {
+        if (opt.getColumName().isEmpty()) {
+          throw new IllegalArgumentException("Column name can't be empty");
+        }
+      }
+      columnOptions.add(option);
       return this;
     }
 
@@ -156,7 +201,17 @@ public class ParquetWriterOptions {
      * Set a column with these options
      * @param options
      */
-    public Builder withColumn(ParquetColumnWriterOptions options) {
+    public Builder withListColumn(ParquetColumnWriterOptions.ParquetListColumnWriterOptions options) {
+      // Lists should have only one child in the Java bindings, unfortunately we have to do this
+      // because the way cudf is implemented today, it requires two children and then it drops
+      // the first one assuming its the offsets child
+      assert (options.getChildColumnOptions().length == 2) : "Lists can only have two children";
+      if (options.getChildColumnOptions()[0] != ParquetColumnWriterOptions.DUMMY_CHILD) {
+        throw new IllegalArgumentException("First child in the list has to be DUMMY_CHILD");
+      }
+      if (options.getChildColumnOptions()[1].getColumName().isEmpty()) {
+        throw new IllegalArgumentException("Column name can't be empty");
+      }
       columnOptions.add(options);
       return this;
     }
@@ -170,10 +225,6 @@ public class ParquetWriterOptions {
     return new Builder();
   }
 
-  private final StatisticsFrequency statsGranularity;
-
-  private final List<ParquetColumnWriterOptions> columnOptions;
-
   private ParquetWriterOptions(Builder builder) {
     this.statsGranularity = builder.statsGranularity;
     this.columnOptions = builder.columnOptions;
@@ -185,7 +236,7 @@ public class ParquetWriterOptions {
     return statsGranularity;
   }
 
-  public boolean[] getFlatIsTimeTypeInt96() {
+  boolean[] getFlatIsTimeTypeInt96() {
     List<Boolean> a = new ArrayList<>();
     a.add(false); // dummy value
     for (ParquetColumnWriterOptions opt: columnOptions) {
@@ -199,7 +250,7 @@ public class ParquetWriterOptions {
     return primitivesBool;
   }
 
-  public int[] getFlatPrecision() {
+  int[] getFlatPrecision() {
     List<Integer> a = new ArrayList<>();
     a.add(0); // dummy value
     for (ParquetColumnWriterOptions opt: columnOptions) {
@@ -208,7 +259,7 @@ public class ParquetWriterOptions {
     return a.stream().mapToInt(Integer::intValue).toArray();
   }
 
-  public boolean[] getFlatIsNullable() {
+  boolean[] getFlatIsNullable() {
     List<Boolean> a = new ArrayList<>();
     a.add(false); // dummy value
     for (ParquetColumnWriterOptions opt: columnOptions) {
@@ -222,7 +273,7 @@ public class ParquetWriterOptions {
     return primitivesBool;
   }
 
-  public int[] getFlatNumChildren() {
+  int[] getFlatNumChildren() {
     List<Integer> a = new ArrayList<>();
     a.add(columnOptions.size());
     for (ParquetColumnWriterOptions opt: columnOptions) {
@@ -231,7 +282,7 @@ public class ParquetWriterOptions {
     return a.stream().mapToInt(Integer::intValue).toArray();
   }
 
-  public String[] getFlatColumnNames() {
+  String[] getFlatColumnNames() {
     List<String> a = new ArrayList<>();
     a.add(""); // dummy value to keep the code simple
     for (ParquetColumnWriterOptions opt: columnOptions) {
