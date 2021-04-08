@@ -311,25 +311,27 @@ class arrow_io_source : public datasource {
    *
    * @param Apache Arrow Filesystem URI
    */
-  explicit arrow_io_source(std::string arrow_filesystem_uri,
-                           std::string file_path,
-                           std::map<std::string, std::string> const& configs)
+  explicit arrow_io_source(std::string arrow_filesystem_uri)
   {
     arrow::Result<std::shared_ptr<arrow::fs::FileSystem>> result =
       arrow::fs::FileSystemFromUri(arrow_filesystem_uri);
-    CUDF_EXPECTS(result.ok(), "Failed to generate Arrow Filesystem instance from URI");
+    CUDF_EXPECTS(
+      result.ok(),
+      "Failed to generate Arrow Filesystem instance from URI. Invalid/unknown URI provided.");
 
     std::shared_ptr<arrow::fs::FileSystem> filesystem = result.ValueOrDie();
 
-    // XXX Still need to parse and populate configuration value here!
-
     // Retrieve the FileInfo for the target path
-    arrow::Result<arrow::fs::FileInfo> file_info_result = filesystem->GetFileInfo(file_path);
+    arrow::Result<arrow::fs::FileInfo> file_info_result =
+      filesystem->GetFileInfo("ursa-labs-taxi-data/2010/06/data.parquet");
+    printf("FileInfo: %s, Size: %ld\n",
+           file_info_result.ValueOrDie().base_name().c_str(),
+           file_info_result.ValueOrDie().size());
     CUDF_EXPECTS(file_info_result.ok(), "Failed to retrieve FileInfo for provided path");
 
     arrow::Result<std::shared_ptr<arrow::io::RandomAccessFile>> in_stream =
       filesystem->OpenInputFile(file_info_result.ValueOrDie());
-    CUDF_EXPECTS(in_stream.ok(), "Failed to open InputStream");
+    CUDF_EXPECTS(in_stream.ok(), "Failed to open Arrow RandomAccessFile");
 
     arrow_file = in_stream.ValueOrDie();
   }
@@ -346,7 +348,15 @@ class arrow_io_source : public datasource {
    */
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
+    printf("Arrow host_read() Offset: %zu, Size: %zu\n", offset, size);
+    printf("The next `arrow_file->ReadAt()` is where the segfaul is occurring\n");
+
+    // Segfault is occurring here. The status of the `Result<RandomAccessFile>`
+    // from Arrow reports "OK" so I'm assuming the object is fine? That is just an assumption
+    // however. Also the `RandomAccessFile` is reporting the correct size and metadata information
+    // so assume its fine.
     auto result = arrow_file->ReadAt(offset, size);
+    printf("After this\n");
     CUDF_EXPECTS(result.ok(), "Cannot read file data");
     return std::make_unique<arrow_io_buffer>(result.ValueOrDie());
   }
@@ -356,6 +366,7 @@ class arrow_io_source : public datasource {
    */
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
+    printf("Other Arrow host_read()\n");
     auto result = arrow_file->ReadAt(offset, size, dst);
     CUDF_EXPECTS(result.ok(), "Cannot read file data");
     return result.ValueOrDie();
@@ -366,7 +377,9 @@ class arrow_io_source : public datasource {
    */
   size_t size() const override
   {
+    printf("Arrow Size called\n");
     auto result = arrow_file->GetSize();
+    printf("Size is: %ld\n", result.ValueOrDie());
     CUDF_EXPECTS(result.ok(), "Cannot get file size");
     return result.ValueOrDie();
   }
