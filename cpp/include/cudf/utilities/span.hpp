@@ -257,6 +257,18 @@ class base_2dspan {
     return {this->data() + flatten_index(row, 0, this->size()), this->size().second};
   }
 
+  // Add subspan
+  constexpr base_2dspan subspan(size_t offset, size_t count) const noexcept
+  {
+    return base_2dspan(_data + flatten_index(offset, 0, this->size()), count, this->size().second);
+  }
+
+  // Add flatten method that returns a span of the type RowType
+  constexpr RowType<T, dynamic_extent> flat_view()
+  {
+    return {this->data(), this->size().first * this->size().second};
+  }
+
   template <typename OtherT,
             template <typename, size_t>
             typename OtherRowType,

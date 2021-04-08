@@ -757,7 +757,7 @@ void writer::impl::build_chunk_dictionaries(
     dict_scratch_size / sizeof(uint32_t), stream);
   chunks.host_to_device(stream);
 
-  // TODO: obviously remove this
+  // TODO: obviously remove this, but wait for dictionary refactor. Maybe we wouldn't need to.
   auto chunks_ptr = static_cast<device_2dspan<gpu::EncColumnChunk>>(chunks).data();
   gpu::BuildChunkDictionaries(
     chunks_ptr, dict_scratch.data(), dict_scratch_size, num_rowgroups * num_columns, stream);
@@ -812,8 +812,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks
                                 const statistics_chunk *chunk_stats)
 {
   auto chunks_ptr = static_cast<device_2dspan<gpu::EncColumnChunk>>(chunks).data();
-  gpu::EncodePages(
-    pages, chunks_ptr, pages_in_batch, first_page_in_batch, comp_in, comp_out, stream);
+  gpu::EncodePages(pages, pages_in_batch, first_page_in_batch, comp_in, comp_out, stream);
   switch (compression_) {
     case parquet::Compression::SNAPPY:
       CUDA_TRY(gpu_snap(comp_in, comp_out, pages_in_batch, stream));
@@ -822,19 +821,15 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks
   }
   // TBD: Not clear if the official spec actually allows dynamically turning off compression at the
   // chunk-level
-  DecideCompression(chunks_ptr + first_rowgroup * num_columns,
+  auto chunks_in_batch = chunks.device_view().subspan(first_rowgroup, rowgroups_in_batch);
+  DecideCompression(chunks_in_batch.flat_view(),
                     pages,
                     rowgroups_in_batch * num_columns,
                     first_page_in_batch,
                     comp_out,
                     stream);
-  EncodePageHeaders(pages,
-                    pages_in_batch,
-                    first_page_in_batch,
-                    comp_out,
-                    page_stats,
-                    chunk_stats,
-                    stream);
+  EncodePageHeaders(
+    pages, pages_in_batch, first_page_in_batch, comp_out, page_stats, chunk_stats, stream);
   GatherPages(
     chunks_ptr + first_rowgroup * num_columns, pages, rowgroups_in_batch * num_columns, stream);
 

@@ -504,7 +504,6 @@ void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
  * @brief Launches kernel for packing column data into parquet pages
  *
  * @param[in,out] pages Device array of EncPages (unordered)
- * @param[in] chunks Column chunks
  * @param[in] num_pages Number of pages
  * @param[in] start_page First page to encode in page array
  * @param[out] comp_in Optionally initializes compressor input params
@@ -512,7 +511,6 @@ void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePages(EncPage *pages,
-                 const EncColumnChunk *chunks,
                  uint32_t num_pages,
                  uint32_t start_page            = 0,
                  gpu_inflate_input_s *comp_in   = nullptr,
@@ -529,7 +527,7 @@ void EncodePages(EncPage *pages,
  * @param[in] comp_out Compressor status or nullptr if no compression
  * @param[in] stream CUDA stream to use, default 0
  */
-void DecideCompression(EncColumnChunk *chunks,
+void DecideCompression(device_span<EncColumnChunk> chunks,
                        const EncPage *pages,
                        uint32_t num_chunks,
                        uint32_t start_page,

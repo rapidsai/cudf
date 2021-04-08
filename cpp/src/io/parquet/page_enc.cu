@@ -925,7 +925,6 @@ convert_nanoseconds(cuda::std::chrono::sys_time<cuda::std::chrono::nanoseconds> 
 // blockDim(128, 1, 1)
 template <int block_size>
 __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
-                                                         const EncColumnChunk *chunks,
                                                          gpu_inflate_input_s *comp_in,
                                                          gpu_inflate_status_s *comp_out,
                                                          uint32_t start_page)
@@ -1270,7 +1269,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
 }
 
 // blockDim(128, 1, 1)
-__global__ void __launch_bounds__(128) gpuDecideCompression(EncColumnChunk *chunks,
+__global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColumnChunk> chunks,
                                                             const EncPage *pages,
                                                             const gpu_inflate_status_s *comp_out,
                                                             uint32_t start_page)
@@ -2167,7 +2166,6 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePages(EncPage *pages,
-                 EncColumnChunk const *chunks,
                  uint32_t num_pages,
                  uint32_t start_page,
                  gpu_inflate_input_s *comp_in,
@@ -2176,8 +2174,7 @@ void EncodePages(EncPage *pages,
 {
   // A page is part of one column. This is launching 1 block per page. 1 block will exclusively
   // deal with one datatype.
-  gpuEncodePages<128>
-    <<<num_pages, 128, 0, stream.value()>>>(pages, chunks, comp_in, comp_out, start_page);
+  gpuEncodePages<128><<<num_pages, 128, 0, stream.value()>>>(pages, comp_in, comp_out, start_page);
 }
 
 /**
@@ -2190,7 +2187,7 @@ void EncodePages(EncPage *pages,
  * @param[in] comp_out Compressor status
  * @param[in] stream CUDA stream to use, default 0
  */
-void DecideCompression(EncColumnChunk *chunks,
+void DecideCompression(device_span<EncColumnChunk> chunks,
                        const EncPage *pages,
                        uint32_t num_chunks,
                        uint32_t start_page,
