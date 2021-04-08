@@ -25,7 +25,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <climits>
+#include <cuda/std/climits>
 #include <vector>
 
 template <typename T>
