@@ -20,13 +20,9 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/iterator.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/search.hpp>
 #include <cudf/table/table_view.hpp>
-
-#include <memory>
-#include <utility>
 
 using bools_col   = cudf::test::fixed_width_column_wrapper<bool>;
 using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
@@ -49,17 +45,26 @@ using TestTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
 TYPED_TEST_CASE(TypedStructSearchTest, TestTypes);
 
 namespace {
+auto search_bounds(cudf::column_view const& t_col_view,
+                   std::unique_ptr<cudf::column> const& values_col,
+                   std::vector<cudf::order> const& column_orders        = {cudf::order::ASCENDING},
+                   std::vector<cudf::null_order> const& null_precedence = {
+                     cudf::null_order::BEFORE})
+{
+  auto const t            = cudf::table_view{std::vector<cudf::column_view>{t_col_view}};
+  auto const values       = cudf::table_view{std::vector<cudf::column_view>{values_col->view()}};
+  auto result_lower_bound = cudf::lower_bound(t, values, column_orders, null_precedence);
+  auto result_upper_bound = cudf::upper_bound(t, values, column_orders, null_precedence);
+  return std::make_pair(std::move(result_lower_bound), std::move(result_upper_bound));
+}
+
 auto search_bounds(std::unique_ptr<cudf::column> const& t_col,
                    std::unique_ptr<cudf::column> const& values_col,
                    std::vector<cudf::order> const& column_orders        = {cudf::order::ASCENDING},
                    std::vector<cudf::null_order> const& null_precedence = {
                      cudf::null_order::BEFORE})
 {
-  auto const t            = cudf::table_view{std::vector<cudf::column_view>{t_col->view()}};
-  auto const values       = cudf::table_view{std::vector<cudf::column_view>{values_col->view()}};
-  auto result_lower_bound = cudf::lower_bound(t, values, column_orders, null_precedence);
-  auto result_upper_bound = cudf::upper_bound(t, values, column_orders, null_precedence);
-  return std::make_pair(std::move(result_lower_bound), std::move(result_upper_bound));
+  return search_bounds(t_col->view(), values_col, column_orders, null_precedence);
 }
 
 auto null_at(cudf::size_type idx) { return cudf::test::iterator_with_null_at(idx); }
@@ -105,6 +110,38 @@ TYPED_TEST(TypedStructSearchTest, TrivialInputTests)
   auto const expected2 = int32s_col{5, 5, 5, 5, 5};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, results2.first->view(), print_all);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, results2.second->view(), print_all);
+}
+
+TYPED_TEST(TypedStructSearchTest, SlicedColumnInputTests)
+{
+  using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+
+  auto child_col_values     = col_wrapper{0, 1, 2, 3, 4, 5};
+  auto const structs_values = structs_col{child_col_values}.release();
+
+  auto child_col_t              = col_wrapper{0, 1, 2, 2, 2, 2, 3, 3, 4, 4};
+  auto const structs_t_original = structs_col{child_col_t}.release();
+
+  auto structs_t = cudf::slice(structs_t_original->view(), {0, 10})[0];  // the entire column t
+  auto results   = search_bounds(structs_t, structs_values);
+  auto expected_lower_bound = int32s_col{0, 1, 2, 6, 8, 10};
+  auto expected_upper_bound = int32s_col{1, 2, 6, 8, 10, 10};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), print_all);
+
+  structs_t            = cudf::slice(structs_t_original->view(), {0, 5})[0];
+  results              = search_bounds(structs_t, structs_values);
+  expected_lower_bound = int32s_col{0, 1, 2, 5, 5, 5};
+  expected_upper_bound = int32s_col{1, 2, 5, 5, 5, 5};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), print_all);
+
+  structs_t            = cudf::slice(structs_t_original->view(), {5, 10})[0];
+  results              = search_bounds(structs_t, structs_values);
+  expected_lower_bound = int32s_col{0, 0, 0, 1, 3, 5};
+  expected_upper_bound = int32s_col{0, 0, 1, 3, 5, 5};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), print_all);
 }
 
 TYPED_TEST(TypedStructSearchTest, SimpleInputWithNullsTests)
