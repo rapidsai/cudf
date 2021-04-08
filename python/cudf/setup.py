@@ -89,6 +89,12 @@ install_requires.append(
     "cupy-cuda" + get_cuda_version_from_header(cuda_include_dir)
 )
 
+CUDF_HOME = os.environ.get(
+    "CUDF_HOME",
+    os.path.abspath(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../")
+    ),
+)
 CUDF_ROOT = os.environ.get(
     "CUDF_ROOT",
     os.path.abspath(
@@ -161,8 +167,8 @@ extensions = [
         "*",
         sources=cython_files,
         include_dirs=[
-            os.path.abspath(os.path.join(CUDF_ROOT, "../include/cudf")),
-            os.path.abspath(os.path.join(CUDF_ROOT, "../include")),
+            os.path.abspath(os.path.join(CUDF_HOME, "cpp/include/cudf")),
+            os.path.abspath(os.path.join(CUDF_HOME, "cpp/include")),
             os.path.abspath(os.path.join(CUDF_ROOT, "include")),
             os.path.join(CUDF_ROOT, "_deps/libcudacxx-src/include"),
             os.path.join(CUDF_ROOT, "_deps/dlpack-src/include"),
