@@ -4,6 +4,7 @@ import datetime as dt
 import numbers
 from collections import namedtuple
 from collections.abc import Sequence
+from decimal import Decimal
 
 import cupy as cp
 import numpy as np
@@ -294,9 +295,11 @@ def cudf_dtype_to_pa_type(dtype):
     """
     if is_categorical_dtype(dtype):
         raise NotImplementedError()
-    elif is_list_dtype(dtype):
-        return dtype.to_arrow()
-    elif is_struct_dtype(dtype):
+    elif (
+        is_list_dtype(dtype)
+        or is_struct_dtype(dtype)
+        or is_decimal_dtype(dtype)
+    ):
         return dtype.to_arrow()
     else:
         return np_to_pa_dtype(np.dtype(dtype))
@@ -345,8 +348,11 @@ def to_cudf_compatible_scalar(val, dtype=None):
     if not is_scalar(val):
         raise ValueError(
             f"Cannot convert value of type {type(val).__name__} "
-            " to cudf scalar"
+            "to cudf scalar"
         )
+
+    if isinstance(val, Decimal):
+        return val
 
     if isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0:
         val = val.item()
@@ -578,6 +584,24 @@ def _get_nan_for_dtype(dtype):
         return np.float64("nan")
 
 
+def _decimal_to_int64(decimal: Decimal) -> int:
+    """
+    Scale a Decimal such that the result is the integer
+    that would result from removing the decimal point.
+
+    Examples
+    --------
+    >>> _decimal_to_int64(Decimal('1.42'))
+    142
+    >>> _decimal_to_int64(Decimal('0.0042'))
+    42
+    >>> _decimal_to_int64(Decimal('-1.004201'))
+    -1004201
+
+    """
+    return int(f"{decimal:0f}".replace(".", ""))
+
+
 def get_allowed_combinations_for_operator(dtype_l, dtype_r, op):
     error = TypeError(
         f"{op} not supported between {dtype_l} and {dtype_r} scalars"
@@ -637,6 +661,11 @@ def find_common_type(dtypes):
     # Aggregate same types
     dtypes = set(dtypes)
 
+    if any(is_decimal_dtype(dtype) for dtype in dtypes):
+        raise NotImplementedError(
+            "DecimalDtype is not yet supported in find_common_type"
+        )
+
     # Corner case 1:
     # Resort to np.result_type to handle "M" and "m" types separately
     dt_dtypes = set(filter(lambda t: is_datetime_dtype(t), dtypes))
@@ -651,7 +680,64 @@ def find_common_type(dtypes):
         dtypes = dtypes - td_dtypes
         dtypes.add(np.result_type(*td_dtypes))
 
-    return np.find_common_type(list(dtypes), [])
+    common_dtype = np.find_common_type(list(dtypes), [])
+    if common_dtype == np.dtype("float16"):
+        # cuDF does not support float16 dtype
+        return np.dtype("float32")
+    else:
+        return common_dtype
+
+
+def _can_cast(from_dtype, to_dtype):
+    """
+    Utility function to determine if we can cast
+    from `from_dtype` to `to_dtype`. This function primarily calls
+    `np.can_cast` but with some special handling around
+    cudf specific dtypes.
+    """
+    if isinstance(from_dtype, type):
+        from_dtype = np.dtype(from_dtype)
+    if isinstance(to_dtype, type):
+        to_dtype = np.dtype(to_dtype)
+
+    # TODO : Add precision & scale checking for
+    # decimal types in future
+    if isinstance(from_dtype, cudf.core.dtypes.Decimal64Dtype):
+        if isinstance(to_dtype, cudf.core.dtypes.Decimal64Dtype):
+            return True
+        elif isinstance(to_dtype, np.dtype):
+            if to_dtype.kind in {"i", "f", "u", "U", "O"}:
+                return True
+            else:
+                return False
+    elif isinstance(from_dtype, np.dtype):
+        if isinstance(to_dtype, np.dtype):
+            return np.can_cast(from_dtype, to_dtype)
+        elif isinstance(to_dtype, cudf.core.dtypes.Decimal64Dtype):
+            if from_dtype.kind in {"i", "f", "u", "U", "O"}:
+                return True
+            else:
+                return False
+        elif isinstance(to_dtype, cudf.core.types.CategoricalDtype):
+            return True
+        else:
+            return False
+    elif isinstance(from_dtype, cudf.core.dtypes.ListDtype):
+        # TODO: Add level based checks too once casting of
+        # list columns is supported
+        if isinstance(to_dtype, cudf.core.dtypes.ListDtype):
+            return np.can_cast(from_dtype.leaf_type, to_dtype.leaf_type)
+        else:
+            return False
+    elif isinstance(from_dtype, cudf.core.dtypes.CategoricalDtype):
+        if isinstance(to_dtype, cudf.core.dtypes.CategoricalDtype):
+            return True
+        elif isinstance(to_dtype, np.dtype):
+            return np.can_cast(from_dtype._categories.dtype, to_dtype)
+        else:
+            return False
+    else:
+        return np.can_cast(from_dtype, to_dtype)
 
 
 # Type dispatch loops similar to what are found in `np.add.types`

@@ -339,5 +339,10 @@ enum class hash_id {
   HASH_SPARK_MURMUR3    ///< Spark Murmur3 hash function
 };
 
+/**
+ * @brief The default seed value for hash functions
+ */
+static constexpr uint32_t DEFAULT_HASH_SEED = 0;
+
 /** @} */
 }  // namespace cudf

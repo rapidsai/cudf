@@ -709,25 +709,40 @@ def test_series_where(data_dtype, fill_value):
             sr.where(sr > 0, fill_value)
     else:
         # Cast back to original dtype as pandas automatically upcasts
-        expect = psr.where(psr > 0, fill_value).astype(psr.dtype)
+        expect = psr.where(psr > 0, fill_value)
         got = sr.where(sr > 0, fill_value)
-        assert_eq(expect, got)
+        # pandas returns 'float16' dtype, which is not supported in cudf
+        assert_eq(
+            expect,
+            got,
+            check_dtype=False if expect.dtype.kind in ("f") else True,
+        )
 
     if sr.dtype.type(fill_value) != fill_value:
         with pytest.raises(TypeError):
             sr.where(sr < 0, fill_value)
     else:
-        expect = psr.where(psr < 0, fill_value).astype(psr.dtype)
+        expect = psr.where(psr < 0, fill_value)
         got = sr.where(sr < 0, fill_value)
-        assert_eq(expect, got)
+        # pandas returns 'float16' dtype, which is not supported in cudf
+        assert_eq(
+            expect,
+            got,
+            check_dtype=False if expect.dtype.kind in ("f") else True,
+        )
 
     if sr.dtype.type(fill_value) != fill_value:
         with pytest.raises(TypeError):
             sr.where(sr == 0, fill_value)
     else:
-        expect = psr.where(psr == 0, fill_value).astype(psr.dtype)
+        expect = psr.where(psr == 0, fill_value)
         got = sr.where(sr == 0, fill_value)
-        assert_eq(expect, got)
+        # pandas returns 'float16' dtype, which is not supported in cudf
+        assert_eq(
+            expect,
+            got,
+            check_dtype=False if expect.dtype.kind in ("f") else True,
+        )
 
 
 @pytest.mark.parametrize("fill_value", [100, 100.0, 100.5])

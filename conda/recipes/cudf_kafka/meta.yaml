@@ -29,12 +29,12 @@ requirements:
     - python
     - cython >=0.29,<0.30
     - setuptools
-    - cudf {{ version }}=*_{{ GIT_DESCRIBE_NUMBER }}
-    - libcudf_kafka {{ version }}=*_{{ GIT_DESCRIBE_NUMBER }}
+    - cudf {{ version }}
+    - libcudf_kafka {{ version }}
   run:
-    - libcudf_kafka {{ version }}=*_{{ GIT_DESCRIBE_NUMBER }}
+    - libcudf_kafka {{ version }}
     - python-confluent-kafka
-    - cudf {{ version }}=*_{{ GIT_DESCRIBE_NUMBER }}
+    - cudf {{ version }}
 
 test:
   requires:
