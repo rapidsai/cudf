@@ -22,6 +22,7 @@ from cudf.core.column import (
     column,
     string,
 )
+from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     min_column_type,
@@ -103,11 +104,23 @@ class NumericalColumn(ColumnBase):
             out_dtype = self.dtype
         else:
             if not (
-                isinstance(rhs, (NumericalColumn, cudf.Scalar,),)
+                isinstance(
+                    rhs,
+                    (
+                        NumericalColumn,
+                        cudf.Scalar,
+                        cudf.core.column.DecimalColumn,
+                    ),
+                )
                 or np.isscalar(rhs)
             ):
                 msg = "{!r} operator not supported between {} and {}"
                 raise TypeError(msg.format(binop, type(self), type(rhs)))
+            if isinstance(rhs, cudf.core.column.DecimalColumn):
+                lhs = self.as_decimal_column(
+                    Decimal64Dtype(Decimal64Dtype.MAX_PRECISION, 0)
+                )
+                return lhs.binary_operator(binop, rhs)
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
                 tmp = self if reflect else rhs
@@ -208,15 +221,7 @@ class NumericalColumn(ColumnBase):
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DecimalColumn":
-        if is_integer_dtype(self.dtype):
-            raise NotImplementedError(
-                "Casting from integer types to decimal "
-                "types not currently supported"
-            )
-        result = libcudf.unary.cast(self, dtype)
-        if isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
-            result.dtype.precision = dtype.precision
-        return result
+        return libcudf.unary.cast(self, dtype)
 
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         dtype = np.dtype(dtype)
@@ -362,7 +367,9 @@ class NumericalColumn(ColumnBase):
     ) -> NumericalColumn:
         quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
         # get sorted indices and exclude nulls
-        sorted_indices = self.as_frame()._get_sorted_inds(True, "first")
+        sorted_indices = self.as_frame()._get_sorted_inds(
+            ascending=True, na_position="first"
+        )
         sorted_indices = sorted_indices[self.null_count :]
 
         return cpp_quantile(self, quant, interpolation, sorted_indices, exact)

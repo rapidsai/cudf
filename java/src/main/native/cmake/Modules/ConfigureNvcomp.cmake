@@ -16,7 +16,13 @@
 
 set(NVCOMP_ROOT "${CMAKE_BINARY_DIR}/nvcomp")
 
-set(NVCOMP_CMAKE_ARGS "-DUSE_RMM=ON -DCUB_DIR=${CUB_INCLUDE}")
+if(CUDA_STATIC_RUNTIME)
+  set(NVCOMP_CUDA_RUNTIME_LIBRARY Static)
+else()
+  set(NVCOMP_CUDA_RUNTIME_LIBRARY Shared)
+endif()
+
+set(NVCOMP_CMAKE_ARGS "-DCMAKE_CUDA_RUNTIME_LIBRARY=${NVCOMP_CUDA_RUNTIME_LIBRARY} -DUSE_RMM=ON -DCUB_DIR=${CUB_INCLUDE}")
 
 configure_file("${CMAKE_SOURCE_DIR}/cmake/Templates/Nvcomp.CMakeLists.txt.cmake"
                "${NVCOMP_ROOT}/CMakeLists.txt")

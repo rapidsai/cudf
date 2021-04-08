@@ -26,7 +26,7 @@ function(find_and_configure_gtest VERSION)
         GIT_REPOSITORY  https://github.com/google/googletest.git
         GIT_TAG         release-${VERSION}
         GIT_SHALLOW     TRUE
-        OPTIONS         "INSTALL_GTEST OFF"
+        OPTIONS         "INSTALL_GTEST ON"
         # googletest >= 1.10.0 provides a cmake config file -- use it if it exists
         FIND_PACKAGE_ARGUMENTS "CONFIG")
     # Add GTest aliases if they don't already exist.
@@ -43,14 +43,6 @@ function(find_and_configure_gtest VERSION)
     fix_cmake_global_defaults(GTest::gmock)
     fix_cmake_global_defaults(GTest::gtest_main)
     fix_cmake_global_defaults(GTest::gmock_main)
-    if(GTest_ADDED)
-        install(TARGETS gmock
-                        gtest
-                        gmock_main
-                        gtest_main
-            DESTINATION lib
-            EXPORT cudf-testing-targets)
-    endif()
 endfunction()
 
 set(CUDF_MIN_VERSION_GTest 1.10.0)

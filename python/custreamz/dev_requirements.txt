@@ -1,0 +1,12 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
+flake8==3.8.3
+black==19.10b0
+isort==5.0.7
+dask==2021.4.0
+distributed>=2.22.0,<=2021.4.0
+streamz
+python-confluent-kafka
+pytest
+setuptools
+wheel

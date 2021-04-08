@@ -111,7 +111,17 @@ struct dispatch_to_cudf_column {
     return mask;
   }
 
-  template <typename T>
+  template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
+  std::unique_ptr<column> operator()(arrow::Array const& array,
+                                     data_type type,
+                                     bool skip_mask,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    CUDF_FAIL("Unsupported type in from_arrow.");
+  }
+
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   std::unique_ptr<column> operator()(arrow::Array const& array,
                                      data_type type,
                                      bool skip_mask,
@@ -124,7 +134,7 @@ struct dispatch_to_cudf_column {
     auto col = make_fixed_width_column(type, num_rows, mask_state::UNALLOCATED, stream, mr);
     auto mutable_column_view = col->mutable_view();
     CUDA_TRY(cudaMemcpyAsync(
-      mutable_column_view.data<void*>(),
+      mutable_column_view.data<T>(),
       reinterpret_cast<const uint8_t*>(data_buffer->address()) + array.offset() * sizeof(T),
       sizeof(T) * num_rows,
       cudaMemcpyDefault,

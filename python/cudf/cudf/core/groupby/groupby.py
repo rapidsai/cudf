@@ -13,6 +13,8 @@ from cudf.core.abc import Serializable
 from cudf.utils.utils import cached_property
 
 
+# Note that all valid aggregation methods (e.g. GroupBy.min) are bound to the
+# class after its definition (see below).
 class GroupBy(Serializable):
 
     _MAX_GROUPS_BEFORE_WARN = 100
@@ -57,14 +59,6 @@ class GroupBy(Serializable):
             self.grouping = by
         else:
             self.grouping = _Grouping(obj, by, level)
-
-    def __getattribute__(self, key):
-        try:
-            return super().__getattribute__(key)
-        except AttributeError:
-            if key in libgroupby._GROUPBY_AGGS:
-                return functools.partial(self._agg_func_name_with_args, key)
-            raise
 
     def __iter__(self):
         group_names, offsets, _, grouped_values = self._grouped()
@@ -266,19 +260,6 @@ class GroupBy(Serializable):
         grouped_values._copy_type_metadata(self.obj)
         group_names = grouped_keys.unique()
         return (group_names, offsets, grouped_keys, grouped_values)
-
-    def _agg_func_name_with_args(self, func_name, *args, **kwargs):
-        """
-        Aggregate given an aggregate function name
-        and arguments to the function, e.g.,
-        `_agg_func_name_with_args("quantile", 0.5)`
-        """
-
-        def func(x):
-            return getattr(x, func_name)(*args, **kwargs)
-
-        func.__name__ = func_name
-        return self.agg(func)
 
     def _normalize_aggs(self, aggs):
         """
@@ -590,6 +571,48 @@ class GroupBy(Serializable):
         return cudf.core.window.rolling.RollingGroupby(self, *args, **kwargs)
 
 
+# Set of valid groupby aggregations that are monkey-patched into the GroupBy
+# namespace.
+_VALID_GROUPBY_AGGS = {
+    "count",
+    "sum",
+    "idxmin",
+    "idxmax",
+    "min",
+    "max",
+    "mean",
+    "var",
+    "std",
+    "quantile",
+    "median",
+    "nunique",
+    "collect",
+    "unique",
+}
+
+
+# Dynamically bind the different aggregation methods.
+def _agg_func_name_with_args(self, func_name, *args, **kwargs):
+    """
+    Aggregate given an aggregate function name and arguments to the
+    function, e.g., `_agg_func_name_with_args("quantile", 0.5)`. The named
+    aggregations must be members of _AggregationFactory.
+    """
+
+    def func(x):
+        """Compute the {} of the group.""".format(func_name)
+        return getattr(x, func_name)(*args, **kwargs)
+
+    func.__name__ = func_name
+    return self.agg(func)
+
+
+for key in _VALID_GROUPBY_AGGS:
+    setattr(
+        GroupBy, key, functools.partialmethod(_agg_func_name_with_args, key)
+    )
+
+
 class DataFrameGroupBy(GroupBy):
     def __init__(
         self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
@@ -685,15 +708,16 @@ class DataFrameGroupBy(GroupBy):
             dropna=dropna,
         )
 
-    def __getattribute__(self, key):
+    def __getattr__(self, key):
+        # Without this check, copying can trigger a RecursionError. See
+        # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html  # noqa: E501
+        # for an explanation.
+        if key == "obj":
+            raise AttributeError
         try:
-            return super().__getattribute__(key)
-        except AttributeError:
-            if key in self.obj:
-                return self.obj[key].groupby(
-                    self.grouping, dropna=self._dropna, sort=self._sort
-                )
-            raise
+            return self[key]
+        except KeyError:
+            raise AttributeError
 
     def __getitem__(self, key):
         return self.obj[key].groupby(

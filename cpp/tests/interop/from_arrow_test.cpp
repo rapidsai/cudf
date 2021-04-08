@@ -168,7 +168,7 @@ TEST_F(FromArrowTest, StructColumn)
     std::vector<std::vector<std::string>>{{"string", "integral", "bool", "nested_list", "struct"}};
   auto str_col =
     cudf::test::strings_column_wrapper{
-      "Samuel Vimes", "Carrot Ironfoundersson", "Angua von Uberwald"}
+      "Samuel Vimes", "Carrot Ironfoundersson", "Angua von Überwald"}
       .release();
   auto str_col2 =
     cudf::test::strings_column_wrapper{{"CUDF", "ROCKS", "EVERYWHERE"}, {0, 1, 0}}.release();
@@ -198,7 +198,7 @@ TEST_F(FromArrowTest, StructColumn)
   cudf::table_view expected_cudf_table({struct_col->view()});
 
   // Create Arrow table
-  std::vector<std::string> str{"Samuel Vimes", "Carrot Ironfoundersson", "Angua von Uberwald"};
+  std::vector<std::string> str{"Samuel Vimes", "Carrot Ironfoundersson", "Angua von Überwald"};
   std::vector<std::string> str2{"CUDF", "ROCKS", "EVERYWHERE"};
   auto str_array  = get_arrow_array<cudf::string_view>(str);
   auto int_array  = get_arrow_array<int32_t>({48, 27, 25});

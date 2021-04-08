@@ -345,24 +345,32 @@ struct collect_list_aggregation final : derived_aggregation<nunique_aggregation>
  */
 struct collect_set_aggregation final : derived_aggregation<collect_set_aggregation> {
   explicit collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE,
-                                   null_equality null_equal  = null_equality::EQUAL)
-    : derived_aggregation{COLLECT_SET}, _null_handling{null_handling}, _null_equal(null_equal)
+                                   null_equality nulls_equal = null_equality::EQUAL,
+                                   nan_equality nans_equal   = nan_equality::UNEQUAL)
+    : derived_aggregation{COLLECT_SET},
+      _null_handling{null_handling},
+      _nulls_equal(nulls_equal),
+      _nans_equal(nans_equal)
   {
   }
   null_policy _null_handling;  ///< include or exclude nulls
-  null_equality _null_equal;   ///< whether to consider nulls as equal values
+  null_equality _nulls_equal;  ///< whether to consider nulls as equal values
+  nan_equality _nans_equal;    ///< whether to consider NaNs as equal value (applicable only to
+                               ///< floating point types)
 
  protected:
   friend class derived_aggregation<collect_set_aggregation>;
 
   bool operator==(collect_set_aggregation const& other) const
   {
-    return _null_handling == other._null_handling && _null_equal == other._null_equal;
+    return _null_handling == other._null_handling && _nulls_equal == other._nulls_equal &&
+           _nans_equal == other._nans_equal;
   }
 
   size_t hash_impl() const
   {
-    return std::hash<int>{}(static_cast<int>(_null_handling) ^ static_cast<int>(_null_equal));
+    return std::hash<int>{}(static_cast<int>(_null_handling) ^ static_cast<int>(_nulls_equal) ^
+                            static_cast<int>(_nans_equal));
   }
 };
 

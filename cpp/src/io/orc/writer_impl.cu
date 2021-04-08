@@ -321,8 +321,8 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
                         string_column_cost{},
                         [&](auto cost, auto rg_idx) -> string_column_cost {
                           const auto &dt = dict[rg_idx * str_col_ids.size() + col_idx];
-                          return {cost.dictionary + dt.dict_char_count + dt.num_dict_strings,
-                                  cost.direct + dt.string_char_count};
+                          return {cost.direct + dt.string_char_count,
+                                  cost.dictionary + dt.dict_char_count + dt.num_dict_strings};
                         });
       // Disable dictionary if it does not reduce the output size
       if (col_cost.dictionary >= col_cost.direct) {
