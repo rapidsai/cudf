@@ -53,9 +53,9 @@ TYPED_TEST(GroupByShiftTest, ForwardShiftNullScalar)
   using K = int32_t;
   using V = TypeParam;
 
-  cudf::test::fixed_width_column_wrapper<K> key{1, 1, 1, 1, 2, 2, 2};
+  cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   cudf::test::fixed_width_column_wrapper<V> val{3, 4, 5, 6, 7, 8, 9};
-  cudf::test::fixed_width_column_wrapper<V> expected({-1, -1, 3, 4, -1, -1, 7},
+  cudf::test::fixed_width_column_wrapper<V> expected({-1, -1, 3, 5, -1, -1, 4},
                                                      {0, 0, 1, 1, 0, 0, 1});
   size_type offset = 2;
   auto slr         = cudf::make_default_constructed_scalar(column_view(val).type());
@@ -69,9 +69,9 @@ TYPED_TEST(GroupByShiftTest, ForwardShiftValidScalar)
   using V = TypeParam;
   using cudf::scalar_type_t;
 
-  cudf::test::fixed_width_column_wrapper<K> key{1, 1, 1, 1, 2, 2, 2};
+  cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   cudf::test::fixed_width_column_wrapper<V> val{3, 4, 5, 6, 7, 8, 9};
-  cudf::test::fixed_width_column_wrapper<V> expected({42, 42, 3, 4, 42, 42, 7});
+  cudf::test::fixed_width_column_wrapper<V> expected({42, 42, 3, 5, 42, 42, 4});
   size_type offset = 2;
   auto slr =
     cudf::scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(42), true);
@@ -84,9 +84,9 @@ TYPED_TEST(GroupByShiftTest, BackwardShiftNullScalar)
   using K = int32_t;
   using V = TypeParam;
 
-  cudf::test::fixed_width_column_wrapper<K> key{1, 1, 1, 1, 2, 2, 2};
+  cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   cudf::test::fixed_width_column_wrapper<V> val{3, 4, 5, 6, 7, 8, 9};
-  cudf::test::fixed_width_column_wrapper<V> expected({5, 6, -1, -1, 9, -1, -1},
+  cudf::test::fixed_width_column_wrapper<V> expected({8, 9, -1, -1, 7, -1, -1},
                                                      {1, 1, 0, 0, 1, 0, 0});
   size_type offset = -2;
   auto slr         = cudf::make_default_constructed_scalar(column_view(val).type());
@@ -99,9 +99,9 @@ TYPED_TEST(GroupByShiftTest, BackwardShiftValidScalar)
   using K = int32_t;
   using V = TypeParam;
 
-  cudf::test::fixed_width_column_wrapper<K> key{1, 1, 1, 1, 2, 2, 2};
+  cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   cudf::test::fixed_width_column_wrapper<V> val{3, 4, 5, 6, 7, 8, 9};
-  cudf::test::fixed_width_column_wrapper<V> expected({5, 6, 42, 42, 9, 42, 42});
+  cudf::test::fixed_width_column_wrapper<V> expected({8, 9, 42, 42, 7, 42, 42});
   size_type offset = -2;
   auto slr =
     cudf::scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(42), true);

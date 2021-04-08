@@ -255,6 +255,9 @@ class groupby {
    * @return Pair containing the table with each group's key and the column shifted
    *
    * @throws cudf::logic_error if @p fill_value dtype does not match @p input dtype
+   *
+   * @note If `fill_value` is null, result column is nullable. If `fill_value` is not null, result
+   * column is not nullable.
    */
   std::pair<std::unique_ptr<table>, std::unique_ptr<column>> shift(
     column_view const& values,
