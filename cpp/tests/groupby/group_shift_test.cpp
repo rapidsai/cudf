@@ -31,24 +31,24 @@ namespace cudf {
 namespace test {
 
 template <typename T>
-struct GroupByShiftTest : public cudf::test::BaseFixture {
+struct groupby_shift_fixed_width_test : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(GroupByShiftTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(groupby_shift_fixed_width_test, cudf::test::FixedWidthTypes);
 
 template <typename V>
-void test_groupby_shift(cudf::test::fixed_width_column_wrapper<int32_t> const& key,
-                        cudf::test::fixed_width_column_wrapper<V> const& value,
-                        size_type offset,
-                        scalar const& fill_value,
-                        cudf::test::fixed_width_column_wrapper<V> const& expected)
+void test_groupby_shift_fixed_width(cudf::test::fixed_width_column_wrapper<int32_t> const& key,
+                                    cudf::test::fixed_width_column_wrapper<V> const& value,
+                                    size_type offset,
+                                    scalar const& fill_value,
+                                    cudf::test::fixed_width_column_wrapper<V> const& expected)
 {
   groupby::groupby gb_obj(table_view({key}));
   auto got = gb_obj.shift(value, offset, fill_value);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got.second, expected);
 }
 
-TYPED_TEST(GroupByShiftTest, ForwardShiftNullScalar)
+TYPED_TEST(groupby_shift_fixed_width_test, ForwardShiftNullScalar)
 {
   using K = int32_t;
   using V = TypeParam;
@@ -60,10 +60,10 @@ TYPED_TEST(GroupByShiftTest, ForwardShiftNullScalar)
   size_type offset = 2;
   auto slr         = cudf::make_default_constructed_scalar(column_view(val).type());
 
-  test_groupby_shift<V>(key, val, offset, *slr, expected);
+  test_groupby_shift_fixed_width<V>(key, val, offset, *slr, expected);
 }
 
-TYPED_TEST(GroupByShiftTest, ForwardShiftValidScalar)
+TYPED_TEST(groupby_shift_fixed_width_test, ForwardShiftValidScalar)
 {
   using K = int32_t;
   using V = TypeParam;
@@ -76,10 +76,10 @@ TYPED_TEST(GroupByShiftTest, ForwardShiftValidScalar)
   auto slr =
     cudf::scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(42), true);
 
-  test_groupby_shift<V>(key, val, offset, slr, expected);
+  test_groupby_shift_fixed_width<V>(key, val, offset, slr, expected);
 }
 
-TYPED_TEST(GroupByShiftTest, BackwardShiftNullScalar)
+TYPED_TEST(groupby_shift_fixed_width_test, BackwardShiftNullScalar)
 {
   using K = int32_t;
   using V = TypeParam;
@@ -91,10 +91,10 @@ TYPED_TEST(GroupByShiftTest, BackwardShiftNullScalar)
   size_type offset = -2;
   auto slr         = cudf::make_default_constructed_scalar(column_view(val).type());
 
-  test_groupby_shift<V>(key, val, offset, *slr, expected);
+  test_groupby_shift_fixed_width<V>(key, val, offset, *slr, expected);
 }
 
-TYPED_TEST(GroupByShiftTest, BackwardShiftValidScalar)
+TYPED_TEST(groupby_shift_fixed_width_test, BackwardShiftValidScalar)
 {
   using K = int32_t;
   using V = TypeParam;
@@ -106,8 +106,78 @@ TYPED_TEST(GroupByShiftTest, BackwardShiftValidScalar)
   auto slr =
     cudf::scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(42), true);
 
-  test_groupby_shift<V>(key, val, offset, slr, expected);
+  test_groupby_shift_fixed_width<V>(key, val, offset, slr, expected);
 }
 
+struct groupby_shift_string_test : public cudf::test::BaseFixture {
+};
+
+void test_groupby_shift_string(cudf::test::fixed_width_column_wrapper<int32_t> const& key,
+                               cudf::test::strings_column_wrapper const& value,
+                               size_type offset,
+                               scalar const& fill_value,
+                               cudf::test::strings_column_wrapper const& expected)
+{
+  groupby::groupby gb_obj(table_view({key}));
+  auto got = gb_obj.shift(value, offset, fill_value);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got.second, expected);
+}
+
+TEST_F(groupby_shift_string_test, ForwardShiftNullScalar)
+{
+  using K = int32_t;
+
+  cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
+  cudf::test::strings_column_wrapper val{"a", "bb", "cc", "d", "eee", "f", "gg"};
+  cudf::test::strings_column_wrapper expected({"", "", "a", "cc", "", "", "bb"},
+                                              {0, 0, 1, 1, 0, 0, 1});
+  size_type offset = 2;
+  auto slr         = cudf::make_default_constructed_scalar(column_view(val).type());
+
+  test_groupby_shift_string(key, val, offset, *slr, expected);
+}
+
+TEST_F(groupby_shift_string_test, ForwardShiftValidScalar)
+{
+  using K = int32_t;
+
+  cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
+  cudf::test::strings_column_wrapper val{"a", "bb", "cc", "d", "eee", "f", "gg"};
+  cudf::test::strings_column_wrapper expected({"42", "42", "a", "cc", "42", "42", "bb"});
+
+  size_type offset = 2;
+  auto slr         = cudf::make_string_scalar("42");
+
+  test_groupby_shift_string(key, val, offset, *slr, expected);
+}
+
+TEST_F(groupby_shift_string_test, BackwardShiftNullScalar)
+{
+  using K = int32_t;
+
+  cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
+  cudf::test::strings_column_wrapper val{"a", "bb", "cc", "d", "eee", "f", "gg"};
+  cudf::test::strings_column_wrapper expected({"f", "gg", "", "", "eee", "", ""},
+                                              {1, 1, 0, 0, 1, 0, 0});
+
+  size_type offset = -2;
+  auto slr         = cudf::make_default_constructed_scalar(column_view(val).type());
+
+  test_groupby_shift_string(key, val, offset, *slr, expected);
+}
+
+TEST_F(groupby_shift_string_test, BackwardShiftValidScalar)
+{
+  using K = int32_t;
+
+  cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
+  cudf::test::strings_column_wrapper val{"a", "bb", "cc", "d", "eee", "f", "gg"};
+  cudf::test::strings_column_wrapper expected({"f", "gg", "42", "42", "eee", "42", "42"});
+
+  size_type offset = -2;
+  auto slr         = cudf::make_string_scalar("42");
+
+  test_groupby_shift_string(key, val, offset, *slr, expected);
+}
 }  // namespace test
 }  // namespace cudf
