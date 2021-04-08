@@ -46,7 +46,7 @@ std::unique_ptr<column> group_shift(
   column_view const& values,
   size_type offset,
   scalar const& fill_value,
-  sort::sort_groupby_helper& helper,
+  device_span<size_type const> group_offsets,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

@@ -52,10 +52,10 @@ struct group_shift_fill_functor {
 
   __device__ size_type operator()(size_type i)
   {
-    if (ForwardShift) {   // offset > 0
+    if (ForwardShift) {  // offset > 0
       group_label    = i / offset;
       offset_to_edge = i % offset;
-    } else {              // offset < 0
+    } else {  // offset < 0
       group_label    = -i / offset;
       offset_to_edge = i % offset + offset + 1;
     }
@@ -97,7 +97,7 @@ std::unique_ptr<column> group_shift_impl(column_view const& values,
                scatter_map_iterator,
                scatter_map_iterator + scatter_map->view().size(),
                scatter_map->mutable_view().begin<size_type>());
-               
+
   auto shifted_filled =
     cudf::detail::scatter({fill_value}, scatter_map->view(), shifted->view(), true, stream, mr);
 
@@ -107,13 +107,12 @@ std::unique_ptr<column> group_shift_impl(column_view const& values,
 std::unique_ptr<column> group_shift(column_view const& values,
                                     size_type offset,
                                     scalar const& fill_value,
-                                    sort::sort_groupby_helper& helper,
+                                    device_span<size_type const> group_offsets,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   if (values.size() == 0) { return make_empty_column(values.type()); }
 
-  rmm::device_uvector<size_type> const& group_offsets = helper.group_offsets(stream);
   if (offset > 0) {
     return group_shift_impl<true>(
       values, offset, group_offsets.begin(), group_offsets.size() - 1, fill_value, stream, mr);

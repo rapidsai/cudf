@@ -222,7 +222,9 @@ std::unique_ptr<column> groupby::shift(column_view const& values,
   CUDF_EXPECTS(values.type() == fill_value.type(),
                "values and fill_value should have the same type.");
 
-  return detail::group_shift(values, offset, fill_value, helper(), rmm::cuda_stream_default, mr);
+  auto stream = rmm::cuda_stream_default;
+  return detail::group_shift(
+    values, offset, fill_value, helper().group_offsets(stream), stream, mr);
 }
 
 }  // namespace groupby
