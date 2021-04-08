@@ -170,7 +170,7 @@ TYPED_TEST(TypedStructSearchTest, ComplexStructTest)
     structs_col{{names_column_t, ages_column_t, is_human_col_t}, null_at(5)}.release();
 
   auto names_column_values = strings_col{"Bagel", "Tomato", "Lemonade", /*NULL*/ "Donut", "Butter"};
-  auto ages_column_values  = col_wrapper{{10, 15, null, XXX, 17}, null_at(1)};
+  auto ages_column_values  = col_wrapper{{10, null, 15, XXX, 17}, null_at(1)};
   auto is_human_col_values = bools_col{false, false, true, /*NULL*/ true, true};
   auto const structs_values =
     structs_col{{names_column_values, ages_column_values, is_human_col_values}, null_at(3)}
