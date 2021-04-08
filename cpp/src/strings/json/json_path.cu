@@ -171,7 +171,7 @@ class parser {
   char const* pos;
 
  private:
-  CUDA_HOST_DEVICE_CALLABLE bool is_whitespace(char c) { return c <= ' '; }
+  CUDA_HOST_DEVICE_CALLABLE bool is_whitespace(char c) { return c == ' '; }
 };
 
 /**
