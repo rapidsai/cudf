@@ -1,9 +1,5 @@
 /*
-<<<<<<< HEAD
- * Copyright (c) 2019-2021, BAIDU CORPORATION.
-=======
  * Copyright (c) 2019-2021, NVIDIA CORPORATION.
->>>>>>> 58f395b15524309b36bcc1480eb4d186764df7dd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,16 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-<<<<<<< HEAD
-
 #pragma once
 
-#include <cudf/column/column.hpp>
-#include <cudf/scalar/scalar.hpp>
-=======
-#pragma once
-
->>>>>>> 58f395b15524309b36bcc1480eb4d186764df7dd
 #include <cudf/strings/strings_column_view.hpp>
 
 namespace cudf {
@@ -39,20 +27,6 @@ namespace strings {
  */
 
 /**
-<<<<<<< HEAD
- * @brief Convert input json strings column to lists.
- *
- * Parse input json strings to a list column, which is combined by struct columns of two column, key
- * and value. and when input json string element type is OBJECT, the list size is 1, while when element
- * type is ARRAY, the list size is euqal to number of json object in the json arrray.
- *
- * @param col The input strings column. Each row must contain a valid json string
- * @param mr Resource for allocating device memory.
- * @return A LIST column of STRUCT column of a pair of string columns, key and value.
- */
-std::unique_ptr<cudf::column> json_to_array(
-  cudf::strings_column_view const& col,
-=======
  * @brief Apply a JSONPath string to all rows in an input strings column.
  *
  * Applies a JSONPath string to an incoming strings column where each row in the column
@@ -69,7 +43,22 @@ std::unique_ptr<cudf::column> json_to_array(
 std::unique_ptr<cudf::column> get_json_object(
   cudf::strings_column_view const& col,
   cudf::string_scalar const& json_path,
->>>>>>> 58f395b15524309b36bcc1480eb4d186764df7dd
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Convert input json strings column to lists.
+ *
+ * Parse input json strings to a list column, which is combined by struct columns of 
+ * two column, key and value. and when input json string element type is OBJECT, the 
+ * list size is 1, while when element type is ARRAY, the list size is euqal to number 
+ * of json object in the json arrray.
+ *
+ * @param col The input strings column. Each row must contain a valid json string
+ * @param mr Resource for allocating device memory.
+ * @return A LIST column of STRUCT column of a pair of string columns, key and value.
+ */
+std::unique_ptr<cudf::column> json_to_array(
+  cudf::strings_column_view const& col,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group

@@ -127,11 +127,7 @@
  *   @defgroup strings_modify Modifying
  *   @defgroup strings_replace Replacing
  *   @defgroup strings_split Splitting
-<<<<<<< HEAD
- *   @defgroup strings_json Json
-=======
  *   @defgroup strings_json JSON
->>>>>>> 58f395b15524309b36bcc1480eb4d186764df7dd
  * @}
  * @defgroup dictionary_apis Dictionary
  * @{
