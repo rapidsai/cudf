@@ -36,6 +36,11 @@
 
 namespace cudf {
 namespace detail {
+
+// explode column gather map uses cudf::out_of_bounds_policy::NULLIFY to
+// fill nulls where there are invalid indices
+constexpr size_type InvalidIndex = -1;
+
 namespace {
 
 std::unique_ptr<table> build_table(
@@ -79,7 +84,7 @@ std::unique_ptr<table> build_table(
     auto nullmask = explode_col_gather_map ? valid_if(
                                                explode_col_gather_map->begin(),
                                                explode_col_gather_map->end(),
-                                               [] __device__(auto i) { return i != -1; },
+                                               [] __device__(auto i) { return i != InvalidIndex; },
                                                stream,
                                                mr)
                                            : std::pair<rmm::device_buffer, size_type>{
@@ -251,8 +256,7 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
                              : offsets[idx] + null_or_empty_offset_p[idx] - 1;
       gather_map_p[invalid_index] = idx;
 
-      // negative one to indicate a null value
-      explode_col_gather_map_p[invalid_index] = -1;
+      explode_col_gather_map_p[invalid_index] = InvalidIndex;
       if (include_position) { position_array[invalid_index] = 0; }
     }
   };
