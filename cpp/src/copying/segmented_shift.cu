@@ -89,6 +89,7 @@ std::unique_ptr<column> segmented_shift_impl(column_view const& segmented_values
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
+  std::cerr << num_segments << std::endl;
   // Step 1: global shift
   auto shift_func = [col_size = segmented_values.size(), offset] __device__(size_type idx) {
     auto raw_shifted_idx = idx - offset;
@@ -141,7 +142,7 @@ std::unique_ptr<column> segmented_shift(column_view const& segmented_values,
     auto rbound_iter = thrust::make_transform_iterator(segment_offsets.begin() + 1,
                                                        [] __device__(auto i) { return i - 1; });
     return segmented_shift_impl<false>(
-      segmented_values, rbound_iter, offset, fill_value, segmented_values.size() - 1, stream, mr);
+      segmented_values, rbound_iter, offset, fill_value, segment_offsets.size() - 1, stream, mr);
   }
 }
 
