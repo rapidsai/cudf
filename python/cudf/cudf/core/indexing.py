@@ -168,13 +168,18 @@ class _SeriesLocIndexer(object):
         from cudf.core.series import Series
 
         if is_scalar(arg):
-            try:
-                found_index = self._sr.index._values.find_first_value(
-                    arg, closest=False
-                )
+            if isinstance(arg, int):
+                found_index = arg
                 return found_index
-            except (TypeError, KeyError, IndexError, ValueError):
-                raise KeyError("label scalar is out of bound")
+            
+            if isinstance(arg, str):
+                try:
+                    found_index = self._sr.index._values.find_first_value(
+                        arg, closest=False
+                    )
+                    return found_index
+                except (TypeError, KeyError, IndexError, ValueError):
+                    raise KeyError("label scalar is out of bound")
 
         elif isinstance(arg, slice):
             return get_label_range_or_mask(

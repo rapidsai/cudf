@@ -1196,3 +1196,12 @@ def test_explode(data, ignore_index, p_index):
             assert_eq(expect, got, check_dtype=False)
     else:
         assert_eq(expect, got, check_dtype=False)
+
+def test_series_indexing():
+    ps = pd.Series([1,2,3], index=pd.Index(["a", "b", "c"]))
+    gs = cudf.from_pandas(ps)
+
+    expect = ps[1]
+    got = gs[1]
+
+    assert_eq(expect, got)

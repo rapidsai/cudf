@@ -1184,7 +1184,6 @@ class Series(Frame, Serializable):
     def __getitem__(self, arg):
         if isinstance(arg, slice):
             return self.iloc[arg]
-        #
         else:
             return self.loc[arg]
 
