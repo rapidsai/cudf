@@ -26,7 +26,6 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
-namespace {
 /**
  * @brief Result of calling a parse function.
  *
@@ -443,7 +442,6 @@ class json_state : private parser {
   json_element_type cur_el_type;     // type of the current element
   json_element_type parent_el_type;  // parent element type
 };
-}  // namespace
 
 /**
  * @copydoc cudf::strings::get_json_object
