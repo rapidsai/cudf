@@ -596,11 +596,11 @@ std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_colum
          str_idx < idx_end;
          ++str_idx) {
       // Separator is inserted only in between strings
-      if (written) output_ptr = detail::copy_string(output_ptr, separator);
       auto const d_str = strings_dv.is_null(str_idx) ? string_narep_dv.value()
                                                      : strings_dv.element<string_view>(str_idx);
-      output_ptr       = detail::copy_string(output_ptr, d_str);
-      written          = true;
+      if (written) output_ptr = detail::copy_string(output_ptr, separator);
+      output_ptr = detail::copy_string(output_ptr, d_str);
+      written    = true;
     }
   };
 
@@ -725,11 +725,11 @@ std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_colum
          str_idx < idx_end;
          ++str_idx) {
       // Separator is inserted only in between strings
-      if (written) output_ptr = detail::copy_string(output_ptr, separator);
       auto const d_str = strings_dv.is_null(str_idx) ? string_narep_dv.value()
                                                      : strings_dv.element<string_view>(str_idx);
-      output_ptr       = detail::copy_string(output_ptr, d_str);
-      written          = true;
+      if (written) output_ptr = detail::copy_string(output_ptr, separator);
+      output_ptr = detail::copy_string(output_ptr, d_str);
+      written    = true;
     }
   };
 
