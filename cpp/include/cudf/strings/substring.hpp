@@ -196,6 +196,7 @@ std::unique_ptr<column> slice_strings(
   strings_column_view const& delimiter_strings,
   size_type count,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf
