@@ -531,27 +531,37 @@ TEST_F(StringsListsConcatenateTest, InvalidInput)
 {
   // Invalid list type
   {
-    auto const l = INT_LISTS{{1, 2, 3}, {4, 5, 6}}.release();
-    EXPECT_THROW(cudf::strings::concatenate(cudf::lists_column_view(l->view())), cudf::logic_error);
+    auto const l  = INT_LISTS{{1, 2, 3}, {4, 5, 6}}.release();
+    auto const lv = cudf::lists_column_view(l->view());
+    EXPECT_THROW(cudf::strings::concatenate(lv), cudf::logic_error);
   }
 
-  // Invalid separator
+  // Invalid scalar separator
   {
     auto const l  = STR_LISTS{STR_LISTS{""}, STR_LISTS{"", "", ""}, STR_LISTS{"", ""}}.release();
     auto const lv = cudf::lists_column_view(l->view());
-    EXPECT_THROW(cudf::strings::concatenate(cudf::lists_column_view(l->view()),
-                                            cudf::string_scalar("", false)),
-                 cudf::logic_error);
+    EXPECT_THROW(cudf::strings::concatenate(lv, cudf::string_scalar("", false)), cudf::logic_error);
+  }
+
+  // Invalid column separators
+  {
+    auto const l  = STR_LISTS{STR_LISTS{""}, STR_LISTS{"", "", ""}, STR_LISTS{"", ""}}.release();
+    auto const lv = cudf::lists_column_view(l->view());
+    auto const separators = STR_COL{"+++"}.release();  // size doesn't match with lists column size
+    EXPECT_THROW(cudf::strings::concatenate(lv, separators->view()), cudf::logic_error);
   }
 }
 
 TEST_F(StringsListsConcatenateTest, EmptyInput)
 {
-  auto const l        = STR_LISTS{}.release();
-  auto const lv       = cudf::lists_column_view(l->view());
-  auto const results  = cudf::strings::concatenate(lv);
-  auto const expected = STR_COL{};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+  auto const l          = STR_LISTS{}.release();
+  auto const lv         = cudf::lists_column_view(l->view());
+  auto const separators = STR_COL{"+++"}.release();
+  auto const results1   = cudf::strings::concatenate(lv);
+  auto const results2   = cudf::strings::concatenate(lv, separators->view());
+  auto const expected   = STR_COL{};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results1, expected, print_all);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results2, expected, print_all);
 }
 
 TEST_F(StringsListsConcatenateTest, ZeroSizeStringsInput)
