@@ -25,6 +25,7 @@ BUILD_CPP_TESTS=${BUILD_CPP_TESTS:-OFF}
 ENABLE_PTDS=${ENABLE_PTDS:-ON}
 RMM_LOGGING_LEVEL=${RMM_LOGGING_LEVEL:-OFF}
 ENABLE_NVTX=${ENABLE_NVTX:-ON}
+ENABLE_GDS=${ENABLE_GDS:-OFF}
 OUT=${OUT:-out}
 
 SIGN_FILE=$1
@@ -37,6 +38,7 @@ echo "SIGN_FILE: $SIGN_FILE,\
  BUILD_CPP_TESTS: $BUILD_CPP_TESTS,\
  ENABLED_PTDS: $ENABLE_PTDS,\
  ENABLE_NVTX: $ENABLE_NVTX,\
+ ENABLE_GDS: $ENABLE_GDS,\
  RMM_LOGGING_LEVEL: $RMM_LOGGING_LEVEL,\
  OUT_PATH: $OUT_PATH"
 
@@ -58,7 +60,7 @@ make -j$PARALLEL_LEVEL
 make install DESTDIR=$INSTALL_PREFIX
 
 ###### Build cudf jar ######
-BUILD_ARG="-Dmaven.repo.local=$WORKSPACE/.m2 -DskipTests=$SKIP_JAVA_TESTS -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL"
+BUILD_ARG="-Dmaven.repo.local=$WORKSPACE/.m2 -DskipTests=$SKIP_JAVA_TESTS -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL -DUSE_GDS=$ENABLE_GDS"
 if [ "$SIGN_FILE" == true ]; then
     # Build javadoc and sources only when SIGN_FILE is true
     BUILD_ARG="$BUILD_ARG -Prelease"
@@ -71,6 +73,9 @@ fi
 
 cd $WORKSPACE/java
 mvn -B clean package $BUILD_ARG
+
+###### Sanity test: fail if static cudart found ######
+find . -name '*.so' | xargs -I{} readelf -Ws {} | grep cuInit && echo "Found statically linked CUDA runtime, this is currently not tested" && exit 1
 
 ###### Stash Jar files ######
 rm -rf $OUT_PATH

@@ -18,6 +18,8 @@ from cudf.api.extensions import (
 from cudf.core import (
     NA,
     CategoricalIndex,
+    interval_range,
+    IntervalIndex,
     DataFrame,
     DatetimeIndex,
     Float32Index,

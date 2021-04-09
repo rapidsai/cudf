@@ -8,7 +8,7 @@ import numbers
 import pickle
 import sys
 import warnings
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from typing import Any, Optional, Set, TypeVar
 
@@ -240,7 +240,7 @@ class DataFrame(Frame, Serializable):
                 self._index = as_index(index)
             if columns is not None:
                 self._data = ColumnAccessor(
-                    OrderedDict.fromkeys(
+                    dict.fromkeys(
                         columns,
                         column.column_empty(
                             len(self), dtype="object", masked=True
@@ -2806,7 +2806,7 @@ class DataFrame(Frame, Serializable):
 
         df = self
         cols = columns
-        dtypes = OrderedDict(df.dtypes)
+        dtypes = dict(df.dtypes)
         idx = labels if index is None and axis in (0, "index") else index
         cols = labels if cols is None and axis in (1, "columns") else cols
         df = df if cols is None else df[list(set(df.columns) & set(cols))]
@@ -5377,7 +5377,7 @@ class DataFrame(Frame, Serializable):
             ldesc_indexes = sorted(
                 (x.index for x in describe_series_list), key=len
             )
-            names = OrderedDict.fromkeys(
+            names = dict.fromkeys(
                 [
                     name
                     for idxnames in ldesc_indexes
@@ -7194,10 +7194,9 @@ class DataFrame(Frame, Serializable):
         """
         Return a subset of the DataFrame's columns as a view.
         """
-        result_columns = OrderedDict({})
-        for col in columns:
-            result_columns[col] = self._data[col]
-        return DataFrame(result_columns, index=self.index)
+        return DataFrame(
+            {col: self._data[col] for col in columns}, index=self.index
+        )
 
     def select_dtypes(self, include=None, exclude=None):
         """Return a subset of the DataFrame’s columns based on the column dtypes.
