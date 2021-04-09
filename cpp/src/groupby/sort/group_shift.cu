@@ -23,11 +23,6 @@
 #include <cudf/detail/scatter.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/span.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
-#include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -113,7 +108,7 @@ std::unique_ptr<column> group_shift_impl(column_view const& sorted_values,
 
   // Step 2: set `fill_value`
   auto scatter_map = make_numeric_column(
-    data_type(type_id::UINT32), num_groups * std::abs(offset), mask_state::UNALLOCATED);
+    data_type(type_id::UINT32), num_groups * std::abs(offset), mask_state::UNALLOCATED, stream);
   group_shift_fill_functor<ForwardShift, decltype(group_bound_begin)> fill_func{group_bound_begin,
                                                                                 offset};
   auto scatter_map_iterator = cudf::detail::make_counting_transform_iterator(0, fill_func);
@@ -135,7 +130,7 @@ std::unique_ptr<column> group_shift(column_view const& sorted_values,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  if (sorted_values.empty()) { return make_empty_column(sorted_values.type()); }
+  if (sorted_values.is_empty()) { return make_empty_column(sorted_values.type()); }
 
   if (offset > 0) {
     return group_shift_impl<true>(sorted_values,

@@ -335,14 +335,6 @@ class groupby {
     host_span<aggregation_request const> requests,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr);
-
-  // Other sort-based algorithms
-  std::unique_ptr<column> shift_detail(
-    column_view const& values,
-    size_type offset,
-    scalar const& fill_value,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 };
 /** @} */
 }  // namespace groupby

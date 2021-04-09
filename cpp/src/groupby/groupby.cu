@@ -32,7 +32,6 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 
 #include <thrust/copy.h>
 
@@ -223,8 +222,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> groupby::shift(
   CUDF_EXPECTS(values.type() == fill_value.type(),
                "values and fill_value should have the same type.");
 
-  auto stream        = rmm::cuda_stream_default;
-  auto sorted_keys   = helper().sorted_keys(stream, mr);
+  auto stream         = rmm::cuda_stream_default;
+  auto sorted_keys    = helper().sorted_keys(stream, mr);
   auto grouped_values = helper().grouped_values(values, stream);
 
   return std::make_pair(
