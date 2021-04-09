@@ -28,8 +28,6 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
-#include <vector>
-
 struct StringsCombineTest : public cudf::test::BaseFixture {
 };
 
@@ -501,3 +499,32 @@ TEST_F(StringsConcatenateWithColSeparatorTest, MultiColumnNonNullableStrings)
     cudf::strings::concatenate(cudf::table_view{{col0, col1}}, cudf::strings_column_view(sep_col));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
 }
+
+struct StringsListsConcatenateTest : public cudf::test::BaseFixture {
+};
+using STRING_LISTS = cudf::test::lists_column_wrapper<cudf::string_view>;
+using INT_LISTS    = cudf::test::lists_column_wrapper<int32_t>;
+
+TEST_F(StringsListsConcatenateTest, InvalidInput)
+{
+  auto const l = INT_LISTS{{1, 2, 3}, {4, 5, 6}}.release();
+  EXPECT_THROW(cudf::strings::concatenate(cudf::lists_column_view(l->view())), cudf::logic_error);
+}
+
+TEST_F(StringsListsConcatenateTest, EmptyInput) {}
+
+TEST_F(StringsListsConcatenateTest, ZeroSizeStringsInput) {}
+
+TEST_F(StringsListsConcatenateTest, AllNullsStringsInput) {}
+
+TEST_F(StringsListsConcatenateTest, ScalarSeparatorNoReplacements) {}
+
+TEST_F(StringsListsConcatenateTest, ScalarSeparatorWithReplacements) {}
+
+TEST_F(StringsListsConcatenateTest, SlicedListsWithScalarSeparator) {}
+
+TEST_F(StringsListsConcatenateTest, ColumnSeparatorNoReplacements) {}
+
+TEST_F(StringsListsConcatenateTest, ColumnSeparatorWithReplacements) {}
+
+TEST_F(StringsListsConcatenateTest, SlicedListsWithColumnSeparator) {}
