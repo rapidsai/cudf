@@ -82,30 +82,21 @@ struct FileFooter {
 
 struct Stream {
   StreamKind kind = INVALID_STREAM_KIND;
-  uint64_t length = 0;  // the number of bytes in the file
+  std::optional<uint32_t> column_id;  // ORC column id (different from column index in the table!)
+  uint64_t length = 0;                // the number of bytes in the file
 
-  // 'column 0' has id 0, table columns have ids [1,...,n]
-  Stream(StreamKind kind, uint32_t column_id, uint64_t length=0)
-    : kind{kind}, length{length}, _column_id{column_id}
+  Stream(StreamKind kind, uint32_t column_id, uint64_t length = 0)
+    : kind{kind}, column_id{column_id}, length{length}
   {
   }
   Stream() = default;
-
-  // Needs to be a non-const reference because of the `ProtobufReader`
-  auto &column_id() noexcept { return _column_id; }
-  auto const &column_id() const noexcept { return _column_id; }
 
   // Returns index of the column in the table, if any
   // Stream of the 'column 0' does not have a corresponding column in the table
   thrust::optional<uint32_t> column_index() const noexcept
   {
-    return _column_id > 0 ? thrust::optional<uint32_t>{_column_id - 1} : thrust::nullopt;
+    return column_id.value_or(0) > 0 ? thrust::optional<uint32_t>{*column_id - 1} : thrust::nullopt;
   }
-
- private:
-  // ORC column id (different from column index in the table!)
-  // Zero means no corresponding column in the table
-  uint32_t _column_id = 0;
 };
 
 struct ColumnEncoding {
@@ -251,6 +242,15 @@ class ProtobufReader {
     return encode_field_number_base<typename T::element_type>(field_number);
   }
 
+  // optional fields don't change the field number encoding
+  template <typename T,
+            typename std::enable_if_t<std::is_same<T, std::optional<typename T::value_type>>::value>
+              * = nullptr>
+  int static constexpr encode_field_number(int field_number) noexcept
+  {
+    return encode_field_number_base<typename T::value_type>(field_number);
+  }
+
   uint32_t read_field_size(const uint8_t *end);
 
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
@@ -301,6 +301,16 @@ class ProtobufReader {
     typename T::element_type contained_value;
     read_field(contained_value, end);
     value = std::make_unique<typename T::element_type>(std::move(contained_value));
+  }
+
+  template <typename T,
+            typename std::enable_if_t<std::is_same<T, std::optional<typename T::value_type>>::value>
+              * = nullptr>
+  void read_field(T &value, const uint8_t *end)
+  {
+    typename T::value_type contained_value;
+    read_field(contained_value, end);
+    value = std::optional<typename T::value_type>{std::move(contained_value)};
   }
 
   template <typename T>

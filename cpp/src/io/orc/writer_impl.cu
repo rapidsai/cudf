@@ -1243,7 +1243,7 @@ void writer::impl::write(table_view const &table)
     ff.types[0].subtypes.resize(num_columns);
     ff.types[0].fieldNames.resize(num_columns);
     for (auto const &column : orc_columns) {
-      ff.types[column.id()].kind      = column.orc_kind();
+      ff.types[column.id()].kind             = column.orc_kind();
       ff.types[0].subtypes[column.index()]   = column.id();
       ff.types[0].fieldNames[column.index()] = column.orc_name();
     }
