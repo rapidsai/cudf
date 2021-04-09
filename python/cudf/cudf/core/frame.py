@@ -2172,12 +2172,14 @@ class Frame(libcudf.table.Table):
                         replacements_per_column[name],
                         all_na_per_column[name],
                     )
-                except KeyError:
-                    # We need to create a deep copy if `find_and_replace`
-                    # was not successful or any of
-                    # `to_replace_per_column`, `replacements_per_column`,
-                    # `all_na_per_column` don't contain the `name`
-                    # that exists in `copy_data`
+                except (KeyError, OverflowError):
+                    # We need to create a deep copy if :
+                    # i. `find_and_replace` was not successful or any of
+                    #    `to_replace_per_column`, `replacements_per_column`,
+                    #    `all_na_per_column` don't contain the `name`
+                    #    that exists in `copy_data`.
+                    # ii. There is an OverflowError while trying to cast
+                    #     `to_replace_per_column` to `replacements_per_column`.
                     copy_data[name] = col.copy(deep=True)
         else:
             copy_data = self._data.copy(deep=True)
