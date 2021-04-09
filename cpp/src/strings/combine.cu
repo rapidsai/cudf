@@ -493,7 +493,7 @@ std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_colum
 
   auto const lists_dv_ptr    = column_device_view::create(lists_strings_column.parent(), stream);
   auto const lists_dv        = *lists_dv_ptr;
-  auto const strings_col     = strings_column_view(lists_strings_column.get_sliced_child(stream));
+  auto const strings_col     = strings_column_view(lists_strings_column.child());
   auto const strings_dv_ptr  = column_device_view::create(strings_col.parent(), stream);
   auto const strings_dv      = *strings_dv_ptr;
   auto const sep_dv_ptr      = column_device_view::create(separators.parent(), stream);
@@ -631,7 +631,7 @@ std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_colum
 
   auto const lists_dv_ptr    = column_device_view::create(lists_strings_column.parent(), stream);
   auto const lists_dv        = *lists_dv_ptr;
-  auto const strings_col     = strings_column_view(lists_strings_column.get_sliced_child(stream));
+  auto const strings_col     = strings_column_view(lists_strings_column.child());
   auto const strings_dv_ptr  = column_device_view::create(strings_col.parent(), stream);
   auto const strings_dv      = *strings_dv_ptr;
   auto const sep_dv          = get_scalar_device_view(const_cast<string_scalar&>(separator));
