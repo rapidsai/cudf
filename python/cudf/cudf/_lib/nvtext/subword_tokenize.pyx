@@ -38,13 +38,13 @@ def subword_tokenize_inmem_hash(Column strings,
     uint32_t max_rows_tensor=500):
     
     cdef column_view c_strings = strings.view()
-    cdef unique_ptr[cpp_hashed_vocabulary] c_vocab = move(hashed_vocablary.c_obj)
+    #cdef unique_ptr[cpp_hashed_vocabulary] c_vocab = move(hashed_vocablary.c_obj)
     cdef cpp_tokenizer_result c_result
     with nogil:
         c_result = tr_move(
             cpp_subword_tokenize(
                 c_strings,
-                c_vocab.get()[0],
+                hashed_vocablary.c_obj.get()[0],
                 max_sequence_length,
                 stride,
                 do_lower,
