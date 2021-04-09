@@ -85,12 +85,6 @@ struct Stream {
   std::optional<uint32_t> column_id;  // ORC column id (different from column index in the table!)
   uint64_t length = 0;                // the number of bytes in the file
 
-  Stream(StreamKind kind, uint32_t column_id, uint64_t length = 0)
-    : kind{kind}, column_id{column_id}, length{length}
-  {
-  }
-  Stream() = default;
-
   // Returns index of the column in the table, if any
   // Stream of the 'column 0' does not have a corresponding column in the table
   thrust::optional<uint32_t> column_index() const noexcept
