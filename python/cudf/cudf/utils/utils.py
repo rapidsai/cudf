@@ -280,6 +280,33 @@ class cached_property:
             return value
 
 
+class GetAttrGetItemMixin:
+    """This mixin changes `__getattr__` to attempt a `__getitem__` call.
+
+    Subclasses may define a `_PROTECTED_KEYS` set as a class attribute to
+    indicate any keys that may be accessed by __getitem__. Testing for these
+    keys allows this class to prevent recursion errors when subclasses are
+    copied (see below for more details). Note that a cleaner solution for this
+    problem would be to override one of the serialization protocols (e.g.
+    `__reduce__` or `__setstate__`, but this class may be used in complex
+    multiple inheritance hierarchies that might also override serialization.
+    The solution here is a minimally invasive change to simplify such patterns.
+    """
+
+    _PROTECTED_KEYS: Union[FrozenSet[str], Set[str]] = frozenset()
+
+    def __getattr__(self, key):
+        # Without this check, copying can trigger a RecursionError. See
+        # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html  # noqa: E501
+        # for an explanation.
+        if key in self._PROTECTED_KEYS:
+            raise AttributeError
+        try:
+            return self[key]
+        except KeyError:
+            raise AttributeError(f"{type(self)} object has no attribute {key}")
+
+
 def time_col_replace_nulls(input_col):
 
     null = column.column_empty_like(input_col, masked=True, newsize=1)
