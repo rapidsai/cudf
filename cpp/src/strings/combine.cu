@@ -633,7 +633,128 @@ std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_colum
   auto const num_rows = lists_strings_column.size();
   if (num_rows == 0) { return detail::make_empty_strings_column(stream, mr); }
 
-  return detail::make_empty_strings_column(stream, mr);
+  auto const lists_dv_ptr    = column_device_view::create(lists_strings_column.parent(), stream);
+  auto const lists_dv        = *lists_dv_ptr;
+  auto const strings_col     = strings_column_view(lists_strings_column.get_sliced_child(stream));
+  auto const strings_dv_ptr  = column_device_view::create(strings_col.parent(), stream);
+  auto const strings_dv      = *strings_dv_ptr;
+  auto const sep_dv          = get_scalar_device_view(const_cast<string_scalar&>(separator));
+  auto const string_narep_dv = get_scalar_device_view(const_cast<string_scalar&>(narep));
+
+  // Compute sizes of strings in the output column along with their validity
+  // An invalid size will be returned to indicate that the corresponding row is null
+  static constexpr auto invalid_size = std::numeric_limits<size_type>::lowest();
+  auto const string_size_comp_fn     = [lists_offsets = lists_strings_column.offsets_begin(),
+                                    lists_dv,
+                                    strings_dv,
+                                    sep_dv,
+                                    string_narep_dv] __device__(size_type lidx) -> size_type {
+    if (lists_dv.is_null(lidx)) { return invalid_size; }
+
+    auto const separator_str = sep_dv.value();
+    auto const count_it      = thrust::make_counting_iterator<size_type>(0);
+
+    // This will be called inside another `thrust::transform` call, thus we will run it sequentially
+    auto const size_bytes = thrust::transform_reduce(
+      thrust::seq,
+      count_it + lists_offsets[lidx],
+      count_it + lists_offsets[lidx + 1],
+      [strings_dv, string_narep_dv, separator_str] __device__(auto const str_idx) -> size_type {
+        if (strings_dv.is_null(str_idx) && !string_narep_dv.is_valid()) { return invalid_size; }
+        return separator_str.size_bytes() +
+               (strings_dv.is_null(str_idx)
+                      ? string_narep_dv.size()
+                      : strings_dv.element<string_view>(str_idx).size_bytes());
+      },
+      size_type{0},
+      thrust::plus<size_type>());
+
+    // Null/empty separator and strings don't produce a non-empty string
+    assert(size_bytes == invalid_size || size_bytes > 0 ||
+           (size_bytes == 0 && separator_str.size_bytes() == 0));
+
+    // Separator is inserted only in between strings
+    return size_bytes != invalid_size
+                 ? static_cast<size_type>(size_bytes - separator_str.size_bytes())
+                 : invalid_size;
+  };
+
+  // Offset of the output strings
+  static_assert(sizeof(offset_type) == sizeof(int32_t));
+  auto offsets_column = make_numeric_column(
+    data_type{type_id::INT32}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
+  auto const output_offsets_view = offsets_column->mutable_view();
+  auto const output_offsets_ptr  = output_offsets_view.begin<offset_type>();
+
+  // Firstly, store the strings' sizes into output_str_offsets from the second element
+  auto const count_it = thrust::make_counting_iterator<size_type>(0);
+  CUDA_TRY(cudaMemsetAsync(output_offsets_ptr, 0, sizeof(int32_t), stream.value()));
+  thrust::transform(rmm::exec_policy(stream),
+                    count_it,
+                    count_it + num_rows,
+                    output_offsets_ptr + 1,
+                    string_size_comp_fn);
+
+  // Use the strings's sizes to compute null_mask and null_count of the output strings column
+  auto [null_mask, null_count] = cudf::detail::valid_if(
+    count_it,
+    count_it + num_rows,
+    [str_sizes = output_offsets_ptr + 1] __device__(size_type str_idx) {
+      return str_sizes[str_idx] != invalid_size;
+    },
+    stream,
+    mr);
+
+  // Build the strings's offsets from strings' sizes
+  auto const iter_trans_begin = thrust::make_transform_iterator(
+    output_offsets_ptr + 1,
+    [] __device__(auto const size) { return size != invalid_size ? size : 0; });
+  thrust::inclusive_scan(rmm::exec_policy(stream),
+                         iter_trans_begin,
+                         iter_trans_begin + num_rows,
+                         output_offsets_ptr + 1);
+
+  // Create the chars column to store the result strings
+  auto const total_bytes = thrust::device_pointer_cast(output_offsets_ptr)[num_rows];
+  auto chars_column =
+    strings::detail::create_chars_child_column(num_rows, null_count, total_bytes, stream, mr);
+
+  auto const concat_strings_fn = [lists_offsets   = lists_strings_column.offsets_begin(),
+                                  str_offsets     = output_offsets_ptr,
+                                  d_results_chars = chars_column->mutable_view().data<char>(),
+                                  strings_dv,
+                                  sep_dv,
+                                  string_narep_dv] __device__(size_type out_idx) {
+    if (str_offsets[out_idx + 1] == str_offsets[out_idx]) { return; }
+
+    auto const separator = sep_dv.value();
+    bool written         = false;
+    auto d_buffer        = d_results_chars + str_offsets[out_idx];
+
+    for (size_type str_idx = lists_offsets[out_idx], idx_end = lists_offsets[out_idx + 1];
+         str_idx < idx_end;
+         ++str_idx) {
+      // Separator is inserted only in between strings
+      if (written) d_buffer = detail::copy_string(d_buffer, separator);
+      auto const d_str = strings_dv.is_null(str_idx) ? string_narep_dv.value()
+                                                     : strings_dv.element<string_view>(str_idx);
+      d_buffer         = detail::copy_string(d_buffer, d_str);
+      written          = true;
+    }
+  };
+
+  // Fill the chars column
+  auto const null_str        = string_view{nullptr, 0};
+  auto const d_results_chars = chars_column->mutable_view().data<char>();
+  thrust::for_each_n(rmm::exec_policy(stream), count_it, num_rows, concat_strings_fn);
+
+  return make_strings_column(num_rows,
+                             std::move(offsets_column),
+                             std::move(chars_column),
+                             null_count,
+                             (null_count) ? std::move(null_mask) : rmm::device_buffer{},
+                             stream,
+                             mr);
 }
 }  // namespace detail
 
