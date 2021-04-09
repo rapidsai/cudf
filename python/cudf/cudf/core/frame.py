@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 import functools
 import warnings
-from collections import OrderedDict, abc as abc
+from collections import abc
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, TypeVar, Union
 
 import cupy
@@ -338,7 +338,7 @@ class Frame(libcudf.table.Table):
             non_intersecting_columns = union_of_columns.symmetric_difference(
                 intersecting_columns
             )
-            names = OrderedDict.fromkeys(intersecting_columns).keys()
+            names = dict.fromkeys(intersecting_columns).keys()
 
             if axis == 0:
                 if ignore_index and (
@@ -364,7 +364,7 @@ class Frame(libcudf.table.Table):
         elif join == "outer":
             # Get a list of the unique table column names
             names = [name for f in objs for name in f._column_names]
-            names = OrderedDict.fromkeys(names).keys()
+            names = dict.fromkeys(names).keys()
 
         else:
             raise ValueError(
@@ -3257,17 +3257,21 @@ class Frame(libcudf.table.Table):
                 # double-argsort to map back from sorted to unsorted positions
                 df = df.take(index.argsort(ascending=True).argsort())
 
-        cols = OrderedDict()
         index = index if index is not None else df.index
         names = columns if columns is not None else list(df.columns)
-        for name in names:
-            if name in df._data:
-                cols[name] = df._data[name].copy(deep=deep)
-            else:
-                dtype = dtypes.get(name, np.float64)
-                cols[name] = column_empty(
-                    dtype=dtype, masked=True, row_count=len(index)
+        cols = {
+            name: (
+                df._data[name].copy(deep=deep)
+                if name in df._data
+                else column_empty(
+                    dtype=dtypes.get(name, np.float64),
+                    masked=True,
+                    row_count=len(index),
                 )
+            )
+            for name in names
+        }
+
         result = self.__class__._from_table(
             Frame(
                 data=cudf.core.column_accessor.ColumnAccessor(
