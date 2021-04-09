@@ -7,6 +7,7 @@ import cupy as cp
 import numpy as np
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
+from numba import cuda
 
 import cudf
 from cudf import _lib as libcudf
@@ -181,6 +182,14 @@ class DecimalColumn(ColumnBase):
             input_col=self, replacement=value, method=method, dtype=dtype
         )
         return self._copy_type_metadata(result)
+
+    def data_array_view(self) -> "cuda.devicearray.DeviceNDArray":
+        """
+        View the data as a device array object
+        """
+        result = cuda.as_cuda_array(self.data)
+
+        return result.view("int64")
 
 
 def _binop_scale(l_dtype, r_dtype, op):
