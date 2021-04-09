@@ -126,6 +126,11 @@ class table_view_base {
    */
   size_type num_rows() const noexcept { return _num_rows; }
 
+  /**
+   * @brief Returns true if `num_columns()` returns zero, or false otherwise
+   */
+  size_type is_empty() const noexcept { return num_columns() == 0; }
+
   table_view_base() = default;
 
   ~table_view_base() = default;

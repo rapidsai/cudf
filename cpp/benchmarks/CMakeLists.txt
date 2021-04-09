@@ -202,3 +202,8 @@ ConfigureBench(STRINGS_BENCH
   string/substring_benchmark.cpp
   string/translate_benchmark.cpp
   string/url_decode_benchmark.cpp)
+
+###################################################################################################
+# - json benchmark -------------------------------------------------------------------
+ConfigureBench(JSON_BENCH
+  string/json_benchmark.cpp)

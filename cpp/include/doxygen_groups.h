@@ -127,6 +127,7 @@
  *   @defgroup strings_modify Modifying
  *   @defgroup strings_replace Replacing
  *   @defgroup strings_split Splitting
+ *   @defgroup strings_json JSON
  * @}
  * @defgroup dictionary_apis Dictionary
  * @{

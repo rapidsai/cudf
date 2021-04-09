@@ -1658,8 +1658,9 @@ class DataFrame(Frame, Serializable):
         if not self.index.equals(other.index):
             other = other.reindex(self.index, axis=0)
 
-        for col in self.columns:
-            this = self[col]
+        source_df = self.copy(deep=False)
+        for col in source_df._column_names:
+            this = source_df[col]
             that = other[col]
 
             if errors == "raise":
@@ -1676,8 +1677,9 @@ class DataFrame(Frame, Serializable):
             # don't overwrite columns unnecessarily
             if mask.all():
                 continue
+            source_df[col] = source_df[col].where(mask, that)
 
-            self[col] = this.where(mask, that)
+        self._mimic_inplace(source_df, inplace=True)
 
     def __add__(self, other):
         return self._apply_op("__add__", other)
@@ -4497,12 +4499,9 @@ class DataFrame(Frame, Serializable):
         else:
             lsuffix, rsuffix = suffixes
 
-        lhs = self.copy(deep=False)
-        rhs = right.copy(deep=False)
-
         # Compute merge
-        gdf_result = super(DataFrame, lhs)._merge(
-            rhs,
+        gdf_result = super()._merge(
+            right,
             on=on,
             left_on=left_on,
             right_on=right_on,
@@ -4510,8 +4509,6 @@ class DataFrame(Frame, Serializable):
             right_index=right_index,
             how=how,
             sort=sort,
-            lsuffix=lsuffix,
-            rsuffix=rsuffix,
             method=method,
             indicator=indicator,
             suffixes=suffixes,

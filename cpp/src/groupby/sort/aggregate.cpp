@@ -379,11 +379,14 @@ void aggregrate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation
   auto const collect_result = detail::group_collect(
     get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr);
   auto const nulls_equal =
-    static_cast<cudf::detail::collect_set_aggregation const&>(agg)._null_equal;
-  cache.add_result(col_idx,
-                   agg,
-                   lists::detail::drop_list_duplicates(
-                     lists_column_view(collect_result->view()), nulls_equal, stream, mr));
+    static_cast<cudf::detail::collect_set_aggregation const&>(agg)._nulls_equal;
+  auto const nans_equal =
+    static_cast<cudf::detail::collect_set_aggregation const&>(agg)._nans_equal;
+  cache.add_result(
+    col_idx,
+    agg,
+    lists::detail::drop_list_duplicates(
+      lists_column_view(collect_result->view()), nulls_equal, nans_equal, stream, mr));
 };
 }  // namespace detail
 

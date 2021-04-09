@@ -3923,6 +3923,110 @@ class Series(Frame, Serializable):
 
         return self._mimic_inplace(result, inplace=inplace)
 
+    def update(self, other):
+        """
+        Modify Series in place using values from passed Series.
+        Uses non-NA values from passed Series to make updates. Aligns
+        on index.
+
+        Parameters
+        ----------
+        other : Series, or object coercible into Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([1, 2, 3])
+        >>> s
+        0    1
+        1    2
+        2    3
+        dtype: int64
+        >>> s.update(cudf.Series([4, 5, 6]))
+        >>> s
+        0    4
+        1    5
+        2    6
+        dtype: int64
+        >>> s = cudf.Series(['a', 'b', 'c'])
+        >>> s
+        0    a
+        1    b
+        2    c
+        dtype: object
+        >>> s.update(cudf.Series(['d', 'e'], index=[0, 2]))
+        >>> s
+        0    d
+        1    b
+        2    e
+        dtype: object
+        >>> s = cudf.Series([1, 2, 3])
+        >>> s
+        0    1
+        1    2
+        2    3
+        dtype: int64
+        >>> s.update(cudf.Series([4, 5, 6, 7, 8]))
+        >>> s
+        0    4
+        1    5
+        2    6
+        dtype: int64
+
+        If ``other`` contains NaNs the corresponding values are not updated
+        in the original Series.
+
+        >>> s = cudf.Series([1, 2, 3])
+        >>> s
+        0    1
+        1    2
+        2    3
+        dtype: int64
+        >>> s.update(cudf.Series([4, np.nan, 6], nan_as_null=False))
+        >>> s
+        0    4
+        1    2
+        2    6
+        dtype: int64
+
+        ``other`` can also be a non-Series object type
+        that is coercible into a Series
+
+        >>> s = cudf.Series([1, 2, 3])
+        >>> s
+        0    1
+        1    2
+        2    3
+        dtype: int64
+        >>> s.update([4, np.nan, 6])
+        >>> s
+        0    4
+        1    2
+        2    6
+        dtype: int64
+        >>> s = cudf.Series([1, 2, 3])
+        >>> s
+        0    1
+        1    2
+        2    3
+        dtype: int64
+        >>> s.update({1: 9})
+        >>> s
+        0    1
+        1    9
+        2    3
+        dtype: int64
+        """
+
+        if not isinstance(other, cudf.Series):
+            other = cudf.Series(other)
+
+        if not self.index.equals(other.index):
+            other = other.reindex(index=self.index)
+        mask = other.notna()
+
+        self.mask(mask, other, inplace=True)
+
     def reverse(self):
         """
         Reverse the Series
@@ -6299,17 +6403,24 @@ class Series(Frame, Serializable):
         method="hash",
         suffixes=("_x", "_y"),
     ):
-
         if left_on not in (self.name, None):
             raise ValueError(
                 "Series to other merge uses series name as key implicitly"
             )
 
-        lhs = self.copy(deep=False)
-        rhs = other.copy(deep=False)
+        if lsuffix or rsuffix:
+            raise ValueError(
+                "The lsuffix and rsuffix keywords have been replaced with the "
+                "``suffixes=`` keyword.  "
+                "Please provide the following instead: \n\n"
+                "    suffixes=('%s', '%s')"
+                % (lsuffix or "_x", rsuffix or "_y")
+            )
+        else:
+            lsuffix, rsuffix = suffixes
 
-        result = super(Series, lhs)._merge(
-            rhs,
+        result = super()._merge(
+            other,
             on=on,
             left_on=left_on,
             right_on=right_on,
@@ -6317,8 +6428,6 @@ class Series(Frame, Serializable):
             right_index=right_index,
             how=how,
             sort=sort,
-            lsuffix=lsuffix,
-            rsuffix=rsuffix,
             method=method,
             indicator=False,
             suffixes=suffixes,

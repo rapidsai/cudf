@@ -750,6 +750,9 @@ class CategoricalAccessor(ColumnMethodsMixin):
             ordered=ordered,
         )
 
+    def _decategorize(self) -> ColumnBase:
+        return self._column._get_decategorized_column()
+
 
 class CategoricalColumn(column.ColumnBase):
     """Implements operations for Columns of Categorical type
