@@ -85,11 +85,11 @@ struct Stream {
   uint64_t length = 0;  // the number of bytes in the file
 
   // 'column 0' has id 0, table columns have ids [1,...,n]
-  Stream(StreamKind kind, uint32_t column_index, uint64_t length)
-    : kind{kind}, length{length}, _column_id{column_index + 1}
+  Stream(StreamKind kind, uint32_t column_id, uint64_t length=0)
+    : kind{kind}, length{length}, _column_id{column_id}
   {
   }
-  Stream(StreamKind kind = INVALID_STREAM_KIND) : kind{kind} {}
+  Stream() = default;
 
   // Needs to be a non-const reference because of the `ProtobufReader`
   auto &column_id() noexcept { return _column_id; }

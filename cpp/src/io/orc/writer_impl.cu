@@ -177,7 +177,10 @@ class orc_column_view {
   }
   auto device_stripe_dict() const { return d_stripe_dict; }
 
+  // Index in the table
   auto index() const noexcept { return _index; }
+  // Id in the ORC file
+  auto id() const noexcept { return _index + 1; }
   size_t type_width() const noexcept { return _type_width; }
   size_t data_count() const noexcept { return _data_count; }
   size_t null_count() const noexcept { return _null_count; }
@@ -348,11 +351,11 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
                                          host_span<stripe_rowgroups const> stripe_bounds)
 {
   // 'column 0' row index stream
-  std::vector<Stream> streams{Stream{ROW_INDEX}};  // TODO: Separate index and data streams?
+  std::vector<Stream> streams{{ROW_INDEX, 0}};  // TODO: Separate index and data streams?
   // First n + 1 streams are row index streams
   streams.reserve(columns.size() + 1);
   std::transform(columns.begin(), columns.end(), std::back_inserter(streams), [](auto const &col) {
-    return Stream{ROW_INDEX, col.index(), 0};
+    return Stream{ROW_INDEX, col.id()};
   });
 
   std::vector<int32_t> ids(columns.size() * gpu::CI_NUM_STREAMS, -1);
@@ -477,22 +480,22 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
     if (present_stream_size != 0) {
       auto len                    = static_cast<uint64_t>(present_stream_size);
       ids[base + gpu::CI_PRESENT] = streams.size();
-      streams.push_back(orc::Stream{PRESENT, column.index(), len});
+      streams.push_back(orc::Stream{PRESENT, column.id(), len});
     }
     if (data_stream_size != 0) {
       auto len                 = static_cast<uint64_t>(std::max<int64_t>(data_stream_size, 0));
       ids[base + gpu::CI_DATA] = streams.size();
-      streams.push_back(orc::Stream{data_kind, column.index(), len});
+      streams.push_back(orc::Stream{data_kind, column.id(), len});
     }
     if (data2_stream_size != 0) {
       auto len                  = static_cast<uint64_t>(std::max<int64_t>(data2_stream_size, 0));
       ids[base + gpu::CI_DATA2] = streams.size();
-      streams.push_back(orc::Stream{data2_kind, column.index(), len});
+      streams.push_back(orc::Stream{data2_kind, column.id(), len});
     }
     if (dict_stream_size != 0) {
       auto len                       = static_cast<uint64_t>(dict_stream_size);
       ids[base + gpu::CI_DICTIONARY] = streams.size();
-      streams.push_back(orc::Stream{DICTIONARY_DATA, column.index(), len});
+      streams.push_back(orc::Stream{DICTIONARY_DATA, column.id(), len});
     }
   }
   return {std::move(streams), std::move(ids)};
@@ -1240,8 +1243,8 @@ void writer::impl::write(table_view const &table)
     ff.types[0].subtypes.resize(num_columns);
     ff.types[0].fieldNames.resize(num_columns);
     for (auto const &column : orc_columns) {
-      ff.types[1 + column.index()].kind      = column.orc_kind();
-      ff.types[0].subtypes[column.index()]   = 1 + column.index();
+      ff.types[column.id()].kind      = column.orc_kind();
+      ff.types[0].subtypes[column.index()]   = column.id();
       ff.types[0].fieldNames[column.index()] = column.orc_name();
     }
   } else {
