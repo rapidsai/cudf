@@ -1615,6 +1615,12 @@ def test_binops_with_NA_consistent(dtype, op):
         assert result._column.null_count == len(data)
 
 
+def _decimal_series(input, dtype):
+    return cudf.Series(
+        [x if x is None else decimal.Decimal(x) for x in input], dtype=dtype,
+    )
+
+
 @pytest.mark.parametrize(
     "args",
     [
@@ -1753,10 +1759,534 @@ def test_binops_with_NA_consistent(dtype, op):
             ["10.0", None],
             cudf.Decimal64Dtype(scale=1, precision=8),
         ),
+        (
+            operator.eq,
+            ["0.18", "0.42"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            ["0.18", "0.21"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            [True, False],
+            bool,
+        ),
+        (
+            operator.eq,
+            ["0.18", "0.42"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            ["0.1800", "0.2100"],
+            cudf.Decimal64Dtype(scale=4, precision=5),
+            [True, False],
+            bool,
+        ),
+        (
+            operator.eq,
+            ["100", None],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-1, precision=4),
+            [True, None],
+            bool,
+        ),
+        (
+            operator.lt,
+            ["0.18", "0.42", "1.00"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            ["0.10", "0.87", "1.00"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            [False, True, False],
+            bool,
+        ),
+        (
+            operator.lt,
+            ["0.18", "0.42", "1.00"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            ["0.1000", "0.8700", "1.0000"],
+            cudf.Decimal64Dtype(scale=4, precision=5),
+            [False, True, False],
+            bool,
+        ),
+        (
+            operator.lt,
+            ["200", None, "100"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            ["100", "200", "100"],
+            cudf.Decimal64Dtype(scale=-1, precision=4),
+            [False, None, False],
+            bool,
+        ),
+        (
+            operator.gt,
+            ["0.18", "0.42", "1.00"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            ["0.10", "0.87", "1.00"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            [True, False, False],
+            bool,
+        ),
+        (
+            operator.gt,
+            ["0.18", "0.42", "1.00"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            ["0.1000", "0.8700", "1.0000"],
+            cudf.Decimal64Dtype(scale=4, precision=5),
+            [True, False, False],
+            bool,
+        ),
+        (
+            operator.gt,
+            ["300", None, "100"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            ["100", "200", "100"],
+            cudf.Decimal64Dtype(scale=-1, precision=4),
+            [True, None, False],
+            bool,
+        ),
+        (
+            operator.le,
+            ["0.18", "0.42", "1.00"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            ["0.10", "0.87", "1.00"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            [False, True, True],
+            bool,
+        ),
+        (
+            operator.le,
+            ["0.18", "0.42", "1.00"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            ["0.1000", "0.8700", "1.0000"],
+            cudf.Decimal64Dtype(scale=4, precision=5),
+            [False, True, True],
+            bool,
+        ),
+        (
+            operator.le,
+            ["300", None, "100"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            ["100", "200", "100"],
+            cudf.Decimal64Dtype(scale=-1, precision=4),
+            [False, None, True],
+            bool,
+        ),
+        (
+            operator.ge,
+            ["0.18", "0.42", "1.00"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            ["0.10", "0.87", "1.00"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            [True, False, True],
+            bool,
+        ),
+        (
+            operator.ge,
+            ["0.18", "0.42", "1.00"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            ["0.1000", "0.8700", "1.0000"],
+            cudf.Decimal64Dtype(scale=4, precision=5),
+            [True, False, True],
+            bool,
+        ),
+        (
+            operator.ge,
+            ["300", None, "100"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            ["100", "200", "100"],
+            cudf.Decimal64Dtype(scale=-1, precision=4),
+            [True, None, True],
+            bool,
+        ),
     ],
 )
 def test_binops_decimal(args):
     op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype = args
+
+    a = _decimal_series(lhs, l_dtype)
+    b = _decimal_series(rhs, r_dtype)
+    expect = (
+        _decimal_series(expect, expect_dtype)
+        if isinstance(expect_dtype, cudf.Decimal64Dtype)
+        else cudf.Series(expect, dtype=expect_dtype)
+    )
+
+    got = op(a, b)
+    assert expect.dtype == got.dtype
+    utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        (
+            operator.eq,
+            ["100", "41", None],
+            cudf.Decimal64Dtype(scale=0, precision=5),
+            [100, 42, 12],
+            cudf.Series([True, False, None], dtype=bool),
+            cudf.Series([True, False, None], dtype=bool),
+        ),
+        (
+            operator.eq,
+            ["100.000", "42.001", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            [100, 42, 12],
+            cudf.Series([True, False, None], dtype=bool),
+            cudf.Series([True, False, None], dtype=bool),
+        ),
+        (
+            operator.eq,
+            ["100", "40", None],
+            cudf.Decimal64Dtype(scale=-1, precision=3),
+            [100, 42, 12],
+            cudf.Series([True, False, None], dtype=bool),
+            cudf.Series([True, False, None], dtype=bool),
+        ),
+        (
+            operator.lt,
+            ["100", "40", "28", None],
+            cudf.Decimal64Dtype(scale=0, precision=3),
+            [100, 42, 24, 12],
+            cudf.Series([False, True, False, None], dtype=bool),
+            cudf.Series([False, False, True, None], dtype=bool),
+        ),
+        (
+            operator.lt,
+            ["100.000", "42.002", "23.999", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            [100, 42, 24, 12],
+            cudf.Series([False, False, True, None], dtype=bool),
+            cudf.Series([False, True, False, None], dtype=bool),
+        ),
+        (
+            operator.lt,
+            ["100", "40", "10", None],
+            cudf.Decimal64Dtype(scale=-1, precision=3),
+            [100, 42, 8, 12],
+            cudf.Series([False, True, False, None], dtype=bool),
+            cudf.Series([False, False, True, None], dtype=bool),
+        ),
+        (
+            operator.gt,
+            ["100", "42", "20", None],
+            cudf.Decimal64Dtype(scale=0, precision=3),
+            [100, 40, 24, 12],
+            cudf.Series([False, True, False, None], dtype=bool),
+            cudf.Series([False, False, True, None], dtype=bool),
+        ),
+        (
+            operator.gt,
+            ["100.000", "42.002", "23.999", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            [100, 42, 24, 12],
+            cudf.Series([False, True, False, None], dtype=bool),
+            cudf.Series([False, False, True, None], dtype=bool),
+        ),
+        (
+            operator.gt,
+            ["100", "40", "10", None],
+            cudf.Decimal64Dtype(scale=-1, precision=3),
+            [100, 42, 8, 12],
+            cudf.Series([False, False, True, None], dtype=bool),
+            cudf.Series([False, True, False, None], dtype=bool),
+        ),
+        (
+            operator.le,
+            ["100", "40", "28", None],
+            cudf.Decimal64Dtype(scale=0, precision=3),
+            [100, 42, 24, 12],
+            cudf.Series([True, True, False, None], dtype=bool),
+            cudf.Series([True, False, True, None], dtype=bool),
+        ),
+        (
+            operator.le,
+            ["100.000", "42.002", "23.999", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            [100, 42, 24, 12],
+            cudf.Series([True, False, True, None], dtype=bool),
+            cudf.Series([True, True, False, None], dtype=bool),
+        ),
+        (
+            operator.le,
+            ["100", "40", "10", None],
+            cudf.Decimal64Dtype(scale=-1, precision=3),
+            [100, 42, 8, 12],
+            cudf.Series([True, True, False, None], dtype=bool),
+            cudf.Series([True, False, True, None], dtype=bool),
+        ),
+        (
+            operator.ge,
+            ["100", "42", "20", None],
+            cudf.Decimal64Dtype(scale=0, precision=3),
+            [100, 40, 24, 12],
+            cudf.Series([True, True, False, None], dtype=bool),
+            cudf.Series([True, False, True, None], dtype=bool),
+        ),
+        (
+            operator.ge,
+            ["100.000", "42.002", "23.999", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            [100, 42, 24, 12],
+            cudf.Series([True, True, False, None], dtype=bool),
+            cudf.Series([True, False, True, None], dtype=bool),
+        ),
+        (
+            operator.ge,
+            ["100", "40", "10", None],
+            cudf.Decimal64Dtype(scale=-1, precision=3),
+            [100, 42, 8, 12],
+            cudf.Series([True, False, True, None], dtype=bool),
+            cudf.Series([True, True, False, None], dtype=bool),
+        ),
+    ],
+)
+@pytest.mark.parametrize("integer_dtype", cudf.tests.utils.INTEGER_TYPES)
+@pytest.mark.parametrize("reflected", [True, False])
+def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
+    """
+    Tested compare operations:
+        eq, lt, gt, le, ge
+    Each operation has 3 decimal data setups, with scale from {==0, >0, <0}.
+    Decimal precisions are sufficient to hold the digits.
+    For each decimal data setup, there is at least one row that lead to one
+    of the following compare results: {True, False, None}.
+    """
+    if not reflected:
+        op, ldata, ldtype, rdata, expected, _ = args
+    else:
+        op, ldata, ldtype, rdata, _, expected = args
+
+    lhs = _decimal_series(ldata, ldtype)
+    rhs = cudf.Series(rdata, dtype=integer_dtype)
+
+    if reflected:
+        rhs, lhs = lhs, rhs
+
+    actual = op(lhs, rhs)
+
+    utils.assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        (
+            operator.add,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal(1),
+            ["101", "201"],
+            cudf.Decimal64Dtype(scale=0, precision=6),
+            False,
+        ),
+        (
+            operator.add,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            1,
+            ["101", "201"],
+            cudf.Decimal64Dtype(scale=0, precision=6),
+            False,
+        ),
+        (
+            operator.add,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal("1.5"),
+            ["101.5", "201.5"],
+            cudf.Decimal64Dtype(scale=1, precision=7),
+            False,
+        ),
+        (
+            operator.add,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            cudf.Scalar(decimal.Decimal("1.5")),
+            ["101.5", "201.5"],
+            cudf.Decimal64Dtype(scale=1, precision=7),
+            False,
+        ),
+        (
+            operator.add,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal(1),
+            ["101", "201"],
+            cudf.Decimal64Dtype(scale=0, precision=6),
+            True,
+        ),
+        (
+            operator.add,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            1,
+            ["101", "201"],
+            cudf.Decimal64Dtype(scale=0, precision=6),
+            True,
+        ),
+        (
+            operator.add,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal("1.5"),
+            ["101.5", "201.5"],
+            cudf.Decimal64Dtype(scale=1, precision=7),
+            True,
+        ),
+        (
+            operator.add,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            cudf.Scalar(decimal.Decimal("1.5")),
+            ["101.5", "201.5"],
+            cudf.Decimal64Dtype(scale=1, precision=7),
+            True,
+        ),
+        (
+            operator.mul,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            1,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=5),
+            False,
+        ),
+        (
+            operator.mul,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal(2),
+            ["200", "400"],
+            cudf.Decimal64Dtype(scale=-2, precision=5),
+            False,
+        ),
+        (
+            operator.mul,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal("1.5"),
+            ["150", "300"],
+            cudf.Decimal64Dtype(scale=-1, precision=6),
+            False,
+        ),
+        (
+            operator.mul,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            cudf.Scalar(decimal.Decimal("1.5")),
+            ["150", "300"],
+            cudf.Decimal64Dtype(scale=-1, precision=6),
+            False,
+        ),
+        (
+            operator.mul,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            1,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=5),
+            True,
+        ),
+        (
+            operator.mul,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal(2),
+            ["200", "400"],
+            cudf.Decimal64Dtype(scale=-2, precision=5),
+            True,
+        ),
+        (
+            operator.mul,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal("1.5"),
+            ["150", "300"],
+            cudf.Decimal64Dtype(scale=-1, precision=6),
+            True,
+        ),
+        (
+            operator.mul,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            cudf.Scalar(decimal.Decimal("1.5")),
+            ["150", "300"],
+            cudf.Decimal64Dtype(scale=-1, precision=6),
+            True,
+        ),
+        (
+            operator.sub,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal(2),
+            ["98", "198"],
+            cudf.Decimal64Dtype(scale=0, precision=6),
+            False,
+        ),
+        (
+            operator.sub,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal("2.5"),
+            ["97.5", "197.5"],
+            cudf.Decimal64Dtype(scale=1, precision=7),
+            False,
+        ),
+        (
+            operator.sub,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            4,
+            ["96", "196"],
+            cudf.Decimal64Dtype(scale=0, precision=6),
+            False,
+        ),
+        (
+            operator.sub,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            cudf.Scalar(decimal.Decimal("2.5")),
+            ["97.5", "197.5"],
+            cudf.Decimal64Dtype(scale=1, precision=7),
+            False,
+        ),
+        (
+            operator.sub,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal(2),
+            ["-98", "-198"],
+            cudf.Decimal64Dtype(scale=0, precision=6),
+            True,
+        ),
+        (
+            operator.sub,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            4,
+            ["-96", "-196"],
+            cudf.Decimal64Dtype(scale=0, precision=6),
+            True,
+        ),
+        (
+            operator.sub,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            decimal.Decimal("2.5"),
+            ["-97.5", "-197.5"],
+            cudf.Decimal64Dtype(scale=1, precision=7),
+            True,
+        ),
+        (
+            operator.sub,
+            ["100", "200"],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            cudf.Scalar(decimal.Decimal("2.5")),
+            ["-97.5", "-197.5"],
+            cudf.Decimal64Dtype(scale=1, precision=7),
+            True,
+        ),
+    ],
+)
+def test_binops_decimal_scalar(args):
+    op, lhs, l_dtype, rhs, expect, expect_dtype, reflect = args
 
     def decimal_series(input, dtype):
         return cudf.Series(
@@ -1764,13 +2294,166 @@ def test_binops_decimal(args):
             dtype=dtype,
         )
 
-    a = decimal_series(lhs, l_dtype)
-    b = decimal_series(rhs, r_dtype)
+    lhs = decimal_series(lhs, l_dtype)
     expect = decimal_series(expect, expect_dtype)
 
-    got = op(a, b)
+    if reflect:
+        lhs, rhs = rhs, lhs
+
+    got = op(lhs, rhs)
     assert expect.dtype == got.dtype
     utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        (
+            operator.eq,
+            ["100.00", "41", None],
+            cudf.Decimal64Dtype(scale=0, precision=5),
+            100,
+            cudf.Series([True, False, None], dtype=bool),
+            cudf.Series([True, False, None], dtype=bool),
+        ),
+        (
+            operator.eq,
+            ["100.123", "41", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            decimal.Decimal("100.123"),
+            cudf.Series([True, False, None], dtype=bool),
+            cudf.Series([True, False, None], dtype=bool),
+        ),
+        (
+            operator.eq,
+            ["100.123", "41", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            cudf.Scalar(decimal.Decimal("100.123")),
+            cudf.Series([True, False, None], dtype=bool),
+            cudf.Series([True, False, None], dtype=bool),
+        ),
+        (
+            operator.gt,
+            ["100.00", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=2, precision=5),
+            100,
+            cudf.Series([False, False, True, None], dtype=bool),
+            cudf.Series([False, True, False, None], dtype=bool),
+        ),
+        (
+            operator.gt,
+            ["100.123", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            decimal.Decimal("100.123"),
+            cudf.Series([False, False, True, None], dtype=bool),
+            cudf.Series([False, True, False, None], dtype=bool),
+        ),
+        (
+            operator.gt,
+            ["100.123", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            cudf.Scalar(decimal.Decimal("100.123")),
+            cudf.Series([False, False, True, None], dtype=bool),
+            cudf.Series([False, True, False, None], dtype=bool),
+        ),
+        (
+            operator.ge,
+            ["100.00", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=2, precision=5),
+            100,
+            cudf.Series([True, False, True, None], dtype=bool),
+            cudf.Series([True, True, False, None], dtype=bool),
+        ),
+        (
+            operator.ge,
+            ["100.123", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            decimal.Decimal("100.123"),
+            cudf.Series([True, False, True, None], dtype=bool),
+            cudf.Series([True, True, False, None], dtype=bool),
+        ),
+        (
+            operator.ge,
+            ["100.123", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            cudf.Scalar(decimal.Decimal("100.123")),
+            cudf.Series([True, False, True, None], dtype=bool),
+            cudf.Series([True, True, False, None], dtype=bool),
+        ),
+        (
+            operator.lt,
+            ["100.00", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=2, precision=5),
+            100,
+            cudf.Series([False, True, False, None], dtype=bool),
+            cudf.Series([False, False, True, None], dtype=bool),
+        ),
+        (
+            operator.lt,
+            ["100.123", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            decimal.Decimal("100.123"),
+            cudf.Series([False, True, False, None], dtype=bool),
+            cudf.Series([False, False, True, None], dtype=bool),
+        ),
+        (
+            operator.lt,
+            ["100.123", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            cudf.Scalar(decimal.Decimal("100.123")),
+            cudf.Series([False, True, False, None], dtype=bool),
+            cudf.Series([False, False, True, None], dtype=bool),
+        ),
+        (
+            operator.le,
+            ["100.00", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=2, precision=5),
+            100,
+            cudf.Series([True, True, False, None], dtype=bool),
+            cudf.Series([True, False, True, None], dtype=bool),
+        ),
+        (
+            operator.le,
+            ["100.123", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            decimal.Decimal("100.123"),
+            cudf.Series([True, True, False, None], dtype=bool),
+            cudf.Series([True, False, True, None], dtype=bool),
+        ),
+        (
+            operator.le,
+            ["100.123", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            cudf.Scalar(decimal.Decimal("100.123")),
+            cudf.Series([True, True, False, None], dtype=bool),
+            cudf.Series([True, False, True, None], dtype=bool),
+        ),
+    ],
+)
+@pytest.mark.parametrize("reflected", [True, False])
+def test_binops_decimal_scalar_compare(args, reflected):
+    """
+    Tested compare operations:
+        eq, lt, gt, le, ge
+    Each operation has 3 data setups: pyints, Decimal, and
+    decimal cudf.Scalar
+    For each data setup, there is at least one row that lead to one of the
+    following compare results: {True, False, None}.
+    """
+    if not reflected:
+        op, ldata, ldtype, rdata, expected, _ = args
+    else:
+        op, ldata, ldtype, rdata, _, expected = args
+
+    lhs = _decimal_series(ldata, ldtype)
+    rhs = rdata
+
+    if reflected:
+        rhs, lhs = lhs, rhs
+
+    actual = op(lhs, rhs)
+
+    utils.assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(

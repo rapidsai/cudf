@@ -10,6 +10,7 @@ from cudf._lib.copying import segmented_gather
 from cudf._lib.lists import (
     contains_scalar,
     count_elements,
+    drop_list_duplicates,
     extract_element,
     sort_lists,
 )
@@ -236,9 +237,10 @@ class ListMethods(ColumnMethodsMixin):
         Series([False, True, True])
         dtype: bool
         """
+        search_key = cudf.Scalar(search_key)
         try:
             res = self._return_or_inplace(
-                contains_scalar(self._column, search_key.device_value)
+                contains_scalar(self._column, search_key)
             )
         except RuntimeError as e:
             if (
@@ -360,6 +362,41 @@ class ListMethods(ColumnMethodsMixin):
             raise
         else:
             return res
+
+    def unique(self):
+        """
+        Returns unique element for each list in the column, order for each
+        unique element is not guaranteed.
+
+        Returns
+        -------
+        ListColumn
+
+        Examples
+        --------
+        >>> s = cudf.Series([[1, 1, 2, None, None], None, [4, 4], []])
+        >>> s
+        0    [1.0, 1.0, 2.0, nan, nan]
+        1                         None
+        2                   [4.0, 4.0]
+        3                           []
+        dtype: list
+        >>> s.list.unique() # Order of list element is not guaranteed
+        0              [1.0, 2.0, nan]
+        1                         None
+        2                        [4.0]
+        3                           []
+        dtype: list
+        """
+
+        if is_list_dtype(self._column.children[1].dtype):
+            raise NotImplementedError("Nested lists unique is not supported.")
+
+        return self._return_or_inplace(
+            drop_list_duplicates(
+                self._column, nulls_equal=True, nans_all_equal=True
+            )
+        )
 
     def sort_values(
         self,

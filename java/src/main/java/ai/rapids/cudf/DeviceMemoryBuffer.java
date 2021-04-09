@@ -122,7 +122,17 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
    * @return the buffer
    */
   public static DeviceMemoryBuffer allocate(long bytes) {
-    return Rmm.alloc(bytes);
+    return allocate(bytes, Cuda.DEFAULT_STREAM);
+  }
+
+  /**
+   * Allocate memory for use on the GPU. You must close it when done.
+   * @param bytes size in bytes to allocate
+   * @param stream The stream in which to synchronize this command
+   * @return the buffer
+   */
+  public static DeviceMemoryBuffer allocate(long bytes, Cuda.Stream stream) {
+    return Rmm.alloc(bytes, stream);
   }
 
   /**

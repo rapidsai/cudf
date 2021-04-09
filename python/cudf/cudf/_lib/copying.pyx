@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import pandas as pd
 
@@ -564,11 +564,11 @@ def copy_if_else(object lhs, object rhs, Column boolean_mask):
             return _copy_if_else_column_column(lhs, rhs, boolean_mask)
         else:
             return _copy_if_else_column_scalar(
-                lhs, as_device_scalar(rhs, lhs.dtype), boolean_mask)
+                lhs, as_device_scalar(rhs), boolean_mask)
     else:
         if isinstance(rhs, Column):
             return _copy_if_else_scalar_column(
-                as_device_scalar(lhs, rhs.dtype), rhs, boolean_mask)
+                as_device_scalar(lhs), rhs, boolean_mask)
         else:
             if lhs is None and rhs is None:
                 return lhs
@@ -685,7 +685,9 @@ def get_element(Column input_column, size_type index):
             cpp_copying.get_element(col_view, index)
         )
 
-    return DeviceScalar.from_unique_ptr(move(c_output))
+    return DeviceScalar.from_unique_ptr(
+        move(c_output), dtype=input_column.dtype
+    )
 
 
 def sample(Table input, size_type n,

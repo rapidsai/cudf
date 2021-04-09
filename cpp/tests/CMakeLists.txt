@@ -154,7 +154,8 @@ ConfigureTest(BINARY_TEST
     binaryop/binop-verify-input-test.cpp
     binaryop/binop-null-test.cpp
     binaryop/binop-integration-test.cpp
-    binaryop/binop-generic-ptx-test.cpp)
+    binaryop/binop-generic-ptx-test.cpp
+    )
 
 ###################################################################################################
 # - unary transform tests -------------------------------------------------------------------------
@@ -171,16 +172,6 @@ ConfigureTest(INTEROP_TEST
     interop/to_arrow_test.cpp
     interop/from_arrow_test.cpp
     interop/dlpack_test.cpp)
-
-###################################################################################################
-# - jit cache tests -------------------------------------------------------------------------------
-ConfigureTest(JITCACHE_TEST
-    "${CUDF_SOURCE_DIR}/src/jit/cache.cpp"
-    jit/jit-cache-test.cpp)
-
-ConfigureTest(JITCACHE_MULTIPROC_TEST
-    "${CUDF_SOURCE_DIR}/src/jit/cache.cpp"
-    jit/jit-cache-multiprocess-test.cpp)
 
 ###################################################################################################
 # - io tests --------------------------------------------------------------------------------------
@@ -201,24 +192,25 @@ ConfigureTest(SORT_TEST
 ###################################################################################################
 # - copying tests ---------------------------------------------------------------------------------
 ConfigureTest(COPYING_TEST
-    copying/utility_tests.cpp
+    copying/concatenate_tests.cu
+    copying/copy_range_tests.cpp
+    copying/copy_tests.cu    
+    copying/detail_gather_tests.cu
+    copying/gather_struct_tests.cu        
     copying/gather_tests.cu
     copying/gather_str_tests.cu
     copying/gather_list_tests.cu
-    copying/segmented_gather_list_tests.cpp
-    copying/gather_struct_tests.cu
-    copying/detail_gather_tests.cu
+    copying/get_value_tests.cpp
+    copying/pack_tests.cu
+    copying/sample_tests.cpp
     copying/scatter_tests.cpp
     copying/scatter_list_tests.cu
-    copying/copy_range_tests.cpp
+    copying/scatter_struct_tests.cu
+    copying/segmented_gather_list_tests.cpp
+    copying/shift_tests.cpp
     copying/slice_tests.cpp
     copying/split_tests.cpp
-    copying/copy_tests.cu
-    copying/shift_tests.cpp
-    copying/get_value_tests.cpp
-    copying/sample_tests.cpp
-    copying/concatenate_tests.cu
-    copying/pack_tests.cu)
+    copying/utility_tests.cpp)
 
 ###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------
@@ -276,7 +268,8 @@ ConfigureTest(ROLLING_TEST
     rolling/rolling_test.cpp 
     rolling/grouped_rolling_test.cpp
     rolling/lead_lag_test.cpp
-    rolling/collect_list_test.cpp)
+    rolling/collect_list_test.cpp
+    )
 
 ###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
@@ -334,6 +327,7 @@ ConfigureTest(STRINGS_TEST
     strings/hash_string.cu
     strings/integers_tests.cu
     strings/ipv4_tests.cpp
+    strings/json_tests.cpp
     strings/pad_tests.cpp
     strings/replace_regex_tests.cpp
     strings/replace_tests.cpp

@@ -1,5 +1,7 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -16,9 +18,55 @@ from setuptools.extension import Extension
 
 import versioneer
 
-install_requires = ["numba", "cython"]
+install_requires = [
+    "numba>=0.49.0,!=0.51.0",
+    "Cython>=0.29,<0.30",
+    "fastavro>=0.22.9",
+    "fsspec>=0.6.0",
+    "numpy",
+    "pandas>=1.0,<1.3.0dev0",
+    "typing_extensions",
+    "protobuf",
+    "nvtx>=0.2.1",
+    "cachetools",
+    "packaging",
+]
+
+extras_require = {
+    "test": [
+        "pytest",
+        "pytest-benchmark",
+        "pytest-xdist",
+        "hypothesis" "mimesis",
+        "pyorc",
+        "msgpack",
+    ]
+}
 
 cython_files = ["cudf/**/*.pyx"]
+
+
+def get_cuda_version_from_header(cuda_include_dir, delimeter=""):
+
+    cuda_version = None
+
+    with open(
+        os.path.join(cuda_include_dir, "cuda.h"), "r", encoding="utf-8"
+    ) as f:
+        for line in f.readlines():
+            if re.search(r"#define CUDA_VERSION ", line) is not None:
+                cuda_version = line
+                break
+
+    if cuda_version is None:
+        raise TypeError("CUDA_VERSION not found in cuda.h")
+    cuda_version = int(cuda_version.split()[2])
+    return "%d%s%d" % (
+        cuda_version // 1000,
+        delimeter,
+        (cuda_version % 1000) // 10,
+    )
+
 
 CUDA_HOME = os.environ.get("CUDA_HOME", False)
 if not CUDA_HOME:
@@ -36,8 +84,25 @@ if not os.path.isdir(CUDA_HOME):
     raise OSError(f"Invalid CUDA_HOME: directory does not exist: {CUDA_HOME}")
 
 cuda_include_dir = os.path.join(CUDA_HOME, "include")
+cuda_lib_dir = os.path.join(CUDA_HOME, "lib64")
+install_requires.append(
+    "cupy-cuda" + get_cuda_version_from_header(cuda_include_dir)
+)
 
-CUDF_ROOT = os.environ.get("CUDF_ROOT", "../../cpp/build/")
+CUDF_HOME = os.environ.get(
+    "CUDF_HOME",
+    os.path.abspath(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../")
+    ),
+)
+CUDF_ROOT = os.environ.get(
+    "CUDF_ROOT",
+    os.path.abspath(
+        os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "../../cpp/build/"
+        )
+    ),
+)
 
 try:
     nthreads = int(os.environ.get("PARALLEL_LEVEL", "0") or "0")
@@ -102,10 +167,11 @@ extensions = [
         "*",
         sources=cython_files,
         include_dirs=[
-            "../../cpp/include/cudf",
-            "../../cpp/include",
-            os.path.join(CUDF_ROOT, "include"),
+            os.path.abspath(os.path.join(CUDF_HOME, "cpp/include/cudf")),
+            os.path.abspath(os.path.join(CUDF_HOME, "cpp/include")),
+            os.path.abspath(os.path.join(CUDF_ROOT, "include")),
             os.path.join(CUDF_ROOT, "_deps/libcudacxx-src/include"),
+            os.path.join(CUDF_ROOT, "_deps/dlpack-src/include"),
             os.path.join(
                 os.path.dirname(sysconfig.get_path("include")),
                 "libcudf/libcudacxx",
@@ -117,9 +183,13 @@ extensions = [
         ],
         library_dirs=(
             pa.get_library_dirs()
-            + [get_python_lib(), os.path.join(os.sys.prefix, "lib")]
+            + [
+                get_python_lib(),
+                os.path.join(os.sys.prefix, "lib"),
+                cuda_lib_dir,
+            ]
         ),
-        libraries=["cudf"] + pa.get_libraries() + ["arrow_cuda"],
+        libraries=["cudart", "cudf"] + pa.get_libraries() + ["arrow_cuda"],
         language="c++",
         extra_compile_args=["-std=c++14"],
     )
@@ -138,8 +208,8 @@ setup(
         "Topic :: Scientific/Engineering",
         "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
     ],
     # Include the separately-compiled shared library
     setup_requires=["cython", "protobuf"],
@@ -157,4 +227,5 @@ setup(
     cmdclass=cmdclass,
     install_requires=install_requires,
     zip_safe=False,
+    extras_require=extras_require,
 )

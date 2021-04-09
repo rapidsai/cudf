@@ -1,7 +1,6 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import functools
-from collections import OrderedDict
 from collections.abc import Sequence
 from math import floor, isinf, isnan
 
@@ -278,62 +277,6 @@ class cached_property:
             value = self.func(instance)
             setattr(instance, self.func.__name__, value)
             return value
-
-
-class NestedMappingMixin:
-    """
-    Make missing values of a mapping empty instances
-    of the same type as the mapping.
-    """
-
-    def __getitem__(self, key):
-        if isinstance(key, tuple):
-            d = self
-            for k in key[:-1]:
-                d = d[k]
-            return d.__getitem__(key[-1])
-        else:
-            return super().__getitem__(key)
-
-    def __setitem__(self, key, value):
-        if isinstance(key, tuple):
-            d = self
-            for k in key[:-1]:
-                d = d.setdefault(k, self.__class__())
-            d.__setitem__(key[-1], value)
-        else:
-            super().__setitem__(key, value)
-
-
-class NestedOrderedDict(NestedMappingMixin, OrderedDict):
-    pass
-
-
-def to_flat_dict(d):
-    """
-    Convert the given nested dictionary to a flat dictionary
-    with tuple keys.
-    """
-
-    def _inner(d, parents=None):
-        if parents is None:
-            parents = []
-        for k, v in d.items():
-            if not isinstance(v, d.__class__):
-                if parents:
-                    k = tuple(parents + [k])
-                yield (k, v)
-            else:
-                yield from _inner(d=v, parents=parents + [k])
-
-    return {k: v for k, v in _inner(d)}
-
-
-def to_nested_dict(d):
-    """
-    Convert the given dictionary with tuple keys to a NestedOrderedDict.
-    """
-    return NestedOrderedDict(d)
 
 
 def time_col_replace_nulls(input_col):
