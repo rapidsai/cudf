@@ -110,11 +110,43 @@ public class ParquetWriterOptions {
      * Set column name
      * @param name
      */
-    public Builder withColumn(String... name) {
+    public Builder withColumn(boolean nullable, String... name) {
       IntStream.range(0, name.length).forEach(
           i -> columnOptions.add(ParquetColumnWriterOptions.simpleColumnBuilder(name[i])
-                  .build())
+              .withNullable(nullable)
+              .build())
       );
+      return this;
+    }
+
+    /**
+     * Set column name
+     * @param name
+     */
+    public Builder withColumn(String... name) {
+      withColumn(false, name);
+      return this;
+    }
+
+    /**
+     * Set nullable column meta data
+     * @param name
+     */
+    public Builder withNullableColumn(String... name) {
+      withColumn(true, name);
+      return this;
+    }
+
+    /**
+     * Set decimal column meta data
+     * @param name
+     * @param precision
+     */
+    public Builder withDecimalColumn(String name, int precision, boolean nullable) {
+      columnOptions.add(ParquetColumnWriterOptions.simpleColumnBuilder(name)
+          .withDecimalPrecision(precision)
+          .withNullable(nullable)
+          .build());
       return this;
     }
 
@@ -124,10 +156,7 @@ public class ParquetWriterOptions {
      * @param precision
      */
     public Builder withDecimalColumn(String name, int precision) {
-      columnOptions.add(ParquetColumnWriterOptions.simpleColumnBuilder(name)
-          .withDecimalPrecision(precision)
-          .withNullable(false)
-          .build());
+      withDecimalColumn(name, precision, false);
       return this;
     }
 
@@ -137,23 +166,20 @@ public class ParquetWriterOptions {
      * @param precision
      */
     public Builder withNullableDecimalColumn(String name, int precision) {
-      columnOptions.add(ParquetColumnWriterOptions.simpleColumnBuilder(name)
-          .withDecimalPrecision(precision)
-          .withNullable(true)
-          .build());
+      withDecimalColumn(name, precision, true);
       return this;
     }
 
     /**
-     * Set nullable column meta data
+     * Create a timestamp column meta data
      * @param name
+     * @param isInt96
      */
-    public Builder withNullableColumn(String... name) {
-      IntStream.range(0, name.length).forEach(
-          i -> columnOptions.add(ParquetColumnWriterOptions.simpleColumnBuilder(name[i])
-              .withNullable(true)
-              .build())
-      );
+    public Builder withTimestampColumn(String name, boolean isInt96, boolean nullable) {
+      columnOptions.add(ParquetColumnWriterOptions.simpleColumnBuilder(name)
+          .withTimestampInt96(isInt96)
+          .withNullable(nullable)
+          .build());
       return this;
     }
 
@@ -163,10 +189,7 @@ public class ParquetWriterOptions {
      * @param isInt96
      */
     public Builder withTimestampColumn(String name, boolean isInt96) {
-      columnOptions.add(ParquetColumnWriterOptions.simpleColumnBuilder(name)
-          .withTimestampInt96(isInt96)
-          .withNullable(false)
-          .build());
+      withTimestampColumn(name, isInt96, false);
       return this;
     }
 
@@ -176,10 +199,7 @@ public class ParquetWriterOptions {
      * @param isInt96
      */
     public Builder withNullableTimestampColumn(String name, boolean isInt96) {
-      columnOptions.add(ParquetColumnWriterOptions.simpleColumnBuilder(name)
-          .withTimestampInt96(isInt96)
-          .withNullable(true)
-          .build());
+      withTimestampColumn(name, isInt96, true);
       return this;
     }
 
