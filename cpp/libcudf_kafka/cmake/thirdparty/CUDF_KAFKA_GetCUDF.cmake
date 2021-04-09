@@ -14,22 +14,7 @@
 # limitations under the License.
 #=============================================================================
 
-function(cudfkafka_save_if_enabled var)
-    if(CUDF_KAFKA_${var})
-        unset(${var} PARENT_SCOPE)
-        unset(${var} CACHE)
-    endif()
-endfunction()
-
-function(cudfkafka_restore_if_enabled var)
-    if(CUDF_KAFKA_${var})
-        set(${var} ON CACHE INTERNAL "" FORCE)
-    endif()
-endfunction()
-
 function(find_and_configure_cudf VERSION)
-    cudfkafka_save_if_enabled(BUILD_TESTS)
-    cudfkafka_save_if_enabled(BUILD_BENCHMARKS)
     CPMFindPackage(NAME cudf
         VERSION         ${VERSION}
         GIT_REPOSITORY  https://github.com/rapidsai/cudf.git
@@ -38,9 +23,16 @@ function(find_and_configure_cudf VERSION)
         SOURCE_SUBDIR   cpp
         OPTIONS         "BUILD_TESTS OFF"
                         "BUILD_BENCHMARKS OFF")
-    cudfkafka_restore_if_enabled(BUILD_TESTS)
-    cudfkafka_restore_if_enabled(BUILD_BENCHMARKS)
+    if(cudf_ADDED)
+        set(cudf_ADDED TRUE PARENT_SCOPE)
+    endif()
 endfunction()
 
-set(CUDF_KAFKA_MIN_VERSION_cudf 0.19)
-find_and_configure_cudf(${CUDF_KAFKA_MIN_VERSION_cudf})
+set(CUDA_KAFKA_MIN_VERSION_cudf "${CUDA_KAFKA_VERSION_MAJOR}.${CUDA_KAFKA_VERSION_MINOR}")
+find_and_configure_cudf(${CUDA_KAFKA_MIN_VERSION_cudf})
+
+if(cudf_ADDED)
+    # Since we are building cudf as part of ourselves we need
+    # to enable the CUDA language in the top-most scope
+    enable_language(CUDA)
+endif()
