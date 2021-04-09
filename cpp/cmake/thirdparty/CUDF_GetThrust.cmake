@@ -27,6 +27,6 @@ function(find_and_configure_thrust VERSION)
     set(Thrust_SOURCE_DIR "${Thrust_SOURCE_DIR}" PARENT_SCOPE)
 endfunction()
 
-set(CUDF_MIN_VERSION_Thrust 1.10.0)
+set(CUDF_MIN_VERSION_Thrust 1.12.0)
 
 find_and_configure_thrust(${CUDF_MIN_VERSION_Thrust})
