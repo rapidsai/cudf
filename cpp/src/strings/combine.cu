@@ -498,24 +498,6 @@ std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_colum
   auto const sep_narep_dv    = get_scalar_device_view(const_cast<string_scalar&>(separator_narep));
   auto const string_narep_dv = get_scalar_device_view(const_cast<string_scalar&>(string_narep));
 
-  // Convert the offsets of lists into offsets of strings in the child strings column
-  //
-  // For example:
-  //  lists_strings_column  = [ {"a", "bc"}, NULL, {null, "def", "ghijk"} ]
-  //  lists_offsets         = [0, 2, 2, 5]
-  //  strings_col           = [ "a", "bc", NULL, "def", "ghijk"]
-  //  strings_col_offsets   = [0, 1, 3, 3, 6, 11]
-  //            ===> output = [0, 3, 3, 11]
-  //  rmm::device_uvector<offset_type> lists_child_offsets(lists_strings_column.size(), stream, mr);
-  //  thrust::transform(rmm::exec_policy(stream),
-  //                    lists_strings_column.offsets_begin(),
-  //                    lists_strings_column.offsets_end(),
-  //                    lists_child_offsets.begin(),
-  //                    [offsets = strings_col.offsets().begin<offset_type>()] __device__(
-  //                      auto const idx) { return offsets[idx]; });
-
-  // Build offsets of the output column by computing size of each string in the output column
-
   // Compute sizes of strings in the output column along with their validity
   // An invalid size will be returned to indicate that the corresponding row is null
   static constexpr auto invalid_size = std::numeric_limits<size_type>::lowest();
@@ -524,8 +506,7 @@ std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_colum
                                     strings_dv,
                                     sep_dv,
                                     sep_narep_dv,
-                                    string_narep_dv,
-                                    stream] __device__(size_type lidx) -> size_type {
+                                    string_narep_dv] __device__(size_type lidx) -> size_type {
     if (lists_dv.is_null(lidx) || (sep_dv.is_null(lidx) && !sep_narep_dv.is_valid())) {
       return invalid_size;
     }
