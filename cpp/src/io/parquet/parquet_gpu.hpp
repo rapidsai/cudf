@@ -232,7 +232,6 @@ struct parquet_column_device_view : stats_column_desc {
   uint32_t *dict_data;     //!< Dictionary data (unique row indices)
   uint8_t physical_type;   //!< physical data type
   uint8_t converted_type;  //!< logical data type
-  // TODO (dm): Evaluate if this is sufficient. At 4 bits, this allows a maximum 16 level nesting
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
                        //!< levels
   constexpr uint8_t num_def_level_bits() { return level_bits & 0xf; }
@@ -327,7 +326,7 @@ struct EncPage {
   uint16_t num_fragments;    //!< Number of fragments in page
   PageType page_type;        //!< Page type
   uint8_t dict_bits_plus1;   //!< 0=plain, nonzero:bits to encoding dictionary indices + 1
-  EncColumnChunk *chunk;     //!< Index in chunk array
+  EncColumnChunk *chunk;     //!< Chunk that this page belongs to
   uint32_t chunk_id;         //!< Index in chunk array
   uint32_t hdr_size;         //!< Size of page header
   uint32_t max_hdr_size;     //!< Maximum size of page header
@@ -455,7 +454,7 @@ dremel_data get_dremel_data(column_view h_col,
  * @param[in] stream CUDA stream to use, default 0
  */
 void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
-                       const parquet_column_device_view *col_desc,
+                       device_span<parquet_column_device_view const> col_desc,
                        uint32_t fragment_size,
                        uint32_t num_rows,
                        rmm::cuda_stream_view stream);
@@ -466,16 +465,12 @@ void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
  * @param[out] groups Statistics groups [num_columns x num_fragments]
  * @param[in] fragments Page fragments [num_columns x num_fragments]
  * @param[in] col_desc Column description [num_columns]
- * @param[in] num_fragments Number of fragments
- * @param[in] num_columns Number of columns
  * @param[in] fragment_size Max size of each fragment in rows
  * @param[in] stream CUDA stream to use, default 0
  */
 void InitFragmentStatistics(cudf::detail::device_2dspan<statistics_group> groups,
                             cudf::detail::device_2dspan<PageFragment const> fragments,
                             device_span<gpu::parquet_column_device_view const> col_desc,
-                            int32_t num_fragments,
-                            int32_t num_columns,
                             uint32_t fragment_size,
                             rmm::cuda_stream_view stream);
 
@@ -492,8 +487,8 @@ void InitFragmentStatistics(cudf::detail::device_2dspan<statistics_group> groups
  * @param[in] stream CUDA stream to use, default 0
  */
 void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                      EncPage *pages,
-                      const parquet_column_device_view *col_desc,
+                      device_span<gpu::EncPage> pages,
+                      device_span<parquet_column_device_view const> col_desc,
                       int32_t num_columns,
                       statistics_merge_group *page_grstats  = nullptr,
                       statistics_merge_group *chunk_grstats = nullptr,
@@ -523,7 +518,7 @@ void EncodePages(device_span<EncPage> pages,
  * @param[in] stream CUDA stream to use, default 0
  */
 void DecideCompression(device_span<EncColumnChunk> chunks,
-                       const EncPage *pages,
+                       device_span<gpu::EncPage const> pages,
                        uint32_t start_page,
                        const gpu_inflate_status_s *comp_out = nullptr,
                        rmm::cuda_stream_view stream         = rmm::cuda_stream_default);
@@ -557,7 +552,7 @@ void EncodePageHeaders(device_span<EncPage> pages,
  * @param[in] stream CUDA stream to use, default 0
  */
 void GatherPages(device_span<EncColumnChunk> chunks,
-                 const EncPage *pages,
+                 device_span<gpu::EncPage const> pages,
                  rmm::cuda_stream_view stream);
 
 /**

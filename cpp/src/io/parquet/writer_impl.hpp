@@ -127,13 +127,11 @@ class writer::impl {
    *
    * @param frag Destination page fragments
    * @param col_desc column description array
-   * @param num_columns Total number of columns
-   * @param num_fragments Total number of fragments per column
    * @param num_rows Total number of rows
    * @param fragment_size Number of rows per fragment
    */
   void init_page_fragments(hostdevice_2dvector<gpu::PageFragment>& frag,
-                           hostdevice_vector<gpu::parquet_column_device_view>& col_desc,
+                           device_span<gpu::parquet_column_device_view const> col_desc,
                            uint32_t num_rows,
                            uint32_t fragment_size);
 
@@ -163,7 +161,7 @@ class writer::impl {
    * @param num_dictionaries Total number of dictionaries
    */
   void build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
-                                hostdevice_vector<gpu::parquet_column_device_view>& col_desc,
+                                device_span<gpu::parquet_column_device_view const> col_desc,
                                 uint32_t num_rowgroups,
                                 uint32_t num_columns,
                                 uint32_t num_dictionaries);
@@ -179,8 +177,8 @@ class writer::impl {
    * @param num_stats_bfr Number of statistics buffers
    */
   void init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
-                          hostdevice_vector<gpu::parquet_column_device_view>& col_desc,
-                          gpu::EncPage* pages,
+                          device_span<gpu::parquet_column_device_view const> col_desc,
+                          device_span<gpu::EncPage> pages,
                           statistics_chunk* page_stats,
                           statistics_chunk* frag_stats,
                           uint32_t num_rowgroups,
@@ -203,7 +201,7 @@ class writer::impl {
    * @param chunk_stats optional chunk-level statistics (nullptr if none)
    */
   void encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
-                    gpu::EncPage* pages,
+                    device_span<gpu::EncPage> pages,
                     uint32_t num_columns,
                     uint32_t pages_in_batch,
                     uint32_t first_page_in_batch,

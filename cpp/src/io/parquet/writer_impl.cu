@@ -718,11 +718,11 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_s
 }
 
 void writer::impl::init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::PageFragment> &frag,
-                                       hostdevice_vector<gpu::parquet_column_device_view> &col_desc,
+                                       device_span<gpu::parquet_column_device_view const> col_desc,
                                        uint32_t num_rows,
                                        uint32_t fragment_size)
 {
-  gpu::InitPageFragments(frag, col_desc.device_ptr(), fragment_size, num_rows, stream);
+  gpu::InitPageFragments(frag, col_desc, fragment_size, num_rows, stream);
   frag.device_to_host(stream, true);
 }
 
@@ -738,8 +738,7 @@ void writer::impl::gather_fragment_statistics(
   auto frag_stats_group_2dview =
     device_2dspan<statistics_group>(frag_stats_group.data(), num_columns, num_fragments);
 
-  gpu::InitFragmentStatistics(
-    frag_stats_group_2dview, frag, col_desc, num_fragments, num_columns, fragment_size, stream);
+  gpu::InitFragmentStatistics(frag_stats_group_2dview, frag, col_desc, fragment_size, stream);
   GatherColumnStatistics(
     frag_stats_chunk.data(), frag_stats_group.data(), num_fragments * num_columns, stream);
   stream.synchronize();
@@ -747,7 +746,7 @@ void writer::impl::gather_fragment_statistics(
 
 void writer::impl::build_chunk_dictionaries(
   hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
-  hostdevice_vector<gpu::parquet_column_device_view> &col_desc,
+  device_span<gpu::parquet_column_device_view const> col_desc,
   uint32_t num_rowgroups,
   uint32_t num_columns,
   uint32_t num_dictionaries)
@@ -761,14 +760,13 @@ void writer::impl::build_chunk_dictionaries(
   auto chunks_ptr = static_cast<device_2dspan<gpu::EncColumnChunk>>(chunks).data();
   gpu::BuildChunkDictionaries(
     chunks_ptr, dict_scratch.data(), dict_scratch_size, num_rowgroups * num_columns, stream);
-  gpu::InitEncoderPages(
-    chunks, nullptr, col_desc.device_ptr(), num_columns, nullptr, nullptr, stream);
+  gpu::InitEncoderPages(chunks, {}, col_desc, num_columns, nullptr, nullptr, stream);
   chunks.device_to_host(stream, true);
 }
 
 void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
-                                      hostdevice_vector<gpu::parquet_column_device_view> &col_desc,
-                                      gpu::EncPage *pages,
+                                      device_span<gpu::parquet_column_device_view const> col_desc,
+                                      device_span<gpu::EncPage> pages,
                                       statistics_chunk *page_stats,
                                       statistics_chunk *frag_stats,
                                       uint32_t num_rowgroups,
@@ -780,7 +778,7 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &
   chunks.host_to_device(stream);
   InitEncoderPages(chunks,
                    pages,
-                   col_desc.device_ptr(),
+                   col_desc,
                    num_columns,
                    (num_stats_bfr) ? page_stats_mrg.data() : nullptr,
                    (num_stats_bfr > num_pages) ? page_stats_mrg.data() + num_pages : nullptr,
@@ -799,7 +797,7 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &
 }
 
 void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
-                                gpu::EncPage *pages,
+                                device_span<gpu::EncPage> pages,
                                 uint32_t num_columns,
                                 uint32_t pages_in_batch,
                                 uint32_t first_page_in_batch,
@@ -810,7 +808,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks
                                 const statistics_chunk *page_stats,
                                 const statistics_chunk *chunk_stats)
 {
-  auto batch_pages = device_span<gpu::EncPage>{pages + first_page_in_batch, pages_in_batch};
+  auto batch_pages = pages.subspan(first_page_in_batch, pages_in_batch);
   gpu::EncodePages(batch_pages, comp_in, comp_out, stream);
   switch (compression_) {
     case parquet::Compression::SNAPPY:
@@ -1162,7 +1160,7 @@ void writer::impl::write(table_view const &table)
   if (num_pages != 0) {
     init_encoder_pages(chunks,
                        col_desc,
-                       pages.data(),
+                       {pages.data(), pages.size()},
                        (num_stats_bfr) ? page_stats.data() : nullptr,
                        (num_stats_bfr) ? frag_stats.data() : nullptr,
                        num_rowgroups,
@@ -1184,7 +1182,7 @@ void writer::impl::write(table_view const &table)
     uint32_t pages_in_batch = first_page_in_next_batch - first_page_in_batch;
     encode_pages(
       chunks,
-      pages.data(),
+      {pages.data(), pages.size()},
       num_columns,
       pages_in_batch,
       first_page_in_batch,
