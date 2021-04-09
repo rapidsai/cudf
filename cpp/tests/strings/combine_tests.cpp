@@ -563,7 +563,7 @@ TEST_F(StringsListsConcatenateTest, EmptyInput)
   auto results            = cudf::strings::concatenate(string_lv);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
 
-  auto const separators = STR_COL{"+++"}.release();
+  auto const separators = STR_COL{}.release();
   results               = cudf::strings::concatenate(string_lv, separators->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
 }
