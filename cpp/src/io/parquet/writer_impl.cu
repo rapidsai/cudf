@@ -762,7 +762,7 @@ void writer::impl::build_chunk_dictionaries(
   gpu::BuildChunkDictionaries(
     chunks_ptr, dict_scratch.data(), dict_scratch_size, num_rowgroups * num_columns, stream);
   gpu::InitEncoderPages(
-    chunks, nullptr, col_desc.device_ptr(), num_rowgroups, num_columns, nullptr, nullptr, stream);
+    chunks, nullptr, col_desc.device_ptr(), num_columns, nullptr, nullptr, stream);
   chunks.device_to_host(stream, true);
 }
 
@@ -781,7 +781,6 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &
   InitEncoderPages(chunks,
                    pages,
                    col_desc.device_ptr(),
-                   num_rowgroups,
                    num_columns,
                    (num_stats_bfr) ? page_stats_mrg.data() : nullptr,
                    (num_stats_bfr > num_pages) ? page_stats_mrg.data() + num_pages : nullptr,
@@ -811,7 +810,8 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks
                                 const statistics_chunk *page_stats,
                                 const statistics_chunk *chunk_stats)
 {
-  gpu::EncodePages(pages, pages_in_batch, first_page_in_batch, comp_in, comp_out, stream);
+  auto batch_pages = device_span<gpu::EncPage>{pages + first_page_in_batch, pages_in_batch};
+  gpu::EncodePages(batch_pages, comp_in, comp_out, stream);
   switch (compression_) {
     case parquet::Compression::SNAPPY:
       CUDA_TRY(gpu_snap(comp_in, comp_out, pages_in_batch, stream));
@@ -823,7 +823,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks
   auto d_chunks_in_batch = chunks.device_view().subspan(first_rowgroup, rowgroups_in_batch);
   DecideCompression(d_chunks_in_batch.flat_view(), pages, first_page_in_batch, comp_out, stream);
   EncodePageHeaders(
-    pages, pages_in_batch, first_page_in_batch, comp_out, page_stats, chunk_stats, stream);
+    batch_pages, pages_in_batch, first_page_in_batch, comp_out, page_stats, chunk_stats, stream);
   GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
 
   auto h_chunks_in_batch = chunks.host_view().subspan(first_rowgroup, rowgroups_in_batch);
@@ -1035,14 +1035,10 @@ void writer::impl::write(table_view const &table)
       gpu::EncColumnChunk *ck = &chunks[r][i];
       bool dict_enable        = false;
 
-      ck->col_desc         = col_desc.device_ptr() + i;
-      ck->uncompressed_bfr = nullptr;
-      ck->compressed_bfr   = nullptr;
-      ck->bfr_size         = 0;
-      ck->compressed_size  = 0;
+      *ck          = {};
+      ck->col_desc = col_desc.device_ptr() + i;
       // TODO: Next, make the chunk member a span
-      // This is ugly; need a .host_view/device_view member
-      ck->fragments = &static_cast<cudf::detail::device_2dspan<gpu::PageFragment>>(fragments)[i][f];
+      ck->fragments = &fragments.device_view()[i][f];
       ck->stats = (frag_stats.size() != 0) ? frag_stats.data() + i * num_fragments + f : nullptr;
       ck->start_row        = start_row;
       ck->num_rows         = (uint32_t)md.row_groups[global_r].num_rows;
@@ -1052,11 +1048,7 @@ void writer::impl::write(table_view const &table)
         std::accumulate(chunk_fragments.begin(), chunk_fragments.end(), 0, [](uint32_t l, auto r) {
           return l + r.num_values;
         });
-      ck->first_page    = 0;
-      ck->num_pages     = 0;
-      ck->is_compressed = 0;
       ck->dictionary_id = num_dictionaries;
-      ck->ck_stat_size  = 0;
       if (col_desc[i].dict_data) {
         // TODO: turn it into subspan
         const gpu::PageFragment *ck_frag = &fragments[i][f];

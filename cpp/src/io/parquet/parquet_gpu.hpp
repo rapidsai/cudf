@@ -494,7 +494,6 @@ void InitFragmentStatistics(cudf::detail::device_2dspan<statistics_group> groups
 void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                       EncPage *pages,
                       const parquet_column_device_view *col_desc,
-                      int32_t num_rowgroups,
                       int32_t num_columns,
                       statistics_merge_group *page_grstats  = nullptr,
                       statistics_merge_group *chunk_grstats = nullptr,
@@ -504,15 +503,11 @@ void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
  * @brief Launches kernel for packing column data into parquet pages
  *
  * @param[in,out] pages Device array of EncPages (unordered)
- * @param[in] num_pages Number of pages
- * @param[in] start_page First page to encode in page array
  * @param[out] comp_in Optionally initializes compressor input params
  * @param[out] comp_out Optionally initializes compressor output params
  * @param[in] stream CUDA stream to use, default 0
  */
-void EncodePages(EncPage *pages,
-                 uint32_t num_pages,
-                 uint32_t start_page            = 0,
+void EncodePages(device_span<EncPage> pages,
                  gpu_inflate_input_s *comp_in   = nullptr,
                  gpu_inflate_status_s *comp_out = nullptr,
                  rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
@@ -544,7 +539,7 @@ void DecideCompression(device_span<EncColumnChunk> chunks,
  * @param[in] chunk_stats Optional chunk-level statistics to be encoded
  * @param[in] stream CUDA stream to use, default 0
  */
-void EncodePageHeaders(EncPage *pages,
+void EncodePageHeaders(device_span<EncPage> pages,
                        uint32_t num_pages,
                        uint32_t start_page                  = 0,
                        const gpu_inflate_status_s *comp_out = nullptr,

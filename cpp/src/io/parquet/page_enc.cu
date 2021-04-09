@@ -410,7 +410,6 @@ __global__ void __launch_bounds__(128) gpuInitPages(device_2dspan<EncColumnChunk
                                                     const parquet_column_device_view *col_desc,
                                                     statistics_merge_group *page_grstats,
                                                     statistics_merge_group *chunk_grstats,
-                                                    int32_t num_rowgroups,
                                                     int32_t num_columns)
 {
   __shared__ __align__(8) parquet_column_device_view col_g;
@@ -924,10 +923,9 @@ convert_nanoseconds(cuda::std::chrono::sys_time<cuda::std::chrono::nanoseconds> 
 
 // blockDim(128, 1, 1)
 template <int block_size>
-__global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
+__global__ void __launch_bounds__(128, 8) gpuEncodePages(device_span<gpu::EncPage> pages,
                                                          gpu_inflate_input_s *comp_in,
-                                                         gpu_inflate_status_s *comp_out,
-                                                         uint32_t start_page)
+                                                         gpu_inflate_status_s *comp_out)
 {
   __shared__ __align__(8) page_enc_state_s state_g;
   using block_scan = cub::BlockScan<uint32_t, block_size>;
@@ -939,7 +937,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   int32_t dict_bits;
 
   if (t == 0) {
-    s->page = pages[start_page + blockIdx.x];
+    s->page = pages[blockIdx.x];
     s->ck   = *s->page.chunk;
     s->col  = *s->ck.col_desc;
     s->cur  = s->page.page_data + s->page.max_hdr_size;
@@ -1262,7 +1260,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   }
   __syncthreads();
   if (t == 0) {
-    pages[start_page + blockIdx.x] = s->page;
+    pages[blockIdx.x] = s->page;
     if (comp_in) comp_in[blockIdx.x] = s->comp_in;
     if (comp_out) comp_out[blockIdx.x] = s->comp_out;
   }
@@ -1274,6 +1272,8 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColum
                                                             const gpu_inflate_status_s *comp_out,
                                                             uint32_t start_page)
 {
+  // After changing the way structs are loaded from coop to normal, this kernel has no business
+  // being launched with 128 thread block. It can easily be a single warp.
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(4) unsigned int error_count;
   using warp_reduce = cub::WarpReduce<uint32_t>;
@@ -1479,7 +1479,7 @@ __device__ uint8_t *EncodeStatistics(uint8_t *start,
 }
 
 // blockDim(128, 1, 1)
-__global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
+__global__ void __launch_bounds__(128) gpuEncodePageHeaders(device_span<EncPage> pages,
                                                             const gpu_inflate_status_s *comp_out,
                                                             const statistics_chunk *page_stats,
                                                             const statistics_chunk *chunk_stats,
@@ -1497,7 +1497,7 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
     uint8_t *hdr_start, *hdr_end;
     uint32_t compressed_page_size, uncompressed_page_size;
 
-    page_g = pages[start_page + blockIdx.x];
+    page_g = pages[blockIdx.x];
     ck_g   = *page_g.chunk;
     col_g  = *ck_g.col_desc;
 
@@ -1561,7 +1561,7 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
     page_g.hdr_size = (uint32_t)(hdr_end - hdr_start);
   }
   __syncthreads();
-  if (t == 0) pages[start_page + blockIdx.x] = page_g;
+  if (t == 0) pages[blockIdx.x] = page_g;
 }
 
 // blockDim(1024, 1, 1)
@@ -2098,9 +2098,9 @@ void InitPageFragments(device_2dspan<PageFragment> frag,
                        uint32_t num_rows,
                        rmm::cuda_stream_view stream)
 {
-  auto num_columns   = frag.size().first;
-  auto num_fragments = frag.size().second;
-  dim3 dim_grid(num_columns, num_fragments);  // 1 threadblock per fragment
+  auto num_columns              = frag.size().first;
+  auto num_fragments_per_column = frag.size().second;
+  dim3 dim_grid(num_columns, num_fragments_per_column);  // 1 threadblock per fragment
   gpuInitPageFragments<512>
     <<<dim_grid, 512, 0, stream.value()>>>(frag, col_desc, fragment_size, num_rows);
 }
@@ -2144,38 +2144,34 @@ void InitFragmentStatistics(device_2dspan<statistics_group> groups,
 void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                       EncPage *pages,
                       const parquet_column_device_view *col_desc,
-                      int32_t num_rowgroups,
                       int32_t num_columns,
                       statistics_merge_group *page_grstats,
                       statistics_merge_group *chunk_grstats,
                       rmm::cuda_stream_view stream)
 {
+  auto num_rowgroups = chunks.size().first;
   dim3 dim_grid(num_columns, num_rowgroups);  // 1 threadblock per rowgroup
   gpuInitPages<<<dim_grid, 128, 0, stream.value()>>>(
-    chunks, pages, col_desc, page_grstats, chunk_grstats, num_rowgroups, num_columns);
+    chunks, pages, col_desc, page_grstats, chunk_grstats, num_columns);
 }
 
 /**
  * @brief Launches kernel for packing column data into parquet pages
  *
  * @param[in,out] pages Device array of EncPages (unordered)
- * @param[in] chunks Column chunks
- * @param[in] num_pages Number of pages
- * @param[in] start_page First page to encode in page array
  * @param[out] comp_in Optionally initializes compressor input params
  * @param[out] comp_out Optionally initializes compressor output params
  * @param[in] stream CUDA stream to use, default 0
  */
-void EncodePages(EncPage *pages,
-                 uint32_t num_pages,
-                 uint32_t start_page,
+void EncodePages(device_span<gpu::EncPage> pages,
                  gpu_inflate_input_s *comp_in,
                  gpu_inflate_status_s *comp_out,
                  rmm::cuda_stream_view stream)
 {
+  auto num_pages = pages.size();
   // A page is part of one column. This is launching 1 block per page. 1 block will exclusively
   // deal with one datatype.
-  gpuEncodePages<128><<<num_pages, 128, 0, stream.value()>>>(pages, comp_in, comp_out, start_page);
+  gpuEncodePages<128><<<num_pages, 128, 0, stream.value()>>>(pages, comp_in, comp_out);
 }
 
 /**
@@ -2208,7 +2204,7 @@ void DecideCompression(device_span<EncColumnChunk> chunks,
  * @param[in] chunk_stats Optional chunk-level statistics to be encoded
  * @param[in] stream CUDA stream to use, default 0
  */
-void EncodePageHeaders(EncPage *pages,
+void EncodePageHeaders(device_span<EncPage> pages,
                        uint32_t num_pages,
                        uint32_t start_page,
                        const gpu_inflate_status_s *comp_out,
@@ -2227,7 +2223,6 @@ void EncodePageHeaders(EncPage *pages,
  *
  * @param[in,out] chunks Column chunks
  * @param[in] pages Device array of EncPages
- * @param[in] num_chunks Number of column chunks
  * @param[in] stream CUDA stream to use, default 0
  */
 void GatherPages(device_span<EncColumnChunk> chunks,
