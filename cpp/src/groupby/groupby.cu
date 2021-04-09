@@ -19,9 +19,9 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby.hpp>
-#include <cudf/detail/groupby/group_shift.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -228,8 +228,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> groupby::shift(
 
   return std::make_pair(
     std::move(sorted_keys),
-    std::move(detail::group_shift(
-      grouped_values->view(), offset, fill_value, helper().group_offsets(stream), stream, mr)));
+    std::move(cudf::detail::segmented_shift(
+      grouped_values->view(), helper().group_offsets(stream), offset, fill_value, stream, mr)));
 }
 
 }  // namespace groupby
