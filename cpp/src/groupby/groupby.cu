@@ -224,13 +224,13 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> groupby::shift(
                "values and fill_value should have the same type.");
 
   auto stream        = rmm::cuda_stream_default;
-  auto sorted_keys   = helper().sorted_keys(stream);
-  auto sorted_values = helper().sorted_values(values, stream, mr);
+  auto sorted_keys   = helper().sorted_keys(stream, mr);
+  auto grouped_values = helper().grouped_values(values, stream);
 
   return std::make_pair(
     std::move(sorted_keys),
     std::move(detail::group_shift(
-      sorted_values->view(), offset, fill_value, helper().group_offsets(stream), stream, mr)));
+      grouped_values->view(), offset, fill_value, helper().group_offsets(stream), stream, mr)));
 }
 
 }  // namespace groupby

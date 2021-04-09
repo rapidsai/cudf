@@ -135,7 +135,7 @@ std::unique_ptr<column> group_shift(column_view const& sorted_values,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  if (sorted_values.size() == 0) { return make_empty_column(sorted_values.type()); }
+  if (sorted_values.empty()) { return make_empty_column(sorted_values.type()); }
 
   if (offset > 0) {
     return group_shift_impl<true>(sorted_values,

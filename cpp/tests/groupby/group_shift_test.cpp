@@ -30,6 +30,7 @@
 namespace cudf {
 namespace test {
 
+using K = int32_t;
 template <typename T>
 struct groupby_shift_fixed_width_test : public cudf::test::BaseFixture {
 };
@@ -50,7 +51,6 @@ void test_groupby_shift_fixed_width(cudf::test::fixed_width_column_wrapper<int32
 
 TYPED_TEST(groupby_shift_fixed_width_test, ForwardShiftNullScalar)
 {
-  using K = int32_t;
   using V = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
@@ -65,9 +65,7 @@ TYPED_TEST(groupby_shift_fixed_width_test, ForwardShiftNullScalar)
 
 TYPED_TEST(groupby_shift_fixed_width_test, ForwardShiftValidScalar)
 {
-  using K = int32_t;
   using V = TypeParam;
-  using cudf::scalar_type_t;
 
   cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   cudf::test::fixed_width_column_wrapper<V> val{3, 4, 5, 6, 7, 8, 9};
@@ -81,7 +79,6 @@ TYPED_TEST(groupby_shift_fixed_width_test, ForwardShiftValidScalar)
 
 TYPED_TEST(groupby_shift_fixed_width_test, BackwardShiftNullScalar)
 {
-  using K = int32_t;
   using V = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
@@ -96,7 +93,6 @@ TYPED_TEST(groupby_shift_fixed_width_test, BackwardShiftNullScalar)
 
 TYPED_TEST(groupby_shift_fixed_width_test, BackwardShiftValidScalar)
 {
-  using K = int32_t;
   using V = TypeParam;
 
   cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
@@ -125,7 +121,6 @@ void test_groupby_shift_string(cudf::test::fixed_width_column_wrapper<int32_t> c
 
 TEST_F(groupby_shift_string_test, ForwardShiftNullScalar)
 {
-  using K = int32_t;
 
   cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   cudf::test::strings_column_wrapper val{"a", "bb", "cc", "d", "eee", "f", "gg"};
@@ -139,7 +134,6 @@ TEST_F(groupby_shift_string_test, ForwardShiftNullScalar)
 
 TEST_F(groupby_shift_string_test, ForwardShiftValidScalar)
 {
-  using K = int32_t;
 
   cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   cudf::test::strings_column_wrapper val{"a", "bb", "cc", "d", "eee", "f", "gg"};
@@ -153,7 +147,6 @@ TEST_F(groupby_shift_string_test, ForwardShiftValidScalar)
 
 TEST_F(groupby_shift_string_test, BackwardShiftNullScalar)
 {
-  using K = int32_t;
 
   cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   cudf::test::strings_column_wrapper val{"a", "bb", "cc", "d", "eee", "f", "gg"};
@@ -168,7 +161,6 @@ TEST_F(groupby_shift_string_test, BackwardShiftNullScalar)
 
 TEST_F(groupby_shift_string_test, BackwardShiftValidScalar)
 {
-  using K = int32_t;
 
   cudf::test::fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   cudf::test::strings_column_wrapper val{"a", "bb", "cc", "d", "eee", "f", "gg"};
