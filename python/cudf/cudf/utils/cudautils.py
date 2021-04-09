@@ -3,17 +3,11 @@ from pickle import dumps
 
 import cachetools
 import numpy as np
-from numba import cuda, jit
-import math
+from numba import cuda
 
 import cudf
 
-try:
-    # Numba >= 0.49
-    from numba.np import numpy_support
-except ImportError:
-    # Numba <= 0.49
-    from numba import numpy_support
+from numba.np import numpy_support
 
 
 #
@@ -55,17 +49,6 @@ def gpu_mark_found_int(arr, val, out, not_found):
             out[i] = not_found
 
 
-@jit
-def _check_equals_float(a, b):
-    """Check float equality with support for nans and infs."""
-    return (
-        a == b
-        or (math.isnan(a) and math.isnan(b))
-        or ((math.isinf(a) and a < 0) and (math.isinf(b) and b < 0))
-        or ((math.isinf(a) and a > 0) and (math.isinf(b) and b > 0))
-    )
-
-
 @cuda.jit
 def gpu_mark_found_float(arr, val, out, not_found):
     i = cuda.grid(1)
@@ -75,7 +58,10 @@ def gpu_mark_found_float(arr, val, out, not_found):
         # at 0.51.1, this will have a very slight
         # performance improvement. Related
         # discussion in : https://github.com/rapidsai/cudf/pull/6073
-        if _check_equals_float(arr[i], float(val)):
+        val = float(val)
+
+        # NaN-aware equality comparison.
+        if (arr[i] == val) or (arr[i] != arr[i] and val != val):
             out[i] = i
         else:
             out[i] = not_found

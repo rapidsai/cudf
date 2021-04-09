@@ -101,10 +101,6 @@ def _is_nep18_active():
         return False
 
 
-# TODO: Do we need to expose this? It's essentially a trivial wrapper for an
-# rmm function and we don't use it anywhere internally. Unless this is intended
-# to allow us the flexibility to use allocators other than RMM in the future it
-# doesn't serve much purpose.
 @initfunc
 def set_allocator(
     allocator="default",
