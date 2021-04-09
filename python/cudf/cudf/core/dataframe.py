@@ -43,6 +43,7 @@ from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
     find_common_type,
     is_categorical_dtype,
+    is_decimal_dtype,
     is_column_like,
     is_datetime_dtype,
     is_list_dtype,
@@ -5908,7 +5909,8 @@ class DataFrame(Frame, Serializable):
 
         if numeric_only:
             data_df = self.select_dtypes(
-                include=[np.number], exclude=["datetime64", "timedelta64"]
+                include=[np.number, cudf.Decimal64Dtype],
+                exclude=["datetime64", "timedelta64"]
             )
         else:
             data_df = self
@@ -7295,7 +7297,7 @@ class DataFrame(Frame, Serializable):
         for dtype in self.dtypes:
             for i_dtype in include:
                 # category handling
-                if is_categorical_dtype(i_dtype):
+                if is_categorical_dtype(i_dtype) or is_decimal_dtype(i_dtype):
                     include_subtypes.add(i_dtype)
                 elif issubclass(dtype.type, i_dtype):
                     include_subtypes.add(dtype.type)
@@ -7305,7 +7307,7 @@ class DataFrame(Frame, Serializable):
         for dtype in self.dtypes:
             for e_dtype in exclude:
                 # category handling
-                if is_categorical_dtype(e_dtype):
+                if is_categorical_dtype(e_dtype) or is_decimal_dtype(e_dtype):
                     exclude_subtypes.add(e_dtype)
                 elif issubclass(dtype.type, e_dtype):
                     exclude_subtypes.add(dtype.type)

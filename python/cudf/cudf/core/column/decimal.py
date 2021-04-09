@@ -1,18 +1,20 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 from decimal import Decimal
-from typing import cast, Any
+from typing import cast, Any, Callable, Sequence, Tuple, Union
 
 import cupy as cp
 import numpy as np
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
+from numbers import Number
 
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
+from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._typing import Dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column
@@ -115,6 +117,49 @@ class DecimalColumn(ColumnBase):
 
     def _apply_scan_op(self, op: str) -> ColumnBase:
         result = libcudf.reduce.scan(op, self, True)
+        return self._copy_type_metadata(result)
+
+    def quantile(
+        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+    ) -> "cudf.core.column.DecimalColumn":
+        if isinstance(q, Number) or cudf.utils.dtypes.is_list_like(q):
+            np_array_q = np.asarray(q)
+            if np.logical_or(np_array_q < 0, np_array_q > 1).any():
+                raise ValueError(
+                    "percentiles should all be in the interval [0, 1]"
+                )
+        # Beyond this point, q either being scalar or list-like
+        # will only have values in range [0, 1]
+        result = self._decimal_quantile(q, interpolation, exact)
+        if isinstance(q, Number):
+            return (
+                cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+                if result[0] is cudf.NA
+                else result[0]
+            )
+        return result
+
+    def median(self, skipna: bool = None) -> "cudf.core.column.DecimalColumn":
+        skipna = True if skipna is None else skipna
+
+        if not skipna and self.has_nulls:
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+        # enforce linear in case the default ever changes
+        return self.quantile(0.5, interpolation="linear", exact=True)
+
+    def _decimal_quantile(
+        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+    ) -> "cudf.core.column.DecimalColumn":
+        quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
+        # get sorted indices and exclude nulls
+        sorted_indices = self.as_frame()._get_sorted_inds(
+            ascending=True, na_position="first"
+        )
+        sorted_indices = sorted_indices[self.null_count :]
+
+        result = cpp_quantile(self, quant, interpolation, sorted_indices, exact)
+        
         return self._copy_type_metadata(result)
 
     def as_decimal_column(
