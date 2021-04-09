@@ -4672,15 +4672,15 @@ public class TableTest extends CudfTestBase {
     ParquetWriterOptions options = ParquetWriterOptions.builder()
         .withColumn("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
         .withStructColumn(structBuilder("_c7")
-            .withSimpleChildColumn("_c7-1")
-            .withSimpleChildColumn("_c7-2")
+            .withLeafColumn("_c7-1")
+            .withLeafColumn("_c7-2")
             .build())
         .withListColumn(listBuilder("_c8")
-            .withSimpleChildColumn("c8-1").withNullable(false).build())
+            .withLeafColumn("c8-1").withNullable(false).build())
         .withListColumn(listBuilder("c9")
-            .withStructChildColumn(structBuilder("c9-1")
-                .withSimpleChildColumn("c9-1-1")
-                .withSimpleChildColumn("c9-1-2").build())
+            .withStructColumn(structBuilder("c9-1")
+                .withLeafColumn("c9-1-1")
+                .withLeafColumn("c9-1-2").build())
             .build())
         .build();
     try (Table table0 = getExpectedFileTable(true);
@@ -4703,8 +4703,8 @@ public class TableTest extends CudfTestBase {
     ParquetWriterOptions options = ParquetWriterOptions.builder()
         .withColumn("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
         .withStructColumn(structBuilder("_c7")
-            .withSimpleChildColumn("_c7-1")
-            .withSimpleChildColumn("_c7-2")
+            .withLeafColumn("_c7-1")
+            .withLeafColumn("_c7-2")
             .build())
         .build();
     try (Table table0 = getExpectedFileTable(true, false);

@@ -112,7 +112,7 @@ public class ParquetWriterOptions {
      */
     public Builder withColumn(boolean nullable, String... name) {
       IntStream.range(0, name.length).forEach(
-          i -> columnOptions.add(ParquetColumnWriterOptions.simpleColumnBuilder(name[i])
+          i -> columnOptions.add(ParquetColumnWriterOptions.leafBuilder(name[i])
               .withNullable(nullable)
               .build())
       );
@@ -143,7 +143,7 @@ public class ParquetWriterOptions {
      * @param precision
      */
     public Builder withDecimalColumn(String name, int precision, boolean nullable) {
-      columnOptions.add(ParquetColumnWriterOptions.simpleColumnBuilder(name)
+      columnOptions.add(ParquetColumnWriterOptions.leafBuilder(name)
           .withDecimalPrecision(precision)
           .withNullable(nullable)
           .build());
@@ -176,7 +176,7 @@ public class ParquetWriterOptions {
      * @param isInt96
      */
     public Builder withTimestampColumn(String name, boolean isInt96, boolean nullable) {
-      columnOptions.add(ParquetColumnWriterOptions.simpleColumnBuilder(name)
+      columnOptions.add(ParquetColumnWriterOptions.leafBuilder(name)
           .withTimestampInt96(isInt96)
           .withNullable(nullable)
           .build());

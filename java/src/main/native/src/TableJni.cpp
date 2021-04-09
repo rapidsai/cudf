@@ -1113,7 +1113,7 @@ void createTableMetaData(JNIEnv *env, jobjectArray &j_col_names, jintArray &j_ch
   auto cpp_names = col_names.as_cpp_vector();
 
   int top_level_children =
-      children[0]; // this should never be 0, because a table can't have no columns
+      children[0]; // this should never be 0, because a table must have columns
 
   // first value are dummy when reading
   // but we write at index 0
@@ -1859,8 +1859,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_crossJoin(JNIEnv *env, jc
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_interleaveColumns(JNIEnv *env, jclass,
                                                                     jlongArray j_cudf_table_view) {
 
-  JNI_NULL_CHECK(env, j_cudf_table_view, "table is null", 0);
-  try {
+  JNI_NULL_CHECK(env, j_cudf_table_view, "table is null", 0);  try {
     cudf::jni::auto_set_device(env);
     cudf::table_view *table_view = reinterpret_cast<cudf::table_view *>(j_cudf_table_view);
     std::unique_ptr<cudf::column> result = cudf::interleave_columns(*table_view);
