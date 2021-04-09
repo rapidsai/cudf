@@ -554,22 +554,28 @@ TEST_F(StringsListsConcatenateTest, InvalidInput)
 
 TEST_F(StringsListsConcatenateTest, EmptyInput)
 {
-  auto const l          = STR_LISTS{}.release();
-  auto const lv         = cudf::lists_column_view(l->view());
+  auto const l        = STR_LISTS{}.release();
+  auto const lv       = cudf::lists_column_view(l->view());
+  auto const expected = STR_COL{};
+  auto results        = cudf::strings::concatenate(lv);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+
   auto const separators = STR_COL{"+++"}.release();
-  auto const results1   = cudf::strings::concatenate(lv);
-  auto const results2   = cudf::strings::concatenate(lv, separators->view());
-  auto const expected   = STR_COL{};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results1, expected, print_all);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results2, expected, print_all);
+  results               = cudf::strings::concatenate(lv, separators->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
 }
 
 TEST_F(StringsListsConcatenateTest, ZeroSizeStringsInput)
 {
-  auto const l       = STR_LISTS{STR_LISTS{""}, STR_LISTS{"", "", ""}, STR_LISTS{"", ""}}.release();
-  auto const lv      = cudf::lists_column_view(l->view());
-  auto const results = cudf::strings::concatenate(lv);
+  auto const l  = STR_LISTS{STR_LISTS{""}, STR_LISTS{"", "", ""}, STR_LISTS{"", ""}}.release();
+  auto const lv = cudf::lists_column_view(l->view());
   auto const expected = STR_COL{"", "", ""};
+
+  auto results = cudf::strings::concatenate(lv);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+
+  auto const separators = STR_COL{"+++"}.release();
+  results               = cudf::strings::concatenate(lv, separators->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
 }
 
@@ -580,8 +586,13 @@ TEST_F(StringsListsConcatenateTest, AllNullsStringsInput)
                            STR_LISTS{{"", ""}, all_nulls()}}
                    .release();
   auto const lv       = cudf::lists_column_view(l->view());
-  auto const results  = cudf::strings::concatenate(lv);
   auto const expected = STR_COL{{"", "", ""}, all_nulls()};
+
+  auto results = cudf::strings::concatenate(lv);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+
+  auto const separators = STR_COL{"+++"}.release();
+  results               = cudf::strings::concatenate(lv, separators->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
 }
 
@@ -751,28 +762,9 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithScalarSeparator)
   }
 }
 
-TEST_F(StringsListsConcatenateTest, ColumnSeparatorNoReplacements)
+TEST_F(StringsListsConcatenateTest, ColumnSeparators)
 {
-  auto const l = STR_LISTS{STR_LISTS{{""}, all_nulls()},
-                           STR_LISTS{{"", "", ""}, all_nulls()},
-                           STR_LISTS{{"", ""}, all_nulls()}}
-                   .release();
-  auto const lv       = cudf::lists_column_view(l->view());
-  auto const results  = cudf::strings::concatenate(lv);
-  auto const expected = STR_COL{{"", "", ""}, all_nulls()};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
-}
 
-TEST_F(StringsListsConcatenateTest, ColumnSeparatorWithReplacements)
-{
-  auto const l = STR_LISTS{STR_LISTS{{""}, all_nulls()},
-                           STR_LISTS{{"", "", ""}, all_nulls()},
-                           STR_LISTS{{"", ""}, all_nulls()}}
-                   .release();
-  auto const lv       = cudf::lists_column_view(l->view());
-  auto const results  = cudf::strings::concatenate(lv);
-  auto const expected = STR_COL{{"", "", ""}, all_nulls()};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
 }
 
 TEST_F(StringsListsConcatenateTest, SlicedListsWithColumnSeparator)
