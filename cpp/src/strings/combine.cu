@@ -491,6 +491,10 @@ std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_colum
   auto const num_rows = lists_strings_column.size();
   if (num_rows == 0) { return detail::make_empty_strings_column(stream, mr); }
 
+  // Accessing the child strings column of the lists column must be done by calling `child()`
+  //  on the lists column, not `get_sliced_child()`
+  // This is because calling to `offsets_begin()` on the lists column returns a pointer to the
+  //  offsets of the original lists column, not sliced offsets (offsets starting from `0`)
   auto const lists_dv_ptr    = column_device_view::create(lists_strings_column.parent(), stream);
   auto const lists_dv        = *lists_dv_ptr;
   auto const strings_col     = strings_column_view(lists_strings_column.child());
@@ -629,6 +633,10 @@ std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_colum
   auto const num_rows = lists_strings_column.size();
   if (num_rows == 0) { return detail::make_empty_strings_column(stream, mr); }
 
+  // Accessing the child strings column of the lists column must be done by calling `child()`
+  //  on the lists column, not `get_sliced_child()`
+  // This is because calling to `offsets_begin()` on the lists column returns a pointer to the
+  //  offsets of the original lists column, not sliced offsets (offsets starting from `0`)
   auto const lists_dv_ptr    = column_device_view::create(lists_strings_column.parent(), stream);
   auto const lists_dv        = *lists_dv_ptr;
   auto const strings_col     = strings_column_view(lists_strings_column.child());
