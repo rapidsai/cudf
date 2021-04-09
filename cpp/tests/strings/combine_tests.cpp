@@ -608,16 +608,66 @@ TEST_F(StringsListsConcatenateTest, ScalarSeparator)
 
 TEST_F(StringsListsConcatenateTest, SlicedListsWithScalarSeparator)
 {
-  auto const l = STR_LISTS{{STR_LISTS{{"a", "bb" /*NULL*/, "ccc"}, null_at(1)},
-                            STR_LISTS{}, /*NULL*/
-                            STR_LISTS{{"ddd" /*NULL*/, "efgh", "ijk"}, null_at(0)},
-                            STR_LISTS{"zzz", "xxxxx"}},
-                           null_at(1)}
-                   .release();
-  auto const lv = cudf::lists_column_view(l->view());
+  auto const l = STR_LISTS{
+    {STR_LISTS{{"a", "bb" /*NULL*/, "ccc"}, null_at(1)},
+     STR_LISTS{}, /*NULL*/
+     STR_LISTS{{"ddd" /*NULL*/, "efgh", "ijk"}, null_at(0)},
+     STR_LISTS{"zzz", "xxxxx"},
+     STR_LISTS{"11111", "11111", "11111", "11111", "11111"}, /*NULL*/
+     STR_LISTS{{"abcdef", "012345", "" /*NULL*/, "xxx000"}, null_at(2)},
+     STR_LISTS{{"xyz" /*NULL*/, "11111", "00000"}, null_at(0)},
+     STR_LISTS{"0a0b0c", "5x5y5z"},
+     STR_LISTS{"xxx"}, /*NULL*/
+     STR_LISTS{"ééé", "12345abcdef"},
+     STR_LISTS{"aaaééébbbéééccc", "12345"}},
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+      return i != 1 && i != 4 && i != 8;
+    })}.release();
 
-  // No null replacement
+  // Sliced the entire lists column, no null replacement
   {
+    auto const lv      = cudf::lists_column_view(cudf::slice(l->view(), {0, 11})[0]);
+    auto const results = cudf::strings::concatenate(lv, cudf::string_scalar("+++"));
+    std::vector<const char*> h_expected{nullptr,
+                                        nullptr,
+                                        nullptr,
+                                        "zzz+++xxxxx",
+                                        nullptr,
+                                        nullptr,
+                                        nullptr,
+                                        "0a0b0c+++5x5y5z",
+                                        nullptr,
+                                        "ééé+++12345abcdef",
+                                        "aaaééébbbéééccc+++12345"};
+    auto const expected =
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+  }
+
+  // Sliced the entire lists column, with null replacement
+  {
+    auto const lv = cudf::lists_column_view(cudf::slice(l->view(), {0, 11})[0]);
+    auto const results =
+      cudf::strings::concatenate(lv, cudf::string_scalar("+++"), cudf::string_scalar("___"));
+    std::vector<const char*> h_expected{"a+++___+++ccc",
+                                        nullptr,
+                                        "___+++efgh+++ijk",
+                                        "zzz+++xxxxx",
+                                        nullptr,
+                                        "abcdef+++012345+++___+++xxx000",
+                                        "___+++11111+++00000",
+                                        "0a0b0c+++5x5y5z",
+                                        nullptr,
+                                        "ééé+++12345abcdef",
+                                        "aaaééébbbéééccc+++12345"};
+    auto const expected =
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+  }
+
+  // Sliced the first half of the lists column, no null replacement
+  {
+    auto const lv      = cudf::lists_column_view(cudf::slice(l->view(), {0, 5})[0]);
     auto const results = cudf::strings::concatenate(lv, cudf::string_scalar("+++"));
     std::vector<const char*> h_expected{nullptr, nullptr, nullptr, "zzz+++xxxxx"};
     auto const expected =
@@ -625,12 +675,66 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithScalarSeparator)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
-  // With null replacement
+  // Sliced the first half of the lists column, with null replacement
   {
+    auto const lv = cudf::lists_column_view(cudf::slice(l->view(), {0, 11})[0]);
     auto const results =
       cudf::strings::concatenate(lv, cudf::string_scalar("+++"), cudf::string_scalar("___"));
     std::vector<const char*> h_expected{
       "a+++___+++ccc", nullptr, "___+++efgh+++ijk", "zzz+++xxxxx"};
+    auto const expected =
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+  }
+
+  // Sliced the second half of the lists column, no null replacement
+  {
+    auto const lv      = cudf::lists_column_view(cudf::slice(l->view(), {5, 11})[0]);
+    auto const results = cudf::strings::concatenate(lv, cudf::string_scalar("+++"));
+    std::vector<const char*> h_expected{
+      nullptr, nullptr, "0a0b0c+++5x5y5z", nullptr, "ééé+++12345abcdef", "aaaééébbbéééccc+++12345"};
+    auto const expected =
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+  }
+
+  // Sliced the second half of the lists column, with null replacement
+  {
+    auto const lv = cudf::lists_column_view(cudf::slice(l->view(), {5, 11})[0]);
+    auto const results =
+      cudf::strings::concatenate(lv, cudf::string_scalar("+++"), cudf::string_scalar("___"));
+    std::vector<const char*> h_expected{"abcdef+++012345+++___+++xxx000",
+                                        "___+++11111+++00000",
+                                        "0a0b0c+++5x5y5z",
+                                        nullptr,
+                                        "ééé+++12345abcdef",
+                                        "aaaééébbbéééccc+++12345"};
+    auto const expected =
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+  }
+
+  // Sliced the middle part of the lists column, no null replacement
+  {
+    auto const lv      = cudf::lists_column_view(cudf::slice(l->view(), {3, 8})[0]);
+    auto const results = cudf::strings::concatenate(lv, cudf::string_scalar("+++"));
+    std::vector<const char*> h_expected{
+      "zzz+++xxxxx", nullptr, nullptr, nullptr, "0a0b0c+++5x5y5z"};
+    auto const expected =
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+  }
+
+  // Sliced the middle part of the lists column, with null replacement
+  {
+    auto const lv = cudf::lists_column_view(cudf::slice(l->view(), {3, 8})[0]);
+    auto const results =
+      cudf::strings::concatenate(lv, cudf::string_scalar("+++"), cudf::string_scalar("___"));
+    std::vector<const char*> h_expected{"zzz+++xxxxx",
+                                        nullptr,
+                                        "abcdef+++012345+++___+++xxx000",
+                                        "___+++11111+++00000",
+                                        "0a0b0c+++5x5y5z"};
     auto const expected =
       STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
