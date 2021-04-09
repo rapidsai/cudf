@@ -89,7 +89,6 @@ std::unique_ptr<column> segmented_shift_impl(column_view const& segmented_values
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
-  std::cerr << num_segments << std::endl;
   // Step 1: global shift
   auto shift_func = [col_size = segmented_values.size(), offset] __device__(size_type idx) {
     auto raw_shifted_idx = idx - offset;
