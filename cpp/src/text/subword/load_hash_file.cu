@@ -36,17 +36,12 @@
 namespace nvtext {
 namespace detail {
 
-/**
- * @brief Retrieve the code point metadata table.
- *
- * Build the code point metadata table in device memory
- * using the vector pieces from codepoint_metadata.ah
- */
-const codepoint_metadata_type* get_codepoint_metadata(rmm::cuda_stream_view stream)
-{
-  static cudf::strings::detail::thread_safe_per_context_cache<codepoint_metadata_type>
-    g_codepoint_metadata;
-  return g_codepoint_metadata.find_or_initialize([stream](void) {
+namespace {
+struct get_codepoint_metadata_init {
+  rmm::cuda_stream_view stream;
+
+  codepoint_metadata_type* operator()() const
+  {
     codepoint_metadata_type* table =
       static_cast<codepoint_metadata_type*>(rmm::mr::get_current_device_resource()->allocate(
         codepoint_metadata_size * sizeof(codepoint_metadata_type), stream));
@@ -66,20 +61,14 @@ const codepoint_metadata_type* get_codepoint_metadata(rmm::cuda_stream_view stre
       cudaMemcpyHostToDevice,
       stream.value()));
     return table;
-  });
-}
+  };
+};
 
-/**
- * @brief Retrieve the aux code point data table.
- *
- * Build the aux code point data table in device memory
- * using the vector pieces from codepoint_metadata.ah
- */
-const aux_codepoint_data_type* get_aux_codepoint_data(rmm::cuda_stream_view stream)
-{
-  static cudf::strings::detail::thread_safe_per_context_cache<aux_codepoint_data_type>
-    g_aux_codepoint_data;
-  return g_aux_codepoint_data.find_or_initialize([stream](void) {
+struct get_aux_codepoint_data_init {
+  rmm::cuda_stream_view stream;
+
+  aux_codepoint_data_type* operator()() const
+  {
     aux_codepoint_data_type* table =
       static_cast<aux_codepoint_data_type*>(rmm::mr::get_current_device_resource()->allocate(
         aux_codepoint_data_size * sizeof(aux_codepoint_data_type), stream));
@@ -111,7 +100,37 @@ const aux_codepoint_data_type* get_aux_codepoint_data(rmm::cuda_stream_view stre
       cudaMemcpyHostToDevice,
       stream.value()));
     return table;
-  });
+  }
+};
+}  // namespace
+
+/**
+ * @brief Retrieve the code point metadata table.
+ *
+ * Build the code point metadata table in device memory
+ * using the vector pieces from codepoint_metadata.ah
+ */
+const codepoint_metadata_type* get_codepoint_metadata(rmm::cuda_stream_view stream)
+{
+  static cudf::strings::detail::thread_safe_per_context_cache<codepoint_metadata_type>
+    g_codepoint_metadata;
+
+  get_codepoint_metadata_init function = {stream};
+  return g_codepoint_metadata.find_or_initialize(function);
+}
+
+/**
+ * @brief Retrieve the aux code point data table.
+ *
+ * Build the aux code point data table in device memory
+ * using the vector pieces from codepoint_metadata.ah
+ */
+const aux_codepoint_data_type* get_aux_codepoint_data(rmm::cuda_stream_view stream)
+{
+  static cudf::strings::detail::thread_safe_per_context_cache<aux_codepoint_data_type>
+    g_aux_codepoint_data;
+  get_aux_codepoint_data_init function = {stream};
+  return g_aux_codepoint_data.find_or_initialize(function);
 }
 
 namespace {
