@@ -39,6 +39,9 @@
 #include <thrust/transform_reduce.h>
 #include <thrust/transform_scan.h>
 
+#include <cudf/unary.hpp>
+#include <cudf_test/column_utilities.hpp>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -514,23 +517,21 @@ std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_colum
     auto const separator_size =
       sep_dv.is_valid(lidx) ? sep_dv.element<string_view>(lidx).size_bytes() : sep_narep_dv.size();
 
-    // This will be called inside another `thrust::transform` call, thus we will run it sequentially
-    auto const count_it   = thrust::make_counting_iterator<size_type>(0);
-    auto const size_bytes = thrust::transform_reduce(
-      thrust::seq,
-      count_it + lists_offsets[lidx],
-      count_it + lists_offsets[lidx + 1],
-      [strings_dv, string_narep_dv, separator_size] __device__(auto const str_idx) -> size_type {
-        if (strings_dv.is_null(str_idx) && !string_narep_dv.is_valid()) { return invalid_size; }
-        return separator_size + (strings_dv.is_null(str_idx)
-                                       ? string_narep_dv.size()
-                                       : strings_dv.element<string_view>(str_idx).size_bytes());
-      },
-      size_type{0},
-      thrust::plus<size_type>());
+    auto size_bytes = size_type{0};
+    for (size_type str_idx = lists_offsets[lidx], idx_end = lists_offsets[lidx + 1];
+         str_idx < idx_end;
+         ++str_idx) {
+      if (strings_dv.is_null(str_idx) && !string_narep_dv.is_valid()) {
+        size_bytes = invalid_size;
+        break;  // early termination: the entire list of strings will result in a null string
+      }
+      size_bytes += separator_size + (strings_dv.is_null(str_idx)
+                                            ? string_narep_dv.size()
+                                            : strings_dv.element<string_view>(str_idx).size_bytes());
+    }
 
     // Null/empty separator and strings don't produce a non-empty string
-    assert(size_bytes == invalid_size || size_bytes > 0 ||
+    assert(size_bytes == invalid_size || size_bytes > separator_size ||
            (size_bytes == 0 && separator_size == 0));
 
     // Separator is inserted only in between strings
@@ -647,23 +648,21 @@ std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_colum
                                     string_narep_dv] __device__(size_type lidx) -> size_type {
     if (lists_dv.is_null(lidx)) { return invalid_size; }
 
-    // This will be called inside another `thrust::transform` call, thus we will run it sequentially
-    auto const count_it   = thrust::make_counting_iterator<size_type>(0);
-    auto const size_bytes = thrust::transform_reduce(
-      thrust::seq,
-      count_it + lists_offsets[lidx],
-      count_it + lists_offsets[lidx + 1],
-      [strings_dv, string_narep_dv, separator_size] __device__(auto const str_idx) -> size_type {
-        if (strings_dv.is_null(str_idx) && !string_narep_dv.is_valid()) { return invalid_size; }
-        return separator_size + (strings_dv.is_null(str_idx)
-                                       ? string_narep_dv.size()
-                                       : strings_dv.element<string_view>(str_idx).size_bytes());
-      },
-      size_type{0},
-      thrust::plus<size_type>());
+    auto size_bytes = size_type{0};
+    for (size_type str_idx = lists_offsets[lidx], idx_end = lists_offsets[lidx + 1];
+         str_idx < idx_end;
+         ++str_idx) {
+      if (strings_dv.is_null(str_idx) && !string_narep_dv.is_valid()) {
+        size_bytes = invalid_size;
+        break;  // early termination: the entire list of strings will result in a null string
+      }
+      size_bytes += separator_size + (strings_dv.is_null(str_idx)
+                                            ? string_narep_dv.size()
+                                            : strings_dv.element<string_view>(str_idx).size_bytes());
+    }
 
     // Null/empty separator and strings don't produce a non-empty string
-    assert(size_bytes == invalid_size || size_bytes > 0 ||
+    assert(size_bytes == invalid_size || size_bytes > separator_size ||
            (size_bytes == 0 && separator_size == 0));
 
     // Separator is inserted only in between strings
