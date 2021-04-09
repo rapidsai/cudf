@@ -693,7 +693,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithScalarSeparator)
 
   // Sliced the first half of the lists column, no null replacement
   {
-    auto const string_lv = cudf::lists_column_view(cudf::slice(string_lists->view(), {0, 5})[0]);
+    auto const string_lv = cudf::lists_column_view(cudf::slice(string_lists->view(), {0, 4})[0]);
     auto const results   = cudf::strings::concatenate(string_lv, cudf::string_scalar("+++"));
     std::vector<const char*> h_expected{nullptr, nullptr, nullptr, "zzz+++xxxxx"};
     auto const expected =
@@ -703,7 +703,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithScalarSeparator)
 
   // Sliced the first half of the lists column, with null replacement
   {
-    auto const string_lv = cudf::lists_column_view(cudf::slice(string_lists->view(), {0, 5})[0]);
+    auto const string_lv = cudf::lists_column_view(cudf::slice(string_lists->view(), {0, 4})[0]);
     auto const results =
       cudf::strings::concatenate(string_lv, cudf::string_scalar("+++"), cudf::string_scalar("___"));
     std::vector<const char*> h_expected{
@@ -897,7 +897,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithColumnSeparators)
 
   // Sliced the first half of the lists column, no null replacement
   {
-    auto const string_lv = cudf::lists_column_view(cudf::slice(string_lists->view(), {0, 5})[0]);
+    auto const string_lv = cudf::lists_column_view(cudf::slice(string_lists->view(), {0, 4})[0]);
     auto const results   = cudf::strings::concatenate(string_lv, cudf::string_scalar("+++"));
     std::vector<const char*> h_expected{nullptr, nullptr, nullptr, nullptr};
     auto const expected =
@@ -907,7 +907,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithColumnSeparators)
 
   // Sliced the first half of the lists column, with null replacements
   {
-    auto const string_lv = cudf::lists_column_view(cudf::slice(string_lists->view(), {0, 5})[0]);
+    auto const string_lv = cudf::lists_column_view(cudf::slice(string_lists->view(), {0, 4})[0]);
     auto const results   = cudf::strings::concatenate(
       string_lv, separators->view(), cudf::string_scalar("|||"), cudf::string_scalar("___"));
     std::vector<const char*> h_expected{
