@@ -64,8 +64,8 @@ class list_scalar;
 class string_scalar;
 template <typename T> class numeric_scalar;
 template <typename T> class fixed_point_scalar;
-template <typename T> class timestamp_scalar;
-template <typename T> class duration_scalar;
+template <typename T> struct timestamp_scalar;
+template <typename T> struct duration_scalar;
 
 class string_scalar_device_view;
 template <typename T> class numeric_scalar_device_view;

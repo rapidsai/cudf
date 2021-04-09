@@ -15,18 +15,29 @@
 #=============================================================================
 
 function(find_and_configure_thrust VERSION)
+    # We only want to set `UPDATE_DISCONNECTED` while
+    # the GIT tag hasn't moved from the last time we cloned
+    set(cpm_thrust_disconnect_update "UPDATE_DISCONNECTED TRUE")
+    set(CPM_THRUST_CURRENT_VERSION ${VERSION} CACHE STRING "version of thrust we checked out")
+    if(NOT VERSION VERSION_EQUAL CPM_THRUST_CURRENT_VERSION)
+        set(CPM_THRUST_CURRENT_VERSION ${VERSION} CACHE STRING "version of thrust we checked out" FORCE)
+        set(cpm_thrust_disconnect_update "")
+    endif()
+
     CPMAddPackage(NAME Thrust
         VERSION         ${VERSION}
         GIT_REPOSITORY  https://github.com/NVIDIA/thrust.git
         GIT_TAG         ${VERSION}
         GIT_SHALLOW     TRUE
-        PATCH_COMMAND   patch -p1 -N < ${CUDF_SOURCE_DIR}/cmake/thrust.patch || true)
+        ${cpm_thrust_disconnect_update}
+        PATCH_COMMAND   patch --reject-file=- -p1 -N < ${CUDF_SOURCE_DIR}/cmake/thrust.patch || true
+        )
 
     thrust_create_target(cudf::Thrust FROM_OPTIONS)
     set(THRUST_LIBRARY "cudf::Thrust" PARENT_SCOPE)
     set(Thrust_SOURCE_DIR "${Thrust_SOURCE_DIR}" PARENT_SCOPE)
 endfunction()
 
-set(CUDF_MIN_VERSION_Thrust 1.10.0)
+set(CUDF_MIN_VERSION_Thrust 1.12.0)
 
 find_and_configure_thrust(${CUDF_MIN_VERSION_Thrust})

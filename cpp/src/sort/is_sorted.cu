@@ -15,6 +15,7 @@
  */
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -23,7 +24,7 @@
 #include <structs/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 namespace cudf {
@@ -37,18 +38,20 @@ auto is_sorted(cudf::table_view const& in,
 {
   // 0-table_view, 1-column_order, 2-null_precedence, 3-validity_columns
   auto flattened = structs::detail::flatten_nested_columns(in, column_order, null_precedence);
-  auto in_d      = table_device_view::create(std::get<0>(flattened), stream);
-  rmm::device_vector<order> d_column_order(std::get<1>(flattened));
-  rmm::device_vector<null_order> const d_null_precedence =
-    (has_nulls) ? rmm::device_vector<null_order>{std::get<2>(flattened)}
-                : rmm::device_vector<null_order>{};
-  auto ineq_op = row_lexicographic_comparator<has_nulls>(
-    *in_d, *in_d, d_column_order.data().get(), d_null_precedence.data().get());
+
+  auto const d_input           = table_device_view::create(std::get<0>(flattened), stream);
+  auto const d_column_order    = make_device_uvector_async(std::get<1>(flattened), stream);
+  auto const d_null_precedence = has_nulls
+                                   ? make_device_uvector_async(std::get<2>(flattened), stream)
+                                   : rmm::device_uvector<null_order>(0, stream);
+
+  auto comparator = row_lexicographic_comparator<has_nulls>(
+    *d_input, *d_input, d_column_order.data(), d_null_precedence.data());
 
   auto sorted = thrust::is_sorted(rmm::exec_policy(stream),
                                   thrust::make_counting_iterator(0),
                                   thrust::make_counting_iterator(in.num_rows()),
-                                  ineq_op);
+                                  comparator);
 
   return sorted;
 }

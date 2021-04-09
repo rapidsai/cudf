@@ -57,8 +57,8 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 
 ### CUDA/GPU requirements
 
-* CUDA 10.1+
-* NVIDIA driver 418.39+
+* CUDA 11.0+
+* NVIDIA driver 450.80.02+
 * Pascal architecture or better (Compute Capability >=6.0)
 
 ### Conda
@@ -79,13 +79,13 @@ conda install -c rapidsai -c nvidia -c numba -c conda-forge \
 
 For the nightly version of `cudf` :
 ```bash
-# for CUDA 10.1
+# for CUDA 11.0
 conda install -c rapidsai-nightly -c nvidia -c numba -c conda-forge \
-    cudf python=3.7 cudatoolkit=10.1
+    cudf python=3.7 cudatoolkit=11.0
 
-# or, for CUDA 10.2
+# or, for CUDA 11.2
 conda install -c rapidsai-nightly -c nvidia -c numba -c conda-forge \
-    cudf python=3.7 cudatoolkit=10.2
+    cudf python=3.7 cudatoolkit=11.1
 ```
 
 Note: cuDF is supported only on Linux, and with Python versions 3.7 and later.

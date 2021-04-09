@@ -18,13 +18,13 @@
 
 #ifdef CUFILE_FOUND
 #include <cufile.h>
+#include <cudf_test/file_utilities.hpp>
 #endif
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf_test/file_utilities.hpp>
 
 #include <string>
 
