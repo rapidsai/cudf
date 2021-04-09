@@ -29,9 +29,9 @@ using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
 using structs_col = cudf::test::structs_column_wrapper;
 using strings_col = cudf::test::strings_column_wrapper;
 
-constexpr bool print_all{true};
-constexpr int32_t null{0};  // Mark for null child elements
-constexpr int32_t XXX{0};   // Mark for null struct elements
+constexpr bool print_all{false};  // For debugging only
+constexpr int32_t null{0};        // Mark for null child elements
+constexpr int32_t XXX{0};         // Mark for null struct elements
 
 template <typename T>
 struct TypedStructSearchTest : public cudf::test::BaseFixture {
