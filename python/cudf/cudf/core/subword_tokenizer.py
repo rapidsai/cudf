@@ -1,12 +1,9 @@
 from __future__ import annotations
-from cudf._lib.nvtext.subword_tokenize import (
-    Hashed_Vocabulary as c_hashed_vocabulary,
-)
 import cupy
 from cudf._lib.nvtext.subword_tokenize import (
-    subword_tokenize as cpp_subword_tokenize,
+    subword_tokenize_inmem_hash as cpp_subword_tokenize,
+    Hashed_Vocabulary as cpp_hashed_vocabulary
 )
-
 
 class subword_tokenizer:
 
@@ -23,12 +20,12 @@ class subword_tokenizer:
         self.do_lower = do_lower
         self.do_truncate = do_truncate
         self.max_rows_tensor = max_rows_tensor
-        self.vocab_file = c_hashed_vocabulary(hash_file) 
+        self.vocab_file = cpp_hashed_vocabulary(hash_file) 
 
     
     def encode(self, str_series):
         tokens, masks, metadata = cpp_subword_tokenize(
-            self._column,
+            str_series._column,
             self.vocab_file,
             self.max_length,
             self.stride,
@@ -37,7 +34,7 @@ class subword_tokenizer:
             self.max_rows_tensor,
         )
         return (
-            cupy.asarray(tokens),
-            cupy.asarray(masks),
-            cupy.asarray(metadata),
+            cupy.asarray(tokens).reshape(-1, self.max_length),
+            cupy.asarray(masks).reshape(-1, self.max_length),
+            cupy.asarray(metadata).reshape(-1, 3),
         ) 
