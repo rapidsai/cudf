@@ -98,13 +98,13 @@ std::unique_ptr<column> shift(
  * Example:
  * ```
  * segmented_values: { 3 1 2 | 3 5 3 | 2 6 }
- * segment_offsets: {0 3 7 9}
+ * segment_offsets: {0 3 6 8}
  * offset: 2
  * fill_value: @
  * result: { @ @ 3 | @ @ 3 | @ @ }
  * -------------------------------------------------
  * segmented_values: { 3 1 2 | 3 5 3 | 2 6 }
- * segment_offsets: {0 3 7 9}
+ * segment_offsets: {0 3 6 8}
  * offset: -1
  * fill_value: -1
  * result: { 1 2 -1 | 5 3 -1 | 6 -1 }
