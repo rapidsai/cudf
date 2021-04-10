@@ -39,7 +39,6 @@ template <bool ForwardShift, typename BoundaryIterator>
 struct segmented_shift_fill_functor {
   BoundaryIterator segment_bounds_begin;
   size_type offset;
-  size_type segment_label, offset_to_bound;
 
   segmented_shift_fill_functor(BoundaryIterator segment_bounds_begin, size_type offset)
     : segment_bounds_begin(segment_bounds_begin), offset(offset)
@@ -48,14 +47,8 @@ struct segmented_shift_fill_functor {
 
   __device__ size_type operator()(size_type i)
   {
-    if (ForwardShift) {  // offset > 0
-      segment_label   = i / offset;
-      offset_to_bound = i % offset;
-    } else {  // offset < 0
-      segment_label   = -i / offset;
-      offset_to_bound = i % offset + offset + 1;
-    }
-    return *(segment_bounds_begin + segment_label) + offset_to_bound;
+    return ForwardShift ? *(segment_bounds_begin + i / offset) + (i % offset)
+                        : *(segment_bounds_begin - i / offset) + (i % offset + offset + 1);
   }
 };
 
@@ -67,7 +60,7 @@ struct segmented_shift_fill_functor {
  * The first step is a global shift for `segmented_values`. The second step is to set the proper
  * locations to `fill_values`.
  *
- * @tparam BoundaryIterator Iterator type to the segment edge list
+ * @tparam BoundaryIterator Iterator type to the segment boundary list
  *
  * @param segmented_values Segmented column to shift
  * @param segment_bound_begin Beginning of iterator range of the list that contains indices to the
@@ -78,6 +71,7 @@ struct segmented_shift_fill_functor {
  * @param num_segments The number of segments
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches
+ *
  * @return Column where values are shifted in each segment
  */
 template <bool ForwardShift, typename BoundaryIterator>
