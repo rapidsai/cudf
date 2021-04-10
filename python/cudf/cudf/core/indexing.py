@@ -10,7 +10,9 @@ import cudf
 from cudf._lib.concat import concat_columns
 from cudf._lib.scalar import _is_null_host_scalar
 from cudf._typing import ColumnLike, DataFrameOrSeries, ScalarLike
+from cudf.core.column import column
 from cudf.core.column.column import as_column
+from cudf.core.series import Series
 from cudf.utils.dtypes import (
     find_common_type,
     is_categorical_dtype,
@@ -164,15 +166,16 @@ class _SeriesLocIndexer(object):
         self._sr.iloc[key] = value
 
     def _loc_to_iloc(self, arg):
-        from cudf.core.column import column
-        from cudf.core.series import Series
-
         if is_scalar(arg):
             if isinstance(arg, int):
                 found_index = arg
                 return found_index
-            
-            if isinstance(arg, str):
+
+            if isinstance(arg, cudf.Scalar):
+                found_index = arg.value
+                return found_index
+
+            else:
                 try:
                     found_index = self._sr.index._values.find_first_value(
                         arg, closest=False

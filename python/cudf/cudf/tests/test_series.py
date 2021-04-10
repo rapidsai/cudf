@@ -1197,11 +1197,15 @@ def test_explode(data, ignore_index, p_index):
     else:
         assert_eq(expect, got, check_dtype=False)
 
-def test_series_indexing():
-    ps = pd.Series([1,2,3], index=pd.Index(["a", "b", "c"]))
+
+@pytest.mark.parametrize(
+    "arg", [1, cudf.Scalar(1, dtype="int32")],
+)
+def test_series_indexing(arg):
+    ps = pd.Series([1, 2, 3], index=pd.Index(["a", "b", "c"]))
     gs = cudf.from_pandas(ps)
 
-    expect = ps[1]
-    got = gs[1]
+    expect = ps[arg]
+    got = gs[arg]
 
     assert_eq(expect, got)
