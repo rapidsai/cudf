@@ -207,7 +207,7 @@ std::unique_ptr<column> concatenate(
  * device memory
  * @return                       New strings column with concatenated results
  */
-std::unique_ptr<column> concatenate(
+std::unique_ptr<column> concatenate_rows(
   lists_column_view const& lists_strings_column,
   strings_column_view const& separators,
   string_scalar const& separator_narep = string_scalar("", false),
@@ -249,7 +249,7 @@ std::unique_ptr<column> concatenate(
  * device memory
  * @return                       New strings column with concatenated results
  */
-std::unique_ptr<column> concatenate(
+std::unique_ptr<column> concatenate_rows(
   lists_column_view const& lists_strings_column,
   string_scalar const& separator      = string_scalar(""),
   string_scalar const& narep          = string_scalar("", false),

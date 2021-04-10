@@ -476,12 +476,12 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 }
 
 namespace detail {
-std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_column,
-                                    strings_column_view const& separators,
-                                    string_scalar const& separator_narep,
-                                    string_scalar const& string_narep,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> concatenate_rows(lists_column_view const& lists_strings_column,
+                                         strings_column_view const& separators,
+                                         string_scalar const& separator_narep,
+                                         string_scalar const& string_narep,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(lists_strings_column.child().type().id() == type_id::STRING,
                "The input column must be a column of lists of strings");
@@ -620,11 +620,11 @@ std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_colum
                              mr);
 }
 
-std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_column,
-                                    string_scalar const& separator,
-                                    string_scalar const& narep,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> concatenate_rows(lists_column_view const& lists_strings_column,
+                                         string_scalar const& separator,
+                                         string_scalar const& narep,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(lists_strings_column.child().type().id() == type_id::STRING,
                "The input column must be a column of lists of strings");
@@ -754,23 +754,24 @@ std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_colum
 }
 }  // namespace detail
 
-std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_column,
-                                    strings_column_view const& separators,
-                                    string_scalar const& separator_narep,
-                                    string_scalar const& string_narep,
-                                    rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> concatenate_rows(lists_column_view const& lists_strings_column,
+                                         strings_column_view const& separators,
+                                         string_scalar const& separator_narep,
+                                         string_scalar const& string_narep,
+                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(
+  return detail::concatenate_rows(
     lists_strings_column, separators, separator_narep, string_narep, rmm::cuda_stream_default, mr);
 }
-std::unique_ptr<column> concatenate(lists_column_view const& lists_strings_column,
-                                    string_scalar const& separator,
-                                    string_scalar const& narep,
-                                    rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> concatenate_rows(lists_column_view const& lists_strings_column,
+                                         string_scalar const& separator,
+                                         string_scalar const& narep,
+                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(lists_strings_column, separator, narep, rmm::cuda_stream_default, mr);
+  return detail::concatenate_rows(
+    lists_strings_column, separator, narep, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings
