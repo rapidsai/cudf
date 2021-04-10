@@ -39,9 +39,6 @@
 #include <thrust/transform_reduce.h>
 #include <thrust/transform_scan.h>
 
-#include <cudf/unary.hpp>
-#include <cudf_test/column_utilities.hpp>
-
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -421,15 +418,15 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                          // If the row is null and if there is no replacement, skip it
                          if (d_column.is_null(ridx) && !col_rep.is_valid()) continue;
 
-                         // Separator goes only in between elements
-                         if (colval_written)
-                           d_buffer = detail::copy_string(d_buffer, separator_str);
-
                          string_view const d_str = d_column.is_null(ridx)
                                                      ? col_rep.value()
                                                      : d_column.element<string_view>(ridx);
-                         d_buffer                = detail::copy_string(d_buffer, d_str);
-                         colval_written          = true;
+                         // Separator goes only in between elements
+                         if (colval_written) {
+                           d_buffer = detail::copy_string(d_buffer, separator_str);
+                         }
+                         d_buffer       = detail::copy_string(d_buffer, d_str);
+                         colval_written = true;
                        }
                      });
 
@@ -599,10 +596,10 @@ std::unique_ptr<column> concatenate_rows(lists_column_view const& lists_strings_
     for (size_type str_idx = lists_offsets[out_idx], idx_end = lists_offsets[out_idx + 1];
          str_idx < idx_end;
          ++str_idx) {
-      // Separator is inserted only in between strings
       auto const d_str = strings_dv.is_null(str_idx) ? string_narep_dv.value()
                                                      : strings_dv.element<string_view>(str_idx);
-      if (written) output_ptr = detail::copy_string(output_ptr, separator);
+      // Separator is inserted only in between strings
+      if (written) { output_ptr = detail::copy_string(output_ptr, separator); }
       output_ptr = detail::copy_string(output_ptr, d_str);
       written    = true;
     }
@@ -732,10 +729,10 @@ std::unique_ptr<column> concatenate_rows(lists_column_view const& lists_strings_
     for (size_type str_idx = lists_offsets[out_idx], idx_end = lists_offsets[out_idx + 1];
          str_idx < idx_end;
          ++str_idx) {
-      // Separator is inserted only in between strings
       auto const d_str = strings_dv.is_null(str_idx) ? string_narep_dv.value()
                                                      : strings_dv.element<string_view>(str_idx);
-      if (written) output_ptr = detail::copy_string(output_ptr, separator);
+      // Separator is inserted only in between strings
+      if (written) { output_ptr = detail::copy_string(output_ptr, separator); }
       output_ptr = detail::copy_string(output_ptr, d_str);
       written    = true;
     }
