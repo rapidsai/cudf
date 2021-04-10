@@ -30,12 +30,12 @@ namespace detail {
 
 namespace {
 
-constexpr size_type SAFE_GATHER_IDX = 0;
+constexpr size_type safe_gather_idx = 0;
 
 /**
  * @brief Functor to determine the location to set `fill_value` for segmented shift.
  */
-template <bool ForwardShift, typename BoundaryIterator>
+template <bool forward_shift, typename BoundaryIterator>
 struct segmented_shift_fill_functor {
   BoundaryIterator segment_bounds_begin;
   size_type offset;
@@ -47,8 +47,8 @@ struct segmented_shift_fill_functor {
 
   __device__ size_type operator()(size_type i)
   {
-    return ForwardShift ? *(segment_bounds_begin + i / offset) + (i % offset)
-                        : *(segment_bounds_begin - i / offset) + (i % offset + offset + 1);
+    return forward_shift ? *(segment_bounds_begin + i / offset) + (i % offset)
+                         : *(segment_bounds_begin - i / offset) + (i % offset + offset + 1);
   }
 };
 
@@ -74,7 +74,7 @@ struct segmented_shift_fill_functor {
  *
  * @return Column where values are shifted in each segment
  */
-template <bool ForwardShift, typename BoundaryIterator>
+template <bool forward_shift, typename BoundaryIterator>
 std::unique_ptr<column> segmented_shift_impl(column_view const& segmented_values,
                                              BoundaryIterator segment_bound_begin,
                                              size_type offset,
@@ -87,7 +87,7 @@ std::unique_ptr<column> segmented_shift_impl(column_view const& segmented_values
   auto shift_func = [col_size = segmented_values.size(), offset] __device__(size_type idx) {
     auto raw_shifted_idx = idx - offset;
     return static_cast<uint32_t>(
-      raw_shifted_idx >= 0 and raw_shifted_idx < col_size ? raw_shifted_idx : SAFE_GATHER_IDX);
+      raw_shifted_idx >= 0 and raw_shifted_idx < col_size ? raw_shifted_idx : safe_gather_idx);
   };
   auto gather_iter_begin = cudf::detail::make_counting_transform_iterator(0, shift_func);
 
@@ -100,7 +100,7 @@ std::unique_ptr<column> segmented_shift_impl(column_view const& segmented_values
   // Step 2: set `fill_value`
   auto scatter_map = make_numeric_column(
     data_type(type_id::UINT32), num_segments * std::abs(offset), mask_state::UNALLOCATED, stream);
-  segmented_shift_fill_functor<ForwardShift, decltype(segment_bound_begin)> fill_func{
+  segmented_shift_fill_functor<forward_shift, decltype(segment_bound_begin)> fill_func{
     segment_bound_begin, offset};
   auto scatter_map_iterator = cudf::detail::make_counting_transform_iterator(0, fill_func);
   thrust::copy(rmm::exec_policy(stream),

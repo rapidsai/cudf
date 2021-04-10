@@ -95,7 +95,22 @@ std::unique_ptr<column> shift(
  * of the segment. If `i - offset < 0 or >= segment_size`, the value is determined by
  * @p fill_value .
  *
- * @param segmented_values Segmented column, specifed by @p segment_offsets
+ * Example:
+ * ```
+ * segmented_values: { 3 1 2 | 3 5 3 | 2 6 }
+ * segment_offsets: {0 3 7 9}
+ * offset: 2
+ * fill_value: @
+ * result: { @ @ 3 | @ @ 3 | @ @ }
+ * -------------------------------------------------
+ * segmented_values: { 3 1 2 | 3 5 3 | 2 6 }
+ * segment_offsets: {0 3 7 9}
+ * offset: -1
+ * fill_value: -1
+ * result: { 1 2 -1 | 5 3 -1 | 6 -1 }
+ * ```
+ *
+ * @param segmented_values Segmented column, specified by @p segment_offsets
  * @param segment_offsets Each segment's offset of @p segmented_values . A list of offsets
  * with size `num_segments + 1`. The size of each segment is `segment_offsets[i+1] -
  * segment_offsets[i]`.
@@ -106,7 +121,7 @@ std::unique_ptr<column> shift(
  */
 std::unique_ptr<column> segmented_shift(
   column_view const& segmented_values,
-  device_span<size_type const> segmented_offsets,
+  device_span<size_type const> segment_offsets,
   size_type offset,
   scalar const& fill_value,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,

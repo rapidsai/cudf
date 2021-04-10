@@ -231,21 +231,17 @@ class groupby {
    *
    * Example:
    * ```
-   * Input:
-   * keys:     {1 1 1 1 2 2 2}
-   * request:
-   *   values: {3 1 4 7 9 2 5}
-   *   offset: 2
-   *   fill_value: @
-   *   result: {@ @ 3 1 @ @ 9}
+   * keys:   {1 1 1 1 2 2 2}
+   * values: {3 1 4 7 9 2 5}
+   * offset: 2
+   * fill_value: @
+   * result: {@ @ 3 1 @ @ 9}
    * -------------------------------------------------
-   * Input:
-   * keys:     {1 1 1 1 2 2 2}
-   * request:
-   *   values: {3 1 4 7 9 2 5}
-   *   offset: -2
-   *   fill_value: -1
-   *   result: {4 7 -1 -1 5 -1 -1}
+   * keys:   {1 1 1 1 2 2 2}
+   * values: {3 1 4 7 9 2 5}
+   * offset: -2
+   * fill_value: -1
+   * result: {4 7 -1 -1 5 -1 -1}
    * ```
    *
    * @param values Column to be shifted
