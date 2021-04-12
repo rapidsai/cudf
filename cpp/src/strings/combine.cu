@@ -527,8 +527,8 @@ std::unique_ptr<column> concatenate_rows(lists_column_view const& lists_strings_
         break;  // early termination: the entire list of strings will result in a null string
       }
       size_bytes += separator_size + (strings_dv.is_null(str_idx)
-                                            ? string_narep_dv.size()
-                                            : strings_dv.element<string_view>(str_idx).size_bytes());
+                                        ? string_narep_dv.size()
+                                        : strings_dv.element<string_view>(str_idx).size_bytes());
     }
 
     // Null/empty separator and strings don't produce a non-empty string
@@ -537,7 +537,7 @@ std::unique_ptr<column> concatenate_rows(lists_column_view const& lists_strings_
 
     // Separator is inserted only in between strings
     return size_bytes != invalid_size ? static_cast<size_type>(size_bytes - separator_size)
-                                          : invalid_size;
+                                      : invalid_size;
   };
 
   // Offset of the output strings
@@ -662,8 +662,8 @@ std::unique_ptr<column> concatenate_rows(lists_column_view const& lists_strings_
         break;  // early termination: the entire list of strings will result in a null string
       }
       size_bytes += separator_size + (strings_dv.is_null(str_idx)
-                                            ? string_narep_dv.size()
-                                            : strings_dv.element<string_view>(str_idx).size_bytes());
+                                        ? string_narep_dv.size()
+                                        : strings_dv.element<string_view>(str_idx).size_bytes());
     }
 
     // Null/empty separator and strings don't produce a non-empty string
@@ -672,7 +672,7 @@ std::unique_ptr<column> concatenate_rows(lists_column_view const& lists_strings_
 
     // Separator is inserted only in between strings
     return size_bytes != invalid_size ? static_cast<size_type>(size_bytes - separator_size)
-                                          : invalid_size;
+                                      : invalid_size;
   };
 
   // Offset of the output strings
