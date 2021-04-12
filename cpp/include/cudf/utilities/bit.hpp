@@ -17,7 +17,7 @@
 #pragma once
 
 #include <cassert>
-#include <climits>
+#include <cuda/std/climits>
 #include <cudf/types.hpp>
 
 /**
