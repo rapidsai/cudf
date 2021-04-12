@@ -10,9 +10,7 @@ import cudf
 from cudf._lib.concat import concat_columns
 from cudf._lib.scalar import _is_null_host_scalar
 from cudf._typing import ColumnLike, DataFrameOrSeries, ScalarLike
-from cudf.core.column import column
 from cudf.core.column.column import as_column
-from cudf.core.series import Series
 from cudf.utils.dtypes import (
     find_common_type,
     is_categorical_dtype,
@@ -195,7 +193,7 @@ class _SeriesLocIndexer(object):
             return indices_from_labels(self._sr, arg)
 
         else:
-            arg = Series(column.as_column(arg))
+            arg = cudf.core.series.Series(cudf.core.column.as_column(arg))
             if arg.dtype in (bool, np.bool_):
                 return arg
             else:
