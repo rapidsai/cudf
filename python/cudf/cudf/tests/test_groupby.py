@@ -1026,6 +1026,36 @@ def test_groupby_size():
     )
 
 
+def test_groupby_cumcount():
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 3, 4],
+            "b": ["bob", "bob", "alice", "cooper"],
+            "c": [1, 2, 3, 4],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_groupby_results_equal(
+        pdf.groupby("a").cumcount(),
+        gdf.groupby("a").cumcount(),
+        check_dtype=False,
+    )
+
+    assert_groupby_results_equal(
+        pdf.groupby(["a", "b", "c"]).cumcount(),
+        gdf.groupby(["a", "b", "c"]).cumcount(),
+        check_dtype=False,
+    )
+
+    sr = pd.Series(range(len(pdf)))
+    assert_groupby_results_equal(
+        pdf.groupby(sr).cumcount(),
+        gdf.groupby(sr).cumcount(),
+        check_dtype=False,
+    )
+
+
 @pytest.mark.parametrize("nelem", get_nelem())
 @pytest.mark.parametrize("as_index", [True, False])
 @pytest.mark.parametrize(

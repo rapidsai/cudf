@@ -99,6 +99,20 @@ class GroupBy(Serializable):
             .agg("size")
         )
 
+    def cumcount(self):
+        """
+        Return the cumulative count of keys in each group.
+        """
+        return (
+            cudf.Series(
+                cudf.core.column.column_empty(
+                    len(self.obj), "int8", masked=False
+                )
+            )
+            .groupby(self.grouping, sort=self._sort)
+            .agg("cumcount")
+        )
+
     @cached_property
     def _groupby(self):
         return libgroupby.GroupBy(self.grouping.keys, dropna=self._dropna)
