@@ -195,8 +195,6 @@ class writer::impl {
    * @param first_page_in_batch first page in batch
    * @param rowgroups_in_batch number of rowgroups in this batch
    * @param first_rowgroup first rowgroup in batch
-   * @param comp_in compressor input array
-   * @param comp_out compressor status array
    * @param page_stats optional page-level statistics (nullptr if none)
    * @param chunk_stats optional chunk-level statistics (nullptr if none)
    */
@@ -207,8 +205,6 @@ class writer::impl {
                     uint32_t first_page_in_batch,
                     uint32_t rowgroups_in_batch,
                     uint32_t first_rowgroup,
-                    gpu_inflate_input_s* comp_in,
-                    gpu_inflate_status_s* comp_out,
                     const statistics_chunk* page_stats,
                     const statistics_chunk* chunk_stats);
 

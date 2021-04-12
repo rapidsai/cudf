@@ -503,9 +503,9 @@ void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePages(device_span<EncPage> pages,
-                 gpu_inflate_input_s *comp_in   = nullptr,
-                 gpu_inflate_status_s *comp_out = nullptr,
-                 rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
+                 device_span<gpu_inflate_input_s> comp_in   = {},
+                 device_span<gpu_inflate_status_s> comp_out = {},
+                 rmm::cuda_stream_view stream               = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel to make the compressed vs uncompressed chunk-level decision
@@ -520,8 +520,8 @@ void EncodePages(device_span<EncPage> pages,
 void DecideCompression(device_span<EncColumnChunk> chunks,
                        device_span<gpu::EncPage const> pages,
                        uint32_t start_page,
-                       const gpu_inflate_status_s *comp_out = nullptr,
-                       rmm::cuda_stream_view stream         = rmm::cuda_stream_default);
+                       device_span<gpu_inflate_status_s const> comp_out = {},
+                       rmm::cuda_stream_view stream                     = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel to encode page headers
@@ -536,11 +536,11 @@ void DecideCompression(device_span<EncColumnChunk> chunks,
  */
 void EncodePageHeaders(device_span<EncPage> pages,
                        uint32_t num_pages,
-                       uint32_t start_page                  = 0,
-                       const gpu_inflate_status_s *comp_out = nullptr,
-                       const statistics_chunk *page_stats   = nullptr,
-                       const statistics_chunk *chunk_stats  = nullptr,
-                       rmm::cuda_stream_view stream         = rmm::cuda_stream_default);
+                       uint32_t start_page                              = 0,
+                       device_span<gpu_inflate_status_s const> comp_out = {},
+                       const statistics_chunk *page_stats               = nullptr,
+                       const statistics_chunk *chunk_stats              = nullptr,
+                       rmm::cuda_stream_view stream                     = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel to gather pages to a single contiguous block per chunk

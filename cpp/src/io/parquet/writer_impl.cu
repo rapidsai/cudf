@@ -802,25 +802,33 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks
                                 uint32_t first_page_in_batch,
                                 uint32_t rowgroups_in_batch,
                                 uint32_t first_rowgroup,
-                                gpu_inflate_input_s *comp_in,
-                                gpu_inflate_status_s *comp_out,
                                 const statistics_chunk *page_stats,
                                 const statistics_chunk *chunk_stats)
 {
   auto batch_pages = pages.subspan(first_page_in_batch, pages_in_batch);
-  gpu::EncodePages(batch_pages, comp_in, comp_out, stream);
+
+  uint32_t max_comp_pages =
+    (compression_ != parquet::Compression::UNCOMPRESSED) ? pages_in_batch : 0;
+
+  rmm::device_uvector<gpu_inflate_input_s> compression_input(max_comp_pages, stream);
+  rmm::device_uvector<gpu_inflate_status_s> compression_status(max_comp_pages, stream);
+
+  device_span<gpu_inflate_input_s> comp_in{compression_input.data(), compression_input.size()};
+  device_span<gpu_inflate_status_s> comp_stat{compression_status.data(), compression_status.size()};
+
+  gpu::EncodePages(batch_pages, comp_in, comp_stat, stream);
   switch (compression_) {
     case parquet::Compression::SNAPPY:
-      CUDA_TRY(gpu_snap(comp_in, comp_out, pages_in_batch, stream));
+      CUDA_TRY(gpu_snap(comp_in.data(), comp_stat.data(), pages_in_batch, stream));
       break;
     default: break;
   }
   // TBD: Not clear if the official spec actually allows dynamically turning off compression at the
   // chunk-level
   auto d_chunks_in_batch = chunks.device_view().subspan(first_rowgroup, rowgroups_in_batch);
-  DecideCompression(d_chunks_in_batch.flat_view(), pages, first_page_in_batch, comp_out, stream);
+  DecideCompression(d_chunks_in_batch.flat_view(), pages, first_page_in_batch, comp_stat, stream);
   EncodePageHeaders(
-    batch_pages, pages_in_batch, first_page_in_batch, comp_out, page_stats, chunk_stats, stream);
+    batch_pages, pages_in_batch, first_page_in_batch, comp_stat, page_stats, chunk_stats, stream);
   GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
 
   auto h_chunks_in_batch = chunks.host_view().subspan(first_rowgroup, rowgroups_in_batch);
@@ -1136,8 +1144,6 @@ void writer::impl::write(table_view const &table)
     (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_pages + num_chunks : 0;
   rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, stream);
   rmm::device_buffer comp_bfr(max_comp_bfr_size, stream);
-  rmm::device_uvector<gpu_inflate_input_s> comp_in(max_comp_pages, stream);
-  rmm::device_uvector<gpu_inflate_status_s> comp_out(max_comp_pages, stream);
   rmm::device_uvector<gpu::EncPage> pages(num_pages, stream);
 
   // This contains stats for both the pages and the rowgroups. WTF. Just make them separate.
@@ -1187,8 +1193,6 @@ void writer::impl::write(table_view const &table)
       first_page_in_batch,
       batch_list[b],
       r,
-      comp_in.data(),
-      comp_out.data(),
       (stats_granularity_ == statistics_freq::STATISTICS_PAGE) ? page_stats.data() : nullptr,
       (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? page_stats.data() + num_pages
                                                                : nullptr);

@@ -74,7 +74,7 @@ struct page_enc_state_s {
   EncColumnChunk ck;
   parquet_column_device_view col;
   gpu_inflate_input_s comp_in;
-  gpu_inflate_status_s comp_out;
+  gpu_inflate_status_s comp_stat;
   uint16_t vals[rle_buffer_size];
 };
 
@@ -924,9 +924,10 @@ convert_nanoseconds(cuda::std::chrono::sys_time<cuda::std::chrono::nanoseconds> 
 
 // blockDim(128, 1, 1)
 template <int block_size>
-__global__ void __launch_bounds__(128, 8) gpuEncodePages(device_span<gpu::EncPage> pages,
-                                                         gpu_inflate_input_s *comp_in,
-                                                         gpu_inflate_status_s *comp_out)
+__global__ void __launch_bounds__(128, 8)
+  gpuEncodePages(device_span<gpu::EncPage> pages,
+                 device_span<gpu_inflate_input_s> comp_in,
+                 device_span<gpu_inflate_status_s> comp_stat)
 {
   __shared__ __align__(8) page_enc_state_s state_g;
   using block_scan = cub::BlockScan<uint32_t, block_size>;
@@ -1255,23 +1256,24 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(device_span<gpu::EncPag
     s->comp_in.srcSize           = actual_data_size;
     s->comp_in.dstDevice         = s->page.compressed_data + s->page.max_hdr_size;
     s->comp_in.dstSize           = compressed_bfr_size;
-    s->comp_out.bytes_written    = 0;
-    s->comp_out.status           = ~0;
-    s->comp_out.reserved         = 0;
+    s->comp_stat.bytes_written   = 0;
+    s->comp_stat.status          = ~0;
+    s->comp_stat.reserved        = 0;
   }
   __syncthreads();
   if (t == 0) {
     pages[blockIdx.x] = s->page;
-    if (comp_in) comp_in[blockIdx.x] = s->comp_in;
-    if (comp_out) comp_out[blockIdx.x] = s->comp_out;
+    if (not comp_in.empty()) comp_in[blockIdx.x] = s->comp_in;
+    if (not comp_stat.empty()) comp_stat[blockIdx.x] = s->comp_stat;
   }
 }
 
 // blockDim(128, 1, 1)
-__global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColumnChunk> chunks,
-                                                            device_span<gpu::EncPage const> pages,
-                                                            const gpu_inflate_status_s *comp_out,
-                                                            uint32_t start_page)
+__global__ void __launch_bounds__(128)
+  gpuDecideCompression(device_span<EncColumnChunk> chunks,
+                       device_span<gpu::EncPage const> pages,
+                       device_span<gpu_inflate_status_s const> comp_stat,
+                       uint32_t start_page)
 {
   // After changing the way structs are loaded from coop to normal, this kernel has no business
   // being launched with 128 thread block. It can easily be a single warp.
@@ -1297,9 +1299,9 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColum
       uint32_t page_data_size = pages[first_page + page].max_data_size;
       uint32_t comp_idx       = first_page + page - start_page;
       uncompressed_data_size += page_data_size;
-      if (comp_out) {
-        compressed_data_size += (uint32_t)comp_out[comp_idx].bytes_written;
-        if (comp_out[comp_idx].status != 0) { atomicAdd(&error_count, 1); }
+      if (not comp_stat.empty()) {
+        compressed_data_size += (uint32_t)comp_stat[comp_idx].bytes_written;
+        if (comp_stat[comp_idx].status != 0) { atomicAdd(&error_count, 1); }
       }
     }
     uncompressed_data_size = warp_reduce(temp_storage[0]).Sum(uncompressed_data_size);
@@ -1308,7 +1310,7 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColum
   __syncthreads();
   if (t == 0) {
     bool is_compressed;
-    if (comp_out) {
+    if (not comp_stat.empty()) {
       uint32_t compression_error = atomicAdd(&error_count, 0);
       is_compressed = (!compression_error && compressed_data_size < uncompressed_data_size);
     } else {
@@ -1481,11 +1483,12 @@ __device__ uint8_t *EncodeStatistics(uint8_t *start,
 }
 
 // blockDim(128, 1, 1)
-__global__ void __launch_bounds__(128) gpuEncodePageHeaders(device_span<EncPage> pages,
-                                                            const gpu_inflate_status_s *comp_out,
-                                                            const statistics_chunk *page_stats,
-                                                            const statistics_chunk *chunk_stats,
-                                                            uint32_t start_page)
+__global__ void __launch_bounds__(128)
+  gpuEncodePageHeaders(device_span<EncPage> pages,
+                       device_span<gpu_inflate_status_s const> comp_stat,
+                       const statistics_chunk *page_stats,
+                       const statistics_chunk *chunk_stats,
+                       uint32_t start_page)
 {
   // When this whole kernel becomes single thread,
   __shared__ __align__(8) parquet_column_device_view col_g;
@@ -1511,7 +1514,7 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(device_span<EncPage>
     uncompressed_page_size = page_g.max_data_size;
     if (ck_g.is_compressed) {
       hdr_start            = page_g.compressed_data;
-      compressed_page_size = (uint32_t)comp_out[blockIdx.x].bytes_written;
+      compressed_page_size = (uint32_t)comp_stat[blockIdx.x].bytes_written;
       page_g.max_data_size = compressed_page_size;
     } else {
       hdr_start            = page_g.page_data;
@@ -2160,18 +2163,18 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
  *
  * @param[in,out] pages Device array of EncPages (unordered)
  * @param[out] comp_in Optionally initializes compressor input params
- * @param[out] comp_out Optionally initializes compressor output params
+ * @param[out] comp_stat Optionally initializes compressor status
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePages(device_span<gpu::EncPage> pages,
-                 gpu_inflate_input_s *comp_in,
-                 gpu_inflate_status_s *comp_out,
+                 device_span<gpu_inflate_input_s> comp_in,
+                 device_span<gpu_inflate_status_s> comp_stat,
                  rmm::cuda_stream_view stream)
 {
   auto num_pages = pages.size();
   // A page is part of one column. This is launching 1 block per page. 1 block will exclusively
   // deal with one datatype.
-  gpuEncodePages<128><<<num_pages, 128, 0, stream.value()>>>(pages, comp_in, comp_out);
+  gpuEncodePages<128><<<num_pages, 128, 0, stream.value()>>>(pages, comp_in, comp_stat);
 }
 
 /**
@@ -2180,17 +2183,17 @@ void EncodePages(device_span<gpu::EncPage> pages,
  * @param[in,out] chunks Column chunks
  * @param[in] pages Device array of EncPages (unordered)
  * @param[in] start_page First page to encode in page array
- * @param[in] comp_out Compressor status
+ * @param[in] comp_stat Compressor status
  * @param[in] stream CUDA stream to use, default 0
  */
 void DecideCompression(device_span<EncColumnChunk> chunks,
                        device_span<gpu::EncPage const> pages,
                        uint32_t start_page,
-                       const gpu_inflate_status_s *comp_out,
+                       device_span<gpu_inflate_status_s const> comp_stat,
                        rmm::cuda_stream_view stream)
 {
   gpuDecideCompression<<<chunks.size(), 128, 0, stream.value()>>>(
-    chunks, pages, comp_out, start_page);
+    chunks, pages, comp_stat, start_page);
 }
 
 /**
@@ -2199,7 +2202,7 @@ void DecideCompression(device_span<EncColumnChunk> chunks,
  * @param[in,out] pages Device array of EncPages
  * @param[in] num_pages Number of pages
  * @param[in] start_page First page to encode in page array
- * @param[in] comp_out Compressor status or nullptr if no compression
+ * @param[in] comp_stat Compressor status or nullptr if no compression
  * @param[in] page_stats Optional page-level statistics to be included in page header
  * @param[in] chunk_stats Optional chunk-level statistics to be encoded
  * @param[in] stream CUDA stream to use, default 0
@@ -2207,7 +2210,7 @@ void DecideCompression(device_span<EncColumnChunk> chunks,
 void EncodePageHeaders(device_span<EncPage> pages,
                        uint32_t num_pages,
                        uint32_t start_page,
-                       const gpu_inflate_status_s *comp_out,
+                       device_span<gpu_inflate_status_s const> comp_stat,
                        const statistics_chunk *page_stats,
                        const statistics_chunk *chunk_stats,
                        rmm::cuda_stream_view stream)
@@ -2215,7 +2218,7 @@ void EncodePageHeaders(device_span<EncPage> pages,
   // TODO: single thread task. No need for 128 threads/block. Earlier it used to employ rest of the
   // threads to coop load structs
   gpuEncodePageHeaders<<<num_pages, 128, 0, stream.value()>>>(
-    pages, comp_out, page_stats, chunk_stats, start_page);
+    pages, comp_stat, page_stats, chunk_stats, start_page);
 }
 
 /**
