@@ -108,6 +108,7 @@ cdef class GroupBy:
         """
         from cudf.core.column_accessor import ColumnAccessor
         cdef vector[libcudf_groupby.aggregation_request] c_agg_requests
+        cdef libcudf_groupby.aggregation_request c_agg_request
         cdef Column col
         cdef Aggregation agg_obj
 
@@ -134,23 +135,23 @@ cdef class GroupBy:
                     "due to an nvcc compiler bug."
                 )
 
-            c_agg_requests.push_back(
-                move(libcudf_groupby.aggregation_request())
-            )
+            c_agg_request = move(libcudf_groupby.aggregation_request())
             for agg in aggs:
                 agg_obj = make_aggregation(agg)
                 if (valid_aggregations == "ALL"
                         or agg_obj.kind in valid_aggregations):
                     included_aggregations[col_name].append(agg)
-                    c_agg_requests.back().aggregations.push_back(
+                    c_agg_request.aggregations.push_back(
                         move(agg_obj.c_obj)
                     )
-            if c_agg_requests.back().aggregations.empty():
-                c_agg_requests.pop_back()
-            else:
-                c_agg_requests.back().values = col.view()
+            if not c_agg_request.aggregations.empty():
+                c_agg_request.values = col.view()
+                c_agg_requests.push_back(
+                    move(c_agg_request)
+                )
+
         if c_agg_requests.empty() and not allow_empty:
-            raise DataError("All requested aggregations are unsupported.")
+            raise DataError("No numeric types to aggregate")
 
         cdef pair[
             unique_ptr[table],
