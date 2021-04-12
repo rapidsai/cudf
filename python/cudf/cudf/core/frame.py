@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 import warnings
-from collections import OrderedDict, abc as abc
+from collections import abc
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, TypeVar, Union
 
 import cupy
@@ -19,11 +19,7 @@ from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
 from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.core.join import merge
-from cudf.utils.dtypes import (
-    is_column_like,
-    is_numerical_dtype,
-    is_scalar,
-)
+from cudf.utils.dtypes import is_column_like, is_numerical_dtype, is_scalar
 
 T = TypeVar("T", bound="Frame")
 
@@ -1985,12 +1981,14 @@ class Frame(libcudf.table.Table):
                         replacements_per_column[name],
                         all_na_per_column[name],
                     )
-                except KeyError:
-                    # We need to create a deep copy if `find_and_replace`
-                    # was not successful or any of
-                    # `to_replace_per_column`, `replacements_per_column`,
-                    # `all_na_per_column` don't contain the `name`
-                    # that exists in `copy_data`
+                except (KeyError, OverflowError):
+                    # We need to create a deep copy if :
+                    # i. `find_and_replace` was not successful or any of
+                    #    `to_replace_per_column`, `replacements_per_column`,
+                    #    `all_na_per_column` don't contain the `name`
+                    #    that exists in `copy_data`.
+                    # ii. There is an OverflowError while trying to cast
+                    #     `to_replace_per_column` to `replacements_per_column`.
                     copy_data[name] = col.copy(deep=True)
         else:
             copy_data = self._data.copy(deep=True)
@@ -3068,17 +3066,21 @@ class Frame(libcudf.table.Table):
                 # double-argsort to map back from sorted to unsorted positions
                 df = df.take(index.argsort(ascending=True).argsort())
 
-        cols = OrderedDict()
         index = index if index is not None else df.index
         names = columns if columns is not None else list(df.columns)
-        for name in names:
-            if name in df._data:
-                cols[name] = df._data[name].copy(deep=deep)
-            else:
-                dtype = dtypes.get(name, np.float64)
-                cols[name] = column_empty(
-                    dtype=dtype, masked=True, row_count=len(index)
+        cols = {
+            name: (
+                df._data[name].copy(deep=deep)
+                if name in df._data
+                else column_empty(
+                    dtype=dtypes.get(name, np.float64),
+                    masked=True,
+                    row_count=len(index),
                 )
+            )
+            for name in names
+        }
+
         result = self.__class__._from_table(
             Frame(
                 data=cudf.core.column_accessor.ColumnAccessor(

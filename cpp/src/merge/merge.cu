@@ -297,7 +297,6 @@ struct column_merger {
                       row_order_.end(),
                       merged_view.begin<Element>(),
                       [d_lcol, d_rcol] __device__(index_type const& index_pair) {
-                        // When C++17, use structure bindings
                         auto side  = thrust::get<0>(index_pair);
                         auto index = thrust::get<1>(index_pair);
                         return side == side::LEFT ? d_lcol[index] : d_rcol[index];

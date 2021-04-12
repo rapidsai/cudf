@@ -265,7 +265,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   do_lower_case,
                                   do_truncate,
                                   max_rows_tensor,
-                                  0,
+                                  rmm::cuda_stream_default,
                                   mr);
 }
 
@@ -286,7 +286,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   do_lower_case,
                                   do_truncate,
                                   max_rows_tensor,
-                                  0,
+                                  rmm::cuda_stream_default,
                                   mr);
 }
 
