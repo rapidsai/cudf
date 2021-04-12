@@ -64,6 +64,7 @@ struct base_fn {
  * @brief Capitalize functor.
  *
  * This capitalizes the first letter of the string.
+ * Also lower-case any characters after the first letter.
  */
 struct capitalize_fn : base_fn {
   column_device_view const d_column;
@@ -102,6 +103,7 @@ struct capitalize_fn : base_fn {
  * This capitalizes the first letter of each word.
  * The beginning of a word is identified as the first alphabetic
  * character after a non-alphabetic character.
+ * Also, lower-case all other alpabetic characters.
  */
 struct title_fn : base_fn {
   column_device_view const d_column;
