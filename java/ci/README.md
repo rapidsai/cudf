@@ -16,6 +16,8 @@ docker build -f java/ci/Dockerfile.centos7 --build-arg CUDA_VERSION=11.0 -t cudf
 
 The following CUDA versions are supported:
 * CUDA 11.0
+* CUDA 11.1
+* CUDA 11.2
 
 Change the --build-arg CUDA_VERSION to what you need.
 You can replace the tag "cudf-build:11.0-devel-centos7" with another name you like.
