@@ -41,8 +41,7 @@ from cudf._lib.transform import bools_to_mask
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
-from cudf.core.dtypes import CategoricalDtype
-from cudf.core.dtypes import IntervalDtype
+from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
     NUMERIC_TYPES,
@@ -61,8 +60,7 @@ from cudf.utils.dtypes import (
     min_unsigned_type,
     np_to_pa_dtype,
 )
-from cudf.utils.utils import mask_dtype, mask_bitsize
-
+from cudf.utils.utils import mask_bitsize, mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
 
@@ -1772,24 +1770,6 @@ def build_interval_column(
     )
 
 
-def _time_col_replace_nulls(input_col):
-    """Replace NaN values in datetime-like columns with nulls."""
-    null = column_empty_like(input_col, masked=True, newsize=1)
-    out_col = cudf._lib.replace.replace(
-        input_col,
-        as_column(
-            Buffer(
-                np.array(
-                    [input_col.default_na_value()], dtype=input_col.dtype
-                ).view("|u1")
-            ),
-            dtype=input_col.dtype,
-        ),
-        null,
-    )
-    return out_col
-
-
 def as_column(
     arbitrary: Any,
     nan_as_null: bool = None,
@@ -1893,7 +1873,9 @@ def as_column(
                 col = col.set_mask(mask)
         elif np.issubdtype(col.dtype, np.datetime64):
             if nan_as_null or (mask is None and nan_as_null is None):
-                col = _time_col_replace_nulls(col)
+                # Ignore typing error since this method is only defined for
+                # DatetimeColumn, not the ColumnBase class.
+                col = col._make_copy_with_na_as_null()  # type: ignore
         return col
 
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
@@ -2014,7 +1996,7 @@ def as_column(
                 data = as_column(
                     buffer, dtype=arbitrary.dtype, nan_as_null=nan_as_null
                 )
-                data = _time_col_replace_nulls(data)
+                data = data._make_copy_with_na_as_null()
                 mask = data.mask
 
             data = cudf.core.column.datetime.DatetimeColumn(
@@ -2034,7 +2016,7 @@ def as_column(
                 data = as_column(
                     buffer, dtype=arbitrary.dtype, nan_as_null=nan_as_null
                 )
-                data = _time_col_replace_nulls(data)
+                data = data._make_copy_with_na_as_null()
                 mask = data.mask
 
             data = cudf.core.column.timedelta.TimeDeltaColumn(
