@@ -66,12 +66,6 @@ class MaskedModel(models.StructModel):
         members = [("value", types.int64), ("valid", types.bool_)]
         models.StructModel.__init__(self, dmm, fe_type, members)
 
-#@register_model(NAType) # check what model NoneType uses
-#class NAModel(models.OpaqueModel):
-#    def __init__(self, dmm, fe_type):
-#        members = []
-#        models.StructModel.__init__(self, dmm, fe_type, members)
-
 register_model(NAType)(models.OpaqueModel)
 
 @lower_builtin(Masked, types.int64, types.bool_)
