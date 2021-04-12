@@ -25,6 +25,15 @@ from cudf.utils.utils import pa_mask_buffer_to_mask
 class DecimalColumn(ColumnBase):
     dtype: Decimal64Dtype
 
+    @property
+    def data_array_view(self) -> "cuda.devicearray.DeviceNDArray":
+        """
+        View the data as a device array object
+        """
+        result = cuda.as_cuda_array(self.data)
+
+        return result.view("int64")
+
     @classmethod
     def from_arrow(cls, data: pa.Array):
         dtype = Decimal64Dtype.from_arrow(data.type)
@@ -182,14 +191,6 @@ class DecimalColumn(ColumnBase):
             input_col=self, replacement=value, method=method, dtype=dtype
         )
         return self._copy_type_metadata(result)
-
-    def data_array_view(self) -> "cuda.devicearray.DeviceNDArray":
-        """
-        View the data as a device array object
-        """
-        result = cuda.as_cuda_array(self.data)
-
-        return result.view("int64")
 
 
 def _binop_scale(l_dtype, r_dtype, op):
