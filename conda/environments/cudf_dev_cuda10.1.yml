@@ -48,7 +48,6 @@ dependencies:
   - dlpack
   - arrow-cpp=1.0.1
   - arrow-cpp-proc * cuda
-  - boost-cpp>=1.72.0
   - double-conversion
   - rapidjson
   - flatbuffers

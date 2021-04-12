@@ -17,7 +17,6 @@ RUN apt update -y --fix-missing && \
       git \
       gcc-${CC} \
       g++-${CXX} \
-      libboost-all-dev \
       tzdata && \
     apt-get autoremove -y && \
     apt-get clean && \
