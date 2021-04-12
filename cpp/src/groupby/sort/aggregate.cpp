@@ -103,10 +103,11 @@ void aggregrate_result_functor::operator()<aggregation::PRODUCT>(aggregation con
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  cache.add_result(col_idx,
-                   agg,
-                   detail::group_product(
-                     get_grouped_values(), helper.num_groups(), helper.group_labels(), stream, mr));
+  cache.add_result(
+    col_idx,
+    agg,
+    detail::group_product(
+      get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr));
 };
 
 template <>
