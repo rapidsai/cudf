@@ -79,7 +79,9 @@ class aggregation {
     LEAD,            ///< window function, accesses row at specified offset following current row
     LAG,             ///< window function, accesses row at specified offset preceding current row
     PTX,             ///< PTX  UDF based reduction
-    CUDA             ///< CUDA UDF based reduction
+    CUDA,            ///< CUDA UDF based reduction
+    RANK,
+    DENSE_RANK
   };
 
   aggregation(aggregation::Kind a) : kind{a} {}
@@ -204,6 +206,12 @@ std::unique_ptr<aggregation> make_nth_element_aggregation(
 
 /// Factory to create a ROW_NUMBER aggregation
 std::unique_ptr<aggregation> make_row_number_aggregation();
+
+/// Factory to create a RANK aggregation
+std::unique_ptr<aggregation> make_rank_aggregation();
+
+/// Factory to create a DENSE_RANK aggregation
+std::unique_ptr<aggregation> make_dense_rank_aggregation();
 
 /**
  * @brief Factory to create a COLLECT_LIST aggregation

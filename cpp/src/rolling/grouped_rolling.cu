@@ -45,9 +45,11 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                std::unique_ptr<aggregation> const& aggr,
                                                rmm::mr::device_memory_resource* mr)
 {
+  table_view empty_order_by = table_view();
   return grouped_rolling_window(group_keys,
                                 input,
                                 empty_like(input)->view(),
+                                empty_order_by,
                                 preceding_window,
                                 following_window,
                                 min_periods,
@@ -64,9 +66,31 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                std::unique_ptr<aggregation> const& aggr,
                                                rmm::mr::device_memory_resource* mr)
 {
+  const table_view empty_order_by = table_view();
   return grouped_rolling_window(group_keys,
                                 input,
                                 default_outputs,
+                                empty_order_by,
+                                window_bounds::get(preceding_window),
+                                window_bounds::get(following_window),
+                                min_periods,
+                                aggr,
+                                mr);
+}
+
+std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
+                                               column_view const& input,
+                                               table_view const& order_by,
+                                               size_type preceding_window,
+                                               size_type following_window,
+                                               size_type min_periods,
+                                               std::unique_ptr<aggregation> const& aggr,
+                                               rmm::mr::device_memory_resource* mr)
+{
+  return grouped_rolling_window(group_keys,
+                                input,
+                                empty_like(input)->view(),
+                                order_by,
                                 window_bounds::get(preceding_window),
                                 window_bounds::get(following_window),
                                 min_periods,
@@ -79,6 +103,7 @@ namespace detail {
 std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                column_view const& input,
                                                column_view const& default_outputs,
+                                               table_view const& order_by,
                                                window_bounds preceding_window_bounds,
                                                window_bounds following_window_bounds,
                                                size_type min_periods,
@@ -104,7 +129,8 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
   if (group_keys.num_columns() == 0) {
     // No Groupby columns specified. Treat as one big group.
     return rolling_window(
-      input, default_outputs, preceding_window, following_window, min_periods, aggr, mr);
+      input, default_outputs, order_by, preceding_window, following_window, min_periods, aggr, mr);
+      // input, default_outputs, preceding_window, following_window, min_periods, aggr, stream, mr);
   }
 
   using sort_groupby_helper = cudf::groupby::detail::sort::sort_groupby_helper;
@@ -170,6 +196,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
     return cudf::detail::rolling_window(
       input,
       default_outputs,
+      order_by,
       cudf::detail::make_counting_transform_iterator(0, preceding_calculator),
       cudf::detail::make_counting_transform_iterator(0, following_calculator),
       min_periods,
@@ -184,6 +211,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                column_view const& input,
                                                column_view const& default_outputs,
+                                               table_view const& order_by,
                                                window_bounds preceding_window_bounds,
                                                window_bounds following_window_bounds,
                                                size_type min_periods,
@@ -193,6 +221,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
   return detail::grouped_rolling_window(group_keys,
                                         input,
                                         default_outputs,
+                                        order_by,
                                         preceding_window_bounds,
                                         following_window_bounds,
                                         min_periods,

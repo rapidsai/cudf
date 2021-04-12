@@ -548,6 +548,18 @@ struct target_type_impl<Source, aggregation::ROW_NUMBER> {
   using type = cudf::size_type;
 };
 
+// Always use size_type accumulator for RANK
+template <typename Source>
+struct target_type_impl<Source, aggregation::RANK> {
+  using type = cudf::size_type;
+};
+
+// Always use size_type accumulator for DENSE_RANK
+template <typename Source>
+struct target_type_impl<Source, aggregation::DENSE_RANK> {
+  using type = cudf::size_type;
+};
+
 // Always use list for COLLECT_LIST
 template <typename Source>
 struct target_type_impl<Source, aggregation::COLLECT_LIST> {
@@ -665,6 +677,10 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kin
       return f.template operator()<aggregation::LEAD>(std::forward<Ts>(args)...);
     case aggregation::LAG:
       return f.template operator()<aggregation::LAG>(std::forward<Ts>(args)...);
+    case aggregation::RANK:
+      return f.template operator()<aggregation::RANK>(std::forward<Ts>(args)...);
+    case aggregation::DENSE_RANK:
+      return f.template operator()<aggregation::DENSE_RANK>(std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");

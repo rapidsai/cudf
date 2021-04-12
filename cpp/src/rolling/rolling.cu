@@ -28,8 +28,9 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 {
   auto defaults =
     cudf::is_dictionary(input.type()) ? dictionary_column_view(input).indices() : input;
+  const auto empty_order_by = table_view();
   return rolling_window(
-    input, empty_like(defaults)->view(), preceding_window, following_window, min_periods, agg, mr);
+    input, empty_like(defaults)->view(), empty_order_by, preceding_window, following_window, min_periods, agg, mr);
 }
 
 namespace detail {
@@ -37,6 +38,7 @@ namespace detail {
 // Applies a fixed-size rolling window function to the values in a column.
 std::unique_ptr<column> rolling_window(column_view const& input,
                                        column_view const& default_outputs,
+                                       table_view const& order_by,
                                        size_type preceding_window,
                                        size_type following_window,
                                        size_type min_periods,
@@ -68,6 +70,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 
     return cudf::detail::rolling_window(input,
                                         default_outputs,
+                                        order_by,
                                         preceding_window_begin,
                                         following_window_begin,
                                         min_periods,
@@ -111,8 +114,10 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   } else {
     auto defaults_col =
       cudf::is_dictionary(input.type()) ? dictionary_column_view(input).indices() : input;
+    auto const empty_order_by = table_view();
     return cudf::detail::rolling_window(input,
                                         empty_like(defaults_col)->view(),
+                                        empty_order_by,
                                         preceding_window.begin<size_type>(),
                                         following_window.begin<size_type>(),
                                         min_periods,
@@ -133,8 +138,53 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        std::unique_ptr<aggregation> const& agg,
                                        rmm::mr::device_memory_resource* mr)
 {
+  auto const empty_order_by = table_view();
   return detail::rolling_window(input,
                                 default_outputs,
+                                empty_order_by,
+                                preceding_window,
+                                following_window,
+                                min_periods,
+                                agg,
+                                rmm::cuda_stream_default,
+                                mr);
+}
+
+// Applies a fixed-size rolling window function to the values in a column.
+std::unique_ptr<column> rolling_window(column_view const& input,
+                                       table_view const& order_by,
+                                       size_type preceding_window,
+                                       size_type following_window,
+                                       size_type min_periods,
+                                       std::unique_ptr<aggregation> const& agg,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  auto defaults =
+    cudf::is_dictionary(input.type()) ? dictionary_column_view(input).indices() : input;
+  return detail::rolling_window(input,
+                                empty_like(defaults)->view(),
+                                order_by,
+                                preceding_window,
+                                following_window,
+                                min_periods,
+                                agg,
+                                rmm::cuda_stream_default,
+                                mr);
+}
+
+// Applies a fixed-size rolling window function to the values in a column.
+std::unique_ptr<column> rolling_window(column_view const& input,
+                                       column_view const& default_outputs,
+                                       table_view const& order_by,
+                                       size_type preceding_window,
+                                       size_type following_window,
+                                       size_type min_periods,
+                                       std::unique_ptr<aggregation> const& agg,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  return detail::rolling_window(input,
+                                default_outputs,
+                                order_by,
                                 preceding_window,
                                 following_window,
                                 min_periods,

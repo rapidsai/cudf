@@ -63,6 +63,7 @@
 #include <thrust/transform.h>
 
 #include <memory>
+#include "cudf/table/table_device_view.cuh"
 
 namespace cudf {
 
@@ -81,6 +82,7 @@ template <typename InputType,
           std::enable_if_t<op == aggregation::COUNT_VALID>* = nullptr>
 bool __device__ process_rolling_window(column_device_view input,
                                        column_device_view ignored_default_outputs,
+                                       table_device_view ignored_order_by,
                                        mutable_column_device_view output,
                                        size_type start_index,
                                        size_type end_index,
@@ -121,6 +123,7 @@ template <typename InputType,
           std::enable_if_t<op == aggregation::COUNT_ALL>* = nullptr>
 bool __device__ process_rolling_window(column_device_view input,
                                        column_device_view ignored_default_outputs,
+                                       table_device_view ignored_order_by,
                                        mutable_column_device_view output,
                                        size_type start_index,
                                        size_type end_index,
@@ -147,6 +150,49 @@ template <typename InputType,
           std::enable_if_t<op == aggregation::ROW_NUMBER>* = nullptr>
 bool __device__ process_rolling_window(column_device_view input,
                                        column_device_view ignored_default_outputs,
+                                       table_device_view ignored_order_by,
+                                       mutable_column_device_view output,
+                                       size_type start_index,
+                                       size_type end_index,
+                                       size_type current_index,
+                                       size_type min_periods)
+{
+  bool output_is_valid                      = end_index - start_index >= min_periods;
+  output.element<OutputType>(current_index) = current_index - start_index + 1;
+
+  return output_is_valid;
+}
+
+template <typename InputType,
+          typename OutputType,
+          typename agg_op,
+          aggregation::Kind op,
+          bool has_nulls,
+          std::enable_if_t<op == aggregation::RANK>* = nullptr>
+bool __device__ process_rolling_window(column_device_view input,
+                                       column_device_view ignored_default_outputs,
+                                       table_device_view order_by,
+                                       mutable_column_device_view output,
+                                       size_type start_index,
+                                       size_type end_index,
+                                       size_type current_index,
+                                       size_type min_periods)
+{
+  bool output_is_valid                      = end_index - start_index >= min_periods;
+  output.element<OutputType>(current_index) = current_index - start_index + 1;
+
+  return output_is_valid;
+}
+
+template <typename InputType,
+          typename OutputType,
+          typename agg_op,
+          aggregation::Kind op,
+          bool has_nulls,
+          std::enable_if_t<op == aggregation::DENSE_RANK>* = nullptr>
+bool __device__ process_rolling_window(column_device_view input,
+                                       column_device_view ignored_default_outputs,
+                                       table_device_view order_by,
                                        mutable_column_device_view output,
                                        size_type start_index,
                                        size_type end_index,
@@ -183,6 +229,7 @@ template <typename InputType,
 std::enable_if_t<(op == aggregation::LEAD) && (cudf::is_fixed_width<InputType>()), bool> __device__
 process_rolling_window(column_device_view input,
                        column_device_view default_outputs,
+                       table_device_view ignored_order_by,
                        mutable_column_device_view output,
                        size_type start_index,
                        size_type end_index,
@@ -232,6 +279,7 @@ template <typename InputType,
 std::enable_if_t<(op == aggregation::LAG) && (cudf::is_fixed_width<InputType>()), bool> __device__
 process_rolling_window(column_device_view input,
                        column_device_view default_outputs,
+                       table_device_view ignored_order_by,
                        mutable_column_device_view output,
                        size_type start_index,
                        size_type end_index,
@@ -272,6 +320,7 @@ template <typename InputType,
                            std::is_same<InputType, cudf::string_view>::value>* = nullptr>
 bool __device__ process_rolling_window(column_device_view input,
                                        column_device_view ignored_default_outputs,
+                                       table_device_view ignored_order_by,
                                        mutable_column_device_view output,
                                        size_type start_index,
                                        size_type end_index,
@@ -315,9 +364,11 @@ template <typename InputType,
           std::enable_if_t<!std::is_same<InputType, cudf::string_view>::value and
                            !(op == aggregation::COUNT_VALID || op == aggregation::COUNT_ALL ||
                              op == aggregation::ROW_NUMBER || op == aggregation::LEAD ||
-                             op == aggregation::LAG || op == aggregation::COLLECT_LIST)>* = nullptr>
+                             op == aggregation::LAG || op == aggregation::COLLECT_LIST ||
+                             op == aggregation::RANK || op == aggregation::DENSE_RANK)>* = nullptr>
 bool __device__ process_rolling_window(column_device_view input,
                                        column_device_view ignored_default_outputs,
+                                       table_device_view ignored_order_by,
                                        mutable_column_device_view output,
                                        size_type start_index,
                                        size_type end_index,
@@ -378,6 +429,7 @@ template <typename InputType,
 __launch_bounds__(block_size) __global__
   void gpu_rolling(column_device_view input,
                    column_device_view default_outputs,
+                   table_device_view order_by,
                    mutable_column_device_view output,
                    size_type* __restrict__ output_valid_count,
                    PrecedingWindowIterator preceding_window_begin,
@@ -407,7 +459,7 @@ __launch_bounds__(block_size) __global__
 
     volatile bool output_is_valid = false;
     output_is_valid = process_rolling_window<InputType, OutputType, agg_op, op, has_nulls>(
-      input, default_outputs, output, start_index, end_index, i, min_periods);
+      input, default_outputs, order_by, output, start_index, end_index, i, min_periods);
 
     // set the mask
     cudf::bitmask_type result_mask{__ballot_sync(active_threads, output_is_valid)};
@@ -441,6 +493,7 @@ template <typename InputType,
 __launch_bounds__(block_size) __global__
   void gpu_rolling(column_device_view input,
                    column_device_view default_outputs,
+                   table_device_view order_by,
                    mutable_column_device_view output,
                    size_type* __restrict__ output_valid_count,
                    PrecedingWindowIterator preceding_window_begin,
@@ -471,7 +524,7 @@ __launch_bounds__(block_size) __global__
 
     volatile bool output_is_valid = false;
     output_is_valid = process_rolling_window<InputType, OutputType, agg_op, op, has_nulls>(
-      input, default_outputs, output, start_index, end_index, i, min_periods, device_agg_op);
+      input, default_outputs, order_by, output, start_index, end_index, i, min_periods, device_agg_op);
 
     // set the mask
     cudf::bitmask_type result_mask{__ballot_sync(active_threads, output_is_valid)};
@@ -503,6 +556,7 @@ struct rolling_window_launcher {
             typename FollowingWindowIterator>
   size_type kernel_launcher(column_view const& input,
                             column_view const& default_outputs,
+                            table_view const& order_by,
                             mutable_column_view& output,
                             PrecedingWindowIterator preceding_window_begin,
                             FollowingWindowIterator following_window_begin,
@@ -519,6 +573,7 @@ struct rolling_window_launcher {
     auto input_device_view           = column_device_view::create(input, stream);
     auto output_device_view          = mutable_column_device_view::create(output, stream);
     auto default_outputs_device_view = column_device_view::create(default_outputs, stream);
+    auto order_by_device_view        = table_device_view::create(order_by, stream);
 
     rmm::device_scalar<size_type> device_valid_count{0, stream};
 
@@ -526,6 +581,7 @@ struct rolling_window_launcher {
       gpu_rolling<Type, OutType, agg_op, op, block_size, true>
         <<<grid.num_blocks, block_size, 0, stream.value()>>>(*input_device_view,
                                                              *default_outputs_device_view,
+                                                             *order_by_device_view,
                                                              *output_device_view,
                                                              device_valid_count.data(),
                                                              preceding_window_begin,
@@ -535,6 +591,7 @@ struct rolling_window_launcher {
       gpu_rolling<Type, OutType, agg_op, op, block_size, false>
         <<<grid.num_blocks, block_size, 0, stream.value()>>>(*input_device_view,
                                                              *default_outputs_device_view,
+                                                             *order_by_device_view,
                                                              *output_device_view,
                                                              device_valid_count.data(),
                                                              preceding_window_begin,
@@ -557,6 +614,7 @@ struct rolling_window_launcher {
             typename FollowingWindowIterator>
   size_type kernel_launcher(column_view const& input,
                             column_view const& default_outputs,
+                            table_view const& order_by,
                             mutable_column_view& output,
                             PrecedingWindowIterator preceding_window_begin,
                             FollowingWindowIterator following_window_begin,
@@ -574,6 +632,7 @@ struct rolling_window_launcher {
     auto input_device_view           = column_device_view::create(input, stream);
     auto output_device_view          = mutable_column_device_view::create(output, stream);
     auto default_outputs_device_view = column_device_view::create(default_outputs, stream);
+    auto order_by_device_view        = table_device_view::create(order_by, stream);
 
     rmm::device_scalar<size_type> device_valid_count{0, stream};
 
@@ -581,6 +640,7 @@ struct rolling_window_launcher {
       gpu_rolling<Type, OutType, agg_op, op, block_size, true>
         <<<grid.num_blocks, block_size, 0, stream.value()>>>(*input_device_view,
                                                              *default_outputs_device_view,
+                                                             *order_by_device_view,
                                                              *output_device_view,
                                                              device_valid_count.data(),
                                                              preceding_window_begin,
@@ -591,6 +651,7 @@ struct rolling_window_launcher {
       gpu_rolling<Type, OutType, agg_op, op, block_size, false>
         <<<grid.num_blocks, block_size, 0, stream.value()>>>(*input_device_view,
                                                              *default_outputs_device_view,
+                                                             *order_by_device_view,
                                                              *output_device_view,
                                                              device_valid_count.data(),
                                                              preceding_window_begin,
@@ -621,6 +682,7 @@ struct rolling_window_launcher {
                    std::unique_ptr<column>>
   launch(column_view const& input,
          column_view const& default_outputs,
+         table_view const& order_by,
          PrecedingWindowIterator preceding_window_begin,
          FollowingWindowIterator following_window_begin,
          size_type min_periods,
@@ -636,6 +698,7 @@ struct rolling_window_launcher {
       kernel_launcher<T, agg_op, op, PrecedingWindowIterator, FollowingWindowIterator>(
         input,
         default_outputs,
+        order_by,
         output_view,
         preceding_window_begin,
         following_window_begin,
@@ -659,6 +722,7 @@ struct rolling_window_launcher {
                    std::unique_ptr<column>>
   launch(column_view const& input,
          column_view const& default_outputs,
+         table_view const& order_by,
          PrecedingWindowIterator preceding_window_begin,
          FollowingWindowIterator following_window_begin,
          size_type min_periods,
@@ -683,6 +747,7 @@ struct rolling_window_launcher {
                       PrecedingWindowIterator,
                       FollowingWindowIterator>(input,
                                                default_outputs,
+                                               order_by,
                                                output_view,
                                                preceding_window_begin,
                                                following_window_begin,
@@ -696,6 +761,7 @@ struct rolling_window_launcher {
                       PrecedingWindowIterator,
                       FollowingWindowIterator>(input,
                                                default_outputs,
+                                               order_by,
                                                output_view,
                                                preceding_window_begin,
                                                following_window_begin,
@@ -728,6 +794,7 @@ struct rolling_window_launcher {
                    std::unique_ptr<column>>
   launch(column_view const& input,
          column_view const& default_outputs,
+         table_view const& order_by,
          PrecedingWindowIterator preceding_window_begin,
          FollowingWindowIterator following_window_begin,
          size_type min_periods,
@@ -748,6 +815,7 @@ struct rolling_window_launcher {
                    std::unique_ptr<column>>
   launch(column_view const& input,
          column_view const& default_outputs,
+         table_view const& order_by,
          PrecedingWindowIterator preceding_window_begin,
          FollowingWindowIterator following_window_begin,
          size_type min_periods,
@@ -773,6 +841,7 @@ struct rolling_window_launcher {
       kernel_launcher<T, agg_op, op, PrecedingWindowIterator, FollowingWindowIterator>(
         input,
         default_outputs,
+        order_by,
         output_view,
         preceding_window_begin,
         following_window_begin,
@@ -797,6 +866,7 @@ struct rolling_window_launcher {
                    std::unique_ptr<column>>
   launch(column_view const& input,
          column_view const& default_outputs,
+         table_view const& order_by,
          PrecedingWindowIterator preceding_window_begin,
          FollowingWindowIterator following_window_begin,
          size_type min_periods,
@@ -818,6 +888,7 @@ struct rolling_window_launcher {
                    std::unique_ptr<column>>
   operator()(column_view const& input,
              column_view const& default_outputs,
+             table_view const& order_by,
              PrecedingWindowIterator preceding_window_begin,
              FollowingWindowIterator following_window_begin,
              size_type min_periods,
@@ -834,6 +905,7 @@ struct rolling_window_launcher {
                   PrecedingWindowIterator,
                   FollowingWindowIterator>(input,
                                            default_outputs,
+                                           order_by,
                                            preceding_window_begin,
                                            following_window_begin,
                                            min_periods,
@@ -849,6 +921,7 @@ struct rolling_window_launcher {
   std::enable_if_t<(op == aggregation::MEAN), std::unique_ptr<column>> operator()(
     column_view const& input,
     column_view const& default_outputs,
+    table_view const& order_by,
     PrecedingWindowIterator preceding_window_begin,
     FollowingWindowIterator following_window_begin,
     size_type min_periods,
@@ -859,6 +932,7 @@ struct rolling_window_launcher {
     return launch<InputType, cudf::DeviceSum, op, PrecedingWindowIterator, FollowingWindowIterator>(
       input,
       default_outputs,
+      order_by,
       preceding_window_begin,
       following_window_begin,
       min_periods,
@@ -873,6 +947,7 @@ struct rolling_window_launcher {
   std::enable_if_t<(op == aggregation::LEAD || op == aggregation::LAG), std::unique_ptr<column>>
   operator()(column_view const& input,
              column_view const& default_outputs,
+             table_view const& order_by,
              PrecedingWindowIterator preceding_window_begin,
              FollowingWindowIterator following_window_begin,
              size_type min_periods,
@@ -887,6 +962,7 @@ struct rolling_window_launcher {
                   FollowingWindowIterator>(
       input,
       default_outputs,
+      order_by,
       preceding_window_begin,
       following_window_begin,
       min_periods,
@@ -1142,6 +1218,7 @@ struct rolling_window_launcher {
   std::enable_if_t<(op == aggregation::COLLECT_LIST), std::unique_ptr<column>> operator()(
     column_view const& input,
     column_view const& default_outputs,
+    table_view const& order_by,
     PrecedingIter preceding_begin_raw,
     FollowingIter following_begin_raw,
     size_type min_periods,
@@ -1221,6 +1298,7 @@ struct dispatch_rolling {
   template <typename T, typename PrecedingWindowIterator, typename FollowingWindowIterator>
   std::unique_ptr<column> operator()(column_view const& input,
                                      column_view const& default_outputs,
+                                     table_view const& order_by,
                                      PrecedingWindowIterator preceding_window_begin,
                                      FollowingWindowIterator following_window_begin,
                                      size_type min_periods,
@@ -1232,6 +1310,7 @@ struct dispatch_rolling {
                                   rolling_window_launcher<T>{},
                                   input,
                                   default_outputs,
+                                  order_by,
                                   preceding_window_begin,
                                   following_window_begin,
                                   min_periods,
@@ -1353,6 +1432,31 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
+  const auto empty_order_by = table_view();
+  return rolling_window(input, default_outputs, empty_order_by, preceding_window_begin, following_window_begin, min_periods, agg, stream, mr);
+}
+
+/**
+ * @copydoc cudf::rolling_window(column_view const& input,
+ *                               PrecedingWindowIterator preceding_window_begin,
+ *                               FollowingWindowIterator following_window_begin,
+ *                               size_type min_periods,
+ *                               std::unique_ptr<aggregation> const& agg,
+ *                               rmm::mr::device_memory_resource* mr)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
+std::unique_ptr<column> rolling_window(column_view const& input,
+                                       column_view const& default_outputs,
+                                       table_view const& order_by,
+                                       PrecedingWindowIterator preceding_window_begin,
+                                       FollowingWindowIterator following_window_begin,
+                                       size_type min_periods,
+                                       std::unique_ptr<aggregation> const& agg,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
+{
   static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
                 "bitmask_type size does not match CUDA warp size");
 
@@ -1362,7 +1466,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
     CUDF_EXPECTS(agg->kind == aggregation::COUNT_ALL || agg->kind == aggregation::COUNT_VALID ||
                    agg->kind == aggregation::ROW_NUMBER || agg->kind == aggregation::MIN ||
                    agg->kind == aggregation::MAX || agg->kind == aggregation::LEAD ||
-                   agg->kind == aggregation::LAG,
+                   agg->kind == aggregation::LAG || agg->kind == aggregation::RANK ||
+                   agg->kind == aggregation::DENSE_RANK,
                  "Invalid aggregation for dictionary column");
 
   min_periods = std::max(min_periods, 0);
@@ -1375,6 +1480,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                       dispatch_rolling{},
                                       input_col,
                                       default_outputs,
+                                      order_by,
                                       preceding_window_begin,
                                       following_window_begin,
                                       min_periods,
@@ -1385,7 +1491,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 
   // dictionary column post processing
   if (agg->kind == aggregation::COUNT_ALL || agg->kind == aggregation::COUNT_VALID ||
-      agg->kind == aggregation::ROW_NUMBER)
+      agg->kind == aggregation::ROW_NUMBER || agg->kind == aggregation::RANK ||
+      agg->kind == aggregation::DENSE_RANK)
     return output;
 
   // output is new dictionary indices (including nulls)

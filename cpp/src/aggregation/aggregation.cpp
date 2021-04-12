@@ -125,6 +125,16 @@ std::unique_ptr<aggregation> make_row_number_aggregation()
 {
   return std::make_unique<aggregation>(aggregation::ROW_NUMBER);
 }
+/// Factory to create a RANK aggregation
+std::unique_ptr<aggregation> make_rank_aggregation()
+{
+  return std::make_unique<aggregation>(aggregation::RANK);
+}
+/// Factory to create a DENSE_RANK aggregation
+std::unique_ptr<aggregation> make_dense_rank_aggregation()
+{
+  return std::make_unique<aggregation>(aggregation::DENSE_RANK);
+}
 /// Factory to create a COLLECT_LIST aggregation
 std::unique_ptr<aggregation> make_collect_list_aggregation(null_policy null_handling)
 {
