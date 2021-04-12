@@ -20,6 +20,7 @@ package ai.rapids.cudf;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.IntStream;
 
 /**
  * Per column settings for writing Parquet files.
@@ -60,14 +61,14 @@ public class ParquetColumnWriterOptions {
      * @param isNullable
      * @return this for chaining.
      */
-    public T withNullable(boolean isNullable) {
+    protected T withNullable(boolean isNullable) {
       this.isNullable = isNullable;
       return (T) this;
     }
 
   }
 
-  public static class LeafBuilder extends Builder<LeafBuilder> {
+  static class LeafBuilder extends Builder<LeafBuilder> implements ParquetWriterOptionsBuilder {
     private String columnName;
     private boolean isTimestampTypeInt96 = false;
     private int precision;
@@ -76,50 +77,66 @@ public class ParquetColumnWriterOptions {
       this.columnName = name;
     }
 
-   /**
-     * Set whether the timestamps should be written in INT96
-     * @return this for chaining.
-     */
-    LeafBuilder withTimestampInt96(boolean int96) {
-      this.isTimestampTypeInt96 = int96;
-      return this;
-    }
-
-    /**
-     * @param precision a value for this column if decimal
-     * @return this for chaining.
-     */
-    LeafBuilder withDecimalPrecision(int precision) {
-      this.precision = precision;
-      return this;
-    }
-
     public ParquetColumnWriterOptions build() {
       return new ParquetColumnWriterOptions(this);
+    }
+
+    @Override
+    public LeafBuilder withColumn(boolean nullable, String... name) {
+      assert(name.length == 1);
+      this.isNullable = nullable;
+      this.columnName = name[0];
+      return this;
+    }
+
+    @Override
+    public LeafBuilder withDecimalColumn(String name, int precision, boolean nullable) {
+      this.columnName = name;
+      this.precision = precision;
+      this.isNullable = nullable;
+      return this;
+    }
+
+    @Override
+    public LeafBuilder withTimestampColumn(String name, boolean isInt96, boolean nullable) {
+      this.columnName = name;
+      this.isTimestampTypeInt96 = isInt96;
+      this.isNullable = nullable;
+      return this;
+    }
+
+    @Override
+    public LeafBuilder withStructColumn(ParquetStructColumnWriterOptions option) {
+      throw new UnsupportedOperationException("Leaf can't have struct column");
+    }
+
+    @Override
+    public LeafBuilder withListColumn(ParquetListColumnWriterOptions options) {
+      throw new UnsupportedOperationException("Leaf child can't have list column");
     }
   }
 
   private static class NestedBuilder<T extends NestedBuilder> extends Builder<T> {
     protected String name;
 
-    protected ParquetColumnWriterOptions withColumnName(String name) {
-      return ParquetColumnWriterOptions.leafBuilder(name).build();
+    protected ParquetColumnWriterOptions.LeafBuilder withColumnName(String name) {
+      return ParquetColumnWriterOptions.leafBuilder(name);
     }
 
-    protected ParquetColumnWriterOptions withDecimal(String name, int precision) {
+    protected ParquetColumnWriterOptions.LeafBuilder withDecimal(String name, int precision,
+                                                                 boolean isNullable) {
       return ParquetColumnWriterOptions.leafBuilder(name)
-          .withDecimalPrecision(precision)
-          .build();
+          .withDecimalColumn(name, precision, isNullable);
     }
 
-    protected ParquetColumnWriterOptions withTimestamp(String name, boolean isInt96) {
+    protected ParquetColumnWriterOptions.LeafBuilder withTimestamp(String name, boolean isInt96,
+                                                                   boolean isNullable) {
       return ParquetColumnWriterOptions.leafBuilder(name)
-          .withTimestampInt96(isInt96)
-          .build();
+          .withTimestampColumn(name, isInt96, isNullable);
     }
   }
 
-  public static class StructBuilder extends NestedBuilder<StructBuilder> {
+  public static class StructBuilder extends NestedBuilder<StructBuilder> implements ParquetWriterOptionsBuilder {
 
     private List<ParquetColumnWriterOptions> children = new ArrayList<>();
 
@@ -127,8 +144,9 @@ public class ParquetColumnWriterOptions {
      * Builder specific to build a Struct meta
      * @param name
      */
-    public StructBuilder(String name) {
+    public StructBuilder(String name, boolean isNullable) {
       this.name = name;
+      this.isNullable = isNullable;
     }
 
     /**
@@ -140,7 +158,8 @@ public class ParquetColumnWriterOptions {
      * @param child
      * @return this for chaining.
      */
-    public StructBuilder withListChildColumn(ParquetListColumnWriterOptions child) {
+    @Override
+    public StructBuilder withListColumn(ParquetListColumnWriterOptions child) {
       assert (child.getChildColumnOptions().length == 2) : "Lists can only have two children";
       if (child.getChildColumnOptions()[0] != DUMMY_CHILD) {
         throw new IllegalArgumentException("First child in the list has to be DUMMY_CHILD");
@@ -157,6 +176,7 @@ public class ParquetColumnWriterOptions {
      * @param child
      * @return this for chaining.
      */
+    @Override
     public StructBuilder withStructColumn(ParquetStructColumnWriterOptions child) {
       for (ParquetColumnWriterOptions opt: child.getChildColumnOptions()) {
         if (opt.getColumName().isEmpty()) {
@@ -172,8 +192,56 @@ public class ParquetColumnWriterOptions {
      * @param name
      * @return this for chaining.
      */
-    public StructBuilder withLeafColumn(String name) {
-      children.add(withColumnName(name));
+    public StructBuilder withNonNullableColumn(String name) {
+      children.add(withColumnName(name).withNullable(false).build());
+      return this;
+    }
+
+    /**
+     * Set a simple child meta data
+     * @param name
+     * @return this for chaining.
+     */
+    public StructBuilder withNullableColumn(String name) {
+      children.add(withColumnName(name).withNullable(true).build());
+      return this;
+    }
+
+    /**
+     * Set a simple child meta data
+     * @param name
+     * @return this for chaining.
+     */
+    @Override
+    public StructBuilder withColumn(boolean nullable, String... name) {
+      IntStream.range(0, name.length).forEach(
+          i -> children.add(ParquetColumnWriterOptions.leafBuilder(name[i])
+              .withNullable(nullable)
+              .build())
+      );
+      return this;
+    }
+
+    /**
+     * Set a Decimal child meta data
+     * @param name
+     * @param precision
+     * @return this for chaining.
+     */
+    @Override
+    public StructBuilder withDecimalColumn(String name, int precision, boolean nullable) {
+      children.add(withDecimal(name, precision, nullable).build());
+      return this;
+    }
+
+    /**
+     * Set a Decimal child meta data
+     * @param name
+     * @param precision
+     * @return this for chaining.
+     */
+    public StructBuilder withNullableDecimalColumn(String name, int precision) {
+      withDecimalColumn(name, precision, true);
       return this;
     }
 
@@ -184,7 +252,19 @@ public class ParquetColumnWriterOptions {
      * @return this for chaining.
      */
     public StructBuilder withDecimalColumn(String name, int precision) {
-      children.add(withDecimal(name, precision));
+      withDecimalColumn(name, precision, false);
+      return this;
+    }
+
+    /**
+     * Set a timestamp child meta data
+     * @param name
+     * @param isInt96
+     * @return this for chaining.
+     */
+    @Override
+    public StructBuilder withTimestampColumn(String name, boolean isInt96, boolean nullable) {
+      children.add(withTimestamp(name, isInt96, nullable).build());
       return this;
     }
 
@@ -195,7 +275,18 @@ public class ParquetColumnWriterOptions {
      * @return this for chaining.
      */
     public StructBuilder withTimestampColumn(String name, boolean isInt96) {
-      children.add(withTimestamp(name, isInt96));
+      withTimestampColumn(name, isInt96, false);
+      return this;
+    }
+
+    /**
+     * Set a timestamp child meta data
+     * @param name
+     * @param isInt96
+     * @return this for chaining.
+     */
+    public StructBuilder withNullableTimestampColumn(String name, boolean isInt96) {
+      withTimestampColumn(name, isInt96, true);
       return this;
     }
 
@@ -204,12 +295,13 @@ public class ParquetColumnWriterOptions {
     }
   }
 
-  public static class ListBuilder extends NestedBuilder<ListBuilder> {
+  public static class ListBuilder extends NestedBuilder<ListBuilder> implements ParquetWriterOptionsBuilder {
 
     private ParquetColumnWriterOptions child = null;
 
-    public ListBuilder(String name) {
+    public ListBuilder(String name, boolean isNullable) {
       this.name = name;
+      this.isNullable = isNullable;
     }
 
     /**
@@ -218,6 +310,7 @@ public class ParquetColumnWriterOptions {
      * @param child
      * @return this for chaining
      */
+    @Override
     public ListBuilder withStructColumn(ParquetStructColumnWriterOptions child) {
       for (ParquetColumnWriterOptions opt: child.getChildColumnOptions()) {
         if (opt.getColumName().isEmpty()) {
@@ -238,6 +331,7 @@ public class ParquetColumnWriterOptions {
      * @param child
      * @return this for chaining
      */
+    @Override
     public ListBuilder withListColumn(ParquetListColumnWriterOptions child) {
       assert (child.getChildColumnOptions().length == 2) : "Lists can only have two children";
       if (child.getChildColumnOptions()[0] != DUMMY_CHILD) {
@@ -251,13 +345,38 @@ public class ParquetColumnWriterOptions {
     }
 
     /**
-     * Will set the simple child meta data of this list column
+     * Will set a non-nullable simple child meta data of this list column
      * Warning: this will over write the previous value as a list can only have one child
      * @param name
-     * @return this for chaining
+     * @return this for chaining.
      */
-    public ListBuilder withLeafColumn(String name) {
-      child = withColumnName(name);
+    public ListBuilder withNonNullableColumn(String name) {
+      child = withColumnName(name).withNullable(false).build();
+      return this;
+    }
+
+    /**
+     * Will set a nullable child meta data of this list column
+     * Warning: this will over write the previous value as a list can only have one child
+     * @param name
+     * @return this for chaining.
+     */
+    public ListBuilder withNullableColumn(String name) {
+      child = withColumnName(name).withNullable(true).build();
+      return this;
+    }
+
+    /**
+     * Will set child meta data of this list column
+     * Warning: this will over write the previous value as a list can only have one child
+     * @param nullable
+     * @param name
+     * @return this for chaining.
+     */
+    @Override
+    public ListBuilder withColumn(boolean nullable, String... name) {
+      assert(name.length == 1);
+      child = withColumnName(name[0]).withNullable(nullable).build();
       return this;
     }
 
@@ -268,8 +387,9 @@ public class ParquetColumnWriterOptions {
      * @param precision
      * @return this for chaining
      */
-    public ListBuilder withDecimalColumn(String name, int precision) {
-      child = withDecimal(name, precision);
+    @Override
+    public ListBuilder withDecimalColumn(String name, int precision, boolean isNullable) {
+      child = withDecimal(name, precision, isNullable).build();
       return this;
     }
 
@@ -280,8 +400,9 @@ public class ParquetColumnWriterOptions {
      * @param isInt96
      * @return this for chaining
      */
-    public ListBuilder withTimestampColumn(String name, boolean isInt96) {
-      child = withTimestamp(name, isInt96);
+    @Override
+    public ListBuilder withTimestampColumn(String name, boolean isInt96, boolean isNullable) {
+      child = withTimestamp(name, isInt96, isNullable).build();
       return this;
     }
 
@@ -295,11 +416,19 @@ public class ParquetColumnWriterOptions {
   }
 
   public static ListBuilder listBuilder(String name) {
-    return new ListBuilder(name);
+    return new ListBuilder(name, true);
+  }
+
+  public static ListBuilder listBuilder(String name, boolean isNullable) {
+    return new ListBuilder(name, isNullable);
+  }
+
+  public static StructBuilder structBuilder(String name, boolean isNullable) {
+    return new StructBuilder(name, isNullable);
   }
 
   public static StructBuilder structBuilder(String name) {
-    return new StructBuilder(name);
+    return new StructBuilder(name, true);
   }
 
   private ParquetColumnWriterOptions(StructBuilder builder) {
