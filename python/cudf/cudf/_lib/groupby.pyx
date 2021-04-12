@@ -53,12 +53,15 @@ _STRING_AGGS = {
 
 _LIST_AGGS = {
     "collect",
+    "cumcount",
 }
 
 _STRUCT_AGGS = {
+    "cumcount",
 }
 
 _INTERVAL_AGGS = {
+    "cumcount",
 }
 
 _DECIMAL_AGGS = {
@@ -70,7 +73,8 @@ _DECIMAL_AGGS = {
     "max",
     "nunique",
     "nth",
-    "collect"
+    "collect",
+    "cumcount",  # TODO evaluates on keys, not on individual columns.
 }
 
 
