@@ -114,7 +114,6 @@ cdef class GroupBy:
         allow_empty = all(len(v) == 0 for v in aggregations.values())
 
         included_aggregations = defaultdict(list)
-        idx = 0
         for i, (col_name, aggs) in enumerate(aggregations.items()):
             col = values._data[col_name]
             dtype = col.dtype
@@ -143,14 +142,13 @@ cdef class GroupBy:
                 if (valid_aggregations == "ALL"
                         or agg_obj.kind in valid_aggregations):
                     included_aggregations[col_name].append(agg)
-                    c_agg_requests[idx].aggregations.push_back(
+                    c_agg_requests.back().aggregations.push_back(
                         move(agg_obj.c_obj)
                     )
-            if c_agg_requests[idx].aggregations.empty():
+            if c_agg_requests.back().aggregations.empty():
                 c_agg_requests.pop_back()
             else:
-                c_agg_requests[idx].values = col.view()
-                idx += 1
+                c_agg_requests.back().values = col.view()
         if c_agg_requests.empty() and not allow_empty:
             raise DataError("No numeric types to aggregate")
 
