@@ -162,17 +162,18 @@ size_t gather_stream_info(const size_t stripe_index,
   uint64_t src_offset    = 0;
   uint64_t dst_offset    = 0;
   for (const auto &stream : stripefooter->streams) {
-    if (stream.column >= orc2gdf.size()) {
+    if (!stream.column_id || *stream.column_id >= orc2gdf.size()) {
       dst_offset += stream.length;
       continue;
     }
 
-    auto col = orc2gdf[stream.column];
+    auto const column_id = *stream.column_id;
+    auto col             = orc2gdf[column_id];
     if (col == -1) {
       // A struct-type column has no data itself, but rather child columns
       // for each of its fields. There is only a PRESENT stream, which
       // needs to be included for the reader.
-      const auto schema_type = types[stream.column];
+      const auto schema_type = types[column_id];
       if (schema_type.subtypes.size() != 0) {
         if (schema_type.kind == orc::STRUCT && stream.kind == orc::PRESENT) {
           for (const auto &idx : schema_type.subtypes) {
@@ -192,7 +193,7 @@ size_t gather_stream_info(const size_t stripe_index,
         // NOTE: skip_count field is temporarily used to track index ordering
         auto &chunk = chunks[stripe_index * num_columns + col];
         const auto idx =
-          get_index_type_and_pos(stream.kind, chunk.skip_count, col == orc2gdf[stream.column]);
+          get_index_type_and_pos(stream.kind, chunk.skip_count, col == orc2gdf[column_id]);
         if (idx.first < gpu::CI_NUM_STREAMS) {
           chunk.strm_id[idx.first]  = stream_info.size();
           chunk.strm_len[idx.first] = stream.length;
@@ -200,8 +201,8 @@ size_t gather_stream_info(const size_t stripe_index,
 
           if (idx.first == gpu::CI_DICTIONARY) {
             chunk.dictionary_start = *num_dictionary_entries;
-            chunk.dict_len         = stripefooter->columns[stream.column].dictionarySize;
-            *num_dictionary_entries += stripefooter->columns[stream.column].dictionarySize;
+            chunk.dict_len         = stripefooter->columns[column_id].dictionarySize;
+            *num_dictionary_entries += stripefooter->columns[column_id].dictionarySize;
           }
         }
       }

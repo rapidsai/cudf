@@ -119,12 +119,12 @@ class orc_column_view {
    * @brief Constructor that extracts out the string position + length pairs
    * for building dictionaries for string columns
    */
-  explicit orc_column_view(size_t id,
+  explicit orc_column_view(size_t index,
                            size_t str_id,
                            column_view const &col,
                            const table_metadata *metadata,
                            rmm::cuda_stream_view stream)
-    : _id(id),
+    : _index(index),
       _str_id(str_id),
       _is_string_type(col.type().id() == type_id::STRING),
       _type_width(_is_string_type ? 0 : cudf::size_of(col.type())),
@@ -135,10 +135,10 @@ class orc_column_view {
       _type_kind(to_orc_type(col.type().id()))
   {
     // Generating default name if name isn't present in metadata
-    if (metadata && _id < metadata->column_names.size()) {
-      _name = metadata->column_names[_id];
+    if (metadata && _index < metadata->column_names.size()) {
+      _name = metadata->column_names[_index];
     } else {
-      _name = "_col" + std::to_string(_id);
+      _name = "_col" + std::to_string(_index);
     }
   }
 
@@ -177,7 +177,10 @@ class orc_column_view {
   }
   auto device_stripe_dict() const { return d_stripe_dict; }
 
-  auto id() const noexcept { return _id; }
+  // Index in the table
+  auto index() const noexcept { return _index; }
+  // Id in the ORC file
+  auto id() const noexcept { return _index + 1; }
   size_t type_width() const noexcept { return _type_width; }
   size_t data_count() const noexcept { return _data_count; }
   size_t null_count() const noexcept { return _null_count; }
@@ -192,8 +195,8 @@ class orc_column_view {
 
  private:
   // Identifier within set of columns and string columns, respectively
-  size_t _id           = 0;
-  size_t _str_id       = 0;
+  uint32_t _index      = 0;
+  uint32_t _str_id     = 0;
   bool _is_string_type = false;
 
   size_t _type_width     = 0;
@@ -347,9 +350,14 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
 orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
                                          host_span<stripe_rowgroups const> stripe_bounds)
 {
-  // First n + 1 streams are row index streams, including 'column 0'
-  std::vector<Stream> streams{{ROW_INDEX, 0, 0}};  // TODO: Separate index and data streams?
-  streams.resize(columns.size() + 1);
+  // 'column 0' row index stream
+  std::vector<Stream> streams{{ROW_INDEX, 0}};  // TODO: Separate index and data streams?
+  // First n + 1 streams are row index streams
+  streams.reserve(columns.size() + 1);
+  std::transform(columns.begin(), columns.end(), std::back_inserter(streams), [](auto const &col) {
+    return Stream{ROW_INDEX, col.id()};
+  });
+
   std::vector<int32_t> ids(columns.size() * gpu::CI_NUM_STREAMS, -1);
 
   for (auto &column : columns) {
@@ -367,8 +375,8 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
       if (single_write_mode) {
         return column.nullable();
       } else {
-        return (column.id() < user_metadata_with_nullability.column_nullable.size())
-                 ? user_metadata_with_nullability.column_nullable[column.id()]
+        return (column.index() < user_metadata_with_nullability.column_nullable.size())
+                 ? user_metadata_with_nullability.column_nullable[column.index()]
                  : true;
       }
     }();
@@ -467,33 +475,27 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
     // Initialize the column's metadata (this is the only reason columns is in/out param)
     column.set_orc_encoding(encoding_kind);
 
-    // Initialize the column's index stream
-    const auto id      = static_cast<uint32_t>(1 + column.id());
-    streams[id].column = id;
-    streams[id].kind   = ROW_INDEX;
-    streams[id].length = 0;
-
     // Initialize the column's data stream(s)
-    const auto base = column.id() * gpu::CI_NUM_STREAMS;
+    const auto base = column.index() * gpu::CI_NUM_STREAMS;
     if (present_stream_size != 0) {
       auto len                    = static_cast<uint64_t>(present_stream_size);
       ids[base + gpu::CI_PRESENT] = streams.size();
-      streams.push_back(orc::Stream{PRESENT, id, len});
+      streams.push_back(orc::Stream{PRESENT, column.id(), len});
     }
     if (data_stream_size != 0) {
       auto len                 = static_cast<uint64_t>(std::max<int64_t>(data_stream_size, 0));
       ids[base + gpu::CI_DATA] = streams.size();
-      streams.push_back(orc::Stream{data_kind, id, len});
+      streams.push_back(orc::Stream{data_kind, column.id(), len});
     }
     if (data2_stream_size != 0) {
       auto len                  = static_cast<uint64_t>(std::max<int64_t>(data2_stream_size, 0));
       ids[base + gpu::CI_DATA2] = streams.size();
-      streams.push_back(orc::Stream{data2_kind, id, len});
+      streams.push_back(orc::Stream{data2_kind, column.id(), len});
     }
     if (dict_stream_size != 0) {
       auto len                       = static_cast<uint64_t>(dict_stream_size);
       ids[base + gpu::CI_DICTIONARY] = streams.size();
-      streams.push_back(orc::Stream{DICTIONARY_DATA, id, len});
+      streams.push_back(orc::Stream{DICTIONARY_DATA, column.id(), len});
     }
   }
   return {std::move(streams), std::move(ids)};
@@ -507,12 +509,20 @@ orc_streams::orc_stream_offsets orc_streams::compute_offsets(
   size_t rle_data_size = 0;
   for (size_t i = 0; i < streams.size(); ++i) {
     const auto &stream = streams[i];
-    const auto &column = columns[stream.column - 1];
 
-    if (((stream.kind == DICTIONARY_DATA || stream.kind == LENGTH) &&
-         (column.orc_encoding() == DICTIONARY_V2)) ||
-        ((stream.kind == DATA) &&
-         (column.orc_kind() == TypeKind::STRING && column.orc_encoding() == DIRECT_V2))) {
+    auto const is_str_data = [&]() {
+      // First stream is an index stream
+      if (!stream.column_index().has_value()) return false;
+
+      auto const &column = columns[stream.column_index().value()];
+      if (column.orc_kind() != TypeKind::STRING) return false;
+
+      // Dictionary encoded string column dictionary characters or
+      // directly encoded string column characters
+      return ((stream.kind == DICTIONARY_DATA && column.orc_encoding() == DICTIONARY_V2) ||
+              (stream.kind == DATA && column.orc_encoding() == DIRECT_V2));
+    }();
+    if (is_str_data) {
       strm_offsets[i] = str_data_size;
       str_data_size += stream.length;
     } else {
@@ -550,7 +560,7 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
     for (auto const &stripe : stripe_bounds) {
       for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
         auto const rg_idx = *rg_idx_it;
-        auto &ck          = chunks[column.id()][rg_idx];
+        auto &ck          = chunks[column.index()][rg_idx];
 
         ck.start_row = (rg_idx * row_index_stride_);
         ck.num_rows  = std::min<uint32_t>(row_index_stride_, column.data_count() - ck.start_row);
@@ -583,19 +593,19 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
   };
   for (auto const &column : columns) {
     if (column.orc_kind() == TypeKind::BOOLEAN && column.nullable()) {
-      validity_check_inputs[column.id()] = {column.nulls(), validity_check_indices(column.id())};
+      validity_check_inputs[column.index()] = {column.nulls(),
+                                               validity_check_indices(column.index())};
     }
   }
   for (auto &cnt_in : validity_check_inputs) {
     auto const valid_counts = segmented_count_set_bits(cnt_in.second.mask, cnt_in.second.indices);
-    CUDF_EXPECTS(std::none_of(valid_counts.cbegin(),
-                              valid_counts.cend(),
-                              [](auto valid_count) { return valid_count % 8; }),
-                 "There's currently a bug in encoding boolean columns. Suggested workaround "
-                 "is to convert "
-                 "to "
-                 "int8 type. Please see https://github.com/rapidsai/cudf/issues/6763 for "
-                 "more information.");
+    CUDF_EXPECTS(
+      std::none_of(valid_counts.cbegin(),
+                   valid_counts.cend(),
+                   [](auto valid_count) { return valid_count % 8; }),
+      "There's currently a bug in encoding boolean columns. Suggested workaround is to convert "
+      "to int8 type."
+      " Please see https://github.com/rapidsai/cudf/issues/6763 for more information.");
   }
 
   for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
@@ -634,11 +644,11 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
               }
             } else if (strm_type == gpu::CI_DATA && ck.type_kind == TypeKind::STRING &&
                        ck.encoding_kind == DIRECT_V2) {
-              strm.lengths[strm_type] = column.host_dict_chunk(rg_idx)->string_char_count;
-              auto const &prev_strm   = col_streams[rg_idx - 1];
-              strm.data_ptrs[strm_type] =
-                (rg_idx == 0) ? encoded_data.data() + stream_offsets.offsets[strm_id]
-                              : (prev_strm.data_ptrs[strm_type] + prev_strm.lengths[strm_type]);
+              strm.lengths[strm_type]   = column.host_dict_chunk(rg_idx)->string_char_count;
+              strm.data_ptrs[strm_type] = (rg_idx == 0)
+                                            ? encoded_data.data() + stream_offsets.offsets[strm_id]
+                                            : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
+                                               col_streams[rg_idx - 1].lengths[strm_type]);
             } else if (strm_type == gpu::CI_DATA && streams[strm_id].length == 0 &&
                        (ck.type_kind == DOUBLE || ck.type_kind == FLOAT)) {
               // Pass-through
@@ -731,7 +741,7 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   rmm::device_uvector<statistics_group> stat_groups(num_chunks, stream);
 
   for (auto const &column : columns) {
-    stats_column_desc *desc = &stat_desc[column.id()];
+    stats_column_desc *desc = &stat_desc[column.index()];
     switch (column.orc_kind()) {
       case TypeKind::BYTE: desc->stats_dtype = dtype_int8; break;
       case TypeKind::SHORT: desc->stats_dtype = dtype_int16; break;
@@ -760,15 +770,15 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
       desc->ts_scale = 0;
     }
     for (auto const &stripe : stripe_bounds) {
-      auto grp         = &stat_merge[column.id() * stripe_bounds.size() + stripe.id];
-      grp->col         = stat_desc.device_ptr(column.id());
-      grp->start_chunk = static_cast<uint32_t>(column.id() * num_rowgroups + stripe.first);
+      auto grp         = &stat_merge[column.index() * stripe_bounds.size() + stripe.id];
+      grp->col         = stat_desc.device_ptr(column.index());
+      grp->start_chunk = static_cast<uint32_t>(column.index() * num_rowgroups + stripe.first);
       grp->num_chunks  = stripe.size;
     }
     statistics_merge_group *col_stats =
-      &stat_merge[stripe_bounds.size() * columns.size() + column.id()];
-    col_stats->col         = stat_desc.device_ptr(column.id());
-    col_stats->start_chunk = static_cast<uint32_t>(column.id() * stripe_bounds.size());
+      &stat_merge[stripe_bounds.size() * columns.size() + column.index()];
+    col_stats->col         = stat_desc.device_ptr(column.index());
+    col_stats->start_chunk = static_cast<uint32_t>(column.index() * stripe_bounds.size());
     col_stats->num_chunks  = static_cast<uint32_t>(stripe_bounds.size());
   }
   stat_desc.host_to_device(stream);
@@ -1169,8 +1179,7 @@ void writer::impl::write(table_view const &table)
     StripeFooter sf;
     sf.streams = streams;
     sf.columns.resize(num_columns + 1);
-    sf.columns[0].kind           = DIRECT;
-    sf.columns[0].dictionarySize = 0;
+    sf.columns[0].kind = DIRECT;
     for (size_t i = 1; i < sf.columns.size(); ++i) {
       sf.columns[i].kind           = orc_columns[i - 1].orc_encoding();
       sf.columns[i].dictionarySize = (sf.columns[i].kind == DICTIONARY_V2)
@@ -1234,19 +1243,20 @@ void writer::impl::write(table_view const &table)
     ff.types[0].subtypes.resize(num_columns);
     ff.types[0].fieldNames.resize(num_columns);
     for (auto const &column : orc_columns) {
-      ff.types[1 + column.id()].kind      = column.orc_kind();
-      ff.types[0].subtypes[column.id()]   = 1 + column.id();
-      ff.types[0].fieldNames[column.id()] = column.orc_name();
+      ff.types[column.id()].kind             = column.orc_kind();
+      ff.types[0].subtypes[column.index()]   = column.id();
+      ff.types[0].fieldNames[column.index()] = column.orc_name();
     }
   } else {
     // verify the user isn't passing mismatched tables
     CUDF_EXPECTS(ff.types.size() == 1 + orc_columns.size(),
                  "Mismatch in table structure between multiple calls to write");
-    CUDF_EXPECTS(
-      std::all_of(orc_columns.cbegin(),
-                  orc_columns.cend(),
-                  [&](auto const &col) { return ff.types[1 + col.id()].kind == col.orc_kind(); }),
-      "Mismatch in column types between multiple calls to write");
+    CUDF_EXPECTS(std::all_of(orc_columns.cbegin(),
+                             orc_columns.cend(),
+                             [&](auto const &col) {
+                               return ff.types[1 + col.index()].kind == col.orc_kind();
+                             }),
+                 "Mismatch in column types between multiple calls to write");
   }
   ff.stripes.insert(ff.stripes.end(),
                     std::make_move_iterator(stripes.begin()),
