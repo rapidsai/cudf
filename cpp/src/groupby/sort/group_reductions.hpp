@@ -24,11 +24,23 @@
 
 #include <memory>
 
+/** @internal @file Internal API in this file are mostly segmented reduction operations on column,
+ * which are used in sort-based groupby aggregations.
+ *
+ */
 namespace cudf {
 namespace groupby {
 namespace detail {
 /**
  * @brief Internal API to calculate groupwise sum
+ *
+ * @code{.pseudo}
+ * values       = [2, 1, 4, -1, -2, <NA>, 4, <NA>]
+ * group_labels = [0, 0, 0,  1,  1,    2, 2,    3]
+ * num_groups   = 4
+ *
+ * group_sum    = [7, -3, 4, <NA>]
+ * @endcode
  *
  * @param values Grouped values to get sum of
  * @param num_groups Number of groups
@@ -45,6 +57,14 @@ std::unique_ptr<column> group_sum(column_view const& values,
 /**
  * @brief Internal API to calculate groupwise product
  *
+ * @code{.pseudo}
+ * values        = [2, 1, 4, -1, -2, <NA>, 4, <NA>]
+ * group_labels  = [0, 0, 0,  1,  1,    2, 2,    3]
+ * num_groups    = 4
+ *
+ * group_product = [6, 2, 4, <NA>]
+ * @endcode
+ *
  * @param values Grouped values to get product of
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
@@ -59,6 +79,14 @@ std::unique_ptr<column> group_product(column_view const& values,
 
 /**
  * @brief Internal API to calculate groupwise minimum value
+ *
+ * @code{.pseudo}
+ * values       = [2, 1, 4, -1, -2, <NA>, 4, <NA>]
+ * group_labels = [0, 0, 0,  1,  1,    2, 2,    3]
+ * num_groups   = 4
+ *
+ * group_min    = [1, -2, 4, <NA>]
+ * @endcode
  *
  * @param values Grouped values to get minimum from
  * @param num_groups Number of groups
@@ -75,6 +103,14 @@ std::unique_ptr<column> group_min(column_view const& values,
 /**
  * @brief Internal API to calculate groupwise maximum value
  *
+ * @code{.pseudo}
+ * values       = [2, 1, 4, -1, -2, <NA>, 4, <NA>]
+ * group_labels = [0, 0, 0,  1,  1,    2, 2,    3]
+ * num_groups   = 4
+ *
+ * group_max    = [4, -1, 4, <NA>]
+ * @endcode
+ *
  * @param values Grouped values to get maximum from
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
@@ -90,7 +126,15 @@ std::unique_ptr<column> group_max(column_view const& values,
 /**
  * @brief Internal API to calculate group-wise indices of maximum values.
  *
- * @param values Ungrouped values to get maximum value's index from
+ * @code{.pseudo}
+ * values       = [2, 1, 4, -1, -2, <NA>, 4, <NA>]
+ * group_labels = [0, 0, 0,  1,  1,    2, 2,    3]
+ * num_groups   = 4
+ *
+ * group_max    = [2, 0, 0, <NA>]
+ * @endcode
+ *
+ * @param values Grouped values to get maximum value's index from
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
  * @param key_sort_order Indices indicating sort order of groupby keys
@@ -107,7 +151,15 @@ std::unique_ptr<column> group_argmax(column_view const& values,
 /**
  * @brief Internal API to calculate group-wise indices of minimum values.
  *
- * @param values Ungrouped values to get minimum value's index from
+ * @code{.pseudo}
+ * values       = [2, 1, 4, -1, -2, <NA>, 4, <NA>]
+ * group_labels = [0, 0, 0,  1,  1,    2, 2,    3]
+ * num_groups   = 4
+ *
+ * group_max    = [1, 1, 0, <NA>]
+ * @endcode
+ *
+ * @param values Grouped values to get minimum value's index from
  * @param num_groups Number of groups
  * @param group_labels ID of group that the corresponding value belongs to
  * @param key_sort_order Indices indicating sort order of groupby keys
@@ -125,6 +177,14 @@ std::unique_ptr<column> group_argmin(column_view const& values,
  * @brief Internal API to calculate number of non-null values in each group of
  *  @p values
  *
+ * @code{.pseudo}
+ * values            = [2, 1, 4, -1, -2, <NA>, 4, <NA>]
+ * group_labels      = [0, 0, 0,  1,  1,    2, 2,    3]
+ * num_groups        = 4
+ *
+ * group_count_valid = [3, 2, 1, 0]
+ * @endcode
+ *
  * @param values Grouped values to get valid count of
  * @param group_labels ID of group that the corresponding value belongs to
  * @param num_groups Number of groups ( unique values in @p group_labels )
@@ -140,6 +200,13 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
 /**
  * @brief Internal API to calculate number of values in each group of @p values
  *
+ * @code{.pseudo}
+ * group_offsets = [0, 3, 5, 7, 8]
+ * num_groups    = 4
+ *
+ * group_count_all = [3, 2, 2, 1]
+ * @endcode
+ *
  * @param group_offsets Offsets of groups' starting points within @p values
  * @param num_groups Number of groups ( unique values in @p group_labels )
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -152,6 +219,16 @@ std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group
 
 /**
  * @brief Internal API to calculate groupwise variance
+ *
+ * @code{.pseudo}
+ * values       = [2, 1, 4, -1, -2, <NA>, 4, <NA>]
+ * group_labels = [0, 0, 0,  1,  1,    2, 2,    3]
+ * group_means  = [2.333333, -1.5, 4.0, <NA>]
+ * group_sizes  = [3, 2, 2, 1]
+ * ddof         = 1
+ *
+ * group_var    = [2.333333, 0.5, <NA>, <NA>]
+ * @endcode
  *
  * @param values Grouped values to get variance of
  * @param group_means Pre-calculated groupwise MEAN
@@ -172,6 +249,16 @@ std::unique_ptr<column> group_var(column_view const& values,
 
 /**
  * @brief Internal API to calculate groupwise quantiles
+ *
+ * @code{.pseudo}
+ * values       = [1, 2, 4, -2, -1, <NA>, 4, <NA>]
+ * group_labels = [0, 0, 0,  1,  1,    2, 2,    3]
+ * group_sizes  = [3, 2, 2, 1]
+ * num_groups   = 4
+ * quantiles    = [0.25, 0.5]
+ *
+ * group_quantiles = [1.5, 2, -1.75, -1.5,  4,  4, <NA>, <NA>]
+ * @endcode
  *
  * @param values Grouped and sorted (within group) values to get quantiles from
  * @param group_sizes Number of valid elements per group
@@ -194,6 +281,16 @@ std::unique_ptr<column> group_quantiles(column_view const& values,
  * @brief Internal API to calculate number of unique values in each group of
  *  @p values
  *
+ * @code{.pseudo}
+ * values        = [2, 4, 4, -1, -2, <NA>, 4, <NA>]
+ * group_labels  = [0, 0, 0,  1,  1,    2, 2,    3]
+ * group_offsets = [0,        3,        5,       7, 8]
+ * num_groups    = 4
+ *
+ * group_nunique(null_policy::EXCLUDE) = [2, 2, 1, 0]
+ * group_nunique(null_policy::INCLUDE) = [2, 2, 2, 1]
+ * @endcode
+ *
  * @param values Grouped and sorted (within group) values to get unique count of
  * @param group_labels ID of group that the corresponding value belongs to
  * @param num_groups Number of groups ( unique values in @p group_labels )
@@ -214,6 +311,17 @@ std::unique_ptr<column> group_nunique(column_view const& values,
 
 /**
  * @brief Internal API to calculate nth values in each group of  @p values
+ *
+ * @code{.pseudo}
+ * values        = [2, 1, 4, -1, -2, <NA>, 4, <NA>]
+ * group_sizes   = [3,        2,        2,       1]
+ * group_labels  = [0, 0, 0,  1,  1,    2, 2,    3]
+ * group_offsets = [0,        3,        5,       7, 8]
+ * num_groups    = 4
+ *
+ * group_nth_element(n=0, null_policy::EXCLUDE) = [2, -1, 4, <NA>]
+ * group_nth_element(n=0, null_policy::INCLUDE) = [2, -1, <NA>, <NA>]
+ * @endcode
  *
  * @param values Grouped values to get nth value of
  * @param group_sizes Number of elements per group
@@ -238,6 +346,14 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
 /**
  * @brief Internal API to collect grouped values into a lists column
  *
+ * @code{.pseudo}
+ * values        = [2, 1, 4, -1, -2, <NA>, 4, <NA>]
+ * group_offsets = [0,        3,        5,   7, 8]
+ * num_groups    = 4
+ *
+ * group_collect = [[2, 1, 4], [-1, -2] [<NA>, 4], [<NA>]]
+ * @endcode
+ *
  * @param values Grouped values to collect
  * @param group_offsets Offsets of groups' starting points within @p values
  * @param num_groups Number of groups
@@ -250,6 +366,9 @@ std::unique_ptr<column> group_collect(column_view const& values,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr);
 
+/** @endinternal
+ *
+ */
 }  // namespace detail
 }  // namespace groupby
 }  // namespace cudf
