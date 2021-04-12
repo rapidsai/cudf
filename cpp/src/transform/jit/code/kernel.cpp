@@ -60,50 +60,7 @@ const char* kernel =
     }
   )***";
 
-const char* masked_binary_op_kernel = 
-  R"***(
-    
-
-    template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-    __global__
-    void test_binop_kernel(cudf::size_type size, 
-                TypeOut* out_data, 
-                TypeLhs* lhs_data,
-                TypeRhs* rhs_data 
-                //bool* output_mask,
-                //cudf::bitmask_type const* lhs_mask, 
-                //cudf::size_type lhs_offset,
-                //cudf::bitmask_type const* rhs_mask, 
-                //cudf::size_type rhs_offset)
-    ) {
-        //int tid = threadIdx.x;
-        //int blkid = blockIdx.x;
-        //int blksz = blockDim.x;
-        //int gridsz = gridDim.x;
-
-        //int start = tid + blkid * blksz;
-        //int step = blksz * gridsz;
-
-        //Masked output;
-
-        //for (cudf::size_type i=start; i<size; i+=step) {
-        //bool l_valid = lhs_mask ? cudf::bit_is_set(lhs_mask, lhs_offset + i) : true,
-        //bool r_valid = rhs_mask ? cudf::bit_is_set(rhs_mask, rhs_offset + i) : true,
-          
-        //GENERIC_BINARY_OP(&output, 
-        //                  lhs_data[i], 
-        //                  l_valid, 
-        //                  rhs_data[i],
-        //                  r_valid);  
-
-        //  out_data[i] = output.value;
-        //  out_mask[i] = output.valid;
-
-        }
-    }
-  )***";
-
-const char* null_kernel =
+const char* masked_binary_op_kernel =
   R"***(
     template <typename TypeOut, typename TypeLhs, typename TypeRhs>
     __global__
