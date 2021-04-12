@@ -560,14 +560,10 @@ void GatherPages(device_span<EncColumnChunk> chunks,
  *
  * @param[in] chunks Column chunks
  * @param[in] dev_scratch Device scratch data (kDictScratchSize bytes per dictionary)
- * @param[in] scratch_size size of scratch data in bytes
- * @param[in] num_chunks Number of column chunks
  * @param[in] stream CUDA stream to use, default 0
  */
-void BuildChunkDictionaries(EncColumnChunk *chunks,
+void BuildChunkDictionaries(device_span<EncColumnChunk> chunks,
                             uint32_t *dev_scratch,
-                            size_t scratch_size,
-                            uint32_t num_chunks,
                             rmm::cuda_stream_view stream);
 
 }  // namespace gpu

@@ -751,15 +751,14 @@ void writer::impl::build_chunk_dictionaries(
   uint32_t num_columns,
   uint32_t num_dictionaries)
 {
-  size_t dict_scratch_size = (size_t)num_dictionaries * gpu::kDictScratchSize;
-  auto dict_scratch        = cudf::detail::make_zeroed_device_uvector_async<uint32_t>(
-    dict_scratch_size / sizeof(uint32_t), stream);
   chunks.host_to_device(stream);
+  if (num_dictionaries > 0) {
+    size_t dict_scratch_size = (size_t)num_dictionaries * gpu::kDictScratchSize;
+    auto dict_scratch        = cudf::detail::make_zeroed_device_uvector_async<uint32_t>(
+      dict_scratch_size / sizeof(uint32_t), stream);
 
-  // TODO: obviously remove this, but wait for dictionary refactor. Maybe we wouldn't need to.
-  auto chunks_ptr = static_cast<device_2dspan<gpu::EncColumnChunk>>(chunks).data();
-  gpu::BuildChunkDictionaries(
-    chunks_ptr, dict_scratch.data(), dict_scratch_size, num_rowgroups * num_columns, stream);
+    gpu::BuildChunkDictionaries(chunks.device_view().flat_view(), dict_scratch.data(), stream);
+  }
   gpu::InitEncoderPages(chunks, {}, col_desc, num_columns, nullptr, nullptr, stream);
   chunks.device_to_host(stream, true);
 }
