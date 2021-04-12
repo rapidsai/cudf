@@ -82,9 +82,9 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
   auto d_offsets = offsets_column->view().template data<int32_t>();
 
   // create the chars column
-  size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
-  auto chars_column =
-    strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
+  auto const bytes =
+    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
+  auto chars_column = strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
   // merge the strings
   auto d_chars = chars_column->mutable_view().template data<char>();
   thrust::for_each_n(rmm::exec_policy(stream),

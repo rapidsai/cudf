@@ -181,7 +181,6 @@ std::unique_ptr<column> replace_re(
         replace_multi_regex_fn<RX_STACK_SMALL>{
           *d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, *d_repls},
         strings_count,
-        strings.null_count(),
         stream,
         mr);
     else if (regex_insts <= RX_MEDIUM_INSTS)
@@ -189,7 +188,6 @@ std::unique_ptr<column> replace_re(
         replace_multi_regex_fn<RX_STACK_MEDIUM>{
           *d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, *d_repls},
         strings_count,
-        strings.null_count(),
         stream,
         mr);
     else
@@ -197,7 +195,6 @@ std::unique_ptr<column> replace_re(
         replace_multi_regex_fn<RX_STACK_LARGE>{
           *d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, *d_repls},
         strings_count,
-        strings.null_count(),
         stream,
         mr);
   }();
