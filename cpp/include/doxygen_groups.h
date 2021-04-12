@@ -127,6 +127,7 @@
  *   @defgroup strings_modify Modifying
  *   @defgroup strings_replace Replacing
  *   @defgroup strings_split Splitting
+ *   @defgroup strings_json JSON
  * @}
  * @defgroup dictionary_apis Dictionary
  * @{
@@ -147,6 +148,7 @@
  *   @defgroup lists_gather Gathering
  *   @defgroup lists_elements Counting
  *   @defgroup lists_drop_duplicates Filtering
+ *   @defgroup lists_sort Sorting
  * @}
  * @defgroup nvtext_apis NVText
  * @{
@@ -163,5 +165,9 @@
  *   @defgroup utility_dispatcher Type Dispatcher
  *   @defgroup utility_bitmask Bitmask
  *   @defgroup utility_error Exception
+ * @}
+ * @defgroup labeling_apis Labeling
+ * @{
+ *   @defgroup label_bins Bin Labeling
  * @}
  */

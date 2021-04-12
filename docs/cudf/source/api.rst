@@ -20,6 +20,13 @@ Series
     :inherited-members:
     :exclude-members: serialize, deserialize, logical_not, logical_or, logical_and, remainder, sum_of_squares, fill, merge, iteritems, items, device_deserialize, device_serialize, host_deserialize, host_serialize, to_dict, tolist, to_list
 
+Lists
+-----
+.. currentmodule:: cudf.core.column.lists
+
+.. autoclass:: ListMethods
+    :members:
+
 Strings
 -------
 .. currentmodule:: cudf.core.column.string

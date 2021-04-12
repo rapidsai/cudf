@@ -139,15 +139,13 @@ std::unique_ptr<column> replace_re(
   auto strings_count = strings.size();
   if (strings_count == 0) return make_empty_strings_column(stream, mr);
   if (patterns.empty())  // no patterns; just return a copy
-    return std::make_unique<column>(strings.parent());
+    return std::make_unique<column>(strings.parent(), stream, mr);
 
   CUDF_EXPECTS(!repls.has_nulls(), "Parameter repls must not have any nulls");
 
-  auto strings_column = column_device_view::create(strings.parent(), stream);
-  auto d_strings      = *strings_column;
-  auto repls_column   = column_device_view::create(repls.parent(), stream);
-  auto d_repls        = *repls_column;
-  auto d_flags        = get_character_flags_table();
+  auto d_strings = column_device_view::create(strings.parent(), stream);
+  auto d_repls   = column_device_view::create(repls.parent(), stream);
+  auto d_flags   = get_character_flags_table();
 
   // compile regexes into device objects
   size_type regex_insts = 0;
@@ -170,37 +168,39 @@ std::unique_ptr<column> replace_re(
   reprog_device* d_progs = reinterpret_cast<reprog_device*>(progs_buffer.data());
 
   // create working buffer for ranges pairs
-  rmm::device_vector<found_range> found_ranges(patterns.size() * strings_count);
-  auto d_found_ranges = found_ranges.data().get();
+  rmm::device_uvector<found_range> found_ranges(patterns.size() * strings_count, stream);
+  auto d_found_ranges = found_ranges.data();
 
   // create child columns
-  std::pair<std::unique_ptr<column>, std::unique_ptr<column>> children(nullptr, nullptr);
-  // Each invocation is predicated on the stack size which is dependent on the number of regex
-  // instructions
-  if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
-    children = make_strings_children(
-      replace_multi_regex_fn<RX_STACK_SMALL>{
-        d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, d_repls},
-      strings_count,
-      strings.null_count(),
-      stream,
-      mr);
-  else if (regex_insts <= RX_MEDIUM_INSTS)
-    children = make_strings_children(
-      replace_multi_regex_fn<RX_STACK_MEDIUM>{
-        d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, d_repls},
-      strings_count,
-      strings.null_count(),
-      stream,
-      mr);
-  else
-    children = make_strings_children(
-      replace_multi_regex_fn<RX_STACK_LARGE>{
-        d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, d_repls},
-      strings_count,
-      strings.null_count(),
-      stream,
-      mr);
+  // std::pair<std::unique_ptr<column>, std::unique_ptr<column>> children(nullptr, nullptr);
+  auto children = [&] {
+    // Each invocation is predicated on the stack size which is dependent on the number of regex
+    // instructions
+    if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
+      return make_strings_children(
+        replace_multi_regex_fn<RX_STACK_SMALL>{
+          *d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, *d_repls},
+        strings_count,
+        strings.null_count(),
+        stream,
+        mr);
+    else if (regex_insts <= RX_MEDIUM_INSTS)
+      return make_strings_children(
+        replace_multi_regex_fn<RX_STACK_MEDIUM>{
+          *d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, *d_repls},
+        strings_count,
+        strings.null_count(),
+        stream,
+        mr);
+    else
+      return make_strings_children(
+        replace_multi_regex_fn<RX_STACK_LARGE>{
+          *d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, *d_repls},
+        strings_count,
+        strings.null_count(),
+        stream,
+        mr);
+  }();
 
   return make_strings_column(strings_count,
                              std::move(children.first),

@@ -19,6 +19,8 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/device_uvector.hpp>
+
 #include <hash/concurrent_unordered_multimap.cuh>
 
 #include <limits>
@@ -29,9 +31,10 @@ constexpr size_type MAX_JOIN_SIZE{std::numeric_limits<size_type>::max()};
 
 constexpr int DEFAULT_JOIN_BLOCK_SIZE = 128;
 constexpr int DEFAULT_JOIN_CACHE_SIZE = 128;
-constexpr size_type JoinNoneValue     = -1;
+constexpr size_type JoinNoneValue     = std::numeric_limits<size_type>::min();
 
-using VectorPair = std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>;
+using VectorPair = std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                             std::unique_ptr<rmm::device_uvector<size_type>>>;
 
 using multimap_type =
   concurrent_unordered_multimap<hash_value_type,
@@ -49,14 +52,10 @@ using row_equality = cudf::row_equality_comparator<true>;
 
 enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_ANTI_JOIN };
 
-inline bool is_trivial_join(table_view const& left,
-                            table_view const& right,
-                            std::vector<size_type> const& left_on,
-                            std::vector<size_type> const& right_on,
-                            join_kind join_type)
+inline bool is_trivial_join(table_view const& left, table_view const& right, join_kind join_type)
 {
   // If there is nothing to join, then send empty table with all columns
-  if (left_on.empty() || right_on.empty()) { return true; }
+  if (left.is_empty() || right.is_empty()) { return true; }
 
   // If left join and the left table is empty, return immediately
   if ((join_kind::LEFT_JOIN == join_type) && (0 == left.num_rows())) { return true; }

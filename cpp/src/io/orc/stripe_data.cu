@@ -1572,7 +1572,7 @@ __global__ void __launch_bounds__(block_size)
           if (t == 0) { s->top.data.buffered_count = n; }
         }
 
-        numvals = min(numvals * 8, is_last_set ? s->top.data.max_vals : blockDim.x);
+        numvals = min(numvals * 8, is_last_set ? (s->top.data.max_vals + 7) & (~0x7) : blockDim.x);
 
       } else if (s->chunk.type_kind == LONG || s->chunk.type_kind == TIMESTAMP ||
                  s->chunk.type_kind == DECIMAL) {

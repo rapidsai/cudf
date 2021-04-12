@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,7 +69,7 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
     auto bitmask_iterator =
       thrust::make_transform_iterator(cudf::detail::make_validity_iterator(*values_view),
                                       [] __device__(auto b) { return static_cast<size_type>(b); });
-    rmm::device_vector<size_type> intra_group_index(values.size());
+    rmm::device_uvector<size_type> intra_group_index(values.size(), stream);
     // intra group index for valids only.
     thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
                                   group_labels.begin(),
@@ -77,9 +77,9 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
                                   bitmask_iterator,
                                   intra_group_index.begin());
     // group_size to recalculate n if n<0
-    rmm::device_vector<size_type> group_count = [&] {
+    rmm::device_uvector<size_type> group_count = [&] {
       if (n < 0) {
-        rmm::device_vector<size_type> group_count(num_groups);
+        rmm::device_uvector<size_type> group_count(num_groups, stream);
         thrust::reduce_by_key(rmm::exec_policy(stream),
                               group_labels.begin(),
                               group_labels.end(),
@@ -88,7 +88,7 @@ std::unique_ptr<column> group_nth_element(column_view const &values,
                               group_count.begin());
         return group_count;
       } else {
-        return rmm::device_vector<size_type>();
+        return rmm::device_uvector<size_type>(0, stream);
       }
     }();
     // gather the valid index == n

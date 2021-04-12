@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@
 #include <cudf/utilities/bit.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <numeric>
@@ -58,7 +58,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> encode(
     auto num_rows_with_nulls =
       cudf::count_unset_bits(reinterpret_cast<bitmask_type*>(mask.data()), 0, num_rows);
 
-    rmm::device_vector<cudf::size_type> gather_map(num_rows);
+    rmm::device_uvector<cudf::size_type> gather_map(num_rows, stream);
 
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<cudf::size_type>(0),

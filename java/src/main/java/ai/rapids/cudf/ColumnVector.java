@@ -570,8 +570,7 @@ public final class ColumnVector extends ColumnView {
       assert columns[i] != null : "Column vectors passed may not be null";
       assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
       assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
-      assert !columns[i].getType().isTimestampType() : "Unsupported column type Timestamp";
-      assert !columns[i].getType().isNestedType() : "Unsupported column of nested type";
+      assert !columns[i].getType().equals(DType.LIST) : "List columns are not supported";
       columnViews[i] = columns[i].getNativeView();
     }
     return new ColumnVector(hash(columnViews, HashType.HASH_SERIAL_MURMUR3.getNativeId(), new int[0], seed));
@@ -606,8 +605,7 @@ public final class ColumnVector extends ColumnView {
       assert columns[i] != null : "Column vectors passed may not be null";
       assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
       assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
-      assert !columns[i].getType().isTimestampType() : "Unsupported column type Timestamp";
-      assert !columns[i].getType().isNestedType() : "Unsupported column of nested type";
+      assert !columns[i].getType().equals(DType.LIST) : "List columns are not supported";
       columnViews[i] = columns[i].getNativeView();
     }
     return new ColumnVector(hash(columnViews, HashType.HASH_SPARK_MURMUR3.getNativeId(), new int[0], seed));
@@ -1165,12 +1163,34 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
+   * Create a new decimal vector from boxed unscaled values (Integer array) and scale.
+   * The created vector is of type DType.DECIMAL32, whose max precision is 9.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static ColumnVector decimalFromBoxedInts(int scale, Integer... values) {
+    try (HostColumnVector host = HostColumnVector.decimalFromBoxedInts(scale, values)) {
+      return host.copyToDevice();
+    }
+  }
+
+  /**
    * Create a new decimal vector from unscaled values (long array) and scale.
    * The created vector is of type DType.DECIMAL64, whose max precision is 18.
    * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
    */
   public static ColumnVector decimalFromLongs(int scale, long... values) {
     try (HostColumnVector host = HostColumnVector.decimalFromLongs(scale, values)) {
+      return host.copyToDevice();
+    }
+  }
+
+  /**
+   * Create a new decimal vector from boxed unscaled values (Long array) and scale.
+   * The created vector is of type DType.DECIMAL64, whose max precision is 18.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static ColumnVector decimalFromBoxedLongs(int scale, Long... values) {
+    try (HostColumnVector host = HostColumnVector.decimalFromBoxedLongs(scale, values)) {
       return host.copyToDevice();
     }
   }

@@ -450,7 +450,8 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::diction
   auto replacements = cudf::dictionary_column_view(replacement_values);
 
   auto matched_input = [&] {
-    auto new_keys = cudf::detail::concatenate({values.keys(), replacements.keys()}, stream);
+    auto new_keys = cudf::detail::concatenate(
+      std::vector<cudf::column_view>({values.keys(), replacements.keys()}), stream);
     return cudf::dictionary::detail::add_keys(input, new_keys->view(), stream, mr);
   }();
   auto matched_view   = cudf::dictionary_column_view(matched_input->view());
@@ -496,8 +497,8 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
     "Columns type mismatch");
   CUDF_EXPECTS(values_to_replace.has_nulls() == false, "values_to_replace must not have nulls");
 
-  if (0 == input_col.size() || 0 == values_to_replace.size() || 0 == replacement_values.size()) {
-    return std::make_unique<cudf::column>(input_col);
+  if (input_col.is_empty() or values_to_replace.is_empty() or replacement_values.is_empty()) {
+    return std::make_unique<cudf::column>(input_col, stream, mr);
   }
 
   return cudf::type_dispatcher<dispatch_storage_type>(input_col.type(),

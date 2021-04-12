@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
@@ -211,10 +212,11 @@ struct column_to_strings_fn {
                (cudf::is_timestamp<column_type>()) || (cudf::is_duration<column_type>()));
   }
 
-  explicit column_to_strings_fn(csv_writer_options const& options,
-                                rmm::mr::device_memory_resource* mr = nullptr,
-                                rmm::cuda_stream_view stream        = nullptr)
-    : options_(options), mr_(mr), stream_(stream)
+  explicit column_to_strings_fn(
+    csv_writer_options const& options,
+    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+    : options_(options), stream_(stream), mr_(mr)
   {
   }
 
@@ -345,8 +347,8 @@ struct column_to_strings_fn {
 
  private:
   csv_writer_options const& options_;
-  rmm::mr::device_memory_resource* mr_;
   rmm::cuda_stream_view stream_;
+  rmm::mr::device_memory_resource* mr_;
 };
 }  // unnamed namespace
 
@@ -416,36 +418,28 @@ void writer::impl::write_chunked(strings_column_view const& str_column_view,
   auto total_num_bytes      = strings_column.chars_size();
   char const* ptr_all_bytes = strings_column.chars().data<char>();
 
-  if (out_sink_->supports_device_write()) {
-    // host algorithm call, but the underlying call
-    // is a device_write taking a device buffer;
-    //
+  if (out_sink_->is_device_write_preferred(total_num_bytes)) {
+    // Direct write from device memory
     out_sink_->device_write(ptr_all_bytes, total_num_bytes, stream);
-    out_sink_->device_write(newline.data(),
-                            newline.size(),
-                            stream);  // needs newline at the end, to separate from next chunk
   } else {
-    // no device write possible;
-    //
-    // copy the bytes to host, too:
-    //
+    // copy the bytes to host to write them out
     thrust::host_vector<char> h_bytes(total_num_bytes);
     CUDA_TRY(cudaMemcpyAsync(h_bytes.data(),
                              ptr_all_bytes,
                              total_num_bytes * sizeof(char),
                              cudaMemcpyDeviceToHost,
                              stream.value()));
-
     stream.synchronize();
 
-    // host algorithm call, where the underlying call
-    // is also host_write taking a host buffer;
-    //
-    char const* ptr_h_bytes = h_bytes.data();
-    out_sink_->host_write(ptr_h_bytes, total_num_bytes);
+    out_sink_->host_write(h_bytes.data(), total_num_bytes);
+  }
+
+  // Needs newline at the end, to separate from next chunk
+  if (out_sink_->is_device_write_preferred(newline.size())) {
+    out_sink_->device_write(newline.data(), newline.size(), stream);
+  } else {
     out_sink_->host_write(options_.get_line_terminator().data(),
-                          options_.get_line_terminator()
-                            .size());  // needs newline at the end, to separate from next chunk
+                          options_.get_line_terminator().size());
   }
 }
 
@@ -503,7 +497,7 @@ void writer::impl::write(table_view const& table,
 
     // convert each chunk to CSV:
     //
-    column_to_strings_fn converter{options_, mr_};
+    column_to_strings_fn converter{options_, stream, mr_};
     for (auto&& sub_view : vector_views) {
       // Skip if the table has no rows
       if (sub_view.num_rows() == 0) continue;

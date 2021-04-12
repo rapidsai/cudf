@@ -178,6 +178,8 @@ class DatetimeColumn(column.ColumnBase):
                 return cudf.Scalar(None, dtype=other.dtype)
 
             return cudf.Scalar(other)
+        elif other is None:
+            return cudf.Scalar(other, dtype=self.dtype)
         else:
             raise TypeError(f"cannot normalize {type(other)}")
 

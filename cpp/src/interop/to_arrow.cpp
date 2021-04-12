@@ -113,7 +113,14 @@ struct dispatch_to_arrow {
     return child_arrays;
   }
 
-  template <typename T>
+  template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
+  std::shared_ptr<arrow::Array> operator()(
+    column_view, cudf::type_id, column_metadata const&, arrow::MemoryPool*, rmm::cuda_stream_view)
+  {
+    CUDF_FAIL("Unsupported type for to_arrow.");
+  }
+
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   std::shared_ptr<arrow::Array> operator()(column_view input_view,
                                            cudf::type_id id,
                                            column_metadata const& metadata,

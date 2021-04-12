@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,22 +108,34 @@ class data_sink {
   virtual bool supports_device_write() const { return false; }
 
   /**
+   * @brief Estimates whether a direct device write would be more optimal for the given size.
+   *
+   * @param size Number of bytes to write
+   * @return whether the device write is expected to be more performant for the given size
+   */
+  virtual bool is_device_write_preferred(size_t size) const { return supports_device_write(); }
+
+  /**
    * @brief Append the buffer content to the sink from a gpu address
    *
-   * @param[in] data Pointer to the buffer to be written into the sink object
-   * @param[in] size Number of bytes to write
+   * For optimal performance, should only be called when `is_device_write_preferred` returns `true`.
+   * Data sink implementations that don't support direct device writes don't need to override
+   * this function.
    *
-   * @return void
+   * @throws cudf::logic_error the object does not support direct device writes, i.e.
+   * `supports_device_write` returns `false`.
+   *
+   * @param gpu_data Pointer to the buffer to be written into the sink object
+   * @param size Number of bytes to write
+   * @param stream CUDA stream to use
    */
   virtual void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream)
   {
-    CUDF_FAIL("data_sink classes that support device_write must override this function.");
+    CUDF_FAIL("data_sink classes that support device_write must override it.");
   }
 
   /**
    * @brief Flush the data written into the sink
-   *
-   * @return void
    */
   virtual void flush() = 0;
 

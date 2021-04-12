@@ -158,7 +158,7 @@ std::unique_ptr<table> create_json_keys_info_table(const parse_options_view &opt
   auto const info_table_mdv = mutable_table_device_view::create(info_table->mutable_view(), stream);
 
   // Reset the key counter - now used for indexing
-  key_counter.set_value(0, stream);
+  key_counter.set_value_zero(stream);
   // Fill the allocated columns
   cudf::io::json::gpu::collect_keys_info(
     options, data, row_offsets, key_counter.data(), {*info_table_mdv}, stream);
@@ -492,9 +492,8 @@ void reader::impl::set_data_types(rmm::cuda_stream_view stream)
                      std::cend(dtype),
                      std::inserter(col_type_map, col_type_map.end()),
                      [&](auto const &ts) -> std::pair<std::string, data_type> {
-                       // When C++17, use structured bindings: auto const& [col_name, type_str] = ..
-                       auto split = split_on_colon(ts);
-                       return {split.first, convert_string_to_dtype(split.second)};
+                       auto const &[col_name, type_str] = split_on_colon(ts);
+                       return {col_name, convert_string_to_dtype(type_str)};
                      });
 
       // Using the map here allows O(n log n) complexity

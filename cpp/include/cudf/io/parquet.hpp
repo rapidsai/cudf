@@ -24,6 +24,8 @@
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <thrust/optional.h>
+
 #include <iostream>
 #include <memory>
 #include <string>
@@ -376,6 +378,162 @@ table_with_metadata read_parquet(
  * @{
  * @file
  */
+class table_input_metadata;
+
+class column_in_metadata {
+  friend table_input_metadata;
+  std::string _name = "";
+  thrust::optional<bool> _nullable;
+  // TODO: This isn't implemented yet
+  bool _list_column_is_map  = false;
+  bool _use_int96_timestamp = false;
+  // bool _output_as_binary = false;
+  thrust::optional<uint8_t> _decimal_precision;
+  std::vector<column_in_metadata> children;
+
+ public:
+  /**
+   * @brief Set the name of this column
+   *
+   * @return this for chaining
+   */
+  column_in_metadata& set_name(std::string const& name)
+  {
+    _name = name;
+    return *this;
+  }
+
+  /**
+   * @brief Set the nullability of this column
+   *
+   * Only valid in case of chunked writes. In single writes, this option is ignored.
+   *
+   * @return column_in_metadata&
+   */
+  column_in_metadata& set_nullability(bool nullable)
+  {
+    _nullable = nullable;
+    return *this;
+  }
+
+  /**
+   * @brief Specify that this list column should be encoded as a map in the written parquet file
+   *
+   * The column must have the structure list<struct<key, value>>. This option is invalid otherwise
+   *
+   * @return this for chaining
+   */
+  column_in_metadata& set_list_column_as_map()
+  {
+    _list_column_is_map = true;
+    return *this;
+  }
+
+  /**
+   * @brief Specifies whether this timestamp column should be encoded using the deprecated int96
+   * physical type. Only valid for the following column types:
+   * timestamp_s, timestamp_ms, timestamp_us, timestamp_ns
+   *
+   * @param req True = use int96 physical type. False = use int64 physical type
+   * @return this for chaining
+   */
+  column_in_metadata& set_int96_timestamps(bool req)
+  {
+    _use_int96_timestamp = req;
+    return *this;
+  }
+
+  /**
+   * @brief Set the decimal precision of this column. Only valid if this column is a decimal
+   * (fixed-point) type
+   *
+   * @param precision The integer precision to set for this decimal column
+   * @return this for chaining
+   */
+  column_in_metadata& set_decimal_precision(uint8_t precision)
+  {
+    _decimal_precision = precision;
+    return *this;
+  }
+
+  /**
+   * @brief Get reference to a child of this column
+   *
+   * @param i Index of the child to get
+   * @return this for chaining
+   */
+  column_in_metadata& child(size_type i) { return children[i]; }
+
+  /**
+   * @brief Get const reference to a child of this column
+   *
+   * @param i Index of the child to get
+   * @return this for chaining
+   */
+  column_in_metadata const& child(size_type i) const { return children[i]; }
+
+  /**
+   * @brief Get the name of this column
+   */
+  std::string get_name() const { return _name; }
+
+  /**
+   * @brief Get whether nullability has been explicitly set for this column.
+   */
+  bool is_nullability_defined() const { return _nullable.has_value(); }
+
+  /**
+   * @brief Gets the explicitly set nullability for this column.
+   * @throws If nullability is not explicitly defined for this column.
+   *         Check using `is_nullability_defined()` first.
+   */
+  bool nullable() const { return _nullable.value(); }
+
+  /**
+   * @brief If this is the metadata of a list column, returns whether it is to be encoded as a map.
+   */
+  bool is_map() const { return _list_column_is_map; }
+
+  /**
+   * @brief Get whether to encode this timestamp column using deprecated int96 physical type
+   */
+  bool is_enabled_int96_timestamps() const { return _use_int96_timestamp; }
+
+  /**
+   * @brief Get whether precision has been set for this decimal column
+   */
+  bool is_decimal_precision_set() const { return _decimal_precision.has_value(); }
+
+  /**
+   * @brief Get the decimal precision that was set for this column.
+   * @throws If decimal precision was not set for this column.
+   *         Check using `is_decimal_precision_set()` first.
+   */
+  uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
+
+  /**
+   * @brief Get the number of children of this column
+   */
+  size_type num_children() const { return children.size(); }
+};
+
+class table_input_metadata {
+ public:
+  table_input_metadata() = default;  // Required by cython
+
+  /**
+   * @brief Construct a new table_input_metadata from a table_view.
+   *
+   * The constructed table_input_metadata has the same structure as the passed table_view
+   *
+   * @param table The table_view to construct metadata for
+   * @param user_data Optional Additional metadata to encode, as key-value pairs
+   */
+  table_input_metadata(table_view const& table, std::map<std::string, std::string> user_data = {});
+
+  std::vector<column_in_metadata> column_metadata;
+  std::map<std::string, std::string> user_data;  //!< Format-dependent metadata as key-values pairs
+};
 
 /**
  * @brief Class to build `parquet_writer_options`.
@@ -395,14 +553,12 @@ class parquet_writer_options {
   // Sets of columns to output
   table_view _table;
   // Optional associated metadata
-  const table_metadata* _metadata = nullptr;
-  // Parquet writes can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
+  table_input_metadata const* _metadata = nullptr;
+  // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
+  // If true then overrides any per-column setting in _metadata.
   bool _write_timestamps_as_int96 = false;
   // Column chunks file path to be set in the raw output metadata
   std::string _column_chunks_file_path;
-  /// vector of precision values for decimal writing. Exactly one entry
-  /// per decimal column. Optional unless decimals are being written.
-  std::vector<uint8_t> _decimal_precision;
 
   /**
    * @brief Constructor from sink and table.
@@ -465,7 +621,7 @@ class parquet_writer_options {
   /**
    * @brief Returns associated metadata.
    */
-  table_metadata const* get_metadata() const { return _metadata; }
+  table_input_metadata const* get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns `true` if timestamps will be written as INT96
@@ -478,16 +634,11 @@ class parquet_writer_options {
   std::string get_column_chunks_file_path() const { return _column_chunks_file_path; }
 
   /**
-   * @brief Returns a constant reference to the decimal precision vector.
-   */
-  std::vector<uint8_t> const& get_decimal_precision() const { return _decimal_precision; }
-
-  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata.
    */
-  void set_metadata(table_metadata const* metadata) { _metadata = metadata; }
+  void set_metadata(table_input_metadata const* metadata) { _metadata = metadata; }
 
   /**
    * @brief Sets the level of statistics.
@@ -520,11 +671,6 @@ class parquet_writer_options {
   {
     _column_chunks_file_path.assign(file_path);
   }
-
-  /**
-   * @brief Sets the decimal precision vector data.
-   */
-  void set_decimal_precision(std::vector<uint8_t> dp) { _decimal_precision = std::move(dp); }
 };
 
 class parquet_writer_options_builder {
@@ -555,7 +701,7 @@ class parquet_writer_options_builder {
    * @param metadata Associated metadata.
    * @return this for chaining.
    */
-  parquet_writer_options_builder& metadata(table_metadata const* metadata)
+  parquet_writer_options_builder& metadata(table_input_metadata const* metadata)
   {
     options._metadata = metadata;
     return *this;
@@ -672,11 +818,10 @@ class chunked_parquet_writer_options {
   // Specify the level of statistics in the output file
   statistics_freq _stats_level = statistics_freq::STATISTICS_ROWGROUP;
   // Optional associated metadata.
-  const table_metadata_with_nullability* _nullable_metadata = nullptr;
-  // Parquet writes can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
+  table_input_metadata const* _metadata = nullptr;
+  // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
+  // If true then overrides any per-column setting in _metadata.
   bool _write_timestamps_as_int96 = false;
-  // Optional decimal precision data - must be present if writing decimals
-  std::vector<uint8_t> _decimal_precision = {};
 
   /**
    * @brief Constructor from sink.
@@ -711,17 +856,9 @@ class chunked_parquet_writer_options {
   statistics_freq get_stats_level() const { return _stats_level; }
 
   /**
-   * @brief Returns nullable metadata information.
+   * @brief Returns metadata information.
    */
-  const table_metadata_with_nullability* get_nullable_metadata() const
-  {
-    return _nullable_metadata;
-  }
-
-  /**
-   * @brief Returns decimal precision pointer.
-   */
-  std::vector<uint8_t> const& get_decimal_precision() const { return _decimal_precision; }
+  table_input_metadata const* get_metadata() const { return _metadata; }
 
   /**
    * @brief Returns `true` if timestamps will be written as INT96
@@ -729,22 +866,11 @@ class chunked_parquet_writer_options {
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
 
   /**
-   * @brief Sets nullable metadata.
+   * @brief Sets metadata.
    *
    * @param metadata Associated metadata.
    */
-  void set_nullable_metadata(const table_metadata_with_nullability* metadata)
-  {
-    _nullable_metadata = metadata;
-  }
-
-  /**
-   * @brief Sets decimal precision data.
-   *
-   * @param v Vector of precision data flattened with exactly one entry per
-   *          decimal column.
-   */
-  void set_decimal_precision_data(std::vector<uint8_t> const& v) { _decimal_precision = v; }
+  void set_metadata(table_input_metadata const* metadata) { _metadata = metadata; }
 
   /**
    * @brief Sets the level of statistics in parquet_writer_options.
@@ -797,15 +923,14 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder(sink_info const& sink) : options(sink){};
 
   /**
-   * @brief Sets nullable metadata to chunked_parquet_writer_options.
+   * @brief Sets metadata to chunked_parquet_writer_options.
    *
    * @param metadata Associated metadata.
    * @return this for chaining.
    */
-  chunked_parquet_writer_options_builder& nullable_metadata(
-    const table_metadata_with_nullability* metadata)
+  chunked_parquet_writer_options_builder& metadata(table_input_metadata const* metadata)
   {
-    options._nullable_metadata = metadata;
+    options._metadata = metadata;
     return *this;
   }
 
@@ -818,18 +943,6 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder& stats_level(statistics_freq sf)
   {
     options._stats_level = sf;
-    return *this;
-  }
-
-  /**
-   * @brief Sets decimal precision data.
-   *
-   * @param v Vector of precision data flattened with exactly one entry per
-   *          decimal column.
-   */
-  chunked_parquet_writer_options_builder& decimal_precision(std::vector<uint8_t> const& v)
-  {
-    options._decimal_precision = v;
     return *this;
   }
 
