@@ -217,6 +217,9 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
                  min_periods,
                  cudf::make_row_number_aggregation());
 
+    // auto empty_order_by = cudf::table_view();
+    // run_test_col(keys, input, empty_order_by)
+
     // >>> test UDFs <<<
     if (input.type() == cudf::data_type{cudf::type_id::INT32} && !input.has_nulls()) {
       auto cuda_udf_agg = cudf::make_udf_aggregation(
@@ -291,6 +294,88 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
   }
 
   std::unique_ptr<cudf::column> create_row_number_reference_output(
+    cudf::column_view const& input,
+    std::vector<size_type> const& group_offsets,
+    size_type const& preceding_window,
+    size_type const& following_window,
+    size_type min_periods)
+  {
+    size_type num_rows = input.size();
+    thrust::host_vector<cudf::size_type> ref_data(num_rows);
+    thrust::host_vector<bool> ref_valid(num_rows);
+
+    // input data and mask
+
+    std::vector<bitmask_type> in_valid = cudf::test::bitmask_to_host(input);
+
+    for (size_type i = 0; i < num_rows; i++) {
+      // load sizes
+      min_periods = std::max(min_periods, 1);  // at least one observation is required
+
+      // compute bounds
+      auto group_end_index   = std::upper_bound(group_offsets.begin(), group_offsets.end(), i);
+      auto group_start_index = group_end_index - 1;
+
+      size_type start       = std::min(num_rows, std::max(0, i - preceding_window + 1));
+      size_type end         = std::min(num_rows, std::max(0, i + following_window + 1));
+      size_type start_index = std::max(*group_start_index, std::min(start, end));
+      size_type end_index   = std::min(*group_end_index, std::max(start, end));
+
+      // aggregate
+      size_type count{end_index - start_index};
+      size_type row_number{i - start_index + 1};
+
+      ref_valid[i] = (count >= min_periods);
+      ref_data[i]  = row_number;
+    }
+
+    fixed_width_column_wrapper<cudf::size_type> col(
+      ref_data.begin(), ref_data.end(), ref_valid.begin());
+    return col.release();
+  }
+
+  std::unique_ptr<cudf::column> create_rank_reference_output(
+    cudf::column_view const& input,
+    std::vector<size_type> const& group_offsets,
+    size_type const& preceding_window,
+    size_type const& following_window,
+    size_type min_periods)
+  {
+    size_type num_rows = input.size();
+    thrust::host_vector<cudf::size_type> ref_data(num_rows);
+    thrust::host_vector<bool> ref_valid(num_rows);
+
+    // input data and mask
+
+    std::vector<bitmask_type> in_valid = cudf::test::bitmask_to_host(input);
+
+    for (size_type i = 0; i < num_rows; i++) {
+      // load sizes
+      min_periods = std::max(min_periods, 1);  // at least one observation is required
+
+      // compute bounds
+      auto group_end_index   = std::upper_bound(group_offsets.begin(), group_offsets.end(), i);
+      auto group_start_index = group_end_index - 1;
+
+      size_type start       = std::min(num_rows, std::max(0, i - preceding_window + 1));
+      size_type end         = std::min(num_rows, std::max(0, i + following_window + 1));
+      size_type start_index = std::max(*group_start_index, std::min(start, end));
+      size_type end_index   = std::min(*group_end_index, std::max(start, end));
+
+      // aggregate
+      size_type count{end_index - start_index};
+      size_type row_number{i - start_index + 1};
+
+      ref_valid[i] = (count >= min_periods);
+      ref_data[i]  = row_number;
+    }
+
+    fixed_width_column_wrapper<cudf::size_type> col(
+      ref_data.begin(), ref_data.end(), ref_valid.begin());
+    return col.release();
+  }
+
+  std::unique_ptr<cudf::column> create_dense_rank_reference_output(
     cudf::column_view const& input,
     std::vector<size_type> const& group_offsets,
     size_type const& preceding_window,
@@ -438,6 +523,12 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
           input, group_offsets, preceding_window, following_window, min_periods);
       case cudf::aggregation::ROW_NUMBER:
         return create_row_number_reference_output(
+          input, group_offsets, preceding_window, following_window, min_periods);
+      case cudf::aggregation::RANK:
+        return create_rank_reference_output(
+          input, group_offsets, preceding_window, following_window, min_periods);
+      case cudf::aggregation::DENSE_RANK:
+        return create_dense_rank_reference_output(
           input, group_offsets, preceding_window, following_window, min_periods);
       case cudf::aggregation::MEAN:
         return create_reference_output<cudf::DeviceSum,
@@ -791,6 +882,24 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
                  following_window_in_days,
                  min_periods,
                  cudf::make_row_number_aggregation());
+    run_test_col(keys,
+                 timestamp_column,
+                 timestamp_order,
+                 input,
+                 expected_grouping,
+                 preceding_window_in_days,
+                 following_window_in_days,
+                 min_periods,
+                 cudf::make_rank_aggregation());
+    run_test_col(keys,
+                 timestamp_column,
+                 timestamp_order,
+                 input,
+                 expected_grouping,
+                 preceding_window_in_days,
+                 following_window_in_days,
+                 min_periods,
+                 cudf::make_dense_rank_aggregation());
   }
 
  private:
@@ -1100,6 +1209,22 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
                                                    following_window,
                                                    min_periods);
       case cudf::aggregation::ROW_NUMBER:
+        return create_row_number_reference_output(timestamp_column,
+                                                  timestamp_order,
+                                                  input,
+                                                  group_offsets,
+                                                  preceding_window,
+                                                  following_window,
+                                                  min_periods);
+      case cudf::aggregation::RANK:
+        return create_row_number_reference_output(timestamp_column,
+                                                  timestamp_order,
+                                                  input,
+                                                  group_offsets,
+                                                  preceding_window,
+                                                  following_window,
+                                                  min_periods);
+      case cudf::aggregation::DENSE_RANK:
         return create_row_number_reference_output(timestamp_column,
                                                   timestamp_order,
                                                   input,
