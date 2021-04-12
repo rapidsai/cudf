@@ -660,10 +660,7 @@ BufInfo build_output_columns(InputIter begin,
 {
   auto current_info = info_begin;
   std::transform(begin, end, out_begin, [&current_info, base_ptr](column_view const& src) {
-    // Use C++17 structured bindings
-    bitmask_type const* bitmask_ptr;
-    size_type null_count;
-    std::tie(bitmask_ptr, null_count) = [&]() {
+    auto [bitmask_ptr, null_count] = [&]() {
       if (src.nullable()) {
         auto const ptr =
           current_info->num_elements == 0
