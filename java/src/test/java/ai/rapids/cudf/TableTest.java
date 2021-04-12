@@ -4650,7 +4650,7 @@ public class TableTest extends CudfTestBase {
     try (Table table0 = getExpectedFileTableWithDecimals();
          MyBufferConsumer consumer = new MyBufferConsumer()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumn("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
+          .withNonNullableColumn("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
           .withDecimalColumn("_c7", 5)
           .withDecimalColumn("_c8", 5)
           .build();
@@ -4670,17 +4670,17 @@ public class TableTest extends CudfTestBase {
   @Test
   void testParquetWriteToBufferChunkedWithNested() {
     ParquetWriterOptions options = ParquetWriterOptions.builder()
-        .withColumn("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
+        .withNullableColumn("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
         .withStructColumn(structBuilder("_c7")
-            .withLeafColumn("_c7-1")
-            .withLeafColumn("_c7-2")
+            .withNullableColumn("_c7-1")
+            .withNullableColumn("_c7-2")
             .build())
-        .withListColumn(listBuilder("_c8")
-            .withLeafColumn("c8-1").withNullable(false).build())
+      .withListColumn(listBuilder("_c8")
+            .withNullableColumn("c8-1").build())
         .withListColumn(listBuilder("c9")
             .withStructColumn(structBuilder("c9-1")
-                .withLeafColumn("c9-1-1")
-                .withLeafColumn("c9-1-2").build())
+                .withNullableColumn("c9-1-1")
+                .withNullableColumn("c9-1-2").build())
             .build())
         .build();
     try (Table table0 = getExpectedFileTable(true);
@@ -4701,10 +4701,10 @@ public class TableTest extends CudfTestBase {
   @Test
   void testParquetWriteToBufferChunked() {
     ParquetWriterOptions options = ParquetWriterOptions.builder()
-        .withColumn("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
+        .withNullableColumn("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
         .withStructColumn(structBuilder("_c7")
-            .withLeafColumn("_c7-1")
-            .withLeafColumn("_c7-2")
+            .withNullableColumn("_c7-1")
+            .withNullableColumn("_c7-2")
             .build())
         .build();
     try (Table table0 = getExpectedFileTable(true, false);
@@ -4726,7 +4726,7 @@ public class TableTest extends CudfTestBase {
     File tempFile = File.createTempFile("test-names", ".parquet");
     try (Table table0 = getExpectedFileTableWithDecimals()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumn("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+          .withNonNullableColumn("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
           .withDecimalColumn("eighth", 5)
           .withDecimalColumn("nineth", 6)
           .withCompressionType(CompressionType.NONE)
@@ -4748,7 +4748,7 @@ public class TableTest extends CudfTestBase {
     File tempFile = File.createTempFile("test-names-metadata", ".parquet");
     try (Table table0 = getExpectedFileTableWithDecimals()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumn("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+          .withNonNullableColumn("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
           .withDecimalColumn("eighth", 6)
           .withDecimalColumn("nineth", 8)
           .withMetadata("somekey", "somevalue")
@@ -4771,7 +4771,7 @@ public class TableTest extends CudfTestBase {
     File tempFile = File.createTempFile("test-uncompressed", ".parquet");
     try (Table table0 = getExpectedFileTableWithDecimals()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumn("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
+          .withNonNullableColumn("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
           .withDecimalColumn("_c7", 4)
           .withDecimalColumn("_c8", 6)
           .withCompressionType(CompressionType.NONE)

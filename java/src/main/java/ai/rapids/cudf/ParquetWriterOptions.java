@@ -123,7 +123,7 @@ public class ParquetWriterOptions {
      * Set column name
      * @param name
      */
-    public Builder withColumn(String... name) {
+    public Builder withNonNullableColumn(String... name) {
       withColumn(false, name);
       return this;
     }
@@ -144,8 +144,7 @@ public class ParquetWriterOptions {
      */
     public Builder withDecimalColumn(String name, int precision, boolean nullable) {
       columnOptions.add(ParquetColumnWriterOptions.leafBuilder(name)
-          .withDecimalPrecision(precision)
-          .withNullable(nullable)
+          .withDecimalColumn(name, precision, nullable)
           .build());
       return this;
     }
@@ -177,8 +176,7 @@ public class ParquetWriterOptions {
      */
     public Builder withTimestampColumn(String name, boolean isInt96, boolean nullable) {
       columnOptions.add(ParquetColumnWriterOptions.leafBuilder(name)
-          .withTimestampInt96(isInt96)
-          .withNullable(nullable)
+          .withTimestampColumn(name, isInt96, nullable)
           .build());
       return this;
     }
