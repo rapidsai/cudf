@@ -42,6 +42,13 @@ namespace strings {
 namespace detail {
 namespace {
 
+/**
+ * @brief Concatenate strings functor
+ *
+ * This will concatenate the strings from each row of the given table
+ * and apply the separator. The null-replacement string `d_narep` is
+ * used in place of any string in a row that contains a null entry.
+ */
 struct concat_strings_fn {
   table_device_view const d_table;
   string_view const d_separator;
@@ -55,10 +62,12 @@ struct concat_strings_fn {
       thrust::any_of(thrust::seq, d_table.begin(), d_table.end(), [idx](auto const& col) {
         return col.is_null(idx);
       });
+    // handle a null row
     if (null_element && !d_narep.is_valid()) {
       if (!d_chars) d_offsets[idx] = 0;
       return;
     }
+
     char* d_buffer  = d_chars ? d_chars + d_offsets[idx] : nullptr;
     size_type bytes = 0;
     for (auto itr = d_table.begin(); itr < d_table.end(); ++itr) {
@@ -131,6 +140,14 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 }
 
 namespace {
+
+/**
+ * @brief Concatenate strings functor using multiple separators.
+ *
+ * A unique separator is provided for each row along with a string to use
+ * when a separator row is null `d_separator_narep`. The `d_narep` is
+ * used in place of a null entry in the strings columns.
+ */
 struct multi_separator_concat_fn {
   table_device_view const d_table;
   column_device_view const d_separators;

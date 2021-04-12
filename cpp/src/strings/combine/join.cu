@@ -96,16 +96,14 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
 
   // build null mask
   // only one entry so it is either all valid or all null
-  size_type null_count = 0;
-  rmm::device_buffer null_mask{0, stream, mr};  // init to null null-mask
-  if (strings.null_count() == strings_count && !narep.is_valid()) {
-    null_mask  = cudf::detail::create_null_mask(1, cudf::mask_state::ALL_NULL, stream, mr);
-    null_count = 1;
-  }
+  auto const null_count =
+    static_cast<size_type>(strings.null_count() == strings_count && !narep.is_valid());
+  auto null_mask = null_count
+                     ? cudf::detail::create_null_mask(1, cudf::mask_state::ALL_NULL, stream, mr)
+                     : rmm::device_buffer{0, stream, mr};
   auto chars_column =
     detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
-  auto chars_view = chars_column->mutable_view();
-  auto d_chars    = chars_view.data<char>();
+  auto d_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
