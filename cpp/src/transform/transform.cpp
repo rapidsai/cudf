@@ -15,6 +15,7 @@
  */
 
 #include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
+#include <jit_preprocessed_files/transform/jit/binop_kernel.cu.jit.hpp>
 
 #include <jit/cache.hpp>
 #include <jit/parser.hpp>
@@ -27,10 +28,6 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-
-#include <jit/timestamps.hpp.jit>
-#include <jit/types.hpp.jit>
-#include <jit/bit.hpp.jit>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -67,7 +64,6 @@ void unary_operation(mutable_column_view output,
              cudf::jit::get_data_ptr(input));
 }
 
-
 void binary_operation(column_view const& A, 
                       column_view const& B, 
                       std::string const& binary_udf, 
@@ -76,6 +72,43 @@ void binary_operation(column_view const& A,
                       column_view const& outmsk_view,
                       rmm::mr::device_memory_resource* mr)
 {
+  std::string kernel_name =
+  jitify2::reflection::Template("cudf::transformation::jit::binop_kernel")  //
+    .instantiate(cudf::jit::get_type_name(outcol_view.type()),  // list of template arguments
+                 cudf::jit::get_type_name(A.type()),
+                 cudf::jit::get_type_name(B.type()));
+
+  std::string cuda_source = cudf::jit::parse_single_function_ptx(
+                     binary_udf, "GENERIC_BINARY_OP", cudf::jit::get_type_name(output_type), {0});
+
+  rmm::cuda_stream_view stream;
+
+  cudf::jit::get_program_cache(*transform_jit_binop_kernel_cu_jit)
+    .get_kernel(
+      kernel_name, {}, {{"transform/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."})  //
+    ->configure_1d_max_occupancy(0, 0, 0, stream.value())                                   //
+    ->launch(outcol_view.size(),
+            cudf::jit::get_data_ptr(outcol_view),
+            cudf::jit::get_data_ptr(A),
+            cudf::jit::get_data_ptr(B),
+            cudf::jit::get_data_ptr(outmsk_view),
+            A.null_mask(),
+            A.offset(),
+            B.null_mask(),
+            B.offset()
+    );
+}
+/*
+void binary_operation(column_view const& A, 
+                      column_view const& B, 
+                      std::string const& binary_udf, 
+                      data_type output_type, 
+                      column_view const& outcol_view,
+                      column_view const& outmsk_view,
+                      rmm::mr::device_memory_resource* mr)
+{
+
+  std::string kernel_name
 
   std::string hash = "prog_transform" + std::to_string(std::hash<std::string>{}(binary_udf));
 
@@ -118,6 +151,7 @@ void binary_operation(column_view const& A,
     );
 
 }
+*/
 
 }  // namespace jit
 }  // namespace transformation
