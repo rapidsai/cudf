@@ -36,6 +36,7 @@ from cudf.core.column.categorical import (
 )
 from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
+from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy
@@ -2674,6 +2675,11 @@ class Series(Frame, Serializable):
     @property
     def list(self):
         return ListMethods(column=self._column, parent=self)
+
+    @copy_docstring(StructMethods.__init__)  # type: ignore
+    @property
+    def struct(self):
+        return StructMethods(column=self._column, parent=self)
 
     @property
     def dtype(self):
