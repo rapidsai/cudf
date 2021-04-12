@@ -130,8 +130,8 @@ std::unique_ptr<column> sorted_order(table_view input,
   auto const d_column_order = make_device_uvector_async(std::get<1>(flattened), stream);
 
   if (has_nulls(input_flattened)) {
-    auto d_null_precedence = make_device_uvector_async(std::get<2>(flattened), stream);
-    auto comparator        = row_lexicographic_comparator<true>(
+    auto const d_null_precedence = make_device_uvector_async(std::get<2>(flattened), stream);
+    auto const comparator        = row_lexicographic_comparator<true>(
       *device_table, *device_table, d_column_order.data(), d_null_precedence.data());
     if (stable) {
       thrust::stable_sort(rmm::exec_policy(stream),
@@ -147,7 +147,7 @@ std::unique_ptr<column> sorted_order(table_view input,
     // protection for temporary d_column_order and d_null_precedence
     stream.synchronize();
   } else {
-    auto comparator =
+    auto const comparator =
       row_lexicographic_comparator<false>(*device_table, *device_table, d_column_order.data());
     if (stable) {
       thrust::stable_sort(rmm::exec_policy(stream),
