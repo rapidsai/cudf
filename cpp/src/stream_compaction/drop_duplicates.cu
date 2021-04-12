@@ -133,14 +133,16 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
                                        cudf::mutable_column_view& unique_indices,
                                        duplicate_keep_option keep,
                                        null_equality nulls_equal,
+                                       null_order null_precedence,
                                        rmm::cuda_stream_view stream)
 {
   // sort only indices
-  auto sorted_indices = sorted_order(keys,
-                                     std::vector<order>{},
-                                     std::vector<null_order>{},
-                                     stream,
-                                     rmm::mr::get_current_device_resource());
+  auto sorted_indices = sorted_order(
+    keys,
+    std::vector<order>{},
+    std::vector<null_order>{static_cast<uint64_t>(keys.num_columns()), null_precedence},
+    stream,
+    rmm::mr::get_current_device_resource());
 
   // extract unique indices
   auto device_input_table = cudf::table_device_view::create(keys, stream);
@@ -180,6 +182,7 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
                                        std::vector<size_type> const& keys,
                                        duplicate_keep_option keep,
                                        null_equality nulls_equal,
+                                       null_order null_precedence,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
@@ -196,7 +199,7 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
   // This is just slice of `unique_indices` but with different size as per the
   // keys_view has been processed in `get_unique_ordered_indices`
   auto unique_indices_view = detail::get_unique_ordered_indices(
-    keys_view, mutable_unique_indices_view, keep, nulls_equal, stream);
+    keys_view, mutable_unique_indices_view, keep, nulls_equal, null_precedence, stream);
 
   // run gather operation to establish new order
   return detail::gather(input,
@@ -216,7 +219,8 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::drop_duplicates(input, keys, keep, nulls_equal, rmm::cuda_stream_default, mr);
+  return detail::drop_duplicates(
+    input, keys, keep, nulls_equal, null_order::BEFORE, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf
