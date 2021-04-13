@@ -18,21 +18,44 @@
 
 package ai.rapids.cudf;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.IntStream;
+import java.util.*;
 
 /**
  * This class represents settings for writing Parquet files. It includes meta data information
  * that will be used by the Parquet writer to write the file
  */
 public class ParquetWriterOptions {
-  private final CompressionType compressionType;
-  private final Map<String, String> metadata;
-  private final StatisticsFrequency statsGranularity;
-  private final List<ParquetColumnWriterOptions> columnOptions;
+  // This child is needed as the first child of a List column meta due to how cudf has been
+  // implemented. Cudf drops the first child from the meta if a column is a LIST. This is done
+  // this way due to some complications in the parquet reader. There was change to fix this here:
+  // https://github.com/rapidsai/cudf/pull/7461/commits/5ce33b40abb87cc7b76b5efeb0a3a0215f9ef6fb
+  // but it was reverted later on here:
+  // https://github.com/rapidsai/cudf/pull/7461/commits/f248eb7265de995a95f998d46d897fb0ae47f53e
+  private static final ParquetWriterOptions DUMMY_CHILD = new ParquetWriterOptions("DUMMY", false);
+
+  private CompressionType compressionType;
+  private Map<String, String> metadata;
+  private StatisticsFrequency statsGranularity;
+  private boolean isTimestampTypeInt96;
+  private int precision;
+  private boolean isNullable;
+  private String columName = "";
+  protected List<ParquetWriterOptions> columnOptions = new ArrayList<>();
+
+  private ParquetWriterOptions(String name, boolean isInt96, int precision, boolean nullable) {
+    this.columName = name;
+    this.precision = precision;
+    this.isNullable = nullable;
+    this.isTimestampTypeInt96 = isInt96;
+  }
+
+  private ParquetWriterOptions(String name, boolean nullable) {
+    this(name, false, 0, nullable);
+  }
+
+  private ParquetWriterOptions(String name, boolean isInt96, boolean nullable) {
+    this(name, isInt96, 0, nullable);
+  }
 
   public enum StatisticsFrequency {
     /** Do not generate statistics */
@@ -67,11 +90,25 @@ public class ParquetWriterOptions {
     return metadata.values().toArray(new String[metadata.size()]);
   }
 
-  public static class Builder {
+  public static class ParquetStructColumnWriterOptions extends ParquetWriterOptions {
+    protected ParquetStructColumnWriterOptions(StructBuilder builder) {
+      super(builder);
+    }
+  }
+
+  public static class ParquetListColumnWriterOptions extends ParquetWriterOptions {
+    protected ParquetListColumnWriterOptions(ListBuilder builder) {
+      super(builder);
+    }
+  }
+
+  public static class Builder<T extends Builder> {
     final Map<String, String> metadata = new LinkedHashMap<>();
     CompressionType compressionType = CompressionType.AUTO;
+    protected String name;
+    protected boolean isNullable = true;
     private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
-    private List<ParquetColumnWriterOptions> columnOptions = new ArrayList();
+    protected List<ParquetWriterOptions> columnOptions = new ArrayList();
 
     /**
      * Add a metadata key and a value
@@ -110,31 +147,29 @@ public class ParquetWriterOptions {
      * Set column name
      * @param name
      */
-    public Builder withColumn(boolean nullable, String... name) {
-      IntStream.range(0, name.length).forEach(
-          i -> columnOptions.add(ParquetColumnWriterOptions.leafBuilder(name[i])
-              .withNullable(nullable)
-              .build())
-      );
-      return this;
+    public T withColumn(boolean nullable, String... name) {
+      for (String n: name) {
+        columnOptions.add(new ParquetWriterOptions(n, nullable));
+      }
+      return (T) this;
     }
 
     /**
      * Set column name
      * @param name
      */
-    public Builder withNonNullableColumn(String... name) {
+    public T withNonNullableColumn(String... name) {
       withColumn(false, name);
-      return this;
+      return (T) this;
     }
 
     /**
      * Set nullable column meta data
      * @param name
      */
-    public Builder withNullableColumn(String... name) {
+    public T withNullableColumn(String... name) {
       withColumn(true, name);
-      return this;
+      return (T) this;
     }
 
     /**
@@ -142,11 +177,9 @@ public class ParquetWriterOptions {
      * @param name
      * @param precision
      */
-    public Builder withDecimalColumn(String name, int precision, boolean nullable) {
-      columnOptions.add(ParquetColumnWriterOptions.leafBuilder(name)
-          .withDecimalColumn(name, precision, nullable)
-          .build());
-      return this;
+    public T withDecimalColumn(String name, int precision, boolean nullable) {
+      columnOptions.add(new ParquetWriterOptions(name, false, precision, nullable));
+      return (T) this;
     }
 
     /**
@@ -154,9 +187,9 @@ public class ParquetWriterOptions {
      * @param name
      * @param precision
      */
-    public Builder withDecimalColumn(String name, int precision) {
+    public T withDecimalColumn(String name, int precision) {
       withDecimalColumn(name, precision, false);
-      return this;
+      return (T) this;
     }
 
     /**
@@ -164,9 +197,9 @@ public class ParquetWriterOptions {
      * @param name
      * @param precision
      */
-    public Builder withNullableDecimalColumn(String name, int precision) {
+    public T withNullableDecimalColumn(String name, int precision) {
       withDecimalColumn(name, precision, true);
-      return this;
+      return (T) this;
     }
 
     /**
@@ -174,11 +207,9 @@ public class ParquetWriterOptions {
      * @param name
      * @param isInt96
      */
-    public Builder withTimestampColumn(String name, boolean isInt96, boolean nullable) {
-      columnOptions.add(ParquetColumnWriterOptions.leafBuilder(name)
-          .withTimestampColumn(name, isInt96, nullable)
-          .build());
-      return this;
+    public T withTimestampColumn(String name, boolean isInt96, boolean nullable) {
+      columnOptions.add(new ParquetWriterOptions(name, isInt96, nullable));
+      return (T) this;
     }
 
     /**
@@ -186,9 +217,9 @@ public class ParquetWriterOptions {
      * @param name
      * @param isInt96
      */
-    public Builder withTimestampColumn(String name, boolean isInt96) {
+    public T withTimestampColumn(String name, boolean isInt96) {
       withTimestampColumn(name, isInt96, false);
-      return this;
+      return (T) this;
     }
 
     /**
@@ -196,42 +227,42 @@ public class ParquetWriterOptions {
      * @param name
      * @param isInt96
      */
-    public Builder withNullableTimestampColumn(String name, boolean isInt96) {
+    public T withNullableTimestampColumn(String name, boolean isInt96) {
       withTimestampColumn(name, isInt96, true);
-      return this;
+      return (T) this;
     }
 
     /**
      * Set a struct column with these options
      * @param option
      */
-    public Builder withStructColumn(ParquetColumnWriterOptions.ParquetStructColumnWriterOptions option) {
-      for (ParquetColumnWriterOptions opt: option.getChildColumnOptions()) {
-        if (opt.getColumName().isEmpty()) {
+    public T withStructColumn(ParquetStructColumnWriterOptions option) {
+      for (ParquetWriterOptions opt: option.columnOptions) {
+        if (opt.columName.isEmpty()) {
           throw new IllegalArgumentException("Column name can't be empty");
         }
       }
       columnOptions.add(option);
-      return this;
+      return (T) this;
     }
 
     /**
      * Set a column with these options
      * @param options
      */
-    public Builder withListColumn(ParquetColumnWriterOptions.ParquetListColumnWriterOptions options) {
+    public T withListColumn(ParquetListColumnWriterOptions options) {
       // Lists should have only one child in the Java bindings, unfortunately we have to do this
       // because the way cudf is implemented today, it requires two children and then it drops
       // the first one assuming its the offsets child
-      assert (options.getChildColumnOptions().length == 2) : "Lists can only have two children";
-      if (options.getChildColumnOptions()[0] != ParquetColumnWriterOptions.DUMMY_CHILD) {
+      assert (options.columnOptions.size() == 2) : "Lists can only have two children";
+      if (options.columnOptions.get(0) != ParquetWriterOptions.DUMMY_CHILD) {
         throw new IllegalArgumentException("First child in the list has to be DUMMY_CHILD");
       }
-      if (options.getChildColumnOptions()[1].getColumName().isEmpty()) {
+      if (options.columnOptions.get(1).columName.isEmpty()) {
         throw new IllegalArgumentException("Column name can't be empty");
       }
       columnOptions.add(options);
-      return this;
+      return (T) this;
     }
 
     public ParquetWriterOptions build() {
@@ -239,8 +270,50 @@ public class ParquetWriterOptions {
     }
   }
 
+  public static class StructBuilder extends Builder<StructBuilder> {
+
+    public StructBuilder(String name, boolean isNullable) {
+      this.name = name;
+      this.isNullable = isNullable;
+    }
+
+    public ParquetStructColumnWriterOptions build() {
+      return new ParquetStructColumnWriterOptions(this);
+    }
+  }
+
+  public static class ListBuilder extends Builder<ListBuilder> {
+
+    public ListBuilder(String name, boolean isNullable) {
+      this.name = name;
+      this.isNullable = isNullable;
+    }
+
+    public ParquetListColumnWriterOptions build() {
+      assert(columnOptions.size() == 1) : "Lists can only have 1 child";
+      columnOptions.add(0, DUMMY_CHILD);
+      return new ParquetListColumnWriterOptions(this);
+    }
+  }
+
   public static Builder builder() {
     return new Builder();
+  }
+
+  public static ListBuilder listBuilder(String name) {
+    return new ListBuilder(name, true);
+  }
+
+  public static ListBuilder listBuilder(String name, boolean isNullable) {
+    return new ListBuilder(name, isNullable);
+  }
+
+  public static StructBuilder structBuilder(String name, boolean isNullable) {
+    return new StructBuilder(name, isNullable);
+  }
+
+  public static StructBuilder structBuilder(String name) {
+    return new StructBuilder(name, true);
   }
 
   private ParquetWriterOptions(Builder builder) {
@@ -250,62 +323,84 @@ public class ParquetWriterOptions {
     this.metadata = builder.metadata;
   }
 
+  private ParquetWriterOptions(StructBuilder builder) {
+    this.columName = builder.name;
+    this.isNullable = builder.isNullable;
+    this.columnOptions = builder.columnOptions;
+  }
+
+  private ParquetWriterOptions(ListBuilder builder) {
+    assert (builder.columnOptions.size() == 2) : "Use the ListBuilder to add a list column";
+    this.columName = builder.name;
+    this.isNullable = builder.isNullable;
+    this.columnOptions = builder.columnOptions;
+  }
+
   public StatisticsFrequency getStatisticsFrequency() {
     return statsGranularity;
   }
 
   boolean[] getFlatIsTimeTypeInt96() {
-    List<Boolean> a = new ArrayList<>();
-    a.add(false); // dummy value
-    for (ParquetColumnWriterOptions opt: columnOptions) {
-      a.addAll(opt.getFlatIsTimeTypeInt96());
+    boolean[] ret = {isTimestampTypeInt96};
+
+    for (ParquetWriterOptions opt: columnOptions) {
+      boolean[] b = opt.getFlatIsTimeTypeInt96();
+      boolean[] tmp = new boolean[ret.length + b.length];
+      System.arraycopy(ret, 0, tmp, 0, ret.length);
+      System.arraycopy(b, 0, tmp, ret.length, b.length);
+      ret = tmp;
     }
-    final boolean[] primitivesBool = new boolean[a.size()];
-    int i = 0;
-    for (Boolean b: a) {
-      primitivesBool[i++] = b;
-    }
-    return primitivesBool;
+    return ret;
   }
 
   int[] getFlatPrecision() {
-    List<Integer> a = new ArrayList<>();
-    a.add(0); // dummy value
-    for (ParquetColumnWriterOptions opt: columnOptions) {
-      a.addAll(opt.getFlatPrecision());
+    int[] ret = {precision};
+
+    for (ParquetWriterOptions opt: columnOptions) {
+      int[] b = opt.getFlatPrecision();
+      int[] tmp = new int[ret.length + b.length];
+      System.arraycopy(ret, 0, tmp, 0, ret.length);
+      System.arraycopy(b, 0, tmp, ret.length, b.length);
+      ret = tmp;
     }
-    return a.stream().mapToInt(Integer::intValue).toArray();
+    return ret;
   }
 
   boolean[] getFlatIsNullable() {
-    List<Boolean> a = new ArrayList<>();
-    a.add(false); // dummy value
-    for (ParquetColumnWriterOptions opt: columnOptions) {
-      a.addAll(opt.getFlatIsNullable());
+    boolean[] ret = {isNullable};
+
+    for (ParquetWriterOptions opt: columnOptions) {
+      boolean[] b = opt.getFlatIsNullable();
+      boolean[] tmp = new boolean[ret.length + b.length];
+      System.arraycopy(ret, 0, tmp, 0, ret.length);
+      System.arraycopy(b, 0, tmp, ret.length, b.length);
+      ret = tmp;
     }
-    final boolean[] primitivesBool = new boolean[a.size()];
-    int i = 0;
-    for (Boolean b: a) {
-      primitivesBool[i++] = b;
-    }
-    return primitivesBool;
+    return ret;
   }
 
   int[] getFlatNumChildren() {
-    List<Integer> a = new ArrayList<>();
-    a.add(columnOptions.size());
-    for (ParquetColumnWriterOptions opt: columnOptions) {
-      a.addAll(opt.getFlatNumChildren());
+    int[] ret = {columnOptions.size()};
+
+    for (ParquetWriterOptions opt: columnOptions) {
+      int[] b = opt.getFlatNumChildren();
+      int[] tmp = new int[ret.length + b.length];
+      System.arraycopy(ret, 0, tmp, 0, ret.length);
+      System.arraycopy(b, 0, tmp, ret.length, b.length);
+      ret = tmp;
     }
-    return a.stream().mapToInt(Integer::intValue).toArray();
+    return ret;
   }
 
   String[] getFlatColumnNames() {
-    List<String> a = new ArrayList<>();
-    a.add(""); // dummy value to keep the code simple
-    for (ParquetColumnWriterOptions opt: columnOptions) {
-      a.addAll(opt.getFlatColumnNames());
+    String[] ret = {columName};
+    for (ParquetWriterOptions opt: columnOptions) {
+      String[] b = opt.getFlatColumnNames();
+      String[] tmp = new String[ret.length + b.length];
+      System.arraycopy(ret, 0, tmp, 0, ret.length);
+      System.arraycopy(b, 0, tmp, ret.length, b.length);
+      ret = tmp;
     }
-    return a.stream().toArray(String[]::new);
+    return ret;
   }
 }
