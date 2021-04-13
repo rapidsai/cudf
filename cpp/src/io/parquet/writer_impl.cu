@@ -1035,9 +1035,8 @@ void writer::impl::write(table_view const &table)
       gpu::EncColumnChunk *ck = &chunks[r][i];
       bool dict_enable        = false;
 
-      *ck          = {};
-      ck->col_desc = col_desc.device_ptr() + i;
-      // TODO: Next, make the chunk member a span
+      *ck           = {};
+      ck->col_desc  = col_desc.device_ptr() + i;
       ck->fragments = &fragments.device_view()[i][f];
       ck->stats = (frag_stats.size() != 0) ? frag_stats.data() + i * num_fragments + f : nullptr;
       ck->start_row        = start_row;
@@ -1050,16 +1049,14 @@ void writer::impl::write(table_view const &table)
         });
       ck->dictionary_id = num_dictionaries;
       if (col_desc[i].dict_data) {
-        // TODO: turn it into subspan
-        const gpu::PageFragment *ck_frag = &fragments[i][f];
-        size_t plain_size                = 0;
-        size_t dict_size                 = 1;
-        uint32_t num_dict_vals           = 0;
+        size_t plain_size      = 0;
+        size_t dict_size       = 1;
+        uint32_t num_dict_vals = 0;
         for (uint32_t j = 0; j < fragments_in_chunk && num_dict_vals < 65536; j++) {
-          plain_size += ck_frag[j].fragment_data_size;
-          dict_size +=
-            ck_frag[j].dict_data_size + ((num_dict_vals > 256) ? 2 : 1) * ck_frag[j].non_nulls;
-          num_dict_vals += ck_frag[j].num_dict_vals;
+          plain_size += chunk_fragments[j].fragment_data_size;
+          dict_size += chunk_fragments[j].dict_data_size +
+                       ((num_dict_vals > 256) ? 2 : 1) * chunk_fragments[j].non_nulls;
+          num_dict_vals += chunk_fragments[j].num_dict_vals;
         }
         if (dict_size < plain_size) {
           parquet_columns[i].use_dictionary(true);
