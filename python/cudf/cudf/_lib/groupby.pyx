@@ -151,7 +151,7 @@ cdef class GroupBy:
                 )
 
         if c_agg_requests.empty() and not allow_empty:
-            raise DataError("No numeric types to aggregate")
+            raise DataError("All requested aggregations are unsupported.")
 
         cdef pair[
             unique_ptr[table],
