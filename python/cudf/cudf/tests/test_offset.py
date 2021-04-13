@@ -34,7 +34,7 @@ def test_construct_max_offset(unit):
     ],
 )
 def test_offset_construction_overflow(kwargs):
-    with pytest.raises(OverflowError):
+    with pytest.raises(NotImplementedError):
         DateOffset(**kwargs)
 
 
