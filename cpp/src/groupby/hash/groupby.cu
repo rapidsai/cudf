@@ -82,7 +82,7 @@ template <class T, size_t N>
 constexpr bool array_contains(std::array<T, N> const& haystack, T needle)
 {
   for (auto const& val : haystack) {
-    if(val == needle) { return true; }
+    if (val == needle) return true;
   }
   return false;
 }
