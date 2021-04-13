@@ -189,7 +189,8 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfLists)
       cudf::detail::make_counting_transform_iterator(0, [](auto i) { return !(i % 3); })};
   };
 
-  auto lists_column = std::make_unique<cudf::column>(cudf::column(lists_column_exemplar(), 0));
+  auto lists_column =
+    std::make_unique<cudf::column>(cudf::column(lists_column_exemplar(), rmm::cuda_stream_default));
 
   // Assemble struct column.
   std::vector<std::unique_ptr<cudf::column>> vector_of_columns;
@@ -242,7 +243,8 @@ TYPED_TEST(TypedStructGatherTest, TestGatherStructOfListsOfLists)
       cudf::detail::make_counting_transform_iterator(0, [](auto i) { return !(i % 3); })};
   };
 
-  auto lists_column = std::make_unique<cudf::column>(cudf::column(lists_column_exemplar(), 0));
+  auto lists_column =
+    std::make_unique<cudf::column>(cudf::column(lists_column_exemplar(), rmm::cuda_stream_default));
 
   // Assemble struct column.
   std::vector<std::unique_ptr<cudf::column>> vector_of_columns;

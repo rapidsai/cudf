@@ -141,6 +141,35 @@ TYPED_TEST(PartitionTest, Identity)
   run_partition_test(table_to_partition, map, 6, table_to_partition, expected_offsets);
 }
 
+TYPED_TEST(PartitionTest, Struct)
+{
+  using value_type = cudf::test::GetType<TypeParam, 0>;
+  using map_type   = cudf::test::GetType<TypeParam, 1>;
+
+  fixed_width_column_wrapper<value_type, int32_t> A({1, 2}, {0, 1});
+  auto struct_col         = cudf::test::structs_column_wrapper({A}, {0, 1}).release();
+  auto table_to_partition = cudf::table_view{{*struct_col}};
+
+  fixed_width_column_wrapper<map_type> map{9, 2};
+
+  fixed_width_column_wrapper<value_type, int32_t> A_expected({2, 1}, {1, 0});
+  auto struct_expected = cudf::test::structs_column_wrapper({A_expected}, {1, 0}).release();
+  auto expected        = cudf::table_view{{*struct_expected}};
+
+  std::vector<cudf::size_type> expected_offsets{0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2};
+
+  // This does not work because we cannot sort a struct right now...
+  // run_partition_test(table_to_partition, map, 12, expected, expected_offsets);
+  // But there is no ambiguity in the ordering so I'll just copy it all here for now.
+  auto num_partitions                  = 12;
+  auto result                          = cudf::partition(table_to_partition, map, num_partitions);
+  auto const& actual_partitioned_table = result.first;
+  auto const& actual_offsets           = result.second;
+  EXPECT_EQ(actual_offsets, expected_offsets);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *actual_partitioned_table);
+}
+
 TYPED_TEST(PartitionTest, Reverse)
 {
   using value_type = cudf::test::GetType<TypeParam, 0>;
