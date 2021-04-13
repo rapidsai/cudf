@@ -123,6 +123,7 @@ OutputIterator unique_copy(InputIterator first,
  * @param[out] unique_indices Column to store the index with unique rows
  * @param[in] keep            keep first entry, last entry, or no entries if duplicates found
  * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL,
+ * @param[in] null_order      flag to denote nulls should appear before or after non-null items,
  *                            nulls are not equal if null_equality::UNEQUAL
  * @param[in] stream          CUDA stream used for device memory operations and kernel launches.
  *
