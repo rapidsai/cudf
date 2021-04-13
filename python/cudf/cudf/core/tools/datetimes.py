@@ -13,7 +13,7 @@ from cudf._lib.strings.convert.convert_integers import (
 )
 from cudf.core import column
 from cudf.core.index import as_index
-from cudf.utils.dtypes import is_scalar
+from cudf.utils.dtypes import is_integer, is_scalar
 
 _unit_dtype_map = {
     "ns": "datetime64[ns]",
@@ -472,7 +472,7 @@ class DateOffset:
                 " are not yet supported."
             )
 
-        if any(val != int(val) for val in kwds.values()):
+        if any(not is_integer(val) for val in kwds.values()):
             raise ValueError("Non-integer periods not supported")
 
         self._kwds = kwds
@@ -484,7 +484,7 @@ class DateOffset:
             if k in all_possible_units:
                 # Months must be int16
                 if k == "months":
-                    # TODO: throw for oob int16 vals
+                    # TODO: throw for out-of-bounds int16 values
                     dtype = "int16"
                 else:
                     unit = self._UNITS_TO_CODES[k]
