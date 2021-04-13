@@ -396,7 +396,6 @@ class DateOffset:
         2   1999-02-28 00:00:00.012345678
         dtype: datetime64[ns]
 
-
         Notes
         -----
         Note that cuDF does not yet support DateOffset arguments
