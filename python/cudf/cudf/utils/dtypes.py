@@ -158,7 +158,7 @@ def is_integer_dtype(obj):
     try:
         dtype = np.dtype(obj)
     except TypeError:
-        return False
+        return pd.api.types.is_integer_dtype(obj)
     return dtype.kind in "iu"
 
 
