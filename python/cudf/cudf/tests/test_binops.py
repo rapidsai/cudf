@@ -2059,8 +2059,12 @@ def test_binops_decimal_comp_mixed_integer(args, integer_dtype, reflected):
     if reflected:
         rhs, lhs = lhs, rhs
 
-    actual = op(lhs, rhs)
+    if integer_dtype in {'int64', 'uint64'}:
+        with pytest.raises(TypeError):
+            op(lhs, rhs)
+        return
 
+    actual = op(lhs, rhs)
     utils.assert_eq(expected, actual)
 
 
@@ -2200,6 +2204,7 @@ def test_binops_decimal_integer_column(
         utils.assert_eq(expect, got)
 
 @pytest.mark.parametrize("args", [
+    # Addition, non reflected
     (
         ['1.1', '2.2', '3.3'],
         [1.1, 2.2, 3.3],
@@ -2207,14 +2212,49 @@ def test_binops_decimal_integer_column(
         np.dtype('float64'),
         operator.add,
         [2.2, 4.4, 6.6],
-        np.dtype('float64')
-    )
+        np.dtype('float64'),
+        False
+    ),
+    (
+        ['1.1', '2.2', '3.3'],
+        [1.1, 2.2, 3.3],
+        cudf.Decimal64Dtype(2,1),
+        np.dtype('float32'),
+        operator.add,
+        [2.2, 4.4, 6.6],
+        np.dtype('float32'),
+        False
+    ),
+    # Addition, reflected    
+    (
+        ['1.1', '2.2', '3.3'],
+        [1.1, 2.2, 3.3],
+        cudf.Decimal64Dtype(2,1),
+        np.dtype('float64'),
+        operator.add,
+        [2.2, 4.4, 6.6],
+        np.dtype('float64'),
+        True
+    ),
+    (
+        ['1.1', '2.2', '3.3'],
+        [1.1, 2.2, 3.3],
+        cudf.Decimal64Dtype(2,1),
+        np.dtype('float32'),
+        operator.add,
+        [2.2, 4.4, 6.6],
+        np.dtype('float32'),
+        True
+    ),    
 ])
 def test_binops_decimal_float_column(args):
-    ldata, rdata, ldtype, rdtype, op, expect, expect_dtype = args
+    ldata, rdata, ldtype, rdtype, op, expect, expect_dtype, reflect = args
 
     lhs = _decimal_series(ldata, ldtype)
-    rhs = cudf.core.column.as_column(rdata, dtype=rdtype)
+    rhs = cudf.Series(rdata, dtype=rdtype)
+
+    if reflect:
+        lhs, rhs = rhs, lhs
 
     # result will be float, not decimal for these binops
     expect = cudf.core.column.as_column(expect, dtype=rdtype)

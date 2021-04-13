@@ -91,16 +91,7 @@ class NumericalColumn(ColumnBase):
     def binary_operator(
         self, binop: str, rhs: BinaryOperand, reflect: bool = False,
     ) -> ColumnBase:
-        int_dtypes = [
-            np.dtype("int8"),
-            np.dtype("int16"),
-            np.dtype("int32"),
-            np.dtype("int64"),
-            np.dtype("uint8"),
-            np.dtype("uint16"),
-            np.dtype("uint32"),
-            np.dtype("uint64"),
-        ]
+
         if rhs is None:
             out_dtype = self.dtype
         else:
@@ -118,14 +109,23 @@ class NumericalColumn(ColumnBase):
                 msg = "{!r} operator not supported between {} and {}"
                 raise TypeError(msg.format(binop, type(self), type(rhs)))
             if isinstance(rhs, cudf.core.column.DecimalColumn):
-                lhs = self.as_decimal_column(
-                    Decimal64Dtype(Decimal64Dtype.MAX_PRECISION, 0)
-                )
+                # For arithmetic ops between decimals and numeric non decimals,
+                # an integral column will be cast to decimal, whereas a float
+                # column will cause the decimal operand to cast to float
+                if self.dtype.kind in 'ui':
+                    lhs = self.as_decimal_column(self._decimal_dtype())
+                elif self.dtype.kind == 'f':
+                    lhs = self
+                    rhs = rhs.astype(self.dtype)
+                else:
+                    lhs = self.as_decimal_column(
+                        Decimal64Dtype(Decimal64Dtype.MAX_PRECISION, 0)
+                    )
                 return lhs.binary_operator(binop, rhs)
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
                 tmp = self if reflect else rhs
-                if (tmp.dtype in int_dtypes) and (
+                if (tmp.dtype.kind in 'ui') and (
                     (np.isscalar(tmp) and (0 == tmp))
                     or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
                 ):
