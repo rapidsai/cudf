@@ -1,20 +1,16 @@
 Welcome to cuDF's documentation!
 =================================
 
+<This is a doc page...>
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
-   api.rst
-   10min.ipynb
-   basics.rst
-   io.rst
-   groupby.md
-   dask-cudf.md
-   10min-cudf-cupy.ipynb
-   guide-to-udfs.ipynb
-   internals.md
-   Working-with-missing-data.ipynb
+   user_guide/index
+   basics/index
+   api_docs/index
+
 
 Indices and tables
 ==================
