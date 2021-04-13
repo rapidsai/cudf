@@ -143,26 +143,22 @@ class writer::impl {
    * @param col_desc column description array
    * @param num_columns Total number of columns
    * @param num_fragments Total number of fragments per column
-   * @param fragment_size Number of rows per fragment
    */
   void gather_fragment_statistics(device_2dspan<statistics_chunk> dst_stats,
                                   device_2dspan<gpu::PageFragment const> frag,
                                   device_span<gpu::parquet_column_device_view const> col_desc,
                                   uint32_t num_columns,
-                                  uint32_t num_fragments,
-                                  uint32_t fragment_size);
+                                  uint32_t num_fragments);
   /**
    * @brief Build per-chunk dictionaries and count data pages
    *
    * @param chunks column chunk array
    * @param col_desc column description array
-   * @param num_rowgroups Total number of rowgroups
    * @param num_columns Total number of columns
    * @param num_dictionaries Total number of dictionaries
    */
   void build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                                 device_span<gpu::parquet_column_device_view const> col_desc,
-                                uint32_t num_rowgroups,
                                 uint32_t num_columns,
                                 uint32_t num_dictionaries);
   /**
@@ -171,7 +167,6 @@ class writer::impl {
    * @param chunks column chunk array
    * @param col_desc column description array
    * @param pages encoder pages array
-   * @param num_rowgroups Total number of rowgroups
    * @param num_columns Total number of columns
    * @param num_pages Total number of pages
    * @param num_stats_bfr Number of statistics buffers
@@ -181,7 +176,6 @@ class writer::impl {
                           device_span<gpu::EncPage> pages,
                           statistics_chunk* page_stats,
                           statistics_chunk* frag_stats,
-                          uint32_t num_rowgroups,
                           uint32_t num_columns,
                           uint32_t num_pages,
                           uint32_t num_stats_bfr);
@@ -190,7 +184,6 @@ class writer::impl {
    *
    * @param chunks column chunk array
    * @param pages encoder pages array
-   * @param num_columns Total number of columns
    * @param pages_in_batch number of pages in this batch
    * @param first_page_in_batch first page in batch
    * @param rowgroups_in_batch number of rowgroups in this batch
@@ -200,7 +193,6 @@ class writer::impl {
    */
   void encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                     device_span<gpu::EncPage> pages,
-                    uint32_t num_columns,
                     uint32_t pages_in_batch,
                     uint32_t first_page_in_batch,
                     uint32_t rowgroups_in_batch,

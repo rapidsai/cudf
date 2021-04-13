@@ -731,14 +731,13 @@ void writer::impl::gather_fragment_statistics(
   device_2dspan<gpu::PageFragment const> frag,
   device_span<gpu::parquet_column_device_view const> col_desc,
   uint32_t num_columns,
-  uint32_t num_fragments,
-  uint32_t fragment_size)
+  uint32_t num_fragments)
 {
   rmm::device_uvector<statistics_group> frag_stats_group(num_fragments * num_columns, stream);
   auto frag_stats_group_2dview =
     device_2dspan<statistics_group>(frag_stats_group.data(), num_columns, num_fragments);
 
-  gpu::InitFragmentStatistics(frag_stats_group_2dview, frag, col_desc, fragment_size, stream);
+  gpu::InitFragmentStatistics(frag_stats_group_2dview, frag, col_desc, stream);
   GatherColumnStatistics(
     frag_stats_chunk.data(), frag_stats_group.data(), num_fragments * num_columns, stream);
   stream.synchronize();
@@ -747,7 +746,6 @@ void writer::impl::gather_fragment_statistics(
 void writer::impl::build_chunk_dictionaries(
   hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
   device_span<gpu::parquet_column_device_view const> col_desc,
-  uint32_t num_rowgroups,
   uint32_t num_columns,
   uint32_t num_dictionaries)
 {
@@ -768,7 +766,6 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &
                                       device_span<gpu::EncPage> pages,
                                       statistics_chunk *page_stats,
                                       statistics_chunk *frag_stats,
-                                      uint32_t num_rowgroups,
                                       uint32_t num_columns,
                                       uint32_t num_pages,
                                       uint32_t num_stats_bfr)
@@ -797,7 +794,6 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &
 
 void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
                                 device_span<gpu::EncPage> pages,
-                                uint32_t num_columns,
                                 uint32_t pages_in_batch,
                                 uint32_t first_page_in_batch,
                                 uint32_t rowgroups_in_batch,
@@ -827,8 +823,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks
   // chunk-level
   auto d_chunks_in_batch = chunks.device_view().subspan(first_rowgroup, rowgroups_in_batch);
   DecideCompression(d_chunks_in_batch.flat_view(), pages, first_page_in_batch, comp_stat, stream);
-  EncodePageHeaders(
-    batch_pages, pages_in_batch, first_page_in_batch, comp_stat, page_stats, chunk_stats, stream);
+  EncodePageHeaders(batch_pages, first_page_in_batch, comp_stat, page_stats, chunk_stats, stream);
   GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
 
   auto h_chunks_in_batch = chunks.host_view().subspan(first_rowgroup, rowgroups_in_batch);
@@ -976,7 +971,7 @@ void writer::impl::write(table_view const &table)
   cudf::detail::hostdevice_2dvector<gpu::PageFragment> fragments(
     num_columns, num_fragments, stream);
 
-  if (fragments.size().second != 0) {
+  if (num_fragments != 0) {
     // Move column info to device
     col_desc.host_to_device(stream);
     leaf_column_views = create_leaf_column_device_views<gpu::parquet_column_device_view>(
@@ -1023,7 +1018,7 @@ void writer::impl::write(table_view const &table)
       device_2dspan<statistics_chunk>(frag_stats.data(), num_columns, num_fragments);
     if (frag_stats.size() != 0) {
       gather_fragment_statistics(
-        frag_stats_2dview, fragments, col_desc, num_columns, num_fragments, fragment_size);
+        frag_stats_2dview, fragments, col_desc, num_columns, num_fragments);
     }
   }
   // Initialize row groups and column chunks
@@ -1093,7 +1088,7 @@ void writer::impl::write(table_view const &table)
 
   // Build chunk dictionaries and count pages
   if (num_chunks != 0) {
-    build_chunk_dictionaries(chunks, col_desc, num_rowgroups, num_columns, num_dictionaries);
+    build_chunk_dictionaries(chunks, col_desc, num_columns, num_dictionaries);
   }
 
   // Initialize batches of rowgroups to encode (mainly to limit peak memory usage)
@@ -1138,15 +1133,13 @@ void writer::impl::write(table_view const &table)
     (compression_ != parquet::Compression::UNCOMPRESSED)
       ? gpu::GetMaxCompressedBfrSize(max_uncomp_bfr_size, max_pages_in_batch)
       : 0;
-  uint32_t max_comp_pages =
-    (compression_ != parquet::Compression::UNCOMPRESSED) ? max_pages_in_batch : 0;
   uint32_t num_stats_bfr =
     (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_pages + num_chunks : 0;
   rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, stream);
   rmm::device_buffer comp_bfr(max_comp_bfr_size, stream);
   rmm::device_uvector<gpu::EncPage> pages(num_pages, stream);
 
-  // This contains stats for both the pages and the rowgroups. WTF. Just make them separate.
+  // This contains stats for both the pages and the rowgroups. TODO: make them separate.
   rmm::device_uvector<statistics_chunk> page_stats(num_stats_bfr, stream);
   for (uint32_t b = 0, r = 0; b < (uint32_t)batch_list.size(); b++) {
     uint8_t *bfr   = static_cast<uint8_t *>(uncomp_bfr.data());
@@ -1168,7 +1161,6 @@ void writer::impl::write(table_view const &table)
                        {pages.data(), pages.size()},
                        (num_stats_bfr) ? page_stats.data() : nullptr,
                        (num_stats_bfr) ? frag_stats.data() : nullptr,
-                       num_rowgroups,
                        num_columns,
                        num_pages,
                        num_stats_bfr);
@@ -1188,7 +1180,6 @@ void writer::impl::write(table_view const &table)
     encode_pages(
       chunks,
       {pages.data(), pages.size()},
-      num_columns,
       pages_in_batch,
       first_page_in_batch,
       batch_list[b],

@@ -465,13 +465,11 @@ void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
  * @param[out] groups Statistics groups [num_columns x num_fragments]
  * @param[in] fragments Page fragments [num_columns x num_fragments]
  * @param[in] col_desc Column description [num_columns]
- * @param[in] fragment_size Max size of each fragment in rows
  * @param[in] stream CUDA stream to use, default 0
  */
 void InitFragmentStatistics(cudf::detail::device_2dspan<statistics_group> groups,
                             cudf::detail::device_2dspan<PageFragment const> fragments,
                             device_span<gpu::parquet_column_device_view const> col_desc,
-                            uint32_t fragment_size,
                             rmm::cuda_stream_view stream);
 
 /**
@@ -527,7 +525,6 @@ void DecideCompression(device_span<EncColumnChunk> chunks,
  * @brief Launches kernel to encode page headers
  *
  * @param[in,out] pages Device array of EncPages
- * @param[in] num_pages Number of pages
  * @param[in] start_page First page to encode in page array
  * @param[in] comp_out Compressor status or nullptr if no compression
  * @param[in] page_stats Optional page-level statistics to be included in page header
@@ -535,7 +532,6 @@ void DecideCompression(device_span<EncColumnChunk> chunks,
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePageHeaders(device_span<EncPage> pages,
-                       uint32_t num_pages,
                        uint32_t start_page                              = 0,
                        device_span<gpu_inflate_status_s const> comp_out = {},
                        const statistics_chunk *page_stats               = nullptr,

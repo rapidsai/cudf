@@ -384,8 +384,7 @@ __global__ void __launch_bounds__(block_size)
 __global__ void __launch_bounds__(128)
   gpuInitFragmentStats(device_2dspan<statistics_group> groups,
                        device_2dspan<PageFragment const> fragments,
-                       device_span<parquet_column_device_view const> col_desc,
-                       uint32_t fragment_size)
+                       device_span<parquet_column_device_view const> col_desc)
 {
   // TODO: why not 1 block per warp?
   __shared__ __align__(8) statistics_group group_g[4];
@@ -413,6 +412,7 @@ __global__ void __launch_bounds__(128)
                statistics_merge_group *chunk_grstats,
                int32_t num_columns)
 {
+  // TODO: All writing seems to be done by thread 0. Could be replaced by thrust foreach
   __shared__ __align__(8) parquet_column_device_view col_g;
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) PageFragment frag_g;
@@ -1431,12 +1431,10 @@ class header_encoder {
 
 __device__ uint8_t *EncodeStatistics(uint8_t *start,
                                      const statistics_chunk *s,
-                                     const parquet_column_device_view *col,
+                                     uint8_t dtype,
                                      float *fp_scratch)
 {
-  uint8_t *end, dtype, dtype_len;
-  // No point passing the column when all we need is a dtype
-  dtype = col->stats_dtype;
+  uint8_t *end, dtype_len;
   switch (dtype) {
     case dtype_bool: dtype_len = 1; break;
     case dtype_int8:
@@ -1508,7 +1506,8 @@ __global__ void __launch_bounds__(128)
 
     if (chunk_stats && start_page + blockIdx.x == ck_g.first_page) {
       hdr_start = (ck_g.is_compressed) ? ck_g.compressed_bfr : ck_g.uncompressed_bfr;
-      hdr_end   = EncodeStatistics(hdr_start, &chunk_stats[page_g.chunk_id], &col_g, fp_scratch);
+      hdr_end =
+        EncodeStatistics(hdr_start, &chunk_stats[page_g.chunk_id], col_g.stats_dtype, fp_scratch);
       page_g.chunk->ck_stat_size = static_cast<uint32_t>(hdr_end - hdr_start);
     }
     uncompressed_page_size = page_g.max_data_size;
@@ -1551,7 +1550,7 @@ __global__ void __launch_bounds__(128)
       if (page_stats) {
         encoder.field_struct_begin(5);
         encoder.set_ptr(EncodeStatistics(
-          encoder.get_ptr(), &page_stats[start_page + blockIdx.x], &col_g, fp_scratch));
+          encoder.get_ptr(), &page_stats[start_page + blockIdx.x], col_g.stats_dtype, fp_scratch));
         encoder.field_struct_end(5);
       }
       encoder.field_struct_end(5);
@@ -2116,20 +2115,17 @@ void InitPageFragments(device_2dspan<PageFragment> frag,
  * @param[out] groups Statistics groups [num_columns x num_fragments]
  * @param[in] fragments Page fragments [num_columns x num_fragments]
  * @param[in] col_desc Column description [num_columns]
- * @param[in] fragment_size Max size of each fragment in rows
  * @param[in] stream CUDA stream to use, default 0
  */
 void InitFragmentStatistics(device_2dspan<statistics_group> groups,
                             device_2dspan<PageFragment const> fragments,
                             device_span<parquet_column_device_view const> col_desc,
-                            uint32_t fragment_size,
                             rmm::cuda_stream_view stream)
 {
   auto num_columns              = col_desc.size();
   auto num_fragments_per_column = fragments.size().second;
   dim3 dim_grid(num_columns, (num_fragments_per_column + 3) >> 2);  // 1 warp per fragment
-  gpuInitFragmentStats<<<dim_grid, 128, 0, stream.value()>>>(
-    groups, fragments, col_desc, fragment_size);
+  gpuInitFragmentStats<<<dim_grid, 128, 0, stream.value()>>>(groups, fragments, col_desc);
 }
 
 /**
@@ -2200,7 +2196,6 @@ void DecideCompression(device_span<EncColumnChunk> chunks,
  * @brief Launches kernel to encode page headers
  *
  * @param[in,out] pages Device array of EncPages
- * @param[in] num_pages Number of pages
  * @param[in] start_page First page to encode in page array
  * @param[in] comp_stat Compressor status or nullptr if no compression
  * @param[in] page_stats Optional page-level statistics to be included in page header
@@ -2208,7 +2203,6 @@ void DecideCompression(device_span<EncColumnChunk> chunks,
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePageHeaders(device_span<EncPage> pages,
-                       uint32_t num_pages,
                        uint32_t start_page,
                        device_span<gpu_inflate_status_s const> comp_stat,
                        const statistics_chunk *page_stats,
@@ -2217,7 +2211,7 @@ void EncodePageHeaders(device_span<EncPage> pages,
 {
   // TODO: single thread task. No need for 128 threads/block. Earlier it used to employ rest of the
   // threads to coop load structs
-  gpuEncodePageHeaders<<<num_pages, 128, 0, stream.value()>>>(
+  gpuEncodePageHeaders<<<pages.size(), 128, 0, stream.value()>>>(
     pages, comp_stat, page_stats, chunk_stats, start_page);
 }
 
