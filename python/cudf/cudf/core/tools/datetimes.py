@@ -517,7 +517,7 @@ class DateOffset:
         seconds += kwargs.pop("seconds", 0)
 
         if seconds > np.iinfo("int64").max:
-            raise OverflowError(
+            raise NotImplementedError(
                 "Total days + weeks + hours + minutes + seconds can not exceed"
                 f" {np.iinfo('int64').max} seconds"
             )
