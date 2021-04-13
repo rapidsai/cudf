@@ -227,7 +227,7 @@ class groupby {
    *
    * For each group, `i`th element is determined by the `i - offset`th element
    * of the group. If `i - offset < 0 or >= group_size`, the value is determined by
-   * @p fill_value .
+   * @p fill_value.
    *
    * Example:
    * @code{.pseudo}

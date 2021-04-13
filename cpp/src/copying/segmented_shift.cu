@@ -60,6 +60,7 @@ struct segmented_shift_fill_functor {
  * The first step is a global shift for `segmented_values`. The second step is to set the proper
  * locations to `fill_values`.
  *
+ * @tparam forward_shift If true, shifts element to the end of the segment.
  * @tparam BoundaryIterator Iterator type to the segment boundary list
  *
  * @param segmented_values Segmented column to shift
@@ -121,7 +122,7 @@ std::unique_ptr<column> segmented_shift(column_view const& segmented_values,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
-  if (segmented_values.is_empty()) { return make_empty_column(segmented_values.type()); }
+  if (segmented_values.is_empty()) { return empty_like(segmented_values); }
 
   if (offset > 0) {
     return segmented_shift_impl<true>(segmented_values,

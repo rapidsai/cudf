@@ -93,7 +93,7 @@ std::unique_ptr<column> shift(
  *
  * For each segment, `i`th element is determined by the `i - offset`th element
  * of the segment. If `i - offset < 0 or >= segment_size`, the value is determined by
- * @p fill_value .
+ * @p fill_value.
  *
  * Example:
  * @code{.pseudo}
