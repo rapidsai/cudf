@@ -230,7 +230,7 @@ class groupby {
    * @p fill_value .
    *
    * Example:
-   * ```
+   * @code{.pseudo}
    * keys:   {1 1 1 1 2 2 2}
    * values: {3 1 4 7 9 2 5}
    * offset: 2
@@ -242,7 +242,7 @@ class groupby {
    * offset: -2
    * fill_value: -1
    * result: {4 7 -1 -1 5 -1 -1}
-   * ```
+   * @endcode
    *
    * @param values Column to be shifted
    * @param offset The off set by which to shift the input

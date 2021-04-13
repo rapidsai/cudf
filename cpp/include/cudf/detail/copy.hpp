@@ -96,7 +96,7 @@ std::unique_ptr<column> shift(
  * @p fill_value .
  *
  * Example:
- * ```
+ * @code{.pseudo}
  * segmented_values: { 3 1 2 | 3 5 3 | 2 6 }
  * segment_offsets: {0 3 6 8}
  * offset: 2
@@ -108,7 +108,7 @@ std::unique_ptr<column> shift(
  * offset: -1
  * fill_value: -1
  * result: { 1 2 -1 | 5 3 -1 | 6 -1 }
- * ```
+ * @endcode
  *
  * @param segmented_values Segmented column, specified by @p segment_offsets
  * @param segment_offsets Each segment's offset of @p segmented_values . A list of offsets
