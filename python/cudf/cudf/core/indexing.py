@@ -169,7 +169,7 @@ class _SeriesLocIndexer(object):
                 found_index = arg
                 return found_index
 
-            if isinstance(arg, cudf.Scalar):
+            elif isinstance(arg, cudf.Scalar):
                 found_index = arg.value
                 return found_index
 
