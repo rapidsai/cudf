@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from numbers import Number
+from decimal import Decimal
 from typing import Any, Callable, Sequence, Tuple, Union, cast
 
 import numpy as np
@@ -217,6 +218,36 @@ class NumericalColumn(ColumnBase):
                 size=self.size,
             ),
         )
+
+    def _decimal_dtype(self):        
+        """
+        Derive a Decimal64Dtype corresponding to an integral 
+        dtype column. Dtypes are derived using the following
+        rules, which are based off of the maximum sized ints
+        that can be contained within that dtype. As such, we
+        do not allow for the uint64 and int64 cases, because
+        the resulting type would require more than 18 digits
+        of precision:
+
+        uint8  -> Decimal64Dtype(3, 1)  ✓
+        uint16 -> Decimal64Dtype(5, 1)  ✓
+        uint32 -> Decimal64Dtype(10, 1) ✓
+        uint64 -> Decimal64Dtype(20, 1) x
+        int8   -> Decimal64Dtype(3, 1)  ✓
+        int16  -> Decimal64Dtype(5, 1)  ✓
+        int32  -> Decimal64Dtype(10, 1) ✓
+        int64  -> Decimal64Dtype(19, 1) x
+        """
+        if self.dtype in {np.dtype("int64"), np.dtype("uint64")}:
+            raise TypeError(
+                f"Can not implicitly cast integer column of "
+                f"dtype {self.dtype} to Decimal64Dtype, as "
+                f"integers could contain more than 18 digits"
+            )
+        return cudf.Decimal64Dtype._from_decimal(
+            Decimal(np.iinfo(self.dtype).max)
+        )
+
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
