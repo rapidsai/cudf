@@ -117,7 +117,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   auto children = make_strings_children(fn, strings_count, 0, stream, mr);
 
   // create resulting null mask
-  auto valid_mask = cudf::detail::valid_if(
+  auto [null_mask, null_count] = cudf::detail::valid_if(
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
     [d_table = *d_table, d_narep] __device__(size_type idx) {
@@ -127,8 +127,6 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
     },
     stream,
     mr);
-  auto& null_mask       = valid_mask.first;
-  auto const null_count = valid_mask.second;
 
   return make_strings_column(strings_count,
                              std::move(children.first),
@@ -241,7 +239,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   auto children = make_strings_children(mscf, strings_count, 0, stream, mr);
 
   // Create resulting null mask
-  auto valid_mask = cudf::detail::valid_if(
+  auto [null_mask, null_count] = cudf::detail::valid_if(
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
     [d_table = *d_table, separator_col_view, separator_rep, col_rep] __device__(size_type ridx) {
@@ -255,13 +253,11 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
     stream,
     mr);
 
-  auto null_count = valid_mask.second;
-
   return make_strings_column(strings_count,
                              std::move(children.first),
                              std::move(children.second),
                              null_count,
-                             (null_count) ? std::move(valid_mask.first) : rmm::device_buffer{},
+                             std::move(null_mask),
                              stream,
                              mr);
 }
