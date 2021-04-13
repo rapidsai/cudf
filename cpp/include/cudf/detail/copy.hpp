@@ -111,7 +111,7 @@ std::unique_ptr<column> shift(
  * @endcode
  *
  * @param segmented_values Segmented column, specified by @p segment_offsets
- * @param segment_offsets Each segment's offset of @p segmented_values . A list of offsets
+ * @param segment_offsets Each segment's offset of @p segmented_values. A list of offsets
  * with size `num_segments + 1`. The size of each segment is `segment_offsets[i+1] -
  * segment_offsets[i]`.
  * @param offset The offset by which to shift the input
