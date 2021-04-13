@@ -2199,6 +2199,30 @@ def test_binops_decimal_integer_column(
         got = op(lhs, rhs)
         utils.assert_eq(expect, got)
 
+@pytest.mark.parametrize("args", [
+    (
+        ['1.1', '2.2', '3.3'],
+        [1.1, 2.2, 3.3],
+        cudf.Decimal64Dtype(2,1),
+        np.dtype('float64'),
+        operator.add,
+        [2.2, 4.4, 6.6],
+        np.dtype('float64')
+    )
+])
+def test_binops_decimal_float_column(args):
+    ldata, rdata, ldtype, rdtype, op, expect, expect_dtype = args
+
+    lhs = _decimal_series(ldata, ldtype)
+    rhs = cudf.core.column.as_column(rdata, dtype=rdtype)
+
+    # result will be float, not decimal for these binops
+    expect = cudf.core.column.as_column(expect, dtype=rdtype)
+    got = op(lhs, rhs)
+
+    utils.assert_eq(expect, got)
+
+
 
 @pytest.mark.parametrize(
     "args",
