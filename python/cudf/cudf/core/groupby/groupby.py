@@ -570,7 +570,7 @@ class GroupBy(Serializable):
         return cudf.core.window.rolling.RollingGroupby(self, *args, **kwargs)
 
     def count(self, dropna=True):
-        """Compute the sizes of each column.
+        """Compute the number of values in each column.
 
         Parameters
         ----------
@@ -584,7 +584,7 @@ class GroupBy(Serializable):
         return self.agg(func)
 
     def sum(self):
-        """Compute the sum of each column."""
+        """Compute the sum of the values in each column."""
         return self.agg("sum")
 
     def idxmin(self):
@@ -604,15 +604,15 @@ class GroupBy(Serializable):
         return self.agg("max")
 
     def mean(self):
-        """Compute the mean value in each column."""
+        """Compute the mean of the values in each column."""
         return self.agg("mean")
 
     def median(self):
-        """Compute the median value in each column."""
+        """Compute the median of the values in each column."""
         return self.agg("median")
 
     def var(self, ddof=1):
-        """Compute the variance of the data in each column.
+        """Compute the variance of the values in each column.
 
         Parameters
         ----------
@@ -627,7 +627,7 @@ class GroupBy(Serializable):
         return self.agg(func)
 
     def std(self, ddof=1):
-        """Compute the standard deviation of the data in each column.
+        """Compute the standard deviation of the values in each column.
 
         Parameters
         ----------
@@ -642,7 +642,7 @@ class GroupBy(Serializable):
         return self.agg(func)
 
     def quantile(self, q=0.5, interpolation="linear"):
-        """Compute the quantiles of each column.
+        """Compute the quantiles of the values in each column.
 
         Parameters
         ----------
@@ -659,15 +659,15 @@ class GroupBy(Serializable):
         return self.agg(func)
 
     def nunique(self):
-        """Compute the number of unique elements in each column."""
+        """Compute the number of unique values in each column."""
         return self.agg("nunique")
 
     def collect(self):
-        """Get a list of the items in each column."""
+        """Get a list of all the values in each column."""
         return self.agg("collect")
 
     def unique(self):
-        """Compute the unique elements in each column."""
+        """Get a list of the unique values in each column."""
         return self.agg("unique")
 
 
