@@ -102,46 +102,10 @@ public class ParquetWriterOptions {
     }
   }
 
-  public static class Builder<T extends Builder> {
-    final Map<String, String> metadata = new LinkedHashMap<>();
-    CompressionType compressionType = CompressionType.AUTO;
+  protected static class NestedBuilder<T extends NestedBuilder> {
     protected String name;
     protected boolean isNullable = true;
-    private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
     protected List<ParquetWriterOptions> columnOptions = new ArrayList();
-
-    /**
-     * Add a metadata key and a value
-     * @param key
-     * @param value
-     */
-    public Builder withMetadata(String key, String value) {
-      this.metadata.put(key, value);
-      return this;
-    }
-
-    /**
-     * Add a map of metadata keys and values
-     * @param metadata
-     */
-    public Builder withMetadata(Map<String, String> metadata) {
-      this.metadata.putAll(metadata);
-      return this;
-    }
-
-    /**
-     * Set the compression type to use for writing
-     * @param compression
-     */
-    public Builder withCompressionType(CompressionType compression) {
-      this.compressionType = compression;
-      return this;
-    }
-
-    public Builder withStatisticsFrequency(StatisticsFrequency statsGranularity) {
-      this.statsGranularity = statsGranularity;
-      return this;
-    }
 
     /**
      * Set column name
@@ -264,13 +228,9 @@ public class ParquetWriterOptions {
       columnOptions.add(options);
       return (T) this;
     }
-
-    public ParquetWriterOptions build() {
-      return new ParquetWriterOptions(this);
-    }
   }
 
-  public static class StructBuilder extends Builder<StructBuilder> {
+  public static class StructBuilder extends NestedBuilder<StructBuilder> {
 
     public StructBuilder(String name, boolean isNullable) {
       this.name = name;
@@ -282,7 +242,50 @@ public class ParquetWriterOptions {
     }
   }
 
-  public static class ListBuilder extends Builder<ListBuilder> {
+  public static class Builder extends NestedBuilder<Builder> {
+    private final Map<String, String> metadata = new LinkedHashMap<>();
+    private CompressionType compressionType = CompressionType.AUTO;
+    private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
+
+    /**
+     * Add a metadata key and a value
+     * @param key
+     * @param value
+     */
+    public Builder withMetadata(String key, String value) {
+      this.metadata.put(key, value);
+      return this;
+    }
+
+    /**
+     * Add a map of metadata keys and values
+     * @param metadata
+     */
+    public Builder withMetadata(Map<String, String> metadata) {
+      this.metadata.putAll(metadata);
+      return this;
+    }
+
+    /**
+     * Set the compression type to use for writing
+     * @param compression
+     */
+    public Builder withCompressionType(CompressionType compression) {
+      this.compressionType = compression;
+      return this;
+    }
+
+    public Builder withStatisticsFrequency(StatisticsFrequency statsGranularity) {
+      this.statsGranularity = statsGranularity;
+      return this;
+    }
+
+    public ParquetWriterOptions build() {
+      return new ParquetWriterOptions(this);
+    }
+  }
+
+  public static class ListBuilder extends NestedBuilder<ListBuilder> {
 
     public ListBuilder(String name, boolean isNullable) {
       this.name = name;
