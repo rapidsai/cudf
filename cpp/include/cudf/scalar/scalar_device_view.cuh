@@ -220,6 +220,11 @@ class fixed_point_scalar_device_view : public detail::scalar_device_view_base {
 
   __device__ void set_value(rep_type value) { *_data = value; }
 
+  /**
+   * @brief Get the value of the scalar, as a `rep_type`.
+   */
+  __device__ rep_type const& rep() const noexcept { return *_data; }
+
  private:
   rep_type* _data{};
 };

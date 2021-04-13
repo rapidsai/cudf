@@ -99,6 +99,32 @@ inline void test_single_agg(column_view const& keys,
   }
 }
 
+inline void test_single_scan(column_view const& keys,
+                             column_view const& values,
+                             column_view const& expect_keys,
+                             column_view const& expect_vals,
+                             std::unique_ptr<aggregation>&& agg,
+                             null_policy include_null_keys                  = null_policy::EXCLUDE,
+                             sorted keys_are_sorted                         = sorted::NO,
+                             std::vector<order> const& column_order         = {},
+                             std::vector<null_order> const& null_precedence = {})
+{
+  std::vector<groupby::aggregation_request> requests;
+  requests.emplace_back(groupby::aggregation_request());
+  requests[0].values = values;
+
+  requests[0].aggregations.push_back(std::move(agg));
+
+  groupby::groupby gb_obj(
+    table_view({keys}), include_null_keys, keys_are_sorted, column_order, null_precedence);
+
+  // groupby scan uses sort implementation
+  auto result = gb_obj.scan(requests);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table_view({expect_keys}), result.first->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, *result.second[0].results[0], true);
+}
+
 inline auto all_valid()
 {
   auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });

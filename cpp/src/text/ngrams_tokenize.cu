@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -158,21 +158,22 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
 
   // first, get the number of tokens per string to get the token-offsets
   // Ex. token-counts = [3,2]; token-offsets = [0,3,5]
-  rmm::device_vector<int32_t> token_offsets(strings_count + 1);
-  auto d_token_offsets = token_offsets.data().get();
+  rmm::device_uvector<int32_t> token_offsets(strings_count + 1, stream);
+  auto d_token_offsets = token_offsets.data();
   thrust::transform_inclusive_scan(rmm::exec_policy(stream),
                                    thrust::make_counting_iterator<cudf::size_type>(0),
                                    thrust::make_counting_iterator<cudf::size_type>(strings_count),
                                    d_token_offsets + 1,
                                    strings_tokenizer{d_strings, d_delimiter},
                                    thrust::plus<int32_t>());
-  CUDA_TRY(cudaMemsetAsync(d_token_offsets, 0, sizeof(int32_t), stream.value()));
-  auto total_tokens = token_offsets[strings_count];  // Ex. 5 tokens
+  int32_t const zero = 0;
+  token_offsets.set_element_async(0, zero, stream);
+  auto const total_tokens = token_offsets.back_element(stream);  // Ex. 5 tokens
 
   // get the token positions (in bytes) per string
   // Ex. start/end pairs: [(0,1),(2,4),(5,8), (0,2),(3,4)]
-  rmm::device_vector<position_pair> token_positions(total_tokens);
-  auto d_token_positions = token_positions.data().get();
+  rmm::device_uvector<position_pair> token_positions(total_tokens, stream);
+  auto d_token_positions = token_positions.data();
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
@@ -181,8 +182,8 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
 
   // compute the number of ngrams per string to get the total number of ngrams to generate
   // Ex. ngram-counts = [2,1]; ngram-offsets = [0,2,3]; total = 3 bigrams
-  rmm::device_vector<int32_t> ngram_offsets(strings_count + 1);
-  auto d_ngram_offsets = ngram_offsets.data().get();
+  rmm::device_uvector<int32_t> ngram_offsets(strings_count + 1, stream);
+  auto d_ngram_offsets = ngram_offsets.data();
   thrust::transform_inclusive_scan(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
@@ -193,8 +194,8 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
       return (token_count >= ngrams) ? token_count - ngrams + 1 : 0;
     },
     thrust::plus<int32_t>());
-  CUDA_TRY(cudaMemsetAsync(d_ngram_offsets, 0, sizeof(int32_t), stream.value()));
-  auto total_ngrams = ngram_offsets[strings_count];
+  ngram_offsets.set_element_async(0, zero, stream);
+  auto const total_ngrams = ngram_offsets.back_element(stream);
 
   // Compute the total size of the ngrams for each string (not for each ngram)
   // Ex. 2 bigrams in 1st string total to 10 bytes; 1 bigram in 2nd string is 4 bytes
@@ -204,8 +205,8 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
   // ngrams for each string.
   // Ex. bigram for first string produces 2 bigrams ("a_bb","bb_ccc") which
   //     is built in memory like this: "a_bbbb_ccc"
-  rmm::device_vector<int32_t> chars_offsets(strings_count + 1);  // output memory offsets
-  auto d_chars_offsets = chars_offsets.data().get();             // per input string
+  rmm::device_uvector<int32_t> chars_offsets(strings_count + 1, stream);  // output memory offsets
+  auto d_chars_offsets = chars_offsets.data();                            // per input string
   thrust::transform_inclusive_scan(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
@@ -213,11 +214,11 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
     d_chars_offsets + 1,
     ngram_builder_fn{d_strings, d_separator, ngrams, d_token_offsets, d_token_positions},
     thrust::plus<int32_t>());
-  CUDA_TRY(cudaMemsetAsync(d_chars_offsets, 0, sizeof(int32_t), stream.value()));
-  auto output_chars_size = chars_offsets[strings_count];  // Ex. 14 output bytes total
+  chars_offsets.set_element_async(0, zero, stream);
+  auto const output_chars_size = chars_offsets.back_element(stream);  // Ex. 14 output bytes total
 
-  rmm::device_vector<int32_t> ngram_sizes(total_ngrams);  // size in bytes of each
-  auto d_ngram_sizes = ngram_sizes.data().get();          // ngram to generate
+  rmm::device_uvector<int32_t> ngram_sizes(total_ngrams, stream);  // size in bytes of each
+  auto d_ngram_sizes = ngram_sizes.data();                         // ngram to generate
 
   // build chars column
   auto chars_column = cudf::strings::detail::create_chars_child_column(

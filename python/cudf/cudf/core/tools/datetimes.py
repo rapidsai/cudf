@@ -1,13 +1,16 @@
 # Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
 import warnings
+from typing import Sequence, Union
 
 import numpy as np
 from pandas.core.tools.datetimes import _unit_map
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.strings.char_types import is_integer as cpp_is_integer
+from cudf._lib.strings.convert.convert_integers import (
+    is_integer as cpp_is_integer,
+)
 from cudf.core import column
 from cudf.core.index import as_index
 from cudf.utils.dtypes import is_scalar
@@ -361,33 +364,8 @@ class DateOffset:
         is desired rather than absolute time arithmetic. Used to
         add or subtract a whole number of periods, such as several
         months or years, to a series or index of datetime dtype.
-        Works similarly to pd.DateOffset, and currently supports a
-        subset of its functionality. The arguments that aren't yet
-        supported are:
-            - years
-            - weeks
-            - days
-            - hours
-            - minutes
-            - seconds
-            - microseconds
-            - milliseconds
-            - nanoseconds
-        In addition, cuDF does not yet support DateOffset arguments
-        that 'replace' units in the datetime data being operated on
-        such as
-            - year
-            - month
-            - week
-            - day
-            - hour
-            - minute
-            - second
-            - microsecond
-            - millisecond
-            - nanosecond
-        Finally, cuDF does not yet support rounding via a `normalize`
-        keyword argument.
+        Works similarly to pd.DateOffset, but stores the offset
+        on the device (GPU).
 
         Parameters
         ----------
@@ -421,6 +399,26 @@ class DateOffset:
         1   1999-01-31 00:00:00.012345678
         2   1999-02-28 00:00:00.012345678
         dtype: datetime64[ns]
+
+
+        Notes
+        -----
+        Note that cuDF does not yet support DateOffset arguments
+        that 'replace' units in the datetime data being operated on
+        such as
+            - year
+            - month
+            - week
+            - day
+            - hour
+            - minute
+            - second
+            - microsecond
+            - millisecond
+            - nanosecond
+
+        cuDF does not yet support rounding via a `normalize`
+        keyword argument.
         """
         if normalize:
             raise NotImplementedError(
@@ -435,6 +433,7 @@ class DateOffset:
             "hours",
             "minutes",
             "seconds",
+            "milliseconds",
             "microseconds",
             "nanoseconds",
             "year",
@@ -600,3 +599,43 @@ class DateOffset:
             raise ValueError(f"Cannot interpret frequency str: {freqstr}")
 
         return cls(**{cls._CODES_TO_UNITS[freq_part]: int(numeric_part)})
+
+
+def _isin_datetimelike(
+    lhs: Union[column.TimeDeltaColumn, column.DatetimeColumn], values: Sequence
+) -> column.ColumnBase:
+    """
+    Check whether values are contained in the
+    DateTimeColumn or TimeDeltaColumn.
+
+    Parameters
+    ----------
+    lhs : TimeDeltaColumn or DatetimeColumn
+        Column to check whether the `values` exist in.
+    values : set or list-like
+        The sequence of values to test. Passing in a single string will
+        raise a TypeError. Instead, turn a single string into a list
+        of one element.
+
+    Returns
+    -------
+    result: Column
+        Column of booleans indicating if each element is in values.
+    """
+    rhs = None
+    try:
+        rhs = cudf.core.column.as_column(values)
+
+        if rhs.dtype.kind in {"f", "i", "u"}:
+            return cudf.core.column.full(len(lhs), False, dtype="bool")
+        rhs = rhs.astype(lhs.dtype)
+        res = lhs._isin_earlystop(rhs)
+        if res is not None:
+            return res
+    except ValueError:
+        # pandas functionally returns all False when cleansing via
+        # typecasting fails
+        return cudf.core.column.full(len(lhs), False, dtype="bool")
+
+    res = lhs._obtain_isin_result(rhs)
+    return res

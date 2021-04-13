@@ -21,6 +21,8 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <structs/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -112,7 +114,7 @@ std::unique_ptr<column> sorted_order(table_view input,
                    0);
 
   // fast-path for single column sort
-  if (input.num_columns() == 1) {
+  if (input.num_columns() == 1 and not cudf::is_nested(input.column(0).type())) {
     auto const single_col = input.column(0);
     auto const col_order  = column_order.empty() ? order::ASCENDING : column_order.front();
     auto const null_prec  = null_precedence.empty() ? null_order::BEFORE : null_precedence.front();
@@ -120,11 +122,13 @@ std::unique_ptr<column> sorted_order(table_view input,
                   : sorted_order<false>(single_col, col_order, null_prec, stream, mr);
   }
 
-  auto device_table = table_device_view::create(input, stream);
-  rmm::device_vector<order> d_column_order(column_order);
+  auto flattened = structs::detail::flatten_nested_columns(input, column_order, null_precedence);
+  auto& input_flattened = std::get<0>(flattened);
+  auto device_table     = table_device_view::create(input_flattened, stream);
+  rmm::device_vector<order> d_column_order(std::get<1>(flattened));
 
-  if (has_nulls(input)) {
-    rmm::device_vector<null_order> d_null_precedence(null_precedence);
+  if (has_nulls(input_flattened)) {
+    rmm::device_vector<null_order> d_null_precedence(std::get<2>(flattened));
     auto comparator = row_lexicographic_comparator<true>(
       *device_table, *device_table, d_column_order.data().get(), d_null_precedence.data().get());
     if (stable) {

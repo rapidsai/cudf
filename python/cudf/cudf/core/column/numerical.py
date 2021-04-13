@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from numbers import Number
-from typing import Any, Callable, Sequence, Union, cast
+from typing import Any, Callable, Sequence, Tuple, Union, cast
 
 import numpy as np
 import pandas as pd
@@ -22,6 +22,7 @@ from cudf.core.column import (
     column,
     string,
 )
+from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     min_column_type,
@@ -103,11 +104,23 @@ class NumericalColumn(ColumnBase):
             out_dtype = self.dtype
         else:
             if not (
-                isinstance(rhs, (NumericalColumn, cudf.Scalar,),)
+                isinstance(
+                    rhs,
+                    (
+                        NumericalColumn,
+                        cudf.Scalar,
+                        cudf.core.column.DecimalColumn,
+                    ),
+                )
                 or np.isscalar(rhs)
             ):
                 msg = "{!r} operator not supported between {} and {}"
                 raise TypeError(msg.format(binop, type(self), type(rhs)))
+            if isinstance(rhs, cudf.core.column.DecimalColumn):
+                lhs = self.as_decimal_column(
+                    Decimal64Dtype(Decimal64Dtype.MAX_PRECISION, 0)
+                )
+                return lhs.binary_operator(binop, rhs)
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
                 tmp = self if reflect else rhs
@@ -205,6 +218,11 @@ class NumericalColumn(ColumnBase):
             ),
         )
 
+    def as_decimal_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.DecimalColumn":
+        return libcudf.unary.cast(self, dtype)
+
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
@@ -247,6 +265,22 @@ class NumericalColumn(ColumnBase):
         self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
     ) -> float:
         return self.reduce("std", skipna=skipna, dtype=dtype, ddof=ddof)
+
+    def _process_values_for_isin(
+        self, values: Sequence
+    ) -> Tuple[ColumnBase, ColumnBase]:
+        lhs = cast("cudf.core.column.ColumnBase", self)
+        rhs = as_column(values, nan_as_null=False)
+
+        if isinstance(rhs, NumericalColumn):
+            rhs = rhs.astype(dtype=self.dtype)
+
+        if lhs.null_count == len(lhs):
+            lhs = lhs.astype(rhs.dtype)
+        elif rhs.null_count == len(rhs):
+            rhs = rhs.astype(lhs.dtype)
+
+        return lhs, rhs
 
     def sum_of_squares(self, dtype: Dtype = None) -> float:
         return libcudf.reduce.reduce("sum_of_squares", self, dtype=dtype)
@@ -333,7 +367,9 @@ class NumericalColumn(ColumnBase):
     ) -> NumericalColumn:
         quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
         # get sorted indices and exclude nulls
-        sorted_indices = self.as_frame()._get_sorted_inds(True, "first")
+        sorted_indices = self.as_frame()._get_sorted_inds(
+            ascending=True, na_position="first"
+        )
         sorted_indices = sorted_indices[self.null_count :]
 
         return cpp_quantile(self, quant, interpolation, sorted_indices, exact)
@@ -671,15 +707,20 @@ def _numeric_column_binop(
     if reflect:
         lhs, rhs = rhs, lhs
 
-    is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]
+    is_op_comparison = op in [
+        "lt",
+        "gt",
+        "le",
+        "ge",
+        "eq",
+        "ne",
+        "NULL_EQUALS",
+    ]
 
     if is_op_comparison:
         out_dtype = "bool"
 
     out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
-
-    if is_op_comparison:
-        out = out.fillna(op == "ne")
 
     return out
 

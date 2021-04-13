@@ -35,6 +35,7 @@ template <typename T>
 class GatherTestListTyped : public cudf::test::BaseFixture {
 };
 using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
+                                                  cudf::test::FixedPointTypes,
                                                   cudf::test::FloatingPointTypes,
                                                   cudf::test::DurationTypes,
                                                   cudf::test::TimestampTypes>;

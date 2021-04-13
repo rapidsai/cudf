@@ -100,36 +100,48 @@ std::unique_ptr<scalar> make_fixed_width_scalar(data_type type,
 namespace {
 struct default_scalar_functor {
   template <typename T>
-  std::unique_ptr<cudf::scalar> operator()()
+  std::unique_ptr<cudf::scalar> operator()(rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
   {
-    using ScalarType = scalar_type_t<T>;
-    return std::unique_ptr<scalar>(new ScalarType);
+    return make_fixed_width_scalar(data_type(type_to_id<T>()), stream, mr);
   }
 };
 
 template <>
-std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<dictionary32>()
+std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<string_view>(
+  rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+{
+  return std::unique_ptr<scalar>(new string_scalar("", false, stream, mr));
+}
+
+template <>
+std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<dictionary32>(
+  rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FAIL("dictionary type not supported");
 }
 
 template <>
-std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<list_view>()
+std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<list_view>(
+  rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FAIL("list_view type not supported");
 }
 
 template <>
-std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<struct_view>()
+std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<struct_view>(
+  rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FAIL("struct_view type not supported");
 }
 
 }  // namespace
 
-std::unique_ptr<scalar> make_default_constructed_scalar(data_type type)
+std::unique_ptr<scalar> make_default_constructed_scalar(data_type type,
+                                                        rmm::cuda_stream_view stream,
+                                                        rmm::mr::device_memory_resource* mr)
 {
-  return type_dispatcher(type, default_scalar_functor{});
+  return type_dispatcher(type, default_scalar_functor{}, stream, mr);
 }
 
 }  // namespace cudf

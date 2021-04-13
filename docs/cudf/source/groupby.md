@@ -120,23 +120,24 @@ a
 
 The following table summarizes the available aggregations and the types that support them:
 
-| Aggregations\dtypes | Numeric  | Datetime | String   | Categorical | List | Struct |
-| ------------------- | -------- | -------  | -------- | ----------- | ---- | ------ |
-| count               | ✅       | ✅       | ✅       | ✅          |      |        |
-| size                | ✅       | ✅       | ✅       | ✅          |      |        |
-| sum                 | ✅       | ✅       |          |             |      |        |
-| idxmin              | ✅       | ✅       |          |             |      |        |
-| idxmax              | ✅       | ✅       |          |             |      |        |
-| min                 | ✅       | ✅       | ✅       |             |      |        |
-| max                 | ✅       | ✅       | ✅       |             |      |        |
-| mean                | ✅       | ✅       |          |             |      |        |
-| var                 | ✅       | ✅       |          |             |      |        |
-| std                 | ✅       | ✅       |          |             |      |        |
-| quantile            | ✅       | ✅       |          |             |      |        |
-| median              | ✅       | ✅       |          |             |      |        |
-| nunique             | ✅       | ✅       | ✅       | ✅          |      |        |
-| nth                 | ✅       | ✅       | ✅       |             |      |        |
-| collect             | ✅       | ✅       | ✅       |             | ✅   |        |
+| Aggregations\dtypes | Numeric  | Datetime | String   | Categorical | List | Struct | Interval | Decimal |
+| ------------------- | -------- | -------  | -------- | ----------- | ---- | ------ | -------- | ------- |
+| count               | ✅       | ✅       | ✅       | ✅          |      |        |          | ✅      |
+| size                | ✅       | ✅       | ✅       | ✅          |      |        |          | ✅      |
+| sum                 | ✅       | ✅       |          |             |      |        |          | ✅      |
+| idxmin              | ✅       | ✅       |          |             |      |        |          | ✅      |
+| idxmax              | ✅       | ✅       |          |             |      |        |          | ✅      |
+| min                 | ✅       | ✅       | ✅       |             |      |        |          | ✅      |
+| max                 | ✅       | ✅       | ✅       |             |      |        |          | ✅      |
+| mean                | ✅       | ✅       |          |             |      |        |          |         |
+| var                 | ✅       | ✅       |          |             |      |        |          |         |
+| std                 | ✅       | ✅       |          |             |      |        |          |         |
+| quantile            | ✅       | ✅       |          |             |      |        |          |         |
+| median              | ✅       | ✅       |          |             |      |        |          |         |
+| nunique             | ✅       | ✅       | ✅       | ✅          |      |        |          | ✅      |
+| nth                 | ✅       | ✅       | ✅       |             |      |        |          | ✅      |
+| collect             | ✅       | ✅       | ✅       |             | ✅   |        |          | ✅      |
+| unique              | ✅       | ✅       | ✅       | ✅          |      |        |          |         |
 
 ## GroupBy apply
 

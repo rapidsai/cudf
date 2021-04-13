@@ -1,6 +1,6 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 import functools
-from collections import OrderedDict
 from collections.abc import Sequence
 from math import floor, isinf, isnan
 
@@ -193,7 +193,7 @@ def initfunc(f):
     return wrapper
 
 
-def get_null_series(size, dtype=np.bool):
+def get_null_series(size, dtype=np.bool_):
     """
     Creates a null series of provided dtype and size
 
@@ -277,92 +277,6 @@ class cached_property:
             value = self.func(instance)
             setattr(instance, self.func.__name__, value)
             return value
-
-
-class ColumnValuesMappingMixin:
-    """
-    Coerce provided values for the mapping to Columns.
-    """
-
-    def __setitem__(self, key, value):
-
-        value = column.as_column(value)
-        super().__setitem__(key, value)
-
-
-class EqualLengthValuesMappingMixin:
-    """
-    Require all values in the mapping to have the same length.
-    """
-
-    def __setitem__(self, key, value):
-        if len(self) > 0:
-            first = next(iter(self.values()))
-            if len(value) != len(first):
-                raise ValueError("All values must be of equal length")
-        super().__setitem__(key, value)
-
-
-class OrderedColumnDict(
-    ColumnValuesMappingMixin, EqualLengthValuesMappingMixin, OrderedDict
-):
-    pass
-
-
-class NestedMappingMixin:
-    """
-    Make missing values of a mapping empty instances
-    of the same type as the mapping.
-    """
-
-    def __getitem__(self, key):
-        if isinstance(key, tuple):
-            d = self
-            for k in key[:-1]:
-                d = d[k]
-            return d.__getitem__(key[-1])
-        else:
-            return super().__getitem__(key)
-
-    def __setitem__(self, key, value):
-        if isinstance(key, tuple):
-            d = self
-            for k in key[:-1]:
-                d = d.setdefault(k, self.__class__())
-            d.__setitem__(key[-1], value)
-        else:
-            super().__setitem__(key, value)
-
-
-class NestedOrderedDict(NestedMappingMixin, OrderedDict):
-    pass
-
-
-def to_flat_dict(d):
-    """
-    Convert the given nested dictionary to a flat dictionary
-    with tuple keys.
-    """
-
-    def _inner(d, parents=None):
-        if parents is None:
-            parents = []
-        for k, v in d.items():
-            if not isinstance(v, d.__class__):
-                if parents:
-                    k = tuple(parents + [k])
-                yield (k, v)
-            else:
-                yield from _inner(d=v, parents=parents + [k])
-
-    return {k: v for k, v in _inner(d)}
-
-
-def to_nested_dict(d):
-    """
-    Convert the given dictionary with tuple keys to a NestedOrderedDict.
-    """
-    return NestedOrderedDict(d)
 
 
 def time_col_replace_nulls(input_col):
@@ -621,4 +535,47 @@ def _categorical_scalar_broadcast_to(cat_scalar, size):
         size=codes.size,
         offset=codes.offset,
         ordered=ordered,
+    )
+
+
+def _create_pandas_series(
+    data=None, index=None, dtype=None, name=None, copy=False, fastpath=False
+):
+    """
+    Wrapper to create a Pandas Series. If the length of data is 0 and
+    dtype is not passed, this wrapper defaults the dtype to `float64`.
+
+    Parameters
+    ----------
+    data : array-like, Iterable, dict, or scalar value
+        Contains data stored in Series. If data is a dict, argument
+        order is maintained.
+    index : array-like or Index (1d)
+        Values must be hashable and have the same length as data.
+        Non-unique index values are allowed. Will default to
+        RangeIndex (0, 1, 2, …, n) if not provided.
+        If data is dict-like and index is None, then the keys
+        in the data are used as the index. If the index is not None,
+        the resulting Series is reindexed with the index values.
+    dtype : str, numpy.dtype, or ExtensionDtype, optional
+        Data type for the output Series. If not specified, this
+        will be inferred from data. See the user guide for more usages.
+    name : str, optional
+        The name to give to the Series.
+    copy : bool, default False
+        Copy input data.
+
+    Returns
+    -------
+    pd.Series
+    """
+    if (data is None or len(data) == 0) and dtype is None:
+        dtype = "float64"
+    return pd.Series(
+        data=data,
+        index=index,
+        dtype=dtype,
+        name=name,
+        copy=copy,
+        fastpath=fastpath,
     )

@@ -26,6 +26,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_vector.hpp>
 
 #include <future>
 #include <memory>
@@ -411,7 +412,11 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
       row += std::max(run_len - 1, 0);
     }
   }
-  return cudf::make_strings_column(out_col.chars, out_col.offsets, out_col.null_mask);
+
+  rmm::device_vector<char> d_chars(out_col.chars);
+  rmm::device_vector<cudf::size_type> d_offsets(out_col.offsets);
+  rmm::device_vector<cudf::bitmask_type> d_null_mask(out_col.null_mask);
+  return cudf::make_strings_column(d_chars, d_offsets, d_null_mask);
 }
 
 template <>

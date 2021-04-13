@@ -27,6 +27,7 @@
 
 #include <cudf/detail/utilities/cuda.cuh>
 
+#include <cudf/utilities/traits.hpp>
 #include <random>
 #include <type_traits>
 #include "../fixture/benchmark_fixture.hpp"
@@ -87,13 +88,19 @@ __global__ void host_dispatching_kernel(mutable_column_device_view source_column
 
 template <FunctorType functor_type>
 struct ColumnHandle {
-  template <typename ColumnType>
+  template <typename ColumnType, CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<ColumnType>())>
   void operator()(mutable_column_device_view source_column, int work_per_thread)
   {
     cudf::detail::grid_1d grid_config{source_column.size(), block_size};
     int grid_size = grid_config.num_blocks;
     // Launch the kernel.
     host_dispatching_kernel<functor_type, ColumnType><<<grid_size, block_size>>>(source_column);
+  }
+
+  template <typename ColumnType, CUDF_ENABLE_IF(not cudf::is_rep_layout_compatible<ColumnType>())>
+  void operator()(mutable_column_device_view source_column, int work_per_thread)
+  {
+    CUDF_FAIL("Invalid type to benchmark.");
   }
 };
 
@@ -104,11 +111,17 @@ struct ColumnHandle {
 // n_rows * n_cols.
 template <FunctorType functor_type>
 struct RowHandle {
-  template <typename T>
+  template <typename T, CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<T>())>
   __device__ void operator()(mutable_column_device_view source, cudf::size_type index)
   {
     using F                 = Functor<T, functor_type>;
     source.data<T>()[index] = F::f(source.data<T>()[index]);
+  }
+
+  template <typename T, CUDF_ENABLE_IF(not cudf::is_rep_layout_compatible<T>())>
+  __device__ void operator()(mutable_column_device_view source, cudf::size_type index)
+  {
+    cudf_assert(false && "Unsupported type.");
   }
 };
 

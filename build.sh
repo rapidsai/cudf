@@ -134,40 +134,36 @@ if hasArg clean; then
     done
 fi
 
-if (( ${BUILD_ALL_GPU_ARCH} == 0 )); then
-    GPU_ARCH="-DGPU_ARCHS="
-    echo "Building for the architecture of the GPU in the system..."
-else
-    GPU_ARCH="-DGPU_ARCHS=ALL"
-    echo "Building for *ALL* supported GPU architectures..."
-fi
 
 ################################################################################
 # Configure, build, and install libcudf
 
 if buildAll || hasArg libcudf; then
+
+    if (( ${BUILD_ALL_GPU_ARCH} == 0 )); then
+        CUDF_CMAKE_CUDA_ARCHITECTURES="-DCMAKE_CUDA_ARCHITECTURES="
+        echo "Building for the architecture of the GPU in the system..."
+    else
+        CUDF_CMAKE_CUDA_ARCHITECTURES=""
+        echo "Building for *ALL* supported GPU architectures..."
+    fi
+
     cmake -S $REPODIR/cpp -B ${LIB_BUILD_DIR} \
           -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
-          ${GPU_ARCH} \
+          ${CUDF_CMAKE_CUDA_ARCHITECTURES} \
           -DUSE_NVTX=${BUILD_NVTX} \
+          -DBUILD_TESTS=${BUILD_TESTS} \
           -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
           -DDISABLE_DEPRECATION_WARNING=${BUILD_DISABLE_DEPRECATION_WARNING} \
           -DPER_THREAD_DEFAULT_STREAM=${BUILD_PER_THREAD_DEFAULT_STREAM} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE}
 
     cd ${LIB_BUILD_DIR}
+
+    cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG}
+
     if [[ ${INSTALL_TARGET} != "" ]]; then
-        cmake --build . -j${PARALLEL_LEVEL} --target install_cudf ${VERBOSE_FLAG}
-    else
-        cmake --build . -j${PARALLEL_LEVEL} --target cudf ${VERBOSE_FLAG}
-    fi
-
-    if [[ ${BUILD_TESTS} == "ON" ]]; then
-        cmake --build . -j${PARALLEL_LEVEL} --target build_tests_cudf ${VERBOSE_FLAG}
-    fi
-
-    if [[ ${BUILD_BENCHMARKS} == "ON" ]]; then
-        cmake --build . -j${PARALLEL_LEVEL} --target build_benchmarks_cudf ${VERBOSE_FLAG}
+        cmake --build . -j${PARALLEL_LEVEL} --target install ${VERBOSE_FLAG}
     fi
 fi
 
@@ -199,17 +195,15 @@ fi
 if hasArg libcudf_kafka; then
     cmake -S $REPODIR/cpp/libcudf_kafka -B ${KAFKA_LIB_BUILD_DIR} \
           -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
+          -DBUILD_TESTS=${BUILD_TESTS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE}
 
+
     cd ${KAFKA_LIB_BUILD_DIR}
+    cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG}
+
     if [[ ${INSTALL_TARGET} != "" ]]; then
         cmake --build . -j${PARALLEL_LEVEL} --target install ${VERBOSE_FLAG}
-    else
-        cmake --build . -j${PARALLEL_LEVEL} --target  libcudf_kafka ${VERBOSE_FLAG}
-    fi
-
-    if [[ ${BUILD_TESTS} == "ON" ]]; then
-        cmake --build . -j${PARALLEL_LEVEL} --target  build_tests_libcudf_kafka ${VERBOSE_FLAG}
     fi
 fi
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -188,9 +188,9 @@ void generate_special_mapping_hash_table()
   printf(
     "// the special case mapping table is a perfect hash table with no collisions, allowing us\n"
     "// to 'hash' by simply modding by the incoming codepoint\n"
-    "inline __device__ uint16_t get_special_case_hash_index(uint32_t code_point){\n"
+    "constexpr uint16_t get_special_case_hash_index(uint32_t code_point){\n"
     "   constexpr uint16_t special_case_prime = %d;\n"
-    "   return code_point %% special_case_prime;"
+    "   return static_cast<uint16_t>(code_point %% special_case_prime);"
     "\n}\n",
     hash_prime);
 }

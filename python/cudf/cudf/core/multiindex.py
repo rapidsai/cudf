@@ -1,9 +1,10 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
+from __future__ import annotations
+
 import itertools
 import numbers
 import pickle
 import warnings
-from collections import OrderedDict
 from collections.abc import Sequence
 from typing import Any, List, Tuple, Union
 
@@ -15,7 +16,9 @@ from pandas._config import get_option
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
+from cudf.core._compat import PANDAS_GE_120
 from cudf.core.column import column
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, as_index
 
@@ -186,6 +189,19 @@ class MultiIndex(Index):
     def names(self, value):
         value = [None] * self.nlevels if value is None else value
         assert len(value) == self.nlevels
+
+        if len(value) == len(set(value)):
+            # IMPORTANT: if the provided names are unique,
+            # we reconstruct self._data with the names as keys.
+            # If they are not unique, the keys of self._data
+            # and self._names will be different, which can lead
+            # to unexpected behaviour in some cases. This is
+            # definitely buggy, but we can't disallow non-unique
+            # names either...
+            self._data = self._data.__class__._create_unsafe(
+                dict(zip(value, self._data.values())),
+                level_names=self._data.level_names,
+            )
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
     def rename(self, names, inplace=False):
@@ -232,7 +248,6 @@ class MultiIndex(Index):
         ValueError: Length of names must match number of levels in MultiIndex.
 
         """
-
         return self.set_names(names, level=None, inplace=inplace)
 
     def set_names(self, names, level=None, inplace=False):
@@ -275,6 +290,10 @@ class MultiIndex(Index):
         names = existing_names
 
         return self._set_names(names=names, inplace=inplace)
+
+    @classmethod
+    def _from_data(cls, data: ColumnAccessor, index=None) -> MultiIndex:
+        return cls.from_frame(cudf.DataFrame._from_data(data))
 
     @classmethod
     def _from_table(cls, table, names=None):
@@ -485,7 +504,28 @@ class MultiIndex(Index):
                     )
                 )
             )
-            preprocess = preprocess.to_pandas(nullable=True)
+
+            if PANDAS_GE_120:
+                # TODO: Remove this whole `if` block,
+                # this is a workaround for the following issue:
+                # https://github.com/pandas-dev/pandas/issues/39984
+                temp_df = preprocess._source_data
+
+                preprocess_pdf = pd.DataFrame()
+                for col in temp_df.columns:
+                    if temp_df[col].dtype.kind == "f":
+                        preprocess_pdf[col] = temp_df[col].to_pandas(
+                            nullable=False
+                        )
+                    else:
+                        preprocess_pdf[col] = temp_df[col].to_pandas(
+                            nullable=True
+                        )
+
+                preprocess_pdf.columns = preprocess.names
+                preprocess = pd.MultiIndex.from_frame(preprocess_pdf)
+            else:
+                preprocess = preprocess.to_pandas(nullable=True)
             preprocess.values[:] = tuples_list
         else:
             preprocess = preprocess.to_pandas(nullable=True)
@@ -632,16 +672,42 @@ class MultiIndex(Index):
         level : str or int, optional
             Name or position of the index level to use (if the index
             is a MultiIndex).
+
         Returns
         -------
         is_contained : cupy array
             CuPy array of boolean values.
+
         Notes
         -------
         When `level` is None, `values` can only be MultiIndex, or a
         set/list-like tuples.
         When `level` is provided, `values` can be Index or MultiIndex,
         or a set/list-like tuples.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> midx = cudf.from_pandas(pd.MultiIndex.from_arrays([[1,2,3],
+        ...                                  ['red', 'blue', 'green']],
+        ...                                  names=('number', 'color')))
+        >>> midx
+        MultiIndex([(1,   'red'),
+                    (2,  'blue'),
+                    (3, 'green')],
+                   names=['number', 'color'])
+
+        Check whether the strings in the 'color' level of the MultiIndex
+        are in a list of colors.
+
+        >>> midx.isin(['red', 'orange', 'yellow'], level='color')
+        array([ True, False, False])
+
+        To check across the levels of a MultiIndex, pass a list of tuples:
+
+        >>> midx.isin([(1, 'red'), (3, 'red')])
+        array([ True, False, False])
         """
         from cudf.utils.dtypes import is_list_like
 
@@ -1181,7 +1247,7 @@ class MultiIndex(Index):
         if not ilevels:
             return None
 
-        popped_data = OrderedDict({})
+        popped_data = {}
         popped_names = []
         names = list(self.names)
 

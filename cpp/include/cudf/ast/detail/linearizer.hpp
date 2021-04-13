@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@
 #include <cudf/utilities/error.hpp>
 
 namespace cudf {
-
 namespace ast {
 
 // Forward declaration
@@ -64,8 +63,8 @@ struct alignas(8) device_data_reference {
 
   const device_data_reference_type reference_type;  // Source of data
   const cudf::data_type data_type;                  // Type of data
-  const cudf::size_type
-    data_index;  // The column index of a table, index of a literal, or index of an intermediate
+  const cudf::size_type data_index;                 // The column index of a table, index of a
+                                                    // literal, or index of an intermediate
   const table_reference table_source;
 
   inline bool operator==(const device_data_reference& rhs) const
@@ -114,7 +113,7 @@ class linearizer {
    * @param table The table used for evaluating the abstract syntax tree.
    */
   linearizer(detail::node const& expr, cudf::table_view table)
-    : table(table), node_count(0), intermediate_counter()
+    : _table(table), _node_count(0), _intermediate_counter()
   {
     expr.accept(*this);
   }
@@ -124,23 +123,23 @@ class linearizer {
    *
    * @return cudf::data_type
    */
-  cudf::data_type get_root_data_type() const;
+  cudf::data_type root_data_type() const;
 
   /**
    * @brief Get the maximum number of intermediates stored by the abstract syntax tree.
    *
    * @return cudf::size_type
    */
-  cudf::size_type get_intermediate_count() const { return intermediate_counter.get_max_used(); }
+  cudf::size_type intermediate_count() const { return _intermediate_counter.get_max_used(); }
 
   /**
    * @brief Get the device data references.
    *
    * @return std::vector<detail::device_data_reference>
    */
-  std::vector<detail::device_data_reference> const& get_data_references() const
+  std::vector<detail::device_data_reference> const& data_references() const
   {
-    return data_references;
+    return _data_references;
   }
 
   /**
@@ -148,16 +147,16 @@ class linearizer {
    *
    * @return std::vector<ast_operator>
    */
-  std::vector<ast_operator> const& get_operators() const { return operators; }
+  std::vector<ast_operator> const& operators() const { return _operators; }
 
   /**
    * @brief Get the operator source indices.
    *
    * @return std::vector<cudf::size_type>
    */
-  std::vector<cudf::size_type> const& get_operator_source_indices() const
+  std::vector<cudf::size_type> const& operator_source_indices() const
   {
-    return operator_source_indices;
+    return _operator_source_indices;
   }
 
   /**
@@ -165,9 +164,9 @@ class linearizer {
    *
    * @return std::vector<cudf::detail::fixed_width_scalar_device_view_base>
    */
-  std::vector<cudf::detail::fixed_width_scalar_device_view_base> const& get_literals() const
+  std::vector<cudf::detail::fixed_width_scalar_device_view_base> const& literals() const
   {
-    return literals;
+    return _literals;
   }
 
   /**
@@ -225,13 +224,13 @@ class linearizer {
   cudf::size_type add_data_reference(detail::device_data_reference data_ref);
 
   // State information about the "linearized" GPU execution plan
-  cudf::table_view table;
-  cudf::size_type node_count;
-  intermediate_counter intermediate_counter;
-  std::vector<detail::device_data_reference> data_references;
-  std::vector<ast_operator> operators;
-  std::vector<cudf::size_type> operator_source_indices;
-  std::vector<cudf::detail::fixed_width_scalar_device_view_base> literals;
+  cudf::table_view _table;
+  cudf::size_type _node_count;
+  intermediate_counter _intermediate_counter;
+  std::vector<detail::device_data_reference> _data_references;
+  std::vector<ast_operator> _operators;
+  std::vector<cudf::size_type> _operator_source_indices;
+  std::vector<cudf::detail::fixed_width_scalar_device_view_base> _literals;
 };
 
 }  // namespace detail

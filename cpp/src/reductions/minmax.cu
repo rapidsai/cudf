@@ -252,8 +252,8 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
   if (col.null_count() == col.size()) {
     // this handles empty and all-null columns
     // return scalars with valid==false
-    return {make_default_constructed_scalar(col.type()),
-            make_default_constructed_scalar(col.type())};
+    return {make_default_constructed_scalar(col.type(), stream, mr),
+            make_default_constructed_scalar(col.type(), stream, mr)};
   }
 
   return type_dispatcher(col.type(), minmax_functor{}, col, stream, mr);
