@@ -41,13 +41,10 @@ public class ParquetColumnWriterOptions {
   static ParquetColumnWriterOptions DUMMY_CHILD = new ParquetColumnWriterOptions("DUMMY");
 
   public static class ParquetStructColumnWriterOptions extends ParquetColumnWriterOptions {
-    protected ParquetStructColumnWriterOptions(StructBuilder<? extends StructBuilder> builder) {
+    protected ParquetStructColumnWriterOptions(AbstractStructBuilder builder) {
       super(builder);
     }
 
-//    protected ParquetStructColumnWriterOptions(ParquetWriterOptions.Builder builder) {
-//      super(builder);
-//    }
   }
 
   public static class ParquetListColumnWriterOptions extends ParquetColumnWriterOptions {
@@ -219,22 +216,27 @@ public class ParquetColumnWriterOptions {
     }
   }
 
-  public static class StructBuilder<T extends StructBuilder> extends NestedBuilder<T> {
-
-    /**
-     * Builder specific to build a Struct meta
-     * @param name
-     */
+  public static class StructBuilder extends AbstractStructBuilder<StructBuilder> {
     public StructBuilder(String name, boolean isNullable) {
       super(name, isNullable);
     }
 
-    protected StructBuilder() {
-      super();
-    }
-
     public ParquetStructColumnWriterOptions build() {
       return new ParquetStructColumnWriterOptions(this);
+    }
+  }
+
+  public abstract static class AbstractStructBuilder<T extends AbstractStructBuilder> extends NestedBuilder<T> {
+    /**
+     * Builder specific to build a Struct meta
+     * @param name
+     */
+    public AbstractStructBuilder(String name, boolean isNullable) {
+      super(name, isNullable);
+    }
+
+    protected AbstractStructBuilder() {
+      super();
     }
   }
 
@@ -262,21 +264,15 @@ public class ParquetColumnWriterOptions {
   }
 
   public static StructBuilder structBuilder(String name) {
-    return new StructBuilder<>(name, true);
+    return new StructBuilder(name, true);
   }
 
-  private ParquetColumnWriterOptions(StructBuilder builder) {
+  private ParquetColumnWriterOptions(AbstractStructBuilder builder) {
     this.columName = builder.name;
     this.isNullable = builder.isNullable;
-    this.childColumnOptions = (ParquetColumnWriterOptions[])
-        builder.children.toArray(new ParquetColumnWriterOptions[0]);
+    this.childColumnOptions =
+        (ParquetColumnWriterOptions[]) builder.children.toArray(new ParquetColumnWriterOptions[0]);
   }
-
-//  private ParquetColumnWriterOptions(ParquetWriterOptions.Builder builder) {
-//    this.columName = builder.name;
-//    this.isNullable = builder.isNullable;
-//    this.childColumnOptions = builder.children.toArray(new ParquetColumnWriterOptions[0]);
-//  }
 
   /**
    * Constructor used for list
