@@ -18,6 +18,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/search.hpp>
@@ -65,9 +66,10 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_cha
 
   auto d_offsets = offsets_column->view().template data<size_type>();
   // build chars column
-  size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
+  auto const bytes =
+    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column =
-    cudf::strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
+    cudf::strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
 
   return std::make_pair(std::move(offsets_column), std::move(chars_column));
 }
