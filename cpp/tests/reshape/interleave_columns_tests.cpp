@@ -512,38 +512,28 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SimpleInputWithNulls)
                              null_at(0)}
                       .release();
 
-  // Ignore null list elements
-  {
-    auto const results = cudf::interleave_columns(TView{{col1->view(), col2->view()}});
-    auto const expected =
-      ListsCol{{ListsCol{{1, null, 3, 4, 10, 11, 12, null}, null_at({1, 7})},
-                ListsCol{{null, 2, 3, 4, 13, 14, 15, 16, 17, null, 20, null}, null_at({0, 9, 11})},
-                ListsCol{{null, 2, 3, 4, null, 21, null, null}, null_at({0, 4, 6, 7})},
-                ListsCol{{null, 18}, null_at(0)},
-                ListsCol{{1, 2, null, 4, 19, 20, null, 22, 23, 24, 25}, null_at({2, 6})},
-                ListsCol{{1, 2, 3, null, null, null, null, null, null, null},
-                         null_at({3, 4, 5, 6, 7, 8, 9})}}}
-        .release();
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
-  }
-
-  // Null list rows result in null list rows
-  {
-    auto const results =
-      cudf::interleave_columns(TView{{col1->view(), col2->view()}},
-                               cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW);
-    auto const expected =
-      ListsCol{{ListsCol{} /*NULL*/,
-                ListsCol{{null, 2, 3, 4, 13, 14, 15, 16, 17, null, 20, null}, null_at({0, 9, 11})},
-                ListsCol{} /*NULL*/,
-                ListsCol{} /*NULL*/,
-                ListsCol{{1, 2, null, 4, 19, 20, null, 22, 23, 24, 25}, null_at({2, 6})},
-                ListsCol{{1, 2, 3, null, null, null, null, null, null, null},
-                         null_at({3, 4, 5, 6, 7, 8, 9})}},
-               null_at({0, 2, 3})}
-        .release();
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
-  }
+  auto const results  = cudf::interleave_columns(TView{{col1->view(), col2->view(), col3->view()}});
+  auto const expected = ListsCol{{ListsCol{{1, null, 3, 4}, null_at(1)},
+                                  ListsCol{{10, 11, 12, null}, null_at(3)},
+                                  ListsCol{} /*NULL*/,
+                                  ListsCol{{null, 2, 3, 4}, null_at(0)},
+                                  ListsCol{{13, 14, 15, 16, 17, null}, null_at(5)},
+                                  ListsCol{{20, null}, null_at(1)},
+                                  ListsCol{{null, 2, 3, 4}, null_at(0)},
+                                  ListsCol{} /*NULL*/,
+                                  ListsCol{{null, 21, null, null}, null_at({0, 2, 3})},
+                                  ListsCol{} /*NULL*/,
+                                  ListsCol{{null, 18}, null_at(0)},
+                                  ListsCol{},
+                                  ListsCol{{1, 2, null, 4}, null_at(2)},
+                                  ListsCol{{19, 20, null}, null_at(2)},
+                                  ListsCol{22, 23, 24, 25},
+                                  ListsCol{{1, 2, 3, null}, null_at(3)},
+                                  ListsCol{{null}, null_at(0)},
+                                  ListsCol{{null, null, null, null, null}, all_nulls()}},
+                                 null_at({2, 7, 9})}
+                          .release();
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
 }
 
 TEST_F(ListsColumnsInterleaveTest, SimpleInputStringsColumnsWithNulls)
