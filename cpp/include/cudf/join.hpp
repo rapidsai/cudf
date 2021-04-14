@@ -41,13 +41,14 @@ namespace cudf {
  * the matched row indices from the right table.
  *
  * @code{.pseudo}
- *     Left: {{0, 1, 2}}
- *     Right: {{1, 2, 3}}
- *     Result: {{1, 2}, {0, 1}}
+ * Left: {{0, 1, 2}}
+ * Right: {{1, 2, 3}}
+ * Result: {{1, 2}, {0, 1}}
  *
- *     Left: {{0, 1, 2}, {3, 4, 5}}
- *     Right: {{1, 2, 3}, {4, 6, 7}}
- *     Result: {{1}, {0}}
+ * Left: {{0, 1, 2}, {3, 4, 5}}
+ * Right: {{1, 2, 3}, {4, 6, 7}}
+ * Result: {{1}, {0}}
+ * @endcode
  *
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
@@ -77,10 +78,10 @@ inner_join(cudf::table_view const& left_keys,
  * in the columns being joined on match.
  *
  * @code{.pseudo}
- *          Left: {{0, 1, 2}}
- *          Right: {{4, 9, 3}, {1, 2, 5}}
- *          left_on: {0}
- *          right_on: {1}
+ * Left: {{0, 1, 2}}
+ * Right: {{4, 9, 3}, {1, 2, 5}}
+ * left_on: {0}
+ * right_on: {1}
  * Result: {{1, 2}, {4, 9}, {1, 2}}
  * @endcode
  *
@@ -125,13 +126,14 @@ std::unique_ptr<cudf::table> inner_join(
  * out-of-bounds value.
  *
  * @code{.pseudo}
- *     Left: {{0, 1, 2}}
- *     Right: {{1, 2, 3}}
- *     Result: {{0, 1, 2}, {None, 0, 1}}
+ * Left: {{0, 1, 2}}
+ * Right: {{1, 2, 3}}
+ * Result: {{0, 1, 2}, {None, 0, 1}}
  *
- *     Left: {{0, 1, 2}, {3, 4, 5}}
- *     Right: {{1, 2, 3}, {4, 6, 7}}
- *     Result: {{0, 1, 2}, {None, 0, None}}
+ * Left: {{0, 1, 2}, {3, 4, 5}}
+ * Right: {{1, 2, 3}, {4, 6, 7}}
+ * Result: {{0, 1, 2}, {None, 0, None}}
+ * @endcode
  *
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
@@ -163,16 +165,16 @@ left_join(cudf::table_view const& left_keys,
  * values in the left columns will be null.
  *
  * @code{.pseudo}
- *          Left: {{0, 1, 2}}
- *          Right: {{1, 2, 3}, {1, 2 ,5}}
- *          left_on: {0}
- *          right_on: {1}
+ * Left: {{0, 1, 2}}
+ * Right: {{1, 2, 3}, {1, 2 ,5}}
+ * left_on: {0}
+ * right_on: {1}
  * Result: { {0, 1, 2}, {NULL, 1, 2}, {NULL, 1, 2} }
  *
- *          Left: {{0, 1, 2}}
- *          Right {{1, 2, 3}, {1, 2, 5}}
- *          left_on: {0}
- *          right_on: {0}
+ * Left: {{0, 1, 2}}
+ * Right {{1, 2, 3}, {1, 2, 5}}
+ * left_on: {0}
+ * right_on: {0}
  * Result: { {0, 1, 2}, {NULL, 1, 2}, {NULL, 1, 2} }
  * @endcode
  *
@@ -216,13 +218,14 @@ std::unique_ptr<cudf::table> left_join(
  * representing a row from one table without a match in the other.
  *
  * @code{.pseudo}
- *     Left: {{0, 1, 2}}
- *     Right: {{1, 2, 3}}
- *     Result: {{0, 1, 2, None}, {None, 0, 1, 2}}
+ * Left: {{0, 1, 2}}
+ * Right: {{1, 2, 3}}
+ * Result: {{0, 1, 2, None}, {None, 0, 1, 2}}
  *
- *     Left: {{0, 1, 2}, {3, 4, 5}}
- *     Right: {{1, 2, 3}, {4, 6, 7}}
- *     Result: {{0, 1, 2, None, None}, {None, 0, None, 1, 2}}
+ * Left: {{0, 1, 2}, {3, 4, 5}}
+ * Right: {{1, 2, 3}, {4, 6, 7}}
+ * Result: {{0, 1, 2, None, None}, {None, 0, None, 1, 2}}
+ * @endcode
  *
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
@@ -254,16 +257,16 @@ full_join(cudf::table_view const& left_keys,
  * values in the left columns will be null.
  *
  * @code{.pseudo}
- *          Left: {{0, 1, 2}}
- *          Right: {{1, 2, 3}, {1, 2, 5}}
- *          left_on: {0}
- *          right_on: {1}
+ * Left: {{0, 1, 2}}
+ * Right: {{1, 2, 3}, {1, 2, 5}}
+ * left_on: {0}
+ * right_on: {1}
  * Result: { {0, 1, 2, NULL}, {NULL, 1, 2, 3}, {NULL, 1, 2, 5} }
  *
- *          Left: {{0, 1, 2}}
- *          Right: {{1, 2, 3}, {1, 2, 5}}
- *          left_on: {0}
- *          right_on: {0}
+ * Left: {{0, 1, 2}}
+ * Right: {{1, 2, 3}, {1, 2, 5}}
+ * left_on: {0}
+ * right_on: {0}
  * Result: { {0, 1, 2, NULL}, {NULL, 1, 2, 3}, {NULL, 1, 2, 5} }
  * @endcode
  *
@@ -305,9 +308,9 @@ std::unique_ptr<cudf::table> full_join(
  * for which there is a matching row in the right table.
  *
  * @code{.pseudo}
- *          TableA: {{0, 1, 2}}
- *          TableB: {{1, 2, 3}}
- *          right_on: {1}
+ * TableA: {{0, 1, 2}}
+ * TableB: {{1, 2, 3}}
+ * right_on: {1}
  * Result: {1, 2}
  * @endcode
  *
@@ -338,16 +341,16 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_semi_join(
  * returns rows that exist in the right table.
  *
  * @code{.pseudo}
- *          TableA: {{0, 1, 2}}
- *          TableB: {{1, 2, 3}, {1, 2, 5}}
- *          left_on: {0}
- *          right_on: {1}
+ * TableA: {{0, 1, 2}}
+ * TableB: {{1, 2, 3}, {1, 2, 5}}
+ * left_on: {0}
+ * right_on: {1}
  * Result: { {1, 2} }
  *
- *          TableA {{0, 1, 2}, {1, 2, 5}}
- *          TableB {{1, 2, 3}}
- *          left_on: {0}
- *          right_on: {0}
+ * TableA {{0, 1, 2}, {1, 2, 5}}
+ * TableB {{1, 2, 3}}
+ * left_on: {0}
+ * right_on: {0}
  * Result: { {1, 2}, {2, 5} }
  * @endcode
  *
@@ -386,8 +389,8 @@ std::unique_ptr<cudf::table> left_semi_join(
  * for which there is no matching row in the right table.
  *
  * @code{.pseudo}
- *          TableA: {{0, 1, 2}}
- *          TableB: {{1, 2, 3}}
+ * TableA: {{0, 1, 2}}
+ * TableB: {{1, 2, 3}}
  * Result: {0}
  * @endcode
  *
@@ -417,16 +420,16 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_anti_join(
  * returns rows that do not exist in the right table.
  *
  * @code{.pseudo}
- *          TableA: {{0, 1, 2}}
- *          TableB: {{1, 2, 3},  {1, 2, 5}}
- *          left_on: {0}
- *          right_on: {1}
+ * TableA: {{0, 1, 2}}
+ * TableB: {{1, 2, 3},  {1, 2, 5}}
+ * left_on: {0}
+ * right_on: {1}
  * Result: {{0}, {1}}
  *
- *          TableA: {{0, 1, 2}, {1, 2, 5}}
- *          TableB: {{1, 2, 3}}
- *          left_on: {0}
- *          right_on: {0}
+ * TableA: {{0, 1, 2}, {1, 2, 5}}
+ * TableB: {{1, 2, 3}}
+ * left_on: {0}
+ * right_on: {0}
  * Result: { {0} {1} }
  * @endcode
  *
@@ -469,8 +472,8 @@ std::unique_ptr<cudf::table> left_anti_join(
  * equal to `left.num_rows() * right.num_rows()`. Use with caution.
  *
  * @code{.pseudo}
- *          Left a: {0, 1, 2}
- *          Right b: {3, 4, 5}
+ * Left a: {0, 1, 2}
+ * Right b: {3, 4, 5}
  * Result: { a: {0, 0, 0, 1, 1, 1, 2, 2, 2}, b: {3, 4, 5, 3, 4, 5, 3, 4, 5} }
  * @endcode
 

@@ -62,6 +62,7 @@ find_path(cuFile_INCLUDE_DIR
     cufile.h
   HINTS
     ${PKG_cuFile_INCLUDE_DIRS}
+    /usr/local/cuda/include
     /usr/local/cuda/lib64
 )
 

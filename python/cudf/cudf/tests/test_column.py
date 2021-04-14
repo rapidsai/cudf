@@ -54,7 +54,7 @@ def test_column_offset_and_size(pandas_input, offset, size):
     if cudf.utils.dtypes.is_categorical_dtype(col.dtype):
         assert col.size == col.codes.size
         assert col.size == (col.codes.data.size / col.codes.dtype.itemsize)
-    elif pd.api.types.is_string_dtype(col.dtype):
+    elif cudf.utils.dtypes.is_string_dtype(col.dtype):
         if col.size > 0:
             assert col.size == (col.children[0].size - 1)
             assert col.size == (
@@ -77,6 +77,49 @@ def test_column_offset_and_size(pandas_input, offset, size):
     expect = pandas_input.iloc[slicer].reset_index(drop=True)
 
     assert_eq(expect, got)
+
+
+def column_slicing_test(col, offset, size, cast_to_float=False):
+    sl = slice(offset, offset + size)
+    col_slice = col[sl]
+    series = cudf.Series(col)
+    sliced_series = cudf.Series(col_slice)
+
+    if cast_to_float:
+        pd_series = series.astype(float).to_pandas()
+        sliced_series = sliced_series.astype(float)
+    else:
+        pd_series = series.to_pandas()
+
+    if cudf.utils.dtypes.is_categorical_dtype(col.dtype):
+        # The cudf.Series is constructed from an already sliced column, whereas
+        # the pandas.Series is constructed from the unsliced series and then
+        # sliced, so the indexes should be different and we must ignore it.
+        # However, we must compare these as frames, not raw arrays,  because
+        # numpy comparison of categorical values won't work.
+        assert_eq(
+            pd_series[sl].reset_index(drop=True),
+            sliced_series.reset_index(drop=True),
+        )
+    else:
+        assert_eq(np.asarray(pd_series[sl]), sliced_series.to_array())
+
+
+@pytest.mark.parametrize("offset", [0, 1, 15])
+@pytest.mark.parametrize("size", [50, 10, 0])
+def test_column_slicing(pandas_input, offset, size):
+    col = cudf.core.column.as_column(pandas_input)
+    column_slicing_test(col, offset, size)
+
+
+@pytest.mark.parametrize("offset", [0, 1, 15])
+@pytest.mark.parametrize("size", [50, 10, 0])
+@pytest.mark.parametrize("precision", [2, 3, 5])
+@pytest.mark.parametrize("scale", [0, 1, 2])
+def test_decimal_column_slicing(offset, size, precision, scale):
+    col = cudf.core.column.as_column(pd.Series(np.random.rand(1000)))
+    col = col.astype(cudf.Decimal64Dtype(precision, scale))
+    column_slicing_test(col, offset, size, True)
 
 
 @pytest.mark.parametrize(

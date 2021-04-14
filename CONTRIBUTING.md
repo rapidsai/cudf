@@ -131,14 +131,14 @@ run each time you commit changes.
 
 Compiler requirements:
 
-* `gcc`     version 5.4+
-* `nvcc`    version 10.0+
-* `cmake`   version 3.14.0+
+* `gcc`     version 9.3+
+* `nvcc`    version 11.0+
+* `cmake`   version 3.18.0+
 
 CUDA/GPU requirements:
 
-* CUDA 10.0+
-* NVIDIA driver 410.48+
+* CUDA 11.0+
+* NVIDIA driver 450.80.02+
 * Pascal architecture or better
 
 You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
@@ -320,7 +320,7 @@ flag. Below is a list of the available arguments and their purpose:
 | `PYARROW_VERSION` | 1.0.1 | Not supported | set pyarrow version |
 | `CMAKE_VERSION` | newest | >=3.14 | set cmake version |
 | `CYTHON_VERSION` | 0.29 | Not supported | set Cython version |
-| `PYTHON_VERSION` | 3.6 | 3.7 | set python version |
+| `PYTHON_VERSION` | 3.7 | 3.8 | set python version |
 
 ---
 

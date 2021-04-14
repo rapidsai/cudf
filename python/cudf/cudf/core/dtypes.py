@@ -14,7 +14,12 @@ import cudf
 from cudf._typing import Dtype
 
 
-class CategoricalDtype(ExtensionDtype):
+class _BaseDtype(ExtensionDtype):
+    # Base type for all cudf-specific dtypes
+    pass
+
+
+class CategoricalDtype(_BaseDtype):
 
     ordered: Optional[bool]
 
@@ -121,7 +126,7 @@ class CategoricalDtype(ExtensionDtype):
         return cls(categories=categories, ordered=ordered)
 
 
-class ListDtype(ExtensionDtype):
+class ListDtype(_BaseDtype):
     _typ: pa.ListType
     name: str = "list"
 
@@ -180,7 +185,7 @@ class ListDtype(ExtensionDtype):
         return hash(self._typ)
 
 
-class StructDtype(ExtensionDtype):
+class StructDtype(_BaseDtype):
 
     name = "struct"
 
@@ -231,7 +236,7 @@ class StructDtype(ExtensionDtype):
         return hash(self._typ)
 
 
-class Decimal64Dtype(ExtensionDtype):
+class Decimal64Dtype(_BaseDtype):
 
     name = "decimal"
     _metadata = ("precision", "scale")
