@@ -289,5 +289,5 @@ cdef Aggregation make_aggregation(op, kwargs=None):
         else:
             agg = op(Aggregation)
     else:
-        raise TypeError("Unknown aggregation {}".format(op))
+        raise TypeError(f"Unknown aggregation {op}")
     return agg
