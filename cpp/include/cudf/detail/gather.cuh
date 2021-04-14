@@ -597,11 +597,7 @@ void gather_bitmask(table_view const& source,
        stream);
 
   // Copy the valid counts into each column
-  std::vector<size_type> valid_counts(d_valid_counts.size());
-  CUDA_TRY(cudaMemcpy(valid_counts.data(),
-                      d_valid_counts.data(),
-                      d_valid_counts.size() * sizeof(size_type),
-                      cudaMemcpyDefault));
+  auto const valid_counts = make_std_vector_sync(d_valid_counts, stream);
   for (size_t i = 0; i < target.size(); ++i) {
     if (target[i]->nullable()) {
       auto const null_count = target_rows - valid_counts[i];
