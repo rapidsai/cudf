@@ -30,9 +30,8 @@ class DecimalColumn(ColumnBase):
         """
         View the data as a device array object
         """
-        result = cuda.as_cuda_array(self.data)
 
-        return result.view("int64")
+        return self.as_numerical_column("float64").data_array_view
 
     @classmethod
     def from_arrow(cls, data: pa.Array):
@@ -191,6 +190,11 @@ class DecimalColumn(ColumnBase):
             input_col=self, replacement=value, method=method, dtype=dtype
         )
         return self._copy_type_metadata(result)
+
+    def default_na_value(self):
+        p = self.dtype.precision
+        s = self.dtype.scale
+        return Decimal("-" + p*"9" + "e" + str(-s))
 
 
 def _binop_scale(l_dtype, r_dtype, op):
