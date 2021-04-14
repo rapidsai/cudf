@@ -38,7 +38,6 @@
 #include <thrust/execution_policy.h>
 #include <thrust/logical.h>
 #include <thrust/scan.h>
-//#include <thrust/transform.h>
 
 #include <algorithm>
 #include <sstream>
@@ -161,8 +160,7 @@ struct column_to_strings_fn {
 
     auto d_column = column_device_view::create(column_v, stream_);
     escape_strings_fn fn{*d_column, delimiter.value()};
-    auto children =
-      cudf::strings::detail::make_strings_children(fn, column_v.size(), 0, stream_, mr_);
+    auto children = cudf::strings::detail::make_strings_children(fn, column_v.size(), stream_, mr_);
 
     return make_strings_column(column_v.size(),
                                std::move(children.first),

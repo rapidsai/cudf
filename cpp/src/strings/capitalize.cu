@@ -154,7 +154,7 @@ std::unique_ptr<column> capitalize_utility(CapitalFn cfn,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
-  auto children = cudf::strings::detail::make_strings_children(cfn, input.size(), 0, stream, mr);
+  auto children = cudf::strings::detail::make_strings_children(cfn, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
                              std::move(children.first),
