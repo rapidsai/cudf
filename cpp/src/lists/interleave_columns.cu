@@ -44,16 +44,17 @@ std::unique_ptr<column> interleave_columns(table_view const& lists_columns,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(std::all_of(lists_columns.begin(),
-                           lists_columns.end(),
-                           [](auto const& col) { return col.type().id() == type_id::LIST; }),
-               "All columns must be of type list");
-  CUDF_EXPECTS(std::all_of(lists_columns.begin(),
-                           lists_columns.end(),
-                           [](auto const& col) {
-                             return not cudf::is_nested(lists_column_view(col).child().type());
-                           }),
-               "Nested types are not supported in `lists::interleave_columns`");
+  auto const first_col_entry_type_id =
+    lists_column_view(*lists_columns.begin()).child().type().id();
+  for (auto const& col : lists_columns) {
+    CUDF_EXPECTS(col.type().id() == type_id::LIST,
+                 "All columns of the input table must be of lists column type.");
+
+    auto const child_col = lists_column_view(col).child();
+    CUDF_EXPECTS(not cudf::is_nested(child_col.type()), "Nested types are not supported.");
+    CUDF_EXPECTS(first_col_entry_type_id == child_col.type().id(),
+                 "The types of entries in the input columns must be the same.");
+  }
 
   // Single column returns a copy
   if (lists_columns.num_columns() == 1) {
