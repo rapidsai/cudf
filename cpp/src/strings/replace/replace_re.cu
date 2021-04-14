@@ -135,21 +135,18 @@ std::unique_ptr<column> replace_re(
     children =
       make_strings_children(replace_regex_fn<RX_STACK_SMALL>{d_strings, d_prog, d_repl, maxrepl},
                             strings_count,
-                            null_count,
                             stream,
                             mr);
   else if (regex_insts <= RX_MEDIUM_INSTS)
     children =
       make_strings_children(replace_regex_fn<RX_STACK_MEDIUM>{d_strings, d_prog, d_repl, maxrepl},
                             strings_count,
-                            null_count,
                             stream,
                             mr);
   else
     children =
       make_strings_children(replace_regex_fn<RX_STACK_LARGE>{d_strings, d_prog, d_repl, maxrepl},
                             strings_count,
-                            null_count,
                             stream,
                             mr);
 
