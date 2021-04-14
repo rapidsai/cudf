@@ -30,11 +30,23 @@ namespace detail {
 namespace {
 struct interleave_columns_functor {
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_fixed_width<T>() and not std::is_same<T, cudf::string_view>::value,
+  std::enable_if_t<not cudf::is_fixed_width<T>() and
+                     not std::is_same<T, cudf::string_view>::value and
+                     not std::is_same<T, cudf::list_view>::value,
                    std::unique_ptr<cudf::column>>
   operator()(Args&&... args)
   {
-    CUDF_FAIL("interleave_columns not supported for dictionary and list types.");
+    CUDF_FAIL("Called `interleave_columns` on none-supported data type.");
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_same<T, cudf::list_view>::value, std::unique_ptr<cudf::column>>
+  operator()(table_view const& strings_columns,
+             bool create_mask,
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr)
+  {
+    return std::make_unique<column>(*(strings_columns.begin()), stream, mr);
   }
 
   template <typename T>
