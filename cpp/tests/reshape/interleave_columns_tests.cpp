@@ -432,11 +432,9 @@ TYPED_TEST_CASE(ListsColumnsInterleaveTypedTest, TypesForTest);
 
 TYPED_TEST(ListsColumnsInterleaveTypedTest, ConcatenateEmptyColumns)
 {
-  auto const col1     = ListsCol{}.release();
-  auto const col2     = ListsCol{}.release();
-  auto const expected = ListsCol{}.release();
-  auto const results  = cudf::interleave_columns(TView{{col1->view(), col2->view()}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
+  auto const col     = ListsCol{}.release();
+  auto const results = cudf::interleave_columns(TView{{col->view(), col->view()}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, *results, print_all);
 }
 
 TYPED_TEST(ListsColumnsInterleaveTypedTest, ConcatenateOneColumnNotNull)
