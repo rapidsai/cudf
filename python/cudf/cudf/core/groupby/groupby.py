@@ -584,35 +584,35 @@ class GroupBy(Serializable):
         return self.agg(func)
 
     def sum(self):
-        """Compute the sum of the values in each column."""
+        """Compute the column-wise sum of the values in each group."""
         return self.agg("sum")
 
     def idxmin(self):
-        """Compute the index of the minimum value in each column."""
+        """Get the column-wise index of the minimum value in each group."""
         return self.agg("idxmin")
 
     def idxmax(self):
-        """Compute the index of the maximum value in each column."""
+        """Get the column-wise index of the maximum value in each group."""
         return self.agg("idxmax")
 
     def min(self):
-        """Compute the minimum value in each column."""
+        """Get the column-wise minimum value in each group."""
         return self.agg("min")
 
     def max(self):
-        """Compute the maximum value in each column."""
+        """Get the column-wise maximum value in each group."""
         return self.agg("max")
 
     def mean(self):
-        """Compute the mean of the values in each column."""
+        """Compute the column-wise mean of the values in each group."""
         return self.agg("mean")
 
     def median(self):
-        """Compute the median of the values in each column."""
+        """Get the column-wise median of the values in each group."""
         return self.agg("median")
 
     def var(self, ddof=1):
-        """Compute the variance of the values in each column.
+        """Compute the column-wise variance of the values in each group.
 
         Parameters
         ----------
@@ -627,7 +627,7 @@ class GroupBy(Serializable):
         return self.agg(func)
 
     def std(self, ddof=1):
-        """Compute the standard deviation of the values in each column.
+        """Compute the column-wise std of the values in each group.
 
         Parameters
         ----------
@@ -642,7 +642,7 @@ class GroupBy(Serializable):
         return self.agg(func)
 
     def quantile(self, q=0.5, interpolation="linear"):
-        """Compute the quantiles of the values in each column.
+        """Compute the column-wise quantiles of the values in each group.
 
         Parameters
         ----------
@@ -659,15 +659,15 @@ class GroupBy(Serializable):
         return self.agg(func)
 
     def nunique(self):
-        """Compute the number of unique values in each column."""
+        """Compute the number of unique values in each column in each group."""
         return self.agg("nunique")
 
     def collect(self):
-        """Get a list of all the values in each column."""
+        """Get a list of all the values for each column in each group."""
         return self.agg("collect")
 
     def unique(self):
-        """Get a list of the unique values in each column."""
+        """Get a list of the unique values for each column in each group."""
         return self.agg("unique")
 
 
