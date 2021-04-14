@@ -430,21 +430,21 @@ using TypesForTest =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
 TYPED_TEST_CASE(ListsColumnsInterleaveTypedTest, TypesForTest);
 
-TYPED_TEST(ListsColumnsInterleaveTypedTest, ConcatenateEmptyColumns)
+TYPED_TEST(ListsColumnsInterleaveTypedTest, InterleaveEmptyColumns)
 {
   auto const col     = ListsCol{}.release();
   auto const results = cudf::interleave_columns(TView{{col->view(), col->view()}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, *results, print_all);
 }
 
-TYPED_TEST(ListsColumnsInterleaveTypedTest, ConcatenateOneColumnNotNull)
+TYPED_TEST(ListsColumnsInterleaveTypedTest, InterleaveOneColumnNotNull)
 {
   auto const col     = ListsCol{{1, 2}, {3, 4}, {5, 6}}.release();
   auto const results = cudf::interleave_columns(TView{{col->view()}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, *results, print_all);
 }
 
-TYPED_TEST(ListsColumnsInterleaveTypedTest, ConcatenateOneColumnWithNulls)
+TYPED_TEST(ListsColumnsInterleaveTypedTest, InterleaveOneColumnWithNulls)
 {
   auto const col = ListsCol{{ListsCol{{1, 2, null}, null_at(2)},
                              ListsCol{} /*NULL*/,
@@ -460,7 +460,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SimpleInputNoNull)
 {
   auto const col1     = ListsCol{{1, 2}, {3, 4}, {5, 6}}.release();
   auto const col2     = ListsCol{{7, 8}, {9, 10}, {11, 12}}.release();
-  auto const expected = ListsCol{{1, 2, 7, 8}, {3, 4, 9, 10}, {5, 6, 11, 12}}.release();
+  auto const expected = ListsCol{{1, 2}, {7, 8}, {3, 4}, {9, 10}, {5, 6}, {11, 12}}.release();
   auto const results  = cudf::interleave_columns(TView{{col1->view(), col2->view()}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
 }
@@ -475,10 +475,12 @@ TEST_F(ListsColumnsInterleaveTest, SimpleInputStringsColumnsNoNull)
   auto const col2 =
     StrListsCol{StrListsCol{"Orange"}, StrListsCol{"Lemon", "Peach"}, StrListsCol{}}.release();
   auto const expected = StrListsCol{
-    StrListsCol{"Tomato", "Apple", "Orange"},
-    StrListsCol{"Banana", "Kiwi", "Cherry", "Lemon", "Peach"},
-    StrListsCol{
-      "Coconut"}}.release();
+    StrListsCol{"Tomato", "Apple"},
+    StrListsCol{"Orange"},
+    StrListsCol{"Banana", "Kiwi", "Cherry"},
+    StrListsCol{"Lemon", "Peach"},
+    StrListsCol{"Coconut"},
+    StrListsCol{}}.release();
   auto const results = cudf::interleave_columns(TView{{col1->view(), col2->view()}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
 }
