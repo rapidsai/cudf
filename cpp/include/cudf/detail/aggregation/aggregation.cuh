@@ -262,7 +262,7 @@ struct update_target_element<Source,
  *
  * `target[target_index] = d_dictionary.keys[d_dictionary.indices[source_index]]`
  */
-struct update_target_from_dictionary {
+struct update_target_from_dictionary_sum {
   template <typename KeyType,
             std::enable_if_t<is_fixed_width<KeyType>() && !is_fixed_point<KeyType>()>* = nullptr>
   __device__ void operator()(mutable_column_device_view& target,
@@ -300,7 +300,7 @@ struct update_target_element<dictionary32, aggregation::SUM, target_has_nulls, s
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     type_dispatcher(source.child(cudf::dictionary_column_view::keys_column_index).type(),
-                    update_target_from_dictionary{},
+                    update_target_from_dictionary_sum{},
                     target,
                     target_index,
                     source,
