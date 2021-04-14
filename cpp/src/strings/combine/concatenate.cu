@@ -114,7 +114,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   // Create device views from the strings columns.
   auto d_table = table_device_view::create(strings_columns, stream);
   concat_strings_fn fn{*d_table, d_separator, d_narep};
-  auto children = make_strings_children(fn, strings_count, 0, stream, mr);
+  auto children = make_strings_children(fn, strings_count, stream, mr);
 
   // create resulting null mask
   auto [null_mask, null_count] = cudf::detail::valid_if(
@@ -236,7 +236,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   auto d_table = table_device_view::create(strings_columns, stream);
 
   multi_separator_concat_fn mscf{*d_table, separator_col_view, separator_rep, col_rep};
-  auto children = make_strings_children(mscf, strings_count, 0, stream, mr);
+  auto children = make_strings_children(mscf, strings_count, stream, mr);
 
   // Create resulting null mask
   auto [null_mask, null_count] = cudf::detail::valid_if(

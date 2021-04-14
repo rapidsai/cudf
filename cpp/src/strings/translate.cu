@@ -112,11 +112,8 @@ std::unique_ptr<column> translate(
 
   auto d_strings = column_device_view::create(strings.parent(), stream);
 
-  auto children = make_strings_children(translate_fn{*d_strings, table.begin(), table.end()},
-                                        strings.size(),
-                                        strings.null_count(),
-                                        stream,
-                                        mr);
+  auto children = make_strings_children(
+    translate_fn{*d_strings, table.begin(), table.end()}, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
                              std::move(children.first),
