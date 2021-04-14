@@ -16,6 +16,7 @@ from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
     is_list_like,
+    is_numerical_dtype,
     is_scalar,
     to_cudf_compatible_scalar,
 )
@@ -165,22 +166,24 @@ class _SeriesLocIndexer(object):
 
     def _loc_to_iloc(self, arg):
         if is_scalar(arg):
-            if pd.api.types.is_integer(arg):
-                found_index = arg
-                return found_index
-
-            elif isinstance(arg, cudf.Scalar):
-                found_index = arg.value
-                return found_index
-
-            else:
-                try:
-                    found_index = self._sr.index._values.find_first_value(
-                        arg, closest=False
-                    )
+            if not is_numerical_dtype(self._sr.index.dtype):
+                if pd.api.types.is_integer(arg):
+                    found_index = arg
                     return found_index
-                except (TypeError, KeyError, IndexError, ValueError):
-                    raise KeyError("label scalar is out of bound")
+
+                elif isinstance(
+                    arg, cudf.Scalar
+                ) and pd.api.types.is_integer_dtype(arg.dtype):
+                    found_index = arg.value
+                    return found_index
+
+            try:
+                found_index = self._sr.index._values.find_first_value(
+                    arg, closest=False
+                )
+                return found_index
+            except (TypeError, KeyError, IndexError, ValueError):
+                raise KeyError("label scalar is out of bound")
 
         elif isinstance(arg, slice):
             return get_label_range_or_mask(

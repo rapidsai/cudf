@@ -1,5 +1,6 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
+import re
 from itertools import combinations
 
 import cupy
@@ -99,16 +100,35 @@ def pdf_gdf_multi():
         + ["numpy.array[%s]" % np.dtype(t).type.__name__ for t in index_dtypes]
     ),
 )
-def test_series_indexing(i1, i2, i3):
+@pytest.mark.parametrize(
+    "arg",
+    [
+        1,
+        -1,
+        "b",
+        np.int32(1),
+        np.uint32(1),
+        np.int8(1),
+        np.uint8(1),
+        np.int16(1),
+        np.uint16(1),
+        np.int64(1),
+        np.uint64(1),
+    ],
+)
+def test_series_indexing(i1, i2, i3, arg):
     a1 = np.arange(20)
     series = cudf.Series(a1)
+
     # Indexing
     sr1 = series.iloc[i1]
     assert sr1.null_count == 0
     np.testing.assert_equal(sr1.to_array(), a1[:12])
+
     sr2 = sr1.iloc[i2]
     assert sr2.null_count == 0
     np.testing.assert_equal(sr2.to_array(), a1[3:12])
+
     # Index with stride
     sr3 = sr2.iloc[i3]
     assert sr3.null_count == 0
@@ -121,6 +141,33 @@ def test_series_indexing(i1, i2, i3):
     if isinstance(i1, np.ndarray) and i1.dtype in index_dtypes:
         for i in i1:  # numpy integers
             assert series[i] == a1[i]
+
+    # Indexing for non-integer dtype Index
+    ps = pd.Series([1, 2, 3], index=pd.Index(["a", "b", "c"]))
+    gs = cudf.from_pandas(ps)
+
+    expect = ps[arg]
+    got = gs[arg]
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["int32", "int16", "int8", "int64", "uint32", "uint16", "uint8", "uint64"],
+)
+def test_series_indexing_cudf_Scalar(dtype):
+    ps = pd.Series([1, 2, 3], index=pd.Index(["a", "b", "c"]))
+    gs = cudf.from_pandas(ps)
+
+    arg = cudf.Scalar(1, dtype=dtype)
+    got = gs[arg]
+
+    with pytest.raises(
+        TypeError, match=re.escape(f"'{arg}' is an invalid key"),
+    ):
+        expect = ps[arg]
+        assert_eq(expect, got)
 
 
 def test_series_indexing_large_size():
