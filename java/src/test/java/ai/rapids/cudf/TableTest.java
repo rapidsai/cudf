@@ -50,6 +50,8 @@ import java.util.stream.Collectors;
 import static ai.rapids.cudf.Aggregate.max;
 import static ai.rapids.cudf.Aggregate.first;
 import static ai.rapids.cudf.Aggregate.last;
+import static ai.rapids.cudf.ParquetColumnWriterOptions.listBuilder;
+import static ai.rapids.cudf.ParquetColumnWriterOptions.structBuilder;
 import static ai.rapids.cudf.ParquetWriterOptions.listBuilder;
 import static ai.rapids.cudf.ParquetWriterOptions.structBuilder;
 import static ai.rapids.cudf.Table.TestBuilder;
@@ -4669,6 +4671,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testParquetWriteToBufferChunkedWithNested() {
+
     ParquetWriterOptions options = ParquetWriterOptions.builder()
         .withNullableColumn("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
         .withStructColumn(structBuilder("_c7")
