@@ -50,8 +50,7 @@ namespace {
  */
 constexpr type_id to_type_id(const orc::SchemaType &schema,
                              bool use_np_dtypes,
-                             type_id timestamp_type_id,
-                             bool decimals_as_float64)
+                             type_id timestamp_type_id)
 {
   switch (schema.kind) {
     case orc::BOOLEAN: return type_id::BOOL8;
@@ -73,9 +72,7 @@ constexpr type_id to_type_id(const orc::SchemaType &schema,
     case orc::DATE:
       // There isn't a (DAYS -> np.dtype) mapping
       return (use_np_dtypes) ? type_id::TIMESTAMP_MILLISECONDS : type_id::TIMESTAMP_DAYS;
-    case orc::DECIMAL:
-      // There isn't an arbitrary-precision type in cuDF, so map as float or int
-      return (decimals_as_float64) ? type_id::FLOAT64 : type_id::INT64;
+    case orc::DECIMAL: return type_id::DECIMAL64;
     default: break;
   }
 
@@ -406,10 +403,6 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 
   // Enable or disable the conversion to numpy-compatible dtypes
   _use_np_dtypes = options.is_enabled_use_np_dtypes();
-
-  // Control decimals conversion (float64 or int64 with optional scale)
-  _decimals_as_float64   = options.is_enabled_decimals_as_float64();
-  _decimals_as_int_scale = options.get_forced_decimals_scale();
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,
@@ -432,8 +425,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   // Get a list of column data types
   std::vector<data_type> column_types;
   for (const auto &col : _selected_columns) {
-    auto col_type = to_type_id(
-      _metadata->ff.types[col], _use_np_dtypes, _timestamp_type.id(), _decimals_as_float64);
+    auto col_type = to_type_id(_metadata->ff.types[col], _use_np_dtypes, _timestamp_type.id());
     CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
     column_types.emplace_back(col_type);
 
@@ -517,13 +509,12 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         chunk.num_rows      = stripe_info->numberOfRows;
         chunk.encoding_kind = stripe_footer->columns[_selected_columns[j]].kind;
         chunk.type_kind     = _metadata->ff.types[_selected_columns[j]].kind;
-        if (_decimals_as_float64) {
-          chunk.decimal_scale =
-            _metadata->ff.types[_selected_columns[j]].scale | orc::gpu::orc_decimal2float64_scale;
-        } else if (_decimals_as_int_scale < 0) {
+        if (column_types[j].id() == type_id::DECIMAL64) {
+          CUDF_EXPECTS(_metadata->ff.types[_selected_columns[j]].precision <= 18,
+                       "Decimal data has precision > 18, Decimal64 data-type doesn't support it.");
           chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale;
-        } else {
-          chunk.decimal_scale = _decimals_as_int_scale;
+          // Update the data type with appropriate scale
+          column_types[j] = data_type(type_id::DECIMAL64, -1 * chunk.decimal_scale);
         }
         chunk.rowgroup_id = num_rowgroups;
         chunk.dtype_len   = (column_types[j].id() == type_id::STRING)

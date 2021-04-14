@@ -90,33 +90,6 @@ def test_orc_reader_basic(datadir, inputfile, columns, use_index, engine):
     assert_eq(expect, got, check_categorical=False)
 
 
-def test_orc_reader_decimal(datadir):
-    path = datadir / "TestOrcFile.decimal.orc"
-    try:
-        orcfile = pa.orc.ORCFile(path)
-    except pa.ArrowIOError as e:
-        pytest.skip(".orc file is not found: %s" % e)
-
-    pdf = orcfile.read().to_pandas()
-    gdf = cudf.read_orc(path, engine="cudf").to_pandas()
-
-    # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
-    # This is because cuDF returns as float64 as it lacks an equivalent dtype
-    pdf = pdf.apply(pd.to_numeric)
-
-    np.testing.assert_allclose(pdf, gdf)
-
-
-def test_orc_reader_decimal_as_int(datadir):
-    path = datadir / "TestOrcFile.decimal.orc"
-
-    gdf = cudf.read_orc(
-        path, engine="cudf", decimals_as_float=False, force_decimal_scale=2
-    ).to_pandas()
-
-    assert gdf["_col0"][0] == -100050  # -1000.5
-
-
 def test_orc_reader_filenotfound(tmpdir):
     with pytest.raises(FileNotFoundError):
         cudf.read_orc("TestMissingFile.orc")
@@ -306,17 +279,14 @@ def test_orc_read_rows(datadir, skiprows, num_rows):
     pdf = orcfile.read().to_pandas()
     gdf = cudf.read_orc(
         path, engine="cudf", skiprows=skiprows, num_rows=num_rows
-    ).to_pandas()
-
-    # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
-    # This is because cuDF returns as float64 as it lacks an equivalent dtype
-    pdf = pdf.apply(pd.to_numeric)
+    )
 
     # Slice rows out of the whole dataframe for comparison as PyArrow doesn't
     # have an API to read a subsection of rows from the file
     pdf = pdf[skiprows : skiprows + num_rows]
+    pdf = pdf.reset_index(drop=True)
 
-    np.testing.assert_allclose(pdf, gdf)
+    assert_eq(pdf, gdf)
 
 
 def test_orc_read_skiprows(tmpdir):
@@ -517,6 +487,7 @@ def test_orc_writer_sliced(tmpdir):
 @pytest.mark.parametrize(
     "orc_file",
     [
+        "TestOrcFile.decimal.orc",
         "TestOrcFile.decimal.same.values.orc",
         "TestOrcFile.decimal.multiple.values.orc",
         # For addional information take look at PR 7034
@@ -525,13 +496,37 @@ def test_orc_writer_sliced(tmpdir):
 )
 def test_orc_reader_decimal_type(datadir, orc_file):
     file_path = datadir / orc_file
-    pdf = pd.read_orc(file_path)
+
+    try:
+        orcfile = pa.orc.ORCFile(file_path)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
+
+    pdf = orcfile.read().to_pandas()
     df = cudf.read_orc(file_path).to_pandas()
-    # Converting to strings since pandas keeps it in decimal
-    pdf["col8"] = pdf["col8"].astype("str")
-    df["col8"] = df["col8"].astype("str")
 
     assert_eq(pdf, df)
+
+
+def test_orc_decimal_precision_fail(datadir):
+    file_path = datadir / "TestOrcFile.int_decimal.precision_19.orc"
+
+    try:
+        orcfile = pa.orc.ORCFile(file_path)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
+
+    # Max precision supported is 18 (Decimal64Dtype limit)
+    # and the data has the precision 19. This test should be removed
+    # once Decimal128Dtype is introduced.
+    with pytest.raises(RuntimeError):
+        cudf.read_orc(file_path)
+
+    # But that shouldn't cause failure if that column is not chosen to be read.
+    pdf = orcfile.read(columns=["int"]).to_pandas()
+    gdf = cudf.read_orc(file_path, columns=["int"])
+
+    assert_eq(pdf, gdf)
 
 
 # For addional information take look at PR 6636 and 6702
