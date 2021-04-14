@@ -551,48 +551,18 @@ TEST_F(ListsColumnsInterleaveTest, SimpleInputStringsColumnsWithNulls)
       null_at(2)}
       .release();
 
-  // Ignore null list elements
-  {
-    auto const results  = cudf::interleave_columns(TView{{col1->view(), col2->view()}});
-    auto const expected = StrListsCol{
-      StrListsCol{{"Tomato",
-                   "Bear" /*NULL*/,
-                   "Apple",
-                   "Orange",
-                   "Dog" /*NULL*/,
-                   "Fox" /*NULL*/,
-                   "Duck" /*NULL*/},
-                  null_at({1, 4, 5, 6})},
-      StrListsCol{{"Banana", "Pig" /*NULL*/, "Kiwi", "Cherry", "Whale" /*NULL*/, "Lemon", "Peach"},
-                  null_at({1, 4})},
-      StrListsCol{
-        "Coconut"}}.release();
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
-  }
-
-  // Null list rows result in null list rows
-  {
-    auto const results =
-      cudf::interleave_columns(TView{{col1->view(), col2->view()}},
-                               cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW);
-    auto const expected =
-      StrListsCol{
-        {StrListsCol{{"Tomato",
-                      "Bear" /*NULL*/,
-                      "Apple",
-                      "Orange",
-                      "Dog" /*NULL*/,
-                      "Fox" /*NULL*/,
-                      "Duck" /*NULL*/},
-                     null_at({1, 4, 5, 6})},
-         StrListsCol{
-           {"Banana", "Pig" /*NULL*/, "Kiwi", "Cherry", "Whale" /*NULL*/, "Lemon", "Peach"},
-           null_at({1, 4})},
-         StrListsCol{""} /*NULL*/},
-        null_at(2)}
-        .release();
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
-  }
+  auto const results = cudf::interleave_columns(TView{{col1->view(), col2->view()}});
+  auto const expected =
+    StrListsCol{
+      {StrListsCol{{"Tomato", "" /*NULL*/, "Apple"}, null_at(1)},
+       StrListsCol{{"Orange", "" /*NULL*/, "" /*NULL*/, "" /*NULL*/}, null_at({1, 2, 3})},
+       StrListsCol{{"Banana", "" /*NULL*/, "Kiwi", "Cherry", "" /*NULL*/}, null_at({1, 4})},
+       StrListsCol{"Lemon", "Peach"},
+       StrListsCol{"Coconut"},
+       StrListsCol{}}, /*NULL*/
+      null_at(5)}
+      .release();
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
 }
 
 TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputNoNull)
