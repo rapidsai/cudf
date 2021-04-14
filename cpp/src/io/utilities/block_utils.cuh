@@ -36,13 +36,6 @@ inline __device__ void syncwarp(void) { __syncwarp(); }
 
 inline __device__ uint32_t ballot(int pred) { return __ballot_sync(~0, pred); }
 
-template <typename T>
-inline __device__ void nanosleep(T d)
-{
-  // TODO: nanosleep temporarily disabled
-  clock();
-}
-
 // Warp reduction helpers
 template <typename T>
 inline __device__ T WarpReduceOr2(T acc)
