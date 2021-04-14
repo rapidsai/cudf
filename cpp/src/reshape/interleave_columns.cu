@@ -19,6 +19,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/lists/detail/interleave_columns.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 
@@ -41,12 +42,12 @@ struct interleave_columns_functor {
 
   template <typename T>
   std::enable_if_t<std::is_same<T, cudf::list_view>::value, std::unique_ptr<cudf::column>>
-  operator()(table_view const& strings_columns,
+  operator()(table_view const& lists_columns,
              bool create_mask,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr)
   {
-    return std::make_unique<column>(*(strings_columns.begin()), stream, mr);
+    return lists::detail::interleave_columns(lists_columns, create_mask, stream, mr);
   }
 
   template <typename T>
