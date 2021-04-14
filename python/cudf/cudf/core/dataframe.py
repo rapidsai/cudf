@@ -649,10 +649,10 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         except AttributeError:
             if key not in self._PROTECTED_KEYS:
                 try:
-                    # Check existence (using a faster internal method).
-                    self._data._select_by_label_grouped(key)
+                    # Check key existence.
+                    self[key]
                     # If a column already exists, set it.
-                    self._data.set_by_label(key, col)
+                    self[key] = col
                     return
                 except KeyError:
                     pass
