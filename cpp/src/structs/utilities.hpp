@@ -57,6 +57,7 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
  * @param input input table to be flattened
  * @param column_order column order for input table
  * @param null_precedence null order for input table
+ * @param force_nullability_columns force output to have nullability columns even if input columns are all valid
  * @return tuple with flattened table, flattened column order, flattened null precedence,
  * vector of boolean columns (struct validity).
  */
@@ -66,7 +67,8 @@ std::tuple<table_view,
            std::vector<std::unique_ptr<column>>>
 flatten_nested_columns(table_view const& input,
                        std::vector<order> const& column_order,
-                       std::vector<null_order> const& null_precedence);
+                       std::vector<null_order> const& null_precedence,
+                       bool force_nullability_columns = false);
 
 }  // namespace detail
 }  // namespace structs

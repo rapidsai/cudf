@@ -73,11 +73,13 @@ struct flattened_table {
   std::vector<column_view> flat_columns;
   std::vector<order> flat_column_order;
   std::vector<null_order> flat_null_precedence;
+  bool force_nullability_columns;
 
   flattened_table(table_view const& input,
                   std::vector<order> const& column_order,
-                  std::vector<null_order> const& null_precedence)
-    : input(input), column_order(column_order), null_precedence(null_precedence)
+                  std::vector<null_order> const& null_precedence,
+                  bool force_nullability_columns)
+    : input(input), column_order(column_order), null_precedence(null_precedence), force_nullability_columns(force_nullability_columns)
   {
   }
 
@@ -86,9 +88,13 @@ struct flattened_table {
                              order col_order,
                              null_order col_null_order)
   {
-    if (col.nullable()) {
+    if (force_nullability_columns || col.nullable()) {
+      // nullable columns could be required for comparisions such as joins
       validity_as_column.push_back(cudf::is_valid(col));
-      validity_as_column.back()->set_null_mask(copy_bitmask(col));
+      if (col.nullable()) {
+        // copy bitmask only works if the column is nullable
+        validity_as_column.back()->set_null_mask(copy_bitmask(col));
+      }
       flat_columns.push_back(validity_as_column.back()->view());
       if (not column_order.empty()) flat_column_order.push_back(col_order);  // doesn't matter.
       if (not null_precedence.empty()) flat_null_precedence.push_back(col_null_order);
@@ -145,7 +151,8 @@ std::tuple<table_view,
            std::vector<std::unique_ptr<column>>>
 flatten_nested_columns(table_view const& input,
                        std::vector<order> const& column_order,
-                       std::vector<null_order> const& null_precedence)
+                       std::vector<null_order> const& null_precedence,
+                       bool force_nullability_columns)
 {
   std::vector<std::unique_ptr<column>> validity_as_column;
   auto const has_struct = std::any_of(
@@ -153,7 +160,7 @@ flatten_nested_columns(table_view const& input,
   if (not has_struct)
     return std::make_tuple(input, column_order, null_precedence, std::move(validity_as_column));
 
-  return flattened_table{input, column_order, null_precedence}();
+  return flattened_table{input, column_order, null_precedence, force_nullability_columns}();
 }
 
 }  // namespace detail
