@@ -79,7 +79,10 @@ struct flattened_table {
                   std::vector<order> const& column_order,
                   std::vector<null_order> const& null_precedence,
                   bool force_nullability_columns)
-    : input(input), column_order(column_order), null_precedence(null_precedence), force_nullability_columns(force_nullability_columns)
+    : input(input),
+      column_order(column_order),
+      null_precedence(null_precedence),
+      force_nullability_columns(force_nullability_columns)
   {
   }
 

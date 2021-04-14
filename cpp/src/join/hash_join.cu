@@ -308,7 +308,7 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const &build,
                "Build column size is too big for hash join");
 
   auto flattened_build = structs::detail::flatten_nested_columns(build, {}, {}, true);
-  _build = std::get<0>(flattened_build);
+  _build               = std::get<0>(flattened_build);
   // need to store off the owning structures for some of the views in _build
   _created_null_columns = std::move(std::get<3>(flattened_build));
 
@@ -363,7 +363,7 @@ hash_join::hash_join_impl::compute_hash_join(cudf::table_view const &probe,
                "Probe column size is too big for hash join");
 
   auto flattened_probe = structs::detail::flatten_nested_columns(probe, {}, {}, true);
-  auto const _probe = std::get<0>(flattened_probe);
+  auto const _probe    = std::get<0>(flattened_probe);
 
   CUDF_EXPECTS(_build.num_columns() == _probe.num_columns(),
                "Mismatch in number of columns to be joined on");

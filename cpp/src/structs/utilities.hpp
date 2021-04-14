@@ -57,7 +57,8 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
  * @param input input table to be flattened
  * @param column_order column order for input table
  * @param null_precedence null order for input table
- * @param force_nullability_columns force output to have nullability columns even if input columns are all valid
+ * @param force_nullability_columns force output to have nullability columns even if input columns
+ * are all valid
  * @return tuple with flattened table, flattened column order, flattened null precedence,
  * vector of boolean columns (struct validity).
  */
