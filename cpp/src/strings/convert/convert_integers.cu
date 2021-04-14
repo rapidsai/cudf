@@ -349,11 +349,10 @@ struct dispatch_from_integers_fn {
     auto d_new_offsets = offsets_view.template data<int32_t>();
 
     // build chars column
-    size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
-    auto chars_column =
-      detail::create_chars_child_column(strings_count, integers.null_count(), bytes, stream, mr);
-    auto chars_view = chars_column->mutable_view();
-    auto d_chars    = chars_view.template data<char>();
+    auto const bytes  = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
+    auto chars_column = detail::create_chars_child_column(strings_count, bytes, stream, mr);
+    auto chars_view   = chars_column->mutable_view();
+    auto d_chars      = chars_view.template data<char>();
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        strings_count,
