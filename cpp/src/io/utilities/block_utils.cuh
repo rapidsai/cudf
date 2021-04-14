@@ -39,11 +39,8 @@ inline __device__ uint32_t ballot(int pred) { return __ballot_sync(~0, pred); }
 template <typename T>
 inline __device__ void nanosleep(T d)
 {
-#if (__CUDA_ARCH__ >= 700)
-  __nanosleep(d);
-#else
+  // TODO: nanosleep temporarily disabled 
   clock();
-#endif
 }
 
 // Warp reduction helpers
