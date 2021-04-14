@@ -896,21 +896,66 @@ def test_binops_decimal_integer_column(args):
         [2.2, 4.4, 6.6],
         np.dtype('float32'),
         True
+    ),
+    # Subtraction, float from decimal
+    (
+        ['1.1', '2.2', '3.3'],
+        [1.05, 2.05, 3.05],
+        cudf.Decimal64Dtype(2,1),
+        np.dtype('float64'),
+        operator.sub,
+        [0.05, 0.15, 0.25],
+        np.dtype('float64'),
+        False
+    ),
+    (
+        ['1.1', '2.2', '3.3'],
+        [1.05, 2.05, 3.05],
+        cudf.Decimal64Dtype(2,1),
+        np.dtype('float32'),
+        operator.sub,
+        np.dtype('float32'),
+        False
     ),    
 ])
 def test_binops_decimal_float_column(args):
-    ldata, rdata, ldtype, rdtype, op, expect, expect_dtype, reflect = args
+    ldata, rdata, ldtype, rdtype, op, expect_dtype, reflect = args
 
     lhs = _decimal_series(ldata, ldtype)
     rhs = cudf.Series(rdata, dtype=rdtype)
 
+    def make_expect(lhs, rhs, ldtype, rdtype):
+        ans = []
+        for lhs, rhs in zip(ldata, rdata):
+            # ultimately we will be operating on two floats
+            # the answer we want though is the same thing that
+            # we would get if we cast a decimal.Decimal to 
+            # a float of the correct width and then used that
+            # in the operation rather than the decimal. 
+
+            # ldata: element->decimal->f32/64->pythonfloat
+            # example: '0.05'
+            # for float32 -> 0.05000000074505805969...
+            # for float64 -> 0.05000000000000000277...
+            lhs = float(
+                rdtype.type(
+                    decimal.Decimal(
+                        lhs
+                    )
+                )
+            )
+            rhs = rdtype.type(rhs)
+            ans.append(op(lhs, rhs))
+        return ans
+
+    expect_data = make_expect(lhs, rhs, ldtype, rdtype)
+    expect = cudf.Series(expect_data, dtype=expect_dtype)
     if reflect:
         lhs, rhs = rhs, lhs
 
     # result will be float, not decimal for these binops
-    expect = cudf.core.column.as_column(expect, dtype=rdtype)
     got = op(lhs, rhs)
-
+    breakpoint()
     utils.assert_eq(expect, got)
 
 
