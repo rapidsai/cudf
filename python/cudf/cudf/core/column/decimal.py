@@ -194,7 +194,7 @@ class DecimalColumn(ColumnBase):
     def default_na_value(self):
         p = self.dtype.precision
         s = self.dtype.scale
-        return Decimal("-" + p*"9" + "e" + str(-s))
+        return Decimal("-" + p * "9" + "e" + str(-s))
 
 
 def _binop_scale(l_dtype, r_dtype, op):
