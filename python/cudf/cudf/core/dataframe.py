@@ -7932,7 +7932,12 @@ def _align_indices(lhs, rhs):
     return lhs_out, rhs_out
 
 
-def _setitem_with_dataframe(input_df, replace_df, input_cols=None, mask=None):
+def _setitem_with_dataframe(
+    input_df: DataFrame,
+    replace_df: DataFrame,
+    input_cols: Any = None,
+    mask: Optional[cudf.core.column.ColumnBase] = None,
+):
     """
         This function sets item dataframes relevant columns with replacement df
         :param input_df: Dataframe to be modified inplace
@@ -7948,6 +7953,9 @@ def _setitem_with_dataframe(input_df, replace_df, input_cols=None, mask=None):
         raise ValueError(
             "Number of Input Columns must be same replacement Dataframe"
         )
+
+    if not input_df.index.equals(replace_df.index):
+        replace_df = replace_df.reindex(input_df.index)
 
     for col_1, col_2 in zip(input_cols, replace_df.columns):
         if col_1 in input_df.columns:
