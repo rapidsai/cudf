@@ -368,4 +368,59 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointInterleave)
   }
 }
 
+namespace {
+using StrListsCol = cudf::test::lists_column_wrapper<cudf::string_view>;
+using IntListsCol = cudf::test::lists_column_wrapper<int32_t>;
+using IntCol      = cudf::test::fixed_width_column_wrapper<int32_t>;
+using TView       = cudf::table_view;
+
+constexpr bool print_all{true};  // For debugging
+constexpr int32_t null{0};
+
+auto null_at(cudf::size_type idx)
+{
+  return cudf::detail::make_counting_transform_iterator(0, [idx](auto i) { return i != idx; });
+}
+auto null_at(std::vector<cudf::size_type> const& indices)
+{
+  return cudf::detail::make_counting_transform_iterator(0, [&indices](auto i) {
+    return std::find(indices.cbegin(), indices.cend(), i) == indices.cend();
+  });
+}
+
+auto all_nulls()
+{
+  return cudf::detail::make_counting_transform_iterator(0, [](auto) { return false; });
+}
+
+}  // namespace
+
+struct ListsColumnsInterleaveTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(ListsColumnsInterleaveTest, InvalidInput)
+{
+  // Input table contains non-list column
+  {
+    auto const col1 = IntCol{}.release();
+    auto const col2 = IntListsCol{}.release();
+    EXPECT_THROW(cudf::interleave_columns(TView{{col1->view(), col2->view()}}), cudf::logic_error);
+  }
+
+  // Nested types are not supported
+  {
+    auto const col = IntListsCol{{IntListsCol{1, 2, 3}, IntListsCol{4, 5, 6}}}.release();
+    EXPECT_THROW(cudf::interleave_columns(TView{{col->view(), col->view()}}), cudf::logic_error);
+  }
+}
+
+template <typename T>
+struct ListsColumnsInterleaveTypedTest : public cudf::test::BaseFixture {
+};
+#define ListsCol cudf::test::lists_column_wrapper<TypeParam>
+
+using TypesForTest =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
+TYPED_TEST_CASE(ListsColumnsInterleaveTypedTest, TypesForTest);
+
 CUDF_TEST_PROGRAM_MAIN()
