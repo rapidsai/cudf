@@ -309,9 +309,9 @@ flag. Below is a list of the available arguments and their purpose:
 
 | Build Argument | Default Value | Other Value(s) | Purpose |
 | --- | --- | --- | --- |
-| `CUDA_VERSION` | 10.0 | 10.1, 10.2 | set CUDA version |
-| `LINUX_VERSION` | ubuntu16.04 | ubuntu18.04 | set Ubuntu version |
-| `CC` & `CXX` | 5 | 7 | set gcc/g++ version; **NOTE:** gcc7 requires Ubuntu 18.04 |
+| `CUDA_VERSION` | 11.0 | 11.1, 11.2.2 | set CUDA version |
+| `LINUX_VERSION` | ubuntu18.04 | ubuntu20.04 | set Ubuntu version |
+| `CC` & `CXX` | 9 | 10 | set gcc/g++ version |
 | `CUDF_REPO` | This repo | Forks of cuDF | set git URL to use for `git clone` |
 | `CUDF_BRANCH` | main | Any branch name | set git branch to checkout of `CUDF_REPO` |
 | `NUMBA_VERSION` | newest | >=0.40.0 | set numba version |
@@ -320,7 +320,7 @@ flag. Below is a list of the available arguments and their purpose:
 | `PYARROW_VERSION` | 1.0.1 | Not supported | set pyarrow version |
 | `CMAKE_VERSION` | newest | >=3.14 | set cmake version |
 | `CYTHON_VERSION` | 0.29 | Not supported | set Cython version |
-| `PYTHON_VERSION` | 3.7 | 3.8 | set python version |
+| `PYTHON_VERSION` | 3.8 | 3.9 | set python version |
 
 ---
 
