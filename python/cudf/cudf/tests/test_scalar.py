@@ -5,8 +5,8 @@ from decimal import Decimal
 
 import numpy as np
 import pandas as pd
-import pytest
 import pyarrow as pa
+import pytest
 
 import cudf
 from cudf import Scalar as pycudf_scalar
@@ -197,7 +197,11 @@ def test_scalar_roundtrip(value):
 def test_null_scalar(dtype):
     s = cudf.Scalar(None, dtype=dtype)
     assert s.value is cudf.NA
-    assert s.dtype == (np.dtype(dtype) if not isinstance(dtype, cudf.Decimal64Dtype) else dtype)
+    assert s.dtype == (
+        np.dtype(dtype)
+        if not isinstance(dtype, cudf.Decimal64Dtype)
+        else dtype
+    )
     assert s.is_valid() is False
 
 
@@ -233,7 +237,6 @@ def test_generic_null_scalar_construction_fails(value):
         cudf.Scalar(value)
 
 
-
 @pytest.mark.parametrize(
     "dtype",
     NUMERIC_TYPES
@@ -245,7 +248,11 @@ def test_generic_null_scalar_construction_fails(value):
 def test_scalar_dtype_and_validity(dtype):
     s = cudf.Scalar(1, dtype=dtype)
 
-    assert s.dtype == (np.dtype(dtype) if not isinstance(dtype, cudf.Decimal64Dtype) else dtype)
+    assert s.dtype == (
+        np.dtype(dtype)
+        if not isinstance(dtype, cudf.Decimal64Dtype)
+        else dtype
+    )
     assert s.is_valid() is True
 
 

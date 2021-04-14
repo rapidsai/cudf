@@ -2,8 +2,7 @@
 import decimal
 
 import numpy as np
-from pandas._libs.tslibs.timestamps import Timestamp as pd_timestamp
-from pandas._libs.tslibs.timedeltas import Timedelta as pd_timedelta
+import pyarrow as pa
 
 from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
 from cudf.core.column.column import ColumnBase
@@ -12,13 +11,10 @@ from cudf.core.index import Index
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
-    to_cudf_compatible_scalar,
-    is_string_dtype,
     is_decimal_dtype,
-    is_datetime_dtype,
-    is_timedelta_dtype
+    to_cudf_compatible_scalar,
 )
-import pyarrow as pa
+
 
 class Scalar(object):
     def __init__(self, value, dtype=None):
@@ -118,11 +114,10 @@ class Scalar(object):
 
     def _device_value_to_host(self):
         self._host_value = self._device_value._to_host_scalar()
-    
+
     def _preprocess_host_value(self, value, dtype):
         pa_scalar = pa.scalar(
-            value if type(value) is not np.bool_
-            else bool(value)
+            value if type(value) is not np.bool_ else bool(value)
         )
         valid = pa_scalar.is_valid
 
@@ -131,7 +126,7 @@ class Scalar(object):
             if dtype is None:
                 # value must be a decimal, derive the dtype
                 dtype = Decimal64Dtype._from_decimal(value)
-            
+
             # arrow coerces a decimal to a difference precision/scale
             # or an int to a decimal with certain precision/scale
             # and errors if the incoming object cannot be coerced
@@ -142,7 +137,9 @@ class Scalar(object):
         else:
             value = to_cudf_compatible_scalar(value, dtype=dtype)
             if dtype is None:
-                if not valid and not isinstance(pa_scalar.type, (pa.TimestampType, pa.DurationType)):
+                if not valid and not isinstance(
+                    pa_scalar.type, (pa.TimestampType, pa.DurationType)
+                ):
                     raise TypeError(
                         "dtype required when constructing a null scalar"
                     )
@@ -154,7 +151,6 @@ class Scalar(object):
             dtype = np.dtype("object") if dtype.char == "U" else dtype
 
         return value if valid else NA, dtype
-
 
     def _sync(self):
         """
