@@ -63,7 +63,7 @@ public class ParquetWriterOptions extends ParquetColumnWriterOptions.ParquetStru
     return metadata.values().toArray(new String[metadata.size()]);
   }
 
-  public static class Builder extends ParquetColumnWriterOptions.StructBuilder<Builder> {
+  public static class Builder extends ParquetColumnWriterOptions.AbstractStructBuilder<Builder> {
     final Map<String, String> metadata = new LinkedHashMap<>();
     CompressionType compressionType = CompressionType.AUTO;
     private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
