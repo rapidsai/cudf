@@ -862,7 +862,6 @@ def test_binops_decimal_integer_column(args):
         cudf.Decimal64Dtype(2,1),
         np.dtype('float64'),
         operator.add,
-        [2.2, 4.4, 6.6],
         np.dtype('float64'),
         False
     ),
@@ -872,7 +871,6 @@ def test_binops_decimal_integer_column(args):
         cudf.Decimal64Dtype(2,1),
         np.dtype('float32'),
         operator.add,
-        [2.2, 4.4, 6.6],
         np.dtype('float32'),
         False
     ),
@@ -883,7 +881,6 @@ def test_binops_decimal_integer_column(args):
         cudf.Decimal64Dtype(2,1),
         np.dtype('float64'),
         operator.add,
-        [2.2, 4.4, 6.6],
         np.dtype('float64'),
         True
     ),
@@ -893,7 +890,6 @@ def test_binops_decimal_integer_column(args):
         cudf.Decimal64Dtype(2,1),
         np.dtype('float32'),
         operator.add,
-        [2.2, 4.4, 6.6],
         np.dtype('float32'),
         True
     ),
@@ -904,7 +900,6 @@ def test_binops_decimal_integer_column(args):
         cudf.Decimal64Dtype(2,1),
         np.dtype('float64'),
         operator.sub,
-        [0.05, 0.15, 0.25],
         np.dtype('float64'),
         False
     ),
@@ -955,7 +950,6 @@ def test_binops_decimal_float_column(args):
 
     # result will be float, not decimal for these binops
     got = op(lhs, rhs)
-    breakpoint()
     utils.assert_eq(expect, got)
 
 
