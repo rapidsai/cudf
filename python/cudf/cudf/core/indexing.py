@@ -167,7 +167,8 @@ class _SeriesLocIndexer(object):
     def _loc_to_iloc(self, arg):
         if is_scalar(arg):
             if not is_numerical_dtype(self._sr.index.dtype):
-                if pd.api.types.is_integer(arg):
+                # TODO: switch to cudf.utils.dtypes.is_integer(arg)
+                if pd.api.types.is_integer(arg):  #
                     found_index = arg
                     return found_index
 

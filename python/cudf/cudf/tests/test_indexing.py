@@ -1,6 +1,5 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
-import re
 from itertools import combinations
 
 import cupy
@@ -154,21 +153,14 @@ def test_series_get_item_iloc_defer(arg):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    ["int32", "int16", "int8", "int64", "uint32", "uint16", "uint8", "uint64"],
-)
-def test_series_iloc_defer_cudf_Scalar(dtype):
+def test_series_iloc_defer_cudf_scalar():
     ps = pd.Series([1, 2, 3], index=pd.Index(["a", "b", "c"]))
     gs = cudf.from_pandas(ps)
 
-    arg = cudf.Scalar(1, dtype=dtype)
-    got = gs[arg]
-
-    with pytest.raises(
-        TypeError, match=re.escape(f"'{arg}' is an invalid key"),
-    ):
-        expect = ps[arg]
+    for t in index_dtypes:
+        arg = cudf.Scalar(1, dtype=t)
+        got = gs[arg]
+        expect = 2
         assert_eq(expect, got)
 
 
