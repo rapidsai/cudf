@@ -100,23 +100,7 @@ def pdf_gdf_multi():
         + ["numpy.array[%s]" % np.dtype(t).type.__name__ for t in index_dtypes]
     ),
 )
-@pytest.mark.parametrize(
-    "arg",
-    [
-        1,
-        -1,
-        "b",
-        np.int32(1),
-        np.uint32(1),
-        np.int8(1),
-        np.uint8(1),
-        np.int16(1),
-        np.uint16(1),
-        np.int64(1),
-        np.uint64(1),
-    ],
-)
-def test_series_indexing(i1, i2, i3, arg):
+def test_series_indexing(i1, i2, i3):
     a1 = np.arange(20)
     series = cudf.Series(a1)
 
@@ -142,7 +126,25 @@ def test_series_indexing(i1, i2, i3, arg):
         for i in i1:  # numpy integers
             assert series[i] == a1[i]
 
-    # Indexing for non-integer dtype Index
+
+@pytest.mark.parametrize(
+    "arg",
+    [
+        1,
+        -1,
+        "b",
+        np.int32(1),
+        np.uint32(1),
+        np.int8(1),
+        np.uint8(1),
+        np.int16(1),
+        np.uint16(1),
+        np.int64(1),
+        np.uint64(1),
+    ],
+)
+def test_series_get_item_iloc_defer(arg):
+    # Indexing for non-numeric dtype Index
     ps = pd.Series([1, 2, 3], index=pd.Index(["a", "b", "c"]))
     gs = cudf.from_pandas(ps)
 
@@ -156,7 +158,7 @@ def test_series_indexing(i1, i2, i3, arg):
     "dtype",
     ["int32", "int16", "int8", "int64", "uint32", "uint16", "uint8", "uint64"],
 )
-def test_series_indexing_cudf_Scalar(dtype):
+def test_series_iloc_defer_cudf_Scalar(dtype):
     ps = pd.Series([1, 2, 3], index=pd.Index(["a", "b", "c"]))
     gs = cudf.from_pandas(ps)
 
