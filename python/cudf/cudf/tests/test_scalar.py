@@ -234,11 +234,7 @@ def test_generic_null_scalar_construction_fails(value):
 
 
 @pytest.mark.parametrize(
-    "dtype",
-    NUMERIC_TYPES
-    + DATETIME_TYPES
-    + TIMEDELTA_TYPES
-    + ["object"]
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["object"]
 )
 def test_scalar_dtype_and_validity(dtype):
     s = cudf.Scalar(1, dtype=dtype)
@@ -246,13 +242,17 @@ def test_scalar_dtype_and_validity(dtype):
     assert s.dtype == np.dtype(dtype)
     assert s.is_valid() is True
 
-@pytest.mark.parametrize('slr,dtype,expect', [
-    (1, cudf.Decimal64Dtype(1, 0), Decimal('1')),
-    (Decimal(1), cudf.Decimal64Dtype(1, 0), Decimal('1')),
-    (Decimal('1.1'), cudf.Decimal64Dtype(2,1), Decimal('1.1')),
-    (Decimal('1.1'), cudf.Decimal64Dtype(4,3), Decimal('1.100')),
-    (Decimal('1.11'), cudf.Decimal64Dtype(2,2), pa.lib.ArrowInvalid)
-])
+
+@pytest.mark.parametrize(
+    "slr,dtype,expect",
+    [
+        (1, cudf.Decimal64Dtype(1, 0), Decimal("1")),
+        (Decimal(1), cudf.Decimal64Dtype(1, 0), Decimal("1")),
+        (Decimal("1.1"), cudf.Decimal64Dtype(2, 1), Decimal("1.1")),
+        (Decimal("1.1"), cudf.Decimal64Dtype(4, 3), Decimal("1.100")),
+        (Decimal("1.11"), cudf.Decimal64Dtype(2, 2), pa.lib.ArrowInvalid),
+    ],
+)
 def test_scalar_dtype_and_validity_decimal(slr, dtype, expect):
     if expect is pa.lib.ArrowInvalid:
         with pytest.raises(expect):
@@ -262,6 +262,7 @@ def test_scalar_dtype_and_validity_decimal(slr, dtype, expect):
         result = cudf.Scalar(slr, dtype=dtype)
         assert result.dtype == dtype
         assert result.is_valid
+
 
 @pytest.mark.parametrize(
     "value",
