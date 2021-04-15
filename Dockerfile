@@ -16,7 +16,6 @@ RUN apt update -y --fix-missing && \
     add-apt-repository ppa:ubuntu-toolchain-r/test && \
     apt update -y --fix-missing && \
     apt install -y --no-install-recommends \
-      software-properties-common \
       git \
       gcc-${CC} \
       g++-${CXX} \
