@@ -110,7 +110,7 @@ std::unique_ptr<column> strip(
 
   // this utility calls the strip_fn to build the offsets and chars columns
   auto children = cudf::strings::detail::make_strings_children(
-    strip_fn{*d_column, stype, d_to_strip}, strings.size(), strings.null_count(), stream, mr);
+    strip_fn{*d_column, stype, d_to_strip}, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
                              std::move(children.first),
