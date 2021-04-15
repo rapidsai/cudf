@@ -45,12 +45,12 @@ class SubwordTokenizer:
         self,
         text,
         max_length,
+        max_num_rows,
         add_special_tokens=True,
         padding="max_length",
         truncation=False,
         stride=0,
         return_tensors="cp",
-        max_num_rows=None,
         return_token_type_ids=False,
     ):
         """

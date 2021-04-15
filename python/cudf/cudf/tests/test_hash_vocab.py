@@ -7,7 +7,7 @@ import pytest
 
 @pytest.fixture(scope="module")
 def datadir(datadir):
-    return os.path.join(datadir, "subword_tokenizer_data", "bert_base_sampled")
+    return os.path.join(datadir, "subword_tokenizer_data", "bert_base_cased_sampled")
 
 
 def test_correct_bert_base_vocab_hash(datadir, tmpdir):

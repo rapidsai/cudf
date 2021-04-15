@@ -63,5 +63,4 @@ def test_subword_tokenize(
         truncation=True,
         add_special_tokens=add_special_tokens,
     )
-
     assert_equal_tokenization_outputs(hf_output, cudf_output)
