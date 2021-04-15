@@ -522,7 +522,7 @@ def test_orc_decimal_precision_fail(datadir):
     with pytest.raises(RuntimeError):
         cudf.read_orc(file_path)
 
-    # But that shouldn't cause failure if that column is not chosen to be read.
+    # Shouldn't cause failure if decimal column is not chosen to be read.
     pdf = orcfile.read(columns=["int"]).to_pandas()
     gdf = cudf.read_orc(file_path, columns=["int"])
 
