@@ -313,7 +313,9 @@ class GetAttrGetItemMixin:
         try:
             return self[key]
         except KeyError:
-            raise AttributeError(f"{type(self).__name__} object has no attribute {key}")
+            raise AttributeError(
+                f"{type(self).__name__} object has no attribute {key}"
+            )
 
 
 def time_col_replace_nulls(input_col):
