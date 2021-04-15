@@ -1,7 +1,7 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 from decimal import Decimal
-from typing import cast, Any, Callable, Sequence, Tuple, Union
+from typing import cast, Any, Sequence, Union
 
 import cupy as cp
 import numpy as np
@@ -158,8 +158,10 @@ class DecimalColumn(ColumnBase):
         )
         sorted_indices = sorted_indices[self.null_count :]
 
-        result = cpp_quantile(self, quant, interpolation, sorted_indices, exact)
-        
+        result = cpp_quantile(
+            self, quant, interpolation, sorted_indices, exact
+        )
+
         return self._copy_type_metadata(result)
 
     def as_decimal_column(

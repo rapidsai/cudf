@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import functools
+import decimal
 from collections.abc import Sequence
 from math import floor, isinf, isnan
 
@@ -95,6 +96,15 @@ def scalar_broadcast_to(scalar, size, dtype=None):
             return scalar_broadcast_to(scalar.categories[0], size).astype(
                 dtype
             )
+
+    if isinstance(scalar, decimal.Decimal):
+        if dtype is None:
+            dtype = cudf.Decimal64Dtype._from_decimal(scalar)
+
+        out_col = column.column_empty(size, dtype=dtype)
+        if out_col.size != 0:
+            out_col[:] = scalar
+        return out_col
 
     scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
     dtype = scalar.dtype
