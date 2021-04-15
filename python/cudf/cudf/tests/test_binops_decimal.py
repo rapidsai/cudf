@@ -911,8 +911,104 @@ def test_binops_decimal_integer_column(args):
         operator.sub,
         np.dtype('float32'),
         False
-    ),    
+    ),
+    # Subtraction, decimal from float
+    (
+        ['1.05', '2.05', '3.05'],
+        [1.1, 2.2, 3.3],
+        cudf.Decimal64Dtype(3,2),
+        np.dtype('float64'),
+        operator.sub,
+        np.dtype('float64'),
+        True
+    ),
+    (
+        ['1.05', '2.05', '3.05'],
+        [1.1, 2.2, 3.3],
+        cudf.Decimal64Dtype(3,2),
+        np.dtype('float32'),
+        operator.sub,
+        np.dtype('float32'),
+        True
+    ),
+    # Multiplication, non-reflected
+    (
+        ['1.1', '2.2', '3.3'],
+        [1.1, 2.2, 3.3],
+        cudf.Decimal64Dtype(2,1),
+        np.dtype('float64'),
+        operator.mul,
+        np.dtype('float64'),
+        False
+    ),
+    (
+        ['1.1', '2.2', '3.3'],
+        [1.1, 2.2, 3.3],
+        cudf.Decimal64Dtype(2,1),
+        np.dtype('float32'),
+        operator.mul,
+        np.dtype('float32'),
+        False
+    ),
+    # Multiplication, reflected
+    (
+        ['1.1', '2.2', '3.3'],
+        [1.1, 2.2, 3.3],
+        cudf.Decimal64Dtype(2,1),
+        np.dtype('float64'),
+        operator.mul,
+        np.dtype('float64'),
+        True
+    ),
+    (
+        ['1.1', '2.2', '3.3'],
+        [1.1, 2.2, 3.3],
+        cudf.Decimal64Dtype(2,1),
+        np.dtype('float32'),
+        operator.mul,
+        np.dtype('float32'),
+        True
+    ),     
+    # division, float by decimal
+    (
+        ['1.1', '2.2', '3.3'],
+        [1.05, 2.05, 3.05],
+        cudf.Decimal64Dtype(2,1),
+        np.dtype('float64'),
+        operator.truediv,
+        np.dtype('float64'),
+        False
+    ),
+    (
+        ['1.1', '2.2', '3.3'],
+        [1.05, 2.05, 3.05],
+        cudf.Decimal64Dtype(2,1),
+        np.dtype('float32'),
+        operator.truediv,
+        np.dtype('float32'),
+        False
+    ),
+    # Subtraction, decimal from float
+    (
+        ['1.05', '2.05', '3.05'],
+        [1.1, 2.2, 3.3],
+        cudf.Decimal64Dtype(3,2),
+        np.dtype('float64'),
+        operator.truediv,
+        np.dtype('float64'),
+        True
+    ),
+    (
+        ['1.05', '2.05', '3.05'],
+        [1.1, 2.2, 3.3],
+        cudf.Decimal64Dtype(3,2),
+        np.dtype('float32'),
+        operator.truediv,
+        np.dtype('float32'),
+        True
+    ),   
 ])
+
 def test_binops_decimal_float_column(args):
     ldata, rdata, ldtype, rdtype, op, expect_dtype, reflect = args
 
@@ -940,6 +1036,8 @@ def test_binops_decimal_float_column(args):
                 )
             )
             rhs = rdtype.type(rhs)
+            if reflect:
+                lhs, rhs = rhs, lhs
             ans.append(op(lhs, rhs))
         return ans
 
@@ -949,6 +1047,7 @@ def test_binops_decimal_float_column(args):
         lhs, rhs = rhs, lhs
 
     # result will be float, not decimal for these binops
+    breakpoint()
     got = op(lhs, rhs)
     utils.assert_eq(expect, got)
 
