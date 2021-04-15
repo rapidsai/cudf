@@ -69,13 +69,10 @@ RUN if [ -f /cudf/docker/package_versions.sh ]; \
          conda env create --name cudf --file /cudf/conda/environments/cudf_dev_cuda${CUDA_SHORT_VERSION}.yml ; \
     fi
 
-# libcudf build/install
 ENV CC=/usr/bin/gcc-${CC}
 ENV CXX=/usr/bin/g++-${CXX}
+
+# libcudf & cudf build/install
 RUN source activate cudf && \
     cd /cudf/ && \
-    ./build.sh libcudf
-
-# cuDF build/install
-RUN source activate cudf && \
-    cd /cudf/ && ./build.sh cudf
+    ./build.sh libcudf cudf

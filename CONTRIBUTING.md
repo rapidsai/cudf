@@ -160,7 +160,7 @@ git submodule update --init --remote --recursive
 ```bash
 # create the conda environment (assuming in base `cudf` directory)
 # note: RAPIDS currently doesn't support `channel_priority: strict`; use `channel_priority: flexible` instead
-conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda10.0.yml
+conda env create --name cudf_dev --file conda/environments/cudf_dev_cuda11.0.yml
 # activate the environment
 conda activate cudf_dev
 ```
@@ -282,7 +282,7 @@ A Dockerfile is provided with a preconfigured conda environment for building and
 
 * Install [nvidia-docker2](https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0)) for Docker + GPU support
 * Verify NVIDIA driver is `410.48` or higher
-* Ensure CUDA 10.0+ is installed
+* Ensure CUDA 11.0+ is installed
 
 ### Usage
 
