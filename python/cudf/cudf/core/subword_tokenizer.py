@@ -21,10 +21,7 @@ def cast_to_appripate_type(ar, cast_type):
 
 
 class SubwordTokenizer:
-    def __init__(
-        self,
-        hash_file: str,
-        do_lower_case: bool = True):
+    def __init__(self, hash_file: str, do_lower_case: bool = True):
         """
         Run CUDA BERT subword tokenizer on cuDF strings column.
         Encodes words to token ids using vocabulary from a pretrained
@@ -37,7 +34,7 @@ class SubwordTokenizer:
             Path to hash file containing vocabulary of words with token-ids.
             This can be created from the raw vocabulary
             using the ``cudf.utils.hash_vocab_utils.hash_vocab`` function
-        
+
         do_lower : bool, Default is True
             If set to true, original text will be lowercased before encoding.
         """
@@ -83,7 +80,8 @@ class SubwordTokenizer:
             A good default can be twice the max_length
 
         add_special_tokens: (bool, optional, defaults to True)
-            Whether or not to encode the sequences with the special tokens of the BERT classification model
+            Whether or not to encode the sequences with the special tokens
+            of the BERT classification model
 
         padding: ('max_length')
             Pad to a maximum length specified with the argument max_length
@@ -106,14 +104,15 @@ class SubwordTokenizer:
             'cp': Return cupy cp.ndarray objects
 
         return_token_type_ids (bool, optional): Only False currently supported
-        
+
         Returns
         -------
         A Encoding with the following fields:
         input_ids:(type defined by return_tensors)
-            A tensor of token ids to be fed to a model. 
+            A tensor of token ids to be fed to a model.
         attention_mask: (type defined by return_tensors)
-            A tensor of indices specifying which tokens should be attended to by the model
+            A tensor of indices specifying which tokens
+            should be attended to by the model
         metadata: (type defined by return_tensors)
             Each row contains the index id of the original string and the
             first and last index of the token-ids that are non-padded and
@@ -125,25 +124,29 @@ class SubwordTokenizer:
         >>> from cudf.utils.hash_vocab_utils  import hash_vocab
         >>> hash_vocab('bert-base-cased-vocab.txt', 'voc_hash.txt')
 
-        >>>from cudf.core.subword_tokenizer import SubwordTokenizer
-        >>>cudf_tokenizer  = SubwordTokenizer('voc_hash.txt', do_lower_case=True) 
+        >>> from cudf.core.subword_tokenizer import SubwordTokenizer
+        >>> cudf_tokenizer  = SubwordTokenizer('voc_hash.txt',
+                                                do_lower_case=True)
 
-        >>>str_series = cudf.Series(['This is the', 'best book'])
-        >>>tokenizer_output = cudf_tokenizer(str_series,
+        >>> str_series = cudf.Series(['This is the', 'best book'])
+        >>> tokenizer_output = cudf_tokenizer(str_series,
                             max_length=8,
-                            max_num_rows=len(str_series),                                  
+                            max_num_rows=len(str_series),
                             padding='max_length',
                             return_tensors='pt',
                             truncation=True)
-        >>>
+        >>>tokenizer_output['input_ids']
         tensor([[ 101, 1142, 1110, 1103,  102,    0,    0,    0],
-                [ 101, 1436, 1520,  102,    0,    0,    0,    0]], device='cuda:0',
+                [ 101, 1436, 1520,  102,    0,    0,    0,    0]],
+                device='cuda:0',
                dtype=torch.int32)
-        >>>
+        >>>tokenizer_output['attention_mask']
         tensor([[1, 1, 1, 1, 1, 0, 0, 0],
-                [1, 1, 1, 1, 0, 0, 0, 0]], device='cuda:0', dtype=torch.int32)
+                [1, 1, 1, 1, 0, 0, 0, 0]],
+                device='cuda:0', dtype=torch.int32)
 
-        >>>tensor([[0, 1, 3],
+        >>>tokenizer_output['metadata']
+        tensor([[0, 1, 3],
                   [1, 1, 2]], device='cuda:0', dtype=torch.int32)
        """
 
@@ -155,12 +158,22 @@ class SubwordTokenizer:
 
         if truncation in [False, "do_not_truncate"]:
             truncation = False
-            warning_msg = "The behaviour currently differs from HuggingFace as we always return overflowing tokens"
+            warning_msg = (
+                "The behaviour currently differs from  "
+                + "HuggingFace as we always return overflowing tokens"
+            )
             warn(warning_msg)
             if add_special_tokens:
-                error_msg = f"Adding special tokens is not supported with truncation = {truncation}"
-                recommendation = "Custom Cupy kernel can potentially be used to add it, see _bert_add_special_tokens for reference"
-                raise NotImplementedError(error_msg+recommendation)
+                error_msg = (
+                    "Adding special tokens is not supported"
+                    + f"with truncation = {truncation}"
+                )
+                recommendation = (
+                    "Custom Cupy kernel can potentially"
+                    + "be used to add it. Fpr reference "
+                    + "see: _bert_add_special_tokens "
+                )
+                raise NotImplementedError(error_msg + recommendation)
 
         if padding != "max_length":
             error_msg = (
@@ -173,7 +186,10 @@ class SubwordTokenizer:
             raise ValueError(error_msg)
 
         if return_tensors not in ["cp", "pt", "tf"]:
-            error_msg = "Only cupy(cp), pytorch(pt) and tensorflow(tf) tensors are supported"
+            error_msg = (
+                "Only cupy(cp), pytorch(pt) and tensorflow(tf)"
+                + "tensors are supported"
+            )
             raise NotImplementedError(error_msg)
 
         stride = max_length - stride
@@ -201,27 +217,29 @@ class SubwordTokenizer:
         if add_special_tokens:
             tokenizer_output = _bert_add_special_tokens(tokenizer_output)
 
-
         tokenizer_output = {
             k: cast_to_appripate_type(v, return_tensors)
             for k, v in tokenizer_output.items()
         }
 
- 
         return tokenizer_output
 
-def _bert_add_special_tokens(token_o):
-    
-    max_length = token_o['input_ids'].shape[1]
-    seq_end_col = max_length - (token_o['input_ids'][:, ::-1] != 0).argmax(1)
-    # clipping to take overflow into account
-    seq_end_col = cp.clip(seq_end_col + 1, a_max=max_length-1)
 
-    _bert_add_special_tokens_input_ids(token_o['input_ids'], seq_end_col)
-    _bert_add_special_tokens_attention_mask(token_o['attention_mask'], seq_end_col)
-    _bert_add_spedical_tokens_metadata(token_o['metadata'], max_length)
+def _bert_add_special_tokens(token_o):
+
+    max_length = token_o["input_ids"].shape[1]
+    seq_end_col = max_length - (token_o["input_ids"][:, ::-1] != 0).argmax(1)
+    # clipping to take overflow into account
+    seq_end_col = cp.clip(seq_end_col + 1, a_max=max_length - 1)
+
+    _bert_add_special_tokens_input_ids(token_o["input_ids"], seq_end_col)
+    _bert_add_special_tokens_attention_mask(
+        token_o["attention_mask"], seq_end_col
+    )
+    _bert_add_spedical_tokens_metadata(token_o["metadata"], max_length)
 
     return token_o
+
 
 def _bert_add_special_tokens_input_ids(input_ids, seq_end_col):
     # Mark sequence start with [CLS] token mapping to the start of sequence
@@ -229,7 +247,10 @@ def _bert_add_special_tokens_input_ids(input_ids, seq_end_col):
     input_ids[:, 0] = 101
     # Mark end of sequence [SEP]
 
-    input_ids[cp.arange(0,input_ids.shape[0],dtype=cp.uint32), seq_end_col] = 102
+    input_ids[
+        cp.arange(0, input_ids.shape[0], dtype=cp.uint32), seq_end_col
+    ] = 102
+
 
 def _bert_add_special_tokens_attention_mask(attention_mask, seq_end_col):
     # Copy attention masks for all but last two
@@ -237,11 +258,13 @@ def _bert_add_special_tokens_attention_mask(attention_mask, seq_end_col):
     # Mark [CLS] token with 1
     attention_mask[:, 0] = 1
     # Mark [SEP] token with 1
-    attention_mask[cp.arange(0,attention_mask.shape[0],dtype=cp.uint32), seq_end_col] = 1 
+    attention_mask[
+        cp.arange(0, attention_mask.shape[0], dtype=cp.uint32), seq_end_col
+    ] = 1
 
-def _bert_add_spedical_tokens_metadata(metadata, max_length):    
+
+def _bert_add_spedical_tokens_metadata(metadata, max_length):
     # metadata seq starts from plus 1
-    metadata[:,1]=metadata[:,1]+1
-    # clip done to take overflow into account 
-    metadata[:,2]=cp.clip(metadata[:,2]+1,a_max=max_length-2)
-
+    metadata[:, 1] = metadata[:, 1] + 1
+    # clip done to take overflow into account
+    metadata[:, 2] = cp.clip(metadata[:, 2] + 1, a_max=max_length - 2)

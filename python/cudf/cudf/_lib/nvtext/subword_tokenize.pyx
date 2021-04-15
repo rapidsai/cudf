@@ -28,7 +28,6 @@ cdef class Hashed_Vocabulary:
             self.c_obj = move(cpp_load_vocabulary_file(c_hash_file))
 
 
-## merge code with allready existing one
 def subword_tokenize_inmem_hash(Column strings,
     Hashed_Vocabulary hashed_vocablary,
     uint32_t max_sequence_length=64,
@@ -36,9 +35,7 @@ def subword_tokenize_inmem_hash(Column strings,
     bool do_lower=True,
     bool do_truncate=False,
     uint32_t max_rows_tensor=500):
-    
     cdef column_view c_strings = strings.view()
-    #cdef unique_ptr[cpp_hashed_vocabulary] c_vocab = move(hashed_vocablary.c_obj)
     cdef cpp_tokenizer_result c_result
     with nogil:
         c_result = tr_move(
@@ -67,7 +64,7 @@ def subword_tokenize_vocab_file(
     bool do_lower=True,
     bool do_truncate=False,
     uint32_t max_rows_tensor=500
-):
+    ):
     cdef column_view c_strings = strings.view()
     cdef cpp_tokenizer_result c_result
     cdef string c_hash_file = <string>str(hash_file).encode()

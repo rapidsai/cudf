@@ -3,7 +3,7 @@
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
-from libc.stdint cimport uint16_t,uint32_t
+from libc.stdint cimport uint16_t, uint32_t
 
 
 from cudf._lib.cpp.column.column cimport column
@@ -25,11 +25,10 @@ cdef extern from "nvtext/subword_tokenize.hpp" namespace "nvtext" nogil:
         uint32_t outer_hash_a
         uint32_t outer_hash_b
         uint16_t num_bin
-        unique_ptr[column] table            
+        unique_ptr[column] table
         unique_ptr[column] bin_coefficients
         unique_ptr[column] bin_offsets
 
-    ### todo : match cpp function def and return pointer 
     cdef  unique_ptr[hashed_vocabulary] load_vocabulary_file(
          const string &filename_hashed_vocabulary
     ) except +
