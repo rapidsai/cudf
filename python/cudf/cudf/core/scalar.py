@@ -11,7 +11,6 @@ from cudf.core.index import Index
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
-    is_decimal_dtype,
     to_cudf_compatible_scalar,
 )
 
@@ -119,7 +118,9 @@ class Scalar(object):
         valid = not _is_null_host_scalar(value)
 
         if isinstance(dtype, Decimal64Dtype):
-            value = pa.scalar(value, type=pa.decimal128(dtype.precision, dtype.scale)).as_py()
+            value = pa.scalar(
+                value, type=pa.decimal128(dtype.precision, dtype.scale)
+            ).as_py()
         if isinstance(value, decimal.Decimal) and dtype is None:
             dtype = Decimal64Dtype._from_decimal(value)
 
