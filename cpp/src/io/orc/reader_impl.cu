@@ -426,8 +426,12 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   std::vector<data_type> column_types;
   for (const auto &col : _selected_columns) {
     auto col_type = to_type_id(_metadata->ff.types[col], _use_np_dtypes, _timestamp_type.id());
+    auto scale    = (col_type == type_id::DECIMAL64) ? _metadata->ff.types[col].scale : 0;
     CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
-    column_types.emplace_back(col_type);
+    // Remove this once we support Decimal128 data type
+    CUDF_EXPECTS((col_type != type_id::DECIMAL64) or (_metadata->ff.types[col].precision <= 18),
+                 "Decimal data has precision > 18, Decimal64 data type doesn't support it.");
+    column_types.emplace_back(col_type, -1 * static_cast<int32_t>(scale));
 
     // Map each ORC column to its column
     orc_col_map[col] = column_types.size() - 1;
@@ -509,15 +513,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         chunk.num_rows      = stripe_info->numberOfRows;
         chunk.encoding_kind = stripe_footer->columns[_selected_columns[j]].kind;
         chunk.type_kind     = _metadata->ff.types[_selected_columns[j]].kind;
-        if (column_types[j].id() == type_id::DECIMAL64) {
-          CUDF_EXPECTS(_metadata->ff.types[_selected_columns[j]].precision <= 18,
-                       "Decimal data has precision > 18, Decimal64 data-type doesn't support it.");
-          chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale;
-          // Update the data type with appropriate scale
-          column_types[j] = data_type(type_id::DECIMAL64, -1 * chunk.decimal_scale);
-        }
-        chunk.rowgroup_id = num_rowgroups;
-        chunk.dtype_len   = (column_types[j].id() == type_id::STRING)
+        chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale;
+        chunk.rowgroup_id   = num_rowgroups;
+        chunk.dtype_len     = (column_types[j].id() == type_id::STRING)
                             ? sizeof(std::pair<const char *, size_t>)
                             : cudf::size_of(column_types[j]);
         if (chunk.type_kind == orc::TIMESTAMP) {

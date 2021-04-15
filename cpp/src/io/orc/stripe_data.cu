@@ -1027,7 +1027,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
     if (t >= num_vals_read and t < num_vals_to_read) {
       auto const pos = static_cast<int>(vals.i64[t]);
       int128_s v     = decode_varint128(bs, pos);
-      int32_t scale  = (t < numvals) ? (col_scale & ~orc_decimal2float64_scale) - val_scale : 0;
+      int32_t scale  = (t < numvals) ? col_scale - val_scale : 0;
       if (scale >= 0) {
         scale       = min(scale, 27);
         vals.i64[t] = ((int64_t)v.lo * kPow5i[scale]) << scale;
