@@ -116,9 +116,13 @@ class Scalar(object):
         self._host_value = self._device_value._to_host_scalar()
 
     def _preprocess_host_value(self, value, dtype):
-        pa_scalar = pa.scalar(
-            value if type(value) is not np.bool_ else bool(value)
-        )
+        if value is NA and dtype is not None:
+            return NA, dtype
+        elif type(value) is np.bool_:
+            value = bool(value)
+        elif isinstance(value, np.datetime64) and dtype is not None:
+            value = value.astype(dtype)
+        pa_scalar = pa.scalar(value)
         valid = pa_scalar.is_valid
 
         # decimal handling
