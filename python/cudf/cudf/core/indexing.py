@@ -172,9 +172,9 @@ class _SeriesLocIndexer(object):
                     found_index = arg
                     return found_index
 
-                elif isinstance(
+                elif pd.api.types.is_integer_dtype(arg.dtype) and isinstance(
                     arg, cudf.Scalar
-                ) and pd.api.types.is_integer_dtype(arg.dtype):
+                ):
                     found_index = arg.value
                     return found_index
 
