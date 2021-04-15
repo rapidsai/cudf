@@ -116,45 +116,39 @@ class Scalar(object):
         self._host_value = self._device_value._to_host_scalar()
 
     def _preprocess_host_value(self, value, dtype):
-        if value is NA and dtype is not None:
-            return NA, dtype
-        elif type(value) is np.bool_:
-            value = bool(value)
-        elif isinstance(value, np.datetime64) and dtype is not None:
-            value = value.astype(dtype)
-        pa_scalar = pa.scalar(value)
-        valid = pa_scalar.is_valid
+        valid = not _is_null_host_scalar(value)
 
-        # decimal handling
-        if isinstance(value, decimal.Decimal) or is_decimal_dtype(dtype):
-            if dtype is None:
-                # value must be a decimal, derive the dtype
-                dtype = Decimal64Dtype._from_decimal(value)
+        if isinstance(dtype, Decimal64Dtype):
+            value = pa.scalar(value, type=pa.decimal128(dtype.precision, dtype.scale)).as_py()
+        if isinstance(value, decimal.Decimal) and dtype is None:
+            dtype = Decimal64Dtype._from_decimal(value)
 
-            # arrow coerces a decimal to a difference precision/scale
-            # or an int to a decimal with certain precision/scale
-            # and errors if the incoming object cannot be coerced
-            # it also cleanly handles None
-            value = pa.scalar(
-                value, type=pa.decimal128(dtype.precision, dtype.scale)
-            ).as_py()
-        else:
-            value = to_cudf_compatible_scalar(value, dtype=dtype)
-            if dtype is None:
-                if not valid and not isinstance(
-                    pa_scalar.type, (pa.TimestampType, pa.DurationType)
-                ):
+        value = to_cudf_compatible_scalar(value, dtype=dtype)
+
+        if dtype is None:
+            if not valid:
+                if isinstance(value, (np.datetime64, np.timedelta64)):
+                    unit, _ = np.datetime_data(value)
+                    if unit == "generic":
+                        raise TypeError(
+                            "Cant convert generic NaT to null scalar"
+                        )
+                    else:
+                        dtype = value.dtype
+                else:
                     raise TypeError(
                         "dtype required when constructing a null scalar"
                     )
-                else:
-                    dtype = value.dtype
+            else:
+                dtype = value.dtype
 
+        if not isinstance(dtype, Decimal64Dtype):
             dtype = np.dtype(dtype)
-            # temporary
-            dtype = np.dtype("object") if dtype.char == "U" else dtype
 
-        return value if valid else NA, dtype
+        if not valid:
+            value = NA
+
+        return value, dtype
 
     def _sync(self):
         """

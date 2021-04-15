@@ -63,7 +63,7 @@ cdef class DeviceScalar:
         dtype : dtype
             A NumPy dtype.
         """
-        self._dtype = dtype if np.dtype(dtype).kind != 'U' else np.dtype('object')
+        self._dtype = dtype if dtype.kind != 'U' else np.dtype('object')
         self._set_value(value, self._dtype)
 
     def _set_value(self, value, dtype):
