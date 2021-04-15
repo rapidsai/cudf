@@ -56,7 +56,7 @@ def test_subword_tokenize(
     cudf_output = cudf_tokenizer(
         str_series,
         max_length=seq_len,
-        max_num_rows=seq_len,
+        max_num_rows=len(str_series),
         stride=stride,
         padding="max_length",
         return_tensors="cp",
