@@ -18,19 +18,53 @@
 
 package ai.rapids.cudf;
 
-import java.sql.Struct;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Per column settings for writing Parquet files.
  */
-public class ParquetColumnWriterOptions {
+class ParquetColumnWriterOptions {
   private boolean isTimestampTypeInt96;
   private int precision;
   private boolean isNullable;
   private String columName;
+  private ParquetColumnWriterOptions(AbstractStructBuilder builder) {
+    this.columName = builder.name;
+    this.isNullable = builder.isNullable;
+    this.childColumnOptions =
+        (ParquetColumnWriterOptions[]) builder.children.toArray(new ParquetColumnWriterOptions[0]);
+  }
+
+  /**
+   * Constructor used for list
+   */
+  private ParquetColumnWriterOptions(ListBuilder builder) {
+    assert(builder.children.size() == 1) : "Lists can only have one child";
+    this.columName = builder.name;
+    this.isNullable = builder.isNullable;
+    // we are adding the child twice even though lists have one child only because the way the cudf
+    // has implemented this it requires two children to be set for the list, but it drops the
+    // first one. This is something that is a lower priority and might be fixed in future
+    this.childColumnOptions =
+        new ParquetColumnWriterOptions[]{DUMMY_CHILD, builder.children.get(0)};
+  }
+
   protected ParquetColumnWriterOptions[] childColumnOptions = {};
+  protected abstract static class AbstractStructBuilder<T extends AbstractStructBuilder>
+      extends NestedBuilder<T> {
+    /**
+     * Builder specific to build a Struct meta
+     * @param name
+     */
+    public AbstractStructBuilder(String name, boolean isNullable) {
+      super(name, isNullable);
+    }
+
+    protected AbstractStructBuilder() {
+      super();
+    }
+  }
 
   // This child is needed as the first child of a List column meta due to how cudf has been
   // implemented. Cudf drops the first child from the meta if a column is a LIST. This is done
@@ -39,19 +73,6 @@ public class ParquetColumnWriterOptions {
   // but it was reverted later on here:
   // https://github.com/rapidsai/cudf/pull/7461/commits/f248eb7265de995a95f998d46d897fb0ae47f53e
   static ParquetColumnWriterOptions DUMMY_CHILD = new ParquetColumnWriterOptions("DUMMY");
-
-  public static class ParquetStructColumnWriterOptions extends ParquetColumnWriterOptions {
-    protected ParquetStructColumnWriterOptions(AbstractStructBuilder builder) {
-      super(builder);
-    }
-
-  }
-
-  public static class ParquetListColumnWriterOptions extends ParquetColumnWriterOptions {
-    protected ParquetListColumnWriterOptions(ListBuilder builder) {
-      super(builder);
-    }
-  }
 
   static abstract class NestedBuilder<T extends NestedBuilder> {
     protected List<ParquetColumnWriterOptions> children = new ArrayList<>();
@@ -62,7 +83,7 @@ public class ParquetColumnWriterOptions {
      * Builder specific to build a Struct meta
      * @param name
      */
-    public NestedBuilder(String name, boolean isNullable) {
+    protected NestedBuilder(String name, boolean isNullable) {
       this.name = name;
       this.isNullable = isNullable;
     }
@@ -216,129 +237,24 @@ public class ParquetColumnWriterOptions {
     }
   }
 
-  public static class StructBuilder extends AbstractStructBuilder<StructBuilder> {
-    public StructBuilder(String name, boolean isNullable) {
-      super(name, isNullable);
-    }
-
-    public ParquetStructColumnWriterOptions build() {
-      return new ParquetStructColumnWriterOptions(this);
-    }
-  }
-
-  public abstract static class AbstractStructBuilder<T extends AbstractStructBuilder> extends NestedBuilder<T> {
-    /**
-     * Builder specific to build a Struct meta
-     * @param name
-     */
-    public AbstractStructBuilder(String name, boolean isNullable) {
-      super(name, isNullable);
-    }
-
-    protected AbstractStructBuilder() {
-      super();
-    }
-  }
-
-  public static class ListBuilder extends NestedBuilder<ListBuilder> {
-
-    public ListBuilder(String name, boolean isNullable) {
-      super(name, isNullable);
-    }
-
-    public ParquetListColumnWriterOptions build() {
-      return new ParquetListColumnWriterOptions(this);
-    }
-  }
-
-  public static ListBuilder listBuilder(String name) {
-    return new ListBuilder(name, true);
-  }
-
-  public static ListBuilder listBuilder(String name, boolean isNullable) {
-    return new ListBuilder(name, isNullable);
-  }
-
-  public static StructBuilder structBuilder(String name, boolean isNullable) {
-    return new StructBuilder(name, isNullable);
-  }
-
-  public static StructBuilder structBuilder(String name) {
-    return new StructBuilder(name, true);
-  }
-
-  private ParquetColumnWriterOptions(AbstractStructBuilder builder) {
-    this.columName = builder.name;
-    this.isNullable = builder.isNullable;
-    this.childColumnOptions =
-        (ParquetColumnWriterOptions[]) builder.children.toArray(new ParquetColumnWriterOptions[0]);
-  }
-
-  /**
-   * Constructor used for list
-   */
-  private ParquetColumnWriterOptions(ListBuilder builder) {
-    assert(builder.children.size() == 1) : "Lists can only have one child";
-    this.columName = builder.name;
-    this.isNullable = builder.isNullable;
-    // we are adding the child twice even though lists have one child only because the way the cudf
-    // has implemented this it requires two children to be set for the list, but it drops the
-    // first one. This is something that is a lower priority and might be fixed in future
-    this.childColumnOptions =
-        new ParquetColumnWriterOptions[]{DUMMY_CHILD, builder.children.get(0)};
-  }
-
-  protected ParquetColumnWriterOptions(String columnName, boolean isTimestampTypeInt96,
-                                       int precision, boolean isNullable) {
+  ParquetColumnWriterOptions(String columnName, boolean isTimestampTypeInt96,
+                             int precision, boolean isNullable) {
     this.isTimestampTypeInt96 = isTimestampTypeInt96;
     this.precision = precision;
     this.isNullable = isNullable;
     this.columName = columnName;
   }
 
-  protected ParquetColumnWriterOptions(String columnName, boolean isNullable) {
+  ParquetColumnWriterOptions(String columnName, boolean isNullable) {
     this.isTimestampTypeInt96 = false;
     this.precision = 0;
     this.isNullable = isNullable;
     this.columName = columnName;
   }
 
-  protected ParquetColumnWriterOptions(String columnName) {
+  ParquetColumnWriterOptions(String columnName) {
     this(columnName, true);
   }
-
-  /**
-   * Return if the column can have null values
-   */
-  public String getColumName() {
-    return columName;
-  }
-
-  /**
-   * Return if the column can have null values
-   */
-  public boolean isNullable() {
-    return isNullable;
-  }
-
-  /**
-   * Return the precision for this column
-   */
-  public int getPrecision() {
-    return precision;
-  }
-
-  /**
-   * Returns true if the writer is expected to write timestamps in INT96
-   */
-  public boolean isTimestampTypeInt96() {
-    return isTimestampTypeInt96;
-  }
-
-  public ParquetColumnWriterOptions[] getChildColumnOptions() {
-    return childColumnOptions;
-  }
-
 
   boolean[] getFlatIsTimeTypeInt96() {
     boolean[] ret = {isTimestampTypeInt96};
@@ -402,5 +318,106 @@ public class ParquetColumnWriterOptions {
       ret = tmp;
     }
     return ret;
+  }
+
+  /**
+   * Creates a ListBuilder for column called 'name'
+   * @param name
+   */
+  public static ListBuilder listBuilder(String name) {
+    return new ListBuilder(name, true);
+  }
+
+  /**
+   * Creates a ListBuilder for column called 'name'
+   * @param name
+   * @param isNullable
+   */
+  public static ListBuilder listBuilder(String name, boolean isNullable) {
+    return new ListBuilder(name, isNullable);
+  }
+
+  /**
+   * Creates a StructBuilder for column called 'name'
+   * @param name
+   * @param isNullable
+   */
+  public static StructBuilder structBuilder(String name, boolean isNullable) {
+    return new StructBuilder(name, isNullable);
+  }
+
+  /**
+   * Creates a StructBuilder for column called 'name'
+   * @param name
+   */
+  public static StructBuilder structBuilder(String name) {
+    return new StructBuilder(name, true);
+  }
+
+  /**
+   * Return if the column can have null values
+   */
+  public String getColumName() {
+    return columName;
+  }
+
+  /**
+   * Return if the column can have null values
+   */
+  public boolean isNullable() {
+    return isNullable;
+  }
+
+  /**
+   * Return the precision for this column
+   */
+  public int getPrecision() {
+    return precision;
+  }
+
+  /**
+   * Returns true if the writer is expected to write timestamps in INT96
+   */
+  public boolean isTimestampTypeInt96() {
+    return isTimestampTypeInt96;
+  }
+
+  /**
+   * Return the child columnOptions for this column
+   */
+  public ParquetColumnWriterOptions[] getChildColumnOptions() {
+    return childColumnOptions;
+  }
+
+  public static class ParquetStructColumnWriterOptions extends ParquetColumnWriterOptions {
+    protected ParquetStructColumnWriterOptions(AbstractStructBuilder builder) {
+      super(builder);
+    }
+  }
+
+  public static class ParquetListColumnWriterOptions extends ParquetColumnWriterOptions {
+    protected ParquetListColumnWriterOptions(ListBuilder builder) {
+      super(builder);
+    }
+  }
+
+  public static class StructBuilder extends AbstractStructBuilder<StructBuilder> {
+    public StructBuilder(String name, boolean isNullable) {
+      super(name, isNullable);
+    }
+
+    public ParquetStructColumnWriterOptions build() {
+      return new ParquetStructColumnWriterOptions(this);
+    }
+  }
+
+  public static class ListBuilder extends NestedBuilder<ListBuilder> {
+    public ListBuilder(String name, boolean isNullable) {
+      super(name, isNullable);
+    }
+
+    public ParquetListColumnWriterOptions build() {
+      return new ParquetListColumnWriterOptions(this);
+    }
   }
 }

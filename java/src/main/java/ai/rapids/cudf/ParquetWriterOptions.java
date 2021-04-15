@@ -25,10 +25,25 @@ import java.util.Map;
  * This class represents settings for writing Parquet files. It includes meta data information
  * that will be used by the Parquet writer to write the file
  */
-public class ParquetWriterOptions extends ParquetColumnWriterOptions.ParquetStructColumnWriterOptions {
+public final class ParquetWriterOptions extends ParquetColumnWriterOptions.ParquetStructColumnWriterOptions {
   private final CompressionType compressionType;
   private final Map<String, String> metadata;
   private final StatisticsFrequency statsGranularity;
+
+  private ParquetWriterOptions(Builder builder) {
+    super(builder);
+    this.statsGranularity = builder.statsGranularity;
+    this.compressionType = builder.compressionType;
+    this.metadata = builder.metadata;
+  }
+
+  String[] getMetadataKeys() {
+    return metadata.keySet().toArray(new String[metadata.size()]);
+  }
+
+  String[] getMetadataValues() {
+    return metadata.values().toArray(new String[metadata.size()]);
+  }
 
   public enum StatisticsFrequency {
     /** Do not generate statistics */
@@ -47,6 +62,14 @@ public class ParquetWriterOptions extends ParquetColumnWriterOptions.ParquetStru
     }
   }
 
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public StatisticsFrequency getStatisticsFrequency() {
+    return statsGranularity;
+  }
+
   public CompressionType getCompressionType() {
     return compressionType;
   }
@@ -55,18 +78,10 @@ public class ParquetWriterOptions extends ParquetColumnWriterOptions.ParquetStru
     return metadata;
   }
 
-  String[] getMetadataKeys() {
-    return metadata.keySet().toArray(new String[metadata.size()]);
-  }
-
-  String[] getMetadataValues() {
-    return metadata.values().toArray(new String[metadata.size()]);
-  }
-
   public static class Builder extends ParquetColumnWriterOptions.AbstractStructBuilder<Builder> {
+    private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
     final Map<String, String> metadata = new LinkedHashMap<>();
     CompressionType compressionType = CompressionType.AUTO;
-    private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
 
     public Builder() {
       super();
@@ -108,20 +123,5 @@ public class ParquetWriterOptions extends ParquetColumnWriterOptions.ParquetStru
     public ParquetWriterOptions build() {
       return new ParquetWriterOptions(this);
     }
-  }
-
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  private ParquetWriterOptions(Builder builder) {
-    super(builder);
-    this.statsGranularity = builder.statsGranularity;
-    this.compressionType = builder.compressionType;
-    this.metadata = builder.metadata;
-  }
-
-  public StatisticsFrequency getStatisticsFrequency() {
-    return statsGranularity;
   }
 }
