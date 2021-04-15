@@ -99,8 +99,8 @@ struct flattened_table {
         validity_as_column.back()->set_null_mask(copy_bitmask(col));
       }
       flat_columns.push_back(validity_as_column.back()->view());
-      if (not column_order.empty()) flat_column_order.push_back(col_order);  // doesn't matter.
-      if (not null_precedence.empty()) flat_null_precedence.push_back(col_null_order);
+      if (not column_order.empty()) { flat_column_order.push_back(col_order);  } // doesn't matter.
+      if (not null_precedence.empty()) { flat_null_precedence.push_back(col_null_order); }
     }
     for (decltype(col.num_children()) i = 0; i < col.num_children(); ++i) {
       auto const& child = col.get_sliced_child(i);
