@@ -30,7 +30,7 @@ cdef extern from "nvtext/subword_tokenize.hpp" namespace "nvtext" nogil:
         unique_ptr[column] bin_offsets
 
     cdef  unique_ptr[hashed_vocabulary] load_vocabulary_file(
-         const string &filename_hashed_vocabulary
+        const string &filename_hashed_vocabulary
     ) except +
 
     cdef tokenizer_result subword_tokenize(
