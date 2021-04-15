@@ -21,23 +21,30 @@ def cast_to_appripate_type(ar, cast_type):
 
 
 class SubwordTokenizer:
-    def __init__(self, hash_file: str, do_lower_case: bool = True):
-        """
-        Run CUDA BERT subword tokenizer on cuDF strings column.
-        Encodes words to token ids using vocabulary from a pretrained
-        tokenizer.
-        This function requires about 21x the number of character bytes
-        in the input strings column as working memory.
-        Parameters
-        ----------
-        hash_file : str
-            Path to hash file containing vocabulary of words with token-ids.
-            This can be created from the raw vocabulary
-            using the ``cudf.utils.hash_vocab_utils.hash_vocab`` function
+    """
+    Run CUDA BERT subword tokenizer on cuDF strings column.
+    Encodes words to token ids using vocabulary from a pretrained
+    tokenizer.
+    This function requires about 21x the number of character bytes
+    in the input strings column as working memory.
 
-        do_lower : bool, Default is True
-            If set to true, original text will be lowercased before encoding.
-        """
+    Parameters
+    ----------
+    hash_file : str
+        Path to hash file containing vocabulary of words with token-ids.
+        This can be created from the raw vocabulary
+        using the ``cudf.utils.hash_vocab_utils.hash_vocab`` function
+
+    do_lower : bool, Default is True
+        If set to true, original text will be lowercased before encoding.
+
+    Returns
+    -------
+    SubwordTokenizer
+    """
+
+    def __init__(self, hash_file: str, do_lower_case: bool = True):
+
         self.do_lower_case = do_lower_case
         self.vocab_file = cpp_hashed_vocabulary(hash_file)
 
@@ -170,7 +177,7 @@ class SubwordTokenizer:
                 )
                 recommendation = (
                     "Custom Cupy kernel can potentially"
-                    + "be used to add it. Fpr reference "
+                    + "be used to add it. For reference "
                     + "see: _bert_add_special_tokens "
                 )
                 raise NotImplementedError(error_msg + recommendation)
@@ -182,7 +189,7 @@ class SubwordTokenizer:
             raise NotImplementedError(error_msg)
 
         if stride > max_length:
-            error_msg = "Stride cant be greater than max_length"
+            error_msg = "Stride can not be greater than max_length"
             raise ValueError(error_msg)
 
         if return_tensors not in ["cp", "pt", "tf"]:

@@ -206,6 +206,12 @@ Window
 .. autoclass:: Rolling
     :members:
 
+SubwordTokenizer
+----------------
+.. currentmodule:: cudf.core.subword_tokenizer
+
+.. autoclass:: SubwordTokenizer
+    :members:
 
 General utility functions
 -------------------------
