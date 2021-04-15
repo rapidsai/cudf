@@ -131,14 +131,14 @@ run each time you commit changes.
 
 Compiler requirements:
 
-* `gcc`     version 7.1+
-* `nvcc`    version 10.1+
+* `gcc`     version 9.3+
+* `nvcc`    version 11.0+
 * `cmake`   version 3.18.0+
 
 CUDA/GPU requirements:
 
-* CUDA 10.1+
-* NVIDIA driver 410.48+
+* CUDA 11.0+
+* NVIDIA driver 450.80.02+
 * Pascal architecture or better
 
 You can obtain CUDA from [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).

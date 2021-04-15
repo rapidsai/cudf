@@ -28,7 +28,7 @@ elseif(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
   set(CUDF_BUILD_FOR_DETECTED_ARCHS TRUE)
 endif()
 
-project(CUDF VERSION 0.19.0 LANGUAGES C CXX)
+project(CUDF VERSION 0.20.0 LANGUAGES C CXX)
 
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake,
 # causing subsequent runs to have different values for the `Threads::Threads` target.
@@ -210,8 +210,8 @@ add_library(cudf
     src/groupby/sort/sort_helper.cu
     src/hash/hashing.cu
     src/interop/dlpack.cpp
-    src/interop/from_arrow.cpp
-    src/interop/to_arrow.cpp
+    src/interop/from_arrow.cu
+    src/interop/to_arrow.cu
     src/io/avro/avro.cpp
     src/io/avro/avro_gpu.cu
     src/io/avro/reader_impl.cu
@@ -397,9 +397,9 @@ set_target_properties(cudf
     PROPERTIES BUILD_RPATH                         "\$ORIGIN"
                INSTALL_RPATH                       "\$ORIGIN"
                # set target compile options
-               CXX_STANDARD                        14
+               CXX_STANDARD                        17
                CXX_STANDARD_REQUIRED               ON
-               CUDA_STANDARD                       14
+               CUDA_STANDARD                       17
                CUDA_STANDARD_REQUIRED              ON
                POSITION_INDEPENDENT_CODE           ON
                INTERFACE_POSITION_INDEPENDENT_CODE ON
@@ -517,7 +517,7 @@ target_compile_options(cudftestutil
 )
 
 target_compile_features(cudftestutil
-    PUBLIC cxx_std_14 $<BUILD_INTERFACE:cuda_std_14>)
+    PUBLIC cxx_std_17 $<BUILD_INTERFACE:cuda_std_17>)
 
 target_link_libraries(cudftestutil
                PUBLIC GTest::gmock

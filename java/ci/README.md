@@ -11,16 +11,16 @@
 
 In the root path of cuDF repo, run below command to build the docker image.
 ```bash
-docker build -f java/ci/Dockerfile.centos7 --build-arg CUDA_VERSION=10.1 -t cudf-build:10.1-devel-centos7 .
+docker build -f java/ci/Dockerfile.centos7 --build-arg CUDA_VERSION=11.2.2 -t cudf-build:11.2.2-devel-centos7 .
 ```
 
-We support different CUDA versions as below:
-* CUDA 10.1
-* CUDA 10.2
+The following CUDA versions are supported:
 * CUDA 11.0
+* CUDA 11.1
+* CUDA 11.2
 
 Change the --build-arg CUDA_VERSION to what you need.
-You can replace the tag "cudf-build:10.1-devel-centos7" with another name you like.
+You can replace the tag "cudf-build:11.2.2-devel-centos7" with another name you like.
 
 ## Start the docker then build
 
@@ -28,7 +28,7 @@ You can replace the tag "cudf-build:10.1-devel-centos7" with another name you li
 
 Run below command to start a docker container with GPU.
 ```bash
-nvidia-docker run -it cudf-build:10.1-devel-centos7 bash
+nvidia-docker run -it cudf-build:11.2.2-devel-centos7 bash
 ```
 
 ### Download the cuDF source code
@@ -36,7 +36,7 @@ nvidia-docker run -it cudf-build:10.1-devel-centos7 bash
 You can download the cuDF repo in the docker container or you can mount it into the container.
 Here I choose to download again in the container.
 ```bash
-git clone --recursive https://github.com/rapidsai/cudf.git -b branch-0.19
+git clone --recursive https://github.com/rapidsai/cudf.git -b branch-0.20
 ```
 
 ### Build cuDF jar with devtoolset
@@ -44,10 +44,10 @@ git clone --recursive https://github.com/rapidsai/cudf.git -b branch-0.19
 ```bash
 cd cudf
 export WORKSPACE=`pwd`
-scl enable devtoolset-8 "java/ci/build-in-docker.sh"
+scl enable devtoolset-9 "java/ci/build-in-docker.sh"
 ```
 
 ### The output
 
-You can find the cuDF jar in java/target/ like cudf-0.19-SNAPSHOT-cuda10-1.jar.
+You can find the cuDF jar in java/target/ like cudf-0.20-SNAPSHOT-cuda11.jar.
 
