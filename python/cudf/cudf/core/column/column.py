@@ -60,7 +60,7 @@ from cudf.utils.dtypes import (
     min_unsigned_type,
     np_to_pa_dtype,
 )
-from cudf.utils.utils import mask_bitsize, mask_dtype
+from cudf.utils.utils import mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
 
@@ -2209,11 +2209,6 @@ def _construct_array(
     return arbitrary
 
 
-@njit
-def _mask_get(mask, pos):
-    return (mask[pos // mask_bitsize] >> (pos % mask_bitsize)) & 1
-
-
 def column_applymap(
     udf: Callable[[ScalarLike], ScalarLike],
     column: ColumnBase,
@@ -2235,34 +2230,19 @@ def column_applymap(
     result : Column
     """
     core = njit(udf)
+
+    # For non-masked columns
+    @cuda.jit
+    def kernel_applymap(values, results):
+        i = cuda.grid(1)
+        # in range?
+        if i < values.size:
+            # call udf
+            results[i] = core(values[i])
+
     results = column_empty(len(column), dtype=out_dtype)
     values = column.data_array_view
-    if column.nullable:
-        # For masked columns
-        @cuda.jit
-        def _kernel_masked(values, masks, results):
-            i = cuda.grid(1)
-            # in range?
-            if i < values.size:
-                # valid?
-                if _mask_get(masks, i):
-                    # call udf
-                    results[i] = core(values[i])
-
-        masks = column.mask_array_view
-        _kernel_masked.forall(len(column))(values, masks, results)
-    else:
-        # For non-masked columns
-        @cuda.jit
-        def kernel_non_masked(values, results):
-            i = cuda.grid(1)
-            # in range?
-            if i < values.size:
-                # call udf
-                results[i] = core(values[i])
-
-        kernel_non_masked.forall(len(column))(values, results)
-
+    kernel_applymap.forall(len(column))(values, results)
     return as_column(results)
 
 
