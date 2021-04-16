@@ -122,7 +122,8 @@ ConfigureBench(REDUCTION_BENCH
 # - groupby benchmark -----------------------------------------------------------------------------
 ConfigureBench(GROUPBY_BENCH
   groupby/group_sum_benchmark.cu
-  groupby/group_nth_benchmark.cu)
+  groupby/group_nth_benchmark.cu
+  groupby/group_shift_benchmark.cu)
 
 ###################################################################################################
 # - hashing benchmark -----------------------------------------------------------------------------
