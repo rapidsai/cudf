@@ -357,13 +357,21 @@ class ColumnBase(Column, Serializable):
                 pa.null(), len(self), [pa.py_buffer((b""))]
             )
 
-        return libcudf.interop.to_arrow(
+        result = libcudf.interop.to_arrow(
             libcudf.table.Table(
                 cudf.core.column_accessor.ColumnAccessor({"None": self})
             ),
             [["None"]],
             keep_index=False,
         )["None"].chunk(0)
+
+        if isinstance(self.dtype, cudf.Decimal64Dtype):
+            result = result.view(
+                pa.decimal128(
+                    scale=result.type.scale, precision=self.dtype.precision
+                )
+            )
+        return result
 
     @classmethod
     def from_arrow(cls, array: pa.Array) -> ColumnBase:
@@ -429,9 +437,13 @@ class ColumnBase(Column, Serializable):
         elif isinstance(array.type, pa.Decimal128Type):
             return cudf.core.column.DecimalColumn.from_arrow(array)
 
-        return libcudf.interop.from_arrow(data, data.column_names)._data[
+        result = libcudf.interop.from_arrow(data, data.column_names)._data[
             "None"
         ]
+
+        if isinstance(result.dtype, cudf.Decimal64Dtype):
+            result.dtype.precision = array.type.precision
+        return result
 
     def _get_mask_as_column(self) -> ColumnBase:
         return libcudf.transform.mask_to_bools(

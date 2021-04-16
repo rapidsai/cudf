@@ -1485,7 +1485,8 @@ class Series(Frame, Serializable):
             lines[-1] = lines[-1] + "dtype: %s" % self.dtype
         else:
             lines = output.split(",")
-            return lines[0] + ", dtype: %s)" % self.dtype
+            lines[-1] = " dtype: %s)" % self.dtype
+            return ",".join(lines)
         if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
             lines.append(category_memory)
         return "\n".join(lines)
