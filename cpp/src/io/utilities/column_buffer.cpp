@@ -20,6 +20,7 @@
  */
 
 #include "column_buffer.hpp"
+#include <cudf/detail/utilities/vector_factories.hpp>
 
 namespace cudf {
 namespace io {
@@ -33,8 +34,8 @@ void column_buffer::create(size_type _size,
 
   switch (type.id()) {
     case type_id::STRING:
-      _strings = std::make_unique<rmm::device_uvector<string_index_pair>>(size, stream);
-      cudaMemsetAsync(_strings->data(), 0, size * sizeof(string_index_pair), stream.value());
+      _strings = std::make_unique<rmm::device_uvector<string_index_pair>>(
+        cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(size, stream));
       break;
 
     // list columns store a buffer of int32's as offsets to represent
