@@ -2501,10 +2501,10 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplitGroups(J
       grouped_cols.at(value_id) = std::move(*value_view_it);
       value_view_it ++;
     }
+    cudf::table_view grouped_table(grouped_cols);
     // When no key columns, uses the input table instead, because the output
     // of 'get_groups' is empty.
-    auto grouped_table = key_indices.empty() ? *input_table
-                                             : cudf::table_view(grouped_cols);
+    auto& grouped_view = key_indices.empty() ? *input_table : grouped_table;
 
     // Resolves the split indices from offsets vector directly to avoid copying. Since
     // the offsets vector may be very large if there are too many small groups.
@@ -2516,7 +2516,7 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplitGroups(J
 
     // 2) Splits the groups.
     std::vector<cudf::packed_table> result =
-        cudf::contiguous_split(grouped_table, split_indices);
+        cudf::contiguous_split(grouped_view, split_indices);
     // Release the grouped table right away after split done.
     groups.keys.reset(nullptr);
     groups.values.reset(nullptr);
