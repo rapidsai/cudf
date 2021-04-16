@@ -61,7 +61,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         if arg == "size":
             return self.size()
 
-        _supported = {"count", "mean", "std", "var", "sum", "min", "max"}
+        _supported = {"count", "mean", "std", "var", "sum", "min", "max", list}
         if (
             isinstance(self.obj, DaskDataFrame)
             and isinstance(self.index, (str, list))
@@ -145,7 +145,7 @@ def groupby_agg(
 
         This aggregation algorithm only supports the following options:
 
-        {"count", "mean", "std", "var", "sum", "min", "max"}
+        {"count", "mean", "std", "var", "sum", "min", "max", list}
 
         This "optimized" approach is more performant than the algorithm
         in `dask.dataframe`, because it allows the cudf backend to
@@ -171,7 +171,7 @@ def groupby_agg(
         # strings (no lists)
         str_cols_out = True
         for col in aggs:
-            if isinstance(aggs[col], str):
+            if isinstance(aggs[col], str) or callable(aggs[col]):
                 aggs[col] = [aggs[col]]
             else:
                 str_cols_out = False
@@ -179,7 +179,7 @@ def groupby_agg(
                 columns.append(col)
 
     # Assert that aggregations are supported
-    _supported = {"count", "mean", "std", "var", "sum", "min", "max"}
+    _supported = {"count", "mean", "std", "var", "sum", "min", "max", list}
     if not _is_supported(aggs, _supported):
         raise ValueError(
             f"Supported aggs include {_supported} for groupby_agg API. "
@@ -255,7 +255,12 @@ def groupby_agg(
         # be str, rather than tuples).
         for col in aggs:
             _aggs[col] = _aggs[col][0]
-    _meta = ddf._meta.groupby(gb_cols, as_index=as_index).agg(_aggs)
+    try:
+        _meta = ddf._meta.groupby(gb_cols, as_index=as_index).agg(_aggs)
+    except NotImplementedError:
+        _meta = ddf._meta_nonempty.groupby(gb_cols, as_index=as_index).agg(
+            _aggs
+        )
     for s in range(split_out):
         dsk[(gb_agg_name, s)] = (
             _finalize_gb_agg,
@@ -381,6 +386,8 @@ def _tree_node_agg(dfs, gb_cols, split_out, dropna, sort, sep):
             agg_dict[col] = ["sum"]
         elif agg in ("min", "max"):
             agg_dict[col] = [agg]
+        elif agg == "list":
+            agg_dict[col] = [list]
         else:
             raise ValueError(f"Unexpected aggregation: {agg}")
 
