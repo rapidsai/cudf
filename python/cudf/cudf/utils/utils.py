@@ -362,7 +362,7 @@ def get_appropriate_dispatched_func(
 def _cast_to_appropriate_cudf_type(val, index=None):
     # Handle scalar
     if val.ndim == 0:
-        return cudf.Scalar(val).value
+        return to_cudf_compatible_scalar(val)
     # 1D array
     elif (val.ndim == 1) or (val.ndim == 2 and val.shape[1] == 1):
         # if index is not None and is of a different length
