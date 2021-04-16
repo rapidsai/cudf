@@ -28,6 +28,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <rmm/device_buffer.hpp>
@@ -323,7 +324,6 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithZeroOffsets)
                                                              following,
                                                              min_periods,
                                                              cudf::make_lag_aggregation(0));
-  ;
 
   expect_columns_equivalent(*lag_0_output_col, *input_col);
 }
@@ -354,7 +354,6 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithNegativeOffsets)
                                                              following,
                                                              min_periods,
                                                              cudf::make_lag_aggregation(-3));
-  ;
 
   expect_columns_equivalent(
     *lag_minus_3_output_col,
@@ -404,7 +403,6 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithNoGrouping)
                                                         following,
                                                         min_periods,
                                                         cudf::make_lead_aggregation(3));
-  ;
 
   expect_columns_equivalent(
     *lead_3_output_col,
@@ -513,31 +511,305 @@ TYPED_TEST(TypedLeadLagWindowTest, DefaultValuesWithoutLeadLag)
     aggs.begin(), aggs.end(), [&](auto& agg) { assert_aggregation_fails(std::move(agg)); });
 }
 
-TEST_F(LeadLagWindowTest, LeadLagWithoutFixedWidthInput)
+template <typename T>
+struct TypedNestedLeadLagWindowTest : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(TypedNestedLeadLagWindowTest, TypesForTest);
+
+TYPED_TEST(TypedNestedLeadLagWindowTest, NumericListsWithNullsAllOver)
 {
-  // Check that Lead/Lag aren't supported for non-fixed-width types.
+  using T   = TypeParam;
+  using lcw = lists_column_wrapper<T, int32_t>;
 
-  auto const input_col = strings_column_wrapper{
-    {"0", "1", "2", "3", "4", "5"}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
-      return false;
-    })}.release();
+  auto null_at_2       = cudf::test::iterator_with_null_at(2);
+  auto const input_col = lcw{{{0, 0},
+                              {1, 1},
+                              {2, 2},
+                              {3, 3, 3},
+                              {{4, 4, 4, 4}, null_at_2},
+                              {5, 5, 5, 5, 5},
+                              {0, 0},
+                              {10, 10},
+                              {20, 20},
+                              {30, 30, 30},
+                              {40, 40, 40, 40},
+                              {{50, 50, 50, 50, 50}, null_at_2}},
+                             null_at_2}
+                           .release();
 
-  auto const grouping_key  = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0};
+  auto const grouping_key = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
   auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
-
-  auto const default_value   = cudf::make_string_scalar("99");
-  auto const default_outputs = cudf::make_column_from_scalar(*default_value, input_col->size());
 
   auto const preceding   = 4;
   auto const following   = 3;
   auto const min_periods = 1;
 
-  EXPECT_THROW(cudf::grouped_rolling_window(grouping_keys,
-                                            input_col->view(),
-                                            default_outputs->view(),
-                                            preceding,
-                                            following,
-                                            min_periods,
-                                            cudf::make_lead_aggregation(4)),
-               cudf::logic_error);
+  auto lead_3_output_col = cudf::grouped_rolling_window(grouping_keys,
+                                                        input_col->view(),
+                                                        preceding,
+                                                        following,
+                                                        min_periods,
+                                                        cudf::make_lead_aggregation(3));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    lead_3_output_col->view(),
+    lcw{{{3, 3, 3},
+         {{4, 4, 4, 4}, null_at_2},
+         {5, 5, 5, 5, 5},
+         {},
+         {},
+         {},
+         {30, 30, 30},
+         {40, 40, 40, 40},
+         {{50, 50, 50, 50, 50}, null_at_2},
+         {},
+         {},
+         {}},
+        iterator_with_null_at(std::vector<size_type>{3, 4, 5, 9, 10, 11})}
+      .release()
+      ->view());
+
+  auto lag_1_output_col = cudf::grouped_rolling_window(grouping_keys,
+                                                       input_col->view(),
+                                                       preceding,
+                                                       following,
+                                                       min_periods,
+                                                       cudf::make_lag_aggregation(1));
+
+  expect_columns_equivalent(lag_1_output_col->view(),
+                            lcw{{{},
+                                 {0, 0},
+                                 {1, 1},
+                                 {2, 2},
+                                 {3, 3, 3},
+                                 {{4, 4, 4, 4}, null_at_2},
+                                 {},
+                                 {0, 0},
+                                 {10, 10},
+                                 {20, 20},
+                                 {30, 30, 30},
+                                 {40, 40, 40, 40}},
+                                iterator_with_null_at(std::vector<size_type>{0, 3, 6})}
+                              .release()
+                              ->view());
+}
+
+TYPED_TEST(TypedNestedLeadLagWindowTest, NumericListsWithDefaults)
+{
+  using T   = TypeParam;
+  using lcw = lists_column_wrapper<T, int32_t>;
+
+  auto null_at_2       = cudf::test::iterator_with_null_at(2);
+  auto const input_col = lcw{{{0, 0},
+                              {1, 1},
+                              {2, 2},
+                              {3, 3, 3},
+                              {{4, 4, 4, 4}, null_at_2},
+                              {5, 5, 5, 5, 5},
+                              {0, 0},
+                              {10, 10},
+                              {20, 20},
+                              {30, 30, 30},
+                              {40, 40, 40, 40},
+                              {{50, 50, 50, 50, 50}, null_at_2}},
+                             null_at_2}
+                           .release();
+
+  auto const defaults_col =
+    lcw{
+      {
+        {},
+        {91, 91},
+        {92, 92},
+        {},  // null!
+        {94, 94, 94},
+        {95, 95},
+        {},
+        {91, 91},
+        {92, 92},
+        {},  // null!
+        {94, 94, 94},
+        {95, 95},
+      },
+    }
+      .release();
+
+  auto const grouping_key = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
+
+  auto const preceding   = 4;
+  auto const following   = 3;
+  auto const min_periods = 1;
+
+  auto lead_3_output_col = cudf::grouped_rolling_window(grouping_keys,
+                                                        input_col->view(),
+                                                        preceding,
+                                                        following,
+                                                        min_periods,
+                                                        cudf::make_lead_aggregation(3));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    lead_3_output_col->view(),
+    lcw{{{3, 3, 3},
+         {{4, 4, 4, 4}, null_at_2},
+         {5, 5, 5, 5, 5},
+         {},
+         {},
+         {},
+         {30, 30, 30},
+         {40, 40, 40, 40},
+         {{50, 50, 50, 50, 50}, null_at_2},
+         {},
+         {},
+         {}},
+        iterator_with_null_at(std::vector<size_type>{3, 4, 5, 9, 10, 11})}
+      .release()
+      ->view());
+
+  auto lag_1_output_col = cudf::grouped_rolling_window(grouping_keys,
+                                                       input_col->view(),
+                                                       preceding,
+                                                       following,
+                                                       min_periods,
+                                                       cudf::make_lag_aggregation(1));
+
+  expect_columns_equivalent(lag_1_output_col->view(),
+                            lcw{{{},
+                                 {0, 0},
+                                 {1, 1},
+                                 {2, 2},
+                                 {3, 3, 3},
+                                 {{4, 4, 4, 4}, null_at_2},
+                                 {},
+                                 {0, 0},
+                                 {10, 10},
+                                 {20, 20},
+                                 {30, 30, 30},
+                                 {40, 40, 40, 40}},
+                                iterator_with_null_at(std::vector<size_type>{0, 3, 6})}
+                              .release()
+                              ->view());
+}
+
+TYPED_TEST(TypedNestedLeadLagWindowTest, Structs)
+{
+  using T   = TypeParam;
+  using lcw = lists_column_wrapper<T, int32_t>;
+
+  auto null_at_2 = cudf::test::iterator_with_null_at(2);
+  auto lists_col = lcw{{{0, 0},
+                        {1, 1},
+                        {2, 2},
+                        {3, 3, 3},
+                        {{4, 4, 4, 4}, null_at_2},
+                        {5, 5, 5, 5, 5},
+                        {0, 0},
+                        {10, 10},
+                        {20, 20},
+                        {30, 30, 30},
+                        {40, 40, 40, 40},
+                        {{50, 50, 50, 50, 50}, null_at_2}},
+                       null_at_2};
+
+  auto strings_col = strings_column_wrapper{{"00",
+                                             "11",
+                                             "22",
+                                             "333",
+                                             "4444",
+                                             "55555",
+                                             "00",
+                                             "1010",
+                                             "2020",
+                                             "303030",
+                                             "40404040",
+                                             "5050505050"},
+                                            iterator_with_null_at(9)};
+
+  auto structs_col = structs_column_wrapper{lists_col, strings_col}.release();
+
+  auto const grouping_key = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
+
+  auto const preceding   = 4;
+  auto const following   = 3;
+  auto const min_periods = 1;
+
+  // Test LEAD().
+  {
+    auto lead_3_output_col = cudf::grouped_rolling_window(grouping_keys,
+                                                          structs_col->view(),
+                                                          preceding,
+                                                          following,
+                                                          min_periods,
+                                                          cudf::make_lead_aggregation(3));
+    auto expected_lists_col =
+      lcw{{{3, 3, 3},
+           {{4, 4, 4, 4}, null_at_2},
+           {5, 5, 5, 5, 5},
+           {},
+           {},
+           {},
+           {30, 30, 30},
+           {40, 40, 40, 40},
+           {{50, 50, 50, 50, 50}, null_at_2},
+           {},
+           {},
+           {}},
+          iterator_with_null_at(std::vector<size_type>{3, 4, 5, 9, 10, 11})};
+    auto expected_strings_col = strings_column_wrapper{
+      {"333", "4444", "55555", "", "", "", "", "40404040", "5050505050", "", "", ""},
+      iterator_with_null_at(std::vector<size_type>{3, 4, 5, 6, 9, 10, 11})};
+
+    auto expected_structs_col =
+      structs_column_wrapper{{expected_lists_col, expected_strings_col},
+                             iterator_with_null_at(std::vector<size_type>{3, 4, 5, 9, 10, 11})}
+        .release();
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lead_3_output_col->view(), expected_structs_col->view());
+  }
+
+  // Test LAG()
+  {
+    auto lag_1_output_col   = cudf::grouped_rolling_window(grouping_keys,
+                                                         structs_col->view(),
+                                                         preceding,
+                                                         following,
+                                                         min_periods,
+                                                         cudf::make_lag_aggregation(1));
+    auto expected_lists_col = lcw{{{},  // null.
+                                   {0, 0},
+                                   {1, 1},
+                                   {},  // null.
+                                   {3, 3, 3},
+                                   {{4, 4, 4, 4}, null_at_2},
+                                   {},  // null.
+                                   {0, 0},
+                                   {10, 10},
+                                   {20, 20},
+                                   {30, 30, 30},
+                                   {40, 40, 40, 40}},
+                                  iterator_with_null_at(std::vector<size_type>{0, 3, 6})};
+    auto expected_strings_col =
+      strings_column_wrapper{{"",  // null.
+                              "00",
+                              "11",
+                              "22",
+                              "333",
+                              "4444",
+                              "",  // null.
+                              "00",
+                              "1010",
+                              "2020",
+                              "",  // null.
+                              "40404040"},
+                             iterator_with_null_at(std::vector<size_type>{0, 6, 10})};
+
+    auto expected_structs_col =
+      structs_column_wrapper{{expected_lists_col, expected_strings_col},
+                             iterator_with_null_at(std::vector<size_type>{0, 6})}
+        .release();
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lag_1_output_col->view(), expected_structs_col->view());
+  }
 }
