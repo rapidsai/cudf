@@ -452,7 +452,9 @@ public final class Table implements AutoCloseable {
   private static native void readArrowIPCEnd(long handle);
 
   private static native long[] groupByAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
-                                                long[] aggInstances, boolean ignoreNullKeys) throws CudfException;
+                                                long[] aggInstances, boolean ignoreNullKeys,
+                                                boolean keySorted, boolean[] keysDescending,
+                                                boolean[] keysNullSmallest) throws CudfException;
 
   private static native long[] rollingWindowAggregate(
       long inputTable,
@@ -1649,8 +1651,12 @@ public final class Table implements AutoCloseable {
 
   /**
    * Returns aggregate operations grouped by columns provided in indices
-   * null is considered as key while grouping.
-   * @param indices columnns to be considered for groupBy
+   * with default options as below:
+   *  - null is considered as key while grouping.
+   *  - keys are not presorted.
+   *  - empty key order array.
+   *  - empty null order array.
+   * @param indices columns to be considered for groupBy
    */
   public GroupByOperation groupBy(int... indices) {
     return groupByInternal(GroupByOptions.builder().withIgnoreNullKeys(false).build(),
@@ -2386,7 +2392,10 @@ public final class Table implements AutoCloseable {
             operation.indices,
             aggColumnIndexes,
             aggOperationInstances,
-            groupByOptions.getIgnoreNullKeys()))) {
+            groupByOptions.getIgnoreNullKeys(),
+            groupByOptions.getKeySorted(),
+            groupByOptions.getKeysDescending(),
+            groupByOptions.getKeysNullSmallest()))) {
           // prepare the final table
           ColumnVector[] finalCols = new ColumnVector[keysLength + aggregates.length];
 
