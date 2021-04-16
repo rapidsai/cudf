@@ -9,6 +9,7 @@ from collections.abc import MutableSequence
 from types import SimpleNamespace
 from typing import (
     Any,
+    Callable,
     Dict,
     List,
     Mapping,
@@ -454,6 +455,16 @@ class ColumnBase(Column, Serializable):
 
     def default_na_value(self) -> Any:
         raise NotImplementedError()
+
+    def applymap(
+        self, udf: Callable[[ScalarLike], ScalarLike], out_dtype: Dtype = None
+    ) -> ColumnBase:
+        """Apply an element-wise function to the values in the Column."""
+        # Subclasses that support applymap must override this behavior.
+        raise TypeError(
+            "User-defined functions are currently not supported on data "
+            f"with dtype {self.dtype}."
+        )
 
     def to_gpu_array(self, fillna=None) -> "cuda.devicearray.DeviceNDArray":
         """Get a dense numba device array for the data.
