@@ -2,12 +2,10 @@
 
 import functools
 from collections.abc import Sequence
-from math import floor, isinf, isnan
 
 import cupy as cp
 import numpy as np
 import pandas as pd
-from numba import njit
 
 import rmm
 
@@ -16,8 +14,10 @@ from cudf.core import column
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import to_cudf_compatible_scalar
 
+# The size of the mask in bytes
 mask_dtype = np.dtype(np.int32)
 mask_bitsize = mask_dtype.itemsize * 8
+
 
 _EQUALITY_OPS = {
     "eq",
@@ -33,46 +33,6 @@ _EQUALITY_OPS = {
     "__le__",
     "__ge__",
 }
-
-
-@njit
-def mask_get(mask, pos):
-    return (mask[pos // mask_bitsize] >> (pos % mask_bitsize)) & 1
-
-
-@njit
-def check_equals_float(a, b):
-    return (
-        a == b
-        or (isnan(a) and isnan(b))
-        or ((isinf(a) and a < 0) and (isinf(b) and b < 0))
-        or ((isinf(a) and a > 0) and (isinf(b) and b > 0))
-    )
-
-
-@njit
-def rint(x):
-    """Round to the nearest integer.
-
-    Returns
-    -------
-    The nearest integer, as a float.
-    """
-    y = floor(x)
-    r = x - y
-
-    if r > 0.5:
-        y += 1.0
-    if r == 0.5:
-        r = y - 2.0 * floor(0.5 * y)
-        if r == 1.0:
-            y += 1.0
-    return y
-
-
-@njit
-def check_equals_int(a, b):
-    return a == b
 
 
 def scalar_broadcast_to(scalar, size, dtype=None):
@@ -110,72 +70,6 @@ def scalar_broadcast_to(scalar, size, dtype=None):
         return out_col
 
 
-def normalize_index(index, size, doraise=True):
-    """Normalize negative index
-    """
-    if index < 0:
-        index = size + index
-    if doraise and not (0 <= index < size):
-        raise IndexError("out-of-bound")
-    return min(index, size)
-
-
-list_types_tuple = (list, np.array)
-
-
-def get_result_name(left, right):
-    """
-    This function will give appropriate name for the operations
-    involving two Series, Index's or combination of both.
-
-    Parameters
-    ----------
-    left : {Series, Index}
-    right : object
-
-    Returns
-    -------
-    name : object {string or None}
-    """
-
-    if isinstance(right, (cudf.Series, cudf.Index, pd.Series, pd.Index)):
-        name = compare_and_get_name(left, right)
-    else:
-        name = left.name
-    return name
-
-
-def compare_and_get_name(a, b):
-    """
-    If both a & b have name attribute, and they are
-    same return the common name.
-    Else, return either one of the name of a or b,
-    whichever is present.
-
-    Parameters
-    ----------
-    a : object
-    b : object
-
-    Returns
-    -------
-    name : str or None
-    """
-    a_has = hasattr(a, "name")
-    b_has = hasattr(b, "name")
-
-    if a_has and b_has:
-        if a.name == b.name:
-            return a.name
-        else:
-            return None
-    elif a_has:
-        return a.name
-    elif b_has:
-        return b.name
-    return None
-
-
 def initfunc(f):
     """
     Decorator for initialization functions that should
@@ -191,24 +85,6 @@ def initfunc(f):
 
     wrapper.initialized = False
     return wrapper
-
-
-def get_null_series(size, dtype=np.bool_):
-    """
-    Creates a null series of provided dtype and size
-
-    Parameters
-    ----------
-    size:  length of series
-    dtype: dtype of series to create; defaults to bool.
-
-    Returns
-    -------
-    a null cudf series of provided `size` and `dtype`
-    """
-
-    empty_col = column.column_empty(size, dtype, True)
-    return cudf.Series(empty_col)
 
 
 # taken from dask array
@@ -267,6 +143,9 @@ class cached_property:
     it with `del`.
     """
 
+    # TODO: Can be replaced with functools.cached_property when we drop support
+    # for Python 3.7.
+
     def __init__(self, func):
         self.func = func
 
@@ -277,24 +156,6 @@ class cached_property:
             value = self.func(instance)
             setattr(instance, self.func.__name__, value)
             return value
-
-
-def time_col_replace_nulls(input_col):
-
-    null = column.column_empty_like(input_col, masked=True, newsize=1)
-    out_col = cudf._lib.replace.replace(
-        input_col,
-        column.as_column(
-            Buffer(
-                np.array(
-                    [input_col.default_na_value()], dtype=input_col.dtype
-                ).view("|u1")
-            ),
-            dtype=input_col.dtype,
-        ),
-        null,
-    )
-    return out_col
 
 
 def raise_iteration_error(obj):
@@ -317,7 +178,8 @@ def pa_mask_buffer_to_mask(mask_buf, size):
     return Buffer(mask_buf)
 
 
-def isnat(val):
+def _isnat(val):
+    """Wraps np.isnat to return False instead of error on invalid inputs."""
     if not isinstance(val, (np.datetime64, np.timedelta64, str)):
         return False
     else:
