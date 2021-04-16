@@ -168,16 +168,14 @@ class _SeriesLocIndexer(object):
         if is_scalar(arg):
             if not is_numerical_dtype(self._sr.index.dtype):
                 # TODO: switch to cudf.utils.dtypes.is_integer(arg)
-                if pd.api.types.is_integer(arg):  #
-                    found_index = arg
-                    return found_index
-
-                elif pd.api.types.is_integer_dtype(arg.dtype) and isinstance(
+                if isinstance(
                     arg, cudf.Scalar
-                ):
+                ) and pd.api.types.is_integer_dtype(arg.dtype):
                     found_index = arg.value
                     return found_index
-
+                elif pd.api.types.is_integer(arg):
+                    found_index = arg
+                    return found_index
             try:
                 found_index = self._sr.index._values.find_first_value(
                     arg, closest=False
