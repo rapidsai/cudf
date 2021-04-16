@@ -1214,3 +1214,11 @@ def test_concat_preserve_order():
         pd.concat(dfs, join="inner"),
         gd.concat([gd.DataFrame(df) for df in dfs], join="inner"),
     )
+
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("typ", [gd.DataFrame, gd.Series])
+def test_concat_single_object(ignore_index, typ):
+    """Ensure that concat on a single object does not change it."""
+    obj = typ([1, 2, 3])
+    assert_eq(gd.concat([obj], ignore_index=ignore_index, axis=0), obj)
