@@ -188,8 +188,8 @@ class SubwordTokenizer:
             )
             raise NotImplementedError(error_msg)
 
-        if stride > max_length:
-            error_msg = "Stride can not be greater than max_length"
+        if max_length <= stride:
+            error_msg = "Stride should be less than max_length"
             raise ValueError(error_msg)
 
         if return_tensors not in ["cp", "pt", "tf"]:

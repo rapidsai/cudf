@@ -26,7 +26,7 @@ def assert_equal_tokenization_outputs(hf_output, cudf_output):
 
 
 @pytest.mark.parametrize("seq_len", [32, 64])
-@pytest.mark.parametrize("stride", [0, 15, 32])
+@pytest.mark.parametrize("stride", [0, 15, 30])
 @pytest.mark.parametrize("add_special_tokens", [True, False])
 @pytest.mark.parametrize("do_lower_case", [True, False])
 def test_subword_tokenize(
@@ -36,6 +36,7 @@ def test_subword_tokenize(
         input_sentence_ls = [line.strip() for line in file]
 
     vocab_dir = os.path.join(datadir, "bert_base_cased_sampled")
+
     hf_tokenizer = BertTokenizer.from_pretrained(
         vocab_dir, do_lower_case=do_lower_case
     )
