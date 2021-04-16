@@ -9,7 +9,6 @@ from collections.abc import MutableSequence
 from types import SimpleNamespace
 from typing import (
     Any,
-    Callable,
     Dict,
     List,
     Mapping,
@@ -25,7 +24,7 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from numba import cuda, njit
+from numba import cuda
 
 import cudf
 from cudf import _lib as libcudf
@@ -2207,43 +2206,6 @@ def _construct_array(
             else np.dtype(native_dtype),
         )
     return arbitrary
-
-
-def column_applymap(
-    udf: Callable[[ScalarLike], ScalarLike],
-    column: ColumnBase,
-    out_dtype: Dtype,
-) -> ColumnBase:
-    """Apply an element-wise function to transform the values in the Column.
-
-    Parameters
-    ----------
-    udf : function
-        Wrapped by numba jit for call on the GPU as a device function.
-    column : Column
-        The source column.
-    out_dtype  : numpy.dtype
-        The dtype for use in the output.
-
-    Returns
-    -------
-    result : Column
-    """
-    core = njit(udf)
-
-    # For non-masked columns
-    @cuda.jit
-    def kernel_applymap(values, results):
-        i = cuda.grid(1)
-        # in range?
-        if i < values.size:
-            # call udf
-            results[i] = core(values[i])
-
-    results = column_empty(len(column), dtype=out_dtype)
-    values = column.data_array_view
-    kernel_applymap.forall(len(column))(values, results)
-    return as_column(results)
 
 
 def _data_from_cuda_array_interface_desc(obj) -> Buffer:
