@@ -50,6 +50,9 @@ import java.util.stream.Collectors;
 import static ai.rapids.cudf.Aggregate.max;
 import static ai.rapids.cudf.Aggregate.first;
 import static ai.rapids.cudf.Aggregate.last;
+import static ai.rapids.cudf.ParquetColumnWriterOptions.*;
+import static ai.rapids.cudf.ParquetWriterOptions.listBuilder;
+import static ai.rapids.cudf.ParquetWriterOptions.structBuilder;
 import static ai.rapids.cudf.Table.TestBuilder;
 import static ai.rapids.cudf.Table.count;
 import static ai.rapids.cudf.Table.mean;
@@ -4545,36 +4548,42 @@ public class TableTest extends CudfTestBase {
   }
 
   private Table getExpectedFileTable() {
-    return getExpectedFileTable(false);
+    return getExpectedFileTable(false, false);
   }
 
   private Table getExpectedFileTable(boolean withNestedColumns) {
+    return getExpectedFileTable(true, true);
+  }
+
+  private Table getExpectedFileTable(boolean withStructColumns, boolean withListColumn) {
     TestBuilder tb = new TestBuilder()
-            .column(true, false, false, true, false)
-            .column(5, 1, 0, 2, 7)
-            .column(new Byte[]{2, 3, 4, 5, 9})
-            .column(3l, 9l, 4l, 2l, 20l)
-            .column("this", "is", "a", "test", "string")
-            .column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f)
-            .column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d);
-    if (withNestedColumns) {
-      StructType nestedType = new StructType(true,
-              new BasicType(false, DType.INT32), new BasicType(false, DType.STRING));
+        .column(true, false, false, true, false)
+        .column(5, 1, 0, 2, 7)
+        .column(new Byte[]{2, 3, 4, 5, 9})
+        .column(3l, 9l, 4l, 2l, 20l)
+        .column("this", "is", "a", "test", "string")
+        .column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f)
+        .column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d);
+    StructType nestedType = new StructType(true,
+        new BasicType(false, DType.INT32), new BasicType(false, DType.STRING));
+    if (withStructColumns) {
       tb.column(nestedType,
-            struct(1, "k1"), struct(2, "k2"), struct(3, "k3"),
-            struct(4, "k4"), new HostColumnVector.StructData((List) null))
-        .column(new ListType(false, new BasicType(false, DType.INT32)),
-                Arrays.asList(1, 2),
-                Arrays.asList(3, 4),
-                Arrays.asList(5),
-                Arrays.asList(6, 7),
-                Arrays.asList(8, 9, 10))
-        .column(new ListType(false, nestedType),
-            Arrays.asList(struct(1, "k1"), struct(2, "k2"), struct(3, "k3")),
-            Arrays.asList(struct(4, "k4"), struct(5, "k5")),
-            Arrays.asList(struct(6, "k6")),
-            Arrays.asList(new HostColumnVector.StructData((List) null)),
-            Arrays.asList());
+          struct(1, "k1"), struct(2, "k2"), struct(3, "k3"),
+          struct(4, "k4"), new HostColumnVector.StructData((List) null));
+    }
+    if (withListColumn) {
+      tb.column(new ListType(false, new BasicType(false, DType.INT32)),
+          Arrays.asList(1, 2),
+          Arrays.asList(3, 4),
+          Arrays.asList(5),
+          Arrays.asList(6, 7),
+          Arrays.asList(8, 9, 10))
+          .column(new ListType(false, nestedType),
+              Arrays.asList(struct(1, "k1"), struct(2, "k2"), struct(3, "k3")),
+              Arrays.asList(struct(4, "k4"), struct(5, "k5")),
+              Arrays.asList(struct(6, "k6")),
+              Arrays.asList(new HostColumnVector.StructData((List) null)),
+              Arrays.asList());
     }
     return tb.build();
   }
@@ -4642,9 +4651,9 @@ public class TableTest extends CudfTestBase {
     try (Table table0 = getExpectedFileTableWithDecimals();
          MyBufferConsumer consumer = new MyBufferConsumer()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumnNames("_c1", "_c2", "_c3", "_c4", "_c5", "_c6", "_c7", "_c8", "_c9")
-          .withTimestampInt96(true)
-          .withDecimalPrecisions(0, 0, 0, 0, 0, 0, 0, 5, 5)
+          .withNonNullableColumn("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
+          .withDecimalColumn("_c7", 5)
+          .withDecimalColumn("_c8", 5)
           .build();
 
       try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
@@ -4660,12 +4669,46 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testParquetWriteToBufferChunkedWithNested() {
+    ParquetWriterOptions options = ParquetWriterOptions.builder()
+        .withNullableColumn("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
+        .withStructColumn(structBuilder("_c7")
+            .withNullableColumn("_c7-1")
+            .withNullableColumn("_c7-2")
+            .build())
+      .withListColumn(listBuilder("_c8")
+            .withNullableColumn("c8-1").build())
+        .withListColumn(listBuilder("c9")
+            .withStructColumn(structBuilder("c9-1")
+                .withNullableColumn("c9-1-1")
+                .withNullableColumn("c9-1-2").build())
+            .build())
+        .build();
+    try (Table table0 = getExpectedFileTable(true);
+         MyBufferConsumer consumer = new MyBufferConsumer()) {
+      try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
+        writer.write(table0);
+        writer.write(table0);
+        writer.write(table0);
+      }
+      try (Table table1 = Table.readParquet(ParquetOptions.DEFAULT, consumer.buffer, 0,
+          consumer.offset);
+           Table concat = Table.concatenate(table0, table0, table0)) {
+        assertTablesAreEqual(concat, table1);
+      }
+    }
+  }
+
+  @Test
   void testParquetWriteToBufferChunked() {
     ParquetWriterOptions options = ParquetWriterOptions.builder()
-        .withColumnNames("_c1", "_c2", "_c3", "_c4", "_c5", "_c6", "_c7")
-        .withTimestampInt96(true)
+        .withNullableColumn("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
+        .withStructColumn(structBuilder("_c7")
+            .withNullableColumn("_c7-1")
+            .withNullableColumn("_c7-2")
+            .build())
         .build();
-    try (Table table0 = getExpectedFileTable();
+    try (Table table0 = getExpectedFileTable(true, false);
          MyBufferConsumer consumer = new MyBufferConsumer()) {
          try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
            writer.write(table0);
@@ -4684,11 +4727,11 @@ public class TableTest extends CudfTestBase {
     File tempFile = File.createTempFile("test-names", ".parquet");
     try (Table table0 = getExpectedFileTableWithDecimals()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh",
-              "eighth", "nineth")
+          .withNonNullableColumn("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+          .withDecimalColumn("eighth", 5)
+          .withDecimalColumn("nineth", 6)
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
-          .withDecimalPrecisions(0, 0, 0, 0, 0, 0, 0, 5, 6)
           .build();
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);
@@ -4706,12 +4749,12 @@ public class TableTest extends CudfTestBase {
     File tempFile = File.createTempFile("test-names-metadata", ".parquet");
     try (Table table0 = getExpectedFileTableWithDecimals()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh",
-            "eighth", "nineth")
+          .withNonNullableColumn("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+          .withDecimalColumn("eighth", 6)
+          .withDecimalColumn("nineth", 8)
           .withMetadata("somekey", "somevalue")
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
-          .withDecimalPrecisions(0, 0, 0, 0, 0, 0, 0, 6, 8)
           .build();
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);
@@ -4729,10 +4772,11 @@ public class TableTest extends CudfTestBase {
     File tempFile = File.createTempFile("test-uncompressed", ".parquet");
     try (Table table0 = getExpectedFileTableWithDecimals()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumnNames("_c1", "_c2", "_c3", "_c4", "_c5", "_c6", "_c7", "_c8", "_c9")
+          .withNonNullableColumn("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
+          .withDecimalColumn("_c7", 4)
+          .withDecimalColumn("_c8", 6)
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
-          .withDecimalPrecisions(0, 0, 0, 0, 0, 0, 0, 4, 6)
           .build();
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);
