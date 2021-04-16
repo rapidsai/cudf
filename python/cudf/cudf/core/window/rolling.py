@@ -10,9 +10,10 @@ from cudf import _lib as libcudf
 from cudf.core import column
 from cudf.core.column.column import as_column
 from cudf.utils import cudautils
+from cudf.utils.utils import GetAttrGetItemMixin
 
 
-class Rolling:
+class Rolling(GetAttrGetItemMixin):
     """
     Rolling window calculations.
 
@@ -154,6 +155,8 @@ class Rolling:
     dtype: float64
     """
 
+    _PROTECTED_KEYS = frozenset(("obj",))
+
     _time_window = False
 
     def __init__(
@@ -180,15 +183,6 @@ class Rolling:
                     "Only the default win_type 'boxcar' is currently supported"
                 )
         self.win_type = win_type
-
-    def __getattr__(self, key):
-        if key == "obj":
-            raise AttributeError()
-        return self.obj[key].rolling(
-            window=self.window,
-            min_periods=self.min_periods,
-            center=self.center,
-        )
 
     def __getitem__(self, arg):
         if isinstance(arg, tuple):

@@ -132,7 +132,7 @@ std::unique_ptr<cudf::column> generate_ngrams(
   auto const ngrams_count = strings_count - ngrams + 1;
 
   auto children = cudf::strings::detail::make_strings_children(
-    ngram_generator_fn{d_strings, ngrams, d_separator}, ngrams_count, 0, stream, mr);
+    ngram_generator_fn{d_strings, ngrams, d_separator}, ngrams_count, stream, mr);
 
   // make the output strings column from the offsets and chars column
   return cudf::make_strings_column(ngrams_count,
@@ -245,7 +245,7 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
   auto const chars_bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), total_ngrams, stream);
   auto chars_column =
-    cudf::strings::detail::create_chars_child_column(total_ngrams, 0, chars_bytes, stream, mr);
+    cudf::strings::detail::create_chars_child_column(total_ngrams, chars_bytes, stream, mr);
   generator.d_chars = chars_column->mutable_view().data<char>();  // output chars
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
