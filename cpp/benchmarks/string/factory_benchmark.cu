@@ -63,7 +63,7 @@ static void BM_factory(benchmark::State& state)
                     string_view_to_pair{});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, 0);
+    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
     cudf::make_strings_column(pairs);
   }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -190,10 +190,10 @@ std::unique_ptr<column> integers_to_ipv4(
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // build chars column
-  size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
-  auto chars_column =
-    create_chars_child_column(strings_count, integers.null_count(), bytes, stream, mr);
-  auto d_chars = chars_column->mutable_view().data<char>();
+  auto const bytes =
+    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
+  auto chars_column = create_chars_child_column(strings_count, bytes, stream, mr);
+  auto d_chars      = chars_column->mutable_view().data<char>();
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,

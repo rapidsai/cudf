@@ -16,19 +16,21 @@
 
 #pragma once
 
+#include "orc_common.h"
+
+#include <io/comp/io_uncomp.h>
+#include <cudf/io/datasource.hpp>
+#include <cudf/io/orc_metadata.hpp>
+#include <cudf/utilities/error.hpp>
+
+#include <thrust/optional.h>
+
 #include <stddef.h>
 #include <stdint.h>
 #include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
-
-#include <cudf/utilities/error.hpp>
-
-#include <io/comp/io_uncomp.h>
-#include <cudf/io/datasource.hpp>
-#include <cudf/io/orc_metadata.hpp>
-#include "orc_common.h"
 
 namespace cudf {
 namespace io {
@@ -80,8 +82,15 @@ struct FileFooter {
 
 struct Stream {
   StreamKind kind = INVALID_STREAM_KIND;
-  uint32_t column = ~0;  // the column id
-  uint64_t length = 0;   // the number of bytes in the file
+  std::optional<uint32_t> column_id;  // ORC column id (different from column index in the table!)
+  uint64_t length = 0;                // the number of bytes in the file
+
+  // Returns index of the column in the table, if any
+  // Stream of the 'column 0' does not have a corresponding column in the table
+  thrust::optional<uint32_t> column_index() const noexcept
+  {
+    return column_id.value_or(0) > 0 ? thrust::optional<uint32_t>{*column_id - 1} : thrust::nullopt;
+  }
 };
 
 struct ColumnEncoding {
@@ -227,6 +236,15 @@ class ProtobufReader {
     return encode_field_number_base<typename T::element_type>(field_number);
   }
 
+  // optional fields don't change the field number encoding
+  template <typename T,
+            typename std::enable_if_t<std::is_same<T, std::optional<typename T::value_type>>::value>
+              * = nullptr>
+  int static constexpr encode_field_number(int field_number) noexcept
+  {
+    return encode_field_number_base<typename T::value_type>(field_number);
+  }
+
   uint32_t read_field_size(const uint8_t *end);
 
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
@@ -277,6 +295,16 @@ class ProtobufReader {
     typename T::element_type contained_value;
     read_field(contained_value, end);
     value = std::make_unique<typename T::element_type>(std::move(contained_value));
+  }
+
+  template <typename T,
+            typename std::enable_if_t<std::is_same<T, std::optional<typename T::value_type>>::value>
+              * = nullptr>
+  void read_field(T &value, const uint8_t *end)
+  {
+    typename T::value_type contained_value;
+    read_field(contained_value, end);
+    value = std::optional<typename T::value_type>{std::move(contained_value)};
   }
 
   template <typename T>
