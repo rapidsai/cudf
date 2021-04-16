@@ -1,6 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import collections
-import functools
 import pickle
 import warnings
 
@@ -570,48 +569,110 @@ class GroupBy(Serializable):
         """
         return cudf.core.window.rolling.RollingGroupby(self, *args, **kwargs)
 
+    def count(self, dropna=True):
+        """Compute the number of values in each column.
 
-# Set of valid groupby aggregations that are monkey-patched into the GroupBy
-# namespace.
-_VALID_GROUPBY_AGGS = {
-    "count",
-    "sum",
-    "prod",
-    "idxmin",
-    "idxmax",
-    "min",
-    "max",
-    "mean",
-    "var",
-    "std",
-    "quantile",
-    "median",
-    "nunique",
-    "collect",
-    "unique",
-}
+        Parameters
+        ----------
+        dropna : bool
+            If ``True``, don't include null values in the count.
+        """
 
+        def func(x):
+            return getattr(x, "count")(dropna=dropna)
 
-# Dynamically bind the different aggregation methods.
-def _agg_func_name_with_args(self, func_name, *args, **kwargs):
-    """
-    Aggregate given an aggregate function name and arguments to the
-    function, e.g., `_agg_func_name_with_args("quantile", 0.5)`. The named
-    aggregations must be members of _AggregationFactory.
-    """
+        return self.agg(func)
 
-    def func(x):
-        """Compute the {} of the group.""".format(func_name)
-        return getattr(x, func_name)(*args, **kwargs)
+    def sum(self):
+        """Compute the column-wise sum of the values in each group."""
+        return self.agg("sum")
 
-    func.__name__ = func_name
-    return self.agg(func)
+    def prod(self):
+        """Compute the column-wise product of the values in each group."""
+        return self.agg("prod")
 
+    def idxmin(self):
+        """Get the column-wise index of the minimum value in each group."""
+        return self.agg("idxmin")
 
-for key in _VALID_GROUPBY_AGGS:
-    setattr(
-        GroupBy, key, functools.partialmethod(_agg_func_name_with_args, key)
-    )
+    def idxmax(self):
+        """Get the column-wise index of the maximum value in each group."""
+        return self.agg("idxmax")
+
+    def min(self):
+        """Get the column-wise minimum value in each group."""
+        return self.agg("min")
+
+    def max(self):
+        """Get the column-wise maximum value in each group."""
+        return self.agg("max")
+
+    def mean(self):
+        """Compute the column-wise mean of the values in each group."""
+        return self.agg("mean")
+
+    def median(self):
+        """Get the column-wise median of the values in each group."""
+        return self.agg("median")
+
+    def var(self, ddof=1):
+        """Compute the column-wise variance of the values in each group.
+
+        Parameters
+        ----------
+        ddof : int
+            The delta degrees of freedom. N - ddof is the divisor used to
+            normalize the variance.
+        """
+
+        def func(x):
+            return getattr(x, "var")(ddof=ddof)
+
+        return self.agg(func)
+
+    def std(self, ddof=1):
+        """Compute the column-wise std of the values in each group.
+
+        Parameters
+        ----------
+        ddof : int
+            The delta degrees of freedom. N - ddof is the divisor used to
+            normalize the standard deviation.
+        """
+
+        def func(x):
+            return getattr(x, "std")(ddof=ddof)
+
+        return self.agg(func)
+
+    def quantile(self, q=0.5, interpolation="linear"):
+        """Compute the column-wise quantiles of the values in each group.
+
+        Parameters
+        ----------
+        q : float or array-like
+            The quantiles to compute.
+        interpolation : {"linear", "lower", "higher", "midpoint", "nearest"}
+            The interpolation method to use when the desired quantile lies
+            between two data points. Defaults to "linear".
+       """
+
+        def func(x):
+            return getattr(x, "quantile")(q=q, interpolation=interpolation)
+
+        return self.agg(func)
+
+    def nunique(self):
+        """Compute the number of unique values in each column in each group."""
+        return self.agg("nunique")
+
+    def collect(self):
+        """Get a list of all the values for each column in each group."""
+        return self.agg("collect")
+
+    def unique(self):
+        """Get a list of the unique values for each column in each group."""
+        return self.agg("unique")
 
 
 class DataFrameGroupBy(GroupBy):
