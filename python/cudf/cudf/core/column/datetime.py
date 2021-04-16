@@ -16,7 +16,13 @@ from cudf import _lib as libcudf
 from cudf._typing import DatetimeLikeScalar, Dtype, DtypeObj, ScalarLike
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer import Buffer
-from cudf.core.column import ColumnBase, column, string
+from cudf.core.column import (
+    ColumnBase,
+    as_column,
+    column,
+    column_empty_like,
+    string,
+)
 from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import _fillna_natwise
 
@@ -306,7 +312,7 @@ class DatetimeColumn(column.ColumnBase):
         self, fill_value: Any = None, method: str = None, dtype: Dtype = None
     ) -> DatetimeColumn:
         if fill_value is not None:
-            if cudf.utils.utils.isnat(fill_value):
+            if cudf.utils.utils._isnat(fill_value):
                 return _fillna_natwise(self)
             if is_scalar(fill_value):
                 if not isinstance(fill_value, cudf.Scalar):
@@ -371,6 +377,23 @@ class DatetimeColumn(column.ColumnBase):
             return True
         else:
             return False
+
+    def _make_copy_with_na_as_null(self):
+        """Return a copy with NaN values replaced with nulls."""
+        null = column_empty_like(self, masked=True, newsize=1)
+        out_col = cudf._lib.replace.replace(
+            self,
+            as_column(
+                Buffer(
+                    np.array([self.default_na_value()], dtype=self.dtype).view(
+                        "|u1"
+                    )
+                ),
+                dtype=self.dtype,
+            ),
+            null,
+        )
+        return out_col
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")

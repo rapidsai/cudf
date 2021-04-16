@@ -43,7 +43,7 @@ from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
-from cudf.utils import cudautils, docutils, ioutils, utils
+from cudf.utils import cudautils, docutils, ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
@@ -52,7 +52,6 @@ from cudf.utils.dtypes import (
     is_list_like,
     is_mixed_with_object_dtype,
     is_scalar,
-    is_string_dtype,
     min_scalar_type,
     numeric_normalize_types,
 )
@@ -1505,7 +1504,6 @@ class Series(Frame, Serializable):
         if isinstance(other, cudf.DataFrame):
             return NotImplemented
 
-        result_name = utils.get_result_name(self, other)
         if isinstance(other, Series):
             if not can_reindex and fn in cudf.utils.utils._EQUALITY_OPS:
                 if not self.index.equals(other.index):
@@ -1544,8 +1542,19 @@ class Series(Frame, Serializable):
                     rhs = rhs.fillna(fill_value)
 
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
-        result = lhs._copy_construct(data=outcol, name=result_name)
-        return result
+
+        # Get the appropriate name for output operations involving two objects
+        # that are a mix of pandas and cudf Series and Index. If the two inputs
+        # are identically named, the output shares this name.
+        if isinstance(other, (cudf.Series, cudf.Index, pd.Series, pd.Index)):
+            if self.name == other.name:
+                result_name = self.name
+            else:
+                result_name = None
+        else:
+            result_name = self.name
+
+        return lhs._copy_construct(data=outcol, name=result_name)
 
     def add(self, other, fill_value=None, axis=0):
         """
@@ -4365,14 +4374,6 @@ class Series(Frame, Serializable):
         4    105
         dtype: int64
         """
-        if is_string_dtype(self._column.dtype) or isinstance(
-            self._column, cudf.core.column.CategoricalColumn
-        ):
-            raise TypeError(
-                "User defined functions are currently not "
-                "supported on Series with dtypes `str` and `category`."
-            )
-
         if callable(udf):
             res_col = self._unaryop(udf)
         else:
