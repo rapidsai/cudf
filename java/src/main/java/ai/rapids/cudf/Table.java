@@ -244,7 +244,6 @@ public final class Table implements AutoCloseable {
   /**
    * Setup everything to write parquet formatted data to a file.
    * @param columnNames     names that correspond to the table columns
-   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
@@ -257,20 +256,18 @@ public final class Table implements AutoCloseable {
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetFileBegin(String[] columnNames,
-                                                   int[] flatNumChildren,
                                                    boolean[] nullable,
                                                    String[] metadataKeys,
                                                    String[] metadataValues,
                                                    int compression,
                                                    int statsFreq,
-                                                   boolean[] isInt96,
+                                                   boolean isInt96,
                                                    int[] precisions,
                                                    String filename) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a buffer.
    * @param columnNames     names that correspond to the table columns
-   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
@@ -283,13 +280,12 @@ public final class Table implements AutoCloseable {
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetBufferBegin(String[] columnNames,
-                                                     int[] flatNumChildren,
                                                      boolean[] nullable,
                                                      String[] metadataKeys,
                                                      String[] metadataValues,
                                                      int compression,
                                                      int statsFreq,
-                                                     boolean[] isInt96,
+                                                     boolean isInt96,
                                                      int[] precisions,
                                                      HostBufferConsumer consumer) throws CudfException;
 
@@ -823,43 +819,35 @@ public final class Table implements AutoCloseable {
     HostBufferConsumer consumer;
 
     private ParquetTableWriter(ParquetWriterOptions options, File outputFile) {
-      String[] columnNames = options.getFlatColumnNames();
-      boolean[] columnNullabilities = options.getFlatIsNullable();
-      boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
-      int[] precisions = options.getFlatPrecision();
-      int[] flatNumChildren = options.getFlatNumChildren();
-
+      int numColumns = options.getColumnNames().length;
+      assert (numColumns == options.getColumnNullability().length);
+      int[] precisions = options.getPrecisions();
+      if (precisions != null) {
+        assert (numColumns >= options.getPrecisions().length);
+      }
       this.consumer = null;
-      this.handle = writeParquetFileBegin(columnNames,
-          flatNumChildren,
-          columnNullabilities,
+      this.handle = writeParquetFileBegin(options.getColumnNames(),
+          options.getColumnNullability(),
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
-          timeInt96Values,
-          precisions,
+          options.isTimestampTypeInt96(),
+          options.getPrecisions(),
           outputFile.getAbsolutePath());
     }
 
     private ParquetTableWriter(ParquetWriterOptions options, HostBufferConsumer consumer) {
-      String[] columnNames = options.getFlatColumnNames();
-      boolean[] columnNullabilities = options.getFlatIsNullable();
-      boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
-      int[] precisions = options.getFlatPrecision();
-      int[] flatNumChildren = options.getFlatNumChildren();
-
-      this.consumer = consumer;
-      this.handle = writeParquetBufferBegin(columnNames,
-          flatNumChildren,
-          columnNullabilities,
+      this.handle = writeParquetBufferBegin(options.getColumnNames(),
+          options.getColumnNullability(),
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
-          timeInt96Values,
-          precisions,
+          options.isTimestampTypeInt96(),
+          options.getPrecisions(),
           consumer);
+      this.consumer = consumer;
     }
 
     @Override
