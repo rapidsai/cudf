@@ -21,8 +21,8 @@
 
 #include "writer_impl.hpp"
 
-#include <io/parquet/compact_protocol_writer.hpp>
 #include <io/utilities/column_utils.cuh>
+#include "compact_protocol_writer.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
