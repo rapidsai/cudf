@@ -16,9 +16,11 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy_if_else.cuh>
-#include <cudf/detail/indexalator.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <cudf/debug_printers.hpp>
 
@@ -35,23 +37,223 @@ namespace {
 /**
  * @brief TBA
  */
-template <bool forward_shift, typename BoundaryIterator>
+template <bool forward_shift, typename OffsetIterator>
 struct filter_functor {
-  BoundaryIterator segment_bounds_begin;
-  size_type num_segments;
+  OffsetIterator segment_offset_begin;
+  OffsetIterator segment_offset_end;
   size_type offset;
 
-  filter_functor(BoundaryIterator segment_bounds_begin, size_type num_segments, size_type offset)
-    : segment_bounds_begin(segment_bounds_begin), num_segments(num_segments), offset(offset)
+  filter_functor(OffsetIterator segment_offset_begin,
+                 OffsetIterator segment_offset_end,
+                 size_type offset)
+    : segment_offset_begin(segment_offset_begin),
+      segment_offset_end(segment_offset_end),
+      offset(offset)
   {
   }
 
-  __device__ bool operator()(size_type i)
+  __device__ bool operator()(size_type const& i)
   {
-    auto segment_bound_idx =
-      thrust::lower_bound(segment_bounds_begin, segment_bounds_begin + num_segments, i);
-    return forward_shift ? *segment_bound_idx <= i and i < *segment_bound_idx + offset
-                         : *segment_bound_idx + offset <= i and i < *segment_bound_idx;
+    if (forward_shift) {
+      auto segment_bound_idx =
+        thrust::upper_bound(thrust::seq, segment_offset_begin, segment_offset_end, i) - 1;
+      return not(*segment_bound_idx <= i and i < *segment_bound_idx + offset);
+    } else {
+      auto segment_bound_idx =
+        thrust::upper_bound(thrust::seq, segment_offset_begin, segment_offset_end, i);
+      return not(*segment_bound_idx + offset <= i and i < *segment_bound_idx);
+    }
+  }
+};
+
+template <typename PairIterator, typename ScalarIterator>
+std::unique_ptr<column> segmented_shift_rep_impl(PairIterator input_pair_iterator,
+                                                 ScalarIterator fill_pair_iterator,
+                                                 bool nullable,
+                                                 size_type offset,
+                                                 device_span<size_type const> segment_offsets,
+                                                 data_type value_type,
+                                                 size_type column_size,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::mr::device_memory_resource* mr)
+{
+  size_type num_segments = segment_offsets.size() - 1;
+  if (offset > 0) {
+    filter_functor<true, decltype(segment_offsets.begin())> filter{
+      segment_offsets.begin(), segment_offsets.end(), offset};
+    return copy_if_else(nullable,
+                        input_pair_iterator,
+                        input_pair_iterator + column_size,
+                        fill_pair_iterator,
+                        filter,
+                        value_type,
+                        stream,
+                        mr);
+  } else {
+    filter_functor<false, decltype(segment_offsets.begin())> filter{
+      segment_offsets.begin(), segment_offsets.end(), offset};
+    return copy_if_else(nullable,
+                        input_pair_iterator,
+                        input_pair_iterator + column_size,
+                        fill_pair_iterator,
+                        filter,
+                        value_type,
+                        stream,
+                        mr);
+  }
+}
+
+// template<typename PairIterator, typename ScalarIterator>
+// std::unique_ptr<column> segmented_shift_string_impl(
+//   PairIterator input_pair_iterator,
+//   ScalarIterator fill_pair_iterator,
+//   size_type offset,
+//   device_span<size_type const> segment_offsets,
+//   size_type column_size,
+//   rmm::cuda_stream_view stream,
+//   rmm::mr::device_memory_resource* mr
+// )
+// {
+//   size_type num_segments = segment_offsets.size() - 1;
+//   if (offset > 0) {
+//     filter_functor<true, decltype(segment_offsets.begin())> filter{segment_offsets.begin(),
+//     segment_offsets.end(), offset}; return strings::detail::copy_if_else(
+//         input_pair_iterator,
+//         input_pair_iterator + column_size,
+//         fill_pair_iterator,
+//         filter,
+//         stream,
+//         mr);
+//   }
+//   else {
+//     filter_functor<false, decltype(segment_offsets.begin())> filter{segment_offsets.begin(),
+//     segment_offsets.end(), offset}; return strings::detail::copy_if_else(
+//       input_pair_iterator,
+//       input_pair_iterator + column_size,
+//       fill_pair_iterator,
+//       filter,
+//       stream,
+//       mr);
+//   }
+// }
+
+template <typename T, typename Enable = void>
+struct segmented_shift_functor {
+  template <typename... Args>
+  std::unique_ptr<column> operator()(Args&&...)
+  {
+    CUDF_FAIL("Unsupported type for segmented_shift.");
+  }
+};
+
+template <typename T>
+struct segmented_shift_functor<T, std::enable_if_t<is_rep_layout_compatible<T>()>> {
+  std::unique_ptr<column> operator()(column_view const& segmented_values,
+                                     device_span<size_type const> segment_offsets,
+                                     size_type offset,
+                                     scalar const& fill_value,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    auto values_device_view = column_device_view::create(segmented_values, stream);
+    auto fill_pair_iterator = make_pair_iterator<T>(fill_value);
+
+    bool nullable = not fill_value.is_valid() or segmented_values.nullable();
+
+    if (segmented_values.has_nulls()) {
+      auto input_pair_iterator = make_pair_iterator<T, true>(*values_device_view) - offset;
+      return segmented_shift_rep_impl(input_pair_iterator,
+                                      fill_pair_iterator,
+                                      nullable,
+                                      offset,
+                                      segment_offsets,
+                                      segmented_values.type(),
+                                      segmented_values.size(),
+                                      stream,
+                                      mr);
+    } else {
+      auto input_pair_iterator = make_pair_iterator<T, false>(*values_device_view) - offset;
+      return segmented_shift_rep_impl(input_pair_iterator,
+                                      fill_pair_iterator,
+                                      nullable,
+                                      offset,
+                                      segment_offsets,
+                                      segmented_values.type(),
+                                      segmented_values.size(),
+                                      stream,
+                                      mr);
+    }
+  }
+};
+
+template <>
+struct segmented_shift_functor<string_view> {
+  std::unique_ptr<column> operator()(column_view const& segmented_values,
+                                     device_span<size_type const> segment_offsets,
+                                     size_type offset,
+                                     scalar const& fill_value,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    // using T = string_view;
+
+    // auto values_device_view = column_device_view::create(segmented_values, stream);
+    // auto fill_pair_iterator = make_pair_iterator<T>(fill_value);
+    // if (segmented_values.has_nulls()) {
+    //   auto input_pair_iterator = make_pair_iterator<T, true>(*values_device_view) - offset;
+    //   return segmented_shift_string_impl(
+    //     input_pair_iterator, fill_pair_iterator, offset, segment_offsets,
+    //     segmented_values.size(), stream, mr
+    //   );
+    // }
+    // else {
+    //   auto input_pair_iterator = make_pair_iterator<T, false>(*values_device_view) - offset;
+    //   return segmented_shift_string_impl(
+    //     input_pair_iterator, fill_pair_iterator, offset, segment_offsets,
+    //     segmented_values.size(), stream, mr
+    //   );
+    // }
+    CUDF_FAIL("segmented_shift does not support string_view yet");
+  }
+};
+
+template <>
+struct segmented_shift_functor<list_view> {
+  std::unique_ptr<column> operator()(column_view const& segmented_values,
+                                     device_span<size_type const> segment_offsets,
+                                     size_type offset,
+                                     scalar const& fill_value,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    CUDF_FAIL("segmented_shift does not support list_view yet");
+  }
+};
+
+template <>
+struct segmented_shift_functor<struct_view> {
+  std::unique_ptr<column> operator()(column_view const& segmented_values,
+                                     device_span<size_type const> segment_offsets,
+                                     size_type offset,
+                                     scalar const& fill_value,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    CUDF_FAIL("segmented_shift does not support struct_view yet");
+  }
+};
+
+struct segmented_shift_functor_forwarder {
+  template <typename T>
+  std::unique_ptr<column> operator()(column_view const& segmented_values,
+                                     device_span<size_type const> segment_offsets,
+                                     size_type offset,
+                                     scalar const& fill_value,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    segmented_shift_functor<T> shifter;
+    return shifter(segmented_values, segment_offsets, offset, fill_value, stream, mr);
   }
 };
 
@@ -61,9 +263,6 @@ struct filter_functor {
  * @brief Implementation of segmented shift
  *
  * TBA
- *
- * @tparam forward_shift If true, shifts element to the end of the segment.
- * @tparam BoudnaryIterator TBA
  *
  * @param segmented_values Segmented column to shift
  * @param segment_bound_begin TBA
@@ -75,32 +274,6 @@ struct filter_functor {
  *
  * @return Column where values are shifted in each segment
  */
-template <bool forward_shift, typename BoundaryIterator>
-std::unique_ptr<column> segmented_shift_impl(column_view const& segmented_values,
-                                             BoundaryIterator segment_boundary_begin,
-                                             std::size_t num_segments,
-                                             size_type const& offset,
-                                             scalar const& fill_value,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
-{
-  auto input_pair_iterator =
-    cudf::detail::indexalator_factory::make_input_pair_iterator(segmented_values) - offset;
-  auto fill_pair_iterator = cudf::detail::indexalator_factory::make_input_pair_iterator(fill_value);
-  auto filter =
-    filter_functor<forward_shift, BoundaryIterator>{segment_boundary_begin, num_segments, offset};
-
-  bool nullable = not fill_value.is_valid() or segmented_values.nullable();
-  return copy_if_else(nullable,
-                      input_pair_iterator,
-                      input_pair_iterator + segmented_values.size(),
-                      fill_pair_iterator,
-                      filter,
-                      segmented_values.type(),
-                      stream,
-                      mr);
-}
-
 std::unique_ptr<column> segmented_shift(column_view const& segmented_values,
                                         device_span<size_type const> segment_offsets,
                                         size_type offset,
@@ -110,25 +283,14 @@ std::unique_ptr<column> segmented_shift(column_view const& segmented_values,
 {
   if (segmented_values.is_empty()) { return empty_like(segmented_values); }
 
-  if (offset > 0) {
-    return segmented_shift_impl<true>(segmented_values,
-                                      segment_offsets.begin(),
-                                      segment_offsets.size() - 1,
-                                      offset,
-                                      fill_value,
-                                      stream,
-                                      mr);
-  } else {
-    auto right_boundary_iterator =
-      thrust::make_transform_iterator(segment_offsets.begin() + 1, [](auto i) { return i - 1; });
-    return segmented_shift_impl<false>(segmented_values,
-                                       right_boundary_iterator,
-                                       segment_offsets.size() - 1,
-                                       offset,
-                                       fill_value,
-                                       stream,
-                                       mr);
-  }
+  return type_dispatcher<dispatch_storage_type>(segmented_values.type(),
+                                                segmented_shift_functor_forwarder{},
+                                                segmented_values,
+                                                segment_offsets,
+                                                offset,
+                                                fill_value,
+                                                stream,
+                                                mr);
 }
 
 }  // namespace detail
