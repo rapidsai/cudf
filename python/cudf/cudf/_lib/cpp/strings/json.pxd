@@ -11,5 +11,5 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 cdef extern from "cudf/strings/json.hpp" namespace "cudf::strings" nogil:
     cdef unique_ptr[column] get_json_object(
         column_view col,
-        string json_path,
+        string_scalar json_path,
     ) except +
