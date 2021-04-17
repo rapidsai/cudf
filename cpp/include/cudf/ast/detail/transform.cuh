@@ -431,8 +431,7 @@ struct ast_plan {
   std::vector<cudf::size_type> offsets() const
   {
     auto offsets = std::vector<int>(_sizes.size());
-    // When C++17, use std::exclusive_scan
-    std::partial_sum(_sizes.cbegin(), _sizes.cend() - 1, offsets.begin() + 1);
+    thrust::exclusive_scan(_sizes.cbegin(), _sizes.cend(), offsets.begin(), 0);
     return offsets;
   }
 

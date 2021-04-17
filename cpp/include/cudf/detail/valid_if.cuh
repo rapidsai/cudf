@@ -25,7 +25,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 
-#include <thrust/device_vector.h>
 #include <thrust/distance.h>
 
 namespace cudf {

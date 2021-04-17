@@ -13,12 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/interop.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/transform.hpp>
@@ -33,6 +33,8 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/gather.h>
 
 namespace cudf {
 
@@ -54,7 +56,7 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type)
     case arrow::Type::DOUBLE: return data_type(type_id::FLOAT64);
     case arrow::Type::DATE32: return data_type(type_id::TIMESTAMP_DAYS);
     case arrow::Type::TIMESTAMP: {
-      arrow::TimestampType const* type = static_cast<arrow::TimestampType const*>(&arrow_type);
+      auto type = static_cast<arrow::TimestampType const*>(&arrow_type);
       switch (type->unit()) {
         case arrow::TimeUnit::type::SECOND: return data_type(type_id::TIMESTAMP_SECONDS);
         case arrow::TimeUnit::type::MILLI: return data_type(type_id::TIMESTAMP_MILLISECONDS);
@@ -64,7 +66,7 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type)
       }
     }
     case arrow::Type::DURATION: {
-      arrow::DurationType const* type = static_cast<arrow::DurationType const*>(&arrow_type);
+      auto type = static_cast<arrow::DurationType const*>(&arrow_type);
       switch (type->unit()) {
         case arrow::TimeUnit::type::SECOND: return data_type(type_id::DURATION_SECONDS);
         case arrow::TimeUnit::type::MILLI: return data_type(type_id::DURATION_MILLISECONDS);
@@ -76,6 +78,10 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type)
     case arrow::Type::STRING: return data_type(type_id::STRING);
     case arrow::Type::DICTIONARY: return data_type(type_id::DICTIONARY32);
     case arrow::Type::LIST: return data_type(type_id::LIST);
+    case arrow::Type::DECIMAL: {
+      auto const type = static_cast<arrow::Decimal128Type const*>(&arrow_type);
+      return data_type{type_id::DECIMAL64, -type->scale()};
+    }
     case arrow::Type::STRUCT: return data_type(type_id::STRUCT);
     default: CUDF_FAIL("Unsupported type_id conversion to cudf");
   }
@@ -173,6 +179,54 @@ std::unique_ptr<column> get_column(arrow::Array const& array,
                                    bool skip_mask,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr);
+
+template <>
+std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal64>(
+  arrow::Array const& array,
+  data_type type,
+  bool skip_mask,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  using DeviceType = int64_t;
+
+  auto constexpr BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+  auto data_buffer               = array.data()->buffers[1];
+  auto const num_rows            = static_cast<size_type>(array.length());
+
+  rmm::device_uvector<DeviceType> buf(num_rows * BIT_WIDTH_RATIO, stream);
+  rmm::device_uvector<DeviceType> out_buf(num_rows, stream, mr);
+
+  CUDA_TRY(cudaMemcpyAsync(
+    reinterpret_cast<uint8_t*>(buf.data()),
+    reinterpret_cast<const uint8_t*>(data_buffer->address()) + array.offset() * sizeof(DeviceType),
+    buf.size() * sizeof(DeviceType),
+    cudaMemcpyDefault,
+    stream.value()));
+
+  auto every_other = [] __device__(size_type i) { return 2 * i; };
+  auto gather_map  = cudf::detail::make_counting_transform_iterator(0, every_other);
+
+  thrust::gather(
+    rmm::exec_policy(stream), gather_map, gather_map + num_rows, buf.data(), out_buf.data());
+
+  auto null_mask = [&] {
+    if (not skip_mask and array.null_bitmap_data()) {
+      auto temp_mask = get_mask_buffer(array, stream, mr);
+      // If array is sliced, we have to copy whole mask and then take copy.
+      return (num_rows == static_cast<size_type>(data_buffer->size() / sizeof(DeviceType)))
+               ? *temp_mask.release()
+               : cudf::detail::copy_bitmask(static_cast<bitmask_type*>(temp_mask->data()),
+                                            array.offset(),
+                                            array.offset() + num_rows,
+                                            stream,
+                                            mr);
+    }
+    return rmm::device_buffer{};
+  }();
+
+  return std::make_unique<cudf::column>(type, num_rows, out_buf.release(), std::move(null_mask));
+}
 
 template <>
 std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(

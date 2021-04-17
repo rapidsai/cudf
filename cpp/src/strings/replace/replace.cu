@@ -476,12 +476,9 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
                     offsets_update_fn);
 
   // build the characters column
-  auto chars_column = create_chars_child_column(strings_count,
-                                                strings.null_count(),
-                                                chars_bytes + (delta_per_target * target_count),
-                                                stream,
-                                                mr);
-  auto d_out_chars  = chars_column->mutable_view().data<char>();
+  auto chars_column = create_chars_child_column(
+    strings_count, chars_bytes + (delta_per_target * target_count), stream, mr);
+  auto d_out_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(chars_start),
@@ -528,11 +525,7 @@ std::unique_ptr<column> replace_row_parallel(strings_column_view const& strings,
 
   // this utility calls the given functor to build the offsets and chars columns
   auto children = cudf::strings::detail::make_strings_children(
-    replace_row_parallel_fn{*d_strings, d_target, d_repl, maxrepl},
-    strings.size(),
-    strings.null_count(),
-    stream,
-    mr);
+    replace_row_parallel_fn{*d_strings, d_target, d_repl, maxrepl}, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
                              std::move(children.first),
@@ -698,12 +691,8 @@ std::unique_ptr<column> replace_slice(strings_column_view const& strings,
   auto d_strings = column_device_view::create(strings.parent(), stream);
 
   // this utility calls the given functor to build the offsets and chars columns
-  auto children =
-    cudf::strings::detail::make_strings_children(replace_slice_fn{*d_strings, d_repl, start, stop},
-                                                 strings.size(),
-                                                 strings.null_count(),
-                                                 stream,
-                                                 mr);
+  auto children = cudf::strings::detail::make_strings_children(
+    replace_slice_fn{*d_strings, d_repl, start, stop}, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
                              std::move(children.first),
@@ -790,12 +779,8 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
   auto d_repls   = column_device_view::create(repls.parent(), stream);
 
   // this utility calls the given functor to build the offsets and chars columns
-  auto children =
-    cudf::strings::detail::make_strings_children(replace_multi_fn{*d_strings, *d_targets, *d_repls},
-                                                 strings.size(),
-                                                 strings.null_count(),
-                                                 stream,
-                                                 mr);
+  auto children = cudf::strings::detail::make_strings_children(
+    replace_multi_fn{*d_strings, *d_targets, *d_repls}, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
                              std::move(children.first),
@@ -831,10 +816,10 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // build chars column
-  size_type bytes   = thrust::device_pointer_cast(d_offsets)[strings_count];
-  auto chars_column = strings::detail::create_chars_child_column(
-    strings_count, strings.null_count(), bytes, stream, mr);
-  auto d_chars = chars_column->mutable_view().data<char>();
+  auto const bytes =
+    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
+  auto chars_column = strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto d_chars      = chars_column->mutable_view().data<char>();
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
