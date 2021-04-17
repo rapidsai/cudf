@@ -319,7 +319,6 @@ __device__ void evaluate_row_expression(detail::row_evaluator const& evaluator,
       type_dispatcher(input.data_type, evaluator, row_index, input, output, op);
     } else if (arity == 2) {
       // Binary operator
-      printf("%i", operator_source_index);
       auto const lhs    = data_references[operator_source_indices[operator_source_index]];
       auto const rhs    = data_references[operator_source_indices[operator_source_index + 1]];
       auto const output = data_references[operator_source_indices[operator_source_index + 2]];
@@ -366,8 +365,7 @@ struct ast_plan {
     auto const h_data_buffer  = host_data_buffer();
     auto const buffer_offsets = offsets();
     auto const buffer_size    = h_data_buffer.second;
-    auto device_data_buffer =
-      rmm::device_buffer(h_data_buffer.first.get(), buffer_size, stream, mr);
+    _device_data_buffer = rmm::device_buffer(h_data_buffer.first.get(), buffer_size, stream, mr);
 
     // To reduce overhead, we don't call a stream sync here.
     // The stream is synced later when the table_device_view is created.
@@ -375,15 +373,15 @@ struct ast_plan {
     stream.synchronize();  // this doesn't seem to work
 
     // Create device pointers to components of plan
-    _device_data_buffer_ptr = static_cast<const char*>(device_data_buffer.data());
-    _device_data_references = reinterpret_cast<const detail::device_data_reference*>(
-      _device_data_buffer_ptr + buffer_offsets[0]);
+    auto device_data_buffer_ptr = static_cast<const char*>(_device_data_buffer.data());
+    _device_data_references     = reinterpret_cast<const detail::device_data_reference*>(
+      device_data_buffer_ptr + buffer_offsets[0]);
     _device_literals = reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
-      _device_data_buffer_ptr + buffer_offsets[1]);
+      device_data_buffer_ptr + buffer_offsets[1]);
     _device_operators =
-      reinterpret_cast<const ast_operator*>(_device_data_buffer_ptr + buffer_offsets[2]);
+      reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]);
     _device_operator_source_indices =
-      reinterpret_cast<const cudf::size_type*>(_device_data_buffer_ptr + buffer_offsets[3]);
+      reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]);
   }
 
   auto device_data_references() const { return _device_data_references; }
@@ -437,7 +435,8 @@ struct ast_plan {
 
   std::vector<cudf::size_type> _sizes;
   std::vector<const void*> _data_pointers;
-  const char* _device_data_buffer_ptr;
+
+  rmm::device_buffer _device_data_buffer;
   const detail::device_data_reference* _device_data_references;
   const cudf::detail::fixed_width_scalar_device_view_base* _device_literals;
   const ast_operator* _device_operators;
