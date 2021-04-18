@@ -22,8 +22,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <cudf/debug_printers.hpp>
-
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/binary_search.h>
@@ -35,7 +33,7 @@ namespace detail {
 namespace {
 
 /**
- * @brief TBA
+ * @brief Functor returns `true` for row `i`, if `i - offset` is in valid segment bounds.
  */
 template <bool forward_shift, typename OffsetIterator>
 struct filter_functor {
@@ -77,7 +75,6 @@ std::unique_ptr<column> segmented_shift_rep_impl(PairIterator input_pair_iterato
                                                  rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {
-  size_type num_segments = segment_offsets.size() - 1;
   if (offset > 0) {
     filter_functor<true, decltype(segment_offsets.begin())> filter{
       segment_offsets.begin(), segment_offsets.end(), offset};
@@ -114,7 +111,6 @@ std::unique_ptr<column> segmented_shift_rep_impl(PairIterator input_pair_iterato
 //   rmm::mr::device_memory_resource* mr
 // )
 // {
-//   size_type num_segments = segment_offsets.size() - 1;
 //   if (offset > 0) {
 //     filter_functor<true, decltype(segment_offsets.begin())> filter{segment_offsets.begin(),
 //     segment_offsets.end(), offset}; return strings::detail::copy_if_else(

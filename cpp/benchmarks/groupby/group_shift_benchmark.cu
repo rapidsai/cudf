@@ -61,9 +61,9 @@ void BM_group_shift(benchmark::State& state)
   cudf::size_type offset =
     static_cast<cudf::size_type>(column_size / 100 * 0.5);  // forward shift half way
   // null fill value
-  // auto fill_value = cudf::make_default_constructed_scalar(cudf::data_type(cudf::type_id::INT64));
+  auto fill_value = cudf::make_default_constructed_scalar(cudf::data_type(cudf::type_id::INT64));
   // non null fill value
-  auto fill_value = cudf::make_fixed_width_scalar(static_cast<int64_t>(42));
+  // auto fill_value = cudf::make_fixed_width_scalar(static_cast<int64_t>(42));
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
