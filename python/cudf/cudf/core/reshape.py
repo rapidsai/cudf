@@ -524,16 +524,13 @@ def melt(
             return cudf.Series([], dtype=A.dtype)
 
     # Step 1: tile id_vars
-    mdata = collections.OrderedDict()
-    for col in id_vars:
-        mdata[col] = _tile(frame[col], K)
+    mdata = {col: _tile(frame[col], K) for col in id_vars}
 
     # Step 2: add variable
-    var_cols = []
-    for i, _ in enumerate(value_vars):
-        var_cols.append(
-            cudf.Series(cudf.core.column.full(N, i, dtype=np.int8))
-        )
+    var_cols = [
+        cudf.Series(cudf.core.column.full(N, i, dtype=np.int8))
+        for i in range(len(value_vars))
+    ]
     temp = cudf.Series._concat(objs=var_cols, index=None)
 
     if not var_name:

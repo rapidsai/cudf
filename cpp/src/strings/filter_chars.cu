@@ -139,8 +139,7 @@ std::unique_ptr<column> filter_characters(
 
   // this utility calls the strip_fn to build the offsets and chars columns
   filter_fn ffn{*d_strings, keep_characters, table.begin(), table.end(), d_replacement};
-  auto children = cudf::strings::detail::make_strings_children(
-    ffn, strings.size(), strings.null_count(), stream, mr);
+  auto children = cudf::strings::detail::make_strings_children(ffn, strings.size(), stream, mr);
 
   return make_strings_column(strings_count,
                              std::move(children.first),

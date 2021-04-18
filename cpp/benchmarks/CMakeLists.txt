@@ -17,7 +17,7 @@
 find_package(Threads REQUIRED)
 
 add_library(cudf_datagen STATIC common/generate_benchmark_input.cpp)
-target_compile_features(cudf_datagen PUBLIC cxx_std_14 cuda_std_14)
+target_compile_features(cudf_datagen PUBLIC cxx_std_17 cuda_std_17)
 
 target_compile_options(cudf_datagen
             PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"

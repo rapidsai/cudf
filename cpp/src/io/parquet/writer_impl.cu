@@ -21,10 +21,11 @@
 
 #include "writer_impl.hpp"
 
-#include <io/parquet/compact_protocol_writer.hpp>
 #include <io/utilities/column_utils.cuh>
+#include "compact_protocol_writer.hpp"
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -34,7 +35,6 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/device_vector.hpp>
 
 #include <algorithm>
 #include <cstring>
@@ -504,7 +504,7 @@ struct parquet_column_view {
                       rmm::cuda_stream_view stream);
 
   column_view leaf_column_view() const;
-  gpu::parquet_column_device_view get_device_view();
+  gpu::parquet_column_device_view get_device_view(rmm::cuda_stream_view stream);
 
   column_view cudf_column_view() const { return cudf_col; }
   parquet::Type physical_type() const { return schema_node.type; }
@@ -517,21 +517,21 @@ struct parquet_column_view {
   bool is_list() const noexcept { return _is_list; }
 
   // Dictionary related member functions
-  uint32_t *get_dict_data() { return (_dict_data.size()) ? _dict_data.data().get() : nullptr; }
-  uint32_t *get_dict_index() { return (_dict_index.size()) ? _dict_index.data().get() : nullptr; }
+  uint32_t *get_dict_data() { return (_dict_data.size()) ? _dict_data.data() : nullptr; }
+  uint32_t *get_dict_index() { return (_dict_index.size()) ? _dict_index.data() : nullptr; }
   void use_dictionary(bool use_dict) { _dictionary_used = use_dict; }
-  void alloc_dictionary(size_t max_num_rows)
+  void alloc_dictionary(size_t max_num_rows, rmm::cuda_stream_view stream)
   {
-    _dict_data.resize(max_num_rows);
-    _dict_index.resize(max_num_rows);
+    _dict_data.resize(max_num_rows, stream);
+    _dict_index.resize(max_num_rows, stream);
   }
-  bool check_dictionary_used()
+  bool check_dictionary_used(rmm::cuda_stream_view stream)
   {
     if (!_dictionary_used) {
-      _dict_data.resize(0);
-      _dict_data.shrink_to_fit();
-      _dict_index.resize(0);
-      _dict_index.shrink_to_fit();
+      _dict_data.resize(0, stream);
+      _dict_data.shrink_to_fit(stream);
+      _dict_index.resize(0, stream);
+      _dict_index.shrink_to_fit(stream);
     }
     return _dictionary_used;
   }
@@ -558,8 +558,8 @@ struct parquet_column_view {
 
   // Dictionary related members
   bool _dictionary_used = false;
-  rmm::device_vector<uint32_t> _dict_data;
-  rmm::device_vector<uint32_t> _dict_index;
+  rmm::device_uvector<uint32_t> _dict_data;
+  rmm::device_uvector<uint32_t> _dict_index;
 };
 
 parquet_column_view::parquet_column_view(schema_tree_node const &schema_node,
@@ -569,7 +569,9 @@ parquet_column_view::parquet_column_view(schema_tree_node const &schema_node,
     _d_nullability(0, stream),
     _dremel_offsets(0, stream),
     _rep_level(0, stream),
-    _def_level(0, stream)
+    _def_level(0, stream),
+    _dict_data(0, stream),
+    _dict_index(0, stream)
 {
   // Construct single inheritance column_view from linked_column_view
   auto curr_col                           = schema_node.leaf_column.get();
@@ -680,16 +682,17 @@ column_view parquet_column_view::leaf_column_view() const
   return col;
 }
 
-gpu::parquet_column_device_view parquet_column_view::get_device_view()
+gpu::parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_stream_view stream)
 {
   column_view col  = leaf_column_view();
   auto desc        = gpu::parquet_column_device_view{};  // Zero out all fields
   desc.stats_dtype = schema_node.stats_dtype;
   desc.ts_scale    = schema_node.ts_scale;
 
-  // TODO (dm): Enable dictionary for list after refactor
-  if (physical_type() != BOOLEAN && physical_type() != UNDEFINED_TYPE && !is_list()) {
-    alloc_dictionary(_data_count);
+  // TODO (dm): Enable dictionary for list and struct after refactor
+  if (physical_type() != BOOLEAN && physical_type() != UNDEFINED_TYPE &&
+      !is_nested(cudf_col.type())) {
+    alloc_dictionary(_data_count, stream);
     desc.dict_index = get_dict_index();
     desc.dict_data  = get_dict_data();
   }
@@ -739,9 +742,9 @@ void writer::impl::gather_fragment_statistics(
   uint32_t num_fragments,
   uint32_t fragment_size)
 {
-  rmm::device_vector<statistics_group> frag_stats_group(num_fragments * num_columns);
+  rmm::device_uvector<statistics_group> frag_stats_group(num_fragments * num_columns, stream);
 
-  gpu::InitFragmentStatistics(frag_stats_group.data().get(),
+  gpu::InitFragmentStatistics(frag_stats_group.data(),
                               frag.device_ptr(),
                               col_desc.device_ptr(),
                               num_fragments,
@@ -749,7 +752,7 @@ void writer::impl::gather_fragment_statistics(
                               fragment_size,
                               stream);
   GatherColumnStatistics(
-    frag_stats_chunk, frag_stats_group.data().get(), num_fragments * num_columns, stream);
+    frag_stats_chunk, frag_stats_group.data(), num_fragments * num_columns, stream);
   stream.synchronize();
 }
 
@@ -761,10 +764,11 @@ void writer::impl::build_chunk_dictionaries(
   uint32_t num_dictionaries)
 {
   size_t dict_scratch_size = (size_t)num_dictionaries * gpu::kDictScratchSize;
-  rmm::device_vector<uint32_t> dict_scratch(dict_scratch_size / sizeof(uint32_t));
+  auto dict_scratch        = cudf::detail::make_zeroed_device_uvector_async<uint32_t>(
+    dict_scratch_size / sizeof(uint32_t), stream);
   chunks.host_to_device(stream);
   gpu::BuildChunkDictionaries(chunks.device_ptr(),
-                              dict_scratch.data().get(),
+                              dict_scratch.data(),
                               dict_scratch_size,
                               num_rowgroups * num_columns,
                               stream);
@@ -789,22 +793,22 @@ void writer::impl::init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk> &ch
                                       uint32_t num_pages,
                                       uint32_t num_stats_bfr)
 {
-  rmm::device_vector<statistics_merge_group> page_stats_mrg(num_stats_bfr);
+  rmm::device_uvector<statistics_merge_group> page_stats_mrg(num_stats_bfr, stream);
   chunks.host_to_device(stream);
   InitEncoderPages(chunks.device_ptr(),
                    pages,
                    col_desc.device_ptr(),
                    num_rowgroups,
                    num_columns,
-                   (num_stats_bfr) ? page_stats_mrg.data().get() : nullptr,
-                   (num_stats_bfr > num_pages) ? page_stats_mrg.data().get() + num_pages : nullptr,
+                   (num_stats_bfr) ? page_stats_mrg.data() : nullptr,
+                   (num_stats_bfr > num_pages) ? page_stats_mrg.data() + num_pages : nullptr,
                    stream);
   if (num_stats_bfr > 0) {
-    MergeColumnStatistics(page_stats, frag_stats, page_stats_mrg.data().get(), num_pages, stream);
+    MergeColumnStatistics(page_stats, frag_stats, page_stats_mrg.data(), num_pages, stream);
     if (num_stats_bfr > num_pages) {
       MergeColumnStatistics(page_stats + num_pages,
                             page_stats,
-                            page_stats_mrg.data().get() + num_pages,
+                            page_stats_mrg.data() + num_pages,
                             num_stats_bfr - num_pages,
                             stream);
     }
@@ -977,8 +981,8 @@ void writer::impl::write(table_view const &table)
   // This should've been `auto const&` but isn't since dictionary space is allocated when calling
   // get_device_view(). Fix during dictionary refactor.
   std::transform(
-    parquet_columns.begin(), parquet_columns.end(), col_desc.host_ptr(), [](auto &pcol) {
-      return pcol.get_device_view();
+    parquet_columns.begin(), parquet_columns.end(), col_desc.host_ptr(), [&](auto &pcol) {
+      return pcol.get_device_view(stream);
     });
 
   // Init page fragments
@@ -1035,12 +1039,12 @@ void writer::impl::write(table_view const &table)
   }
 
   // Allocate column chunks and gather fragment statistics
-  rmm::device_vector<statistics_chunk> frag_stats;
+  rmm::device_uvector<statistics_chunk> frag_stats(0, stream);
   if (stats_granularity_ != statistics_freq::STATISTICS_NONE) {
-    frag_stats.resize(num_fragments * num_columns);
+    frag_stats.resize(num_fragments * num_columns, stream);
     if (frag_stats.size() != 0) {
       gather_fragment_statistics(
-        frag_stats.data().get(), fragments, col_desc, num_columns, num_fragments, fragment_size);
+        frag_stats.data(), fragments, col_desc, num_columns, num_fragments, fragment_size);
     }
   }
   // Initialize row groups and column chunks
@@ -1063,8 +1067,7 @@ void writer::impl::write(table_view const &table)
       ck->bfr_size         = 0;
       ck->compressed_size  = 0;
       ck->fragments        = fragments.device_ptr() + i * num_fragments + f;
-      ck->stats =
-        (frag_stats.size() != 0) ? frag_stats.data().get() + i * num_fragments + f : nullptr;
+      ck->stats = (frag_stats.size() != 0) ? frag_stats.data() + i * num_fragments + f : nullptr;
       ck->start_row      = start_row;
       ck->num_rows       = (uint32_t)md.row_groups[global_r].num_rows;
       ck->first_fragment = i * num_fragments + f;
@@ -1112,7 +1115,7 @@ void writer::impl::write(table_view const &table)
   }
 
   // Free unused dictionaries
-  for (auto &col : parquet_columns) { col.check_dictionary_used(); }
+  for (auto &col : parquet_columns) { col.check_dictionary_used(stream); }
 
   // Build chunk dictionaries and count pages
   if (num_chunks != 0) {
@@ -1167,10 +1170,10 @@ void writer::impl::write(table_view const &table)
     (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_pages + num_chunks : 0;
   rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, stream);
   rmm::device_buffer comp_bfr(max_comp_bfr_size, stream);
-  rmm::device_vector<gpu_inflate_input_s> comp_in(max_comp_pages);
-  rmm::device_vector<gpu_inflate_status_s> comp_out(max_comp_pages);
-  rmm::device_vector<gpu::EncPage> pages(num_pages);
-  rmm::device_vector<statistics_chunk> page_stats(num_stats_bfr);
+  rmm::device_uvector<gpu_inflate_input_s> comp_in(max_comp_pages, stream);
+  rmm::device_uvector<gpu_inflate_status_s> comp_out(max_comp_pages, stream);
+  rmm::device_uvector<gpu::EncPage> pages(num_pages, stream);
+  rmm::device_uvector<statistics_chunk> page_stats(num_stats_bfr, stream);
   for (uint32_t b = 0, r = 0; b < (uint32_t)batch_list.size(); b++) {
     uint8_t *bfr   = static_cast<uint8_t *>(uncomp_bfr.data());
     uint8_t *bfr_c = static_cast<uint8_t *>(comp_bfr.data());
@@ -1188,9 +1191,9 @@ void writer::impl::write(table_view const &table)
   if (num_pages != 0) {
     init_encoder_pages(chunks,
                        col_desc,
-                       pages.data().get(),
-                       (num_stats_bfr) ? page_stats.data().get() : nullptr,
-                       (num_stats_bfr) ? frag_stats.data().get() : nullptr,
+                       pages.data(),
+                       (num_stats_bfr) ? page_stats.data() : nullptr,
+                       (num_stats_bfr) ? frag_stats.data() : nullptr,
                        num_rowgroups,
                        num_columns,
                        num_pages,
@@ -1210,16 +1213,16 @@ void writer::impl::write(table_view const &table)
     uint32_t pages_in_batch = first_page_in_next_batch - first_page_in_batch;
     encode_pages(
       chunks,
-      pages.data().get(),
+      pages.data(),
       num_columns,
       pages_in_batch,
       first_page_in_batch,
       batch_list[b],
       r,
-      comp_in.data().get(),
-      comp_out.data().get(),
-      (stats_granularity_ == statistics_freq::STATISTICS_PAGE) ? page_stats.data().get() : nullptr,
-      (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? page_stats.data().get() + num_pages
+      comp_in.data(),
+      comp_out.data(),
+      (stats_granularity_ == statistics_freq::STATISTICS_PAGE) ? page_stats.data() : nullptr,
+      (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? page_stats.data() + num_pages
                                                                : nullptr);
     for (; r < rnext; r++, global_r++) {
       for (auto i = 0; i < num_columns; i++) {

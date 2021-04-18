@@ -155,7 +155,8 @@ ConfigureTest(BINARY_TEST
     binaryop/binop-verify-input-test.cpp
     binaryop/binop-null-test.cpp
     binaryop/binop-integration-test.cpp
-    binaryop/binop-generic-ptx-test.cpp)
+    binaryop/binop-generic-ptx-test.cpp
+    )
 
 ###################################################################################################
 # - unary transform tests -------------------------------------------------------------------------
@@ -172,16 +173,6 @@ ConfigureTest(INTEROP_TEST
     interop/to_arrow_test.cpp
     interop/from_arrow_test.cpp
     interop/dlpack_test.cpp)
-
-###################################################################################################
-# - jit cache tests -------------------------------------------------------------------------------
-ConfigureTest(JITCACHE_TEST
-    "${CUDF_SOURCE_DIR}/src/jit/cache.cpp"
-    jit/jit-cache-test.cpp)
-
-ConfigureTest(JITCACHE_MULTIPROC_TEST
-    "${CUDF_SOURCE_DIR}/src/jit/cache.cpp"
-    jit/jit-cache-multiprocess-test.cpp)
 
 ###################################################################################################
 # - io tests --------------------------------------------------------------------------------------
@@ -278,7 +269,8 @@ ConfigureTest(ROLLING_TEST
     rolling/rolling_test.cpp 
     rolling/grouped_rolling_test.cpp
     rolling/lead_lag_test.cpp
-    rolling/collect_list_test.cpp)
+    rolling/collect_list_test.cpp
+    )
 
 ###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
