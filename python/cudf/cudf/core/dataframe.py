@@ -52,6 +52,7 @@ from cudf.utils.dtypes import (
     is_struct_dtype,
     numeric_normalize_types,
 )
+from cudf.utils.utils import GetAttrGetItemMixin
 
 T = TypeVar("T", bound="DataFrame")
 
@@ -109,9 +110,9 @@ _cupy_nan_methods_map = {
 }
 
 
-class DataFrame(Frame, Serializable):
+class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
-    _internal_names = {"_data", "_index"}
+    _PROTECTED_KEYS = frozenset(("_data", "_index"))
 
     @annotate("DATAFRAME_INIT", color="blue", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):
@@ -638,34 +639,26 @@ class DataFrame(Frame, Serializable):
         return list(o)
 
     def __setattr__(self, key, col):
-
-        # if an attribute already exists, set it.
         try:
+            # Preexisting attributes may be set. We cannot rely on checking the
+            # `_PROTECTED_KEYS` because we must also allow for settable
+            # properties, and we must call object.__getattribute__ to bypass
+            # the `__getitem__` behavior inherited from `GetAttrGetItemMixin`.
             object.__getattribute__(self, key)
-            object.__setattr__(self, key, col)
-            return
+            super().__setattr__(key, col)
         except AttributeError:
-            pass
+            if key not in self._PROTECTED_KEYS:
+                try:
+                    # Check key existence.
+                    self[key]
+                    # If a column already exists, set it.
+                    self[key] = col
+                    return
+                except KeyError:
+                    pass
 
-        # if a column already exists, set it.
-        if key not in self._internal_names:
-            try:
-                self[key]  # __getitem__ to verify key exists
-                self[key] = col
-                return
-            except KeyError:
-                pass
-
-        object.__setattr__(self, key, col)
-
-    def __getattr__(self, key):
-        if key in self._internal_names:
-            return object.__getattribute__(self, key)
-        else:
-            if key in self:
-                return self[key]
-
-        raise AttributeError("'DataFrame' object has no attribute %r" % key)
+            # Set a new attribute that is not already a column.
+            super().__setattr__(key, col)
 
     @annotate("DATAFRAME_GETITEM", color="blue", domain="cudf_python")
     def __getitem__(self, arg):

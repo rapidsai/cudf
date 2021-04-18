@@ -18,9 +18,9 @@
 
 #include <io/comp/gpuinflate.h>
 #include <io/statistics/column_stats.h>
-#include <io/parquet/parquet_common.hpp>
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
+#include "parquet_common.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
@@ -38,6 +38,8 @@
 namespace cudf {
 namespace io {
 namespace parquet {
+
+using cudf::io::detail::string_index_pair;
 
 /**
  * @brief Struct representing an input column in the file.
@@ -68,14 +70,6 @@ enum level_type {
   REPETITION,
 
   NUM_LEVEL_TYPES
-};
-
-/**
- * @brief Struct to describe the output of a string datatype
- */
-struct nvstrdesc_s {
-  const char *ptr;
-  size_t count;
 };
 
 /**
@@ -211,7 +205,7 @@ struct ColumnChunkDesc {
   int32_t max_num_pages;                      // size of page_info array
   PageInfo *page_info;                        // output page info for up to num_dict_pages +
                                               // num_data_pages (dictionary pages first)
-  nvstrdesc_s *str_dict_index;                // index for string dictionary
+  string_index_pair *str_dict_index;          // index for string dictionary
   uint32_t **valid_map_base;                  // base pointers of valid bit map for this column
   void **column_data_base;                    // base pointers of column data
   int8_t codec;                               // compressed codec enum
