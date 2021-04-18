@@ -32,38 +32,6 @@ namespace detail {
 
 namespace {
 
-/**
- * @brief Functor returns `true` for row `i`, if `i - offset` is in valid segment bounds.
- */
-template <bool forward_shift, typename OffsetIterator>
-struct filter_functor {
-  OffsetIterator segment_offset_begin;
-  OffsetIterator segment_offset_end;
-  size_type offset;
-
-  filter_functor(OffsetIterator segment_offset_begin,
-                 OffsetIterator segment_offset_end,
-                 size_type offset)
-    : segment_offset_begin(segment_offset_begin),
-      segment_offset_end(segment_offset_end),
-      offset(offset)
-  {
-  }
-
-  __device__ bool operator()(size_type const& i)
-  {
-    if (forward_shift) {
-      auto segment_bound_idx =
-        thrust::upper_bound(thrust::seq, segment_offset_begin, segment_offset_end, i) - 1;
-      return not(*segment_bound_idx <= i and i < *segment_bound_idx + offset);
-    } else {
-      auto segment_bound_idx =
-        thrust::upper_bound(thrust::seq, segment_offset_begin, segment_offset_end, i);
-      return not(*segment_bound_idx + offset <= i and i < *segment_bound_idx);
-    }
-  }
-};
-
 template <typename PairIterator, typename ScalarIterator>
 std::unique_ptr<column> segmented_shift_rep_impl(PairIterator input_pair_iterator,
                                                  ScalarIterator fill_pair_iterator,
@@ -76,8 +44,11 @@ std::unique_ptr<column> segmented_shift_rep_impl(PairIterator input_pair_iterato
                                                  rmm::mr::device_memory_resource* mr)
 {
   if (offset > 0) {
-    filter_functor<true, decltype(segment_offsets.begin())> filter{
-      segment_offsets.begin(), segment_offsets.end(), offset};
+    auto filter = [segment_offsets, offset] __device__(auto const& i) {
+      auto segment_bound_idx =
+        thrust::upper_bound(thrust::seq, segment_offsets.begin(), segment_offsets.end(), i) - 1;
+      return not(*segment_bound_idx <= i and i < *segment_bound_idx + offset);
+    };
     return copy_if_else(nullable,
                         input_pair_iterator,
                         input_pair_iterator + column_size,
@@ -87,8 +58,11 @@ std::unique_ptr<column> segmented_shift_rep_impl(PairIterator input_pair_iterato
                         stream,
                         mr);
   } else {
-    filter_functor<false, decltype(segment_offsets.begin())> filter{
-      segment_offsets.begin(), segment_offsets.end(), offset};
+    auto filter = [segment_offsets, offset] __device__(auto const& i) {
+      auto segment_bound_idx =
+        thrust::upper_bound(thrust::seq, segment_offsets.begin(), segment_offsets.end(), i);
+      return not(*segment_bound_idx + offset <= i and i < *segment_bound_idx);
+    };
     return copy_if_else(nullable,
                         input_pair_iterator,
                         input_pair_iterator + column_size,
@@ -100,38 +74,41 @@ std::unique_ptr<column> segmented_shift_rep_impl(PairIterator input_pair_iterato
   }
 }
 
-// template<typename PairIterator, typename ScalarIterator>
-// std::unique_ptr<column> segmented_shift_string_impl(
-//   PairIterator input_pair_iterator,
-//   ScalarIterator fill_pair_iterator,
-//   size_type offset,
-//   device_span<size_type const> segment_offsets,
-//   size_type column_size,
-//   rmm::cuda_stream_view stream,
-//   rmm::mr::device_memory_resource* mr
-// )
-// {
-//   if (offset > 0) {
-//     filter_functor<true, decltype(segment_offsets.begin())> filter{segment_offsets.begin(),
-//     segment_offsets.end(), offset}; return strings::detail::copy_if_else(
-//         input_pair_iterator,
-//         input_pair_iterator + column_size,
-//         fill_pair_iterator,
-//         filter,
-//         stream,
-//         mr);
-//   }
-//   else {
-//     filter_functor<false, decltype(segment_offsets.begin())> filter{segment_offsets.begin(),
-//     segment_offsets.end(), offset}; return strings::detail::copy_if_else(
-//       input_pair_iterator,
-//       input_pair_iterator + column_size,
-//       fill_pair_iterator,
-//       filter,
-//       stream,
-//       mr);
-//   }
-// }
+template <typename PairIterator, typename ScalarIterator>
+std::unique_ptr<column> segmented_shift_string_impl(PairIterator input_pair_iterator,
+                                                    ScalarIterator fill_pair_iterator,
+                                                    size_type offset,
+                                                    device_span<size_type const> segment_offsets,
+                                                    size_type column_size,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
+{
+  if (offset > 0) {
+    auto filter = [segment_offsets, offset] __device__(auto const& i) {
+      auto segment_bound_idx =
+        thrust::upper_bound(thrust::seq, segment_offsets.begin(), segment_offsets.end(), i) - 1;
+      return not(*segment_bound_idx <= i and i < *segment_bound_idx + offset);
+    };
+    return strings::detail::copy_if_else(input_pair_iterator,
+                                         input_pair_iterator + column_size,
+                                         fill_pair_iterator,
+                                         filter,
+                                         stream,
+                                         mr);
+  } else {
+    auto filter = [segment_offsets, offset] __device__(auto const& i) {
+      auto segment_bound_idx =
+        thrust::upper_bound(thrust::seq, segment_offsets.begin(), segment_offsets.end(), i);
+      return not(*segment_bound_idx + offset <= i and i < *segment_bound_idx);
+    };
+    return strings::detail::copy_if_else(input_pair_iterator,
+                                         input_pair_iterator + column_size,
+                                         fill_pair_iterator,
+                                         filter,
+                                         stream,
+                                         mr);
+  }
+}
 
 template <typename T, typename Enable = void>
 struct segmented_shift_functor {
@@ -191,25 +168,29 @@ struct segmented_shift_functor<string_view> {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    // using T = string_view;
+    using T = string_view;
 
-    // auto values_device_view = column_device_view::create(segmented_values, stream);
-    // auto fill_pair_iterator = make_pair_iterator<T>(fill_value);
-    // if (segmented_values.has_nulls()) {
-    //   auto input_pair_iterator = make_pair_iterator<T, true>(*values_device_view) - offset;
-    //   return segmented_shift_string_impl(
-    //     input_pair_iterator, fill_pair_iterator, offset, segment_offsets,
-    //     segmented_values.size(), stream, mr
-    //   );
-    // }
-    // else {
-    //   auto input_pair_iterator = make_pair_iterator<T, false>(*values_device_view) - offset;
-    //   return segmented_shift_string_impl(
-    //     input_pair_iterator, fill_pair_iterator, offset, segment_offsets,
-    //     segmented_values.size(), stream, mr
-    //   );
-    // }
-    CUDF_FAIL("segmented_shift does not support string_view yet");
+    auto values_device_view = column_device_view::create(segmented_values, stream);
+    auto fill_pair_iterator = make_pair_iterator<T>(fill_value);
+    if (segmented_values.has_nulls()) {
+      auto input_pair_iterator = make_pair_iterator<T, true>(*values_device_view) - offset;
+      return segmented_shift_string_impl(input_pair_iterator,
+                                         fill_pair_iterator,
+                                         offset,
+                                         segment_offsets,
+                                         segmented_values.size(),
+                                         stream,
+                                         mr);
+    } else {
+      auto input_pair_iterator = make_pair_iterator<T, false>(*values_device_view) - offset;
+      return segmented_shift_string_impl(input_pair_iterator,
+                                         fill_pair_iterator,
+                                         offset,
+                                         segment_offsets,
+                                         segmented_values.size(),
+                                         stream,
+                                         mr);
+    }
   }
 };
 
