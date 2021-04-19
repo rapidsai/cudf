@@ -991,6 +991,8 @@ static const __device__ __constant__ int64_t kPow5i[28] = {1,
  *
  * @param[in] bs Input byte stream
  * @param[in,out] vals on input: scale from secondary stream, on output: value
+ * @param[in] val_scale Scale of each value
+ * @param[in] col_scale Scale from schema to which value will be adjusted
  * @param[in] numvals Number of values to decode
  * @param[in] t thread id
  *
@@ -1027,7 +1029,10 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
     if (t >= num_vals_read and t < num_vals_to_read) {
       auto const pos = static_cast<int>(vals.i64[t]);
       int128_s v     = decode_varint128(bs, pos);
-      int32_t scale  = (t < numvals) ? col_scale - val_scale : 0;
+      // Since cuDF column stores just one scale, value needs to
+      // be adjusted to col_scale from val_scale. So the difference
+      // of them will be used to add 0s or remove digits.
+      int32_t scale = (t < numvals) ? col_scale - val_scale : 0;
       if (scale >= 0) {
         scale       = min(scale, 27);
         vals.i64[t] = ((int64_t)v.lo * kPow5i[scale]) << scale;

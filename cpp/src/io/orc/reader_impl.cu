@@ -426,12 +426,16 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   std::vector<data_type> column_types;
   for (const auto &col : _selected_columns) {
     auto col_type = to_type_id(_metadata->ff.types[col], _use_np_dtypes, _timestamp_type.id());
-    auto scale    = (col_type == type_id::DECIMAL64) ? _metadata->ff.types[col].scale : 0;
     CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
     // Remove this once we support Decimal128 data type
     CUDF_EXPECTS((col_type != type_id::DECIMAL64) or (_metadata->ff.types[col].precision <= 18),
                  "Decimal data has precision > 18, Decimal64 data type doesn't support it.");
-    column_types.emplace_back(col_type, -1 * static_cast<int32_t>(scale));
+    // sign of the scale is changed since cuDF follows c++ libraries like CNL
+    // which uses negative scaling, but liborc and other libraries
+    // follow positive scaling.
+    auto scale =
+      (col_type == type_id::DECIMAL64) ? -static_cast<int32_t>(_metadata->ff.types[col].scale) : 0;
+    column_types.emplace_back(col_type, scale);
 
     // Map each ORC column to its column
     orc_col_map[col] = column_types.size() - 1;
