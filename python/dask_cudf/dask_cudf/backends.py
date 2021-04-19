@@ -246,8 +246,6 @@ try:
 
     from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
 
-    from cudf.core.column import column
-
     def safe_hash(frame):
         index = frame.index
         if isinstance(frame, cudf.DataFrame):
@@ -267,7 +265,7 @@ try:
         if isinstance(ind, cudf.MultiIndex):
             return safe_hash(ind.to_frame(index=False))
 
-        col = column.as_column(ind)
+        col = cudf.core.column.as_column(ind)
         return safe_hash(cudf.Series(col))
 
     @group_split_dispatch.register((cudf.Series, cudf.DataFrame))
