@@ -76,8 +76,8 @@ constexpr std::array<aggregation::Kind, 12> hash_aggregations{aggregation::SUM,
 // Could be hash: SUM, PRODUCT, MIN, MAX, COUNT_VALID, COUNT_ALL, ANY, ALL,
 // Compound: MEAN(SUM, COUNT_VALID), VARIANCE, STD(MEAN (SUM, COUNT_VALID), COUNT_VALID),
 // ARGMAX, ARGMIN
-// FIXME(kn): adding SUM_OF_SQUARES causes ptxas compiler crash (<=CUDA 10.2) for more than 3 types!
 
+// TODO replace with std::find in C++20 onwards.
 template <class T, size_t N>
 constexpr bool array_contains(std::array<T, N> const& haystack, T needle)
 {

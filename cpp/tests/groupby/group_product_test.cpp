@@ -28,17 +28,14 @@ template <typename V>
 struct groupby_product_test : public cudf::test::BaseFixture {
 };
 
-// These tests will not work for all types until the following ptxas bug is fixed in 10.2
-// https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
-// using supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
-using supported_types = cudf::test::Types<float, double>;
+using K               = int32_t;
+using supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
 TYPED_TEST_CASE(groupby_product_test, supported_types);
 
 // clang-format off
 TYPED_TEST(groupby_product_test, basic)
 {
-    using K = int32_t;
     using V = TypeParam;
     using R = cudf::detail::target_type_t<V, aggregation::PRODUCT>;
 
@@ -56,7 +53,6 @@ TYPED_TEST(groupby_product_test, basic)
 
 TYPED_TEST(groupby_product_test, empty_cols)
 {
-    using K = int32_t;
     using V = TypeParam;
     using R = cudf::detail::target_type_t<V, aggregation::PRODUCT>;
 
@@ -72,7 +68,6 @@ TYPED_TEST(groupby_product_test, empty_cols)
 
 TYPED_TEST(groupby_product_test, zero_valid_keys)
 {
-    using K = int32_t;
     using V = TypeParam;
     using R = cudf::detail::target_type_t<V, aggregation::PRODUCT>;
 
@@ -88,7 +83,6 @@ TYPED_TEST(groupby_product_test, zero_valid_keys)
 
 TYPED_TEST(groupby_product_test, zero_valid_values)
 {
-    using K = int32_t;
     using V = TypeParam;
     using R = cudf::detail::target_type_t<V, aggregation::PRODUCT>;
 
@@ -104,7 +98,6 @@ TYPED_TEST(groupby_product_test, zero_valid_values)
 
 TYPED_TEST(groupby_product_test, null_keys_and_values)
 {
-    using K = int32_t;
     using V = TypeParam;
     using R = cudf::detail::target_type_t<V, aggregation::PRODUCT>;
 
@@ -128,7 +121,6 @@ TYPED_TEST(groupby_product_test, null_keys_and_values)
 // https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
 TYPED_TEST(groupby_product_test, DISABLED_dictionary)
 {
-  using K = int32_t;
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, aggregation::PRODUCT>;
 
