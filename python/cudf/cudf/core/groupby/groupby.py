@@ -1,6 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import collections
-import functools
 import pickle
 import warnings
 
@@ -10,9 +9,11 @@ from nvtx import annotate
 import cudf
 from cudf._lib import groupby as libgroupby
 from cudf.core.abc import Serializable
-from cudf.utils.utils import cached_property
+from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
+# Note that all valid aggregation methods (e.g. GroupBy.min) are bound to the
+# class after its definition (see below).
 class GroupBy(Serializable):
 
     _MAX_GROUPS_BEFORE_WARN = 100
@@ -57,14 +58,6 @@ class GroupBy(Serializable):
             self.grouping = by
         else:
             self.grouping = _Grouping(obj, by, level)
-
-    def __getattribute__(self, key):
-        try:
-            return super().__getattribute__(key)
-        except AttributeError:
-            if key in libgroupby._GROUPBY_AGGS:
-                return functools.partial(self._agg_func_name_with_args, key)
-            raise
 
     def __iter__(self):
         group_names, offsets, _, grouped_values = self._grouped()
@@ -266,19 +259,6 @@ class GroupBy(Serializable):
         grouped_values._copy_type_metadata(self.obj)
         group_names = grouped_keys.unique()
         return (group_names, offsets, grouped_keys, grouped_values)
-
-    def _agg_func_name_with_args(self, func_name, *args, **kwargs):
-        """
-        Aggregate given an aggregate function name
-        and arguments to the function, e.g.,
-        `_agg_func_name_with_args("quantile", 0.5)`
-        """
-
-        def func(x):
-            return getattr(x, func_name)(*args, **kwargs)
-
-        func.__name__ = func_name
-        return self.agg(func)
 
     def _normalize_aggs(self, aggs):
         """
@@ -589,8 +569,111 @@ class GroupBy(Serializable):
         """
         return cudf.core.window.rolling.RollingGroupby(self, *args, **kwargs)
 
+    def count(self, dropna=True):
+        """Compute the number of values in each column.
 
-class DataFrameGroupBy(GroupBy):
+        Parameters
+        ----------
+        dropna : bool
+            If ``True``, don't include null values in the count.
+        """
+
+        def func(x):
+            return getattr(x, "count")(dropna=dropna)
+
+        return self.agg(func)
+
+    def sum(self):
+        """Compute the column-wise sum of the values in each group."""
+        return self.agg("sum")
+
+    def idxmin(self):
+        """Get the column-wise index of the minimum value in each group."""
+        return self.agg("idxmin")
+
+    def idxmax(self):
+        """Get the column-wise index of the maximum value in each group."""
+        return self.agg("idxmax")
+
+    def min(self):
+        """Get the column-wise minimum value in each group."""
+        return self.agg("min")
+
+    def max(self):
+        """Get the column-wise maximum value in each group."""
+        return self.agg("max")
+
+    def mean(self):
+        """Compute the column-wise mean of the values in each group."""
+        return self.agg("mean")
+
+    def median(self):
+        """Get the column-wise median of the values in each group."""
+        return self.agg("median")
+
+    def var(self, ddof=1):
+        """Compute the column-wise variance of the values in each group.
+
+        Parameters
+        ----------
+        ddof : int
+            The delta degrees of freedom. N - ddof is the divisor used to
+            normalize the variance.
+        """
+
+        def func(x):
+            return getattr(x, "var")(ddof=ddof)
+
+        return self.agg(func)
+
+    def std(self, ddof=1):
+        """Compute the column-wise std of the values in each group.
+
+        Parameters
+        ----------
+        ddof : int
+            The delta degrees of freedom. N - ddof is the divisor used to
+            normalize the standard deviation.
+        """
+
+        def func(x):
+            return getattr(x, "std")(ddof=ddof)
+
+        return self.agg(func)
+
+    def quantile(self, q=0.5, interpolation="linear"):
+        """Compute the column-wise quantiles of the values in each group.
+
+        Parameters
+        ----------
+        q : float or array-like
+            The quantiles to compute.
+        interpolation : {"linear", "lower", "higher", "midpoint", "nearest"}
+            The interpolation method to use when the desired quantile lies
+            between two data points. Defaults to "linear".
+       """
+
+        def func(x):
+            return getattr(x, "quantile")(q=q, interpolation=interpolation)
+
+        return self.agg(func)
+
+    def nunique(self):
+        """Compute the number of unique values in each column in each group."""
+        return self.agg("nunique")
+
+    def collect(self):
+        """Get a list of all the values for each column in each group."""
+        return self.agg("collect")
+
+    def unique(self):
+        """Get a list of the unique values for each column in each group."""
+        return self.agg("unique")
+
+
+class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
+    _PROTECTED_KEYS = frozenset(("obj",))
+
     def __init__(
         self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
     ):
@@ -684,16 +767,6 @@ class DataFrameGroupBy(GroupBy):
             as_index=as_index,
             dropna=dropna,
         )
-
-    def __getattribute__(self, key):
-        try:
-            return super().__getattribute__(key)
-        except AttributeError:
-            if key in self.obj:
-                return self.obj[key].groupby(
-                    self.grouping, dropna=self._dropna, sort=self._sort
-                )
-            raise
 
     def __getitem__(self, key):
         return self.obj[key].groupby(

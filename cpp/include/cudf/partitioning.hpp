@@ -83,6 +83,9 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> partition(
  * @param input The table to partition
  * @param columns_to_hash Indices of input columns to hash
  * @param num_partitions The number of partitions to use
+ * @param hash_function Optional hash id that chooses the hash function to use
+ * @param seed Optional seed value to the hash function
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory.
  *
  * @returns An output table and a vector of row offsets to each partition
@@ -92,6 +95,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   std::vector<size_type> const& columns_to_hash,
   int num_partitions,
   hash_id hash_function               = hash_id::HASH_MURMUR3,
+  uint32_t seed                       = DEFAULT_HASH_SEED,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

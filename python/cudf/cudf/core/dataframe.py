@@ -8,7 +8,7 @@ import numbers
 import pickle
 import sys
 import warnings
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from typing import Any, Optional, Set, TypeVar
 
@@ -52,7 +52,7 @@ from cudf.utils.dtypes import (
     is_struct_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import OrderedColumnDict
+from cudf.utils.utils import GetAttrGetItemMixin
 
 T = TypeVar("T", bound="DataFrame")
 
@@ -110,9 +110,9 @@ _cupy_nan_methods_map = {
 }
 
 
-class DataFrame(Frame, Serializable):
+class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
-    _internal_names = {"_data", "_index"}
+    _PROTECTED_KEYS = frozenset(("_data", "_index"))
 
     @annotate("DATAFRAME_INIT", color="blue", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):
@@ -241,7 +241,7 @@ class DataFrame(Frame, Serializable):
                 self._index = as_index(index)
             if columns is not None:
                 self._data = ColumnAccessor(
-                    OrderedDict.fromkeys(
+                    dict.fromkeys(
                         columns,
                         column.column_empty(
                             len(self), dtype="object", masked=True
@@ -639,34 +639,26 @@ class DataFrame(Frame, Serializable):
         return list(o)
 
     def __setattr__(self, key, col):
-
-        # if an attribute already exists, set it.
         try:
+            # Preexisting attributes may be set. We cannot rely on checking the
+            # `_PROTECTED_KEYS` because we must also allow for settable
+            # properties, and we must call object.__getattribute__ to bypass
+            # the `__getitem__` behavior inherited from `GetAttrGetItemMixin`.
             object.__getattribute__(self, key)
-            object.__setattr__(self, key, col)
-            return
+            super().__setattr__(key, col)
         except AttributeError:
-            pass
+            if key not in self._PROTECTED_KEYS:
+                try:
+                    # Check key existence.
+                    self[key]
+                    # If a column already exists, set it.
+                    self[key] = col
+                    return
+                except KeyError:
+                    pass
 
-        # if a column already exists, set it.
-        if key not in self._internal_names:
-            try:
-                self[key]  # __getitem__ to verify key exists
-                self[key] = col
-                return
-            except KeyError:
-                pass
-
-        object.__setattr__(self, key, col)
-
-    def __getattr__(self, key):
-        if key in self._internal_names:
-            return object.__getattribute__(self, key)
-        else:
-            if key in self:
-                return self[key]
-
-        raise AttributeError("'DataFrame' object has no attribute %r" % key)
+            # Set a new attribute that is not already a column.
+            super().__setattr__(key, col)
 
     @annotate("DATAFRAME_GETITEM", color="blue", domain="cudf_python")
     def __getitem__(self, arg):
@@ -1659,8 +1651,9 @@ class DataFrame(Frame, Serializable):
         if not self.index.equals(other.index):
             other = other.reindex(self.index, axis=0)
 
-        for col in self.columns:
-            this = self[col]
+        source_df = self.copy(deep=False)
+        for col in source_df._column_names:
+            this = source_df[col]
             that = other[col]
 
             if errors == "raise":
@@ -1677,8 +1670,9 @@ class DataFrame(Frame, Serializable):
             # don't overwrite columns unnecessarily
             if mask.all():
                 continue
+            source_df[col] = source_df[col].where(mask, that)
 
-            self[col] = this.where(mask, that)
+        self._mimic_inplace(source_df, inplace=True)
 
     def __add__(self, other):
         return self._apply_op("__add__", other)
@@ -2805,7 +2799,7 @@ class DataFrame(Frame, Serializable):
 
         df = self
         cols = columns
-        dtypes = OrderedDict(df.dtypes)
+        dtypes = dict(df.dtypes)
         idx = labels if index is None and axis in (0, "index") else index
         cols = labels if cols is None and axis in (1, "columns") else cols
         df = df if cols is None else df[list(set(df.columns) & set(cols))]
@@ -3842,10 +3836,32 @@ class DataFrame(Frame, Serializable):
         - Support axis='index' only.
         - Not supporting: inplace, kind
         - Ascending can be a list of bools to control per column
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a':[10, 0, 2], 'b':[-10, 10, 1]})
+        >>> df
+            a   b
+        0  10 -10
+        1   0  10
+        2   2   1
+        >>> inds = df.argsort()
+        >>> inds
+        0    1
+        1    2
+        2    0
+        dtype: int32
+        >>> df.take(inds)
+            a   b
+        1   0  10
+        2   2   1
+        0  10 -10
         """
-        return self._get_sorted_inds(
+        inds_col = self._get_sorted_inds(
             ascending=ascending, na_position=na_position
         )
+        return cudf.Series(inds_col)
 
     @annotate("SORT_INDEX", color="red", domain="cudf_python")
     def sort_index(
@@ -4476,12 +4492,9 @@ class DataFrame(Frame, Serializable):
         else:
             lsuffix, rsuffix = suffixes
 
-        lhs = self.copy(deep=False)
-        rhs = right.copy(deep=False)
-
         # Compute merge
-        gdf_result = super(DataFrame, lhs)._merge(
-            rhs,
+        gdf_result = super()._merge(
+            right,
             on=on,
             left_on=left_on,
             right_on=right_on,
@@ -4489,8 +4502,6 @@ class DataFrame(Frame, Serializable):
             right_index=right_index,
             how=how,
             sort=sort,
-            lsuffix=lsuffix,
-            rsuffix=rsuffix,
             method=method,
             indicator=indicator,
             suffixes=suffixes,
@@ -4854,7 +4865,7 @@ class DataFrame(Frame, Serializable):
             table_to_hash = self
         else:
             cols = [self[k]._column for k in columns]
-            table_to_hash = Frame(data=OrderedColumnDict(zip(columns, cols)))
+            table_to_hash = Frame(data=dict(zip(columns, cols)))
 
         return Series(table_to_hash._hash()).values
 
@@ -5359,7 +5370,7 @@ class DataFrame(Frame, Serializable):
             ldesc_indexes = sorted(
                 (x.index for x in describe_series_list), key=len
             )
-            names = OrderedDict.fromkeys(
+            names = dict.fromkeys(
                 [
                     name
                     for idxnames in ldesc_indexes
@@ -7176,10 +7187,9 @@ class DataFrame(Frame, Serializable):
         """
         Return a subset of the DataFrame's columns as a view.
         """
-        result_columns = OrderedDict({})
-        for col in columns:
-            result_columns[col] = self._data[col]
-        return DataFrame(result_columns, index=self.index)
+        return DataFrame(
+            {col: self._data[col] for col in columns}, index=self.index
+        )
 
     def select_dtypes(self, include=None, exclude=None):
         """Return a subset of the DataFrame’s columns based on the column dtypes.
@@ -7913,7 +7923,12 @@ def _align_indices(lhs, rhs):
     return lhs_out, rhs_out
 
 
-def _setitem_with_dataframe(input_df, replace_df, input_cols=None, mask=None):
+def _setitem_with_dataframe(
+    input_df: DataFrame,
+    replace_df: DataFrame,
+    input_cols: Any = None,
+    mask: Optional[cudf.core.column.ColumnBase] = None,
+):
     """
         This function sets item dataframes relevant columns with replacement df
         :param input_df: Dataframe to be modified inplace
@@ -7929,6 +7944,9 @@ def _setitem_with_dataframe(input_df, replace_df, input_cols=None, mask=None):
         raise ValueError(
             "Number of Input Columns must be same replacement Dataframe"
         )
+
+    if not input_df.index.equals(replace_df.index):
+        replace_df = replace_df.reindex(input_df.index)
 
     for col_1, col_2 in zip(input_cols, replace_df.columns):
         if col_1 in input_df.columns:

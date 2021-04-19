@@ -705,7 +705,7 @@ TEST_F(MergeTest, KeysWithNulls)
   auto valids2 = cudf::detail::make_counting_transform_iterator(
     0, [](auto row) { return (row % 15 == 0) ? false : true; });
   cudf::test::fixed_width_column_wrapper<int32_t> data2(data_iter, data_iter + nrows, valids2);
-  auto all_data = cudf::concatenate({data1, data2});
+  auto all_data = cudf::concatenate(std::vector<cudf::column_view>{{data1, data2}});
 
   std::vector<cudf::order> column_orders{cudf::order::ASCENDING, cudf::order::DESCENDING};
   std::vector<cudf::null_order> null_precedences{cudf::null_order::AFTER, cudf::null_order::BEFORE};

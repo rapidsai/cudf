@@ -17,7 +17,7 @@
 find_package(Threads REQUIRED)
 
 add_library(cudf_datagen STATIC common/generate_benchmark_input.cpp)
-target_compile_features(cudf_datagen PUBLIC cxx_std_14 cuda_std_14)
+target_compile_features(cudf_datagen PUBLIC cxx_std_17 cuda_std_17)
 
 target_compile_options(cudf_datagen
             PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
@@ -173,8 +173,14 @@ ConfigureBench(AST_BENCH ast/transform_benchmark.cpp)
 ConfigureBench(BINARYOP_BENCH binaryop/binaryop_benchmark.cu)
 
 ###################################################################################################
-# - subword tokenizer benchmark -------------------------------------------------------------------
-ConfigureBench(SUBWORD_TOKENIZER_BENCH text/subword_benchmark.cpp)
+# - nvtext benchmark -------------------------------------------------------------------
+ConfigureBench(TEXT_BENCH
+  text/ngrams_benchmark.cpp
+  text/normalize_benchmark.cpp
+  text/normalize_spaces_benchmark.cpp
+  text/replace_benchmark.cpp
+  text/subword_benchmark.cpp
+  text/tokenize_benchmark.cpp)
 
 ###################################################################################################
 # - strings benchmark -------------------------------------------------------------------
@@ -191,6 +197,13 @@ ConfigureBench(STRINGS_BENCH
   string/filter_benchmark.cpp
   string/find_benchmark.cpp
   string/replace_benchmark.cpp
+  string/replace_re_benchmark.cpp
   string/split_benchmark.cpp
   string/substring_benchmark.cpp
+  string/translate_benchmark.cpp
   string/url_decode_benchmark.cpp)
+
+###################################################################################################
+# - json benchmark -------------------------------------------------------------------
+ConfigureBench(JSON_BENCH
+  string/json_benchmark.cpp)

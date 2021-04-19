@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -125,6 +125,11 @@ class table_view_base {
    * @brief Returns the number of rows
    */
   size_type num_rows() const noexcept { return _num_rows; }
+
+  /**
+   * @brief Returns true if `num_columns()` returns zero, or false otherwise
+   */
+  size_type is_empty() const noexcept { return num_columns() == 0; }
 
   table_view_base() = default;
 
@@ -291,4 +296,21 @@ table_view scatter_columns(table_view const& source,
                            std::vector<size_type> const& map,
                            table_view const& target);
 
+namespace detail {
+/**
+ * @brief Indicates whether respective columns in input tables are relationally comparable.
+ *
+ * @param lhs The first table
+ * @param rhs The second table (may be the same table as `lhs`)
+ * @return true all of respective columns on `lhs` and 'rhs` tables are comparable.
+ * @return false any of respective columns on `lhs` and 'rhs` tables are not comparable.
+ */
+template <typename TableView>
+bool is_relationally_comparable(TableView const& lhs, TableView const& rhs);
+
+extern template bool is_relationally_comparable<table_view>(table_view const& lhs,
+                                                            table_view const& rhs);
+extern template bool is_relationally_comparable<mutable_table_view>(mutable_table_view const& lhs,
+                                                                    mutable_table_view const& rhs);
+}  // namespace detail
 }  // namespace cudf

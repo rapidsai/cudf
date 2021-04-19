@@ -154,7 +154,7 @@ class fixed_width_scalar : public scalar {
   /**
    * @brief Implicit conversion operator to get the value of the scalar on the host
    */
-  explicit operator value_type() const { return this->value(0); }
+  explicit operator value_type() const { return this->value(rmm::cuda_stream_default); }
 
   /**
    * @brief Get the value of the scalar
@@ -452,7 +452,7 @@ class string_scalar : public scalar {
   /**
    * @brief Implicit conversion operator to get the value of the scalar in a host std::string
    */
-  explicit operator std::string() const { return this->to_string(0); }
+  explicit operator std::string() const { return this->to_string(rmm::cuda_stream_default); }
 
   /**
    * @brief Get the value of the scalar in a host std::string
