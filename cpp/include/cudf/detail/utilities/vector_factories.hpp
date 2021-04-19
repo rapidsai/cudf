@@ -34,6 +34,51 @@ namespace cudf {
 namespace detail {
 
 /**
+ * @brief Asynchronously construct a `device_uvector` and set all elements to zero.
+ *
+ * @note This function does not synchronize `stream`.
+ *
+ * @tparam T The type of the data to copy
+ * @param size The number of elements in the created vector
+ * @param stream The stream on which to allocate memory and perform the memset
+ * @param mr The memory resource to use for allocating the returned device_uvector
+ * @return A device_uvector containing zeros
+ */
+template <typename T>
+rmm::device_uvector<T> make_zeroed_device_uvector_async(
+  std::size_t size,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  rmm::device_uvector<T> ret(size, stream, mr);
+  CUDA_TRY(cudaMemsetAsync(ret.data(), 0, size * sizeof(T), stream.value()));
+  return ret;
+}
+
+/**
+ * @brief Synchronously construct a `device_uvector` and set all elements to zero.
+ *
+ * @note This function synchronizes `stream`.
+ *
+ * @tparam T The type of the data to copy
+ * @param size The number of elements in the created vector
+ * @param stream The stream on which to allocate memory and perform the memset
+ * @param mr The memory resource to use for allocating the returned device_uvector
+ * @return A device_uvector containing zeros
+ */
+template <typename T>
+rmm::device_uvector<T> make_zeroed_device_uvector_sync(
+  std::size_t size,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  rmm::device_uvector<T> ret(size, stream, mr);
+  CUDA_TRY(cudaMemsetAsync(ret.data(), 0, size * sizeof(T), stream.value()));
+  stream.synchronize();
+  return ret;
+}
+
+/**
  * @brief Asynchronously construct a `device_uvector` containing a deep copy of data from a
  * `host_span`
  *
