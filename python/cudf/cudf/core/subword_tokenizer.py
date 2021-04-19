@@ -227,7 +227,7 @@ class SubwordTokenizer:
             tokenizer_output = _bert_add_special_tokens(tokenizer_output)
 
         tokenizer_output = {
-            k: cast_to_appripate_type(v, return_tensors)
+            k: _cast_to_appripate_type(v, return_tensors)
             for k, v in tokenizer_output.items()
         }
 
