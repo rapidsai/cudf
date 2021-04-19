@@ -43,7 +43,7 @@ def subword_tokenize_inmem_hash(
         c_result = tr_move(
             cpp_subword_tokenize(
                 c_strings,
-                hashed_vocablary.c_obj.get()[0],
+                hashed_vocabulary.c_obj.get()[0],
                 max_sequence_length,
                 stride,
                 do_lower,
