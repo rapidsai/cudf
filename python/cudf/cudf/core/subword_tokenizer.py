@@ -9,7 +9,7 @@ from cudf._lib.nvtext.subword_tokenize import (
 )
 
 
-def cast_to_appripate_type(ar, cast_type):
+def _cast_to_appripate_type(ar, cast_type):
     if cast_type == "cp":
         return ar
 
