@@ -548,11 +548,11 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *
    * \code{.cpp}
    * template<typename T>
-   * void some_function(cudf::column_view<T> const& col_view, bool has_nulls){
+   * void some_function(cudf::column_view<T> const& col_view){
    *    auto d_col = cudf::column_device_view::create(col_view);
    *    // Create a `DYNAMIC` optional iterator
    *    auto optional_iterator = d_col->optional_begin<T>(cudf::contains_nulls::DYNAMIC{},
-   *                                                      has_nulls);
+   *                                                      col_view.has_nulls());
    * }
    * \endcode
    *
