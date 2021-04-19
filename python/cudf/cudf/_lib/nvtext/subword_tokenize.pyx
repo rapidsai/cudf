@@ -30,7 +30,7 @@ cdef class Hashed_Vocabulary:
 
 def subword_tokenize_inmem_hash(
     Column strings,
-    Hashed_Vocabulary hashed_vocablary,
+    Hashed_Vocabulary hashed_vocabulary,
     uint32_t max_sequence_length=64,
     uint32_t stride=48,
     bool do_lower=True,
