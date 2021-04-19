@@ -43,13 +43,100 @@ namespace lists {
 namespace detail {
 
 struct SegmentedSortColumn {
+  template <typename KeyT, typename ValueT, typename OffsetIteratorT>
+  void SortPairsAscending(KeyT const* keys_in,
+                          KeyT* keys_out,
+                          ValueT const* values_in,
+                          ValueT* values_out,
+                          int num_items,
+                          int num_segments,
+                          OffsetIteratorT begin_offsets,
+                          OffsetIteratorT end_offsets,
+                          rmm::cuda_stream_view stream)
+  {
+    rmm::device_buffer d_temp_storage;
+    size_t temp_storage_bytes = 0;
+    cub::DeviceSegmentedRadixSort::SortPairs(d_temp_storage.data(),
+                                             temp_storage_bytes,
+                                             keys_in,
+                                             keys_out,
+                                             values_in,
+                                             values_out,
+                                             num_items,
+                                             num_segments,
+                                             begin_offsets,
+                                             end_offsets,
+                                             0,
+                                             sizeof(KeyT) * 8,
+                                             stream.value());
+    d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
+
+    cub::DeviceSegmentedRadixSort::SortPairs(d_temp_storage.data(),
+                                             temp_storage_bytes,
+                                             keys_in,
+                                             keys_out,
+                                             values_in,
+                                             values_out,
+                                             num_items,
+                                             num_segments,
+                                             begin_offsets,
+                                             end_offsets,
+                                             0,
+                                             sizeof(KeyT) * 8,
+                                             stream.value());
+  }
+
+  template <typename KeyT, typename ValueT, typename OffsetIteratorT>
+  void SortPairsDescending(KeyT const* keys_in,
+                           KeyT* keys_out,
+                           ValueT const* values_in,
+                           ValueT* values_out,
+                           int num_items,
+                           int num_segments,
+                           OffsetIteratorT begin_offsets,
+                           OffsetIteratorT end_offsets,
+                           rmm::cuda_stream_view stream)
+  {
+    rmm::device_buffer d_temp_storage;
+    size_t temp_storage_bytes = 0;
+    cub::DeviceSegmentedRadixSort::SortPairsDescending(d_temp_storage.data(),
+                                                       temp_storage_bytes,
+                                                       keys_in,
+                                                       keys_out,
+                                                       values_in,
+                                                       values_out,
+                                                       num_items,
+                                                       num_segments,
+                                                       begin_offsets,
+                                                       end_offsets,
+                                                       0,
+                                                       sizeof(KeyT) * 8,
+                                                       stream.value());
+    d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
+
+    cub::DeviceSegmentedRadixSort::SortPairsDescending(d_temp_storage.data(),
+                                                       temp_storage_bytes,
+                                                       keys_in,
+                                                       keys_out,
+                                                       values_in,
+                                                       values_out,
+                                                       num_items,
+                                                       num_segments,
+                                                       begin_offsets,
+                                                       end_offsets,
+                                                       0,
+                                                       sizeof(KeyT) * 8,
+                                                       stream.value());
+  }
+
   template <typename T>
-  std::unique_ptr<column> operator()(column_view const& child,
-                                     column_view const& segment_offsets,
-                                     order column_order,
-                                     null_order null_precedence,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+  std::enable_if_t<not is_numeric<T>(), std::unique_ptr<column>> operator()(
+    column_view const& child,
+    column_view const& segment_offsets,
+    order column_order,
+    null_order null_precedence,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
   {
     auto child_table = segmented_sort_by_key(table_view{{child}},
                                              table_view{{child}},
@@ -59,6 +146,75 @@ struct SegmentedSortColumn {
                                              stream,
                                              mr);
     return std::move(child_table->release().front());
+  }
+
+  template <typename T>
+  std::enable_if_t<is_numeric<T>(), std::unique_ptr<column>> operator()(
+    column_view const& child,
+    column_view const& offsets,
+    order column_order,
+    null_order null_precedence,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
+  {
+    auto output =
+      cudf::detail::allocate_like(child, child.size(), mask_allocation_policy::NEVER, stream, mr);
+    mutable_column_view mutable_output_view = output->mutable_view();
+
+    auto keys = [&]() {
+      if (child.nullable()) {
+        rmm::device_uvector<T> keys(child.size(), stream);
+        auto const null_replace_T = null_precedence == null_order::AFTER
+                                      ? std::numeric_limits<T>::max()
+                                      : std::numeric_limits<T>::min();
+
+        auto device_child = column_device_view::create(child, stream);
+        auto keys_in =
+          cudf::detail::make_null_replacement_iterator<T>(*device_child, null_replace_T);
+        thrust::copy_n(rmm::exec_policy(stream), keys_in, child.size(), keys.begin());
+        return keys;
+      }
+      return rmm::device_uvector<T>{0, stream};
+    }();
+
+    std::unique_ptr<column> sorted_indices = cudf::make_numeric_column(
+      data_type(type_to_id<size_type>()), child.size(), mask_state::UNALLOCATED, stream, mr);
+    mutable_column_view mutable_indices_view = sorted_indices->mutable_view();
+    thrust::sequence(rmm::exec_policy(stream),
+                     mutable_indices_view.begin<size_type>(),
+                     mutable_indices_view.end<size_type>(),
+                     0);
+
+    if (column_order == order::ASCENDING)
+      SortPairsAscending(child.nullable() ? keys.data() : child.begin<T>(),
+                         mutable_output_view.begin<T>(),
+                         mutable_indices_view.begin<size_type>(),
+                         mutable_indices_view.begin<size_type>(),
+                         child.size(),
+                         offsets.size() - 1,
+                         offsets.begin<size_type>(),
+                         offsets.begin<size_type>() + 1,
+                         stream);
+    else
+      SortPairsDescending(child.nullable() ? keys.data() : child.begin<T>(),
+                          mutable_output_view.begin<T>(),
+                          mutable_indices_view.begin<size_type>(),
+                          mutable_indices_view.begin<size_type>(),
+                          child.size(),
+                          offsets.size() - 1,
+                          offsets.begin<size_type>(),
+                          offsets.begin<size_type>() + 1,
+                          stream);
+    std::vector<std::unique_ptr<column>> output_cols;
+    output_cols.push_back(std::move(output));
+    // rearrange the null_mask.
+    cudf::detail::gather_bitmask(cudf::table_view{{child}},
+                                 mutable_indices_view.begin<size_type>(),
+                                 output_cols,
+                                 cudf::detail::gather_bitmask_op::DONT_CHECK,
+                                 stream,
+                                 mr);
+    return std::move(output_cols.front());
   }
 };
 
