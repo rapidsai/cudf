@@ -2122,9 +2122,10 @@ void InitFragmentStatistics(device_2dspan<statistics_group> groups,
                             device_span<parquet_column_device_view const> col_desc,
                             rmm::cuda_stream_view stream)
 {
-  auto num_columns              = col_desc.size();
-  auto num_fragments_per_column = fragments.size().second;
-  dim3 dim_grid(num_columns, (num_fragments_per_column + 3) >> 2);  // 1 warp per fragment
+  int const num_columns              = col_desc.size();
+  int const num_fragments_per_column = fragments.size().second;
+  auto grid_y = util::div_rounding_up_safe(num_fragments_per_column, 128 / cudf::detail::warp_size);
+  dim3 dim_grid(num_columns, grid_y);  // 1 warp per fragment
   gpuInitFragmentStats<<<dim_grid, 128, 0, stream.value()>>>(groups, fragments, col_desc);
 }
 
