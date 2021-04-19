@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/copy_if_else.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
@@ -32,6 +32,9 @@ namespace detail {
 
 namespace {
 
+/**
+ * @brief Helper function to invoke general `copy_if_else`
+ */
 template <typename PairIterator, typename ScalarIterator>
 std::unique_ptr<column> segmented_shift_rep_impl(PairIterator input_pair_iterator,
                                                  ScalarIterator fill_pair_iterator,
@@ -74,6 +77,9 @@ std::unique_ptr<column> segmented_shift_rep_impl(PairIterator input_pair_iterato
   }
 }
 
+/**
+ * @brief Helper function to invoke string specialization of `copy_if_else`
+ */
 template <typename PairIterator, typename ScalarIterator>
 std::unique_ptr<column> segmented_shift_string_impl(PairIterator input_pair_iterator,
                                                     ScalarIterator fill_pair_iterator,
@@ -119,6 +125,9 @@ struct segmented_shift_functor {
   }
 };
 
+/**
+ * @brief Segmented shift specialization for representation layout compatible types.
+ */
 template <typename T>
 struct segmented_shift_functor<T, std::enable_if_t<is_rep_layout_compatible<T>()>> {
   std::unique_ptr<column> operator()(column_view const& segmented_values,
@@ -158,6 +167,9 @@ struct segmented_shift_functor<T, std::enable_if_t<is_rep_layout_compatible<T>()
   }
 };
 
+/**
+ * @brief Segmented shift specialization for `string_view`.
+ */
 template <>
 struct segmented_shift_functor<string_view> {
   std::unique_ptr<column> operator()(column_view const& segmented_values,
@@ -193,6 +205,9 @@ struct segmented_shift_functor<string_view> {
   }
 };
 
+/**
+ * @brief Segmented shift specialization for `list_view`.
+ */
 template <>
 struct segmented_shift_functor<list_view> {
   std::unique_ptr<column> operator()(column_view const& segmented_values,
@@ -206,6 +221,9 @@ struct segmented_shift_functor<list_view> {
   }
 };
 
+/**
+ * @brief Segmented shift specialization for `struct_view`.
+ */
 template <>
 struct segmented_shift_functor<struct_view> {
   std::unique_ptr<column> operator()(column_view const& segmented_values,
@@ -219,6 +237,10 @@ struct segmented_shift_functor<struct_view> {
   }
 };
 
+/**
+ * @brief Functor to instantiate the specializations for segmented shift and
+ * forward arguments.
+ */
 struct segmented_shift_functor_forwarder {
   template <typename T>
   std::unique_ptr<column> operator()(column_view const& segmented_values,
@@ -233,23 +255,8 @@ struct segmented_shift_functor_forwarder {
   }
 };
 
-}  // anonymous namespace
+}  // namespace
 
-/**
- * @brief Implementation of segmented shift
- *
- * TBA
- *
- * @param segmented_values Segmented column to shift
- * @param segment_bound_begin TBA
- * @param num_segments TBA
- * @param offset The offset by which to shift the input
- * @param fill_value Fill value for indeterminable outputs
- * @param mr Device memory resource used to allocate the returned table's device memory
- * @param stream CUDA stream used for device memory operations and kernel launches
- *
- * @return Column where values are shifted in each segment
- */
 std::unique_ptr<column> segmented_shift(column_view const& segmented_values,
                                         device_span<size_type const> segment_offsets,
                                         size_type offset,
