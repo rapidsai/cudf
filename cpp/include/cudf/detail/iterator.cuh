@@ -198,9 +198,8 @@ auto make_null_replacement_iterator(column_device_view const& column,
  * @throws cudf::logic_error if column datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the column
- * @tparam MODE The null_mode of the iterator
  * @param column The column to iterate
- * @return auto Iterator that returns valid column elements, and validity of the
+ * @return Iterator that returns valid column elements and the validity of the
  * element in a thrust::optional
  */
 template <typename Element>
@@ -244,7 +243,6 @@ auto make_optional_iterator(column_device_view const& column,
  * @throws cudf::logic_error if column datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the column
- * @tparam mode The has_nulls mode of the iterator
  * @param column The column to iterate
  * @return Iterator that returns column elements and the validity of the
  * element as a thrust::optional
@@ -287,9 +285,8 @@ auto make_optional_iterator(column_device_view const& column, contains_nulls::YE
  * @throws cudf::logic_error if column datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the column
- * @tparam mode The has_nulls mode of the iterator
  * @param column The column to iterate
- * @return auto Iterator that returns column elements, and validity of the
+ * @return Iterator that returns column elements and the validity of the
  * element in a thrust::optional
  */
 template <typename Element>
@@ -655,7 +652,6 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
  * @throws cudf::logic_error if scalar datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the scalar
- * @tparam mode The has_nulls mode of the iterator
  * @tparam has_nulls If the scalar value will have a null at runtime
  * @param scalar_value The scalar to iterate
  * @return Iterator that returns scalar elements and validity of the
@@ -714,7 +710,7 @@ auto inline make_optional_iterator(scalar const& scalar_value,
  *
  * @tparam Element The type of elements in the scalar
  * @param scalar_value The scalar to iterate
- * @return auto Iterator that returns scalar elements, and validity of the
+ * @return Iterator that returns scalar elements and the validity of the
  * element in a thrust::optional
  */
 template <typename Element>
@@ -766,7 +762,7 @@ auto inline make_optional_iterator(scalar const& scalar_value, contains_nulls::Y
  *
  * @tparam Element The type of elements in the scalar
  * @param scalar_value The scalar to iterate
- * @return auto Iterator that returns scalar elements, and validity of the
+ * @return Iterator that returns scalar elements and the validity of the
  * element in a thrust::optional
  */
 template <typename Element>
