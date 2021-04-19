@@ -657,7 +657,7 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
  * @tparam mode The has_nulls mode of the iterator
  * @tparam has_nulls If the scalar value will have a null at runtime
  * @param scalar_value The scalar to iterate
- * @return auto Iterator that returns scalar elements, and validity of the
+ * @return Iterator that returns scalar elements and validity of the
  * element in a thrust::optional
  */
 template <typename Element>
