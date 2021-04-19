@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,4 +16,5 @@
 
 #pragma once
 
-#include "csv_common.h"
+// This file serves as a placeholder for user defined functions, so jitify can choose to override it
+// at runtime.

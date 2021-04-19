@@ -120,11 +120,8 @@ std::unique_ptr<column> slice_strings(
   auto const d_stop   = get_scalar_device_view(const_cast<numeric_scalar<size_type>&>(stop));
   auto const d_step   = get_scalar_device_view(const_cast<numeric_scalar<size_type>&>(step));
 
-  auto children = make_strings_children(substring_fn{*d_column, d_start, d_stop, d_step},
-                                        strings.size(),
-                                        strings.null_count(),
-                                        stream,
-                                        mr);
+  auto children = make_strings_children(
+    substring_fn{*d_column, d_start, d_stop, d_step}, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
                              std::move(children.first),
@@ -172,7 +169,7 @@ struct substring_from_fn {
     }
     auto const d_str  = d_column.template element<string_view>(idx);
     auto const length = d_str.length();
-    auto const start  = starts[idx];
+    auto const start  = std::max(starts[idx], 0);
     if (start >= length) {
       if (!d_chars) d_offsets[idx] = 0;
       return;
@@ -218,8 +215,8 @@ std::unique_ptr<column> compute_substrings_from_fn(column_device_view const& d_c
       : rmm::device_buffer(
           d_column.null_mask(), cudf::bitmask_allocation_size_bytes(strings_count), stream, mr);
 
-  auto children = make_strings_children(
-    substring_from_fn{d_column, starts, stops}, strings_count, null_count, stream, mr);
+  auto children =
+    make_strings_children(substring_from_fn{d_column, starts, stops}, strings_count, stream, mr);
 
   return make_strings_column(strings_count,
                              std::move(children.first),
@@ -402,8 +399,9 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                "Strings and delimiters column sizes do not match");
 
   CUDF_FUNC_RANGE();
-  auto delimiters_dev_view_ptr = cudf::column_device_view::create(delimiters.parent(), 0);
-  auto delimiters_dev_view     = *delimiters_dev_view_ptr;
+  auto delimiters_dev_view_ptr =
+    cudf::column_device_view::create(delimiters.parent(), rmm::cuda_stream_default);
+  auto delimiters_dev_view = *delimiters_dev_view_ptr;
   return (delimiters_dev_view.nullable())
            ? detail::slice_strings(
                strings,

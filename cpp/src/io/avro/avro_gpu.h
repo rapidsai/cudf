@@ -25,13 +25,6 @@ namespace cudf {
 namespace io {
 namespace avro {
 namespace gpu {
-/**
- * @brief Struct to describe the output of a string datatype
- */
-struct nvstrdesc_s {
-  const char *ptr;
-  size_t count;
-};
 
 /**
  * @brief Struct to describe the avro schema
@@ -59,7 +52,7 @@ struct schemadesc_s {
  */
 void DecodeAvroColumnData(block_desc_s *blocks,
                           schemadesc_s *schema,
-                          cudf::device_span<nvstrdesc_s> global_dictionary,
+                          cudf::device_span<string_index_pair> global_dictionary,
                           const uint8_t *avro_data,
                           uint32_t num_blocks,
                           uint32_t schema_len,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,4 +16,13 @@
 
 #pragma once
 
-#include "json_common.h"
+#include <jitify2.hpp>
+#include <memory>
+
+namespace cudf {
+namespace jit {
+
+jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData preprog);
+
+}  // namespace jit
+}  // namespace cudf

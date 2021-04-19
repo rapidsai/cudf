@@ -72,6 +72,7 @@ RUN cd /repos/ && git clone https://github.com/rapidsai/rmm.git && cd /repos/rmm
 ADD . /repos/cudf/
 
 # Build env for CUDF build
+ENV CUDF_HOME=/repos/cudf/
 ENV CUDF_ROOT=/repos/cudf/cpp/build/
 
 # Install cudf from source

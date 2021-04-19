@@ -83,10 +83,7 @@ TYPED_TEST(ChronoColumnTest, ChronoDurationsMatchPrimitiveRepresentation)
 
   // round-trip through the host to copy `chrono_col` values
   // to a new fixed_width_column_wrapper `primitive_col`
-  // When C++17, use structured bindings
-  thrust::host_vector<Rep> chrono_col_data;
-  std::vector<cudf::bitmask_type> chrono_col_mask;
-  std::tie(chrono_col_data, chrono_col_mask) = to_host<Rep>(chrono_col);
+  auto const [chrono_col_data, chrono_col_mask] = to_host<Rep>(chrono_col);
 
   auto primitive_col =
     fixed_width_column_wrapper<Rep>(chrono_col_data.begin(), chrono_col_data.end());

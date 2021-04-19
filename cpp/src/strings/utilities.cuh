@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/detail/get_value.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -66,7 +67,6 @@ __device__ inline char* copy_string(char* buffer, const string_view& d_string)
  *        After that, the d_offsets and d_chars are set and this is called again to fill in the
  *        chars memory.
  * @param strings_count Number of strings.
- * @param null_count Number of nulls in the strings column.
  * @param mr Device memory resource used to allocate the returned columns' device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return offsets child column and chars child column for a strings column
@@ -75,7 +75,6 @@ template <typename SizeAndExecuteFunction>
 auto make_strings_children(
   SizeAndExecuteFunction size_and_exec_fn,
   size_type strings_count,
-  size_type null_count,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -100,8 +99,9 @@ auto make_strings_children(
     rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
 
   // Now build the chars column
-  std::unique_ptr<column> chars_column = create_chars_child_column(
-    strings_count, null_count, thrust::device_pointer_cast(d_offsets)[strings_count], stream, mr);
+  auto const bytes = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
+  std::unique_ptr<column> chars_column =
+    create_chars_child_column(strings_count, bytes, stream, mr);
   size_and_exec_fn.d_chars = chars_column->mutable_view().template data<char>();
   for_each_fn(size_and_exec_fn);
 

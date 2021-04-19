@@ -19,10 +19,12 @@
 #include "timezone.cuh"
 
 #include <io/comp/gpuinflate.h>
-#include <io/orc/orc_common.h>
 #include <io/statistics/column_stats.h>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
+#include <io/utilities/column_buffer.hpp>
+#include "orc_common.h"
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -30,12 +32,15 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
+
+using cudf::detail::device_2dspan;
+
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
   explicit constexpr CompressedStreamInfo(const uint8_t *compressed_data_, size_t compressed_size_)
     : compressed_data(compressed_data_),
-      compressed_data_size(compressed_size_),
       uncompressed_data(nullptr),
+      compressed_data_size(compressed_size_),
       decctl(nullptr),
       decstatus(nullptr),
       copyctl(nullptr),
@@ -65,14 +70,6 @@ enum StreamIndexType {
   CI_DICTIONARY,  // Dictionary stream
   CI_INDEX,       // Index stream
   CI_NUM_STREAMS
-};
-
-/**
- * @brief Struct to describe the output of a string datatype
- */
-struct nvstrdesc_s {
-  const char *ptr;
-  size_t count;
 };
 
 /**
@@ -292,8 +289,8 @@ void DecodeOrcColumnData(ColumnDesc const *chunks,
  * @param[in, out] streams chunk streams device array [column][rowgroup]
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void EncodeOrcColumnData(detail::device_2dspan<EncChunk const> chunks,
-                         detail::device_2dspan<encoder_chunk_streams> streams,
+void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
+                         device_2dspan<encoder_chunk_streams> streams,
                          rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
@@ -307,10 +304,10 @@ void EncodeOrcColumnData(detail::device_2dspan<EncChunk const> chunks,
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void EncodeStripeDictionaries(StripeDictionary *stripes,
-                              detail::device_2dspan<EncChunk const> chunks,
+                              device_2dspan<EncChunk const> chunks,
                               uint32_t num_string_columns,
                               uint32_t num_stripes,
-                              detail::device_2dspan<encoder_chunk_streams> enc_streams,
+                              device_2dspan<encoder_chunk_streams> enc_streams,
                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
@@ -321,7 +318,7 @@ void EncodeStripeDictionaries(StripeDictionary *stripes,
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void set_chunk_columns(const table_device_view &view,
-                       detail::device_2dspan<EncChunk> chunks,
+                       device_2dspan<EncChunk> chunks,
                        rmm::cuda_stream_view stream);
 
 /**
@@ -331,8 +328,8 @@ void set_chunk_columns(const table_device_view &view,
  * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void CompactOrcDataStreams(detail::device_2dspan<StripeStream> strm_desc,
-                           detail::device_2dspan<encoder_chunk_streams> enc_streams,
+void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
+                           device_2dspan<encoder_chunk_streams> enc_streams,
                            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
@@ -352,8 +349,8 @@ void CompressOrcDataStreams(uint8_t *compressed_data,
                             uint32_t num_compressed_blocks,
                             CompressionKind compression,
                             uint32_t comp_blk_size,
-                            detail::device_2dspan<StripeStream> strm_desc,
-                            detail::device_2dspan<encoder_chunk_streams> enc_streams,
+                            device_2dspan<StripeStream> strm_desc,
+                            device_2dspan<encoder_chunk_streams> enc_streams,
                             gpu_inflate_input_s *comp_in,
                             gpu_inflate_status_s *comp_out,
                             rmm::cuda_stream_view stream = rmm::cuda_stream_default);

@@ -20,7 +20,7 @@
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <io/utilities/column_type_histogram.hpp>
+#include "column_type_histogram.hpp"
 
 #include <rmm/device_vector.hpp>
 
