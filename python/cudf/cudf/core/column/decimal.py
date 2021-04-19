@@ -150,7 +150,7 @@ class DecimalColumn(ColumnBase):
 
     def _decimal_quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
-    ) -> "cudf.core.column.DecimalColumn":
+    ) -> ColumnBase:
         quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
         # get sorted indices and exclude nulls
         sorted_indices = self.as_frame()._get_sorted_inds(
