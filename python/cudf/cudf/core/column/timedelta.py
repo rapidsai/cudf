@@ -306,7 +306,7 @@ class TimeDeltaColumn(column.ColumnBase):
         self, fill_value: Any = None, method: str = None, dtype: Dtype = None
     ) -> TimeDeltaColumn:
         if fill_value is not None:
-            if cudf.utils.utils.isnat(fill_value):
+            if cudf.utils.utils._isnat(fill_value):
                 return _fillna_natwise(self)
             col = self  # type: column.ColumnBase
             if is_scalar(fill_value):

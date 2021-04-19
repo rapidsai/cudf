@@ -23,7 +23,7 @@
 #include "timezone.cuh"
 
 #include <io/comp/gpuinflate.h>
-#include <io/orc/orc.h>
+#include "orc.h"
 
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
