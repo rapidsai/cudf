@@ -130,8 +130,7 @@ struct segmented_shift_functor<T, std::enable_if_t<is_rep_layout_compatible<T>()
   {
     auto values_device_view = column_device_view::create(segmented_values, stream);
     auto fill_pair_iterator = make_pair_iterator<T>(fill_value);
-
-    bool nullable = not fill_value.is_valid() or segmented_values.nullable();
+    bool nullable           = not fill_value.is_valid() or segmented_values.nullable();
 
     if (segmented_values.has_nulls()) {
       auto input_pair_iterator = make_pair_iterator<T, true>(*values_device_view) - offset;
@@ -259,6 +258,7 @@ std::unique_ptr<column> segmented_shift(column_view const& segmented_values,
                                         rmm::mr::device_memory_resource* mr)
 {
   if (segmented_values.is_empty()) { return empty_like(segmented_values); }
+  if (offset == 0) { return std::make_unique<column>(segmented_values); };
 
   return type_dispatcher<dispatch_storage_type>(segmented_values.type(),
                                                 segmented_shift_functor_forwarder{},

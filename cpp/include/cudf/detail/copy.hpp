@@ -118,6 +118,8 @@ std::unique_ptr<column> shift(
  * @param fill_value Fill value for indeterminable outputs
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
+ *
+ * @note If `offset == 0`, a copy of @p segmented_values is returned.
  */
 std::unique_ptr<column> segmented_shift(
   column_view const& segmented_values,
