@@ -60,18 +60,13 @@ inline rmm::device_buffer create_data(
   return data;
 }
 
+using string_index_pair = thrust::pair<const char*, size_type>;
+
 /**
  * @brief Class for holding device memory buffers to column data that eventually
  * will be used to create a column.
  */
 struct column_buffer {
-  // there is a potential bug here.  In the decoding step, the buffer of
-  // data holding these pairs is cast to an nvstrdesc_s, which is a struct
-  // containing <const char *, size_t>.   So there is a mismatch between the
-  // size_type and the size_t.  I believe this works because the str_pair is
-  // aligned out to 8 bytes anyway.
-  using str_pair = thrust::pair<const char*, size_type>;
-
   column_buffer() = default;
 
   // construct without a known size. call create() later to actually
@@ -84,7 +79,7 @@ struct column_buffer {
                 bool _is_nullable                   = true,
                 rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : type(_type), is_nullable(_is_nullable), _null_count(0)
+    : type(_type), is_nullable(_is_nullable)
   {
     create(_size, stream, mr);
   }
@@ -101,30 +96,7 @@ struct column_buffer {
   // preprocessing steps such as in the Parquet reader
   void create(size_type _size,
               rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-  {
-    size = _size;
-
-    switch (type.id()) {
-      case type_id::STRING:
-        _strings = std::make_unique<rmm::device_uvector<str_pair>>(size, stream);
-        cudaMemsetAsync(_strings->data(), 0, size * sizeof(str_pair), stream.value());
-        break;
-
-      // list columns store a buffer of int32's as offsets to represent
-      // their individual rows
-      case type_id::LIST: _data = create_data(data_type{type_id::INT32}, size, stream, mr); break;
-
-      // struct columns store no data themselves.  just validity and children.
-      case type_id::STRUCT: break;
-
-      default: _data = create_data(type, size, stream, mr); break;
-    }
-    if (is_nullable) {
-      _null_mask = cudf::detail::create_null_mask(
-        size, mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr);
-    }
-  }
+              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   auto data() { return _strings ? _strings->data() : _data.data(); }
   auto data_size() const { return _strings ? _strings->size() : _data.size(); }
@@ -138,110 +110,24 @@ struct column_buffer {
 
   auto& null_count() { return _null_count; }
 
-  std::unique_ptr<rmm::device_uvector<str_pair>> _strings;
+  std::unique_ptr<rmm::device_uvector<string_index_pair>> _strings;
   rmm::device_buffer _data{};
   rmm::device_buffer _null_mask{};
   size_type _null_count{0};
 
-  bool is_nullable{false};
   data_type type{type_id::EMPTY};
+  bool is_nullable{false};
   size_type size{0};
   std::vector<column_buffer> children;
   uint32_t user_data{0};  // arbitrary user data
   std::string name;
 };
 
-namespace {
-/**
- * @brief Creates a column from an existing set of device memory buffers.
- *
- * @throws std::bad_alloc if device memory allocation fails
- *
- * @param buffer Column buffer descriptors
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory
- *
- * @return `std::unique_ptr<cudf::column>` Column from the existing device data
- */
 std::unique_ptr<column> make_column(
   column_buffer& buffer,
   column_name_info* schema_info       = nullptr,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-{
-  using str_pair = thrust::pair<const char*, size_type>;
-
-  if (schema_info != nullptr) { schema_info->name = buffer.name; }
-
-  switch (buffer.type.id()) {
-    case type_id::STRING:
-      if (schema_info != nullptr) {
-        schema_info->children.push_back(column_name_info{"offsets"});
-        schema_info->children.push_back(column_name_info{"chars"});
-      }
-      return make_strings_column(*buffer._strings, stream, mr);
-
-    case type_id::LIST: {
-      // make offsets column
-      auto offsets =
-        std::make_unique<column>(data_type{type_id::INT32}, buffer.size, std::move(buffer._data));
-
-      column_name_info* child_info = nullptr;
-      if (schema_info != nullptr) {
-        schema_info->children.push_back(column_name_info{"offsets"});
-        schema_info->children.push_back(column_name_info{""});
-        child_info = &schema_info->children.back();
-      }
-
-      // make child column
-      CUDF_EXPECTS(buffer.children.size() > 0, "Encountered malformed column_buffer");
-      auto child = make_column(buffer.children[0], child_info, stream, mr);
-
-      // make the final list column (note : size is the # of offsets, so our actual # of rows is 1
-      // less)
-      return make_lists_column(buffer.size - 1,
-                               std::move(offsets),
-                               std::move(child),
-                               buffer._null_count,
-                               std::move(buffer._null_mask),
-                               stream,
-                               mr);
-    } break;
-
-    case type_id::STRUCT: {
-      std::vector<std::unique_ptr<cudf::column>> output_children;
-      output_children.reserve(buffer.children.size());
-      std::transform(buffer.children.begin(),
-                     buffer.children.end(),
-                     std::back_inserter(output_children),
-                     [&](column_buffer& col) {
-                       column_name_info* child_info = nullptr;
-                       if (schema_info != nullptr) {
-                         schema_info->children.push_back(column_name_info{""});
-                         child_info = &schema_info->children.back();
-                       }
-                       return make_column(col, child_info, stream, mr);
-                     });
-
-      return make_structs_column(buffer.size,
-                                 std::move(output_children),
-                                 buffer._null_count,
-                                 std::move(buffer._null_mask),
-                                 stream,
-                                 mr);
-    } break;
-
-    default: {
-      return std::make_unique<column>(buffer.type,
-                                      buffer.size,
-                                      std::move(buffer._data),
-                                      std::move(buffer._null_mask),
-                                      buffer._null_count);
-    }
-  }
-}
-
-}  // namespace
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace io
