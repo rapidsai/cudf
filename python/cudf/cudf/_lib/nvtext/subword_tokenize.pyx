@@ -37,6 +37,9 @@ def subword_tokenize_inmem_hash(
     bool do_truncate=False,
     uint32_t max_rows_tensor=500
 ):
+    """
+    Subword tokenizes text series by using the pre-loaded hashed vocabulary
+    """
     cdef column_view c_strings = strings.view()
     cdef cpp_tokenizer_result c_result
     with nogil:
@@ -67,6 +70,10 @@ def subword_tokenize_vocab_file(
     bool do_truncate=False,
     uint32_t max_rows_tensor=500
 ):
+    """
+        Subword tokenizes text series by using the hashed vocabulary
+        stored on disk
+    """
     cdef column_view c_strings = strings.view()
     cdef cpp_tokenizer_result c_result
     cdef string c_hash_file = <string>str(hash_file).encode()

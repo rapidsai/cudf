@@ -1,9 +1,5 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
-# Copyright (c) 2021, NVIDIA CORPORATION.
-
-# Copyright (c) 2021, NVIDIA CORPORATION.
-
 from __future__ import annotations
 import cupy as cp
 from warnings import warn
@@ -172,8 +168,8 @@ class SubwordTokenizer:
         if truncation in (False, "do_not_truncate"):
             truncation = False
             warning_msg = (
-                "When truncation is not True, the behaviour currently differs from  "
-                + "HuggingFace as cudf always returns overflowing tokens"
+                "When truncation is not True, the behaviour currently differs "
+                "from HuggingFace as cudf always returns overflowing tokens"
             )
             warn(warning_msg)
             if add_special_tokens:
