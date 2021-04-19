@@ -138,8 +138,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& strings,
                          get_special_case_mapping_table()};
 
   // this utility calls the functor to build the offsets and chars columns
-  auto children = cudf::strings::detail::make_strings_children(
-    functor, strings.size(), strings.null_count(), stream, mr);
+  auto children = cudf::strings::detail::make_strings_children(functor, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
                              std::move(children.first),

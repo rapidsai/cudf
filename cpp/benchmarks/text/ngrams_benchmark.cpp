@@ -43,7 +43,7 @@ static void BM_ngrams(benchmark::State& state, ngrams_type nt)
   cudf::strings_column_view input(table->view().column(0));
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, 0);
+    cuda_event_timer raii(state, true);
     switch (nt) {
       case ngrams_type::tokens: nvtext::generate_ngrams(input); break;
       case ngrams_type::characters: nvtext::generate_character_ngrams(input); break;

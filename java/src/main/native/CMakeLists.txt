@@ -252,7 +252,14 @@ set(SOURCE_FILES
 add_library(cudfjni SHARED ${SOURCE_FILES})
 
 #Override RPATH for cudfjni
-SET_TARGET_PROPERTIES(cudfjni PROPERTIES BUILD_RPATH "\$ORIGIN")
+SET_TARGET_PROPERTIES(cudfjni
+    PROPERTIES BUILD_RPATH "\$ORIGIN"
+               # set target compile options
+               CXX_STANDARD                        17
+               CXX_STANDARD_REQUIRED               ON
+               CUDA_STANDARD                       17
+               CUDA_STANDARD_REQUIRED              ON
+)
 
 target_compile_options(cudfjni
             PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
@@ -267,7 +274,7 @@ target_compile_definitions(cudfjni
 if(USE_GDS)
     add_library(cufilejni SHARED "src/CuFileJni.cpp")
     target_include_directories(cufilejni PRIVATE "${cuFile_INCLUDE_DIRS}")
-    target_link_libraries(cufilejni PRIVATE "${cuFile_LIBRARIES}")
+    target_link_libraries(cufilejni PRIVATE cudfjni "${cuFile_LIBRARIES}")
 endif(USE_GDS)
 
 ###################################################################################################
@@ -284,4 +291,4 @@ target_compile_definitions(cudfjni PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni ${CUDF_LIB} ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} cuda nvrtc)
+target_link_libraries(cudfjni ${CUDF_LIB} ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} cuda)
