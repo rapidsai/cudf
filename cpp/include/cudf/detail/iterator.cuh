@@ -245,8 +245,8 @@ auto make_optional_iterator(column_device_view const& column,
  * @tparam Element The type of elements in the column
  * @tparam mode The has_nulls mode of the iterator
  * @param column The column to iterate
- * @return auto Iterator that returns column elements, and validity of the
- * element in a thrust::optional
+ * @return Iterator that returns column elements and the validity of the
+ * element as a thrust::optional
  */
 template <typename Element>
 auto make_optional_iterator(column_device_view const& column, contains_nulls::YES)
