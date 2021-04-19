@@ -358,10 +358,15 @@ struct ast_plan {
     add_to_plan(expr_linearizer.operator_source_indices());
 
     // Create device buffer
-    auto const h_data_buffer  = host_data_buffer();
-    auto const buffer_offsets = offsets();
-    auto const buffer_size    = h_data_buffer.second;
-    _device_data_buffer = rmm::device_buffer(h_data_buffer.first.get(), buffer_size, stream, mr);
+    auto const buffer_size = std::accumulate(_sizes.cbegin(), _sizes.cend(), 0);
+    auto buffer_offsets    = std::vector<int>(_sizes.size());
+    thrust::exclusive_scan(_sizes.cbegin(), _sizes.cend(), buffer_offsets.begin(), 0);
+
+    auto h_data_buffer = std::make_unique<char[]>(buffer_size);
+    for (unsigned int i = 0; i < _data_pointers.size(); ++i)
+      std::memcpy(h_data_buffer.get() + buffer_offsets[i], _data_pointers[i], _sizes[i]);
+
+    _device_data_buffer = rmm::device_buffer(h_data_buffer.get(), buffer_size, stream, mr);
 
     stream.synchronize();
 
@@ -397,33 +402,6 @@ struct ast_plan {
     auto const data_size = sizeof(T) * v.size();
     _sizes.push_back(data_size);
     _data_pointers.push_back(v.data());
-  }
-
-  /**
-   * @brief Create and return host buffer
-   *
-   * @return `std::pair` containing host buffer and buffer size
-   */
-  buffer_type host_data_buffer() const
-  {
-    auto const total_size = std::accumulate(_sizes.cbegin(), _sizes.cend(), 0);
-    auto host_data_buffer = std::make_unique<char[]>(total_size);
-    auto const offset     = offsets();  // calculate once outside for loop
-    for (unsigned int i = 0; i < _data_pointers.size(); ++i)
-      std::memcpy(host_data_buffer.get() + offset[i], _data_pointers[i], _sizes[i]);
-    return std::make_pair(std::move(host_data_buffer), total_size);
-  }
-
-  /**
-   * @brief Returns a `std::vector` of offsets into `data_pointers`
-   *
-   * @return `std::vector` of offsets into `data_pointers`
-   */
-  std::vector<cudf::size_type> offsets() const
-  {
-    auto offsets = std::vector<int>(_sizes.size());
-    thrust::exclusive_scan(_sizes.cbegin(), _sizes.cend(), offsets.begin(), 0);
-    return offsets;
   }
 
   std::vector<cudf::size_type> _sizes;
