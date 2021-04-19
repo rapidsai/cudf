@@ -72,18 +72,20 @@ def _get_non_empty_data(s):
             if len(s._column.categories)
             else [UNKNOWN_CATEGORIES]
         )
-        codes = column.full(size=2, fill_value=0, dtype="int32")
+        codes = cudf.core.column.full(size=2, fill_value=0, dtype="int32")
         ordered = s._column.ordered
-        data = column.build_categorical_column(
+        data = cudf.core.column.build_categorical_column(
             categories=categories, codes=codes, ordered=ordered
         )
     elif is_string_dtype(s.dtype):
         data = pa.array(["cat", "dog"])
     else:
         if pd.api.types.is_numeric_dtype(s.dtype):
-            data = column.as_column(cp.arange(start=0, stop=2, dtype=s.dtype))
+            data = cudf.core.column.as_column(
+                cp.arange(start=0, stop=2, dtype=s.dtype)
+            )
         else:
-            data = column.as_column(
+            data = cudf.core.column.as_column(
                 cp.arange(start=0, stop=2, dtype="int64")
             ).astype(s.dtype)
     return data
