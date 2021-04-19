@@ -1257,7 +1257,7 @@ struct rolling_window_launcher {
 
     return lists::detail::drop_list_duplicates(lists_column_view(collect_result->view()),
                                                null_equality::EQUAL,
-                                               nan_equality::ALL_EQUAL,
+                                               nan_equality::UNEQUAL,
                                                stream,
                                                mr);
   }

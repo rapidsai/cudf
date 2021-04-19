@@ -268,7 +268,7 @@ ConfigureTest(ROLLING_TEST
     rolling/rolling_test.cpp 
     rolling/grouped_rolling_test.cpp
     rolling/lead_lag_test.cpp
-    rolling/collect_list_test.cpp
+    rolling/collect_ops_test.cpp
     )
 
 ###################################################################################################
