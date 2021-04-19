@@ -176,8 +176,8 @@ class SubwordTokenizer:
             warn(warning_msg)
             if add_special_tokens:
                 error_msg = (
-                    "Adding special tokens is not supported"
-                    + f"with truncation = {truncation}"
+                    f"Adding special tokens is not supported"
+                    f"with truncation = {truncation}. "
                 )
                 recommendation = (
                     "Custom Cupy kernel can potentially"
