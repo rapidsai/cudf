@@ -181,8 +181,8 @@ class SubwordTokenizer:
                 )
                 recommendation = (
                     "Custom Cupy kernel can potentially"
-                    + "be used to add it. For reference "
-                    + "see: _bert_add_special_tokens "
+                    "be used to add it. For reference "
+                    "see: _bert_add_special_tokens "
                 )
                 raise NotImplementedError(error_msg + recommendation)
 
