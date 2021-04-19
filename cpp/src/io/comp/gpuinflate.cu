@@ -512,13 +512,10 @@ __device__ void decode_symbols(inflate_state_s *s)
 #if ENABLE_PREFETCH
     // Wait for prefetcher to fetch a worst-case of 48 bits per symbol
     while ((*(volatile int32_t *)&s->pref.cur_p - (int32_t)(size_t)cur < batch_size * 6) ||
-           (s->x.batch_len[batch] != 0))
+           (s->x.batch_len[batch] != 0)) {}
 #else
-    while (s->x.batch_len[batch] != 0)
+    while (s->x.batch_len[batch] != 0) {}
 #endif
-    {
-      nanosleep(100);
-    }
     batch_len = 0;
 #if ENABLE_PREFETCH
     if (cur + (bitpos >> 3) >= end) {
@@ -662,7 +659,7 @@ __device__ void decode_symbols(inflate_state_s *s)
     if (batch_len != 0) batch = (batch + 1) & (batch_count - 1);
   } while (sym != 256);
 
-  while (s->x.batch_len[batch] != 0) { nanosleep(150); }
+  while (s->x.batch_len[batch] != 0) {}
   s->x.batch_len[batch] = -1;
   s->bitbuf             = bitbuf;
   s->bitpos             = bitpos;
@@ -779,7 +776,7 @@ __device__ void process_symbols(inflate_state_s *s, int t)
     uint32_t lit_mask;
 
     if (t == 0) {
-      while ((batch_len = s->x.batch_len[batch]) == 0) { nanosleep(100); }
+      while ((batch_len = s->x.batch_len[batch]) == 0) {}
     } else {
       batch_len = 0;
     }
@@ -962,8 +959,6 @@ __device__ void prefetch_warp(volatile inflate_state_s *s, int t)
         s->pref.cur_p = cur_p;
         __threadfence_block();
       }
-    } else if (t == 0) {
-      nanosleep(150);
     }
   }
 }
