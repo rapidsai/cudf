@@ -1228,7 +1228,6 @@ struct value_accessor {
  *
  * @throws cudf::logic_error if column datatype and template T type mismatch.
  * @throws cudf::logic_error if the column is not nullable, and `with_nulls=true`
- * @throws cudf::logic_error if column datatype and template T type mismatch.
  *
  *
  * @tparam T The type of elements in the column
