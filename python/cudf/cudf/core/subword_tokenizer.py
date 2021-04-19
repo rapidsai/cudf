@@ -165,7 +165,7 @@ class SubwordTokenizer:
             error_msg = "Returning token_type_ids is currently supported"
             raise NotImplementedError(error_msg)
 
-        if truncation in [False, "do_not_truncate"]:
+        if truncation in (False, "do_not_truncate"):
             truncation = False
             warning_msg = (
                 "The behaviour currently differs from  "
