@@ -199,7 +199,7 @@ class SubwordTokenizer:
         if return_tensors not in ["cp", "pt", "tf"]:
             error_msg = (
                 "Only cupy(cp), pytorch(pt) and tensorflow(tf)"
-                + "tensors are supported"
+                "tensors are supported"
             )
             raise NotImplementedError(error_msg)
 
