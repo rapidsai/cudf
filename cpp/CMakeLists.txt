@@ -112,6 +112,39 @@ endif()
 # * set other CUDA compilation flags
 include(cmake/Modules/ConfigureCUDA.cmake)
 
+# Check if sccache is used
+if (CMAKE_C_COMPILER_LAUNCHER STREQUAL "sccache" OR CMAKE_CXX_COMPILER_LAUNCHER STREQUAL "sccache" OR CMAKE_CUDA_COMPILER_LAUNCHER STREQUAL "sccache")
+    # Check if sccache is using rapids-compose s3 bucket
+    # TODO: Fix bucket name
+    if (DEFINED ENV{SCCACHE_BUCKET} AND $ENV{SCCACHE_BUCKET} STREQUAL "sccache")
+        # Define s3 prefix
+        # Get Linux Version
+        execute_process(COMMAND "lsb_release" "-irs" OUTPUT_VARIABLE SCCACHE_LINUX_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
+        string(REPLACE "\n" "" SCCACHE_LINUX_VERSION ${SCCACHE_LINUX_VERSION})
+        string(TOLOWER ${SCCACHE_LINUX_VERSION} SCCACHE_LINUX_VERSION)
+
+        # Get project name
+        string(TOLOWER ${CMAKE_PROJECT_NAME} SCCACHE_PROJECT_NAME)
+
+        # Get CUDA version
+        string(REGEX MATCH "^[0-9]+.[0-9]+" SCCACHE_CUDA_VERSION ${CUDAToolkit_VERSION})
+
+        # Get Python version
+        execute_process(COMMAND "python" "--version" OUTPUT_VARIABLE SCCACHE_PYTHON_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
+        string(REGEX MATCH "[0-9]+.[0-9]+" SCCACHE_PYTHON_VERSION ${SCCACHE_PYTHON_VERSION})
+
+        # Get current branch
+        execute_process(COMMAND "git" "rev-parse" "--abbrev-ref" "HEAD" WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} OUTPUT_VARIABLE SCCACHE_GIT_BRANCH OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+        # Set s3 prefix
+        set(ENV{SCCACHE_S3_KEY_PREFIX} "${SCCACHE_PROJECT_NAME}-${SCCACHE_GIT_BRANCH}-${SCCACHE_LINUX_VERSION}-${SCCACHE_CUDA_VERSION}-py${SCCACHE_PYTHON_VERSION}")
+
+        # Force sccache to reload configuration
+        execute_process(COMMAND "sccache" "--stop-server" OUTPUT_QUIET ERROR_QUIET)
+        execute_process(COMMAND "sccache" "--start-server" OUTPUT_QUIET ERROR_QUIET)
+    endif()
+endif()
+
 ###################################################################################################
 # - dependencies ----------------------------------------------------------------------------------
 
