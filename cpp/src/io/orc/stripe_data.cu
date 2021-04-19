@@ -149,9 +149,9 @@ static __device__ void bytestream_init(volatile orc_bytestream_s *bs,
                                        const uint8_t *base,
                                        uint32_t len)
 {
-  uint32_t pos   = static_cast<uint32_t>(7 & reinterpret_cast<size_t>(base));
+  uint32_t pos   = (len > 0) ? static_cast<uint32_t>(7 & reinterpret_cast<size_t>(base)) : 0;
   bs->base       = base - pos;
-  bs->pos        = (len > 0) ? pos : 0;
+  bs->pos        = pos;
   bs->len        = (len + pos + 7) & ~7;
   bs->fill_pos   = 0;
   bs->fill_count = min(bs->len, bytestream_buffer_size) >> 3;
