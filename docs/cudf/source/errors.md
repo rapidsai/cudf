@@ -21,7 +21,7 @@ cuDF follows error conventions used by Pandas. Following [Pandas Wiki](https://g
 
 Custom error types, should not be used whenever possible.
 
-Error raised by the API is considered as part of the API interface and should be documented in the docstring. For a specific invalid input, if the error raised has changed, it is considered as a `breaking` change.
+Errors raised by the API are considered part of the API and should be documented in the docstring. For a specific invalid input, changing the raised exception is considered a breaking change.
 
 ## Handling Exceptions Thrown by Supporting Libraries
 
@@ -31,16 +31,14 @@ Note that this does not mean cuDF will skip checking errors. As supporting libra
 
 ### Python Libraries
 
-If python libraries throws a builtin error type, cuDF will surface such error.
+If Python libraries raise a builtin error type, cuDF will surface that error.
 
 If python libraries throws a custom error type, cuDF will attempt to reinterpret it into builtin error type.
 
 ### C++ Libraries
 
-cuDF interfaces with c++ libraries through Cython. By default, cuDF builds such interfaces capturing all exceptions thrown by c++ libraries. Cython maps these exceptions into python errors as outlined by [this document](http://docs.cython.org/en/latest/src/userguide/wrapping_CPlusPlus.html#exceptions).
+cuDF interfaces with C++ libraries through Cython. By default, cuDF captures all exceptions thrown by C++ libraries. Cython maps these exceptions into Python errors as outlined by [this document](http://docs.cython.org/en/latest/src/userguide/wrapping_CPlusPlus.html#exceptions).
 
-In an unambiguous situation, for example, the c++ function called by cuDF will only throw one instance of `std::out_of_range` exception, indicating an out of bound array access error, cuDF will skip checks in the python level and surface such error (through automatic Cython error mapping) if occurs.
+In cases where the meaning of a C++ exception can be unambiguously determined, cuDF will skip any checks in Python and directly surface such exceptions via Cython's C++->Python exception mapping. However, in some cases the exceptions may be ambiguous. For example, a C++ function may raise two instances of `std::invalid_argument` error, each signaling different kinds of invalid argument combination. In that case, cuDF will check the invalid combinations and re-raise with proper user message.
 
-In an ambiguous situation, for example, the c++ function may raise two instances of `std::invalid_argument` error, each signaling different kinds of invalid argument combination, cuDF will check the invalid combinations and re-raise with proper user message.
-
-In cases when the contents of `what()` is standardized by the supporting library, cuDF will utilize it to disambiguate.
+In cases when the contents of [`what()`](https://www.cplusplus.com/reference/exception/exception/what/) is standardized by the supporting library, cuDF will utilize it to disambiguate.
