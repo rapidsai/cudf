@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
+#include "parquet_gpu.hpp"
 
 #include <cudf/utilities/error.hpp>
 

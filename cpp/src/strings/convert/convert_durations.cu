@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -427,10 +427,8 @@ struct dispatch_from_durations_fn {
     // build chars column
     auto const chars_bytes =
       cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-    auto chars_column = detail::create_chars_child_column(
-      strings_count, durations.null_count(), chars_bytes, stream, mr);
-    auto chars_view = chars_column->mutable_view();
-    auto d_chars    = chars_view.template data<char>();
+    auto chars_column = detail::create_chars_child_column(strings_count, chars_bytes, stream, mr);
+    auto d_chars      = chars_column->mutable_view().template data<char>();
 
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
