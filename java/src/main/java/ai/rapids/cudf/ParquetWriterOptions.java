@@ -78,7 +78,8 @@ public final class ParquetWriterOptions extends ParquetColumnWriterOptions.Parqu
     return metadata;
   }
 
-  public static class Builder extends ParquetColumnWriterOptions.AbstractStructBuilder<Builder> {
+  public static class Builder extends ParquetColumnWriterOptions.AbstractStructBuilder<Builder,
+      ParquetWriterOptions> {
     private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
     final Map<String, String> metadata = new LinkedHashMap<>();
     CompressionType compressionType = CompressionType.AUTO;
@@ -89,8 +90,6 @@ public final class ParquetWriterOptions extends ParquetColumnWriterOptions.Parqu
 
     /**
      * Add a metadata key and a value
-     * @param key
-     * @param value
      */
     public Builder withMetadata(String key, String value) {
       this.metadata.put(key, value);
@@ -99,7 +98,6 @@ public final class ParquetWriterOptions extends ParquetColumnWriterOptions.Parqu
 
     /**
      * Add a map of metadata keys and values
-     * @param metadata
      */
     public Builder withMetadata(Map<String, String> metadata) {
       this.metadata.putAll(metadata);
@@ -108,7 +106,6 @@ public final class ParquetWriterOptions extends ParquetColumnWriterOptions.Parqu
 
     /**
      * Set the compression type to use for writing
-     * @param compression
      */
     public Builder withCompressionType(CompressionType compression) {
       this.compressionType = compression;

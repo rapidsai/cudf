@@ -24,7 +24,7 @@ import java.util.List;
 /**
  * Per column settings for writing Parquet files.
  */
-class ParquetColumnWriterOptions {
+public class ParquetColumnWriterOptions {
   private boolean isTimestampTypeInt96;
   private int precision;
   private boolean isNullable;
@@ -51,11 +51,10 @@ class ParquetColumnWriterOptions {
   }
 
   protected ParquetColumnWriterOptions[] childColumnOptions = {};
-  protected abstract static class AbstractStructBuilder<T extends AbstractStructBuilder>
-      extends NestedBuilder<T> {
+  protected abstract static class AbstractStructBuilder<T extends AbstractStructBuilder,
+      V extends ParquetColumnWriterOptions> extends NestedBuilder<T, V> {
     /**
      * Builder specific to build a Struct meta
-     * @param name
      */
     public AbstractStructBuilder(String name, boolean isNullable) {
       super(name, isNullable);
@@ -74,14 +73,13 @@ class ParquetColumnWriterOptions {
   // https://github.com/rapidsai/cudf/pull/7461/commits/f248eb7265de995a95f998d46d897fb0ae47f53e
   static ParquetColumnWriterOptions DUMMY_CHILD = new ParquetColumnWriterOptions("DUMMY");
 
-  static abstract class NestedBuilder<T extends NestedBuilder> {
+  public static abstract class NestedBuilder<T extends NestedBuilder, V extends ParquetColumnWriterOptions> {
     protected List<ParquetColumnWriterOptions> children = new ArrayList<>();
     protected boolean isNullable = true;
     protected String name = "";
 
     /**
      * Builder specific to build a Struct meta
-     * @param name
      */
     protected NestedBuilder(String name, boolean isNullable) {
       this.name = name;
@@ -110,7 +108,6 @@ class ParquetColumnWriterOptions {
      * LIST column to have two children and the first child to be the
      * {@link ParquetColumnWriterOptions#DUMMY_CHILD}.
      * This is the current behavior in cudf and will change in future
-     * @param child
      * @return this for chaining.
      */
     public T withListColumn(ParquetListColumnWriterOptions child) {
@@ -127,7 +124,6 @@ class ParquetColumnWriterOptions {
 
     /**
      * Set a child struct meta data
-     * @param child
      * @return this for chaining.
      */
     public T withStructColumn(ParquetStructColumnWriterOptions child) {
@@ -142,7 +138,6 @@ class ParquetColumnWriterOptions {
 
     /**
      * Set column name
-     * @param name
      */
     public T withNonNullableColumn(String... name) {
       withColumn(false, name);
@@ -151,7 +146,6 @@ class ParquetColumnWriterOptions {
 
     /**
      * Set nullable column meta data
-     * @param name
      */
     public T withNullableColumn(String... name) {
       withColumn(true, name);
@@ -160,7 +154,6 @@ class ParquetColumnWriterOptions {
 
     /**
      * Set a simple child meta data
-     * @param name
      * @return this for chaining.
      */
     public T withColumn(boolean nullable, String... name) {
@@ -172,8 +165,6 @@ class ParquetColumnWriterOptions {
 
     /**
      * Set a Decimal child meta data
-     * @param name
-     * @param precision
      * @return this for chaining.
      */
     public T withDecimalColumn(String name, int precision, boolean nullable) {
@@ -183,8 +174,6 @@ class ParquetColumnWriterOptions {
 
     /**
      * Set a Decimal child meta data
-     * @param name
-     * @param precision
      * @return this for chaining.
      */
     public T withNullableDecimalColumn(String name, int precision) {
@@ -194,8 +183,6 @@ class ParquetColumnWriterOptions {
 
     /**
      * Set a Decimal child meta data
-     * @param name
-     * @param precision
      * @return this for chaining.
      */
     public T withDecimalColumn(String name, int precision) {
@@ -205,8 +192,6 @@ class ParquetColumnWriterOptions {
 
     /**
      * Set a timestamp child meta data
-     * @param name
-     * @param isInt96
      * @return this for chaining.
      */
     public T withTimestampColumn(String name, boolean isInt96, boolean nullable) {
@@ -216,8 +201,6 @@ class ParquetColumnWriterOptions {
 
     /**
      * Set a timestamp child meta data
-     * @param name
-     * @param isInt96
      * @return this for chaining.
      */
     public T withTimestampColumn(String name, boolean isInt96) {
@@ -227,14 +210,14 @@ class ParquetColumnWriterOptions {
 
     /**
      * Set a timestamp child meta data
-     * @param name
-     * @param isInt96
      * @return this for chaining.
      */
     public T withNullableTimestampColumn(String name, boolean isInt96) {
       withTimestampColumn(name, isInt96, true);
       return (T) this;
     }
+
+    public abstract V build();
   }
 
   ParquetColumnWriterOptions(String columnName, boolean isTimestampTypeInt96,
@@ -322,7 +305,6 @@ class ParquetColumnWriterOptions {
 
   /**
    * Creates a ListBuilder for column called 'name'
-   * @param name
    */
   public static ListBuilder listBuilder(String name) {
     return new ListBuilder(name, true);
@@ -330,8 +312,6 @@ class ParquetColumnWriterOptions {
 
   /**
    * Creates a ListBuilder for column called 'name'
-   * @param name
-   * @param isNullable
    */
   public static ListBuilder listBuilder(String name, boolean isNullable) {
     return new ListBuilder(name, isNullable);
@@ -339,8 +319,6 @@ class ParquetColumnWriterOptions {
 
   /**
    * Creates a StructBuilder for column called 'name'
-   * @param name
-   * @param isNullable
    */
   public static StructBuilder structBuilder(String name, boolean isNullable) {
     return new StructBuilder(name, isNullable);
@@ -348,7 +326,6 @@ class ParquetColumnWriterOptions {
 
   /**
    * Creates a StructBuilder for column called 'name'
-   * @param name
    */
   public static StructBuilder structBuilder(String name) {
     return new StructBuilder(name, true);
@@ -401,7 +378,7 @@ class ParquetColumnWriterOptions {
     }
   }
 
-  public static class StructBuilder extends AbstractStructBuilder<StructBuilder> {
+  public static class StructBuilder extends AbstractStructBuilder<StructBuilder, ParquetStructColumnWriterOptions> {
     public StructBuilder(String name, boolean isNullable) {
       super(name, isNullable);
     }
@@ -411,7 +388,7 @@ class ParquetColumnWriterOptions {
     }
   }
 
-  public static class ListBuilder extends NestedBuilder<ListBuilder> {
+  public static class ListBuilder extends NestedBuilder<ListBuilder, ParquetListColumnWriterOptions> {
     public ListBuilder(String name, boolean isNullable) {
       super(name, isNullable);
     }
