@@ -170,8 +170,8 @@ class SubwordTokenizer:
         if truncation in (False, "do_not_truncate"):
             truncation = False
             warning_msg = (
-                "The behaviour currently differs from  "
-                + "HuggingFace as we always return overflowing tokens"
+                "When truncation is not True, the behaviour currently differs from  "
+                + "HuggingFace as cudf always returns overflowing tokens"
             )
             warn(warning_msg)
             if add_special_tokens:
