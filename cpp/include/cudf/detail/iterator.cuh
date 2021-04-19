@@ -184,11 +184,12 @@ auto make_null_replacement_iterator(column_device_view const& column,
  *
  * \code{.cpp}
  * template<typename T>
- * void some_function(cudf::column_view<T> const& col_view, bool has_nulls){
+ * void some_function(cudf::column_view<T> const& col_view){
  *    auto d_col = cudf::column_device_view::create(col_view);
  *    // Create a `DYNAMIC` optional iterator
  *    auto optional_iterator = cudf::detail::make_optional_iterator<T>(d_col,
- *                                                cudf::contains_nulls::DYNAMIC{}, has_nulls);
+ *                                                cudf::contains_nulls::DYNAMIC{},
+ *                                                col_view.has_nulls());
  * }
  * \endcode
  *
