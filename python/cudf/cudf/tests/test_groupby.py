@@ -1236,7 +1236,11 @@ def test_raise_data_error():
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
     gdf = cudf.from_pandas(pdf)
 
-    assert_exceptions_equal(pdf.groupby("a").mean, gdf.groupby("a").mean)
+    assert_exceptions_equal(
+        pdf.groupby("a").mean,
+        gdf.groupby("a").mean,
+        compare_error_message=False,
+    )
 
 
 def test_drop_unsupported_multi_agg():

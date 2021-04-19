@@ -20,6 +20,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
@@ -35,7 +36,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <algorithm>
@@ -567,15 +567,14 @@ void gather_bitmask(table_view const& source,
   }
 
   // Make device array of target bitmask pointers
-  thrust::host_vector<bitmask_type*> target_masks(target.size());
+  std::vector<bitmask_type*> target_masks(target.size());
   std::transform(target.begin(), target.end(), target_masks.begin(), [](auto const& col) {
     return col->mutable_view().null_mask();
   });
-  rmm::device_vector<bitmask_type*> d_target_masks(target_masks);
+  auto d_target_masks = make_device_uvector_async(target_masks, stream);
 
-  auto const masks         = d_target_masks.data().get();
   auto const device_source = table_device_view::create(source, stream);
-  auto d_valid_counts      = rmm::device_vector<size_type>(target.size());
+  auto d_valid_counts      = make_zeroed_device_uvector_async<size_type>(target.size(), stream);
 
   // Dispatch operation enum to get implementation
   auto const impl = [op]() {
@@ -591,14 +590,14 @@ void gather_bitmask(table_view const& source,
   }();
   impl(*device_source,
        gather_map,
-       masks,
+       d_target_masks.data(),
        target.size(),
        target_rows,
-       d_valid_counts.data().get(),
+       d_valid_counts.data(),
        stream);
 
   // Copy the valid counts into each column
-  auto const valid_counts = thrust::host_vector<size_type>(d_valid_counts);
+  auto const valid_counts = make_std_vector_sync(d_valid_counts, stream);
   for (size_t i = 0; i < target.size(); ++i) {
     if (target[i]->nullable()) {
       auto const null_count = target_rows - valid_counts[i];

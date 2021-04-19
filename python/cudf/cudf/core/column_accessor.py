@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import MutableMapping
+from functools import reduce
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -19,10 +20,63 @@ import pandas as pd
 
 import cudf
 from cudf.core import column
-from cudf.utils.utils import cached_property, to_flat_dict, to_nested_dict
+from cudf.utils.utils import cached_property
 
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
+
+
+class _NestedGetItemDict(dict):
+    """A dictionary whose __getitem__ method accesses nested dicts.
+
+    This class directly subclasses dict for performance, so there are a number
+    of gotchas: 1) the only safe accessor for nested elements is
+    `__getitem__` (all other accessors will fail to perform nested lookups), 2)
+    nested mappings will not exhibit the same behavior (they will be raw
+    dictionaries unless explicitly created to be of this class), and 3) to
+    construct this class you _must_ use `from_zip` to get appropriate treatment
+    of tuple keys.
+    """
+
+    @classmethod
+    def from_zip(cls, data):
+        """Create from zip, specialized factory for nesting."""
+        obj = cls()
+        for key, value in data:
+            d = obj
+            for k in key[:-1]:
+                d = d.setdefault(k, {})
+            d[key[-1]] = value
+        return obj
+
+    def __getitem__(self, key):
+        """Recursively apply dict.__getitem__ for nested elements."""
+        # As described in the pandas docs
+        # https://pandas.pydata.org/pandas-docs/stable/user_guide/advanced.html#advanced-indexing-with-hierarchical-index  # noqa: E501
+        # accessing nested elements of a multiindex must be done using a tuple.
+        # Lists and other sequences are treated as accessing multiple elements
+        # at the top level of the index.
+        if isinstance(key, tuple):
+            return reduce(dict.__getitem__, key, self)
+        return super().__getitem__(key)
+
+
+def _to_flat_dict_inner(d, parents=()):
+    for k, v in d.items():
+        if not isinstance(v, d.__class__):
+            if parents:
+                k = parents + (k,)
+            yield (k, v)
+        else:
+            yield from _to_flat_dict_inner(d=v, parents=parents + (k,))
+
+
+def _to_flat_dict(d):
+    """
+    Convert the given nested dictionary to a flat dictionary
+    with tuple keys.
+    """
+    return {k: v for k, v in _to_flat_dict_inner(d)}
 
 
 class ColumnAccessor(MutableMapping):
@@ -166,7 +220,7 @@ class ColumnAccessor(MutableMapping):
         return the underlying mapping as a nested mapping.
         """
         if self.multiindex:
-            return to_nested_dict(dict(zip(self.names, self.columns)))
+            return _NestedGetItemDict.from_zip(zip(self.names, self.columns))
         else:
             return self._data
 
@@ -343,10 +397,11 @@ class ColumnAccessor(MutableMapping):
         self._clear_cache()
 
     def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
+        data = {k: self._grouped_data[k] for k in key}
+        if self.multiindex:
+            data = _to_flat_dict(data)
         return self.__class__(
-            to_flat_dict({k: self._grouped_data[k] for k in key}),
-            multiindex=self.multiindex,
-            level_names=self.level_names,
+            data, multiindex=self.multiindex, level_names=self.level_names,
         )
 
     def _select_by_label_grouped(self, key: Any) -> ColumnAccessor:
@@ -354,7 +409,8 @@ class ColumnAccessor(MutableMapping):
         if isinstance(result, cudf.core.column.ColumnBase):
             return self.__class__({key: result})
         else:
-            result = to_flat_dict(result)
+            if self.multiindex:
+                result = _to_flat_dict(result)
             if not isinstance(key, tuple):
                 key = (key,)
             return self.__class__(

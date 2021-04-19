@@ -65,7 +65,7 @@ std::unique_ptr<cudf::column> gather_chars(StringIterator strings_begin,
   auto const output_count = std::distance(map_begin, map_end);
   if (output_count == 0) return make_empty_column(data_type{type_id::INT8});
 
-  auto chars_column  = create_chars_child_column(output_count, 0, chars_bytes, stream, mr);
+  auto chars_column  = create_chars_child_column(output_count, chars_bytes, stream, mr);
   auto const d_chars = chars_column->mutable_view().template data<char>();
 
   auto gather_chars_fn = [strings_begin, map_begin, offsets] __device__(size_type out_idx) -> char {

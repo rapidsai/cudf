@@ -26,6 +26,8 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
 
+#include <rmm/device_uvector.hpp>
+
 class GatherTestStr : public cudf::test::BaseFixture {
 };
 
@@ -131,7 +133,7 @@ TEST_F(GatherTestStr, GatherEmptyMapStringsColumn)
 {
   cudf::column_view zero_size_strings_column(
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  rmm::device_vector<cudf::size_type> gather_map{};
+  rmm::device_uvector<cudf::size_type> gather_map{0, rmm::cuda_stream_default};
   auto results = cudf::detail::gather(cudf::table_view({zero_size_strings_column}),
                                       gather_map.begin(),
                                       gather_map.end(),
