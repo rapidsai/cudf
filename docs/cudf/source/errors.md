@@ -17,7 +17,11 @@ cuDF follows error conventions used by Pandas. Following [Pandas Wiki](https://g
 |     IndexError     | Array access out of range | [Retrieving rows from a column specified by an out of bound index](https://github.com/rapidsai/cudf/blob/7d49f75df9681dbe1653029e7d508355884a6d86/python/cudf/cudf/core/column/column.py#L849-L851) |
 |     KeyError       | Mapping access with invalid key | [Retrieving rows from column specified by an invalid key](https://github.com/rapidsai/cudf/blob/7d49f75df9681dbe1653029e7d508355884a6d86/python/cudf/cudf/core/indexing.py#L177) |
 | NotImplementedError| Operation of object is planned, but not yet supported | (none) |
+
+|  FileNotFoundError | File could not be found at user specified location | https://github.com/rapidsai/cudf/blob/4893259b2fd6cf1f2079eff68249290708519892/python/cudf/cudf/_lib/csv.pyx#L369 |
+|   OverflowError    | Numerical overflows | (Usually surfacing from supporting libraries?)  |
 |     IOError        | (TBA by cuIO) | (TBA) |
+|     OSError        | Operating system failure | (TBA) |
 
 Custom error types, should not be used whenever possible.
 
