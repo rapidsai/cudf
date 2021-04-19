@@ -47,11 +47,11 @@ void BM_group_shift(benchmark::State& state)
 {
   using wrapper = cudf::test::fixed_width_column_wrapper<int64_t>;
 
-  // const cudf::size_type num_columns{(cudf::size_type)state.range(0)};
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  const int num_groups = 100;
 
   auto data_it = cudf::detail::make_counting_transform_iterator(
-    0, [=](cudf::size_type row) { return random_int(0, 100); });  // 100 groups
+    0, [](cudf::size_type row) { return random_int(0, num_groups); });
 
   wrapper keys(data_it, data_it + column_size);
   wrapper vals(data_it, data_it + column_size);
@@ -59,7 +59,7 @@ void BM_group_shift(benchmark::State& state)
   cudf::groupby::groupby gb_obj(cudf::table_view({keys}));
 
   cudf::size_type offset =
-    static_cast<cudf::size_type>(column_size / 100 * 0.5);  // forward shift half way
+    static_cast<cudf::size_type>(column_size / 100.0 * 0.5);  // forward shift half way
   // null fill value
   auto fill_value = cudf::make_default_constructed_scalar(cudf::data_type(cudf::type_id::INT64));
   // non null fill value
