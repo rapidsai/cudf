@@ -1232,6 +1232,7 @@ struct value_accessor {
  *
  *
  * @tparam T The type of elements in the column
+ * @tparam contains_nulls_mode Specifies if nulls are checked at runtime or compile time.
  */
 template <typename T, typename contains_nulls_mode>
 struct optional_accessor {
