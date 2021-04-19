@@ -344,10 +344,6 @@ __device__ void evaluate_row_expression(detail::row_evaluator const& evaluator,
  * and copies that to the device with a single host-device memory copy. Because the plan tends to be
  * small, this is the most efficient approach for low latency.
  *
- * TODO: Remove comment below depending on final design
- * The stream is not synchronized automatically, so a stream sync must be performed manually (or by
- * another function) before the device data can be used safely.
- *
  */
 struct ast_plan {
  public:
@@ -367,10 +363,7 @@ struct ast_plan {
     auto const buffer_size    = h_data_buffer.second;
     _device_data_buffer = rmm::device_buffer(h_data_buffer.first.get(), buffer_size, stream, mr);
 
-    // To reduce overhead, we don't call a stream sync here.
-    // The stream is synced later when the table_device_view is created.
-    // ^^^^ this comment will be removed, we are synchronizing vvvv
-    stream.synchronize();  // this doesn't seem to work
+    stream.synchronize();
 
     // Create device pointers to components of plan
     auto device_data_buffer_ptr = static_cast<const char*>(_device_data_buffer.data());
