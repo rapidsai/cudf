@@ -625,7 +625,7 @@ class list_scalar : public scalar {
   /**
    * @brief Returns a non-owning, immutable view to underlying device data
    */
-  list_view view() const { return list_view{}; }
+  column_view view() const { return _data.view(); }
 
  private:
   cudf::column _data;
