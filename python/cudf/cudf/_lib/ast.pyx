@@ -4,6 +4,7 @@ import numpy as np
 from enum import Enum
 
 from cython.operator cimport dereference
+from cudf._lib.cpp.types cimport size_type
 
 cimport cudf._lib.cpp.ast as libcudf_ast
 
@@ -69,3 +70,12 @@ cdef class Literal:
 
     def __dealloc__(self):
         del self.c_literal
+
+
+cdef class ColumnReference:
+    def __cinit__(self, index):
+        cdef size_type idx = index
+        self.c_column_reference = new libcudf_ast.column_reference(idx)
+
+    def __dealloc__(self):
+        del self.c_column_reference

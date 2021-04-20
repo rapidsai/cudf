@@ -8,7 +8,7 @@ from libc.stdint cimport (
 from libcpp cimport bool
 from libcpp.string cimport string
 
-from cudf._lib.cpp.types cimport data_type
+from cudf._lib.cpp.types cimport data_type, size_type
 from cudf._lib.cpp.wrappers.decimals cimport scale_type
 
 from cudf._lib.cpp.scalar.scalar cimport (
@@ -74,6 +74,12 @@ cdef extern from "cudf/ast/linearizer.hpp" namespace "cudf::ast" nogil:
     cdef cppclass literal:
         # Due to https://github.com/cython/cython/issues/3198, we need to
         # specify a return type for templated constructors.
-        literal literal[T](numeric_scalar[T] &)
-        literal literal[T](timestamp_scalar[T] &)
-        literal literal[T](duration_scalar[T] &)
+        literal literal[T](numeric_scalar[T] &) except +
+        literal literal[T](timestamp_scalar[T] &) except +
+        literal literal[T](duration_scalar[T] &) except +
+
+    cdef cppclass column_reference:
+        # Allow for default C++ parameters by declaring multiple constructors
+        # with the default parameters optionally omitted.
+        column_reference(size_type) except +
+        column_reference(size_type, table_reference) except +
