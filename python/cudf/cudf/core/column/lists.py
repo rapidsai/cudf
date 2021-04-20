@@ -17,6 +17,7 @@ from cudf._lib.lists import (
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.dtypes import ListDtype
 from cudf.utils.dtypes import is_list_dtype, is_numerical_dtype
 
 
@@ -450,4 +451,27 @@ class ListMethods(ColumnMethodsMixin):
         return self._return_or_inplace(
             sort_lists(self._column, ascending, na_position),
             retain_index=not ignore_index,
+        )
+
+    def ravel(self):
+        result_dtype = self._column.dtype.element_type
+        if not isinstance(result_dtype, ListDtype):
+            raise ValueError(
+                "Cannot ravel a list column with just 1 level of nesting"
+            )
+
+        self_offsets = self._column.children[0]
+        child_offsets = self._column.children[1].children[0]
+        result_offsets = child_offsets[self_offsets]
+        result_children = (result_offsets, self._column.list().leaves)
+
+        return self._return_or_inplace(
+            ListColumn(
+                self._column.size,
+                self._column.dtype.element_type,
+                self._column.mask,
+                self._column.offset,
+                self._column.null_count,
+                result_children,
+            )
         )
