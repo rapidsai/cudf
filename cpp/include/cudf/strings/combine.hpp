@@ -174,7 +174,7 @@ std::unique_ptr<column> concatenate(
  * delimited by the row separator provided in the `separators` strings column.
  *
  * A null list row will always result in a null string in the output row. Any non-null list row
- * having a null entry will result in the corresponding output row to be null unless a valid
+ * having a null element will result in the corresponding output row to be null unless a valid
  * `string_narep` scalar is provided to be used in its place. Any null row in the `separators`
  * column will also result in a null output row unless a valid `separator_narep` scalar is provided
  * to be used in place of the null separators.
@@ -207,9 +207,9 @@ std::unique_ptr<column> concatenate(
  * device memory
  * @return                       New strings column with concatenated results
  */
-std::unique_ptr<column> concatenate_rows(
-  lists_column_view const& lists_strings_column,
-  strings_column_view const& separators,
+std::unique_ptr<column> concatenate_list_elements(
+  const lists_column_view& lists_strings_column,
+  const strings_column_view& separators,
   string_scalar const& separator_narep = string_scalar("", false),
   string_scalar const& string_narep    = string_scalar("", false),
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
@@ -222,7 +222,7 @@ std::unique_ptr<column> concatenate_rows(
  * delimited by the separator provided.
  *
  * A null list row will always result in a null string in the output row. Any non-null list row
- * having a null entry will result in the corresponding output row to be null unless a narep
+ * having a null elenent will result in the corresponding output row to be null unless a narep
  * string is specified to be used in its place.
  *
  * @code{.pseudo}
@@ -249,8 +249,8 @@ std::unique_ptr<column> concatenate_rows(
  * device memory
  * @return                       New strings column with concatenated results
  */
-std::unique_ptr<column> concatenate_rows(
-  lists_column_view const& lists_strings_column,
+std::unique_ptr<column> concatenate_list_elements(
+  const lists_column_view& lists_strings_column,
   string_scalar const& separator      = string_scalar(""),
   string_scalar const& narep          = string_scalar("", false),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
