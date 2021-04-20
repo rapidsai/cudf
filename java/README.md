@@ -52,6 +52,9 @@ CUDA 11.0:
 
 Build the native code first, and make sure the a JDK is installed and available.
 
+Pass in the cmake options `-DCUDF_USE_ARROW_STATIC=ON` so that Apache Arrow and Boost libraries are
+linked statically.
+
 If you use the default cmake options libcudart will be dynamically linked to libcudf
 which is included.  If you do this the resulting jar will have a classifier associated with it
 because that jar can only be used with a single version of the CUDA runtime.  
