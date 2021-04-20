@@ -537,7 +537,7 @@ reader::impl::load_data_and_gather_row_offsets(host_span<char const> data,
   } while (pos < data.size());
 
   auto const non_blank_row_offsets =
-    cudf::io::csv::gpu::remove_blank_rows(opts.view(), d_data, all_row_offsets, stream);
+    io::csv::gpu::remove_blank_rows(opts.view(), d_data, all_row_offsets, stream);
   auto row_offsets = selected_rows_offsets{std::move(all_row_offsets), non_blank_row_offsets};
 
   // Remove header rows and extract header

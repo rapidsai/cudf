@@ -22,6 +22,7 @@
 #include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/detail/utilities/trie.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.cuh>
 #include <cudf/null_mask.hpp>
@@ -1019,21 +1020,13 @@ std::vector<column_type_histogram> detect_column_types(
   const int block_size = csvparse_block_dim;
   const int grid_size  = (row_starts.size() + block_size - 1) / block_size;
 
-  auto d_stats = rmm::device_uvector<column_type_histogram>(num_active_columns, stream);
-  CUDA_TRY(cudaMemsetAsync(
-    d_stats.data(), 0, num_active_columns * sizeof(column_type_histogram), stream.value()));
+  auto d_stats =
+    detail::make_zeroed_device_uvector_async<column_type_histogram>(num_active_columns, stream);
 
   data_type_detection<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_flags, row_starts, d_stats);
 
-  std::vector<column_type_histogram> h_stats(num_active_columns);
-  CUDA_TRY(cudaMemcpyAsync(h_stats.data(),
-                           d_stats.data(),
-                           num_active_columns * sizeof(column_type_histogram),
-                           cudaMemcpyDefault,
-                           stream.value()));
-  stream.synchronize();
-  return h_stats;
+  return detail::make_std_vector_sync(d_stats);
 }
 
 void __host__ decode_row_column_data(cudf::io::parse_options_view const &options,
