@@ -40,20 +40,17 @@ struct reduce_functor {
   template <typename T>
   static constexpr bool is_supported()
   {
-    // clang-format off
     switch (K) {
-      aggregation::SUM :
+      case aggregation::SUM:
         return cudf::is_numeric<T>() || cudf::is_duration<T>() || cudf::is_fixed_point<T>();
-      aggregation::PRODUCT :
-        return cudf::detail::is_product_supported<T>();
-      aggregation::MIN : aggregation::MAX :
+      case aggregation::PRODUCT: return cudf::detail::is_product_supported<T>();
+      case aggregation::MIN:
+      case aggregation::MAX:
         return cudf::is_fixed_width<T>() and is_relationally_comparable<T, T>();
-      aggregation::ARGMIN : aggregation::ARGMAX :
-        return is_relationally_comparable<T, T>();
-      default:
-        return false;
+      case aggregation::ARGMIN:
+      case aggregation::ARGMAX: return is_relationally_comparable<T, T>();
+      default: return false;
     }
-    // clang-format on
   }
 
   template <typename T>

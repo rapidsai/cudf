@@ -33,89 +33,86 @@ using supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, flo
 
 TYPED_TEST_CASE(groupby_product_test, supported_types);
 
-// clang-format off
 TYPED_TEST(groupby_product_test, basic)
 {
-    using V = TypeParam;
-    using R = cudf::detail::target_type_t<V, aggregation::PRODUCT>;
+  using V = TypeParam;
+  using R = cudf::detail::target_type_t<V, aggregation::PRODUCT>;
 
-    fixed_width_column_wrapper<K> keys        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-    fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  // clang-format off
+  fixed_width_column_wrapper<K> keys        { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
-                                          //  { 1, 1, 1,  2, 2, 2, 2,  3, 3, 3}
-    fixed_width_column_wrapper<K> expect_keys { 1,        2,           3      };
-                                          //  { 0, 3, 6,  1, 4, 5, 9,  2, 7, 8}
-    fixed_width_column_wrapper<R> expect_vals({   0.,       180.,      112. }, all_valid());
+                                        //  { 1, 1, 1,  2, 2, 2, 2,  3, 3, 3}
+  fixed_width_column_wrapper<K> expect_keys { 1,        2,           3      };
+                                        //  { 0, 3, 6,  1, 4, 5, 9,  2, 7, 8}
+  fixed_width_column_wrapper<R> expect_vals({   0.,       180.,      112. }, all_valid());
+  // clang-format on
 
-    auto agg = cudf::make_product_aggregation();
-    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_product_aggregation());
 }
 
 TYPED_TEST(groupby_product_test, empty_cols)
 {
-    using V = TypeParam;
-    using R = cudf::detail::target_type_t<V, aggregation::PRODUCT>;
+  using V = TypeParam;
+  using R = cudf::detail::target_type_t<V, aggregation::PRODUCT>;
 
-    fixed_width_column_wrapper<K> keys        { };
-    fixed_width_column_wrapper<V> vals        { };
+  fixed_width_column_wrapper<K> keys{};
+  fixed_width_column_wrapper<V> vals{};
 
-    fixed_width_column_wrapper<K> expect_keys { };
-    fixed_width_column_wrapper<R> expect_vals { };
+  fixed_width_column_wrapper<K> expect_keys{};
+  fixed_width_column_wrapper<R> expect_vals{};
 
-    auto agg = cudf::make_product_aggregation();
-    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_product_aggregation());
 }
 
 TYPED_TEST(groupby_product_test, zero_valid_keys)
 {
-    using V = TypeParam;
-    using R = cudf::detail::target_type_t<V, aggregation::PRODUCT>;
+  using V = TypeParam;
+  using R = cudf::detail::target_type_t<V, aggregation::PRODUCT>;
 
-    fixed_width_column_wrapper<K> keys      ( { 1, 2, 3}, all_null() );
-    fixed_width_column_wrapper<V> vals        { 3, 4, 5};
+  fixed_width_column_wrapper<K> keys({1, 2, 3}, all_null());
+  fixed_width_column_wrapper<V> vals{3, 4, 5};
 
-    fixed_width_column_wrapper<K> expect_keys { };
-    fixed_width_column_wrapper<R> expect_vals { };
+  fixed_width_column_wrapper<K> expect_keys{};
+  fixed_width_column_wrapper<R> expect_vals{};
 
-    auto agg = cudf::make_product_aggregation();
-    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_product_aggregation());
 }
 
 TYPED_TEST(groupby_product_test, zero_valid_values)
 {
-    using V = TypeParam;
-    using R = cudf::detail::target_type_t<V, aggregation::PRODUCT>;
+  using V = TypeParam;
+  using R = cudf::detail::target_type_t<V, aggregation::PRODUCT>;
 
-    fixed_width_column_wrapper<K> keys        { 1, 1, 1};
-    fixed_width_column_wrapper<V> vals      ( { 3, 4, 5}, all_null() );
+  fixed_width_column_wrapper<K> keys{1, 1, 1};
+  fixed_width_column_wrapper<V> vals({3, 4, 5}, all_null());
 
-    fixed_width_column_wrapper<K> expect_keys { 1 };
-    fixed_width_column_wrapper<R> expect_vals({ 0 }, all_null());
+  fixed_width_column_wrapper<K> expect_keys{1};
+  fixed_width_column_wrapper<R> expect_vals({0}, all_null());
 
-    auto agg = cudf::make_product_aggregation();
-    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_product_aggregation());
 }
 
 TYPED_TEST(groupby_product_test, null_keys_and_values)
 {
-    using V = TypeParam;
-    using R = cudf::detail::target_type_t<V, aggregation::PRODUCT>;
+  using V = TypeParam;
+  using R = cudf::detail::target_type_t<V, aggregation::PRODUCT>;
 
-    fixed_width_column_wrapper<K> keys(       { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
-                                              { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
-    fixed_width_column_wrapper<V> vals(       { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 3},
-                                              { 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
+  // clang-format off
+  fixed_width_column_wrapper<K> keys(       { 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
+                                            { 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
+  fixed_width_column_wrapper<V> vals(       { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 3},
+                                            { 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
-                                          //  { 1, 1,     2, 2, 2,   3, 3,    4}
-    fixed_width_column_wrapper<K> expect_keys({ 1,        2,         3,       4}, all_valid());
-                                          //  { _, 3, 6,  1, 4, 9,   2, 8,    _}
-    fixed_width_column_wrapper<R> expect_vals({ 18.,      36.,       16.,     3.},
-                                              { 1,        1,         1,       0});
+                                        //  { 1, 1,     2, 2, 2,   3, 3,    4}
+  fixed_width_column_wrapper<K> expect_keys({ 1,        2,         3,       4}, all_valid());
+                                        //  { _, 3, 6,  1, 4, 9,   2, 8,    _}
+  fixed_width_column_wrapper<R> expect_vals({ 18.,      36.,       16.,     3.},
+                                            { 1,        1,         1,       0});
+  // clang-format on
 
-    auto agg = cudf::make_product_aggregation();
-    test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_product_aggregation());
 }
-// clang-format on
 
 // This test will not work until the following ptxas bug is fixed in 10.2
 // https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
@@ -126,12 +123,12 @@ TYPED_TEST(groupby_product_test, DISABLED_dictionary)
 
   // clang-format off
   fixed_width_column_wrapper<K> keys{ 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
-  dictionary_column_wrapper<V>  vals{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  dictionary_column_wrapper<V>  vals{ 0, 2, 2, 3, 4, 5, 6, 7, 8, 9};
 
-                                        //   { 1, 1, 1,  2, 2, 2, 2,  3, 3, 3}
+                                        //  { 1, 1, 1,  2, 2, 2, 2,  3, 3, 3}
   fixed_width_column_wrapper<K> expect_keys({ 1,        2,           3      });
                                         //  { 0, 3, 6,  1, 4, 5, 9,  2, 7, 8}
-  fixed_width_column_wrapper<R> expect_vals( {  0.,     180.,        112. }, all_valid());
+  fixed_width_column_wrapper<R> expect_vals({  0.,     180.,        112. }, all_valid());
   // clang-format on
 
   test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_product_aggregation());
