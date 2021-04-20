@@ -5901,7 +5901,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         if numeric_only:
             data_df = self.select_dtypes(
-                include=[np.number], exclude=["datetime64", "timedelta64"],
+                include=[np.number], exclude=["datetime64", "timedelta64"]
             )
         else:
             data_df = self
