@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/span.hpp>
@@ -65,13 +66,12 @@ __global__ void gather_chars_fn_string_parallel(StringIterator strings_begin,
                                                 MapIterator string_indices,
                                                 size_type total_out_strings)
 {
-  constexpr size_t datatype_size    = sizeof(uint4);
-  constexpr size_t threads_per_warp = 32;
+  constexpr size_t datatype_size = sizeof(uint4);
 
   int global_thread_id = blockIdx.x * blockDim.x + threadIdx.x;
-  int global_warp_id   = global_thread_id / threads_per_warp;
-  int warp_lane        = global_thread_id % threads_per_warp;
-  int nwarps           = gridDim.x * blockDim.x / threads_per_warp;
+  int global_warp_id   = global_thread_id / cudf::detail::warp_size;
+  int warp_lane        = global_thread_id % cudf::detail::warp_size;
+  int nwarps           = gridDim.x * blockDim.x / cudf::detail::warp_size;
 
   auto const alignment_offset = reinterpret_cast<std::uintptr_t>(out_chars) % datatype_size;
   uint4* out_chars_aligned    = reinterpret_cast<uint4*>(out_chars - alignment_offset);
@@ -96,7 +96,7 @@ __global__ void gather_chars_fn_string_parallel(StringIterator strings_begin,
       (out_end + alignment_offset) / datatype_size * datatype_size - alignment_offset;
 
     for (size_type ichar = out_start_aligned + warp_lane * datatype_size; ichar < out_end_aligned;
-         ichar += threads_per_warp * datatype_size) {
+         ichar += cudf::detail::warp_size * datatype_size) {
       *(out_chars_aligned + (ichar + alignment_offset) / datatype_size) =
         load_uint4(in_start + ichar - out_start);
     }
