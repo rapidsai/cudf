@@ -180,8 +180,7 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
       auto hi_optional = thrust::get<2>(scalar_tuple);
       if (lo_optional.has_value() and (*element_optional < *lo_optional)) {
         return *(thrust::get<1>(scalar_tuple));
-      } else if (hi_optional.has_value() and
-                 (*element_optional > *hi_optional)) {
+      } else if (hi_optional.has_value() and (*element_optional > *hi_optional)) {
         return *(thrust::get<3>(scalar_tuple));
       }
     }
