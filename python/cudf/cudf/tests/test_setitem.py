@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_EQ_123, PANDAS_GE_120
+from cudf.core._compat import PANDAS_GE_120, PANDAS_LE_122
 from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
 
@@ -21,7 +21,7 @@ def test_dataframe_setitem_bool_mask_scaler(df, arg, value):
 
 
 @pytest.mark.xfail(
-    condition=PANDAS_EQ_123 or not PANDAS_GE_120,
+    condition=PANDAS_GE_120 and PANDAS_LE_122,
     reason="https://github.com/pandas-dev/pandas/issues/40204",
 )
 def test_dataframe_setitem_scaler_bool():

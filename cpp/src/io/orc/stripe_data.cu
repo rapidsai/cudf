@@ -25,6 +25,8 @@ namespace io {
 namespace orc {
 namespace gpu {
 
+using cudf::io::detail::string_index_pair;
+
 // Must be able to handle 512x 8-byte values. These values are base 128 encoded
 // so 8 byte value is expanded to 10 bytes.
 constexpr int bytestream_buffer_size = 512 * 8 * 2;
@@ -147,9 +149,9 @@ static __device__ void bytestream_init(volatile orc_bytestream_s *bs,
                                        const uint8_t *base,
                                        uint32_t len)
 {
-  uint32_t pos   = static_cast<uint32_t>(7 & reinterpret_cast<size_t>(base));
+  uint32_t pos   = (len > 0) ? static_cast<uint32_t>(7 & reinterpret_cast<size_t>(base)) : 0;
   bs->base       = base - pos;
-  bs->pos        = (len > 0) ? pos : 0;
+  bs->pos        = pos;
   bs->len        = (len + pos + 7) & ~7;
   bs->fill_pos   = 0;
   bs->fill_count = min(bs->len, bytestream_buffer_size) >> 3;
@@ -1683,9 +1685,9 @@ __global__ void __launch_bounds__(block_size)
             case BINARY:
             case VARCHAR:
             case CHAR: {
-              nvstrdesc_s *strdesc = &static_cast<nvstrdesc_s *>(data_out)[row];
-              void const *ptr      = nullptr;
-              uint32_t count       = 0;
+              string_index_pair *strdesc = &static_cast<string_index_pair *>(data_out)[row];
+              void const *ptr            = nullptr;
+              uint32_t count             = 0;
               if (is_dictionary(s->chunk.encoding_kind)) {
                 auto const dict_idx = s->vals.u32[t + vals_skipped];
                 if (dict_idx < s->chunk.dict_len) {
@@ -1703,8 +1705,8 @@ __global__ void __launch_bounds__(block_size)
                   count = secondary_val;
                 }
               }
-              strdesc->ptr   = static_cast<char const *>(ptr);
-              strdesc->count = count;
+              strdesc->first  = static_cast<char const *>(ptr);
+              strdesc->second = count;
               break;
             }
             case TIMESTAMP: {

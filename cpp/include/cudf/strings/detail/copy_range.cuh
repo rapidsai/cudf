@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
@@ -180,10 +181,10 @@ std::unique_ptr<column> copy_range(
 
     auto p_offsets =
       thrust::device_pointer_cast(p_offsets_column->view().template data<size_type>());
-    auto chars_bytes = p_offsets[target.size()];
-
-    auto p_chars_column = strings::detail::create_chars_child_column(
-      target.size(), null_count, chars_bytes, stream, mr);
+    auto const chars_bytes =
+      cudf::detail::get_value<int32_t>(p_offsets_column->view(), target.size(), stream);
+    auto p_chars_column =
+      strings::detail::create_chars_child_column(target.size(), chars_bytes, stream, mr);
 
     // copy to the chars column
 

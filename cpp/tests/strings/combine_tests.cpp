@@ -263,7 +263,7 @@ TEST_F(StringsConcatenateWithColSeparatorTest,
 
   auto results = cudf::strings::concatenate(
     cudf::table_view{{col0}}, cudf::strings_column_view(sep_col), sep_rep, col_rep);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, exp_results, true);
 }
 
 TEST_F(StringsConcatenateWithColSeparatorTest, SingleColumnStringMixNoReplacements)
@@ -341,7 +341,7 @@ TEST_F(StringsConcatenateWithColSeparatorTest, SingleColumnStringMixSeparatorAnd
 
   auto results = cudf::strings::concatenate(
     cudf::table_view{{col0}}, cudf::strings_column_view(sep_col), sep_rep, col_rep);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, exp_results, true);
 }
 
 TEST_F(StringsConcatenateWithColSeparatorTest, MultiColumnEmptyAndNullStringsNoReplacements)
@@ -481,7 +481,7 @@ TEST_F(StringsConcatenateWithColSeparatorTest, MultiColumnStringMixSeparatorAndC
 
   auto results = cudf::strings::concatenate(
     cudf::table_view{{col0, col1}}, cudf::strings_column_view(sep_col), sep_rep, col_rep);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, exp_results, true);
 }
 
 TEST_F(StringsConcatenateWithColSeparatorTest, MultiColumnNonNullableStrings)
@@ -497,7 +497,7 @@ TEST_F(StringsConcatenateWithColSeparatorTest, MultiColumnNonNullableStrings)
 
   auto results =
     cudf::strings::concatenate(cudf::table_view{{col0, col1}}, cudf::strings_column_view(sep_col));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, exp_results, true);
 }
 
 struct StringsListsConcatenateTest : public cudf::test::BaseFixture {
