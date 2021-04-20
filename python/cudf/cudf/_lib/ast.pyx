@@ -5,6 +5,7 @@ from enum import Enum
 
 from cython.operator cimport dereference
 from cudf._lib.cpp.types cimport size_type
+from libcpp.memory cimport make_unique
 
 cimport cudf._lib.cpp.ast as libcudf_ast
 
@@ -64,18 +65,14 @@ class TableReference(Enum):
 
 cdef class Literal:
     def __cinit__(self, value):
-        self.c_scalar = new numeric_scalar[float](value, True)
-        self.c_literal = new libcudf_ast.literal(
+        cdef float val = value
+        self.c_scalar = make_unique[numeric_scalar[float]](val, True)
+        self.c_literal = make_unique[libcudf_ast.literal](
             <numeric_scalar[float] &>dereference(self.c_scalar))
-
-    def __dealloc__(self):
-        del self.c_literal
 
 
 cdef class ColumnReference:
     def __cinit__(self, index):
         cdef size_type idx = index
-        self.c_column_reference = new libcudf_ast.column_reference(idx)
-
-    def __dealloc__(self):
-        del self.c_column_reference
+        self.c_column_reference = make_unique[libcudf_ast.column_reference](
+            idx)
