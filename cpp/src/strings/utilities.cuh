@@ -16,11 +16,14 @@
 #pragma once
 
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/transform_iterator.h>
 
 #include <cstring>
 
@@ -38,7 +41,7 @@ namespace detail {
  */
 __device__ inline char* copy_and_increment(char* buffer, const char* input, size_type bytes)
 {
-  memcpy(buffer, input, bytes);
+  std::memcpy(buffer, input, bytes);
   return buffer + bytes;
 }
 
@@ -106,6 +109,81 @@ auto make_strings_children(
   for_each_fn(size_and_exec_fn);
 
   return std::make_pair(std::move(offsets_column), std::move(chars_column));
+}
+
+/**
+ * @brief Creates child offsets, chars columns and null mask, null count of a strings column by
+ * applying the template function that can be used for computing the output size of each string as
+ * well as create the output.
+ *
+ * @tparam SizeAndExecuteFunction Function must accept an index and return a size.
+ *         It must have members d_offsets and d_chars which are set to memory containing
+ *         the offsets and chars columns during write. In addition, it must also output negative
+ *         index values to the d_offsets array to specify that the corresponding string rows are
+ *         null elements.
+ *
+ * @param size_and_exec_fn This is called twice. Once for the output size of each string.
+ *        After that, the d_offsets and d_chars are set and this is called again to fill in the
+ *        chars memory.
+ * @param strings_count Number of strings.
+ * @param mr Device memory resource used to allocate the returned columns' device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return offsets child column and chars child column for a strings column
+ */
+template <typename SizeAndExecuteFunction>
+std::tuple<std::unique_ptr<column>, std::unique_ptr<column>, rmm::device_buffer, size_type>
+make_strings_children_with_null_mask(
+  SizeAndExecuteFunction size_and_exec_fn,
+  size_type strings_count,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  auto offsets_column = make_numeric_column(
+    data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
+  auto offsets_view          = offsets_column->mutable_view();
+  auto d_offsets             = offsets_view.template data<int32_t>();
+  size_and_exec_fn.d_offsets = d_offsets;
+
+  // This is called twice -- once for offsets and once for chars.
+  auto for_each_fn = [strings_count, stream](SizeAndExecuteFunction& size_and_exec_fn) {
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       strings_count,
+                       size_and_exec_fn);
+  };
+
+  // Compute the string sizes, storing in d_offsets (negative output sizes mean null strings)
+  for_each_fn(size_and_exec_fn);
+
+  // Use the string sizes to compute null_mask and null_count of the output strings column
+  auto [null_mask, null_count] = cudf::detail::valid_if(
+    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_counting_iterator<size_type>(strings_count),
+    [d_offsets] __device__(auto const idx) { return d_offsets[idx] >= 0; },
+    stream,
+    mr);
+
+  // Compute the offsets
+  auto const iter_trans_begin = thrust::make_transform_iterator(
+    d_offsets, [] __device__(auto const size) { return size < 0 ? 0 : size; });
+  thrust::exclusive_scan(
+    rmm::exec_policy(stream), iter_trans_begin, iter_trans_begin + strings_count + 1, d_offsets);
+
+  // Now build the chars column
+  auto const bytes = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
+  std::unique_ptr<column> chars_column =
+    create_chars_child_column(strings_count, bytes, stream, mr);
+  size_and_exec_fn.d_chars = chars_column->mutable_view().template data<char>();
+
+  // If all the strings are empty or null, the d_chars pointer will has nullptr value.
+  // Thus, we need to set an arbitrary pointer value to d_chars to prevent the string sizes to be
+  // computed again. It is safe to do so, because in this case the string column has all empty, or
+  // all null string elements so nothing will be copied onto d_chars.
+  if (!size_and_exec_fn.d_chars) { size_and_exec_fn.d_chars = reinterpret_cast<char*>(0x1); }
+  for_each_fn(size_and_exec_fn);
+
+  return std::make_tuple(
+    std::move(offsets_column), std::move(chars_column), std::move(null_mask), null_count);
 }
 
 /**
