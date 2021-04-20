@@ -230,7 +230,9 @@ ConfigureTest(SPAN_TEST utilities_tests/span_tests.cu)
 ConfigureTest(ITERATOR_TEST
     iterator/value_iterator_test.cu
     iterator/pair_iterator_test.cu
-    iterator/scalar_iterator_test.cu)
+    iterator/scalar_iterator_test.cu
+    iterator/optional_iterator_test.cu
+    )
 
 ###################################################################################################
 # - device atomics tests --------------------------------------------------------------------------
