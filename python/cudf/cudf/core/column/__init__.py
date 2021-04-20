@@ -7,7 +7,6 @@ from cudf.core.column.column import (
     as_column,
     build_categorical_column,
     build_column,
-    column_applymap,
     column_empty,
     column_empty_like,
     column_empty_like_same_mask,

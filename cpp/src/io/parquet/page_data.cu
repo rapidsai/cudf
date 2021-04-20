@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/column_buffer.hpp>
+#include "parquet_gpu.hpp"
 
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/utilities/bit.hpp>
@@ -518,13 +518,14 @@ inline __device__ void gpuOutputString(volatile page_state_s *s, int src_pos, vo
 
   if (s->dict_base) {
     // String dictionary
-    uint32_t dict_pos = (s->dict_bits > 0)
-                          ? s->dict_idx[src_pos & (non_zero_buffer_size - 1)] * sizeof(nvstrdesc_s)
-                          : 0;
+    uint32_t dict_pos = (s->dict_bits > 0) ? s->dict_idx[src_pos & (non_zero_buffer_size - 1)] *
+                                               sizeof(string_index_pair)
+                                           : 0;
     if (dict_pos < (uint32_t)s->dict_size) {
-      const nvstrdesc_s *src = reinterpret_cast<const nvstrdesc_s *>(s->dict_base + dict_pos);
-      ptr                    = src->ptr;
-      len                    = src->count;
+      const string_index_pair *src =
+        reinterpret_cast<const string_index_pair *>(s->dict_base + dict_pos);
+      ptr = src->first;
+      len = src->second;
     }
   } else {
     // Plain encoding
@@ -539,9 +540,9 @@ inline __device__ void gpuOutputString(volatile page_state_s *s, int src_pos, vo
     *static_cast<uint32_t *>(dstv) = device_str2hash32(ptr, len);
   } else {
     // Output string descriptor
-    nvstrdesc_s *dst = static_cast<nvstrdesc_s *>(dstv);
-    dst->ptr         = ptr;
-    dst->count       = len;
+    string_index_pair *dst = static_cast<string_index_pair *>(dstv);
+    dst->first             = ptr;
+    dst->second            = len;
   }
 }
 
@@ -1010,7 +1011,7 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
           // Fall through to DOUBLE
         case DOUBLE: s->dtype_len = 8; break;
         case INT96: s->dtype_len = 12; break;
-        case BYTE_ARRAY: s->dtype_len = sizeof(nvstrdesc_s); break;
+        case BYTE_ARRAY: s->dtype_len = sizeof(string_index_pair); break;
         default:  // FIXED_LEN_BYTE_ARRAY:
           s->dtype_len = dtype_len_out;
           s->error |= (s->dtype_len <= 0);
@@ -1094,7 +1095,7 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
           if (((s->col.data_type & 7) == BYTE_ARRAY) && (s->col.str_dict_index)) {
             // String dictionary: use index
             s->dict_base = reinterpret_cast<const uint8_t *>(s->col.str_dict_index);
-            s->dict_size = s->col.page_info[0].num_input_values * sizeof(nvstrdesc_s);
+            s->dict_size = s->col.page_info[0].num_input_values * sizeof(string_index_pair);
           } else {
             s->dict_base =
               s->col.page_info[0].page_data;  // dictionary is always stored in the first page

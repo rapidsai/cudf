@@ -285,7 +285,7 @@ def _is_supported(arg, supported: set):
             _global_set = set()
             for col in arg:
                 if isinstance(arg[col], list):
-                    _global_set.union(set(arg[col]))
+                    _global_set = _global_set.union(set(arg[col]))
                 else:
                     _global_set.add(arg[col])
         else:
