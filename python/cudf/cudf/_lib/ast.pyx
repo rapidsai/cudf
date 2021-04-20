@@ -2,10 +2,17 @@
 
 from enum import Enum
 
+from cudf.core.column_accessor import ColumnAccessor
+from cudf.core.dataframe import DataFrame
+
 from cython.operator cimport dereference
 from cudf._lib.cpp.types cimport size_type
-from libcpp.memory cimport make_shared, shared_ptr
+from libcpp.memory cimport make_shared, shared_ptr, unique_ptr
+from libcpp.utility cimport move
 from cudf._lib.ast cimport underlying_type_ast_operator
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.table cimport Table
 
 cimport cudf._lib.cpp.ast as libcudf_ast
 
@@ -106,3 +113,18 @@ cdef class Expression(Node):
             )
 
         self.c_node = <shared_ptr[libcudf_ast.node]> self.c_obj
+
+
+cdef evaluate_expression_internal(Table values, Expression expr):
+    result_data = ColumnAccessor()
+    cdef unique_ptr[column] col = libcudf_ast.compute_column(
+        values.view(),
+        <const libcudf_ast.expression>dereference(expr.c_obj.get())
+    )
+    result_data['result'] = Column.from_unique_ptr(move(col))
+    result_table = Table(data=result_data)
+    return DataFrame._from_table(result_table)
+
+
+def evaluate_expression(df, expr):
+    return evaluate_expression_internal(df, expr)
