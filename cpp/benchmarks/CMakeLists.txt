@@ -170,7 +170,7 @@ ConfigureBench(AST_BENCH ast/transform_benchmark.cpp)
 
 ###################################################################################################
 # - binaryop benchmark ----------------------------------------------------------------------------
-ConfigureBench(BINARYOP_BENCH binaryop/binaryop_benchmark.cu)
+ConfigureBench(BINARYOP_BENCH binaryop/binaryop_benchmark.cpp)
 
 ###################################################################################################
 # - nvtext benchmark -------------------------------------------------------------------
