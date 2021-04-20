@@ -2119,10 +2119,11 @@ class GenericIndex(Index):
 
     def __getitem__(self, index):
         if type(self) == IntervalIndex:
-            raise NotImplementedError(
-                "Getting a scalar from an IntervalIndex is not yet supported"
-            )
-        res = self._values[index]
+            interval_arr = self.to_arrow().__array__()
+            final_arr = [interval_range(interval_arr[i]['left'], interval_arr[i]['right'], periods=1) for i in range(len(interval_arr))]
+            res = final_arr[index]
+        else:
+            res = self._values[index]
         if not isinstance(index, int):
             res = as_index(res)
             res.name = self.name

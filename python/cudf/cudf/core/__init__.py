@@ -26,3 +26,4 @@ from cudf.core.index import (
 from cudf.core.multiindex import MultiIndex
 from cudf.core.scalar import NA, Scalar
 from cudf.core.series import Series
+from cudf.core.cut import cut

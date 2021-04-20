@@ -9,6 +9,7 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.extensions import ExtensionDtype
 from pandas.core.arrays._arrow_utils import ArrowIntervalType
+from cudf.utils.dtypes import  is_interval_dtype
 
 import cudf
 from cudf._typing import Dtype
@@ -37,6 +38,8 @@ class CategoricalDtype(_BaseDtype):
             return cudf.core.index.as_index(
                 cudf.core.column.column_empty(0, dtype="object", masked=False)
             )
+        if is_interval_dtype(self._categories[0]):
+            return self._categories
         return cudf.core.index.as_index(self._categories, copy=False)
 
     @property
@@ -76,7 +79,8 @@ class CategoricalDtype(_BaseDtype):
             dtype = "object"  # type: Any
         else:
             dtype = None
-
+        if is_interval_dtype(categories[0].dtype):
+            return categories
         column = cudf.core.column.as_column(categories, dtype=dtype)
 
         if isinstance(column, cudf.core.column.CategoricalColumn):
@@ -231,12 +235,9 @@ class StructDtype(_BaseDtype):
 
     def __repr__(self):
         return f"{type(self).__name__}({self.fields})"
-<<<<<<< HEAD
-=======
 
     def __hash__(self):
         return hash(self._typ)
->>>>>>> cdf77047c6e2f17c478a8569168a09def2c9b135
 
 
 class Decimal64Dtype(_BaseDtype):
@@ -296,8 +297,6 @@ class Decimal64Dtype(_BaseDtype):
     def from_arrow(cls, typ):
         return cls(typ.precision, typ.scale)
 
-<<<<<<< HEAD
-=======
     @property
     def itemsize(self):
         return 8
@@ -330,7 +329,6 @@ class Decimal64Dtype(_BaseDtype):
         precision = max(len(metadata.digits), -metadata.exponent)
         return cls(precision, -metadata.exponent)
 
->>>>>>> cdf77047c6e2f17c478a8569168a09def2c9b135
 
 class IntervalDtype(StructDtype):
     name = "interval"
@@ -339,11 +337,6 @@ class IntervalDtype(StructDtype):
         """
         subtype: str, np.dtype
             The dtype of the Interval bounds.
-<<<<<<< HEAD
-        """
-        super().__init__(fields={"left": subtype, "right": subtype})
-        self.closed = closed
-=======
         closed: {‘right’, ‘left’, ‘both’, ‘neither’}, default ‘right’
             Whether the interval is closed on the left-side, right-side,
             both or neither. See the Notes for more detailed explanation.
@@ -354,19 +347,11 @@ class IntervalDtype(StructDtype):
             self.closed = closed
         else:
             raise ValueError("closed value is not valid")
->>>>>>> cdf77047c6e2f17c478a8569168a09def2c9b135
 
     @property
     def subtype(self):
         return self.fields["left"]
 
-<<<<<<< HEAD
-    @classmethod
-    def from_arrow(cls, typ):
-        return IntervalDtype(typ.subtype.to_pandas_dtype())
-
-    def to_arrow(self):
-=======
     def __repr__(self):
         return f"interval[{self.fields['left']}]"
 
@@ -376,7 +361,6 @@ class IntervalDtype(StructDtype):
 
     def to_arrow(self):
 
->>>>>>> cdf77047c6e2f17c478a8569168a09def2c9b135
         return ArrowIntervalType(
             pa.from_numpy_dtype(self.subtype), self.closed
         )

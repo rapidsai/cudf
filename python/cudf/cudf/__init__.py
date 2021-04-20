@@ -40,6 +40,7 @@ from cudf.core import (
     UInt64Index,
     from_pandas,
     merge,
+    cut
 )
 from cudf.core.algorithms import factorize
 from cudf.core.dtypes import (
