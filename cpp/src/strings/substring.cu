@@ -169,7 +169,7 @@ struct substring_from_fn {
     }
     auto const d_str  = d_column.template element<string_view>(idx);
     auto const length = d_str.length();
-    auto const start  = starts[idx];
+    auto const start  = std::max(starts[idx], 0);
     if (start >= length) {
       if (!d_chars) d_offsets[idx] = 0;
       return;
