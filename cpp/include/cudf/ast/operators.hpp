@@ -21,7 +21,6 @@ namespace ast {
 
 /**
  * @brief Enum of supported operators.
- *
  */
 enum class ast_operator {
   // Binary operators

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -120,6 +120,25 @@ TYPED_TEST(groupby_median_test, null_keys_and_values)
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 // clang-format on
+
+TYPED_TEST(groupby_median_test, dictionary)
+{
+  using K = int32_t;
+  using V = TypeParam;
+  using R = cudf::detail::target_type_t<V, aggregation::MEDIAN>;
+
+  // clang-format off
+  fixed_width_column_wrapper<K> keys{ 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  dictionary_column_wrapper<V>  vals{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+                                        //  { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3}
+  fixed_width_column_wrapper<K> expect_keys({ 1,       2,          3      });
+                                        //  { 0, 3, 6, 1, 4, 5, 9, 2, 7, 8}
+  fixed_width_column_wrapper<R> expect_vals({ 3.,       4.5,       7.   }, all_valid());
+  // clang-format on
+
+  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_median_aggregation());
+}
 
 }  // namespace test
 }  // namespace cudf

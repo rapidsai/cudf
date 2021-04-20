@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 import csv
 import gzip
@@ -15,7 +15,7 @@ import pytest
 
 import cudf
 from cudf import read_csv
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, assert_exceptions_equal
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -1815,7 +1815,7 @@ def test_csv_reader_dtypes(dtype):
 
 
 @pytest.mark.parametrize(
-    "dtype", ["Int64", "UInt32", {"a": "UInt64", "b": "float64", "c": "Int32"}]
+    "dtype", ["Int64", "UInt32", {"a": "UInt64", "b": "Float64", "c": "Int32"}]
 )
 def test_csv_reader_nullable_dtypes(dtype):
     buf = "a,b,c\n1,10,111\n2,11,112\n3,12,113\n4,13,114\n"
@@ -1838,7 +1838,6 @@ def test_csv_reader_timedetla_dtypes(dtype):
     assert_eq(expected, actual)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/6719")
 @pytest.mark.parametrize(
     "dtype", sorted(list(cudf.utils.dtypes.DATETIME_TYPES))
 )
@@ -1905,21 +1904,14 @@ def test_csv_reader_category_error():
         cudf.read_csv(StringIO(csv_buf), dtype="category")
 
 
-def test_csv_writer_datetime_sep_error():
-    # TODO: Remove this test once following
-    # issues is fixed: https://github.com/rapidsai/cudf/issues/6699
+def test_csv_writer_datetime_sep():
     df = cudf.DataFrame(
         {"a": cudf.Series([22343, 2323423, 234324234], dtype="datetime64[ns]")}
     )
-
-    with pytest.raises(
-        ValueError,
-        match=re.escape(
-            "sep cannot be '-' when writing a datetime64 dtype to csv, "
-            "refer to: https://github.com/rapidsai/cudf/issues/6699"
-        ),
-    ):
-        df.to_csv(sep="-")
+    df["a"] = df["a"].astype("datetime64[s]")
+    expected = df.to_pandas().to_csv(date_format="%Y-%m-%dT%H:%M:%SZ", sep="-")
+    actual = df.to_csv(sep="-")
+    assert expected == actual
 
 
 def test_na_filter_empty_fields():
@@ -1942,3 +1934,44 @@ def test_na_filter_empty_fields():
         StringIO(buffer), keep_default_na=False, na_values=test_na
     )
     assert_eq(pdf, gdf)
+
+
+def test_csv_sep_error():
+    pdf = pd.DataFrame({"a": [1, 2, 3]})
+    gdf = cudf.DataFrame({"a": [1, 2, 3]})
+    assert_exceptions_equal(
+        lfunc=pdf.to_csv,
+        rfunc=gdf.to_csv,
+        lfunc_args_and_kwargs=([], {"sep": "abc"}),
+        rfunc_args_and_kwargs=([], {"sep": "abc"}),
+        expected_error_message='"sep" must be a 1-character string',
+    )
+
+    assert_exceptions_equal(
+        lfunc=pdf.to_csv,
+        rfunc=gdf.to_csv,
+        lfunc_args_and_kwargs=([], {"sep": 1}),
+        rfunc_args_and_kwargs=([], {"sep": 1}),
+        expected_error_message='"sep" must be string, not int',
+    )
+
+
+def test_to_csv_encoding_error():
+    # TODO: Remove this test once following
+    # issue is fixed: https://github.com/rapidsai/cudf/issues/2957
+    df = cudf.DataFrame({"a": ["你好", "test"]})
+    encoding = "utf-8-sig"
+    error_message = (
+        f"Encoding {encoding} is not supported. "
+        + "Currently, only utf-8 encoding is supported."
+    )
+    with pytest.raises(NotImplementedError, match=re.escape(error_message)):
+        df.to_csv("test.csv", encoding=encoding)
+
+
+def test_to_csv_compression_error():
+    df = cudf.DataFrame({"a": ["test"]})
+    compression = "snappy"
+    error_message = "Writing compressed csv is not currently supported in cudf"
+    with pytest.raises(NotImplementedError, match=re.escape(error_message)):
+        df.to_csv("test.csv", compression=compression)

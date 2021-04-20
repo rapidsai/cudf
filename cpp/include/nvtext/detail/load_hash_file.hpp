@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,9 +40,10 @@ namespace detail {
  * @param mr Memory resource to allocate any returned objects.
  * @return vocabulary hash-table elements
  */
-hashed_vocabulary load_vocabulary_file(std::string const& filename_hashed_vocabulary,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr);
+std::unique_ptr<hashed_vocabulary> load_vocabulary_file(
+  std::string const& filename_hashed_vocabulary,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace nvtext

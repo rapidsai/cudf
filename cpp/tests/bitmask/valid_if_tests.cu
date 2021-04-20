@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,8 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/types.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -53,7 +56,7 @@ TEST_F(ValidIfTest, InvalidRange)
 
 TEST_F(ValidIfTest, OddsValid)
 {
-  auto iter     = cudf::test::make_counting_transform_iterator(0, odds_valid{});
+  auto iter     = cudf::detail::make_counting_transform_iterator(0, odds_valid{});
   auto expected = cudf::test::detail::make_null_mask(iter, iter + 10000);
   auto actual   = cudf::detail::valid_if(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(10000), odds_valid{});
@@ -63,7 +66,7 @@ TEST_F(ValidIfTest, OddsValid)
 
 TEST_F(ValidIfTest, AllValid)
 {
-  auto iter     = cudf::test::make_counting_transform_iterator(0, all_valid{});
+  auto iter     = cudf::detail::make_counting_transform_iterator(0, all_valid{});
   auto expected = cudf::test::detail::make_null_mask(iter, iter + 10000);
   auto actual   = cudf::detail::valid_if(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(10000), all_valid{});
@@ -73,7 +76,7 @@ TEST_F(ValidIfTest, AllValid)
 
 TEST_F(ValidIfTest, AllNull)
 {
-  auto iter     = cudf::test::make_counting_transform_iterator(0, all_null{});
+  auto iter     = cudf::detail::make_counting_transform_iterator(0, all_null{});
   auto expected = cudf::test::detail::make_null_mask(iter, iter + 10000);
   auto actual   = cudf::detail::valid_if(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(10000), all_null{});

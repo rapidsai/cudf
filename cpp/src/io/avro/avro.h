@@ -36,7 +36,7 @@ namespace avro {
  */
 struct schema_entry {
   explicit schema_entry(type_kind_e kind_, int32_t parent_idx_ = -1, int32_t num_children_ = 0)
-    : kind(kind_), parent_idx(parent_idx_), num_children(num_children_)
+    : parent_idx(parent_idx_), num_children(num_children_), kind(kind_)
   {
   }
   int32_t parent_idx   = -1;  // index of parent entry in schema array, negative if no parent

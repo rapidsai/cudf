@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ struct schemadesc_s {
  */
 void DecodeAvroColumnData(block_desc_s *blocks,
                           schemadesc_s *schema,
-                          cudf::detail::device_span<nvstrdesc_s> global_dictionary,
+                          cudf::device_span<nvstrdesc_s> global_dictionary,
                           const uint8_t *avro_data,
                           uint32_t num_blocks,
                           uint32_t schema_len,

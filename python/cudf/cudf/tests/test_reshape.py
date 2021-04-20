@@ -1,10 +1,14 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
+import re
+
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
 from cudf import melt as cudf_melt
-from cudf.core import DataFrame
+from cudf.core._compat import PANDAS_GE_120
 from cudf.tests.utils import (
     ALL_TYPES,
     DATETIME_TYPES,
@@ -51,7 +55,7 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
         pdf[colname] = data
         value_vars.append(colname)
 
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
 
     got = cudf_melt(frame=gdf, id_vars=id_vars, value_vars=value_vars)
     got_from_melt_method = gdf.melt(id_vars=id_vars, value_vars=value_vars)
@@ -71,7 +75,14 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
 @pytest.mark.parametrize(
     "dtype",
     list(NUMERIC_TYPES + DATETIME_TYPES)
-    + [pytest.param("str", marks=pytest.mark.xfail())],
+    + [
+        pytest.param(
+            "str",
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_120, reason="pandas bug"
+            ),
+        )
+    ],
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_df_stack(nulls, num_cols, num_rows, dtype):
@@ -89,7 +100,7 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
             data[idx] = np.nan
         pdf[colname] = data
 
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
 
     got = gdf.stack()
 
@@ -100,7 +111,6 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
         )
 
     assert_eq(expect, got)
-    pass
 
 
 @pytest.mark.parametrize("num_rows", [1, 2, 10, 1000])
@@ -126,7 +136,7 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
             data[idx] = np.nan
         pdf[colname] = data
 
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
 
     if dtype == "category":
         with pytest.raises(ValueError):
@@ -165,7 +175,7 @@ def test_tile(nulls, num_cols, num_rows, dtype, count):
             data[idx] = np.nan
         pdf[colname] = data
 
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
 
     got = gdf.tile(count)
     expect = pd.DataFrame(pd.concat([pdf] * count))
@@ -345,7 +355,7 @@ def test_series_merge_sorted(nparts, key, na_position, ascending):
 )
 def test_pivot_simple(index, column, data):
     pdf = pd.DataFrame({"index": index, "column": column, "data": data})
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
 
     expect = pdf.pivot("index", "column")
     got = gdf.pivot("index", "column")
@@ -402,7 +412,7 @@ def test_pivot_multi_values():
         ),
     ],
 )
-def test_unstack(level):
+def test_unstack_multiindex(level):
     pdf = pd.DataFrame(
         {
             "foo": ["one", "one", "one", "two", "two", "two"],
@@ -415,6 +425,53 @@ def test_unstack(level):
     assert_eq(
         pdf.unstack(level=level), gdf.unstack(level=level), check_dtype=False,
     )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [{"A": [1.0, 2.0, 3.0, 4.0, 5.0], "B": [11.0, 12.0, 13.0, 14.0, 15.0]}],
+)
+@pytest.mark.parametrize(
+    "index",
+    [
+        pd.Index(range(0, 5), name=None),
+        pd.Index(range(0, 5), name="row_index"),
+    ],
+)
+@pytest.mark.parametrize(
+    "col_idx",
+    [
+        pd.Index(["a", "b"], name=None),
+        pd.Index(["a", "b"], name="col_index"),
+        pd.MultiIndex.from_tuples([("c", 1), ("c", 2)], names=[None, None]),
+        pd.MultiIndex.from_tuples(
+            [("c", 1), ("c", 2)], names=["col_index1", "col_index2"]
+        ),
+    ],
+)
+def test_unstack_index(data, index, col_idx):
+    pdf = pd.DataFrame(data)
+    gdf = cudf.from_pandas(pdf)
+
+    pdf.index = index
+    pdf.columns = col_idx
+
+    gdf.index = cudf.from_pandas(index)
+    gdf.columns = cudf.from_pandas(col_idx)
+
+    assert_eq(pdf.unstack(), gdf.unstack())
+
+
+def test_unstack_index_invalid():
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": ["a", "b", "c"]})
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Calling unstack() on single index dataframe with "
+            "different column datatype is not supported."
+        ),
+    ):
+        gdf.unstack()
 
 
 def test_pivot_duplicate_error():

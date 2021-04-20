@@ -187,7 +187,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher(ast_operator op
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Invalid operator.");
 #else
-      release_assert(false && "Invalid operator.");
+      cudf_assert(false && "Invalid operator.");
 #endif
       break;
   }
@@ -784,7 +784,7 @@ struct double_dispatch_binary_operator_types {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid binary operation.");
 #else
-    release_assert(false && "Invalid binary operation.");
+    cudf_assert(false && "Invalid binary operation.");
 #endif
   }
 };
@@ -819,7 +819,7 @@ struct single_dispatch_binary_operator_types {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid binary operation.");
 #else
-    release_assert(false && "Invalid binary operation.");
+    cudf_assert(false && "Invalid binary operation.");
 #endif
   }
 };
@@ -924,14 +924,13 @@ struct dispatch_unary_operator_types {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid unary operation.");
 #else
-    release_assert(false && "Invalid unary operation.");
+    cudf_assert(false && "Invalid unary operation.");
 #endif
   }
 };
 
 /**
  * @brief Functor performing a type dispatch for a unary operator.
- *
  */
 struct type_dispatch_unary_op {
   template <ast_operator op, typename F, typename... Ts>
@@ -968,7 +967,6 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void unary_operator_dispatcher(ast_operator 
 
 /**
  * @brief Functor to determine the return type of an operator from its input types.
- *
  */
 struct return_type_functor {
   /**
@@ -998,7 +996,7 @@ struct return_type_functor {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid binary operation. Return type cannot be determined.");
 #else
-    release_assert(false && "Invalid binary operation. Return type cannot be determined.");
+    cudf_assert(false && "Invalid binary operation. Return type cannot be determined.");
 #endif
   }
 
@@ -1026,7 +1024,7 @@ struct return_type_functor {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid unary operation. Return type cannot be determined.");
 #else
-    release_assert(false && "Invalid unary operation. Return type cannot be determined.");
+    cudf_assert(false && "Invalid unary operation. Return type cannot be determined.");
 #endif
   }
 };
@@ -1057,7 +1055,6 @@ inline cudf::data_type ast_operator_return_type(ast_operator op,
 
 /**
  * @brief Functor to determine the arity (number of operands) of an operator.
- *
  */
 struct arity_functor {
   template <ast_operator op>

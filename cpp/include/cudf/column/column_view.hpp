@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
+
 #include <vector>
 
 /**
@@ -42,8 +44,7 @@ namespace detail {
  * To enable zero-copy slicing, a `column_view_base` has an `offset` that
  *indicates the index of the first element in the column relative to the base
  *device memory allocation. By default, `offset()` is zero.
- *
- **/
+ */
 class column_view_base {
  public:
   /**
@@ -56,10 +57,14 @@ class column_view_base {
    *a column, and instead, accessing the elements should be done via
    *`data<T>()`.
    *
+   * This function will only participate in overload resolution if `is_rep_layout_compatible<T>()`
+   * or `std::is_same<T,void>::value` are true.
+   *
    * @tparam The type to cast to
    * @return T const* Typed pointer to underlying data
-   **/
-  template <typename T = void>
+   */
+  template <typename T = void,
+            CUDF_ENABLE_IF(std::is_same<T, void>::value or is_rep_layout_compatible<T>())>
   T const* head() const noexcept
   {
     return static_cast<T const*>(_data);
@@ -71,12 +76,13 @@ class column_view_base {
    *
    * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
-   * @TODO Clarify behavior for variable-width types.
+   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
+   * false.
    *
    * @tparam T The type to cast to
    * @return T const* Typed pointer to underlying data, including the offset
-   **/
-  template <typename T>
+   */
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T const* data() const noexcept
   {
     return head<T>() + _offset;
@@ -86,10 +92,13 @@ class column_view_base {
    * @brief Return first element (accounting for offset) after underlying data
    * is casted to the specified type.
    *
+   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
+   * false.
+   *
    * @tparam T The desired type
    * @return T const* Pointer to the first element after casting
-   **/
-  template <typename T>
+   */
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T const* begin() const noexcept
   {
     return data<T>();
@@ -99,10 +108,13 @@ class column_view_base {
    * @brief Return one past the last element after underlying data is casted to
    * the specified type.
    *
+   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
+   * false.
+   *
    * @tparam T The desired type
    * @return T const* Pointer to one past the last element after casting
-   **/
-  template <typename T>
+   */
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T const* end() const noexcept
   {
     return begin<T>() + size();
@@ -110,17 +122,17 @@ class column_view_base {
 
   /**
    * @brief Returns the number of elements in the column
-   **/
+   */
   size_type size() const noexcept { return _size; }
 
   /**
    * @brief Returns true if `size()` returns zero, or false otherwise
-   **/
+   */
   size_type is_empty() const noexcept { return size() == 0; }
 
   /**
    * @brief Returns the element `data_type`
-   **/
+   */
   data_type type() const noexcept { return _type; }
 
   /**
@@ -131,7 +143,7 @@ class column_view_base {
    *
    * @return true The bitmask is allocated
    * @return false The bitmask is not allocated
-   **/
+   */
   bool nullable() const noexcept { return nullptr != _null_mask; }
 
   /**
@@ -141,7 +153,7 @@ class column_view_base {
    * point `set_null_count(UNKNOWN_NULL_COUNT)` was invoked, then the
    * first invocation of `null_count()` will compute and store the count of null
    * elements indicated by the `null_mask` (if it exists).
-   **/
+   */
   size_type null_count() const;
 
   /**
@@ -156,7 +168,7 @@ class column_view_base {
    *
    * @param[in] begin The starting index of the range (inclusive).
    * @param[in] end The index of the last element in the range (exclusive).
-   **/
+   */
   size_type null_count(size_type begin, size_type end) const;
 
   /**
@@ -165,7 +177,7 @@ class column_view_base {
    *
    * @return true One or more elements are null
    * @return false All elements are valid
-   **/
+   */
   bool has_nulls() const { return null_count() > 0; }
 
   /**
@@ -188,13 +200,13 @@ class column_view_base {
    * @note This function does *not* account for the `offset()`.
    *
    * @note If `null_count() == 0`, this may return `nullptr`.
-   **/
+   */
   bitmask_type const* null_mask() const noexcept { return _null_mask; }
 
   /**
    * @brief Returns the index of the first element relative to the base memory
    * allocation, i.e., what is returned from `head<T>()`.
-   **/
+   */
   size_type offset() const noexcept { return _offset; }
 
  protected:
@@ -278,8 +290,7 @@ class mutable_column_view_base : public column_view_base {
  * To enable zero-copy slicing, a `column_view` has an `offset` that indicates
  * the index of the first element in the column relative to the base device
  * memory allocation. By default, `offset()` is zero.
- *
- **/
+ */
 class column_view : public detail::column_view_base {
  public:
   column_view() = default;
@@ -347,7 +358,7 @@ class column_view : public detail::column_view_base {
 
   /**
    * @brief Returns the number of child columns.
-   **/
+   */
   size_type num_children() const noexcept { return _children.size(); }
 
   /**
@@ -361,7 +372,7 @@ class column_view : public detail::column_view_base {
   auto child_end() const noexcept { return _children.cend(); }
 
  private:
-  friend column_view logical_cast(column_view const& input, data_type type);
+  friend column_view bit_cast(column_view const& input, data_type type);
 
   std::vector<column_view> _children{};  ///< Based on element type, children
                                          ///< may contain additional data
@@ -386,8 +397,7 @@ class column_view : public detail::column_view_base {
  * To enable zero-copy slicing, a `mutable_column_view` has an `offset` that
  * indicates the index of the first element in the column relative to the base
  * device memory allocation. By default, `offset()` is zero.
- *
- **/
+ */
 class mutable_column_view : public detail::column_view_base {
  public:
   mutable_column_view() = default;
@@ -441,6 +451,9 @@ class mutable_column_view : public detail::column_view_base {
    * @brief Returns pointer to the base device memory allocation casted to
    * the specified type.
    *
+   * This function will only participate in overload resolution if `is_rep_layout_compatible<T>()`
+   * or `std::is_same<T,void>::value` are true.
+   *
    * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
    * @note It should be rare to need to access the `head<T>()` allocation of a
@@ -448,8 +461,9 @@ class mutable_column_view : public detail::column_view_base {
    *
    * @tparam The type to cast to
    * @return T* Typed pointer to underlying data
-   **/
-  template <typename T = void>
+   */
+  template <typename T = void,
+            CUDF_ENABLE_IF(std::is_same<T, void>::value or is_rep_layout_compatible<T>())>
   T* head() const noexcept
   {
     return const_cast<T*>(detail::column_view_base::head<T>());
@@ -459,14 +473,15 @@ class mutable_column_view : public detail::column_view_base {
    * @brief Returns the underlying data casted to the specified type, plus the
    * offset.
    *
-   * @note If `offset() == 0`, then `head<T>() == data<T>()`
+   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
+   * false.
    *
-   * @TODO Clarify behavior for variable-width types.
+   * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
    * @tparam T The type to cast to
    * @return T* Typed pointer to underlying data, including the offset
-   **/
-  template <typename T>
+   */
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T* data() const noexcept
   {
     return const_cast<T*>(detail::column_view_base::data<T>());
@@ -476,10 +491,13 @@ class mutable_column_view : public detail::column_view_base {
    * @brief Return first element (accounting for offset) when underlying data is
    * casted to the specified type.
    *
+   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
+   * false.
+   *
    * @tparam T The desired type
    * @return T* Pointer to the first element after casting
-   **/
-  template <typename T>
+   */
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T* begin() const noexcept
   {
     return const_cast<T*>(detail::column_view_base::begin<T>());
@@ -489,10 +507,13 @@ class mutable_column_view : public detail::column_view_base {
    * @brief Return one past the last element after underlying data is casted to
    * the specified type.
    *
+   * This function does not participate in overload resolution if `is_rep_layout_compatible<T>` is
+   * false.
+   *
    * @tparam T The desired type
    * @return T* Pointer to one past the last element after casting
-   **/
-  template <typename T>
+   */
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   T* end() const noexcept
   {
     return const_cast<T*>(detail::column_view_base::end<T>());
@@ -516,7 +537,7 @@ class mutable_column_view : public detail::column_view_base {
    * @throws cudf::logic_error if `new_null_count > 0` and `nullable() == false`
    *
    * @param new_null_count The new null count
-   **/
+   */
   void set_null_count(size_type new_null_count);
 
   /**
@@ -532,7 +553,7 @@ class mutable_column_view : public detail::column_view_base {
 
   /**
    * @brief Returns the number of child columns.
-   **/
+   */
   size_type num_children() const noexcept { return mutable_children.size(); }
 
   /**
@@ -549,11 +570,11 @@ class mutable_column_view : public detail::column_view_base {
    * @brief Converts a mutable view into an immutable view
    *
    * @return column_view An immutable view of the mutable view's elements
-   **/
+   */
   operator column_view() const;
 
  private:
-  friend mutable_column_view logical_cast(mutable_column_view const& input, data_type type);
+  friend mutable_column_view bit_cast(mutable_column_view const& input, data_type type);
 
   std::vector<mutable_column_view> mutable_children;
 };
@@ -563,51 +584,53 @@ class mutable_column_view : public detail::column_view_base {
  *
  * @param parent The parent whose descendants will be counted
  * @return size_type The number of descendants of the parent
- **/
+ */
 size_type count_descendants(column_view parent);
 
 /**
- * @brief Zero-copy cast between types with the same underlying representation.
+ * @brief Zero-copy cast between types with the same size and compatible underlying representations.
  *
  * This is similar to `reinterpret_cast` or `bit_cast` in that it gives a view of the same raw bits
  * as a different type. Unlike `reinterpret_cast` however, this cast is only allowed on types that
- * have the same width and underlying representation. For example, the way timestamp types are laid
- * out in memory is equivalent to an integer representing a duration since a fixed epoch; logically
- * casting to the same integer type (INT32 for days, INT64 for others) results in a raw view of the
- * duration count. However, an INT32 column cannot be logically cast to INT64 as the sizes differ,
- * nor can an INT32 columm be logically cast to a FLOAT32 since what the bits represent differs.
+ * have the same width and compatible representations. For example, the way timestamp types are laid
+ * out in memory is equivalent to an integer representing a duration since a fixed epoch;
+ * bit-casting to the same integer type (INT32 for days, INT64 for others) results in a raw view of
+ * the duration count. A FLOAT32 can also be bit-casted into INT32 and treated as an integer value.
+ * However, an INT32 column cannot be bit-casted to INT64 as the sizes differ, nor can a string_view
+ * column be casted into a numeric type column as their data representations are not compatible.
  *
- * The validity of the conversion can be checked with `cudf::is_logically_castable()`.
+ * The validity of the conversion can be checked with `cudf::is_bit_castable()`.
  *
  * @throws cudf::logic_error if the specified cast is not possible, i.e.,
- * `is_logically_castable(input.type(), type)` is false.
+ * `is_bit_castable(input.type(), type)` is false.
  *
  * @param input The `column_view` to cast from
  * @param type The `data_type` to cast to
  * @return New `column_view` wrapping the same data as `input` but cast to `type`
  */
-column_view logical_cast(column_view const& input, data_type type);
+column_view bit_cast(column_view const& input, data_type type);
 
 /**
- * @brief Zero-copy cast between types with the same underlying representation.
+ * @brief Zero-copy cast between types with the same size and compatible underlying representations.
  *
  * This is similar to `reinterpret_cast` or `bit_cast` in that it gives a view of the same raw bits
  * as a different type. Unlike `reinterpret_cast` however, this cast is only allowed on types that
- * have the same width and underlying representation. For example, the way timestamp types are laid
- * out in memory is equivalent to an integer representing a duration since a fixed epoch; logically
- * casting to the same integer type (INT32 for days, INT64 for others) results in a raw view of the
- * duration count. However, an INT32 column cannot be logically cast to INT64 as the sizes differ,
- * nor can an INT32 columm be logically cast to a FLOAT32 since what the bits represent differs.
+ * have the same width and compatible representations. For example, the way timestamp types are laid
+ * out in memory is equivalent to an integer representing a duration since a fixed epoch;
+ * bit-casting to the same integer type (INT32 for days, INT64 for others) results in a raw view of
+ * the duration count. A FLOAT32 can also be bit-casted into INT32 and treated as an integer value.
+ * However, an INT32 column cannot be bit-casted to INT64 as the sizes differ, nor can a string_view
+ * column be casted into a numeric type column as their data representations are not compatible.
  *
- * The validity of the conversion can be checked with `cudf::is_logically_castable()`.
+ * The validity of the conversion can be checked with `cudf::is_bit_castable()`.
  *
  * @throws cudf::logic_error if the specified cast is not possible, i.e.,
- * `is_logically_castable(input.type(), type)` is false.
+ * `is_bit_castable(input.type(), type)` is false.
  *
  * @param input The `mutable_column_view` to cast from
  * @param type The `data_type` to cast to
  * @return New `mutable_column_view` wrapping the same data as `input` but cast to `type`
  */
-mutable_column_view logical_cast(mutable_column_view const& input, data_type type);
+mutable_column_view bit_cast(mutable_column_view const& input, data_type type);
 
 }  // namespace cudf

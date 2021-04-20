@@ -36,7 +36,9 @@ column_view structs_column_view::get_sliced_child(int index) const
                      size(),
                      child(index).head<uint8_t>(),
                      child(index).null_mask(),
-                     child(index).null_count(),
+                     // TODO: could potentially compute the actual count here, but at
+                     // the moment this interface doesn't take a stream.
+                     UNKNOWN_NULL_COUNT,
                      offset(),
                      children};
 }

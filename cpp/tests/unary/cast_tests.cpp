@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/unary.hpp>
@@ -536,6 +537,9 @@ inline auto make_fixed_point_data_type(int32_t scale)
   return cudf::data_type{cudf::type_to_id<T>(), scale};
 }
 
+struct FixedPointTestSingleType : public cudf::test::BaseFixture {
+};
+
 template <typename T>
 struct FixedPointTests : public cudf::test::BaseFixture {
 };
@@ -566,8 +570,9 @@ TYPED_TEST(FixedPointTests, CastToDoubleLarge)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<double>;
 
-  auto begin          = make_counting_transform_iterator(0, [](auto i) { return 10 * (i + 0.5); });
-  auto begin2         = make_counting_transform_iterator(0, [](auto i) { return i + 0.5; });
+  auto begin =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 10 * (i + 0.5); });
+  auto begin2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i + 0.5; });
   auto const input    = fp_wrapper{begin, begin + 2000, scale_type{-1}};
   auto const expected = fw_wrapper(begin2, begin2 + 2000);
   auto const result   = cudf::cast(input, make_data_type<double>());
@@ -590,6 +595,18 @@ TYPED_TEST(FixedPointTests, CastToInt32)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TEST_F(FixedPointTestSingleType, CastDecimal64ToInt32)
+{
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<int32_t>;
+
+  auto const input    = fp_wrapper{{7246212000}, numeric::scale_type{-5}};
+  auto const expected = fw_wrapper{72462};
+  auto const result   = cudf::cast(input, make_data_type<int32_t>());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 TYPED_TEST(FixedPointTests, CastToIntLarge)
 {
   using namespace numeric;
@@ -599,8 +616,8 @@ TYPED_TEST(FixedPointTests, CastToIntLarge)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<int32_t>;
 
-  auto begin          = thrust::make_counting_iterator(0);
-  auto begin2         = make_counting_transform_iterator(0, [](auto i) { return 10 * i; });
+  auto begin  = thrust::make_counting_iterator(0);
+  auto begin2 = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 10 * i; });
   auto const input    = fp_wrapper{begin, begin + 2000, scale_type{1}};
   auto const expected = fw_wrapper(begin2, begin2 + 2000);
   auto const result   = cudf::cast(input, make_data_type<int32_t>());
@@ -632,8 +649,9 @@ TYPED_TEST(FixedPointTests, CastFromDoubleLarge)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<double>;
 
-  auto begin          = make_counting_transform_iterator(0, [](auto i) { return i + 0.5; });
-  auto begin2         = make_counting_transform_iterator(0, [](auto i) { return 10 * (i + 0.5); });
+  auto begin = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i + 0.5; });
+  auto begin2 =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 10 * (i + 0.5); });
   auto const input    = fw_wrapper(begin, begin + 2000);
   auto const expected = fp_wrapper{begin2, begin2 + 2000, scale_type{-1}};
   auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(-1));
@@ -656,6 +674,18 @@ TYPED_TEST(FixedPointTests, CastFromInt)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TEST_F(FixedPointTestSingleType, CastInt32ToDecimal64)
+{
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<int32_t>;
+
+  auto const input    = fw_wrapper{-48938};
+  auto const expected = fp_wrapper{{-4893800000LL}, numeric::scale_type{-5}};
+  auto const result   = cudf::cast(input, make_fixed_point_data_type<numeric::decimal64>(-5));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 TYPED_TEST(FixedPointTests, CastFromIntLarge)
 {
   using namespace numeric;
@@ -665,8 +695,8 @@ TYPED_TEST(FixedPointTests, CastFromIntLarge)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<int32_t>;
 
-  auto begin          = make_counting_transform_iterator(0, [](auto i) { return 1000 * i; });
-  auto begin2         = thrust::make_counting_iterator(0);
+  auto begin  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 1000 * i; });
+  auto begin2 = thrust::make_counting_iterator(0);
   auto const input    = fw_wrapper(begin, begin + 2000);
   auto const expected = fp_wrapper{begin2, begin2 + 2000, scale_type{3}};
   auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(3));

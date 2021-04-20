@@ -34,8 +34,6 @@ TYPED_TEST_CASE(TileTest, cudf::test::AllTypes);
 
 TYPED_TEST(TileTest, NoColumns)
 {
-  using T = TypeParam;
-
   cudf::table_view in(std::vector<cudf::column_view>{});
 
   auto expected = in;

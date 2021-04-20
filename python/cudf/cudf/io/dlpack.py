@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 from cudf._lib import interop as libdlpack
 from cudf.core.column import ColumnBase
@@ -28,6 +28,11 @@ def from_dlpack(pycapsule_obj):
     -------
     A cuDF DataFrame or Series depending on if the input DLPack tensor is 1D
     or 2D.
+
+    Notes
+    -----
+    cuDF from_dlpack() assumes column-major (Fortran order) input. If the input
+    tensor is row-major, transpose it before passing it to this function.
     """
 
     res = libdlpack.from_dlpack(pycapsule_obj)
@@ -46,8 +51,8 @@ def to_dlpack(cudf_obj):
     `dmlc/dlpack <https://github.com/dmlc/dlpack>`_.
 
     This function takes a cuDF object as input, and returns a PyCapsule object
-    which contains a pointer to DLPack tensor. This function deep
-    copies the data in the cuDF object into the DLPack tensor.
+    which contains a pointer to DLPack tensor. This function deep copies
+    the data in the cuDF object into the DLPack tensor.
 
     Parameters
     ----------
@@ -57,6 +62,11 @@ def to_dlpack(cudf_obj):
     Returns
     -------
     A  DLPack tensor pointer which is encapsulated in a PyCapsule object.
+
+    Notes
+    -----
+    cuDF to_dlpack() produces column-major (Fortran order) output. If the
+    output tensor needs to be row major, transpose the output of this function.
     """
     if len(cudf_obj) == 0:
         raise ValueError("Cannot create DLPack tensor of 0 size")

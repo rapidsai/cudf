@@ -244,7 +244,7 @@ TYPED_TEST(DLPackNumericTests, ToDlpack1D)
   validate_dtype<TypeParam>(tensor.dtype);
   EXPECT_EQ(kDLGPU, tensor.ctx.device_type);
   EXPECT_EQ(1, tensor.ndim);
-  EXPECT_EQ(0, tensor.byte_offset);
+  EXPECT_EQ(uint64_t{0}, tensor.byte_offset);
   EXPECT_EQ(nullptr, tensor.strides);
 
   EXPECT_NE(nullptr, tensor.data);
@@ -277,7 +277,7 @@ TYPED_TEST(DLPackNumericTests, ToDlpack2D)
   validate_dtype<TypeParam>(tensor.dtype);
   EXPECT_EQ(kDLGPU, tensor.ctx.device_type);
   EXPECT_EQ(2, tensor.ndim);
-  EXPECT_EQ(0, tensor.byte_offset);
+  EXPECT_EQ(uint64_t{0}, tensor.byte_offset);
 
   EXPECT_NE(nullptr, tensor.data);
   EXPECT_NE(nullptr, tensor.shape);

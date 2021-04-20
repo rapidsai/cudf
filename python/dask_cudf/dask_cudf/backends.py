@@ -1,4 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -6,7 +7,11 @@ import pyarrow as pa
 
 from dask.dataframe.categorical import categorical_dtype_dispatch
 from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
-from dask.dataframe.methods import concat_dispatch, tolist_dispatch
+from dask.dataframe.methods import (
+    concat_dispatch,
+    is_categorical_dtype_dispatch,
+    tolist_dispatch,
+)
 from dask.dataframe.utils import (
     UNKNOWN_CATEGORIES,
     _nonempty_scalar,
@@ -67,18 +72,20 @@ def _get_non_empty_data(s):
             if len(s._column.categories)
             else [UNKNOWN_CATEGORIES]
         )
-        codes = column.full(size=2, fill_value=0, dtype="int32")
+        codes = cudf.core.column.full(size=2, fill_value=0, dtype="int32")
         ordered = s._column.ordered
-        data = column.build_categorical_column(
+        data = cudf.core.column.build_categorical_column(
             categories=categories, codes=codes, ordered=ordered
         )
     elif is_string_dtype(s.dtype):
         data = pa.array(["cat", "dog"])
     else:
         if pd.api.types.is_numeric_dtype(s.dtype):
-            data = column.as_column(cp.arange(start=0, stop=2, dtype=s.dtype))
+            data = cudf.core.column.as_column(
+                cp.arange(start=0, stop=2, dtype=s.dtype)
+            )
         else:
-            data = column.as_column(
+            data = cudf.core.column.as_column(
                 cp.arange(start=0, stop=2, dtype="int64")
             ).astype(s.dtype)
     return data
@@ -205,8 +212,16 @@ def concat_cudf(
     filter_warning=True,
     sort=None,
     ignore_index=False,
+    **kwargs,
 ):
     assert join == "outer"
+
+    ignore_order = kwargs.get("ignore_order", False)
+    if ignore_order:
+        raise NotImplementedError(
+            "ignore_order parameter is not yet supported in dask-cudf"
+        )
+
     return cudf.concat(dfs, axis=axis, ignore_index=ignore_index)
 
 
@@ -220,11 +235,16 @@ def tolist_cudf(obj):
     return obj.to_arrow().to_pylist()
 
 
+@is_categorical_dtype_dispatch.register(
+    (cudf.Series, cudf.Index, cudf.CategoricalDtype, Series)
+)
+def is_categorical_dtype_cudf(obj):
+    return cudf.utils.dtypes.is_categorical_dtype(obj)
+
+
 try:
 
     from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
-
-    from cudf.core.column import column
 
     def safe_hash(frame):
         index = frame.index
@@ -245,7 +265,7 @@ try:
         if isinstance(ind, cudf.MultiIndex):
             return safe_hash(ind.to_frame(index=False))
 
-        col = column.as_column(ind)
+        col = cudf.core.column.as_column(ind)
         return safe_hash(cudf.Series(col))
 
     @group_split_dispatch.register((cudf.Series, cudf.DataFrame))

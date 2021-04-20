@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,7 +86,6 @@ class bitwise_partitioner {
   const size_type mask;
 };
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief Computes which partition each row of a device_table will belong to
  based on hashing each row, and applying a partition function to the hash value.
@@ -112,7 +111,6 @@ class bitwise_partitioner {
  partition(num_partitions -1) size, ...} }
  * @param[out] global_partition_sizes The number of rows in each partition.
  */
-/* ----------------------------------------------------------------------------*/
 template <class row_hasher_t, typename partitioner_type>
 __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
                                               const size_type num_rows,
@@ -170,7 +168,6 @@ __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
   }
 }
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief  Given an array of partition numbers, computes the final output
  location for each element in the output such that all rows with the same
@@ -188,7 +185,6 @@ __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
          {block0 partition(num_partitions-1) offset, block1
  partition(num_partitions -1) offset, ...} }
  */
-/* ----------------------------------------------------------------------------*/
 __global__ void compute_row_output_locations(size_type* __restrict__ row_partition_numbers,
                                              const size_type num_rows,
                                              const size_type num_partitions,
@@ -228,7 +224,6 @@ __global__ void compute_row_output_locations(size_type* __restrict__ row_partiti
   }
 }
 
-/* --------------------------------------------------------------------------*/
 /**
  * @brief Move one column from the input table to the hashed table.
  *
@@ -245,7 +240,6 @@ __global__ void compute_row_output_locations(size_type* __restrict__ row_partiti
  * for each block
  * @param[in] scanned_block_partition_sizes The scan of block_partition_sizes
  */
-/* ----------------------------------------------------------------------------*/
 template <typename InputIter, typename DataType>
 __global__ void copy_block_partitions(InputIter input_iter,
                                       DataType* __restrict__ output_buf,
@@ -454,6 +448,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   table_view const& input,
   table_view const& table_to_hash,
   size_type num_partitions,
+  uint32_t seed,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -487,7 +482,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
   auto row_partition_offset = rmm::device_vector<size_type>(num_rows);
 
   auto const device_input = table_device_view::create(table_to_hash, stream);
-  auto const hasher       = row_hasher<hash_function, hash_has_nulls>(*device_input);
+  auto const hasher       = row_hasher<hash_function, hash_has_nulls>(*device_input, seed);
 
   // If the number of partitions is a power of two, we can compute the partition
   // number of each row more efficiently with bitwise operations
@@ -573,17 +568,17 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
 
     // Copy input to output by partition per column
     std::transform(input.begin(), input.end(), output_cols.begin(), [=](auto const& col) {
-      return cudf::type_dispatcher(col.type(),
-                                   copy_block_partitions_dispatcher{},
-                                   col,
-                                   num_partitions,
-                                   row_partition_numbers_ptr,
-                                   row_partition_offset_ptr,
-                                   block_partition_sizes_ptr,
-                                   scanned_block_partition_sizes_ptr,
-                                   grid_size,
-                                   stream,
-                                   mr);
+      return cudf::type_dispatcher<dispatch_storage_type>(col.type(),
+                                                          copy_block_partitions_dispatcher{},
+                                                          col,
+                                                          num_partitions,
+                                                          row_partition_numbers_ptr,
+                                                          row_partition_offset_ptr,
+                                                          block_partition_sizes_ptr,
+                                                          scanned_block_partition_sizes_ptr,
+                                                          grid_size,
+                                                          stream,
+                                                          mr);
     });
 
     if (has_nulls(input)) {
@@ -731,6 +726,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   table_view const& input,
   std::vector<size_type> const& columns_to_hash,
   int num_partitions,
+  uint32_t seed,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -743,10 +739,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
 
   if (has_nulls(table_to_hash)) {
     return hash_partition_table<hash_function, true>(
-      input, table_to_hash, num_partitions, stream, mr);
+      input, table_to_hash, num_partitions, seed, stream, mr);
   } else {
     return hash_partition_table<hash_function, false>(
-      input, table_to_hash, num_partitions, stream, mr);
+      input, table_to_hash, num_partitions, seed, stream, mr);
   }
 }
 }  // namespace local
@@ -777,6 +773,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   std::vector<size_type> const& columns_to_hash,
   int num_partitions,
   hash_id hash_function,
+  uint32_t seed,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -789,10 +786,10 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
           CUDF_FAIL("IdentityHash does not support this data type");
       }
       return detail::local::hash_partition<IdentityHash>(
-        input, columns_to_hash, num_partitions, stream, mr);
+        input, columns_to_hash, num_partitions, seed, stream, mr);
     case (hash_id::HASH_MURMUR3):
       return detail::local::hash_partition<MurmurHash3_32>(
-        input, columns_to_hash, num_partitions, stream, mr);
+        input, columns_to_hash, num_partitions, seed, stream, mr);
     default: CUDF_FAIL("Unsupported hash function in hash_partition");
   }
 }

@@ -122,8 +122,7 @@ struct fixed_point_unary_cast {
                                        cudf::is_fixed_point<TargetT>())>* = nullptr>
   CUDA_DEVICE_CALLABLE DeviceT operator()(SourceT const element)
   {
-    auto const fp = TargetT{element, scale};
-    return numeric::scaled_integer<DeviceT>{fp}.value;
+    return TargetT{element, scale}.value();
   }
 };
 
@@ -179,11 +178,13 @@ std::unique_ptr<column> rescale(column_view input,
 
   if (input.type().scale() > scale) {
     auto const scalar = make_fixed_point_scalar<T>(0, scale_type{scale});
-    return detail::binary_operation(input, *scalar, binary_operator::ADD, {}, stream, mr);
+    auto const type   = cudf::data_type{cudf::type_to_id<T>(), scale};
+    return detail::binary_operation(input, *scalar, binary_operator::ADD, type, stream, mr);
   } else {
     auto const diff   = input.type().scale() - scale;
     auto const scalar = make_fixed_point_scalar<T>(std::pow(10, -diff), scale_type{diff});
-    return detail::binary_operation(input, *scalar, binary_operator::DIV, {}, stream, mr);
+    auto const type   = cudf::data_type{cudf::type_to_id<T>(), scale};
+    return detail::binary_operation(input, *scalar, binary_operator::DIV, type, stream, mr);
   }
 };
 

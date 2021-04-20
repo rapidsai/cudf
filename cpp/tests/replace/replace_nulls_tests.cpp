@@ -1,5 +1,5 @@
 /*
- * Copyright 2019, NVIDIA CORPORATION.
+ * Copyright 2019-2021, NVIDIA CORPORATION.
  *
  * Copyright 2018 BlazingDB, Inc.
  *     Copyright 2018 Alexander Ocsa <cristhian@blazingdb.com>
@@ -23,6 +23,7 @@
 
 #include <cudf/dictionary/detail/replace.hpp>
 #include <cudf/dictionary/encode.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/error.hpp>
@@ -178,6 +179,61 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplaceScalar)
   ASSERT_NO_THROW(result = cudf::replace_nulls(input_w, *repl, mr()));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
+}
+
+struct ReplaceNullsPolicyStringTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(ReplaceNullsPolicyStringTest, PrecedingFill)
+{
+  cudf::test::strings_column_wrapper input({"head", "", "", "mid", "mid", "", "tail"},
+                                           {1, 0, 0, 1, 1, 0, 1});
+
+  cudf::test::strings_column_wrapper expected({"head", "head", "head", "mid", "mid", "mid", "tail"},
+                                              cudf::test::all_valid());
+
+  auto result = cudf::replace_nulls(input, cudf::replace_policy::PRECEDING);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+}
+
+TEST_F(ReplaceNullsPolicyStringTest, FollowingFill)
+{
+  cudf::test::strings_column_wrapper input({"head", "", "", "mid", "mid", "", "tail"},
+                                           {1, 0, 0, 1, 1, 0, 1});
+
+  cudf::test::strings_column_wrapper expected({"head", "mid", "mid", "mid", "mid", "tail", "tail"},
+                                              cudf::test::all_valid());
+
+  auto result = cudf::replace_nulls(input, cudf::replace_policy::FOLLOWING);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+}
+
+TEST_F(ReplaceNullsPolicyStringTest, PrecedingFillLeadingNulls)
+{
+  cudf::test::strings_column_wrapper input({"", "", "", "mid", "mid", "", "tail"},
+                                           {0, 0, 0, 1, 1, 0, 1});
+
+  cudf::test::strings_column_wrapper expected({"", "", "", "mid", "mid", "mid", "tail"},
+                                              {0, 0, 0, 1, 1, 1, 1});
+
+  auto result = cudf::replace_nulls(input, cudf::replace_policy::PRECEDING);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+}
+
+TEST_F(ReplaceNullsPolicyStringTest, FollowingFillTrailingNulls)
+{
+  cudf::test::strings_column_wrapper input({"head", "", "", "mid", "mid", "", ""},
+                                           {1, 0, 0, 1, 1, 0, 0});
+
+  cudf::test::strings_column_wrapper expected({"head", "mid", "mid", "mid", "mid", "", ""},
+                                              {1, 1, 1, 1, 1, 0, 0});
+
+  auto result = cudf::replace_nulls(input, cudf::replace_policy::FOLLOWING);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
 }
 
 template <typename T>
@@ -382,6 +438,151 @@ TYPED_TEST(ReplaceNullsPolicyTest, FollowingFillTrailingNulls)
     cudf::replace_policy::FOLLOWING);
 }
 
+template <typename T>
+struct ReplaceNullsFixedPointTest : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(ReplaceNullsFixedPointTest, cudf::test::FixedPointTypes);
+
+TYPED_TEST(ReplaceNullsFixedPointTest, ReplaceColumn)
+{
+  auto const scale = numeric::scale_type{0};
+  auto const sz    = std::size_t{1000};
+  auto data_begin  = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    return TypeParam{i, scale};
+  });
+  auto valid_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 3 ? 1 : 0; });
+  auto replace_begin  = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    return TypeParam{-2, scale};
+  });
+  auto expected_begin = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    int val = i % 3 ? static_cast<int>(i) : -2;
+    return TypeParam{val, scale};
+  });
+
+  ReplaceNullsColumn<TypeParam>(
+    cudf::test::fixed_width_column_wrapper<TypeParam>(data_begin, data_begin + sz, valid_begin),
+    cudf::test::fixed_width_column_wrapper<TypeParam>(replace_begin, replace_begin + sz),
+    cudf::test::fixed_width_column_wrapper<TypeParam>(expected_begin, expected_begin + sz));
+}
+
+TYPED_TEST(ReplaceNullsFixedPointTest, ReplaceColumn_Empty)
+{
+  ReplaceNullsColumn<TypeParam>(cudf::test::fixed_width_column_wrapper<TypeParam>{},
+                                cudf::test::fixed_width_column_wrapper<TypeParam>{},
+                                cudf::test::fixed_width_column_wrapper<TypeParam>{});
+}
+
+TYPED_TEST(ReplaceNullsFixedPointTest, ReplaceScalar)
+{
+  auto const scale = numeric::scale_type{0};
+  auto const sz    = std::size_t{1000};
+  auto data_begin  = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    return TypeParam{i, scale};
+  });
+  auto valid_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 3 ? 1 : 0; });
+  auto expected_begin = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    int val = i % 3 ? static_cast<int>(i) : -2;
+    return TypeParam{val, scale};
+  });
+
+  cudf::fixed_point_scalar<TypeParam> replacement{-2, scale};
+
+  ReplaceNullsScalar<TypeParam>(
+    cudf::test::fixed_width_column_wrapper<TypeParam>(data_begin, data_begin + sz, valid_begin),
+    replacement,
+    cudf::test::fixed_width_column_wrapper<TypeParam>(expected_begin, expected_begin + sz));
+}
+
+TYPED_TEST(ReplaceNullsFixedPointTest, ReplacementHasNulls)
+{
+  auto const scale = numeric::scale_type{0};
+  auto const sz    = std::size_t{1000};
+  auto data_begin  = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    return TypeParam{i, scale};
+  });
+  auto data_valid_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 3 ? 1 : 0; });
+  auto replace_begin = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    return TypeParam{-2, scale};
+  });
+  auto replace_valid_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 2 ? 1 : 0; });
+  auto expected_begin = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    int val = i % 3 ? static_cast<int>(i) : -2;
+    return TypeParam{val, scale};
+  });
+  auto expected_valid_begin =
+    cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return i % 6 ? 1 : 0; });
+
+  ReplaceNullsColumn<TypeParam>(cudf::test::fixed_width_column_wrapper<TypeParam>(
+                                  data_begin, data_begin + sz, data_valid_begin),
+                                cudf::test::fixed_width_column_wrapper<TypeParam>(
+                                  replace_begin, replace_begin + sz, replace_valid_begin),
+                                cudf::test::fixed_width_column_wrapper<TypeParam>(
+                                  expected_begin, expected_begin + sz, expected_valid_begin));
+}
+
+template <typename T>
+struct ReplaceNullsPolicyFixedPointTest : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(ReplaceNullsPolicyFixedPointTest, cudf::test::FixedPointTypes);
+
+TYPED_TEST(ReplaceNullsPolicyFixedPointTest, PrecedingFill)
+{
+  using fp     = TypeParam;
+  auto const s = numeric::scale_type{0};
+  auto col     = cudf::test::fixed_width_column_wrapper<TypeParam>(
+    {fp{42, s}, fp{2, s}, fp{1, s}, fp{-10, s}, fp{20, s}, fp{-30, s}}, {1, 0, 0, 1, 0, 1});
+  auto expect_col = cudf::test::fixed_width_column_wrapper<TypeParam>(
+    {fp{42, s}, fp{42, s}, fp{42, s}, fp{-10, s}, fp{-10, s}, fp{-30, s}}, {1, 1, 1, 1, 1, 1});
+
+  TestReplaceNullsWithPolicy(
+    std::move(col), std::move(expect_col), cudf::replace_policy::PRECEDING);
+}
+
+TYPED_TEST(ReplaceNullsPolicyFixedPointTest, FollowingFill)
+{
+  using fp     = TypeParam;
+  auto const s = numeric::scale_type{0};
+  auto col     = cudf::test::fixed_width_column_wrapper<TypeParam>(
+    {fp{42, s}, fp{2, s}, fp{1, s}, fp{-10, s}, fp{20, s}, fp{-30, s}}, {1, 0, 0, 1, 0, 1});
+  auto expect_col = cudf::test::fixed_width_column_wrapper<TypeParam>(
+    {fp{42, s}, fp{-10, s}, fp{-10, s}, fp{-10, s}, fp{-30, s}, fp{-30, s}}, {1, 1, 1, 1, 1, 1});
+
+  TestReplaceNullsWithPolicy(
+    std::move(col), std::move(expect_col), cudf::replace_policy::FOLLOWING);
+}
+
+TYPED_TEST(ReplaceNullsPolicyFixedPointTest, PrecedingFillLeadingNulls)
+{
+  using fp     = TypeParam;
+  auto const s = numeric::scale_type{0};
+  auto col     = cudf::test::fixed_width_column_wrapper<TypeParam>(
+    {fp{1, s}, fp{2, s}, fp{3, s}, fp{4, s}, fp{5, s}}, {0, 0, 1, 0, 1});
+  auto expect_col = cudf::test::fixed_width_column_wrapper<TypeParam>(
+    {fp{1, s}, fp{2, s}, fp{3, s}, fp{3, s}, fp{5, s}}, {0, 0, 1, 1, 1});
+
+  TestReplaceNullsWithPolicy(
+    std::move(col), std::move(expect_col), cudf::replace_policy::PRECEDING);
+}
+
+TYPED_TEST(ReplaceNullsPolicyFixedPointTest, FollowingFillTrailingNulls)
+{
+  using fp     = TypeParam;
+  auto const s = numeric::scale_type{0};
+  auto col     = cudf::test::fixed_width_column_wrapper<TypeParam>(
+    {fp{1, s}, fp{2, s}, fp{3, s}, fp{4, s}, fp{5, s}}, {1, 0, 1, 0, 0});
+  auto expect_col = cudf::test::fixed_width_column_wrapper<TypeParam>(
+    {fp{1, s}, fp{3, s}, fp{3, s}, fp{4, s}, fp{5, s}}, {1, 1, 1, 0, 0});
+
+  TestReplaceNullsWithPolicy(
+    std::move(col), std::move(expect_col), cudf::replace_policy::FOLLOWING);
+}
+
 struct ReplaceDictionaryTest : public cudf::test::BaseFixture {
 };
 
@@ -450,6 +651,69 @@ TEST_F(ReplaceDictionaryTest, ReplaceNullsNoNulls)
   result =
     cudf::dictionary::detail::replace_nulls(dict_input, cudf::numeric_scalar<int64_t>(0, false));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), input->view());
+}
+
+struct ReplaceNullsPolicyDictionaryTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(ReplaceNullsPolicyDictionaryTest, PrecedingFill)
+{
+  cudf::test::strings_column_wrapper input_w({"head", "", "", "mid1", "mid2", "tail", "", ""},
+                                             {1, 0, 0, 1, 1, 1, 0, 0});
+  auto input = cudf::dictionary::encode(input_w);
+
+  cudf::test::strings_column_wrapper expected_w(
+    {"head", "head", "head", "mid1", "mid2", "tail", "tail", "tail"}, cudf::test::all_valid());
+  auto expected = cudf::dictionary::encode(expected_w);
+
+  auto result = cudf::replace_nulls(*input, cudf::replace_policy::PRECEDING);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected->view());
+}
+
+TEST_F(ReplaceNullsPolicyDictionaryTest, FollowingFill)
+{
+  cudf::test::strings_column_wrapper input_w({"head", "", "", "mid1", "mid2", "", "", "tail"},
+                                             {1, 0, 0, 1, 1, 0, 0, 1});
+  auto input = cudf::dictionary::encode(input_w);
+
+  cudf::test::strings_column_wrapper expected_w(
+    {"head", "mid1", "mid1", "mid1", "mid2", "tail", "tail", "tail"}, cudf::test::all_valid());
+  auto expected = cudf::dictionary::encode(expected_w);
+
+  auto result = cudf::replace_nulls(*input, cudf::replace_policy::FOLLOWING);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected->view());
+}
+
+TEST_F(ReplaceNullsPolicyDictionaryTest, PrecedingFillLeadingNulls)
+{
+  cudf::test::strings_column_wrapper input_w({"", "", "", "mid1", "mid2", "", "", "tail"},
+                                             {0, 0, 0, 1, 1, 0, 0, 1});
+  auto input = cudf::dictionary::encode(input_w);
+
+  cudf::test::strings_column_wrapper expected_w(
+    {"", "", "", "mid1", "mid2", "mid2", "mid2", "tail"}, {0, 0, 0, 1, 1, 1, 1, 1});
+  auto expected = cudf::dictionary::encode(expected_w);
+
+  auto result = cudf::replace_nulls(*input, cudf::replace_policy::PRECEDING);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected->view());
+}
+
+TEST_F(ReplaceNullsPolicyDictionaryTest, FollowingFillTrailingNulls)
+{
+  cudf::test::strings_column_wrapper input_w({"head", "", "", "mid", "tail", "", "", ""},
+                                             {1, 0, 0, 1, 1, 0, 0, 0});
+  auto input = cudf::dictionary::encode(input_w);
+
+  cudf::test::strings_column_wrapper expected_w({"head", "mid", "mid", "mid", "tail", "", "", ""},
+                                                {1, 1, 1, 1, 1, 0, 0, 0});
+  auto expected = cudf::dictionary::encode(expected_w);
+
+  auto result = cudf::replace_nulls(*input, cudf::replace_policy::FOLLOWING);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

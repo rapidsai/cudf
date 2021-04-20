@@ -16,7 +16,7 @@
 
 #pragma once
 
-/** ---------------------------------------------------------------------------*
+/**
  * @brief overloads for CUDA atomic operations
  * @file device_atomics.cuh
  *
@@ -30,7 +30,7 @@
  * `atomicAnd`, `atomicOr`, `atomicXor` are also supported for integer data types.
  * Also provides `cudf::genericAtomicOperation` which performs atomic operation
  * with the given binary operator.
- * ---------------------------------------------------------------------------**/
+ */
 
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/types.hpp>
@@ -412,7 +412,7 @@ struct typesAtomicCASImpl<T, 8> {
 
 }  // namespace detail
 
-/** -------------------------------------------------------------------------*
+/**
  * @brief compute atomic binary operation
  * reads the `old` located at the `address` in global or shared memory,
  * computes 'BinaryOp'('old', 'update_value'),
@@ -427,7 +427,7 @@ struct typesAtomicCASImpl<T, 8> {
  * @param[in] op  The binary operator used for compute
  *
  * @returns The old value at `address`
- * -------------------------------------------------------------------------**/
+ */
 template <typename T, typename BinaryOp>
 typename std::enable_if_t<cudf::is_numeric<T>(), T> __forceinline__ __device__
 genericAtomicOperation(T* address, T const& update_value, BinaryOp op)
@@ -476,7 +476,7 @@ __forceinline__ __device__ bool genericAtomicOperation(bool* address,
 
 }  // namespace cudf
 
-/** -------------------------------------------------------------------------*
+/**
  * @brief Overloads for `atomicAdd`
  * reads the `old` located at the `address` in global or shared memory,
  * computes (old + val), and stores the result back to memory at the same
@@ -496,14 +496,14 @@ __forceinline__ __device__ bool genericAtomicOperation(bool* address,
  * @param[in] val The value to be added
  *
  * @returns The old value at `address`
- * -------------------------------------------------------------------------**/
+ */
 template <typename T>
 __forceinline__ __device__ T atomicAdd(T* address, T val)
 {
   return cudf::genericAtomicOperation(address, val, cudf::DeviceSum{});
 }
 
-/** -------------------------------------------------------------------------*
+/**
  * @brief Overloads for `atomicMin`
  * reads the `old` located at the `address` in global or shared memory,
  * computes the minimum of old and val, and stores the result back to memory
@@ -522,14 +522,14 @@ __forceinline__ __device__ T atomicAdd(T* address, T val)
  * @param[in] val The value to be computed
  *
  * @returns The old value at `address`
- * -------------------------------------------------------------------------**/
+ */
 template <typename T>
 __forceinline__ __device__ T atomicMin(T* address, T val)
 {
   return cudf::genericAtomicOperation(address, val, cudf::DeviceMin{});
 }
 
-/** -------------------------------------------------------------------------*
+/**
  * @brief Overloads for `atomicMax`
  * reads the `old` located at the `address` in global or shared memory,
  * computes the maximum of old and val, and stores the result back to memory
@@ -548,14 +548,14 @@ __forceinline__ __device__ T atomicMin(T* address, T val)
  * @param[in] val The value to be computed
  *
  * @returns The old value at `address`
- * -------------------------------------------------------------------------**/
+ */
 template <typename T>
 __forceinline__ __device__ T atomicMax(T* address, T val)
 {
   return cudf::genericAtomicOperation(address, val, cudf::DeviceMax{});
 }
 
-/** --------------------------------------------------------------------------*
+/**
  * @brief Overloads for `atomicCAS`
  * reads the `old` located at the `address` in global or shared memory,
  * computes (`old` == `compare` ? `val` : `old`),
@@ -575,14 +575,14 @@ __forceinline__ __device__ T atomicMax(T* address, T val)
  * @param[in] val The value to be computed
  *
  * @returns The old value at `address`
- * -------------------------------------------------------------------------**/
+ */
 template <typename T>
 __forceinline__ __device__ T atomicCAS(T* address, T compare, T val)
 {
   return cudf::detail::typesAtomicCASImpl<T>()(address, compare, val);
 }
 
-/** -------------------------------------------------------------------------*
+/**
  * @brief Overloads for `atomicAnd`
  * reads the `old` located at the `address` in global or shared memory,
  * computes (old & val), and stores the result back to memory at the same
@@ -596,14 +596,14 @@ __forceinline__ __device__ T atomicCAS(T* address, T compare, T val)
  * @param[in] val The value to be computed
  *
  * @returns The old value at `address`
- * -------------------------------------------------------------------------**/
+ */
 template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
 __forceinline__ __device__ T atomicAnd(T* address, T val)
 {
   return cudf::genericAtomicOperation(address, val, cudf::DeviceAnd{});
 }
 
-/** -------------------------------------------------------------------------*
+/**
  * @brief Overloads for `atomicOr`
  * reads the `old` located at the `address` in global or shared memory,
  * computes (old | val), and stores the result back to memory at the same
@@ -617,14 +617,14 @@ __forceinline__ __device__ T atomicAnd(T* address, T val)
  * @param[in] val The value to be computed
  *
  * @returns The old value at `address`
- * -------------------------------------------------------------------------**/
+ */
 template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
 __forceinline__ __device__ T atomicOr(T* address, T val)
 {
   return cudf::genericAtomicOperation(address, val, cudf::DeviceOr{});
 }
 
-/** -------------------------------------------------------------------------*
+/**
  * @brief Overloads for `atomicXor`
  * reads the `old` located at the `address` in global or shared memory,
  * computes (old ^ val), and stores the result back to memory at the same
@@ -638,7 +638,7 @@ __forceinline__ __device__ T atomicOr(T* address, T val)
  * @param[in] val The value to be computed
  *
  * @returns The old value at `address`
- * -------------------------------------------------------------------------**/
+ */
 template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
 __forceinline__ __device__ T atomicXor(T* address, T val)
 {

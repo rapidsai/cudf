@@ -24,7 +24,7 @@ namespace cudf {
 namespace io {
 /**
  * @brief Input parameters for the decompression interface
- **/
+ */
 struct gpu_inflate_input_s {
   const void *srcDevice;
   uint64_t srcSize;
@@ -34,7 +34,7 @@ struct gpu_inflate_input_s {
 
 /**
  * @brief Output parameters for the decompression interface
- **/
+ */
 struct gpu_inflate_status_s {
   uint64_t bytes_written;
   uint32_t status;
@@ -52,7 +52,7 @@ struct gpu_inflate_status_s {
  * @param[in] count Number of input/output structures, default 1
  * @param[in] parse_hdr Whether or not to parse GZIP header, default false
  * @param[in] stream CUDA stream to use, default 0
- **/
+ */
 cudaError_t gpuinflate(gpu_inflate_input_s *inputs,
                        gpu_inflate_status_s *outputs,
                        int count                    = 1,
@@ -65,7 +65,7 @@ cudaError_t gpuinflate(gpu_inflate_input_s *inputs,
  * @param[in] inputs List of input argument structures
  * @param[in] count Number of input structures, default 1
  * @param[in] stream CUDA stream to use, default 0
- **/
+ */
 cudaError_t gpu_copy_uncompressed_blocks(gpu_inflate_input_s *inputs,
                                          int count                    = 1,
                                          rmm::cuda_stream_view stream = rmm::cuda_stream_default);
@@ -80,7 +80,7 @@ cudaError_t gpu_copy_uncompressed_blocks(gpu_inflate_input_s *inputs,
  * @param[out] outputs List of output status structures
  * @param[in] count Number of input/output structures, default 1
  * @param[in] stream CUDA stream to use, default 0
- **/
+ */
 cudaError_t gpu_unsnap(gpu_inflate_input_s *inputs,
                        gpu_inflate_status_s *outputs,
                        int count                    = 1,
@@ -92,7 +92,7 @@ cudaError_t gpu_unsnap(gpu_inflate_input_s *inputs,
  * @param[in] max_num_inputs The maximum number of compressed input chunks
  *
  * @return The size in bytes of required temporary memory
- **/
+ */
 size_t get_gpu_debrotli_scratch_size(int max_num_inputs = 0);
 
 /**
@@ -107,7 +107,7 @@ size_t get_gpu_debrotli_scratch_size(int max_num_inputs = 0);
  * @param[in] scratch_size Size in bytes of the temporary memory
  * @param[in] count Number of input/output structures, default 1
  * @param[in] stream CUDA stream to use, default 0
- **/
+ */
 cudaError_t gpu_debrotli(gpu_inflate_input_s *inputs,
                          gpu_inflate_status_s *outputs,
                          void *scratch,
@@ -125,7 +125,7 @@ cudaError_t gpu_debrotli(gpu_inflate_input_s *inputs,
  * @param[out] outputs List of output status structures
  * @param[in] count Number of input/output structures, default 1
  * @param[in] stream CUDA stream to use, default 0
- **/
+ */
 cudaError_t gpu_snap(gpu_inflate_input_s *inputs,
                      gpu_inflate_status_s *outputs,
                      int count                    = 1,

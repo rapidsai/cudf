@@ -1,11 +1,18 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
+from typing import Any, Union
+
 import numpy as np
 import pandas as pd
 from nvtx import annotate
 
 import cudf
+from cudf._lib.concat import concat_columns
 from cudf._lib.scalar import _is_null_host_scalar
+from cudf._typing import ColumnLike, DataFrameOrSeries, ScalarLike
+from cudf.core.column.column import as_column
 from cudf.utils.dtypes import (
+    find_common_type,
     is_categorical_dtype,
     is_column_like,
     is_list_like,
@@ -91,8 +98,10 @@ class _SeriesIlocIndexer(object):
         else:
             value = column.as_column(value)
 
-        if hasattr(value, "dtype") and pd.api.types.is_numeric_dtype(
-            value.dtype
+        if (
+            not is_categorical_dtype(self._sr._column.dtype)
+            and hasattr(value, "dtype")
+            and pd.api.types.is_numeric_dtype(value.dtype)
         ):
             # normalize types if necessary:
             if not pd.api.types.is_integer(key):
@@ -113,16 +122,42 @@ class _SeriesLocIndexer(object):
     def __init__(self, sr):
         self._sr = sr
 
-    def __getitem__(self, arg):
+    def __getitem__(self, arg: Any) -> Union[ScalarLike, DataFrameOrSeries]:
+        if isinstance(arg, pd.MultiIndex):
+            arg = cudf.from_pandas(arg)
+
+        if isinstance(self._sr.index, cudf.MultiIndex) and not isinstance(
+            arg, cudf.MultiIndex
+        ):
+            result = self._sr.index._get_row_major(self._sr, arg)
+            if (
+                isinstance(arg, tuple)
+                and len(arg) == self._sr._index.nlevels
+                and not any((isinstance(x, slice) for x in arg))
+            ):
+                result = result.iloc[0]
+            return result
         try:
             arg = self._loc_to_iloc(arg)
         except (TypeError, KeyError, IndexError, ValueError):
-            raise IndexError("Failed to convert index to appropirate row")
+            raise KeyError(arg)
 
         return self._sr.iloc[arg]
 
     def __setitem__(self, key, value):
-        key = self._loc_to_iloc(key)
+        try:
+            key = self._loc_to_iloc(key)
+        except KeyError as e:
+            if (
+                is_scalar(key)
+                and not isinstance(self._sr.index, cudf.MultiIndex)
+                and is_scalar(value)
+            ):
+                _append_new_row_inplace(self._sr.index._values, key)
+                _append_new_row_inplace(self._sr._column, value)
+                return
+            else:
+                raise e
         if isinstance(value, (pd.Series, cudf.Series)):
             value = cudf.Series(value)
             value = value._align_to_index(self._sr.index, how="right")
@@ -139,7 +174,7 @@ class _SeriesLocIndexer(object):
                 )
                 return found_index
             except (TypeError, KeyError, IndexError, ValueError):
-                raise IndexError("label scalar is out of bound")
+                raise KeyError("label scalar is out of bound")
 
         elif isinstance(arg, slice):
             return get_label_range_or_mask(
@@ -153,12 +188,12 @@ class _SeriesLocIndexer(object):
 
         else:
             arg = Series(column.as_column(arg))
-            if arg.dtype in [np.bool, np.bool_]:
+            if arg.dtype in (bool, np.bool_):
                 return arg
             else:
                 indices = indices_from_labels(self._sr, arg)
                 if indices.null_count > 0:
-                    raise IndexError("label scalar is out of bound")
+                    raise KeyError("label scalar is out of bound")
                 return indices
 
 
@@ -337,7 +372,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     df.drop(columns=[tmp_col_name], inplace=True)
                     # There were no indices found
                     if len(df) == 0:
-                        raise IndexError
+                        raise KeyError(arg)
 
         # Step 3: Gather index
         if df.shape[0] == 1:  # we have a single row
@@ -461,3 +496,14 @@ def _normalize_dtypes(df):
         for name, col in df._data.items():
             df[name] = col.astype(normalized_dtype)
     return df
+
+
+def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
+    """Append a scalar `value` to the end of `col` inplace.
+       Cast to common type if possible
+    """
+    to_type = find_common_type([type(value), col.dtype])
+    val_col = as_column(value, dtype=to_type)
+    old_col = col.astype(to_type)
+
+    col._mimic_inplace(concat_columns([old_col, val_col]), inplace=True)

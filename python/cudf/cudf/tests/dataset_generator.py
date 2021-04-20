@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 # This module is for generating "synthetic" datasets. It was originally
 # designed for testing filtered reading. Generally, it should be useful
@@ -16,6 +16,8 @@ import pandas as pd
 import pyarrow as pa
 from mimesis import Generic
 from pyarrow import parquet as pq
+
+import cudf
 
 
 class ColumnParameters:
@@ -122,13 +124,18 @@ def _generate_column(column_params, num_rows):
                 else None,
             )
 
+        if hasattr(column_params.dtype, "to_arrow"):
+            arrow_type = column_params.dtype.to_arrow()
+        elif column_params.dtype is not None:
+            arrow_type = pa.from_numpy_dtype(column_params.dtype)
+        else:
+            arrow_type = None
+
         vals = pa.array(
             column_params.generator,
             size=column_params.cardinality,
             safe=False,
-            type=pa.from_numpy_dtype(column_params.dtype)
-            if column_params.dtype is not None
-            else None,
+            type=arrow_type,
         )
         # Generate data for current column
         return pa.array(
@@ -145,9 +152,7 @@ def _generate_column(column_params, num_rows):
             else None,
             size=num_rows,
             safe=False,
-            type=pa.from_numpy_dtype(column_params.dtype)
-            if column_params.dtype is not None
-            else None,
+            type=arrow_type,
         )
 
     else:
@@ -208,28 +213,35 @@ def get_dataframe(parameters, use_threads):
             column_params.generator = column_params.generator()
 
     # Get schema for each column
-    schema = pa.schema(
-        [
+    table_fields = []
+    for i, column_params in enumerate(parameters.column_parameters):
+        if (
+            isinstance(column_params.dtype, str)
+            and column_params.dtype == "category"
+        ):
+            arrow_type = pa.dictionary(
+                index_type=pa.int64(),
+                value_type=pa.from_numpy_dtype(
+                    type(next(iter(column_params.generator)))
+                ),
+            )
+        elif hasattr(column_params.dtype, "to_arrow"):
+            arrow_type = column_params.dtype.to_arrow()
+        else:
+            arrow_type = pa.from_numpy_dtype(
+                type(next(iter(column_params.generator)))
+                if column_params.dtype is None
+                else column_params.dtype
+            )
+        table_fields.append(
             pa.field(
                 name=str(i),
-                type=pa.dictionary(
-                    index_type=pa.int64(),
-                    value_type=pa.from_numpy_dtype(
-                        type(next(iter(column_params.generator)))
-                    ),
-                )
-                if isinstance(column_params.dtype, str)
-                and column_params.dtype == "category"
-                else pa.from_numpy_dtype(
-                    type(next(iter(column_params.generator)))
-                    if column_params.dtype is None
-                    else column_params.dtype
-                ),
+                type=arrow_type,
                 nullable=column_params.null_frequency > 0,
             )
-            for i, column_params in enumerate(parameters.column_parameters)
-        ]
-    )
+        )
+
+    schema = pa.schema(table_fields)
 
     # Initialize column data and which columns should be sorted
     column_data = [None] * len(parameters.column_parameters)
@@ -299,7 +311,36 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
         null_frequency = copy.deepcopy(meta["null_frequency"])
         cardinality = copy.deepcopy(meta["cardinality"])
 
-        if dtype == "category":
+        if dtype == "list":
+            lists_max_length = meta["lists_max_length"]
+            nesting_max_depth = meta["nesting_max_depth"]
+            value_type = meta["value_type"]
+            nesting_depth = np.random.randint(1, nesting_max_depth)
+
+            dtype = cudf.core.dtypes.ListDtype(value_type)
+
+            # Determining the `dtype` from the `value_type`
+            # and the nesting_depth
+            i = 1
+            while i < nesting_depth:
+                dtype = cudf.core.dtypes.ListDtype(dtype)
+                i += 1
+
+            column_params.append(
+                ColumnParameters(
+                    cardinality=cardinality,
+                    null_frequency=null_frequency,
+                    generator=list_generator(
+                        dtype=value_type,
+                        size=cardinality,
+                        nesting_depth=nesting_depth,
+                        lists_max_length=lists_max_length,
+                    ),
+                    is_sorted=False,
+                    dtype=dtype,
+                )
+            )
+        elif dtype == "category":
             column_params.append(
                 ColumnParameters(
                     cardinality=cardinality,
@@ -401,6 +442,9 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
 
 
 def int_generator(dtype, size):
+    """
+    Generator for int data
+    """
     iinfo = np.iinfo(dtype)
     return lambda: np.random.randint(
         low=iinfo.min, high=iinfo.max, size=size, dtype=dtype,
@@ -408,6 +452,9 @@ def int_generator(dtype, size):
 
 
 def float_generator(dtype, size):
+    """
+    Generator for float data
+    """
     finfo = np.finfo(dtype)
     return (
         lambda: np.random.uniform(
@@ -418,6 +465,9 @@ def float_generator(dtype, size):
 
 
 def datetime_generator(dtype, size):
+    """
+    Generator for datetime data
+    """
     iinfo = np.iinfo("int64")
     return lambda: np.random.randint(
         low=np.datetime64(iinfo.min + 1, "ns").astype(dtype).astype("int"),
@@ -427,6 +477,9 @@ def datetime_generator(dtype, size):
 
 
 def timedelta_generator(dtype, size):
+    """
+    Generator for timedelta data
+    """
     iinfo = np.iinfo("int64")
     return lambda: np.random.randint(
         low=np.timedelta64(iinfo.min + 1, "ns").astype(dtype).astype("int"),
@@ -436,4 +489,99 @@ def timedelta_generator(dtype, size):
 
 
 def boolean_generator(size):
+    """
+    Generator for bool data
+    """
     return lambda: np.random.choice(a=[False, True], size=size)
+
+
+def get_values_for_nested_data(dtype, lists_max_length):
+    """
+    Returns list of values based on dtype.
+    """
+    cardinality = np.random.randint(0, lists_max_length)
+    dtype = np.dtype(dtype)
+    if dtype.kind in ("i", "u"):
+        values = int_generator(dtype=dtype, size=cardinality)()
+    elif dtype.kind == "f":
+        values = float_generator(dtype=dtype, size=cardinality)()
+    elif dtype.kind in ("U", "O"):
+        values = [
+            mimesis.random.random.schoice(string.printable, 100,)
+            for _ in range(cardinality)
+        ]
+    elif dtype.kind == "M":
+        values = datetime_generator(dtype=dtype, size=cardinality)().astype(
+            dtype
+        )
+    elif dtype.kind == "m":
+        values = timedelta_generator(dtype=dtype, size=cardinality)().astype(
+            dtype
+        )
+    elif dtype.kind == "b":
+        values = boolean_generator(cardinality)().astype(dtype)
+    else:
+        raise TypeError(f"Unsupported dtype: {dtype}")
+
+    # To ensure numpy arrays are not passed as input to
+    # list constructor, returning a python list object here.
+    if isinstance(values, np.ndarray):
+        return values.tolist()
+    else:
+        return values
+
+
+def make_lists(dtype, lists_max_length, nesting_depth, top_level_list):
+    """
+    Helper to create random list of lists with `nesting_depth` and
+    specified value type `dtype`.
+    """
+    nesting_depth -= 1
+    if nesting_depth >= 0:
+        L = np.random.randint(1, lists_max_length)
+        for i in range(L):
+            top_level_list.append(
+                make_lists(
+                    dtype=dtype,
+                    lists_max_length=lists_max_length,
+                    nesting_depth=nesting_depth,
+                    top_level_list=[],
+                )
+            )
+    else:
+        top_level_list = get_values_for_nested_data(
+            dtype=dtype, lists_max_length=lists_max_length
+        )
+    return top_level_list
+
+
+def get_nested_lists(dtype, size, nesting_depth, lists_max_length):
+    """
+    Returns a list of nested lists with random nesting
+    depth and random nested lists length.
+    """
+    list_of_lists = []
+
+    while len(list_of_lists) <= size:
+        list_of_lists.extend(
+            make_lists(
+                dtype=dtype,
+                lists_max_length=lists_max_length,
+                nesting_depth=nesting_depth,
+                top_level_list=[],
+            )
+        )
+
+    return list_of_lists
+
+
+def list_generator(dtype, size, nesting_depth, lists_max_length):
+    """
+    Generator for list data
+    """
+    return lambda: get_nested_lists(
+        dtype=dtype,
+        size=size,
+        nesting_depth=nesting_depth,
+        lists_max_length=lists_max_length,
+    )

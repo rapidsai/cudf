@@ -1,3 +1,5 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -27,6 +29,7 @@ def test_sqrt_integer():
 def math_op_test(
     dtype, fn, nelem=128, test_df=False, positive_only=False, check_dtype=True
 ):
+    np.random.seed(0)
     randvals = gen_rand(dtype, nelem, positive_only=positive_only)
     h_series = pd.Series(randvals.astype(dtype))
     d_series = cudf.Series(h_series)

@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -8,9 +8,13 @@ import pytest
 import cudf
 from cudf.core.dtypes import (
     CategoricalDtype,
+    Decimal64Dtype,
     ListDtype,
     StructDtype,
+<<<<<<< HEAD
     DecimalDtype,
+=======
+>>>>>>> cdf77047c6e2f17c478a8569168a09def2c9b135
     IntervalDtype,
 )
 from cudf.tests.utils import assert_eq
@@ -137,8 +141,9 @@ def test_struct_dtype_fields(fields):
 
 
 def test_decimal_dtype():
-    dt = DecimalDtype(4, 2)
+    dt = Decimal64Dtype(4, 2)
     assert dt.to_arrow() == pa.decimal128(4, 2)
+<<<<<<< HEAD
     assert dt == DecimalDtype.from_arrow(pa.decimal128(4, 2))
 
 
@@ -147,6 +152,21 @@ def test_interval_dtype_pyarrow_round_trip(fields):
     pa_array = pd.core.arrays._arrow_utils.ArrowIntervalType(
         "int64", closed="right"
     )
+=======
+    assert dt == Decimal64Dtype.from_arrow(pa.decimal128(4, 2))
+
+
+def test_max_precision():
+    Decimal64Dtype(scale=0, precision=18)
+    with pytest.raises(ValueError):
+        Decimal64Dtype(scale=0, precision=19)
+
+
+@pytest.mark.parametrize("fields", ["int64", "int32"])
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+def test_interval_dtype_pyarrow_round_trip(fields, closed):
+    pa_array = pd.core.arrays._arrow_utils.ArrowIntervalType(fields, closed)
+>>>>>>> cdf77047c6e2f17c478a8569168a09def2c9b135
     expect = pa_array
     got = IntervalDtype.from_arrow(expect).to_arrow()
     assert expect.equals(got)

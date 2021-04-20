@@ -1,7 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 import cudf
-import warnings
 
 from cudf._lib.table cimport Table
 from libcpp.vector cimport vector
@@ -32,10 +31,6 @@ def from_dlpack(dlpack_capsule):
 
     DLPack Tensor PyCapsule is expected to have the name "dltensor".
     """
-    warnings.warn("WARNING: cuDF from_dlpack() assumes column-major (Fortran"
-                  " order) input. If the input tensor is row-major, transpose"
-                  " it before passing it to this function.")
-
     cdef DLManagedTensor* dlpack_tensor = <DLManagedTensor*>pycapsule.\
         PyCapsule_GetPointer(dlpack_capsule, 'dltensor')
     pycapsule.PyCapsule_SetName(dlpack_capsule, 'used_dltensor')
@@ -61,11 +56,6 @@ def to_dlpack(Table source_table):
 
     DLPack Tensor PyCapsule will have the name "dltensor".
     """
-
-    warnings.warn("WARNING: cuDF to_dlpack() produces column-major (Fortran "
-                  "order) output. If the output tensor needs to be row major, "
-                  "transpose the output of this function.")
-
     for column in source_table._columns:
         if column.null_count:
             raise ValueError(

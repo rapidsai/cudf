@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include "chunked_state.hpp"
 #include "orc.h"
 #include "orc_gpu.h"
 
@@ -27,9 +26,12 @@
 #include <cudf/io/detail/orc.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <memory>
 #include <string>
@@ -44,10 +46,79 @@ class orc_column_view;
 
 using namespace cudf::io::orc;
 using namespace cudf::io;
+using cudf::detail::device_2dspan;
+using cudf::detail::host_2dspan;
+using cudf::detail::hostdevice_2dvector;
+
+/**
+ * @brief Indices of rowgroups contained in a stripe.
+ *
+ * Provides a container-like interface to iterate over rowgroup indices.
+ */
+struct stripe_rowgroups {
+  uint32_t id;     // stripe id
+  uint32_t first;  // first rowgroup in the stripe
+  uint32_t size;   // number of rowgroups in the stripe
+  stripe_rowgroups(uint32_t id, uint32_t first, uint32_t size) : id{id}, first{first}, size{size} {}
+  auto cbegin() const { return thrust::make_counting_iterator(first); }
+  auto cend() const { return thrust::make_counting_iterator(first + size); }
+};
+
+/**
+ * @brief Returns the total number of rowgroups in the list of contigious stripes.
+ */
+inline auto stripes_size(host_span<stripe_rowgroups const> stripes)
+{
+  return !stripes.empty() ? *stripes.back().cend() - stripes.front().first : 0;
+}
+
+/**
+ * @brief List of per-column ORC streams.
+ *
+ * Provides interface to calculate their offsets.
+ */
+class orc_streams {
+ public:
+  orc_streams(std::vector<Stream> streams, std::vector<int32_t> ids)
+    : streams{std::move(streams)}, ids{std::move(ids)}
+  {
+  }
+  Stream const& operator[](int idx) const { return streams[idx]; }
+  Stream& operator[](int idx) { return streams[idx]; }
+  auto id(int idx) const { return ids[idx]; }
+  auto& id(int idx) { return ids[idx]; }
+  auto size() const { return streams.size(); }
+
+  /**
+   * @brief List of ORC stream offsets and their total size.
+   */
+  struct orc_stream_offsets {
+    std::vector<size_t> offsets;
+    size_t str_data_size = 0;
+    size_t rle_data_size = 0;
+    auto data_size() const { return str_data_size + rle_data_size; }
+  };
+  orc_stream_offsets compute_offsets(host_span<orc_column_view const> columns,
+                                     size_t num_rowgroups) const;
+
+  operator std::vector<Stream> const&() const { return streams; }
+
+ private:
+  std::vector<Stream> streams;
+  std::vector<int32_t> ids;
+};
+
+/**
+ * @brief ORC per-chunk streams of encoded data.
+ */
+struct encoded_data {
+  rmm::device_uvector<uint8_t> data;                        // Owning array of the encoded data
+  hostdevice_2dvector<gpu::encoder_chunk_streams> streams;  // streams of encoded data, per chunk
+};
 
 /**
  * @brief Implementation for ORC writer
- **/
+ */
 class writer::impl {
   // ORC datasets start with a 3 byte header
   static constexpr const char* MAGIC = "ORC";
@@ -64,229 +135,201 @@ class writer::impl {
    *
    * @param sink Output sink
    * @param options Settings for controlling behavior
+   * @param mode Option to write at once or in chunks
    * @param mr Device memory resource to use for device memory allocation
-   **/
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
   explicit impl(std::unique_ptr<data_sink> sink,
                 orc_writer_options const& options,
-                rmm::mr::device_memory_resource* mr);
+                SingleWriteMode mode,
+                rmm::mr::device_memory_resource* mr,
+                rmm::cuda_stream_view stream);
 
   /**
-   * @brief Write an entire dataset to ORC format.
+   * @brief Constructor with chunked writer options.
    *
-   * @param table The set of columns
-   * @param metadata The metadata associated with the table
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
-  void write(table_view const& table, const table_metadata* metadata, rmm::cuda_stream_view stream);
+   * @param sink Output sink
+   * @param options Settings for controlling behavior
+   * @param mode Option to write at once or in chunks
+   * @param mr Device memory resource to use for device memory allocation
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  explicit impl(std::unique_ptr<data_sink> sink,
+                chunked_orc_writer_options const& options,
+                SingleWriteMode mode,
+                rmm::mr::device_memory_resource* mr,
+                rmm::cuda_stream_view stream);
+
+  /**
+   * @brief Destructor to complete any incomplete write and release resources.
+   */
+  ~impl();
 
   /**
    * @brief Begins the chunked/streamed write process.
-   *
-   * @param[in] orc_chunked_state Internal state maintained between chunks.
-   * boundaries.
    */
-  void write_chunked_begin(orc_chunked_state& state);
+  void init_state();
 
   /**
    * @brief Writes a single subtable as part of a larger ORC file/table write.
    *
    * @param[in] table The table information to be written
-   * @param[in] orc_chunked_state Internal state maintained between chunks.
-   * boundaries.
    */
-  void write_chunk(table_view const& table, orc_chunked_state& state);
+  void write(table_view const& table);
 
   /**
    * @brief Finishes the chunked/streamed write process.
-   *
-   * @param[in] orc_chunked_state Internal state maintained between chunks.
-   * boundaries.
    */
-  void write_chunked_end(orc_chunked_state& state);
+  void close();
 
  private:
   /**
    * @brief Builds up column dictionaries indices
    *
+   * @param view Table device view representing input table
    * @param columns List of columns
-   * @param num_rows Total number of rows
    * @param str_col_ids List of columns that are strings type
+   * @param d_str_col_ids List of columns that are strings type in device memory
    * @param dict_data Dictionary data memory
    * @param dict_index Dictionary index memory
    * @param dict List of dictionary chunks
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
-  void init_dictionaries(orc_column_view* columns,
-                         size_t num_rows,
+   */
+  void init_dictionaries(const table_device_view& view,
+                         orc_column_view* columns,
                          std::vector<int> const& str_col_ids,
+                         device_span<size_type> d_str_col_ids,
                          uint32_t* dict_data,
                          uint32_t* dict_index,
-                         hostdevice_vector<gpu::DictionaryChunk>& dict,
-                         rmm::cuda_stream_view stream);
+                         hostdevice_vector<gpu::DictionaryChunk>* dict);
 
   /**
-   * @brief Builds up per-stripe dictionaries for string columns
+   * @brief Builds up per-stripe dictionaries for string columns.
    *
    * @param columns List of columns
-   * @param num_rows Total number of rows
    * @param str_col_ids List of columns that are strings type
-   * @param stripe_list List of stripe boundaries
+   * @param stripe_bounds List of stripe boundaries
    * @param dict List of dictionary chunks
    * @param dict_index List of dictionary indices
    * @param stripe_dict List of stripe dictionaries
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   void build_dictionaries(orc_column_view* columns,
-                          size_t num_rows,
                           std::vector<int> const& str_col_ids,
-                          std::vector<uint32_t> const& stripe_list,
+                          host_span<stripe_rowgroups const> stripe_bounds,
                           hostdevice_vector<gpu::DictionaryChunk> const& dict,
                           uint32_t* dict_index,
-                          hostdevice_vector<gpu::StripeDictionary>& stripe_dict,
-                          rmm::cuda_stream_view stream);
+                          hostdevice_vector<gpu::StripeDictionary>& stripe_dict);
 
   /**
-   * @brief Returns stream information for each column
+   * @brief Builds up per-column streams.
    *
-   * @param columns List of columns
-   * @param num_columns Total number of columns
-   * @param num_rows Total number of rows
-   * @param stripe_list List of stripe boundaries
-   * @param strm_ids List of unique stream identifiers
-   *
-   * @return The streams
-   **/
-  std::vector<Stream> gather_streams(orc_column_view* columns,
-                                     size_t num_columns,
-                                     size_t num_rows,
-                                     std::vector<uint32_t> const& stripe_list,
-                                     std::vector<int32_t>& strm_ids,
-                                     const orc_chunked_state& state);
+   * @param[in,out] columns List of columns
+   * @param[in] stripe_bounds List of stripe boundaries
+   * @return List of stream descriptors
+   */
+  orc_streams create_streams(host_span<orc_column_view> columns,
+                             host_span<stripe_rowgroups const> stripe_bounds);
 
   /**
-   * @brief Encodes the streams as a series of column data chunks
+   * @brief Gathers stripe information.
    *
    * @param columns List of columns
-   * @param num_columns Total number of columns
-   * @param num_rows Total number of rows
-   * @param num_rowgroups Total number of row groups
+   * @param num_rowgroups Total number of rowgroups
+   * @return List of stripe descriptors
+   */
+  std::vector<stripe_rowgroups> gather_stripe_info(host_span<orc_column_view const> columns,
+                                                   size_t num_rowgroups);
+
+  /**
+   * @brief Encodes the input columns into streams.
+   *
+   * @param view Table device view representing input table
+   * @param columns List of columns
    * @param str_col_ids List of columns that are strings type
-   * @param stripe_list List of stripe boundaries
-   * @param streams List of columns' index and data streams
-   * @param strm_ids List of unique stream identifiers
-   * @param chunks List of column data chunks
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   *
-   * @return Device buffer containing encoded data
-   **/
-  rmm::device_buffer encode_columns(orc_column_view* columns,
-                                    size_t num_columns,
-                                    size_t num_rows,
-                                    size_t num_rowgroups,
-                                    std::vector<int> const& str_col_ids,
-                                    std::vector<uint32_t> const& stripe_list,
-                                    std::vector<Stream> const& streams,
-                                    std::vector<int32_t> const& strm_ids,
-                                    hostdevice_vector<gpu::EncChunk>& chunks,
-                                    rmm::cuda_stream_view stream);
+   * @param stripe_bounds List of stripe boundaries
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return Encoded data and per-chunk stream descriptors
+   */
+  encoded_data encode_columns(const table_device_view& view,
+                              host_span<orc_column_view const> columns,
+                              std::vector<int> const& str_col_ids,
+                              host_span<stripe_rowgroups const> stripe_bounds,
+                              orc_streams const& streams);
 
   /**
    * @brief Returns stripe information after compacting columns' individual data
-   * chunks into contiguous data streams
+   * chunks into contiguous data streams.
    *
-   * @param num_columns Total number of columns
-   * @param num_rows Total number of rows
-   * @param num_index_streams Total number of index streams
-   * @param num_data_streams Total number of data streams
-   * @param stripe_list List of stripe boundaries
-   * @param chunks List of column data chunks
-   * @param strm_desc List of stream descriptors
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param[in] num_rows Total number of rows
+   * @param[in] num_index_streams Total number of index streams
+   * @param[in] stripe_bounds List of stripe boundaries
+   * @param[in,out] enc_streams List of encoder chunk streams [column][rowgroup]
+   * @param[in,out] strm_desc List of stream descriptors [stripe][data_stream]
    *
    * @return The stripes' information
-   **/
-  std::vector<StripeInformation> gather_stripes(size_t num_columns,
-                                                size_t num_rows,
-                                                size_t num_index_streams,
-                                                size_t num_data_streams,
-                                                std::vector<uint32_t> const& stripe_list,
-                                                hostdevice_vector<gpu::EncChunk>& chunks,
-                                                hostdevice_vector<gpu::StripeStream>& strm_desc,
-                                                rmm::cuda_stream_view stream);
+   */
+  std::vector<StripeInformation> gather_stripes(
+    size_t num_rows,
+    size_t num_index_streams,
+    host_span<stripe_rowgroups const> stripe_bounds,
+    hostdevice_2dvector<gpu::encoder_chunk_streams>* enc_streams,
+    hostdevice_2dvector<gpu::StripeStream>* strm_desc);
 
   /**
    * @brief Returns per-stripe and per-file column statistics encoded
-   * in ORC protobuf format
+   * in ORC protobuf format.
    *
+   * @param table Table information to be written
    * @param columns List of columns
-   * @param num_columns Total number of columns
-   * @param num_rows Total number of rows
-   * @param num_rowgroups Total number of row groups
-   * @param stripe_list List of stripe boundaries
-   * @param stripes Stripe information
-   * @param chunks List of column data chunks
-   * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param stripe_bounds List of stripe boundaries
    *
    * @return The statistic blobs
-   **/
+   */
   std::vector<std::vector<uint8_t>> gather_statistic_blobs(
-    orc_column_view const* columns,
-    size_t num_columns,
-    size_t num_rows,
-    size_t num_rowgroups,
-    std::vector<uint32_t> const& stripe_list,
-    std::vector<StripeInformation> const& stripes,
-    hostdevice_vector<gpu::EncChunk>& chunks,
-    rmm::cuda_stream_view stream);
+    const table_device_view& table,
+    host_span<orc_column_view const> columns,
+    host_span<stripe_rowgroups const> stripe_bounds);
 
   /**
-   * @brief Write the specified column's row index stream
+   * @brief Writes the specified column's row index stream.
    *
-   * @param stripe_id Stripe's identifier
-   * @param stream_id Stream's identifier
-   * @param columns List of columns
-   * @param num_columns Total number of columns
-   * @param num_data_streams Total number of data streams
-   * @param group Starting row group in the stripe
-   * @param groups_in_stripe Number of row groups in the stripe
-   * @param chunks List of all column chunks
-   * @param strm_desc List of stream descriptors
-   * @param comp_out Output status for compressed streams
-   * @param streams List of all streams
-   * @param pbw Protobuf writer
-   **/
+   * @param[in] stripe_id Stripe's identifier
+   * @param[in] stream_id Stream identifier (column id + 1)
+   * @param[in] columns List of columns
+   * @param[in] rowgroups_range Indexes of rowgroups in the stripe
+   * @param[in] enc_streams List of encoder chunk streams [column][rowgroup]
+   * @param[in] strm_desc List of stream descriptors
+   * @param[in] comp_out Output status for compressed streams
+   * @param[in,out] stripe Stream's parent stripe
+   * @param[in,out] streams List of all streams
+   * @param[in,out] pbw Protobuf writer
+   */
   void write_index_stream(int32_t stripe_id,
                           int32_t stream_id,
-                          orc_column_view* columns,
-                          size_t num_columns,
-                          size_t num_data_streams,
-                          size_t group,
-                          size_t groups_in_stripe,
-                          hostdevice_vector<gpu::EncChunk> const& chunks,
-                          hostdevice_vector<gpu::StripeStream> const& strm_desc,
-                          hostdevice_vector<gpu_inflate_status_s> const& comp_out,
-                          StripeInformation& stripe,
-                          std::vector<Stream>& streams,
+                          host_span<orc_column_view const> columns,
+                          stripe_rowgroups const& rowgroups_range,
+                          host_2dspan<gpu::encoder_chunk_streams const> enc_streams,
+                          host_2dspan<gpu::StripeStream const> strm_desc,
+                          host_span<gpu_inflate_status_s const> comp_out,
+                          StripeInformation* stripe,
+                          orc_streams* streams,
                           ProtobufWriter* pbw);
 
   /**
    * @brief Write the specified column's data streams
    *
-   * @param strm_desc Stream's descriptor
-   * @param chunk First column chunk of the stream
-   * @param compressed_data Compressed stream data
-   * @param stream_out Temporary host output buffer
-   * @param stripe Stream's parent stripe
-   * @param streams List of all streams
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   * @param[in] strm_desc Stream's descriptor
+   * @param[in] enc_stream Chunk's streams
+   * @param[in] compressed_data Compressed stream data
+   * @param[in,out] stream_out Temporary host output buffer
+   * @param[in,out] stripe Stream's parent stripe
+   * @param[in,out] streams List of all streams
+   */
   void write_data_stream(gpu::StripeStream const& strm_desc,
-                         gpu::EncChunk const& chunk,
+                         gpu::encoder_chunk_streams const& enc_stream,
                          uint8_t const* compressed_data,
                          uint8_t* stream_out,
-                         StripeInformation& stripe,
-                         std::vector<Stream>& streams,
-                         rmm::cuda_stream_view stream);
+                         StripeInformation* stripe,
+                         orc_streams* streams);
 
   /**
    * @brief Insert 3-byte uncompressed block headers in a byte vector
@@ -300,7 +343,7 @@ class writer::impl {
    *
    * @tparam T Optional type
    * @param num_rows Number of rows
-   **/
+   */
   template <typename T = size_t>
   constexpr inline auto div_by_rowgroups(T num_rows) const
   {
@@ -312,7 +355,7 @@ class writer::impl {
    *
    * @tparam T Optional type
    * @param modulus Number to use for division
-   **/
+   */
   template <typename T = size_t>
   constexpr inline auto div_rowgroups_by(T modulus) const
   {
@@ -321,6 +364,8 @@ class writer::impl {
 
  private:
   rmm::mr::device_memory_resource* _mr = nullptr;
+  // Cuda stream to be used
+  rmm::cuda_stream_view stream = rmm::cuda_stream_default;
 
   size_t max_stripe_size_           = DEFAULT_STRIPE_SIZE;
   size_t row_index_stride_          = default_row_index_stride;
@@ -329,6 +374,22 @@ class writer::impl {
 
   bool enable_dictionary_ = true;
   bool enable_statistics_ = true;
+
+  // Overall file metadata.  Filled in during the process and written during write_chunked_end()
+  cudf::io::orc::FileFooter ff;
+  cudf::io::orc::Metadata md;
+  // current write position for rowgroups/chunks
+  size_t current_chunk_offset;
+  // optional user metadata
+  table_metadata const* user_metadata = nullptr;
+  // only used in the write_chunked() case. copied from the (optionally) user supplied
+  // argument to write_chunked_begin()
+  table_metadata_with_nullability user_metadata_with_nullability;
+  // special parameter only used by detail::write() to indicate that we are guaranteeing
+  // a single table write.  this enables some internal optimizations.
+  bool const single_write_mode;
+  // to track if the output has been written to sink
+  bool closed = false;
 
   std::vector<uint8_t> buffer_;
   std::unique_ptr<data_sink> out_sink_;

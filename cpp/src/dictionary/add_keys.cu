@@ -43,7 +43,6 @@ namespace detail {
  * d2 = add_keys( d1, [d, b, e] )
  * d2 is now {[a, b, c, d, e, f], [5, 0, 3, 1, 2, 2, 2, 5, 0]}
  * ```
- *
  */
 std::unique_ptr<column> add_keys(
   dictionary_column_view const& dictionary_column,

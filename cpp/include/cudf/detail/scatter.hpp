@@ -61,7 +61,7 @@ namespace detail {
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Result of scattering values from source to target
- **/
+ */
 std::unique_ptr<table> scatter(
   table_view const& source,
   column_view const& scatter_map,
@@ -101,7 +101,7 @@ std::unique_ptr<table> scatter(
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return Result of scattering values from source to target
- **/
+ */
 std::unique_ptr<table> scatter(
   std::vector<std::reference_wrapper<const scalar>> const& source,
   column_view const& indices,

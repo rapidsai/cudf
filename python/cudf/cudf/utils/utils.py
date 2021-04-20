@@ -1,4 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 import functools
 from collections import OrderedDict
 from collections.abc import Sequence
@@ -193,7 +194,7 @@ def initfunc(f):
     return wrapper
 
 
-def get_null_series(size, dtype=np.bool):
+def get_null_series(size, dtype=np.bool_):
     """
     Creates a null series of provided dtype and size
 
@@ -277,36 +278,6 @@ class cached_property:
             value = self.func(instance)
             setattr(instance, self.func.__name__, value)
             return value
-
-
-class ColumnValuesMappingMixin:
-    """
-    Coerce provided values for the mapping to Columns.
-    """
-
-    def __setitem__(self, key, value):
-
-        value = column.as_column(value)
-        super().__setitem__(key, value)
-
-
-class EqualLengthValuesMappingMixin:
-    """
-    Require all values in the mapping to have the same length.
-    """
-
-    def __setitem__(self, key, value):
-        if len(self) > 0:
-            first = next(iter(self.values()))
-            if len(value) != len(first):
-                raise ValueError("All values must be of equal length")
-        super().__setitem__(key, value)
-
-
-class OrderedColumnDict(
-    ColumnValuesMappingMixin, EqualLengthValuesMappingMixin, OrderedDict
-):
-    pass
 
 
 class NestedMappingMixin:
@@ -473,31 +444,73 @@ def search_range(start, stop, x, step=1, side="left"):
     return max(min(length, i), 0)
 
 
+_UFUNC_ALIASES = {
+    "power": "pow",
+    "equal": "eq",
+    "not_equal": "ne",
+    "less": "lt",
+    "less_equal": "le",
+    "greater": "gt",
+    "greater_equal": "ge",
+    "absolute": "abs",
+}
+# For op(., cudf.Series) -> cudf.Series.__r{op}__
+_REVERSED_NAMES = {
+    "lt": "__gt__",
+    "le": "__ge__",
+    "gt": "__lt__",
+    "ge": "__le__",
+    "eq": "__eq__",
+    "ne": "__ne__",
+}
+
+
+# todo: can probably be used to remove cudf/core/ops.py
+def _get_cudf_series_ufunc(fname, args, kwargs, cudf_ser_submodule):
+    if isinstance(args[0], cudf.Series):
+        cudf_ser_func = getattr(cudf_ser_submodule, fname)
+        return cudf_ser_func(*args, **kwargs)
+    elif len(args) == 2 and isinstance(args[1], cudf.Series):
+        rev_name = _REVERSED_NAMES.get(fname, f"__r{fname}__")
+        cudf_ser_func = getattr(cudf_ser_submodule, rev_name)
+        return cudf_ser_func(args[1], args[0], **kwargs)
+    return NotImplemented
+
+
 # Utils for using appropriate dispatch for array functions
 def get_appropriate_dispatched_func(
     cudf_submodule, cudf_ser_submodule, cupy_submodule, func, args, kwargs
 ):
-    fname = func.__name__
+    if kwargs.get("out") is None:
+        fname = func.__name__
+        # Dispatch these functions to appropiate alias from the _UFUNC_ALIASES
+        is_ufunc = fname in _UFUNC_ALIASES
+        fname = _UFUNC_ALIASES.get(fname, fname)
 
-    if hasattr(cudf_submodule, fname):
-        cudf_func = getattr(cudf_submodule, fname)
-        return cudf_func(*args, **kwargs)
+        if hasattr(cudf_submodule, fname):
+            cudf_func = getattr(cudf_submodule, fname)
+            return cudf_func(*args, **kwargs)
 
-    elif hasattr(cudf_ser_submodule, fname):
-        cudf_ser_func = getattr(cudf_ser_submodule, fname)
-        return cudf_ser_func(*args, **kwargs)
+        elif hasattr(cudf_ser_submodule, fname):
+            if is_ufunc:
+                return _get_cudf_series_ufunc(
+                    fname, args, kwargs, cudf_ser_submodule
+                )
+            else:
+                cudf_ser_func = getattr(cudf_ser_submodule, fname)
+                return cudf_ser_func(*args, **kwargs)
 
-    elif hasattr(cupy_submodule, fname):
-        cupy_func = getattr(cupy_submodule, fname)
-        # Handle case if cupy impliments it as a numpy function
-        # Unsure if needed
-        if cupy_func is func:
-            return NotImplemented
+        elif hasattr(cupy_submodule, fname):
+            cupy_func = getattr(cupy_submodule, fname)
+            # Handle case if cupy impliments it as a numpy function
+            # Unsure if needed
+            if cupy_func is func:
+                return NotImplemented
 
-        cupy_compatible_args, index = _get_cupy_compatible_args_index(args)
-        if cupy_compatible_args:
-            cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
-            return _cast_to_appropriate_cudf_type(cupy_output, index)
+            cupy_compatible_args, index = _get_cupy_compatible_args_index(args)
+            if cupy_compatible_args:
+                cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
+                return _cast_to_appropriate_cudf_type(cupy_output, index)
 
     return NotImplemented
 
@@ -579,4 +592,47 @@ def _categorical_scalar_broadcast_to(cat_scalar, size):
         size=codes.size,
         offset=codes.offset,
         ordered=ordered,
+    )
+
+
+def _create_pandas_series(
+    data=None, index=None, dtype=None, name=None, copy=False, fastpath=False
+):
+    """
+    Wrapper to create a Pandas Series. If the length of data is 0 and
+    dtype is not passed, this wrapper defaults the dtype to `float64`.
+
+    Parameters
+    ----------
+    data : array-like, Iterable, dict, or scalar value
+        Contains data stored in Series. If data is a dict, argument
+        order is maintained.
+    index : array-like or Index (1d)
+        Values must be hashable and have the same length as data.
+        Non-unique index values are allowed. Will default to
+        RangeIndex (0, 1, 2, …, n) if not provided.
+        If data is dict-like and index is None, then the keys
+        in the data are used as the index. If the index is not None,
+        the resulting Series is reindexed with the index values.
+    dtype : str, numpy.dtype, or ExtensionDtype, optional
+        Data type for the output Series. If not specified, this
+        will be inferred from data. See the user guide for more usages.
+    name : str, optional
+        The name to give to the Series.
+    copy : bool, default False
+        Copy input data.
+
+    Returns
+    -------
+    pd.Series
+    """
+    if (data is None or len(data) == 0) and dtype is None:
+        dtype = "float64"
+    return pd.Series(
+        data=data,
+        index=index,
+        dtype=dtype,
+        name=name,
+        copy=copy,
+        fastpath=fastpath,
     )

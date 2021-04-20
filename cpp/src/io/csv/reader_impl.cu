@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 /**
  * @file reader_impl.cu
  * @brief cuDF-IO CSV reader class implementation
- **/
+ */
 
 #include "reader_impl.hpp"
 
@@ -42,8 +42,8 @@
 using std::string;
 using std::vector;
 
-using cudf::detail::device_span;
-using cudf::detail::host_span;
+using cudf::device_span;
+using cudf::host_span;
 
 namespace cudf {
 namespace io {
@@ -62,7 +62,7 @@ using namespace cudf::io;
  * @param[in] num_columns Number of columns in the CSV file (optional)
  *
  * @return Estimated maximum size of a row, in bytes
- **/
+ */
 constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept
 {
   constexpr size_t max_row_bytes = 16 * 1024;  // 16KB
@@ -351,7 +351,7 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
         // during the conversion stage
         const std::string quotechar(1, opts.quotechar);
         const std::string dblquotechar(2, opts.quotechar);
-        std::unique_ptr<column> col = make_strings_column(out_buffers[i]._strings, stream);
+        std::unique_ptr<column> col = cudf::make_strings_column(*out_buffers[i]._strings, stream);
         out_columns.emplace_back(
           cudf::strings::replace(col->view(), dblquotechar, quotechar, -1, mr_));
       } else {

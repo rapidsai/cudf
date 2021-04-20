@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,14 +20,26 @@
 
 #pragma once
 
-#include <cudf/io/parquet.hpp>
-
+#include <cudf/io/detail/utils.hpp>
+#include <cudf/io/types.hpp>
+#include <cudf/table/table_view.hpp>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
+
+#include <string>
+#include <vector>
 
 namespace cudf {
 namespace io {
+
+// Forward declaration
+class parquet_reader_options;
+class parquet_writer_options;
+class chunked_parquet_writer_options;
+
 namespace detail {
 namespace parquet {
+
 /**
  * @brief Class to read Parquet dataset data into columns.
  */
@@ -90,11 +102,32 @@ class writer {
    *
    * @param sink The data sink to write the data to
    * @param options Settings for controlling writing behavior
+   * @param mode Option to write at once or in chunks
    * @param mr Device memory resource to use for device memory allocation
+   * @param stream CUDA stream used for device memory operations and kernel launches
    */
   explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
                   parquet_writer_options const& options,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                  SingleWriteMode mode                = SingleWriteMode::YES,
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default);
+
+  /**
+   * @brief Constructor for writer to handle chunked parquet options.
+   *
+   * @param sink The data sink to write the data to
+   * @param options Settings for controlling writing behavior for chunked writer
+   * @param mode Option to write at once or in chunks
+   * @param mr Device memory resource to use for device memory allocation
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return A parquet-compatible blob that contains the data for all rowgroups in the list
+   */
+  explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
+                  chunked_parquet_writer_options const& options,
+                  SingleWriteMode mode                = SingleWriteMode::NO,
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default);
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
@@ -102,51 +135,21 @@ class writer {
   ~writer();
 
   /**
-   * @brief Writes the dataset as per options provided.
-   *
-   * @param table Set of columns to output
-   * @param metadata Table metadata and column names
-   * @param return_filemetadata If true, return the raw file metadata
-   * @param column_chunks_file_path Column chunks file path to be set in the raw output metadata
-   * @param int96_timestamps If true, write timestamps as INT96 values
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   */
-  std::unique_ptr<std::vector<uint8_t>> write(
-    table_view const& table,
-    const table_metadata* metadata            = nullptr,
-    bool return_filemetadata                  = false,
-    const std::string column_chunks_file_path = "",
-    bool int96_timestamps                     = false,
-    rmm::cuda_stream_view stream              = rmm::cuda_stream_default);
-
-  /**
-   * @brief Begins the chunked/streamed write process.
-   *
-   * @param[in] pq_chunked_state Internal state maintained between chunks.
-   */
-  void write_chunked_begin(struct pq_chunked_state& state);
-
-  /**
    * @brief Writes a single subtable as part of a larger parquet file/table write.
    *
    * @param[in] table The table information to be written
-   * @param[in] pq_chunked_state Internal state maintained between chunks.
    */
-  void write_chunk(table_view const& table, struct pq_chunked_state& state);
+  void write(table_view const& table);
 
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] pq_chunked_state Internal state maintained between chunks.
-   * @param[in] return_filemetadata If true, return the raw file metadata
    * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
    *
-   * @return A parquet-compatible blob that contains the data for all rowgroups in the list
+   * @return A parquet-compatible blob that contains the data for all rowgroups in the list only if
+   * `column_chunks_file_path` is provided, else null.
    */
-  std::unique_ptr<std::vector<uint8_t>> write_chunked_end(
-    struct pq_chunked_state& state,
-    bool return_filemetadata                   = false,
-    const std::string& column_chunks_file_path = "");
+  std::unique_ptr<std::vector<uint8_t>> close(std::string const& column_chunks_file_path = "");
 
   /**
    * @brief Merges multiple metadata blobs returned by write_all into a single metadata blob

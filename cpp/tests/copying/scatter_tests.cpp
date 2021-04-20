@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 #include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/stream_compaction.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -168,8 +170,6 @@ TYPED_TEST(ScatterIndexTypeTests, ScatterScalarOutOfBounds)
 {
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
-  using scalar_ptr    = std::unique_ptr<cudf::scalar>;
-  using scalar_vector = std::vector<scalar_ptr>;
 
   auto const source = scalar_type_t<TypeParam>(100, true);
   std::reference_wrapper<const cudf::scalar> slr_ref{source};
@@ -396,9 +396,9 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarNoNulls)
 {
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
+  using Type = cudf::device_storage_type_t<TypeParam>;
 
-  auto const source =
-    scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(100), true);
+  auto const source = scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<Type>(100), true);
   std::reference_wrapper<const cudf::scalar> slr_ref{source};
   std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{slr_ref};
 
@@ -418,9 +418,9 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarTargetNulls)
 {
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
+  using Type = cudf::device_storage_type_t<TypeParam>;
 
-  auto const source =
-    scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(100), true);
+  auto const source = scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<Type>(100), true);
   std::reference_wrapper<const cudf::scalar> slr_ref{source};
   std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{slr_ref};
 
@@ -442,9 +442,10 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarSourceNulls)
 {
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
+  using Type = cudf::device_storage_type_t<TypeParam>;
 
   auto const source =
-    scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(100), false);
+    scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<Type>(100), false);
   std::reference_wrapper<const cudf::scalar> slr_ref{source};
   std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{slr_ref};
 
@@ -465,9 +466,10 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarBothNulls)
 {
   using cudf::scalar_type_t;
   using cudf::test::fixed_width_column_wrapper;
+  using Type = cudf::device_storage_type_t<TypeParam>;
 
   auto const source =
-    scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<TypeParam>(100), false);
+    scalar_type_t<TypeParam>(cudf::test::make_type_param_scalar<Type>(100), false);
   std::reference_wrapper<const cudf::scalar> slr_ref{source};
   std::vector<std::reference_wrapper<const cudf::scalar>> source_vector{slr_ref};
 
@@ -487,19 +489,20 @@ TYPED_TEST(ScatterDataTypeTests, ScatterScalarBothNulls)
 
 TYPED_TEST(ScatterDataTypeTests, ScatterSourceNullsLarge)
 {
+  using cudf::detail::make_counting_transform_iterator;
   using cudf::test::fixed_width_column_wrapper;
-  using cudf::test::make_counting_transform_iterator;
 
   constexpr cudf::size_type N{513};
 
   fixed_width_column_wrapper<TypeParam, int32_t> source({0, 0, 0, 0}, {0, 0, 0, 0});
   fixed_width_column_wrapper<int32_t> scatter_map({0, 1, 2, 3});
-  auto target_data = make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto target_data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(target_data)::value_type>
     target(target_data, target_data + N);
 
-  auto expect_data  = make_counting_transform_iterator(0, [](auto i) { return i; });
-  auto expect_valid = make_counting_transform_iterator(0, [](auto i) { return i > 3; });
+  auto expect_data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto expect_valid =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i > 3; });
   fixed_width_column_wrapper<TypeParam, typename decltype(expect_data)::value_type> expected(
     expect_data, expect_data + N, expect_valid);
 
@@ -737,7 +740,7 @@ struct BooleanMaskScalarScatter : public cudf::test::BaseFixture {
     static_cast<ScalarType*>(scalar.get())->set_value(value);
     static_cast<ScalarType*>(scalar.get())->set_valid(validity);
 
-    return std::move(scalar);
+    return scalar;
   }
 };
 

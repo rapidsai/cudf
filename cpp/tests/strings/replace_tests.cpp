@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/strings/detail/replace.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
@@ -25,59 +26,209 @@
 
 #include <vector>
 
+using algorithm = cudf::strings::detail::replace_algorithm;
+
 struct StringsReplaceTest : public cudf::test::BaseFixture {
+  cudf::test::strings_column_wrapper build_corpus()
+  {
+    std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
+                                       "the fat cat lays next to the other accénted cat",
+                                       "a slow moving turtlé cannot catch the bird",
+                                       "which can be composéd together to form a more complete",
+                                       "The result does not include the value in the sum in",
+                                       "",
+                                       nullptr};
+
+    return cudf::test::strings_column_wrapper(
+      h_strings.begin(),
+      h_strings.end(),
+      thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  }
 };
 
 TEST_F(StringsReplaceTest, Replace)
 {
-  std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
-                                     "the fat cat lays next to the other accénted cat",
-                                     "a slow moving turtlé cannot catch the bird",
-                                     "which can be composéd together to form a more complete",
-                                     "The result does not include the value in the sum in",
-                                     "",
-                                     nullptr};
-
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  auto strings      = build_corpus();
   auto strings_view = cudf::strings_column_view(strings);
+  // replace all occurrences of 'the ' with '++++ '
+  std::vector<const char*> h_expected{"++++ quick brown fox jumps over ++++ lazy dog",
+                                      "++++ fat cat lays next to ++++ other accénted cat",
+                                      "a slow moving turtlé cannot catch ++++ bird",
+                                      "which can be composéd together to form a more complete",
+                                      "The result does not include ++++ value in ++++ sum in",
+                                      "",
+                                      nullptr};
+  cudf::test::strings_column_wrapper expected(
+    h_expected.begin(),
+    h_expected.end(),
+    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+  auto results =
+    cudf::strings::replace(strings_view, cudf::string_scalar("the "), cudf::string_scalar("++++ "));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results = cudf::strings::detail::replace<algorithm::CHAR_PARALLEL>(
+    strings_view, cudf::string_scalar("the "), cudf::string_scalar("++++ "));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results = cudf::strings::detail::replace<algorithm::ROW_PARALLEL>(
+    strings_view, cudf::string_scalar("the "), cudf::string_scalar("++++ "));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
 
-  {
-    // replace all occurrences of 'the ' with '++++ '
-    auto results = cudf::strings::replace(
-      strings_view, cudf::string_scalar("the "), cudf::string_scalar("++++ "));
-    std::vector<const char*> h_expected{"++++ quick brown fox jumps over ++++ lazy dog",
-                                        "++++ fat cat lays next to ++++ other accénted cat",
-                                        "a slow moving turtlé cannot catch ++++ bird",
-                                        "which can be composéd together to form a more complete",
-                                        "The result does not include ++++ value in ++++ sum in",
-                                        "",
-                                        nullptr};
-    cudf::test::strings_column_wrapper expected(
-      h_expected.begin(),
-      h_expected.end(),
-      thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  }
-  {
-    // only remove the first occurrence of 'the '
+TEST_F(StringsReplaceTest, ReplaceReplLimit)
+{
+  auto strings      = build_corpus();
+  auto strings_view = cudf::strings_column_view(strings);
+  // only remove the first occurrence of 'the '
+  std::vector<const char*> h_expected{"quick brown fox jumps over the lazy dog",
+                                      "fat cat lays next to the other accénted cat",
+                                      "a slow moving turtlé cannot catch bird",
+                                      "which can be composéd together to form a more complete",
+                                      "The result does not include value in the sum in",
+                                      "",
+                                      nullptr};
+  cudf::test::strings_column_wrapper expected(
+    h_expected.begin(),
+    h_expected.end(),
+    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+  auto results =
+    cudf::strings::replace(strings_view, cudf::string_scalar("the "), cudf::string_scalar(""), 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results = cudf::strings::detail::replace<algorithm::CHAR_PARALLEL>(
+    strings_view, cudf::string_scalar("the "), cudf::string_scalar(""), 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results = cudf::strings::detail::replace<algorithm::ROW_PARALLEL>(
+    strings_view, cudf::string_scalar("the "), cudf::string_scalar(""), 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsReplaceTest, ReplaceReplLimitInputSliced)
+{
+  auto strings = build_corpus();
+  // replace first two occurrences of ' ' with '--'
+  std::vector<const char*> h_expected{"the--quick--brown fox jumps over the lazy dog",
+                                      "the--fat--cat lays next to the other accénted cat",
+                                      "a--slow--moving turtlé cannot catch the bird",
+                                      "which--can--be composéd together to form a more complete",
+                                      "The--result--does not include the value in the sum in",
+                                      "",
+                                      nullptr};
+  cudf::test::strings_column_wrapper expected(
+    h_expected.begin(),
+    h_expected.end(),
+    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+  std::vector<cudf::size_type> slice_indices{0, 2, 2, 3, 3, 7};
+  auto sliced_strings  = cudf::slice(strings, slice_indices);
+  auto sliced_expected = cudf::slice(expected, slice_indices);
+  for (size_t i = 0; i < sliced_strings.size(); ++i) {
+    auto strings_view = cudf::strings_column_view(sliced_strings[i]);
     auto results =
-      cudf::strings::replace(strings_view, cudf::string_scalar("the "), cudf::string_scalar(""), 1);
-    std::vector<const char*> h_expected{"quick brown fox jumps over the lazy dog",
-                                        "fat cat lays next to the other accénted cat",
-                                        "a slow moving turtlé cannot catch bird",
-                                        "which can be composéd together to form a more complete",
-                                        "The result does not include value in the sum in",
-                                        "",
-                                        nullptr};
-    cudf::test::strings_column_wrapper expected(
-      h_expected.begin(),
-      h_expected.end(),
-      thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+      cudf::strings::replace(strings_view, cudf::string_scalar(" "), cudf::string_scalar("--"), 2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, sliced_expected[i]);
+    results = cudf::strings::detail::replace<algorithm::CHAR_PARALLEL>(
+      strings_view, cudf::string_scalar(" "), cudf::string_scalar("--"), 2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, sliced_expected[i]);
+    results = cudf::strings::detail::replace<algorithm::ROW_PARALLEL>(
+      strings_view, cudf::string_scalar(" "), cudf::string_scalar("--"), 2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, sliced_expected[i]);
   }
+}
+
+TEST_F(StringsReplaceTest, ReplaceTargetOverlap)
+{
+  auto corpus      = build_corpus();
+  auto corpus_view = cudf::strings_column_view(corpus);
+  // replace all occurrences of 'the ' with '+++++++ '
+  auto strings = cudf::strings::replace(
+    corpus_view, cudf::string_scalar("the "), cudf::string_scalar("++++++++ "));
+  auto strings_view = cudf::strings_column_view(*strings);
+  // replace all occurrences of '+++' with 'plus '
+  std::vector<const char*> h_expected{
+    "plus plus ++ quick brown fox jumps over plus plus ++ lazy dog",
+    "plus plus ++ fat cat lays next to plus plus ++ other accénted cat",
+    "a slow moving turtlé cannot catch plus plus ++ bird",
+    "which can be composéd together to form a more complete",
+    "The result does not include plus plus ++ value in plus plus ++ sum in",
+    "",
+    nullptr};
+  cudf::test::strings_column_wrapper expected(
+    h_expected.begin(),
+    h_expected.end(),
+    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+  auto results =
+    cudf::strings::replace(strings_view, cudf::string_scalar("+++"), cudf::string_scalar("plus "));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results = cudf::strings::detail::replace<algorithm::CHAR_PARALLEL>(
+    strings_view, cudf::string_scalar("+++"), cudf::string_scalar("plus "));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  results = cudf::strings::detail::replace<algorithm::ROW_PARALLEL>(
+    strings_view, cudf::string_scalar("+++"), cudf::string_scalar("plus "));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsReplaceTest, ReplaceTargetOverlapsStrings)
+{
+  auto strings      = build_corpus();
+  auto strings_view = cudf::strings_column_view(strings);
+  // replace all occurrences of 'dogthe' with '+'
+  // should not replace anything unless it incorrectly matches across a string boundary
+  auto results =
+    cudf::strings::replace(strings_view, cudf::string_scalar("dogthe"), cudf::string_scalar("+"));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
+  results = cudf::strings::detail::replace<algorithm::CHAR_PARALLEL>(
+    strings_view, cudf::string_scalar("dogthe"), cudf::string_scalar("+"));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
+  results = cudf::strings::detail::replace<algorithm::ROW_PARALLEL>(
+    strings_view, cudf::string_scalar("dogthe"), cudf::string_scalar("+"));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
+}
+
+TEST_F(StringsReplaceTest, ReplaceNullInput)
+{
+  std::vector<const char*> h_null_strings(128);
+  auto strings = cudf::test::strings_column_wrapper(
+    h_null_strings.begin(), h_null_strings.end(), thrust::make_constant_iterator(false));
+  auto strings_view = cudf::strings_column_view(strings);
+  // replace all occurrences of '+' with ''
+  // should not replace anything as input is all null
+  auto results =
+    cudf::strings::replace(strings_view, cudf::string_scalar("+"), cudf::string_scalar(""));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
+  results = cudf::strings::detail::replace<algorithm::CHAR_PARALLEL>(
+    strings_view, cudf::string_scalar("+"), cudf::string_scalar(""));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
+  results = cudf::strings::detail::replace<algorithm::ROW_PARALLEL>(
+    strings_view, cudf::string_scalar("+"), cudf::string_scalar(""));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
+}
+
+TEST_F(StringsReplaceTest, ReplaceEndOfString)
+{
+  auto strings      = build_corpus();
+  auto strings_view = cudf::strings_column_view(strings);
+  // replace all occurrences of 'in' with  ' '
+  std::vector<const char*> h_expected{"the quick brown fox jumps over the lazy dog",
+                                      "the fat cat lays next to the other accénted cat",
+                                      "a slow mov g turtlé cannot catch the bird",
+                                      "which can be composéd together to form a more complete",
+                                      "The result does not  clude the value   the sum  ",
+                                      "",
+                                      nullptr};
+
+  cudf::test::strings_column_wrapper expected(
+    h_expected.begin(),
+    h_expected.end(),
+    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+
+  auto results =
+    cudf::strings::replace(strings_view, cudf::string_scalar("in"), cudf::string_scalar(" "));
+  cudf::test::expect_columns_equal(*results, expected);
+
+  results = cudf::strings::detail::replace<cudf::strings::detail::replace_algorithm::CHAR_PARALLEL>(
+    strings_view, cudf::string_scalar("in"), cudf::string_scalar(" "));
+  cudf::test::expect_columns_equal(*results, expected);
+
+  results = cudf::strings::detail::replace<cudf::strings::detail::replace_algorithm::ROW_PARALLEL>(
+    strings_view, cudf::string_scalar("in"), cudf::string_scalar(" "));
+  cudf::test::expect_columns_equal(*results, expected);
 }
 
 TEST_F(StringsReplaceTest, ReplaceSlice)
@@ -136,17 +287,7 @@ TEST_F(StringsReplaceTest, ReplaceSliceError)
 
 TEST_F(StringsReplaceTest, ReplaceMulti)
 {
-  std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
-                                     "the fat cat lays next to the other accénted cat",
-                                     "a slow moving turtlé cannot catch the bird",
-                                     "which can be composéd together to form a more complete",
-                                     "The result does not include the value in the sum in",
-                                     "",
-                                     nullptr};
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  auto strings      = build_corpus();
   auto strings_view = cudf::strings_column_view(strings);
 
   std::vector<const char*> h_targets{"the ", "a ", "to "};

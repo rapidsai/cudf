@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
-#include <initializer_list>
-#include <iterator>
-#include <tests/groupby/groupby_test_util.hpp>
+#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
+#include <tests/groupby/groupby_test_util.hpp>
+
+#include <initializer_list>
+#include <iterator>
 #include <type_traits>
 #include <vector>
-#include "cudf/utilities/traits.hpp"
 
 namespace cudf {
 namespace test {
@@ -136,6 +137,28 @@ TYPED_TEST(groupby_mean_test, null_keys_and_values)
     test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 // clang-format on
+
+struct groupby_dictionary_mean_test : public cudf::test::BaseFixture {
+};
+
+// This tests will not work until the following ptxas bug is fixed in 10.2
+// https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
+TEST_F(groupby_dictionary_mean_test, DISABLED_basic)
+{
+  using K = int32_t;
+  using V = int16_t;
+  using R = cudf::detail::target_type_t<V, aggregation::MEAN>;
+
+  // clang-format off
+  fixed_width_column_wrapper<K>     keys{ 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  dictionary_column_wrapper<V, int> vals{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+  fixed_width_column_wrapper<K>         expect_keys({ 1,    2,     3    });
+  fixed_width_column_wrapper<R, double> expect_vals({ 9./3, 19./4, 17./3});
+  // clang-format on
+
+  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_mean_aggregation());
+}
 
 }  // namespace test
 }  // namespace cudf

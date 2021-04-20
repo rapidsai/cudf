@@ -28,7 +28,7 @@ struct block_desc_s {
                                   uint32_t size_,
                                   uint32_t first_row_,
                                   uint32_t num_rows_)
-    : offset(offset_), first_row(first_row_), num_rows(num_rows_), size(size_)
+    : offset(offset_), size(size_), first_row(first_row_), num_rows(num_rows_)
   {
   }
 

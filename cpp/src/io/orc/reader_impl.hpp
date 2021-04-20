@@ -97,7 +97,7 @@ class reader::impl {
                                             const OrcDecompressor *decompressor,
                                             std::vector<orc_stream_info> &stream_info,
                                             size_t num_stripes,
-                                            rmm::device_vector<gpu::RowGroup> &row_groups,
+                                            device_span<gpu::RowGroup> row_groups,
                                             size_t row_index_stride,
                                             rmm::cuda_stream_view stream);
 
@@ -118,8 +118,8 @@ class reader::impl {
                           size_t num_dicts,
                           size_t skip_rows,
                           size_t num_rows,
-                          timezone_table const &tz_table,
-                          const rmm::device_vector<gpu::RowGroup> &row_groups,
+                          timezone_table_view tz_table,
+                          device_span<gpu::RowGroup const> row_groups,
                           size_t row_index_stride,
                           std::vector<column_buffer> &out_buffers,
                           rmm::cuda_stream_view stream);
@@ -127,7 +127,7 @@ class reader::impl {
  private:
   rmm::mr::device_memory_resource *_mr = nullptr;
   std::unique_ptr<datasource> _source;
-  std::unique_ptr<metadata> _metadata;
+  std::unique_ptr<cudf::io::orc::metadata> _metadata;
 
   std::vector<int> _selected_columns;
   bool _use_index                  = true;

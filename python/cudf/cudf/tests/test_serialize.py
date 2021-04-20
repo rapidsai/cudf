@@ -1,5 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import pickle
+
 import msgpack
 import numpy as np
 import pandas as pd
@@ -144,11 +146,11 @@ def test_serialize_groupby_df():
     df["key_1"] = np.random.randint(0, 20, 100)
     df["key_2"] = np.random.randint(0, 20, 100)
     df["val"] = np.arange(100, dtype=np.float32)
-    gb = df.groupby(["key_1", "key_2"])
+    gb = df.groupby(["key_1", "key_2"], sort=True)
     outgb = gb.deserialize(*gb.serialize())
     expect = gb.mean()
     got = outgb.mean()
-    assert_eq(got, expect)
+    assert_eq(got.sort_index(), expect.sort_index())
 
 
 def test_serialize_groupby_external():
@@ -158,7 +160,7 @@ def test_serialize_groupby_external():
     outgb = gb.deserialize(*gb.serialize())
     expect = gb.mean()
     got = outgb.mean()
-    assert_eq(got, expect)
+    assert_eq(got.sort_index(), expect.sort_index())
 
 
 def test_serialize_groupby_level():
@@ -169,7 +171,7 @@ def test_serialize_groupby_level():
     expect = gb.mean()
     outgb = gb.deserialize(*gb.serialize())
     got = outgb.mean()
-    assert_eq(expect, got)
+    assert_eq(expect.sort_index(), got.sort_index())
 
 
 def test_serialize_groupby_sr():
@@ -178,7 +180,7 @@ def test_serialize_groupby_sr():
     outgb = gb.deserialize(*gb.serialize())
     got = gb.mean()
     expect = outgb.mean()
-    assert_eq(got, expect)
+    assert_eq(got.sort_index(), expect.sort_index())
 
 
 def test_serialize_datetime():
@@ -285,3 +287,33 @@ def test_serialize_list_columns(data):
     df = cudf.DataFrame(data)
     recreated = df.__class__.deserialize(*df.serialize())
     assert_eq(recreated, df)
+
+
+def test_deserialize_cudf_0_16(datadir):
+    fname = datadir / "pkl" / "stringColumnWithRangeIndex_cudf_0.16.pkl"
+
+    expected = cudf.DataFrame({"a": ["hi", "hello", "world", None]})
+    actual = pickle.load(open(fname, "rb"))
+
+    assert_eq(expected, actual)
+
+
+def test_serialize_sliced_string():
+    # https://github.com/rapidsai/cudf/issues/7735
+    data = ["hi", "hello", None]
+    pd_series = pd.Series(data, dtype=pd.StringDtype())
+    gd_series = cudf.Series(data, dtype="str")
+    sliced = gd_series[0:3]
+    serialized_gd_series = gd_series.serialize()
+    serialized_sliced = sliced.serialize()
+
+    # validate frames are equal or not
+    # because both should be identical
+    for i in range(3):
+        assert_eq(
+            serialized_gd_series[1][i].to_host_array(),
+            serialized_sliced[1][i].to_host_array(),
+        )
+
+    recreated = cudf.Series.deserialize(*sliced.serialize())
+    assert_eq(recreated.to_pandas(nullable=True), pd_series)

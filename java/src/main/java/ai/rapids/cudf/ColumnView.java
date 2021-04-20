@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,9 +18,8 @@
 
 package ai.rapids.cudf;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.IntStream;
 
 import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
 
@@ -49,6 +48,65 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     this.nullCount = ColumnView.getNativeNullCount(viewHandle);
   }
 
+  /**
+   * Create a new column view based off of data already on the device. Ref count on the buffers
+   * is not incremented and none of the underlying buffers are owned by this view. The returned
+   * ColumnView is only valid as long as the underlying buffers remain valid. If the buffers are
+   * closed before this ColumnView is closed, it will result in undefined behavior.
+   *
+   * If ownership is needed, call {@link ColumnView#copyToColumnVector}
+   *
+   * @param type           the type of the vector
+   * @param rows           the number of rows in this vector.
+   * @param nullCount      the number of nulls in the dataset.
+   * @param validityBuffer an optional validity buffer. Must be provided if nullCount != 0.
+   *                       The ownership doesn't change on this buffer
+   * @param offsetBuffer   a host buffer required for nested types including strings and string
+   *                       categories. The ownership doesn't change on this buffer
+   * @param children       an array of ColumnView children
+   */
+  public ColumnView(DType type, long rows, Optional<Long> nullCount,
+                     BaseDeviceMemoryBuffer validityBuffer,
+                     BaseDeviceMemoryBuffer offsetBuffer, ColumnView[] children) {
+    this(type, (int) rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
+        null, validityBuffer, offsetBuffer, children);
+    assert(type.isNestedType());
+    assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
+        || !nullCount.isPresent();
+  }
+
+  /**
+   * Create a new column view based off of data already on the device. Ref count on the buffers
+   * is not incremented and none of the underlying buffers are owned by this view. The returned
+   * ColumnView is only valid as long as the underlying buffers remain valid. If the buffers are
+   * closed before this ColumnView is closed, it will result in undefined behavior.
+   *
+   * If ownership is needed, call {@link ColumnView#copyToColumnVector}
+   *
+   * @param type           the type of the vector
+   * @param rows           the number of rows in this vector.
+   * @param nullCount      the number of nulls in the dataset.
+   * @param dataBuffer     a host buffer required for nested types including strings and string
+   *                       categories. The ownership doesn't change on this buffer
+   * @param validityBuffer an optional validity buffer. Must be provided if nullCount != 0.
+   *                       The ownership doesn't change on this buffer
+   */
+  public ColumnView(DType type, long rows, Optional<Long> nullCount,
+                    BaseDeviceMemoryBuffer dataBuffer,
+                    BaseDeviceMemoryBuffer validityBuffer) {
+    this(type, (int) rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
+        dataBuffer, validityBuffer, null, null);
+    assert (!type.isNestedType());
+    assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
+        || !nullCount.isPresent();
+  }
+
+  private ColumnView(DType type, long rows, int nullCount,
+                     BaseDeviceMemoryBuffer dataBuffer, BaseDeviceMemoryBuffer validityBuffer,
+                     BaseDeviceMemoryBuffer offsetBuffer, ColumnView[] children) {
+    this(ColumnVector.initViewHandle(type, (int) rows, nullCount, dataBuffer, validityBuffer,
+        offsetBuffer, Arrays.stream(children).mapToLong(c -> c.getNativeView()).toArray()));
+  }
 
   /** Creates a ColumnVector from a column view handle
    * @return a new ColumnVector
@@ -70,6 +128,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final long getNativeView() {
     return viewHandle;
   }
+
+  static int getFixedPointOutputScale(BinaryOp op, DType lhsType, DType rhsType) {
+    assert (lhsType.isDecimalType() && rhsType.isDecimalType());
+    return fixedPointOutputScale(op.nativeId, lhsType.getScale(), rhsType.getScale());
+  }
+
+  private static native int fixedPointOutputScale(int op, int lhsScale, int rhsScale);
 
   public final DType getType() {
     return type;
@@ -192,6 +257,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Get the number of elements for each list. Null lists will have a value of null.
+   * @return the number of elements in each list as an INT32 value.
+   */
+  public final ColumnVector countElements() {
+    assert DType.LIST.equals(type) : "Only lists are supported";
+    return new ColumnVector(countElements(getNativeView()));
+  }
+
+  /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
    * TRUE for any entry that is not null, and FALSE for any null entry (as per the validity mask)
    *
@@ -214,17 +288,32 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
    * TRUE for any entry that is an integer, and FALSE if its not an integer. A null will be returned
-   * for null entries
+   * for null entries.
    *
    * NOTE: Integer doesn't mean a 32-bit integer. It means a number that is not a fraction.
    * i.e. If this method returns true for a value it could still result in an overflow or underflow
    * if you convert it to a Java integral type
    *
-   * @return - Boolean vector
+   * @return Boolean vector
    */
   public final ColumnVector isInteger() {
     assert type.equals(DType.STRING);
     return new ColumnVector(isInteger(getNativeView()));
+  }
+
+  /**
+   * Returns a Boolean vector with the same number of rows as this instance, that has
+   * TRUE for any entry that is an integer, and FALSE if its not an integer. A null will be returned
+   * for null entries.
+   *
+   * @param intType the data type that should be used for bounds checking. Note that only
+   *                integer types are allowed.
+   * @return Boolean vector
+   */
+  public final ColumnVector isInteger(DType intType) {
+    assert type.equals(DType.STRING);
+    return new ColumnVector(isIntegerWithType(getNativeView(),
+        intType.getTypeId().getNativeId(), intType.getScale()));
   }
 
   /**
@@ -299,7 +388,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return - ColumnVector with nulls replaced by scalar
    */
   public final ColumnVector replaceNulls(Scalar scalar) {
-    return new ColumnVector(replaceNulls(getNativeView(), scalar.getScalarHandle()));
+    return new ColumnVector(replaceNullsScalar(getNativeView(), scalar.getScalarHandle()));
+  }
+
+  /**
+   * Returns a ColumnVector with any null values replaced with the corresponding row in the
+   * specified replacement column.
+   * This column and the replacement column must have the same type and number of rows.
+   *
+   * @param replacements column of replacement values
+   * @return column with nulls replaced by corresponding row of replacements column
+   */
+  public final ColumnVector replaceNulls(ColumnView replacements) {
+    return new ColumnVector(replaceNullsColumn(getNativeView(), replacements.getNativeView()));
   }
 
   /**
@@ -520,7 +621,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return the new ColumnVector with merged null mask.
    */
   public final ColumnVector mergeAndSetValidity(BinaryOp mergeOp, ColumnView... columns) {
-    assert mergeOp == BinaryOp.BITWISE_AND : "Only BITWISE_AND supported right now";
+    assert mergeOp == BinaryOp.BITWISE_AND || mergeOp == BinaryOp.BITWISE_OR : "Only BITWISE_AND and BITWISE_OR supported right now";
     long[] columnViews = new long[columns.length];
     long size = getRowCount();
 
@@ -1106,9 +1207,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns a boolean scalar that is true if all of the elements in
    * the column are true or non-zero otherwise false.
    * Null values are skipped.
-   * @deprecated the only output type supported is BOOL8.
    */
-  @Deprecated
   public Scalar all() {
     return all(DType.BOOL8);
   }
@@ -1118,7 +1217,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * if all of the elements in the column are true or non-zero
    * otherwise false or 0.
    * Null values are skipped.
+   * @deprecated the only output type supported is BOOL8.
    */
+  @Deprecated
   public Scalar all(DType outType) {
     return reduce(Aggregation.all(), outType);
   }
@@ -1297,6 +1398,90 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * This method takes in a nested type and replaces its children with the given views
+   * Note: Make sure the numbers of rows in the leaf node are the same as the child replacing it
+   * otherwise the list can point to elements outside of the column values.
+   *
+   * Note: this method returns a ColumnView that won't live past the ColumnVector that it's
+   * pointing to.
+   *
+   * Ex: List<Int> list = col{{1,3}, {9,3,5}}
+   *
+   * validNewChild = col{8, 3, 9, 2, 0}
+   *
+   * list.replaceChildrenWithViews(1, validNewChild) => col{{8, 3}, {9, 2, 0}}
+   *
+   * invalidNewChild = col{3, 2}
+   * list.replaceChildrenWithViews(1, invalidNewChild) => col{{3, 2}, {invalid, invalid, invalid}}
+   *
+   * invalidNewChild = col{8, 3, 9, 2, 0, 0, 7}
+   * list.replaceChildrenWithViews(1, invalidNewChild) => col{{8, 3}, {9, 2, 0}} // undefined result
+   */
+  public ColumnView replaceChildrenWithViews(int[] indices,
+                                             ColumnView[] views) {
+    assert (type.isNestedType());
+    assert (indices.length == views.length);
+    if (type == DType.LIST) {
+      assert (indices.length == 1);
+    }
+    if (indices.length != views.length) {
+      throw new IllegalArgumentException("The indices size and children size should match");
+    }
+    Map<Integer, ColumnView> map = new HashMap<>();
+    IntStream.range(0, indices.length).forEach(index -> {
+      if (map.containsKey(indices[index])) {
+        throw new IllegalArgumentException("Duplicate mapping found for replacing child index");
+      }
+      map.put(indices[index], views[index]);
+    });
+    List<ColumnView> newChildren = new ArrayList<>(getNumChildren());
+    IntStream.range(0, getNumChildren()).forEach(i -> {
+      ColumnView view = map.remove(i);
+      ColumnView child = getChildColumnView(i);
+      if (view == null) {
+        newChildren.add(child);
+      } else {
+        if (child.getRowCount() != view.getRowCount()) {
+          throw new IllegalArgumentException("Child row count doesn't match the old child");
+        }
+        newChildren.add(view);
+      }
+    });
+    if (!map.isEmpty()) {
+      throw new IllegalArgumentException("One or more invalid child indices passed to be replaced");
+    }
+    return new ColumnView(type, getRowCount(), Optional.of(getNullCount()), getValid(),
+        getOffsets(), newChildren.stream().toArray(n -> new ColumnView[n]));
+  }
+
+  /**
+   * This method takes in a list and returns a new list with the leaf node replaced with the given
+   * view. Make sure the numbers of rows in the leaf node are the same as the child replacing it
+   * otherwise the list can point to elements outside of the column values.
+   *
+   * Note: this method returns a ColumnView that won't live past the ColumnVector that it's
+   * pointing to.
+   *
+   * Ex: List<Int> list = col{{1,3}, {9,3,5}}
+   *
+   * validNewChild = col{8, 3, 9, 2, 0}
+   *
+   * list.replaceChildrenWithViews(1, validNewChild) => col{{8, 3}, {9, 2, 0}}
+   *
+   * invalidNewChild = col{3, 2}
+   * list.replaceChildrenWithViews(1, invalidNewChild) =>
+   *        col{{3, 2}, {invalid, invalid, invalid}} throws an exception
+   *
+   * invalidNewChild = col{8, 3, 9, 2, 0, 0, 7}
+   * list.replaceChildrenWithViews(1, invalidNewChild) =>
+   *       col{{8, 3}, {9, 2, 0}} throws an exception
+   */
+  public ColumnView replaceListChild(ColumnView child) {
+    assert(type == DType.LIST);
+    return replaceChildrenWithViews(new int[]{0}, new ColumnView[]{child});
+  }
+
+  /**
    * Zero-copy cast between types with the same underlying representation.
    *
    * Similar to reinterpret_cast or bit_cast in C++. This will essentially take the underlying data
@@ -1304,9 +1489,24 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * types must match.
    * @param type the type you want to go to.
    * @return a ColumnView that cannot outlive the Column that owns the actual data it points to.
+   * @deprecated this has changed to bit_cast in C++ so use that name instead
    */
+  @Deprecated
   public ColumnView logicalCastTo(DType type) {
-    return new ColumnView(logicalCastTo(getNativeView(),
+    return bitCastTo(type);
+  }
+
+  /**
+   * Zero-copy cast between types with the same underlying length.
+   *
+   * Similar to bit_cast in C++. This will take the underlying data and create new metadata
+   * so it is interpreted as a new type. Not all types are supported the width of the
+   * types must match.
+   * @param type the type you want to go to.
+   * @return a ColumnView that cannot outlive the Column that owns the actual data it points to.
+   */
+  public ColumnView bitCastTo(DType type) {
+    return new ColumnView(bitCastTo(getNativeView(),
         type.typeId.getNativeId(), type.getScale()));
   }
 
@@ -1883,6 +2083,23 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(substringColumn(getNativeView(), start.getNativeView(), end.getNativeView()));
   }
 
+   /**
+   * Apply a JSONPath string to all rows in an input strings column.
+   *
+   * Applies a JSONPath string to an incoming strings column where each row in the column
+   * is a valid json string.  The output is returned by row as a strings column.
+   *
+   * For reference, https://tools.ietf.org/id/draft-goessner-dispatch-jsonpath-00.html
+   * Note: Only implements the operators: $ . [] *
+   *
+   * @param path The JSONPath string to be applied to each row
+   * @return new strings ColumnVector containing the retrieved json object strings
+   */
+  public final ColumnVector getJSONObject(Scalar path) {
+    assert(type.equals(DType.STRING)) : "column type must be a String";
+    return new ColumnVector(getJSONObject(getNativeView(), path.getScalarHandle()));
+  }
+
   /**
    * Returns a new strings column where target string within each string is replaced with the specified
    * replacement string.
@@ -2287,6 +2504,116 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(mapLookup(getNativeView(), key.getScalarHandle()));
   }
 
+
+  /**
+   * Create a new struct column view of existing column views. Note that this will NOT copy
+   * the contents of the input columns to make a new vector, but makes a view that must not
+   * outlive the child views that it references. The resulting column cannot be null.
+   * @param rows the number of rows in the struct column. This is needed if no columns
+   *             are provided.
+   * @param columns the columns to add to the struct in the order they should be added
+   * @return the new column view. It is the responsibility of the caller to close this.
+   */
+  public static ColumnView makeStructView(long rows, ColumnView... columns) {
+    long[] handles = new long[columns.length];
+    for (int i = 0; i < columns.length; i++) {
+      ColumnView cv = columns[i];
+      if (rows != cv.getRowCount()) {
+        throw new IllegalArgumentException("All columns must have the same number of rows");
+      }
+      handles[i] = cv.getNativeView();
+    }
+    return new ColumnView(makeStructView(handles, rows));
+  }
+
+  /**
+   * Create a new struct column view of existing column views. Note that this will NOT copy
+   * the contents of the input columns to make a new vector, but makes a view that must not
+   * outlive the child views that it references. The resulting column cannot be null.
+   * @param columns the columns to add to the struct in the order they should be added
+   * @return the new column view. It is the responsibility of the caller to close this.
+   */
+  public static ColumnView makeStructView(ColumnView... columns) {
+    if (columns.length <= 0) {
+      throw new IllegalArgumentException("At least one column is needed to get the row count");
+    }
+    return makeStructView(columns[0].rows, columns);
+  }
+
+  /**
+   * Create a new column view from a raw device buffer. Note that this will NOT copy
+   * the contents of the buffer but only creates a view. The view MUST NOT outlive
+   * the underlying device buffer. The column view will be created without a validity
+   * vector, so it is not possible to create a view containing null elements. Additionally
+   * only fixed-width primitive types are supported.
+   *
+   * @param buffer device memory that will back the column view
+   * @param startOffset byte offset into the device buffer where the column data starts
+   * @param type type of data in the column view
+   * @param rows number of data elements in the column view
+   * @return new column view instance that must not outlive the backing device buffer
+   */
+  public static ColumnView fromDeviceBuffer(BaseDeviceMemoryBuffer buffer,
+                                            long startOffset,
+                                            DType type,
+                                            int rows) {
+    if (buffer == null) {
+      throw new NullPointerException("buffer is null");
+    }
+    int typeSize = type.getSizeInBytes();
+    if (typeSize <= 0) {
+      throw new IllegalArgumentException("Unsupported type: " + type);
+    }
+    if (startOffset < 0) {
+      throw new IllegalArgumentException("Invalid start offset: " + startOffset);
+    }
+    if (rows < 0) {
+      throw new IllegalArgumentException("Invalid row count: " + rows);
+    }
+    long dataSize = typeSize * rows;
+    if (startOffset + dataSize > buffer.length) {
+      throw new IllegalArgumentException("View extends beyond buffer range");
+    }
+    long dataAddress = buffer.getAddress() + startOffset;
+    if (dataAddress % typeSize != 0) {
+      throw new IllegalArgumentException("Data address " + Long.toHexString(dataAddress) +
+          " is misaligned relative to type size of " + typeSize + " bytes");
+    }
+    return new ColumnView(makeCudfColumnView(type.typeId.getNativeId(), type.getScale(),
+        dataAddress, dataSize, 0, 0, 0, rows, null));
+  }
+
+  /**
+   * Create a column of bool values indicating whether the specified scalar
+   * is an element of each row of a list column.
+   * Output `column[i]` is set to null if one or more of the following are true:
+   * 1. The key is null
+   * 2. The column vector list value is null
+   * 3. The list row does not contain the key, and contains at least
+   *    one null.
+   * @param key the scalar to look up
+   * @return a Boolean ColumnVector with the result of the lookup
+   */
+  public final ColumnVector listContains(Scalar key) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    return new ColumnVector(listContains(getNativeView(), key.getScalarHandle()));
+  }
+
+  /**
+   * Create a column of bool values indicating whether the list rows of the first
+   * column contain the corresponding values in the second column.
+   * 1. The key value is null
+   * 2. The column vector list value is null
+   * 3. The list row does not contain the key, and contains at least
+   *    one null.
+   * @param key the ColumnVector with look up values
+   * @return a Boolean ColumnVector with the result of the lookup
+   */
+  public final ColumnVector listContainsColumn(ColumnView key) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    return new ColumnVector(listContainsColumn(getNativeView(), key.getNativeView()));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -2338,6 +2665,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *         by the timestampToLong method.
    */
   private static native long stringTimestampToTimestamp(long viewHandle, int unit, String format);
+
+  private static native long getJSONObject(long viewHandle, long scalarHandle) throws CudfException;
 
   /**
    * Native method to parse and convert a timestamp column vector to string column vector. A unix
@@ -2518,13 +2847,31 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long binaryOpVV(long lhs, long rhs, int op, int dtype, int scale);
 
+  private static native long countElements(long viewHandle);
+
   private static native long byteCount(long viewHandle) throws CudfException;
 
   private static native long extractListElement(long nativeView, int index);
 
+  /**
+   * Native method for list lookup
+   * @param nativeView the column view handle of the list
+   * @param key the scalar key handle
+   * @return column handle of the resultant
+   */
+  private static native long listContains(long nativeView, long key);
+
+  /**
+   * Native method for list lookup
+   * @param nativeView the column view handle of the list
+   * @param keyColumn the column handle of look up keys
+   * @return column handle of the resultant
+   */
+  private static native long listContainsColumn(long nativeView, long keyColumn);
+
   private static native long castTo(long nativeHandle, int type, int scale);
 
-  private static native long logicalCastTo(long nativeHandle, int type, int scale);
+  private static native long bitCastTo(long nativeHandle, int type, int scale);
 
   private static native long byteListCast(long nativeHandle, boolean config);
 
@@ -2567,7 +2914,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long charLengths(long viewHandle) throws CudfException;
 
-  private static native long replaceNulls(long viewHandle, long scalarHandle) throws CudfException;
+  private static native long replaceNullsScalar(long viewHandle, long scalarHandle) throws CudfException;
+
+  private static native long replaceNullsColumn(long viewHandle, long replaceViewHandle) throws CudfException;
 
   private static native long ifElseVV(long predVec, long trueVec, long falseVec) throws CudfException;
 
@@ -2586,6 +2935,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long isFloat(long viewHandle);
 
   private static native long isInteger(long viewHandle);
+
+  private static native long isIntegerWithType(long viewHandle, int typeId, int typeScale);
 
   private static native long isNotNanNative(long viewHandle);
 
@@ -2620,7 +2971,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long clamper(long nativeView, long loScalarHandle, long loScalarReplaceHandle,
                                      long hiScalarHandle, long hiScalarReplaceHandle);
 
-  protected native long title(long handle);
+  protected static native long title(long handle);
+
+  private static native long makeStructView(long[] handles, long rowCount);
 
   private static native long isTimestamp(long nativeView, String format);
   /**
@@ -2755,7 +3108,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         mainOffsetsDevBuff.copyFromHostBuffer(mainColOffsets, 0, offsetsLen);
       }
       List<DeviceMemoryBuffer> toClose = new ArrayList<>();
-      long[] childHandles = (devChildren.isEmpty()) ? null : new long[devChildren.size()];
+      long[] childHandles = new long[devChildren.size()];
       for (ColumnView.NestedColumnVector ncv : devChildren) {
         toClose.addAll(ncv.getBuffersToClose());
       }

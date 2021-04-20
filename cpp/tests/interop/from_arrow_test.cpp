@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,17 +18,20 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
+
 #include <tests/interop/arrow_utils.hpp>
 
 std::unique_ptr<cudf::table> get_cudf_table()
@@ -131,8 +134,9 @@ TYPED_TEST(FromArrowTestDurationsTest, DurationTable)
 
 TEST_F(FromArrowTest, NestedList)
 {
-  auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 3 != 0; });
-  auto col    = cudf::test::lists_column_wrapper<int64_t>(
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3 != 0; });
+  auto col = cudf::test::lists_column_wrapper<int64_t>(
     {{{{{1, 2}, valids}, {{3, 4}, valids}, {5}}, {{6}, {{7, 8, 9}, valids}}}, valids});
   cudf::table_view expected_table_view({col});
 
@@ -164,7 +168,7 @@ TEST_F(FromArrowTest, StructColumn)
     std::vector<std::vector<std::string>>{{"string", "integral", "bool", "nested_list", "struct"}};
   auto str_col =
     cudf::test::strings_column_wrapper{
-      "Samuel Vimes", "Carrot Ironfoundersson", "Angua von Uberwald"}
+      "Samuel Vimes", "Carrot Ironfoundersson", "Angua von Überwald"}
       .release();
   auto str_col2 =
     cudf::test::strings_column_wrapper{{"CUDF", "ROCKS", "EVERYWHERE"}, {0, 1, 0}}.release();
@@ -194,7 +198,7 @@ TEST_F(FromArrowTest, StructColumn)
   cudf::table_view expected_cudf_table({struct_col->view()});
 
   // Create Arrow table
-  std::vector<std::string> str{"Samuel Vimes", "Carrot Ironfoundersson", "Angua von Uberwald"};
+  std::vector<std::string> str{"Samuel Vimes", "Carrot Ironfoundersson", "Angua von Überwald"};
   std::vector<std::string> str2{"CUDF", "ROCKS", "EVERYWHERE"};
   auto str_array  = get_arrow_array<cudf::string_view>(str);
   auto int_array  = get_arrow_array<int32_t>({48, 27, 25});

@@ -46,6 +46,7 @@ std::unique_ptr<column> md5_hash(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+template <template <typename> class hash_function>
 std::unique_ptr<column> serial_murmur_hash3_32(
   table_view const& input,
   uint32_t seed                       = 0,

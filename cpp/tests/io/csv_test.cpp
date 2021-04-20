@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,14 +21,20 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
-#include <cudf/strings/string_view.cuh>
+#include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/unary.hpp>
 
 #include <arrow/io/api.h>
+
+#include <thrust/execution_policy.h>
+#include <thrust/find.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
 #include <fstream>
@@ -39,12 +45,6 @@
 #include <sstream>
 #include <string>
 #include <vector>
-
-#include <thrust/execution_policy.h>
-#include <thrust/find.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <cudf/strings/convert/convert_datetime.hpp>
-#include <cudf/unary.hpp>
 
 namespace cudf_io = cudf::io;
 
@@ -289,7 +289,7 @@ std::vector<std::string> prepend_zeros(const std::vector<T>& input,
 TYPED_TEST(CsvReaderNumericTypeTest, SingleColumn)
 {
   constexpr auto num_rows = 10;
-  auto sequence           = cudf::test::make_counting_transform_iterator(
+  auto sequence           = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return static_cast<TypeParam>(i + 1000.50f); });
 
   auto filepath = temp_env->get_temp_filepath("SingleColumn.csv");
@@ -587,6 +587,114 @@ TEST_F(CsvReaderTest, DatesCastToTimestampNanoSeconds)
                                     cudf::timestamp_ns{1126875750400000000ns},
                                     cudf::timestamp_ns{2764800000000000ns}},
     view.column(0));
+}
+
+TEST_F(CsvReaderTest, IntegersCastToTimestampSeconds)
+{
+  auto filepath = temp_env->get_temp_dir() + "IntegersCastToTimestampS.csv";
+  std::vector<int64_t> input_vals{1, 10, 111, 2, 11, 112, 3, 12, 113, 43432423, 13342, 13243214};
+  auto expected_column =
+    column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>(input_vals.begin(), input_vals.end());
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    for (auto v : input_vals) { outfile << v << "\n"; }
+  }
+
+  cudf_io::csv_reader_options in_opts =
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
+      .names({"A"})
+      .dtypes({"datetime64[s]"})
+      .header(-1)
+      .timestamp_type(cudf::data_type{cudf::type_id::TIMESTAMP_SECONDS});
+  auto result = cudf_io::read_csv(in_opts);
+
+  const auto view = result.tbl->view();
+  EXPECT_EQ(1, view.num_columns());
+  ASSERT_EQ(cudf::type_id::TIMESTAMP_SECONDS, view.column(0).type().id());
+
+  using namespace cuda::std::chrono_literals;
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_column, view.column(0));
+}
+
+TEST_F(CsvReaderTest, IntegersCastToTimestampMilliSeconds)
+{
+  auto filepath = temp_env->get_temp_dir() + "IntegersCastToTimestampMs.csv";
+  std::vector<int64_t> input_vals{1, 10, 111, 2, 11, 112, 3, 12, 113, 43432423, 13342, 13243214};
+  auto expected_column = column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>(
+    input_vals.begin(), input_vals.end());
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    for (auto v : input_vals) { outfile << v << "\n"; }
+  }
+
+  cudf_io::csv_reader_options in_opts =
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
+      .names({"A"})
+      .dtypes({"datetime64[ms]"})
+      .header(-1)
+      .timestamp_type(cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS});
+  auto result = cudf_io::read_csv(in_opts);
+
+  const auto view = result.tbl->view();
+  EXPECT_EQ(1, view.num_columns());
+  ASSERT_EQ(cudf::type_id::TIMESTAMP_MILLISECONDS, view.column(0).type().id());
+
+  using namespace cuda::std::chrono_literals;
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_column, view.column(0));
+}
+
+TEST_F(CsvReaderTest, IntegersCastToTimestampMicroSeconds)
+{
+  auto filepath = temp_env->get_temp_dir() + "IntegersCastToTimestampUs.csv";
+  std::vector<int64_t> input_vals{1, 10, 111, 2, 11, 112, 3, 12, 113, 43432423, 13342, 13243214};
+  auto expected_column = column_wrapper<cudf::timestamp_us, cudf::timestamp_us::rep>(
+    input_vals.begin(), input_vals.end());
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    for (auto v : input_vals) { outfile << v << "\n"; }
+  }
+
+  cudf_io::csv_reader_options in_opts =
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
+      .names({"A"})
+      .dtypes({"datetime64[us]"})
+      .header(-1)
+      .timestamp_type(cudf::data_type{cudf::type_id::TIMESTAMP_MICROSECONDS});
+  auto result = cudf_io::read_csv(in_opts);
+
+  const auto view = result.tbl->view();
+  EXPECT_EQ(1, view.num_columns());
+  ASSERT_EQ(cudf::type_id::TIMESTAMP_MICROSECONDS, view.column(0).type().id());
+
+  using namespace cuda::std::chrono_literals;
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_column, view.column(0));
+}
+
+TEST_F(CsvReaderTest, IntegersCastToTimestampNanoSeconds)
+{
+  auto filepath = temp_env->get_temp_dir() + "IntegersCastToTimestampNs.csv";
+  std::vector<int64_t> input_vals{1, 10, 111, 2, 11, 112, 3, 12, 113, 43432423, 13342, 13243214};
+  auto expected_column = column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep>(
+    input_vals.begin(), input_vals.end());
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    for (auto v : input_vals) { outfile << v << "\n"; }
+  }
+
+  cudf_io::csv_reader_options in_opts =
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
+      .names({"A"})
+      .dtypes({"datetime64[ns]"})
+      .header(-1)
+      .timestamp_type(cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS});
+  auto result = cudf_io::read_csv(in_opts);
+
+  const auto view = result.tbl->view();
+  EXPECT_EQ(1, view.num_columns());
+  ASSERT_EQ(cudf::type_id::TIMESTAMP_NANOSECONDS, view.column(0).type().id());
+
+  using namespace cuda::std::chrono_literals;
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_column, view.column(0));
 }
 
 TEST_F(CsvReaderTest, FloatingPoint)
@@ -1133,7 +1241,7 @@ TEST_F(CsvReaderTest, HexTest)
 TYPED_TEST(CsvReaderNumericTypeTest, SingleColumnWithWriter)
 {
   constexpr auto num_rows = 10;
-  auto sequence           = cudf::test::make_counting_transform_iterator(
+  auto sequence           = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return static_cast<TypeParam>(i + 1000.50f); });
   auto input_column = column_wrapper<TypeParam>(sequence, sequence + num_rows);
   auto input_table  = cudf::table_view{std::vector<cudf::column_view>{input_column}};
@@ -1242,7 +1350,7 @@ TEST_F(CsvReaderTest, MultiColumnWithWriter)
   const auto result_sliced_view = result_table.select(non_float64s);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_sliced_view, result_sliced_view);
 
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
   double tol{1.0e-6};
   auto float64_col_idx = non_float64s.size();
   check_float_column(
@@ -1750,7 +1858,7 @@ TEST_F(CsvReaderTest, ParseOutOfRangeIntegers)
 TEST_F(CsvReaderTest, ReadMaxNumericValue)
 {
   constexpr auto num_rows = 10;
-  auto sequence           = cudf::test::make_counting_transform_iterator(
+  auto sequence           = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return std::numeric_limits<uint64_t>::max() - i; });
 
   auto filepath = temp_env->get_temp_filepath("ReadMaxNumericValue.csv");
@@ -1771,7 +1879,7 @@ TEST_F(CsvReaderTest, ReadMaxNumericValue)
 TEST_F(CsvReaderTest, DefaultWriteChunkSize)
 {
   for (auto num_rows : {1, 20, 100, 1000}) {
-    auto sequence = cudf::test::make_counting_transform_iterator(
+    auto sequence = cudf::detail::make_counting_transform_iterator(
       0, [](auto i) { return static_cast<int32_t>(i + 1000.50f); });
     auto input_column = column_wrapper<int32_t>(sequence, sequence + num_rows);
     auto input_table  = cudf::table_view{std::vector<cudf::column_view>{input_column}};

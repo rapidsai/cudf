@@ -2,11 +2,12 @@
 
 from io import BufferedWriter, IOBase
 
+from fsspec.core import get_fs_token_paths
+from fsspec.utils import stringify_path
 from pyarrow import orc as orc
 
 from dask import dataframe as dd
 from dask.base import tokenize
-from dask.bytes.core import get_fs_token_paths, stringify_path
 from dask.dataframe.io.utils import _get_pyarrow_dtypes
 
 import cudf

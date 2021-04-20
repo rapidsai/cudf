@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_vector.hpp>
 
 #include <future>
 #include <memory>
@@ -307,7 +308,7 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
  */
 struct string_column_data {
   std::vector<char> chars;
-  std::vector<int32_t> offsets;
+  std::vector<cudf::size_type> offsets;
   std::vector<cudf::bitmask_type> null_mask;
   explicit string_column_data(cudf::size_type rows, cudf::size_type size)
   {
@@ -347,14 +348,20 @@ void copy_string(cudf::size_type src_idx,
 template <typename Char_gen>
 void append_string(Char_gen& char_gen, bool valid, uint32_t length, string_column_data& column_data)
 {
-  auto const idx = column_data.offsets.size() - 1;
-  column_data.offsets.push_back(column_data.offsets.back() + length);
-  std::generate_n(std::back_inserter(column_data.chars),
-                  column_data.offsets[idx + 1] - column_data.offsets[idx],
-                  [&]() { return char_gen(); });
-
-  // TODO: use empty string for invalid fields?
-  if (!valid) { cudf::clear_bit_unsafe(column_data.null_mask.data(), idx); }
+  if (!valid) {
+    auto const idx = column_data.offsets.size() - 1;
+    cudf::clear_bit_unsafe(column_data.null_mask.data(), idx);
+    // duplicate the offset value to indicate an empty row
+    column_data.offsets.push_back(column_data.offsets.back());
+    return;
+  }
+  for (uint32_t idx = 0; idx < length; ++idx) {
+    auto const ch = char_gen();
+    if (ch >= '\x7F')                       // x7F is at the top edge of ASCII
+      column_data.chars.push_back('\xC4');  // these characters are assigned two bytes
+    column_data.chars.push_back(static_cast<char>(ch + (ch >= '\x7F')));
+  }
+  column_data.offsets.push_back(column_data.chars.size());
 }
 
 /**
@@ -371,7 +378,8 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
                                                                       std::mt19937& engine,
                                                                       cudf::size_type num_rows)
 {
-  auto char_dist = [&engine, dist = std::uniform_int_distribution<char>{'!', '~'}]() mutable {
+  auto char_dist = [&engine,  // range 32-127 is ASCII; 127-136 will be multi-byte UTF-8
+                    dist = std::uniform_int_distribution<unsigned char>{32, 137}]() mutable {
     return dist(engine);
   };
   auto len_dist =
@@ -404,7 +412,11 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
       row += std::max(run_len - 1, 0);
     }
   }
-  return cudf::make_strings_column(out_col.chars, out_col.offsets, out_col.null_mask);
+
+  rmm::device_vector<char> d_chars(out_col.chars);
+  rmm::device_vector<cudf::size_type> d_offsets(out_col.offsets);
+  rmm::device_vector<cudf::bitmask_type> d_null_mask(out_col.null_mask);
+  return cudf::make_strings_column(d_chars, d_offsets, d_null_mask);
 }
 
 template <>
@@ -468,13 +480,13 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
   auto list_column = std::move(leaf_column);
   for (int lvl = 0; lvl < dist_params.max_depth; ++lvl) {
     // Generating the next level - offsets point into the current list column
-    auto current_child_column = std::move(list_column);
-    auto const num_rows       = current_child_column->size() / single_level_mean;
+    auto current_child_column      = std::move(list_column);
+    cudf::size_type const num_rows = current_child_column->size() / single_level_mean;
 
     std::vector<int32_t> offsets{0};
     offsets.reserve(num_rows + 1);
     std::vector<cudf::bitmask_type> null_mask(null_mask_size(num_rows), ~0);
-    for (int row = 1; row < num_rows + 1; ++row) {
+    for (cudf::size_type row = 1; row < num_rows + 1; ++row) {
       offsets.push_back(
         std::min<int32_t>(current_child_column->size(), offsets.back() + len_dist(engine)));
       if (!valid_dist(engine)) cudf::clear_bit_unsafe(null_mask.data(), row);
@@ -531,7 +543,7 @@ columns_vector create_random_columns(data_profile const& profile,
 std::vector<cudf::type_id> repeat_dtypes(std::vector<cudf::type_id> const& dtype_ids,
                                          cudf::size_type num_cols)
 {
-  if (dtype_ids.size() == num_cols) { return dtype_ids; }
+  if (dtype_ids.size() == static_cast<std::size_t>(num_cols)) { return dtype_ids; }
   std::vector<cudf::type_id> out_dtypes;
   out_dtypes.reserve(num_cols);
   for (cudf::size_type col = 0; col < num_cols; ++col)

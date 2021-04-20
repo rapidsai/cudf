@@ -113,7 +113,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
   return std::make_pair(std::move(null_mask), null_count);
 }
 
-/**----------------------------------------------------------------------------*
+/**
  * @brief Populates a set of bitmasks by applying a binary predicate to two
 *         input ranges.
 
@@ -146,7 +146,7 @@ std::pair<rmm::device_buffer, size_type> valid_if(
  *                      remaining bits may not be initialized.
  * @param valid_counts  Used to obtain the total number of valid bits for each
  *                      mask.
- **/
+ */
 template <typename InputIterator1,
           typename InputIterator2,
           typename BinaryPredicate,

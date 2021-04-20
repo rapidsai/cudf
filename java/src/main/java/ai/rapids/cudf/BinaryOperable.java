@@ -38,7 +38,7 @@ public interface BinaryOperable {
    * with scale=0 as scale is required. Dtype is discarded for binary operations for decimal
    * types in cudf as a new DType is created for output type with the new scale.
    */
-  static DType implicitConversion(BinaryOperable lhs, BinaryOperable rhs) {
+  static DType implicitConversion(BinaryOp op, BinaryOperable lhs, BinaryOperable rhs) {
     DType a = lhs.getType();
     DType b = rhs.getType();
     if (a.equals(DType.FLOAT64) || b.equals(DType.FLOAT64)) {
@@ -86,13 +86,15 @@ public interface BinaryOperable {
       int scale = 0;
       if (a.typeId == DType.DTypeEnum.DECIMAL32) {
         if (b.typeId == DType.DTypeEnum.DECIMAL32) {
-          return DType.create(DType.DTypeEnum.DECIMAL32, scale);
+          return DType.create(DType.DTypeEnum.DECIMAL32,
+              ColumnView.getFixedPointOutputScale(op, lhs.getType(), rhs.getType()));
         } else {
           throw new IllegalArgumentException("Both columns must be of the same fixed_point type");
         }
       } else if (a.typeId == DType.DTypeEnum.DECIMAL64) {
         if (b.typeId == DType.DTypeEnum.DECIMAL64) {
-          return DType.create(DType.DTypeEnum.DECIMAL64, scale);
+          return DType.create(DType.DTypeEnum.DECIMAL64,
+              ColumnView.getFixedPointOutputScale(op, lhs.getType(), rhs.getType()));
         } else {
           throw new IllegalArgumentException("Both columns must be of the same fixed_point type");
         }
@@ -128,7 +130,7 @@ public interface BinaryOperable {
    * Add + operator. this + rhs
    */
   default ColumnVector add(BinaryOperable rhs) {
-    return add(rhs, implicitConversion(this, rhs));
+    return add(rhs, implicitConversion(BinaryOp.ADD, this, rhs));
   }
 
   /**
@@ -144,7 +146,7 @@ public interface BinaryOperable {
    * Subtract one vector from another. this - rhs
    */
   default ColumnVector sub(BinaryOperable rhs) {
-    return sub(rhs, implicitConversion(this, rhs));
+    return sub(rhs, implicitConversion(BinaryOp.SUB, this, rhs));
   }
 
   /**
@@ -160,7 +162,7 @@ public interface BinaryOperable {
    * Multiply two vectors together. this * rhs
    */
   default ColumnVector mul(BinaryOperable rhs) {
-    return mul(rhs, implicitConversion(this, rhs));
+    return mul(rhs, implicitConversion(BinaryOp.MUL, this, rhs));
   }
 
   /**
@@ -176,7 +178,7 @@ public interface BinaryOperable {
    * Divide one vector by another. this / rhs
    */
   default ColumnVector div(BinaryOperable rhs) {
-    return div(rhs, implicitConversion(this, rhs));
+    return div(rhs, implicitConversion(BinaryOp.DIV, this, rhs));
   }
 
   /**
@@ -192,7 +194,7 @@ public interface BinaryOperable {
    * (double)this / (double)rhs
    */
   default ColumnVector trueDiv(BinaryOperable rhs) {
-    return trueDiv(rhs, implicitConversion(this, rhs));
+    return trueDiv(rhs, implicitConversion(BinaryOp.TRUE_DIV, this, rhs));
   }
 
   /**
@@ -208,7 +210,7 @@ public interface BinaryOperable {
    * Math.floor(this/rhs)
    */
   default ColumnVector floorDiv(BinaryOperable rhs) {
-    return floorDiv(rhs, implicitConversion(this, rhs));
+    return floorDiv(rhs, implicitConversion(BinaryOp.FLOOR_DIV, this, rhs));
   }
 
   /**
@@ -224,7 +226,7 @@ public interface BinaryOperable {
    * this % rhs
    */
   default ColumnVector mod(BinaryOperable rhs) {
-    return mod(rhs, implicitConversion(this, rhs));
+    return mod(rhs, implicitConversion(BinaryOp.MOD, this, rhs));
   }
 
   /**
@@ -240,7 +242,7 @@ public interface BinaryOperable {
    * Math.pow(this, rhs)
    */
   default ColumnVector pow(BinaryOperable rhs) {
-    return pow(rhs, implicitConversion(this, rhs));
+    return pow(rhs, implicitConversion(BinaryOp.POW, this, rhs));
   }
 
   /**
@@ -338,7 +340,7 @@ public interface BinaryOperable {
    * Bit wise and (&). this & rhs
    */
   default ColumnVector bitAnd(BinaryOperable rhs) {
-    return bitAnd(rhs, implicitConversion(this, rhs));
+    return bitAnd(rhs, implicitConversion(BinaryOp.BITWISE_AND, this, rhs));
   }
 
   /**
@@ -352,7 +354,7 @@ public interface BinaryOperable {
    * Bit wise or (|). this | rhs
    */
   default ColumnVector bitOr(BinaryOperable rhs) {
-    return bitOr(rhs, implicitConversion(this, rhs));
+    return bitOr(rhs, implicitConversion(BinaryOp.BITWISE_OR, this, rhs));
   }
 
   /**
@@ -366,7 +368,7 @@ public interface BinaryOperable {
    * Bit wise xor (^). this ^ rhs
    */
   default ColumnVector bitXor(BinaryOperable rhs) {
-    return bitXor(rhs, implicitConversion(this, rhs));
+    return bitXor(rhs, implicitConversion(BinaryOp.BITWISE_XOR, this, rhs));
   }
 
   /**
@@ -380,7 +382,7 @@ public interface BinaryOperable {
    * Logical and (&&). this && rhs
    */
   default ColumnVector and(BinaryOperable rhs) {
-    return and(rhs, implicitConversion(this, rhs));
+    return and(rhs, implicitConversion(BinaryOp.LOGICAL_AND, this, rhs));
   }
 
   /**
@@ -394,7 +396,7 @@ public interface BinaryOperable {
    * Logical or (||). this || rhs
    */
   default ColumnVector or(BinaryOperable rhs) {
-    return or(rhs, implicitConversion(this, rhs));
+    return or(rhs, implicitConversion(BinaryOp.LOGICAL_OR, this, rhs));
   }
 
   /**
@@ -421,7 +423,7 @@ public interface BinaryOperable {
    *    with this[i] << shiftBy
    */
   default ColumnVector shiftLeft(BinaryOperable shiftBy) {
-    return shiftLeft(shiftBy, implicitConversion(this, shiftBy));
+    return shiftLeft(shiftBy, implicitConversion(BinaryOp.SHIFT_LEFT, this, shiftBy));
   }
 
   /**
@@ -447,7 +449,7 @@ public interface BinaryOperable {
    *    with this[i] >> shiftBy
    */
   default ColumnVector shiftRight(BinaryOperable shiftBy) {
-    return shiftRight(shiftBy, implicitConversion(this, shiftBy));
+    return shiftRight(shiftBy, implicitConversion(BinaryOp.SHIFT_RIGHT, this, shiftBy));
   }
 
   /**
@@ -475,7 +477,8 @@ public interface BinaryOperable {
    *    with this[i] >>> shiftBy
    */
   default ColumnVector shiftRightUnsigned(BinaryOperable shiftBy) {
-    return shiftRightUnsigned(shiftBy, implicitConversion(this, shiftBy));
+    return shiftRightUnsigned(shiftBy, implicitConversion(BinaryOp.SHIFT_RIGHT_UNSIGNED, this,
+        shiftBy));
   }
 
   /**
@@ -505,7 +508,7 @@ public interface BinaryOperable {
    * in radians, between the positive x axis and the ray to the point (x, y) ≠ (0, 0).
    */
   default ColumnVector arctan2(BinaryOperable xCoordinate) {
-    return arctan2(xCoordinate, implicitConversion(this, xCoordinate));
+    return arctan2(xCoordinate, implicitConversion(BinaryOp.ATAN2, this, xCoordinate));
   }
 
   /**
@@ -529,7 +532,7 @@ public interface BinaryOperable {
    *
    */
   default ColumnVector pmod(BinaryOperable rhs) {
-    return pmod(rhs, implicitConversion(this, rhs));
+    return pmod(rhs, implicitConversion(BinaryOp.PMOD, this, rhs));
   }
 
   /**
@@ -557,7 +560,7 @@ public interface BinaryOperable {
    * Returns the max non null value.
    */
   default ColumnVector maxNullAware(BinaryOperable rhs) {
-    return maxNullAware(rhs, implicitConversion(this, rhs));
+    return maxNullAware(rhs, implicitConversion(BinaryOp.NULL_MAX, this, rhs));
   }
 
   /**
@@ -571,6 +574,7 @@ public interface BinaryOperable {
    * Returns the min non null value.
    */
   default ColumnVector minNullAware(BinaryOperable rhs) {
-    return minNullAware(rhs, implicitConversion(this, rhs));
+    return minNullAware(rhs, implicitConversion(BinaryOp.NULL_MIN, this, rhs));
   }
+
 }

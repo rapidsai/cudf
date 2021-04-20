@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,22 +70,19 @@ struct in_place_copy_range_dispatch {
   cudf::column_view const& source;
   cudf::mutable_column_view& target;
 
-  template <typename T>
-  std::enable_if_t<cudf::is_fixed_width<T>(), void> operator()(cudf::size_type source_begin,
-                                                               cudf::size_type source_end,
-                                                               cudf::size_type target_begin,
-                                                               rmm::cuda_stream_view stream)
+  template <typename T, CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<T>())>
+  void operator()(cudf::size_type source_begin,
+                  cudf::size_type source_end,
+                  cudf::size_type target_begin,
+                  rmm::cuda_stream_view stream)
   {
     in_place_copy_range<T>(source, target, source_begin, source_end, target_begin, stream);
   }
 
-  template <typename T>
-  std::enable_if_t<not cudf::is_fixed_width<T>(), void> operator()(cudf::size_type source_begin,
-                                                                   cudf::size_type source_end,
-                                                                   cudf::size_type target_begin,
-                                                                   rmm::cuda_stream_view stream)
+  template <typename T, typename... Args>
+  void operator()(Args&&...)
   {
-    CUDF_FAIL("in-place copy does not work for variable width types.");
+    CUDF_FAIL("Unsupported type for in-place copy.");
   }
 };
 
@@ -93,7 +90,18 @@ struct out_of_place_copy_range_dispatch {
   cudf::column_view const& source;
   cudf::column_view const& target;
 
-  template <typename T>
+  template <typename T, CUDF_ENABLE_IF(not cudf::is_rep_layout_compatible<T>())>
+  std::unique_ptr<cudf::column> operator()(
+    cudf::size_type source_begin,
+    cudf::size_type source_end,
+    cudf::size_type target_begin,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+  {
+    CUDF_FAIL("Unsupported type for out of place copy.");
+  }
+
+  template <typename T, CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<T>())>
   std::unique_ptr<cudf::column> operator()(
     cudf::size_type source_begin,
     cudf::size_type source_end,
@@ -108,9 +116,8 @@ struct out_of_place_copy_range_dispatch {
     }
 
     if (source_end != source_begin) {  // otherwise no-op
-      using Type    = cudf::device_storage_type_t<T>;
       auto ret_view = p_ret->mutable_view();
-      in_place_copy_range<Type>(source, ret_view, source_begin, source_end, target_begin, stream);
+      in_place_copy_range<T>(source, ret_view, source_begin, source_end, target_begin, stream);
     }
 
     return p_ret;
@@ -238,12 +245,12 @@ void copy_range_in_place(column_view const& source,
                "target should be nullable if source has null values.");
 
   if (source_end != source_begin) {  // otherwise no-op
-    cudf::type_dispatcher(target.type(),
-                          in_place_copy_range_dispatch{source, target},
-                          source_begin,
-                          source_end,
-                          target_begin,
-                          stream);
+    cudf::type_dispatcher<dispatch_storage_type>(target.type(),
+                                                 in_place_copy_range_dispatch{source, target},
+                                                 source_begin,
+                                                 source_end,
+                                                 target_begin,
+                                                 stream);
   }
 }
 
@@ -261,13 +268,14 @@ std::unique_ptr<column> copy_range(column_view const& source,
                "Range is out of bounds.");
   CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.");
 
-  return cudf::type_dispatcher(target.type(),
-                               out_of_place_copy_range_dispatch{source, target},
-                               source_begin,
-                               source_end,
-                               target_begin,
-                               stream,
-                               mr);
+  return cudf::type_dispatcher<dispatch_storage_type>(
+    target.type(),
+    out_of_place_copy_range_dispatch{source, target},
+    source_begin,
+    source_end,
+    target_begin,
+    stream,
+    mr);
 }
 
 }  // namespace detail

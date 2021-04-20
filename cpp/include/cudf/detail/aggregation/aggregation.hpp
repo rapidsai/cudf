@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #pragma once
 
 #include <cudf/aggregation.hpp>
-#include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -154,6 +154,9 @@ struct quantile_aggregation final : derived_aggregation<quantile_aggregation> {
   }
 };
 
+/**
+ * @brief Derived aggregation class for specifying LEAD/LAG window aggregations
+ */
 struct lead_lag_aggregation final : derived_aggregation<lead_lag_aggregation> {
   lead_lag_aggregation(Kind kind, size_type offset)
     : derived_aggregation{offset < 0 ? (kind == LAG ? LEAD : LAG) : kind},
@@ -317,6 +320,61 @@ struct udf_aggregation final : derived_aggregation<udf_aggregation> {
 };
 
 /**
+ * @brief Derived aggregation class for specifying COLLECT_LIST aggregation
+ */
+struct collect_list_aggregation final : derived_aggregation<nunique_aggregation> {
+  explicit collect_list_aggregation(null_policy null_handling = null_policy::INCLUDE)
+    : derived_aggregation{COLLECT_LIST}, _null_handling{null_handling}
+  {
+  }
+  null_policy _null_handling;  ///< include or exclude nulls
+
+ protected:
+  friend class derived_aggregation<nunique_aggregation>;
+
+  bool operator==(nunique_aggregation const& other) const
+  {
+    return _null_handling == other._null_handling;
+  }
+
+  size_t hash_impl() const { return std::hash<int>{}(static_cast<int>(_null_handling)); }
+};
+
+/**
+ * @brief Derived aggregation class for specifying COLLECT_SET aggregation
+ */
+struct collect_set_aggregation final : derived_aggregation<collect_set_aggregation> {
+  explicit collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE,
+                                   null_equality nulls_equal = null_equality::EQUAL,
+                                   nan_equality nans_equal   = nan_equality::UNEQUAL)
+    : derived_aggregation{COLLECT_SET},
+      _null_handling{null_handling},
+      _nulls_equal(nulls_equal),
+      _nans_equal(nans_equal)
+  {
+  }
+  null_policy _null_handling;  ///< include or exclude nulls
+  null_equality _nulls_equal;  ///< whether to consider nulls as equal values
+  nan_equality _nans_equal;    ///< whether to consider NaNs as equal value (applicable only to
+                               ///< floating point types)
+
+ protected:
+  friend class derived_aggregation<collect_set_aggregation>;
+
+  bool operator==(collect_set_aggregation const& other) const
+  {
+    return _null_handling == other._null_handling && _nulls_equal == other._nulls_equal &&
+           _nans_equal == other._nans_equal;
+  }
+
+  size_t hash_impl() const
+  {
+    return std::hash<int>{}(static_cast<int>(_null_handling) ^ static_cast<int>(_nulls_equal) ^
+                            static_cast<int>(_nans_equal));
+  }
+};
+
+/**
  * @brief Sentinel value used for `ARGMAX` aggregation.
  *
  * The output column for an `ARGMAX` aggregation is initialized with the
@@ -337,7 +395,7 @@ constexpr size_type ARGMIN_SENTINEL{-1};
  *
  * @tparam Source The type on which the aggregation is computed
  * @tparam k The aggregation performed
- **/
+ */
 template <typename Source, aggregation::Kind k, typename Enable = void>
 struct target_type_impl {
   using type = void;
@@ -411,6 +469,15 @@ struct target_type_impl<
   using type = int64_t;
 };
 
+// Summing fixed_point numbers, always use the decimal64 accumulator
+template <typename Source, aggregation::Kind k>
+struct target_type_impl<
+  Source,
+  k,
+  std::enable_if_t<cudf::is_fixed_point<Source>() && (k == aggregation::SUM)>> {
+  using type = numeric::decimal64;
+};
+
 // Summing/Multiplying float/doubles, use same type accumulator
 template <typename Source, aggregation::Kind k>
 struct target_type_impl<
@@ -481,9 +548,15 @@ struct target_type_impl<Source, aggregation::ROW_NUMBER> {
   using type = cudf::size_type;
 };
 
-// Always use list for COLLECT
+// Always use list for COLLECT_LIST
 template <typename Source>
-struct target_type_impl<Source, aggregation::COLLECT> {
+struct target_type_impl<Source, aggregation::COLLECT_LIST> {
+  using type = cudf::list_view;
+};
+
+// Always use list for COLLECT_SET
+template <typename Source>
+struct target_type_impl<Source, aggregation::COLLECT_SET> {
   using type = cudf::list_view;
 };
 
@@ -584,8 +657,10 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kin
       return f.template operator()<aggregation::NTH_ELEMENT>(std::forward<Ts>(args)...);
     case aggregation::ROW_NUMBER:
       return f.template operator()<aggregation::ROW_NUMBER>(std::forward<Ts>(args)...);
-    case aggregation::COLLECT:
-      return f.template operator()<aggregation::COLLECT>(std::forward<Ts>(args)...);
+    case aggregation::COLLECT_LIST:
+      return f.template operator()<aggregation::COLLECT_LIST>(std::forward<Ts>(args)...);
+    case aggregation::COLLECT_SET:
+      return f.template operator()<aggregation::COLLECT_SET>(std::forward<Ts>(args)...);
     case aggregation::LEAD:
       return f.template operator()<aggregation::LEAD>(std::forward<Ts>(args)...);
     case aggregation::LAG:
@@ -594,7 +669,7 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kin
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");
 #else
-      release_assert(false && "Unsupported aggregation.");
+      cudf_assert(false && "Unsupported aggregation.");
 
       // The following code will never be reached, but the compiler generates a
       // warning if there isn't a return value.

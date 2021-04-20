@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import re
 from collections.abc import Mapping, Sequence
@@ -74,6 +74,17 @@ def assert_eq(left, right, **kwargs):
     without switching between assert_frame_equal/assert_series_equal/...
     functions.
     """
+    # dtypes that we support but Pandas doesn't will convert to
+    # `object`. Check equality before that happens:
+    if kwargs.get("check_dtype", True):
+        if hasattr(left, "dtype") and hasattr(right, "dtype"):
+            if isinstance(
+                left.dtype, cudf.core.dtypes._BaseDtype
+            ) and not isinstance(
+                left.dtype, cudf.CategoricalDtype
+            ):  # leave categorical comparison to Pandas
+                assert_eq(left.dtype, right.dtype)
+
     if hasattr(left, "to_pandas"):
         left = left.to_pandas()
     if hasattr(right, "to_pandas"):
@@ -97,13 +108,13 @@ def assert_eq(left, right, **kwargs):
         else:
             assert np.array_equal(left, right)
     else:
+        # Use the overloaded __eq__ of the operands
         if left == right:
             return True
+        elif any([np.issubdtype(type(x), np.floating) for x in (left, right)]):
+            np.testing.assert_almost_equal(left, right)
         else:
-            if np.isnan(left):
-                assert np.isnan(right)
-            else:
-                assert np.allclose(left, right, equal_nan=True)
+            np.testing.assert_equal(left, right)
     return True
 
 
@@ -259,7 +270,9 @@ def gen_rand(dtype, size, **kwargs):
     elif dtype.kind == "b":
         low = kwargs.get("low", 0)
         high = kwargs.get("high", 2)
-        return np.random.randint(low=low, high=high, size=size).astype(np.bool)
+        return np.random.randint(low=low, high=high, size=size).astype(
+            np.bool_
+        )
     elif dtype.kind == "M":
         low = kwargs.get("low", 0)
         time_unit, _ = np.datetime_data(dtype)

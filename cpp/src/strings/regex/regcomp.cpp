@@ -216,8 +216,8 @@ class regex_parser {
     }
 
     /* sort on span start */
-    for (int p = 0; p < cls.size(); p += 2)
-      for (int np = p + 2; np < cls.size(); np += 2)
+    for (std::size_t p = 0; p < cls.size(); p += 2)
+      for (std::size_t np = p + 2; np < cls.size(); np += 2)
         if (cls[np] < cls[p]) {
           c           = cls[np];
           cls[np]     = cls[p];
@@ -230,8 +230,8 @@ class regex_parser {
     /* merge spans */
     reclass yycls{builtins};
     if (cls.size() >= 2) {
-      int np = 0;
-      int p  = 0;
+      int np        = 0;
+      std::size_t p = 0;
       yycls.literals += cls[p++];
       yycls.literals += cls[p++];
       for (; p < cls.size(); p += 2) {
@@ -682,7 +682,7 @@ class regex_compiler {
     int rep_start = -1;
 
     out.clear();
-    for (int i = 0; i < in.size(); i++) {
+    for (std::size_t i = 0; i < in.size(); i++) {
       if (in[i].t != COUNTED && in[i].t != COUNTED_LAZY) {
         out.push_back(in[i]);
         if (in[i].t == LBRA || in[i].t == LBRA_NC) {
@@ -701,11 +701,11 @@ class regex_compiler {
         regex_parser::Item item = in[i];
         if (item.d.yycount.n <= 0) {
           // need to erase
-          for (int j = 0; j < i - rep_start; j++) out.pop_back();
+          for (std::size_t j = 0; j < i - rep_start; j++) out.pop_back();
         } else {
           // repeat
           for (int j = 1; j < item.d.yycount.n; j++)
-            for (int k = rep_start; k < i; k++) out.push_back(in[k]);
+            for (std::size_t k = rep_start; k < i; k++) out.push_back(in[k]);
         }
 
         // optional repeats
@@ -715,7 +715,7 @@ class regex_compiler {
             o_item.t    = LBRA_NC;
             o_item.d.yy = 0;
             out.push_back(o_item);
-            for (int k = rep_start; k < i; k++) out.push_back(in[k]);
+            for (std::size_t k = rep_start; k < i; k++) out.push_back(in[k]);
           }
           for (int j = item.d.yycount.n; j < item.d.yycount.m; j++) {
             regex_parser::Item o_item;
@@ -746,7 +746,7 @@ class regex_compiler {
             }
           } else  // copy it once then put '*'
           {
-            for (int k = rep_start; k < i; k++) out.push_back(in[k]);
+            for (std::size_t k = rep_start; k < i; k++) out.push_back(in[k]);
 
             if (item.t == COUNTED) {
               o_item.t = STAR;
@@ -763,7 +763,7 @@ class regex_compiler {
 
  public:
   regex_compiler(const char32_t* pattern, int dot_type, reprog& prog)
-    : m_prog(prog), cursubid(0), pushsubid(0), lastwasand(false), nbra(0), yyclass_id(0), yy(0)
+    : m_prog(prog), cursubid(0), pushsubid(0), lastwasand(false), nbra(0), yy(0), yyclass_id(0)
   {
     // Parse
     std::vector<regex_parser::Item> items;
@@ -908,9 +908,9 @@ void reprog::optimize2()
 void reprog::print()
 {
   printf("Instructions:\n");
-  for (int i = 0; i < _insts.size(); i++) {
+  for (std::size_t i = 0; i < _insts.size(); i++) {
     const reinst& inst = _insts[i];
-    printf("%d :", i);
+    printf("%zu :", i);
     switch (inst.type) {
       default: printf("Unknown instruction: %d, nextid= %d", inst.type, inst.u2.next_id); break;
       case CHAR:

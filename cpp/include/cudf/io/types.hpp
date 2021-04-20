@@ -148,7 +148,6 @@ struct table_metadata {
  *
  * In the case where column nullability is known, pass `true` if the corresponding column could
  * contain nulls in one or more subtables to be written, otherwise `false`.
- *
  */
 struct table_metadata_with_nullability : public table_metadata {
   std::vector<bool> column_nullable;  //!< Per-column nullability information.

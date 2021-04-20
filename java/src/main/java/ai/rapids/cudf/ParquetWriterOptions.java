@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
   public static class Builder extends CMWriterBuilder<Builder> {
     private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
     private boolean isTimestampTypeInt96 = false;
+    private int[] precisionValues = null;
 
     public Builder withStatisticsFrequency(StatisticsFrequency statsGranularity) {
       this.statsGranularity = statsGranularity;
@@ -56,12 +57,21 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
       return this;
     }
 
+    /**
+     * This is a temporary hack to make things work.  This API will go away once we can update the
+     * parquet APIs properly.
+     * @param precisionValues a value for each column, non-decimal columns are ignored.
+     * @return this for chaining.
+     */
+    public Builder withDecimalPrecisions(int ... precisionValues) {
+      this.precisionValues = precisionValues;
+      return this;
+    }
+
     public ParquetWriterOptions build() {
       return new ParquetWriterOptions(this);
     }
   }
-
-  public static final ParquetWriterOptions DEFAULT = new ParquetWriterOptions(new Builder());
 
   public static Builder builder() {
     return new Builder();
@@ -73,10 +83,19 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
     super(builder);
     this.statsGranularity = builder.statsGranularity;
     this.isTimestampTypeInt96 = builder.isTimestampTypeInt96;
+    this.precisions = builder.precisionValues;
   }
 
   public StatisticsFrequency getStatisticsFrequency() {
     return statsGranularity;
+  }
+
+  /**
+   * Return the flattened list of precisions if set otherwise empty array will be returned.
+   * For a definition of what `flattened` means please look at {@link Builder#withDecimalPrecisions}
+   */
+  public int[] getPrecisions() {
+    return precisions;
   }
 
   /**
@@ -87,4 +106,6 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
   }
 
   private boolean isTimestampTypeInt96;
+
+  private int[] precisions;
 }

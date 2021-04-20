@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <algorithm>
+
 namespace cudf {
 namespace {
 
@@ -36,6 +38,22 @@ namespace {
 bool md5_type_check(data_type dt)
 {
   return !is_chrono(dt) && (is_fixed_width(dt) || (dt.id() == type_id::STRING));
+}
+
+template <typename IterType>
+std::vector<column_view> to_leaf_columns(IterType iter_begin, IterType iter_end)
+{
+  std::vector<column_view> leaf_columns;
+  std::for_each(iter_begin, iter_end, [&leaf_columns](column_view const& col) {
+    if (is_nested(col.type())) {
+      CUDF_EXPECTS(col.type().id() == type_id::STRUCT, "unsupported nested type");
+      auto child_columns = to_leaf_columns(col.child_begin(), col.child_end());
+      leaf_columns.insert(leaf_columns.end(), child_columns.begin(), child_columns.end());
+    } else {
+      leaf_columns.emplace_back(col);
+    }
+  });
+  return leaf_columns;
 }
 
 }  // namespace
@@ -52,7 +70,10 @@ std::unique_ptr<column> hash(table_view const& input,
   switch (hash_function) {
     case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, initial_hash, stream, mr);
     case (hash_id::HASH_MD5): return md5_hash(input, stream, mr);
-    case (hash_id::HASH_SERIAL_MURMUR3): return serial_murmur_hash3_32(input, seed, stream, mr);
+    case (hash_id::HASH_SERIAL_MURMUR3):
+      return serial_murmur_hash3_32<MurmurHash3_32>(input, seed, stream, mr);
+    case (hash_id::HASH_SPARK_MURMUR3):
+      return serial_murmur_hash3_32<SparkMurmurHash3_32>(input, seed, stream, mr);
     default: return nullptr;
   }
 }
@@ -119,6 +140,7 @@ std::unique_ptr<column> md5_hash(table_view const& input,
                              mr);
 }
 
+template <template <typename> class hash_function>
 std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
                                                uint32_t seed,
                                                rmm::cuda_stream_view stream,
@@ -129,10 +151,11 @@ std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
 
   if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }
 
-  auto const device_input = table_device_view::create(input, stream);
+  table_view const leaf_table(to_leaf_columns(input.begin(), input.end()));
+  auto const device_input = table_device_view::create(leaf_table, stream);
   auto output_view        = output->mutable_view();
 
-  if (has_nulls(input)) {
+  if (has_nulls(leaf_table)) {
     thrust::tabulate(rmm::exec_policy(stream),
                      output_view.begin<int32_t>(),
                      output_view.end<int32_t>(),
@@ -145,7 +168,7 @@ std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
                          [rindex = row_index] __device__(auto hash, auto column) {
                            return cudf::type_dispatcher(
                              column.type(),
-                             element_hasher_with_seed<MurmurHash3_32, true>{hash, hash},
+                             element_hasher_with_seed<hash_function, true>{hash, hash},
                              column,
                              rindex);
                          });
@@ -163,7 +186,7 @@ std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
                          [rindex = row_index] __device__(auto hash, auto column) {
                            return cudf::type_dispatcher(
                              column.type(),
-                             element_hasher_with_seed<MurmurHash3_32, false>{hash, hash},
+                             element_hasher_with_seed<hash_function, false>{hash, hash},
                              column,
                              rindex);
                          });

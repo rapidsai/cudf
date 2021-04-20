@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_booleans.hpp>
@@ -25,6 +26,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
 #include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -111,17 +113,11 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
   // copy null mask
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(booleans, stream, mr);
   // build offsets column
-  auto offsets_transformer_itr =
-    thrust::make_transform_iterator(thrust::make_counting_iterator<int32_t>(0),
-                                    [d_column, d_true, d_false] __device__(size_type idx) {
-                                      if (d_column.is_null(idx)) return 0;
-                                      size_type bytes = 0;
-                                      if (d_column.element<bool>(idx))
-                                        bytes = d_true.size_bytes();
-                                      else
-                                        bytes = d_false.size_bytes();
-                                      return bytes;
-                                    });
+  auto offsets_transformer_itr = cudf::detail::make_counting_transform_iterator(
+    0, [d_column, d_true, d_false] __device__(size_type idx) {
+      if (d_column.is_null(idx)) return 0;
+      return d_column.element<bool>(idx) ? d_true.size_bytes() : d_false.size_bytes();
+    });
   auto offsets_column = make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto offsets_view = offsets_column->view();

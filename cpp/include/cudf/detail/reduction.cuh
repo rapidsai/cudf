@@ -33,7 +33,7 @@
 namespace cudf {
 namespace reduction {
 namespace detail {
-/** --------------------------------------------------------------------------*
+/**
  * @brief Compute the specified simple reduction over the input range of elements.
  *
  * @param[in] d_in      the begin iterator
@@ -45,7 +45,7 @@ namespace detail {
  * @tparam Op               the reduction operator with device binary operator
  * @tparam InputIterator    the input column iterator
  * @tparam OutputType       the output type of reduction
- * ----------------------------------------------------------------------------**/
+ */
 template <typename Op,
           typename InputIterator,
           typename OutputType = typename thrust::iterator_value<InputIterator>::type,
@@ -148,7 +148,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   return std::unique_ptr<scalar>(s);
 }
 
-/** --------------------------------------------------------------------------*
+/**
  * @brief compute reduction by the compound operator (reduce and transform)
  *
  * @param[in] d_in      the begin iterator
@@ -166,7 +166,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
  * @tparam Op               the reduction operator with device binary operator
  * @tparam InputIterator    the input column iterator
  * @tparam OutputType       the output type of reduction
- * ----------------------------------------------------------------------------**/
+ */
 template <typename Op,
           typename InputIterator,
           typename OutputType,

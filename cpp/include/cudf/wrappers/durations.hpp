@@ -31,23 +31,23 @@ namespace cudf {
 
 /**
  * @brief Type alias representing an int32_t duration of days.
- **/
+ */
 using duration_D = cuda::std::chrono::duration<int32_t, cuda::std::chrono::days::period>;
 /**
  * @brief Type alias representing an int64_t duration of seconds.
- **/
+ */
 using duration_s = cuda::std::chrono::duration<int64_t, cuda::std::chrono::seconds::period>;
 /**
  * @brief Type alias representing an int64_t duration of milliseconds.
- **/
+ */
 using duration_ms = cuda::std::chrono::duration<int64_t, cuda::std::chrono::milliseconds::period>;
 /**
  * @brief Type alias representing an int64_t duration of microseconds.
- **/
+ */
 using duration_us = cuda::std::chrono::duration<int64_t, cuda::std::chrono::microseconds::period>;
 /**
  * @brief Type alias representing an int64_t duration of nanoseconds.
- **/
+ */
 using duration_ns = cuda::std::chrono::duration<int64_t, cuda::std::chrono::nanoseconds::period>;
 
 static_assert(sizeof(duration_D) == sizeof(typename duration_D::rep), "");
@@ -64,7 +64,7 @@ namespace std {
  * @brief Specialization of std::numeric_limits for cudf::detail::duration
  *
  * Pass through to return the limits of the underlying numeric representation.
- **/
+ */
 #define DURATION_LIMITS(TypeName)                                             \
   template <>                                                                 \
   struct numeric_limits<TypeName> {                                           \

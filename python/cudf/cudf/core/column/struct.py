@@ -1,4 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import pyarrow as pa
 
@@ -7,6 +8,8 @@ from cudf.core.column import ColumnBase
 
 
 class StructColumn(ColumnBase):
+    dtype: cudf.core.dtypes.StructDtype
+
     @property
     def base_size(self):
         if not self.base_children:

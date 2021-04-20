@@ -68,7 +68,6 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
     case ST_FLD_STRUCT:
       for (;;) {
         int c = getb();
-        int d = c >> 4;
         t     = c & 0xf;
         if (!c) break;
         if (depth > 10) return false;
@@ -285,7 +284,7 @@ bool CompactProtocolReader::read(KeyValue *k)
  */
 bool CompactProtocolReader::InitSchema(FileMetaData *md)
 {
-  if (WalkSchema(md) != md->schema.size()) return false;
+  if (static_cast<std::size_t>(WalkSchema(md)) != md->schema.size()) return false;
 
   /* Inside FileMetaData, there is a std::vector of RowGroups and each RowGroup contains a
    * a std::vector of ColumnChunks. Each ColumnChunk has a member ColumnMetaData, which contains

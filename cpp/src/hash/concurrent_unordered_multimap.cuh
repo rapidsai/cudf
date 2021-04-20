@@ -100,7 +100,7 @@ class concurrent_unordered_multimap {
    * @param equal The equality comparison function for comparing if two keys are
    * equal
    * @param allocator The allocator to use for allocation of the map's storage
-   **/
+   */
   static auto create(size_type capacity,
                      rmm::cuda_stream_view stream    = rmm::cuda_stream_default,
                      const bool init                 = true,
@@ -134,7 +134,7 @@ class concurrent_unordered_multimap {
    * from the `create()` factory function.
    *
    * @param stream CUDA stream used for device memory operations and kernel launches.
-   **/
+   */
   void destroy(rmm::cuda_stream_view stream = rmm::cuda_stream_default)
   {
     m_allocator.deallocate(m_hashtbl_values, m_hashtbl_capacity, stream);
@@ -152,7 +152,7 @@ class concurrent_unordered_multimap {
    * should be appropriately synchronized with the creating stream.
    *
    * @returns iterator to the first element in the map.
-   **/
+   */
   __host__ __device__ iterator begin()
   {
     return iterator(m_hashtbl_values, m_hashtbl_values + m_hashtbl_size, m_hashtbl_values);
@@ -169,7 +169,7 @@ class concurrent_unordered_multimap {
    * should be appropriately synchronized with the creating stream.
    *
    * @returns constant iterator to the first element in the map.
-   **/
+   */
   __host__ __device__ const_iterator begin() const
   {
     return const_iterator(m_hashtbl_values, m_hashtbl_values + m_hashtbl_size, m_hashtbl_values);
@@ -186,7 +186,7 @@ class concurrent_unordered_multimap {
    * should be appropriately synchronized with the creating stream.
    *
    * @returns iterator to the one past the last element in the map.
-   **/
+   */
   __host__ __device__ iterator end()
   {
     return iterator(
@@ -204,7 +204,7 @@ class concurrent_unordered_multimap {
    * should be appropriately synchronized with the creating stream.
    *
    * @returns constant iterator to the one past the last element in the map.
-   **/
+   */
   __host__ __device__ const_iterator end() const
   {
     return const_iterator(
@@ -216,7 +216,6 @@ class concurrent_unordered_multimap {
     return unused_key;
   }
 
-  /* --------------------------------------------------------------------------*/
   /**
    * @brief Computes a hash value for a key
    *
@@ -225,14 +224,12 @@ class concurrent_unordered_multimap {
    *
    * @returns   The hash value for the key
    */
-  /* ----------------------------------------------------------------------------*/
   template <typename hash_value_type = typename Hasher::result_type>
   __forceinline__ __host__ __device__ hash_value_type get_hash(const key_type& the_key) const
   {
     return m_hf(the_key);
   }
 
-  /* --------------------------------------------------------------------------*/
   /**
    * @brief Computes the destination hash map partition for a key
    *
@@ -248,7 +245,6 @@ class concurrent_unordered_multimap {
    *
    * @returns   The destination hash table partition for the specified key
    */
-  /* ----------------------------------------------------------------------------*/
   template <typename hash_value_type = typename Hasher::result_type>
   __forceinline__ __host__ __device__ int get_partition(
     const key_type& the_key,
@@ -281,7 +277,6 @@ class concurrent_unordered_multimap {
     return dest_part;
   }
 
-  /* --------------------------------------------------------------------------*/
   /**
    * @brief  Inserts a (key, value) pair into the hash map
    *
@@ -298,7 +293,6 @@ class concurrent_unordered_multimap {
    *
    * @returns An iterator to the newly inserted (key, value) pair
    */
-  /* ----------------------------------------------------------------------------*/
   template <typename hash_value_type = typename Hasher::result_type,
             typename comparison_type = key_equal>
   __forceinline__ __device__ iterator insert(const value_type& x,
@@ -368,7 +362,6 @@ class concurrent_unordered_multimap {
     return iterator(m_hashtbl_values, m_hashtbl_values + hashtbl_size, it);
   }
 
-  /* --------------------------------------------------------------------------*/
   /**
    * @brief  Inserts a (key, value) pair into the hash map partition. This
    * is useful when building the hash table in multiple passes, one
@@ -391,7 +384,6 @@ class concurrent_unordered_multimap {
    *
    * @returns An iterator to the newly inserted (key, value) pair
    */
-  /* ----------------------------------------------------------------------------*/
   template <typename hash_value_type = typename Hasher::result_type,
             typename comparison_type = key_equal>
   __forceinline__ __device__ iterator insert_part(const value_type& x,
@@ -423,7 +415,6 @@ class concurrent_unordered_multimap {
       return insert(x, true, hash_value, keys_are_equal);
   }
 
-  /* --------------------------------------------------------------------------*/
   /**
    * @brief Searches for a key in the hash map and returns an iterator to the
    * first instance of the key in the map.
@@ -441,7 +432,6 @@ class concurrent_unordered_multimap {
    *
    * @returns   An iterator to the first instance of the key in the map
    */
-  /* ----------------------------------------------------------------------------*/
   template <typename hash_value_type = typename Hasher::result_type,
             typename comparison_type = key_equal>
   __forceinline__ __host__ __device__ const_iterator

@@ -29,7 +29,7 @@ constexpr int hash_bits = 12;
 
 /**
  * @brief snappy compressor state
- **/
+ */
 struct snap_state_s {
   const uint8_t *src;                 ///< Ptr to uncompressed data
   uint32_t src_len;                   ///< Uncompressed data length
@@ -44,7 +44,7 @@ struct snap_state_s {
 
 /**
  * @brief 12-bit hash from four consecutive bytes
- **/
+ */
 static inline __device__ uint32_t snap_hash(uint32_t v)
 {
   return (v * ((1 << 20) + (0x2a00) + (0x6a) + 1)) >> (32 - hash_bits);
@@ -52,7 +52,7 @@ static inline __device__ uint32_t snap_hash(uint32_t v)
 
 /**
  * @brief Fetches four consecutive bytes
- **/
+ */
 static inline __device__ uint32_t fetch4(const uint8_t *src)
 {
   uint32_t src_align    = 3 & reinterpret_cast<uintptr_t>(src);
@@ -71,7 +71,7 @@ static inline __device__ uint32_t fetch4(const uint8_t *src)
  * @param t Thread in warp
  *
  * @return Updated pointer to compressed byte stream
- **/
+ */
 static __device__ uint8_t *StoreLiterals(
   uint8_t *dst, uint8_t *end, const uint8_t *src, uint32_t len_minus1, uint32_t t)
 {
@@ -124,7 +124,7 @@ static __device__ uint8_t *StoreLiterals(
  * @param distance Copy distance
  *
  * @return Updated pointer to compressed byte stream
- **/
+ */
 static __device__ uint8_t *StoreCopy(uint8_t *dst,
                                      uint8_t *end,
                                      uint32_t copy_len,
@@ -151,7 +151,7 @@ static __device__ uint8_t *StoreCopy(uint8_t *dst,
 /**
  * @brief Returns mask of any thread in the warp that has a hash value
  * equal to that of the calling thread
- **/
+ */
 static inline __device__ uint32_t HashMatchAny(uint32_t v, uint32_t t)
 {
 #if (__CUDA_ARCH__ >= 700)
@@ -177,7 +177,7 @@ static inline __device__ uint32_t HashMatchAny(uint32_t v, uint32_t t)
  * @param t thread in warp
  *
  * @return Number of bytes before first match (literal length)
- **/
+ */
 static __device__ uint32_t FindFourByteMatch(snap_state_s *s,
                                              const uint8_t *src,
                                              uint32_t pos0,
@@ -256,7 +256,7 @@ static __device__ uint32_t Match60(const uint8_t *src1,
  * @param[in] inputs Source/Destination buffer information per block
  * @param[out] outputs Compression status per block
  * @param[in] count Number of blocks to compress
- **/
+ */
 extern "C" __global__ void __launch_bounds__(128)
   snap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int count)
 {

@@ -140,7 +140,7 @@ TEST_F(StringsExtractTests, ExtractEventTest)
                                       "user@test.com",
                                       "Test Message Description"});
 
-  for (auto idx = 0; idx < patterns.size(); ++idx) {
+  for (std::size_t idx = 0; idx < patterns.size(); ++idx) {
     auto results = cudf::strings::extract(strings_view, patterns[idx]);
     cudf::test::strings_column_wrapper expected({expecteds[idx]});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);

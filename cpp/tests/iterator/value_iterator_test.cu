@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 auto strings_to_string_views(std::vector<std::string>& input_strings)
 {
-  auto all_valid = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
   std::vector<char> chars;
   std::vector<int32_t> offsets;
   std::tie(chars, offsets) = cudf::test::detail::make_chars_and_offsets(
@@ -343,7 +343,7 @@ TYPED_TEST(IteratorTest, error_handling)
 
   CUDF_EXPECT_THROW_MESSAGE((cudf::detail::make_null_replacement_iterator(
                               *d_col_no_null, cudf::test::make_type_param_scalar<T>(0))),
-                            "Unexpected non-nullable column.");
+                            "column with nulls must have a validity bitmask");
 
   CUDF_EXPECT_THROW_MESSAGE((d_col_no_null->pair_begin<T, true>()),
                             "Unexpected non-nullable column.");

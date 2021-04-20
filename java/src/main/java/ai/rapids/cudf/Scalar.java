@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -525,6 +525,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case INT32:
     case UINT32:
     case TIMESTAMP_DAYS:
+    case DECIMAL32:
       return getInt() == other.getInt();
     case FLOAT32:
       return getFloat() == other.getFloat();
@@ -536,7 +537,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case TIMESTAMP_MILLISECONDS:
     case TIMESTAMP_MICROSECONDS:
     case TIMESTAMP_NANOSECONDS:
-      return getLong() == getLong();
+    case DECIMAL64:
+      return getLong() == other.getLong();
     case STRING:
       return Arrays.equals(getUTF8(), other.getUTF8());
     default:
@@ -566,6 +568,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       case INT32:
       case UINT32:
       case TIMESTAMP_DAYS:
+      case DECIMAL32:
         valueHash = getInt();
         break;
       case INT64:
@@ -574,6 +577,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       case TIMESTAMP_MILLISECONDS:
       case TIMESTAMP_MICROSECONDS:
       case TIMESTAMP_NANOSECONDS:
+      case DECIMAL64:
         valueHash = Long.hashCode(getLong());
         break;
       case FLOAT32:
@@ -642,6 +646,11 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         sb.append(getJavaString());
         sb.append('"');
         break;
+      case DECIMAL32:
+        // FALL THROUGH
+      case DECIMAL64:
+        sb.append(getBigDecimal());
+        break;
       default:
         throw new IllegalArgumentException("Unknown scalar type: " + type);
       }
@@ -666,7 +675,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     }
 
     @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       if (scalarHandle != 0) {
         if (logErrorIfNotClean) {
           LOG.error("A SCALAR WAS LEAKED(ID: " + id + " " + Long.toHexString(scalarHandle) + ")");

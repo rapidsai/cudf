@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cub/cub.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table_device_view.cuh>
 
@@ -71,28 +72,33 @@ constexpr auto remap_sentinel_hash(H hash, S sentinel)
  * @param[in,out] multi_map The hash table to be built to insert rows into
  * @param[in] hash_build Row hasher for the build table
  * @param[in] build_table_num_rows The number of rows in the build table
+ * @param[in] row_bitmask Bitmask where bit `i` indicates the presence of a null
+ * value in row `i` of input keys. This is nullptr if nulls are equal.
  * @param[out] error Pointer used to set an error code if the insert fails
  */
 template <typename multimap_type>
 __global__ void build_hash_table(multimap_type multi_map,
                                  row_hash hash_build,
                                  const cudf::size_type build_table_num_rows,
+                                 bitmask_type const* row_bitmask,
                                  int* error)
 {
   cudf::size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < build_table_num_rows) {
-    // Compute the hash value of this row
-    auto const row_hash_value = remap_sentinel_hash(hash_build(i), multi_map.get_unused_key());
+    if (!row_bitmask || cudf::bit_is_set(row_bitmask, i)) {
+      // Compute the hash value of this row
+      auto const row_hash_value = remap_sentinel_hash(hash_build(i), multi_map.get_unused_key());
 
-    // Insert the (row hash value, row index) into the map
-    // using the row hash value to determine the location in the
-    // hash map where the new pair should be inserted
-    const auto insert_location =
-      multi_map.insert(thrust::make_pair(row_hash_value, i), true, row_hash_value);
+      // Insert the (row hash value, row index) into the map
+      // using the row hash value to determine the location in the
+      // hash map where the new pair should be inserted
+      auto const insert_location =
+        multi_map.insert(thrust::make_pair(row_hash_value, i), true, row_hash_value);
 
-    // If the insert failed, set the error code accordingly
-    if (multi_map.end() == insert_location) { *error = 1; }
+      // If the insert failed, set the error code accordingly
+      if (multi_map.end() == insert_location) { *error = 1; }
+    }
     i += blockDim.x * gridDim.x;
   }
 }

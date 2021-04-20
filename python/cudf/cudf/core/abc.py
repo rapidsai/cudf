@@ -12,9 +12,9 @@ if sys.version_info < (3, 8):
     try:
         import pickle5 as pickle
     except ImportError:
-        import pickle
+        import pickle  # type: ignore
 else:
-    import pickle
+    import pickle  # type: ignore
 
 
 class Serializable(abc.ABC):

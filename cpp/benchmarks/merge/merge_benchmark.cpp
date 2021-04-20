@@ -62,7 +62,7 @@ void BM_merge(benchmark::State& state)
     auto const clamped_rows = std::max(std::min(rows, avg_rows * 2), 0);
 
     int32_t prev_key  = 0;
-    auto key_sequence = cudf::test::make_counting_transform_iterator(0, [&](auto row) {
+    auto key_sequence = cudf::detail::make_counting_transform_iterator(0, [&](auto row) {
       prev_key += key_dist(rand_gen);
       return prev_key;
     });

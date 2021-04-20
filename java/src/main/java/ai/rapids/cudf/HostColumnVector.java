@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -303,6 +303,16 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
   }
 
+  public static HostColumnVector emptyStructs(DataType dataType, long rows) {
+    StructData sd = new StructData();
+    try (ColumnBuilder cb = new ColumnBuilder(dataType, rows)) {
+      for (long i = 0; i < rows; i++) {
+        cb.append(sd);
+      }
+      return cb.build();
+    }
+  }
+
   /**
    * Create a new vector from the given values.
    */
@@ -472,12 +482,46 @@ public final class HostColumnVector extends HostColumnVectorCore {
   }
 
   /**
+   * Create a new decimal vector from boxed unscaled values (Integer array) and scale.
+   * The created vector is of type DType.DECIMAL32, whose max precision is 9.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static HostColumnVector decimalFromBoxedInts(int scale, Integer... values) {
+    return build(DType.create(DType.DTypeEnum.DECIMAL32, scale), values.length, (b) -> {
+      for (Integer v : values) {
+        if (v == null) {
+          b.appendNull();
+        } else {
+          b.appendUnscaledDecimal(v);
+        }
+      }
+    });
+  }
+
+  /**
    * Create a new decimal vector from unscaled values (long array) and scale.
    * The created vector is of type DType.DECIMAL64, whose max precision is 18.
    * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
    */
   public static HostColumnVector decimalFromLongs(int scale, long... values) {
     return build(DType.create(DType.DTypeEnum.DECIMAL64, scale), values.length, (b) -> b.appendUnscaledDecimalArray(values));
+  }
+
+  /**
+   * Create a new decimal vector from boxed unscaled values (Long array) and scale.
+   * The created vector is of type DType.DECIMAL64, whose max precision is 18.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static HostColumnVector decimalFromBoxedLongs(int scale, Long... values) {
+    return build(DType.create(DType.DTypeEnum.DECIMAL64, scale), values.length, (b) -> {
+      for (Long v : values) {
+        if (v == null) {
+          b.appendNull();
+        } else {
+          b.appendUnscaledDecimal(v);
+        }
+      }
+    });
   }
 
   /**
