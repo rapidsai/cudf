@@ -144,7 +144,7 @@ make_strings_children_with_null_mask(
   auto d_offsets             = offsets_view.template data<int32_t>();
   size_and_exec_fn.d_offsets = d_offsets;
 
-  // This is called twice -- once for offsets and once for chars.
+  // This is called twice: once for offsets and once for chars
   auto for_each_fn = [strings_count, stream](SizeAndExecuteFunction& size_and_exec_fn) {
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
@@ -174,13 +174,13 @@ make_strings_children_with_null_mask(
   auto chars_column = create_chars_child_column(strings_count, bytes, stream, mr);
 
   // If all the strings are empty or null, `bytes` will be `0` thus the `d_chars` pointer will has
-  // `nullptr` value. Thus, we need to set an arbitrary pointer value to d_chars to prevent the
+  // `nullptr` value. Thus, we need to set an arbitrary pointer value to `d_chars` to prevent the
   // string sizes to be computed again. It is safe to do so, because in this case the strings column
   // has all empty or all null string elements so nothing will be copied onto `d_chars`.
   size_and_exec_fn.d_chars =
     bytes > 0 ? chars_column->mutable_view().template data<char>() : reinterpret_cast<char*>(0x1);
 
-  // Execute the function fn to do whatever needed
+  // Execute the function fn to do whatever needed after the offsets have been computed
   for_each_fn(size_and_exec_fn);
 
   return std::make_tuple(std::move(offsets_column),
