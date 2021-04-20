@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 import functools
 
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
@@ -162,6 +163,39 @@ def test_take_invalid(invalid, exception):
         gs.list.take(invalid)
 
 
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        ([[1, 1, 2, 2], [], None, [3, 4, 5]], [[1, 2], [], None, [3, 4, 5]]),
+        (
+            [[1.233, np.nan, 1.234, 3.141, np.nan, 1.234]],
+            [[1.233, 1.234, np.nan, 3.141]],
+        ),  # duplicate nans
+        ([[1, 1, 2, 2, None, None]], [[1, 2, None]]),  # duplicate nulls
+        (
+            [[1.233, np.nan, None, 1.234, 3.141, np.nan, 1.234, None]],
+            [[1.233, 1.234, np.nan, None, 3.141]],
+        ),  # duplicate nans and nulls
+        ([[2, None, 1, None, 2]], [[1, 2, None]]),
+        ([[], []], [[], []]),
+        ([[], None], [[], None]),
+    ],
+)
+def test_unique(data, expected):
+    """
+    Pandas de-duplicates nans and nulls respectively in Series.unique.
+    `expected` is setup to mimic such behavior
+    """
+    gs = cudf.Series(data, nan_as_null=False)
+
+    got = gs.list.unique()
+    expected = cudf.Series(expected, nan_as_null=False).list.sort_values()
+
+    got = got.list.sort_values()
+
+    assert_eq(expected, got)
+
+
 def key_func_builder(x, na_position):
     if x is None:
         if na_position == "first":
@@ -246,3 +280,38 @@ def test_get_nulls():
     with pytest.raises(IndexError, match="list index out of range"):
         sr = cudf.Series([[], [], []])
         sr.list.get(100)
+
+
+@pytest.mark.parametrize(
+    "data, scalar, expect",
+    [
+        ([[1, 2, 3], []], 1, [True, False],),
+        ([[1, 2, 3], [], [3, 4, 5]], 6, [False, False, False],),
+        ([[1.0, 2.0, 3.0], None, []], 2.0, [True, None, False],),
+        ([[None, "b", "c"], [], ["b", "e", "f"]], "b", [True, False, True],),
+        ([[None, 2, 3], None, []], 1, [None, None, False]),
+        ([[None, "b", "c"], [], ["b", "e", "f"]], "d", [None, False, False],),
+    ],
+)
+def test_contains_scalar(data, scalar, expect):
+    sr = cudf.Series(data)
+    expect = cudf.Series(expect)
+    got = sr.list.contains(cudf.Scalar(scalar, sr.dtype.element_type))
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data, expect",
+    [
+        ([[1, 2, 3], []], [None, None],),
+        ([[1.0, 2.0, 3.0], None, []], [None, None, None],),
+        ([[None, 2, 3], [], None], [None, None, None],),
+        ([[1, 2, 3], [3, 4, 5]], [None, None],),
+        ([[], [], []], [None, None, None],),
+    ],
+)
+def test_contains_null_search_key(data, expect):
+    sr = cudf.Series(data)
+    expect = cudf.Series(expect, dtype="bool")
+    got = sr.list.contains(cudf.Scalar(cudf.NA, sr.dtype.element_type))
+    assert_eq(expect, got)

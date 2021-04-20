@@ -230,10 +230,13 @@ std::unique_ptr<aggregation> make_collect_list_aggregation(
  * @param null_handling Indicates whether to include/exclude nulls during collection
  * @param nulls_equal   Flag to specify whether null entries within each list should be considered
  * equal
+ * @param nans_equal    Flag to specify whether NaN values in floating point column should be
+ * considered equal
  */
 std::unique_ptr<aggregation> make_collect_set_aggregation(
   null_policy null_handling = null_policy::INCLUDE,
-  null_equality null_equal  = null_equality::EQUAL);
+  null_equality nulls_equal = null_equality::EQUAL,
+  nan_equality nans_equal   = nan_equality::UNEQUAL);
 
 /// Factory to create a LAG aggregation
 std::unique_ptr<aggregation> make_lag_aggregation(size_type offset);

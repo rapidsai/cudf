@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/device_buffer.hpp>
 
@@ -136,38 +137,32 @@ cudf::size_type count_unset_bits(bitmask_type const* bitmask, size_type start, s
  * `[indices[2*i], indices[(2*i)+1])` (where 0 <= i < indices.size() / 2).
  *
  * Returns an empty vector if `bitmask == nullptr`.
- * @throws cudf::logic_error if `indices.size() % 2 != 0`
- * @throws cudf::logic_error if `indices[2*i] < 0 or
- * indices[2*i] > indices[(2*i)+1]`
  *
- * @param[in] bitmask Bitmask residing in device memory whose bits will be
- * counted
- * @param[in] indices A vector of indices used to specify ranges to count the
- * number of set bits
- * @return std::vector<size_type> A vector storing the number of non-zero bits
- * in the specified ranges
+ * @throws cudf::logic_error if `indices.size() % 2 != 0`
+ * @throws cudf::logic_error if `indices[2*i] < 0 or indices[2*i] > indices[(2*i)+1]`
+ *
+ * @param[in] bitmask Bitmask residing in device memory whose bits will be counted
+ * @param[in] indices A host_span of indices specifying ranges to count the number of set bits
+ * @return A vector storing the number of non-zero bits in the specified ranges
  */
 std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
-                                                std::vector<cudf::size_type> const& indices);
+                                                host_span<cudf::size_type const> indices);
 
 /**
  * @brief Given a bitmask, counts the number of unset (0) bits in every range
  * `[indices[2*i], indices[(2*i)+1])` (where 0 <= i < indices.size() / 2).
  *
  * Returns an empty vector if `bitmask == nullptr`.
- * @throws cudf::logic_error if `indices.size() % 2 != 0`
- * @throws cudf::logic_error if `indices[2*i] < 0 or
- * indices[2*i] > indices[(2*i)+1]`
  *
- * @param[in] bitmask Bitmask residing in device memory whose bits will be
- * counted
- * @param[in] indices A vector of indices used to specify ranges to count the
- * number of unset bits
- * @return std::vector<size_type> A vector storing the number of zero bits in
- * the specified ranges
+ * @throws cudf::logic_error if `indices.size() % 2 != 0`
+ * @throws cudf::logic_error if `indices[2*i] < 0 or indices[2*i] > indices[(2*i)+1]`
+ *
+ * @param[in] bitmask Bitmask residing in device memory whose bits will be counted
+ * @param[in] indices A host_span of indices specifying ranges to count the number of unset bits
+ * @return A vector storing the number of zero bits in the specified ranges
  */
 std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
-                                                  std::vector<cudf::size_type> const& indices);
+                                                  host_span<cudf::size_type const> indices);
 
 /**
  * @brief Creates a `device_buffer` from a slice of bitmask defined by a range

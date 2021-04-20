@@ -64,7 +64,7 @@ struct store_result_functor {
       // It's overridden in scan implementation.
       return sorted_values->view();
     else
-      return (grouped_values = helper.grouped_values(values))->view();
+      return (grouped_values = helper.grouped_values(values, stream))->view();
   };
 
   /**
@@ -76,7 +76,7 @@ struct store_result_functor {
   column_view get_sorted_values()
   {
     return sorted_values ? sorted_values->view()
-                         : (sorted_values = helper.sorted_values(values))->view();
+                         : (sorted_values = helper.sorted_values(values, stream))->view();
   };
 
  protected:

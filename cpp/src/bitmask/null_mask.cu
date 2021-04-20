@@ -20,6 +20,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -30,7 +31,6 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/device_vector.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <thrust/binary_search.h>
@@ -466,7 +466,7 @@ cudf::size_type count_unset_bits(bitmask_type const *bitmask,
 }
 
 std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
-                                                std::vector<size_type> const &indices,
+                                                host_span<size_type const> indices,
                                                 rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(indices.size() % 2 == 0,
@@ -489,8 +489,8 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
   }
 
   size_type num_ranges = indices.size() / 2;
-  thrust::host_vector<size_type> h_first_indices(num_ranges);
-  thrust::host_vector<size_type> h_last_indices(num_ranges);
+  std::vector<size_type> h_first_indices(num_ranges);
+  std::vector<size_type> h_last_indices(num_ranges);
   thrust::stable_partition_copy(thrust::seq,
                                 std::begin(indices),
                                 std::end(indices),
@@ -499,9 +499,9 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
                                 h_last_indices.begin(),
                                 [](auto i) { return (i % 2) == 0; });
 
-  rmm::device_vector<size_type> d_first_indices = h_first_indices;
-  rmm::device_vector<size_type> d_last_indices  = h_last_indices;
-  rmm::device_vector<size_type> d_null_counts(num_ranges, 0);
+  auto d_first_indices = make_device_uvector_async(h_first_indices, stream);
+  auto d_last_indices  = make_device_uvector_async(h_last_indices, stream);
+  rmm::device_uvector<size_type> d_null_counts(num_ranges, stream);
 
   auto word_num_set_bits = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
@@ -510,12 +510,12 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
     thrust::make_counting_iterator(0),
     // We cannot use lambda as cub::DeviceSegmentedReduce::Sum() requires
     // first_word_indices and last_word_indices to have the same type.
-    to_word_index(true, d_first_indices.data().get()));
+    to_word_index(true, d_first_indices.data()));
   auto last_word_indices = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
     // We cannot use lambda as cub::DeviceSegmentedReduce::Sum() requires
     // first_word_indices and last_word_indices to have the same type.
-    to_word_index(false, d_last_indices.data().get()));
+    to_word_index(false, d_last_indices.data()));
 
   // first allocate temporary memroy
 
@@ -560,7 +560,7 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
 
   std::vector<size_type> ret(num_ranges);
   CUDA_TRY(cudaMemcpyAsync(ret.data(),
-                           d_null_counts.data().get(),
+                           d_null_counts.data(),
                            num_ranges * sizeof(size_type),
                            cudaMemcpyDeviceToHost,
                            stream.value()));
@@ -571,7 +571,7 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
 }
 
 std::vector<size_type> segmented_count_unset_bits(bitmask_type const *bitmask,
-                                                  std::vector<size_type> const &indices,
+                                                  host_span<size_type const> indices,
                                                   rmm::cuda_stream_view stream)
 {
   if (indices.empty()) {
@@ -669,7 +669,7 @@ cudf::size_type count_unset_bits(bitmask_type const *bitmask, size_type start, s
 
 // Count non-zero bits in the specified ranges
 std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
-                                                std::vector<size_type> const &indices)
+                                                host_span<size_type const> indices)
 {
   CUDF_FUNC_RANGE();
   return detail::segmented_count_set_bits(bitmask, indices, rmm::cuda_stream_default);
@@ -677,7 +677,7 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const *bitmask,
 
 // Count zero bits in the specified ranges
 std::vector<size_type> segmented_count_unset_bits(bitmask_type const *bitmask,
-                                                  std::vector<size_type> const &indices)
+                                                  host_span<size_type const> indices)
 {
   CUDF_FUNC_RANGE();
   return detail::segmented_count_unset_bits(bitmask, indices, rmm::cuda_stream_default);

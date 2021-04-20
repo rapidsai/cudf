@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ struct quantiles_functor {
     column_view const& group_sizes,
     cudf::device_span<size_type const> group_offsets,
     size_type const num_groups,
-    rmm::device_vector<double> const& quantile,
+    device_span<double const> quantile,
     interpolation interpolation,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr)
@@ -112,7 +112,7 @@ struct quantiles_functor {
                            *group_size_view,
                            *result_view,
                            group_offsets.data(),
-                           quantile.data().get(),
+                           quantile.data(),
                            static_cast<size_type>(quantile.size()),
                            interpolation});
     } else {
@@ -125,7 +125,7 @@ struct quantiles_functor {
                            *group_size_view,
                            *result_view,
                            group_offsets.data(),
-                           quantile.data().get(),
+                           quantile.data(),
                            static_cast<size_type>(quantile.size()),
                            interpolation});
     }

@@ -102,13 +102,16 @@ def pdf_gdf_multi():
 def test_series_indexing(i1, i2, i3):
     a1 = np.arange(20)
     series = cudf.Series(a1)
+
     # Indexing
     sr1 = series.iloc[i1]
     assert sr1.null_count == 0
     np.testing.assert_equal(sr1.to_array(), a1[:12])
+
     sr2 = sr1.iloc[i2]
     assert sr2.null_count == 0
     np.testing.assert_equal(sr2.to_array(), a1[3:12])
+
     # Index with stride
     sr3 = sr2.iloc[i3]
     assert sr3.null_count == 0
@@ -121,6 +124,44 @@ def test_series_indexing(i1, i2, i3):
     if isinstance(i1, np.ndarray) and i1.dtype in index_dtypes:
         for i in i1:  # numpy integers
             assert series[i] == a1[i]
+
+
+@pytest.mark.parametrize(
+    "arg",
+    [
+        1,
+        -1,
+        "b",
+        np.int32(1),
+        np.uint32(1),
+        np.int8(1),
+        np.uint8(1),
+        np.int16(1),
+        np.uint16(1),
+        np.int64(1),
+        np.uint64(1),
+    ],
+)
+def test_series_get_item_iloc_defer(arg):
+    # Indexing for non-numeric dtype Index
+    ps = pd.Series([1, 2, 3], index=pd.Index(["a", "b", "c"]))
+    gs = cudf.from_pandas(ps)
+
+    expect = ps[arg]
+    got = gs[arg]
+
+    assert_eq(expect, got)
+
+
+def test_series_iloc_defer_cudf_scalar():
+    ps = pd.Series([1, 2, 3], index=pd.Index(["a", "b", "c"]))
+    gs = cudf.from_pandas(ps)
+
+    for t in index_dtypes:
+        arg = cudf.Scalar(1, dtype=t)
+        got = gs[arg]
+        expect = 2
+        assert_eq(expect, got)
 
 
 def test_series_indexing_large_size():
@@ -1401,3 +1442,14 @@ def test_iloc_before_zero_terminate(arg, pobj):
     gobj = cudf.from_pandas(pobj)
 
     assert_eq(pobj.iloc[arg], gobj.iloc[arg])
+
+
+def test_iloc_decimal():
+    sr = cudf.Series(["1.00", "2.00", "3.00", "4.00"]).astype(
+        cudf.Decimal64Dtype(scale=2, precision=3)
+    )
+    got = sr.iloc[[3, 2, 1, 0]]
+    expect = cudf.Series(["4.00", "3.00", "2.00", "1.00"],).astype(
+        cudf.Decimal64Dtype(scale=2, precision=3)
+    )
+    assert_eq(expect.reset_index(drop=True), got.reset_index(drop=True))

@@ -32,7 +32,7 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/detail/column_utilities.hpp>
 
-#include <jit/type.h>
+#include <jit/type.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -71,7 +71,7 @@ struct column_property_comparator {
 
     // equivalent, but not exactly equal columns can have a different number of children if their
     // sizes are both 0. Specifically, empty string columns may or may not have children.
-    if (check_exact_equality || lhs.size() > 0) {
+    if (check_exact_equality || (lhs.size() > 0 && lhs.null_count() < lhs.size())) {
       EXPECT_EQ(lhs.num_children(), rhs.num_children());
     }
   }
@@ -93,8 +93,8 @@ struct column_property_comparator {
     // recurse
     cudf::type_dispatcher(lhs_l.child().type(),
                           column_property_comparator<check_exact_equality>{},
-                          lhs_l.get_sliced_child(0),
-                          rhs_l.get_sliced_child(0));
+                          lhs_l.get_sliced_child(rmm::cuda_stream_default),
+                          rhs_l.get_sliced_child(rmm::cuda_stream_default));
   }
 };
 
@@ -283,8 +283,9 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     // compare offsets, taking slicing into account
 
     // left side
-    size_type lhs_shift = cudf::detail::get_value<size_type>(lhs_l.offsets(), lhs_l.offset(), 0);
-    auto lhs_offsets    = thrust::make_transform_iterator(
+    size_type lhs_shift =
+      cudf::detail::get_value<size_type>(lhs_l.offsets(), lhs_l.offset(), rmm::cuda_stream_default);
+    auto lhs_offsets = thrust::make_transform_iterator(
       lhs_l.offsets().begin<size_type>() + lhs_l.offset(),
       [lhs_shift] __device__(size_type offset) { return offset - lhs_shift; });
     auto lhs_valids = thrust::make_transform_iterator(
@@ -294,8 +295,9 @@ struct column_comparator_impl<list_view, check_exact_equality> {
       });
 
     // right side
-    size_type rhs_shift = cudf::detail::get_value<size_type>(rhs_l.offsets(), rhs_l.offset(), 0);
-    auto rhs_offsets    = thrust::make_transform_iterator(
+    size_type rhs_shift =
+      cudf::detail::get_value<size_type>(rhs_l.offsets(), rhs_l.offset(), rmm::cuda_stream_default);
+    auto rhs_offsets = thrust::make_transform_iterator(
       rhs_l.offsets().begin<size_type>() + rhs_l.offset(),
       [rhs_shift] __device__(size_type offset) { return offset - rhs_shift; });
     auto rhs_valids = thrust::make_transform_iterator(
@@ -328,8 +330,8 @@ struct column_comparator_impl<list_view, check_exact_equality> {
         differences, lhs, rhs, print_all_differences, depth);
 
     // recurse
-    auto lhs_child = lhs_l.get_sliced_child(0);
-    auto rhs_child = rhs_l.get_sliced_child(0);
+    auto lhs_child = lhs_l.get_sliced_child(rmm::cuda_stream_default);
+    auto rhs_child = rhs_l.get_sliced_child(rmm::cuda_stream_default);
     cudf::type_dispatcher(lhs_child.type(),
                           column_comparator<check_exact_equality>{},
                           lhs_child,
@@ -518,7 +520,8 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
   size_type output_size = c.size() + 1;
 
   // the first offset value to normalize everything against
-  size_type first = cudf::detail::get_value<size_type>(offsets, c.offset(), 0);
+  size_type first =
+    cudf::detail::get_value<size_type>(offsets, c.offset(), rmm::cuda_stream_default);
   rmm::device_vector<size_type> shifted_offsets(output_size);
 
   // normalize the offset values for the column offset
@@ -687,19 +690,20 @@ struct column_view_printer {
     lists_column_view lcv(col);
 
     // propage slicing to the child if necessary
-    column_view child    = lcv.get_sliced_child(0);
+    column_view child    = lcv.get_sliced_child(rmm::cuda_stream_default);
     bool const is_sliced = lcv.offset() > 0 || child.offset() > 0;
 
     std::string tmp =
       get_nested_type_str(col) + (is_sliced ? "(sliced)" : "") + ":\n" + indent +
       "Length : " + std::to_string(lcv.size()) + "\n" + indent +
       "Offsets : " + (lcv.size() > 0 ? nested_offsets_to_string(lcv) : "") + "\n" +
-      (lcv.has_nulls() ? indent + "Null count: " + std::to_string(lcv.null_count()) + "\n" +
-                           detail::to_string(bitmask_to_host(col), col.size(), indent) + "\n"
-                       : "") +
-      indent + "Children :\n" +
-      (child.type().id() != type_id::LIST && child.has_nulls()
-         ? indent + detail::to_string(bitmask_to_host(child), child.size(), indent) + "\n"
+      (lcv.parent().nullable()
+         ? indent + "Null count: " + std::to_string(lcv.null_count()) + "\n" +
+             detail::to_string(bitmask_to_host(col), col.size(), indent) + "\n"
+         : "") +
+      // non-nested types don't typically display their null masks, so do it here for convenience.
+      (!is_nested(child.type()) && child.nullable()
+         ? "   " + detail::to_string(bitmask_to_host(child), child.size(), indent) + "\n"
          : "") +
       (detail::to_string(child, ", ", indent + "   ")) + "\n";
 
@@ -718,18 +722,25 @@ struct column_view_printer {
 
     out_stream << get_nested_type_str(col) << ":\n"
                << indent << "Length : " << view.size() << ":\n";
-    if (view.has_nulls()) {
+    if (view.nullable()) {
       out_stream << indent << "Null count: " << view.null_count() << "\n"
                  << detail::to_string(bitmask_to_host(col), col.size(), indent) << "\n";
     }
 
     auto iter = thrust::make_counting_iterator(0);
-    std::transform(iter,
-                   iter + view.num_children(),
-                   std::ostream_iterator<std::string>(out_stream, "\n"),
-                   [&](size_type index) {
-                     return detail::to_string(view.get_sliced_child(index), ", ", indent + "    ");
-                   });
+    std::transform(
+      iter,
+      iter + view.num_children(),
+      std::ostream_iterator<std::string>(out_stream, "\n"),
+      [&](size_type index) {
+        auto child = view.get_sliced_child(index);
+
+        // non-nested types don't typically display their null masks, so do it here for convenience.
+        return (!is_nested(child.type()) && child.nullable()
+                  ? "   " + detail::to_string(bitmask_to_host(child), child.size(), indent) + "\n"
+                  : "") +
+               detail::to_string(child, ", ", indent + "   ");
+      });
 
     out.push_back(out_stream.str());
   }

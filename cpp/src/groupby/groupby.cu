@@ -55,7 +55,7 @@ groupby::groupby(table_view const& keys,
 
 // Select hash vs. sort groupby implementation
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::dispatch_aggregation(
-  std::vector<aggregation_request> const& requests,
+  host_span<aggregation_request const> requests,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -79,7 +79,7 @@ groupby::~groupby() = default;
 
 namespace {
 /// Make an empty table with appropriate types for requested aggs
-auto empty_results(std::vector<aggregation_request> const& requests)
+auto empty_results(host_span<aggregation_request const> requests)
 {
   std::vector<aggregation_result> empty_results;
 
@@ -102,7 +102,7 @@ auto empty_results(std::vector<aggregation_request> const& requests)
 }
 
 /// Verifies the agg requested on the request's values is valid
-void verify_valid_requests(std::vector<aggregation_request> const& requests)
+void verify_valid_requests(host_span<aggregation_request const> requests)
 {
   CUDF_EXPECTS(
     std::all_of(
@@ -143,7 +143,7 @@ void verify_valid_requests(std::vector<aggregation_request> const& requests)
 
 // Compute aggregation requests
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggregate(
-  std::vector<aggregation_request> const& requests, rmm::mr::device_memory_resource* mr)
+  host_span<aggregation_request const> requests, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
@@ -156,12 +156,12 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
 
   if (_keys.num_rows() == 0) { return std::make_pair(empty_like(_keys), empty_results(requests)); }
 
-  return dispatch_aggregation(requests, 0, mr);
+  return dispatch_aggregation(requests, rmm::cuda_stream_default, mr);
 }
 
 // Compute scan requests
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan(
-  std::vector<aggregation_request> const& requests, rmm::mr::device_memory_resource* mr)
+  host_span<aggregation_request const> requests, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
@@ -190,7 +190,7 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
 
   if (values.num_columns()) {
     auto grouped_values = cudf::detail::gather(values,
-                                               helper().key_sort_order(),
+                                               helper().key_sort_order(rmm::cuda_stream_default),
                                                cudf::out_of_bounds_policy::DONT_CHECK,
                                                cudf::detail::negative_index_policy::NOT_ALLOWED,
                                                rmm::cuda_stream_default,

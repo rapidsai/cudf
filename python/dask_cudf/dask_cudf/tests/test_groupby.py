@@ -7,10 +7,11 @@ import pytest
 import dask
 from dask import dataframe as dd
 
-import dask_cudf
-
 import cudf
 from cudf.core._compat import PANDAS_GE_120
+
+import dask_cudf
+from dask_cudf.groupby import _is_supported
 
 
 @pytest.mark.parametrize("aggregation", ["sum", "mean", "count", "min", "max"])
@@ -533,3 +534,11 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
     )
 
     dd.assert_eq(gf, pf)
+
+
+@pytest.mark.parametrize(
+    "arg",
+    [["not_supported"], {"a": "not_supported"}, {"a": ["not_supported"]}],
+)
+def test_is_supported(arg):
+    assert _is_supported(arg, {"supported"}) is False

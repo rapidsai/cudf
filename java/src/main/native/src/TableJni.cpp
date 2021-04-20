@@ -30,6 +30,7 @@
 #include <cudf/lists/explode.hpp>
 #include <cudf/merge.hpp>
 #include <cudf/partitioning.hpp>
+#include <cudf/replace.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/search.hpp>
@@ -40,6 +41,8 @@
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
 #include "row_conversion.hpp"
+
+#include <algorithm>
 
 namespace cudf {
 namespace jni {
@@ -609,6 +612,48 @@ jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &t
   return convert_table_for_return(env, table_result, extra);
 }
 
+// Convert the JNI boolean array of key column sort order to a vector of cudf::order
+// for groupby.
+std::vector<cudf::order> resolve_column_order(JNIEnv *env, jbooleanArray jkeys_sort_desc,
+                                              int key_size) {
+  cudf::jni::native_jbooleanArray keys_sort_desc(env, jkeys_sort_desc);
+  auto keys_sort_num = keys_sort_desc.size();
+  // The number of column order should be 0 or equal to the number of key.
+  if (keys_sort_num != 0 && keys_sort_num != key_size) {
+    throw cudf::jni::jni_exception("key-column and key-sort-order size mismatch.");
+  }
+
+  std::vector<cudf::order> column_order(keys_sort_num);
+  if (keys_sort_num > 0) {
+    std::transform(keys_sort_desc.data(), keys_sort_desc.data() + keys_sort_num,
+        column_order.begin(),
+        [](jboolean is_desc) { return is_desc ? cudf::order::DESCENDING
+                                              : cudf::order::ASCENDING; });
+  }
+  return column_order;
+}
+
+// Convert the JNI boolean array of key column null order to a vector of cudf::null_order
+// for groupby.
+std::vector<cudf::null_order> resolve_null_precedence(JNIEnv *env, jbooleanArray jkeys_null_first,
+                                                      int key_size) {
+  cudf::jni::native_jbooleanArray keys_null_first(env, jkeys_null_first);
+  auto null_order_num = keys_null_first.size();
+  // The number of null order should be 0 or equal to the number of key.
+  if (null_order_num != 0 && null_order_num != key_size) {
+    throw cudf::jni::jni_exception("key-column and key-null-order size mismatch.");
+  }
+
+  std::vector<cudf::null_order> null_precedence(null_order_num);
+  if (null_order_num > 0) {
+    std::transform(keys_null_first.data(), keys_null_first.data() + null_order_num,
+        null_precedence.begin(),
+        [](jboolean null_before) { return null_before ? cudf::null_order::BEFORE
+                                                      : cudf::null_order::AFTER; });
+  }
+  return null_precedence;
+}
+
 namespace {
 
 // Check that window parameters are valid.
@@ -618,6 +663,116 @@ bool valid_window_parameters(native_jintArray const &values,
                              native_jintArray const &following) {
   return values.size() == ops.size() && values.size() == min_periods.size() &&
          values.size() == preceding.size() && values.size() == following.size();
+}
+
+// Generate gather maps needed to manifest the result of a join between two tables.
+// The resulting Java long array contains the following at each index:
+//   0: Size of each gather map in bytes
+//   1: Device address of the gather map for the left table
+//   2: Host address of the rmm::device_buffer instance that owns the left gather map data
+//   3: Device address of the gather map for the right table
+//   4: Host address of the rmm::device_buffer instance that owns the right gather map data
+template <typename T>
+jlongArray join_gather_maps(JNIEnv *env, jlong j_left_keys, jlong j_right_keys,
+                            jboolean compare_nulls_equal, T join_func) {
+  JNI_NULL_CHECK(env, j_left_keys, "left_table is null", NULL);
+  JNI_NULL_CHECK(env, j_right_keys, "right_table is null", NULL);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto left_keys = reinterpret_cast<cudf::table_view const *>(j_left_keys);
+    auto right_keys = reinterpret_cast<cudf::table_view const *>(j_right_keys);
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
+              std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
+        join_maps = join_func(*left_keys, *right_keys, nulleq);
+
+    // release the underlying device buffer to Java
+    auto left_map_buffer = std::make_unique<rmm::device_buffer>(join_maps.first->release());
+    auto right_map_buffer = std::make_unique<rmm::device_buffer>(join_maps.second->release());
+    cudf::jni::native_jlongArray result(env, 5);
+    result[0] = static_cast<jlong>(left_map_buffer->size());
+    result[1] = reinterpret_cast<jlong>(left_map_buffer->data());
+    result[2] = reinterpret_cast<jlong>(left_map_buffer.release());
+    result[3] = reinterpret_cast<jlong>(right_map_buffer->data());
+    result[4] = reinterpret_cast<jlong>(right_map_buffer.release());
+    return result.get_jArray();
+  }
+  CATCH_STD(env, NULL);
+}
+
+// Generate gather maps needed to manifest the result of a join between two tables.
+// The resulting Java long array contains the following at each index:
+//   0: Size of the gather map in bytes
+//   1: Device address of the gather map
+//   2: Host address of the rmm::device_buffer instance that owns the gather map data
+template <typename T>
+jlongArray join_gather_single_map(JNIEnv *env, jlong j_left_keys, jlong j_right_keys,
+                                  jboolean compare_nulls_equal, T join_func) {
+  JNI_NULL_CHECK(env, j_left_keys, "left_table is null", NULL);
+  JNI_NULL_CHECK(env, j_right_keys, "right_table is null", NULL);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto left_keys = reinterpret_cast<cudf::table_view const *>(j_left_keys);
+    auto right_keys = reinterpret_cast<cudf::table_view const *>(j_right_keys);
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
+    std::unique_ptr<rmm::device_uvector<cudf::size_type>> join_map =
+        join_func(*left_keys, *right_keys, nulleq);
+
+    // release the underlying device buffer to Java
+    auto gather_map_buffer = std::make_unique<rmm::device_buffer>(join_map->release());
+    cudf::jni::native_jlongArray result(env, 3);
+    result[0] = static_cast<jlong>(gather_map_buffer->size());
+    result[1] = reinterpret_cast<jlong>(gather_map_buffer->data());
+    result[2] = reinterpret_cast<jlong>(gather_map_buffer.release());
+    return result.get_jArray();
+  }
+  CATCH_STD(env, NULL);
+}
+
+// Returns a table view containing only the columns at the specified indices
+cudf::table_view const get_keys_table(cudf::table_view const *t,
+                                      native_jintArray const &key_indices) {
+  std::vector<cudf::column_view> key_cols;
+  key_cols.reserve(key_indices.size());
+  std::transform(key_indices.begin(), key_indices.end(), std::back_inserter(key_cols),
+                 [t](int idx) { return t->column(idx); });
+  return table_view(key_cols);
+}
+
+// Returns a table view containing only the columns that are NOT at the specified indices
+cudf::table_view const get_non_keys_table(cudf::table_view const *t,
+                                          native_jintArray const &key_indices) {
+  std::vector<int> non_key_indices;
+  for (int i = 0; i < t->num_columns(); ++i) {
+    if (std::find(key_indices.begin(), key_indices.end(), i) == key_indices.end()) {
+      non_key_indices.push_back(i);
+    }
+  }
+  std::vector<cudf::column_view> cols;
+  std::transform(non_key_indices.begin(), non_key_indices.end(), std::back_inserter(cols),
+                 [&t](int idx) { return t->column(idx); });
+  return table_view(cols);
+}
+
+// Combine left and right join results into a column pointer array that can be returned to the JVM.
+jlongArray combine_join_results(JNIEnv *env, std::vector<std::unique_ptr<cudf::column>> left_cols,
+                                std::vector<std::unique_ptr<cudf::column>> right_cols) {
+  cudf::jni::native_jlongArray outcol_handles(env, left_cols.size() + right_cols.size());
+  auto iter = std::transform(
+      left_cols.begin(), left_cols.end(), outcol_handles.begin(),
+      [](std::unique_ptr<cudf::column> &col) { return reinterpret_cast<jlong>(col.release()); });
+  std::transform(
+      right_cols.begin(), right_cols.end(), iter,
+      [](std::unique_ptr<cudf::column> &col) { return reinterpret_cast<jlong>(col.release()); });
+  return outcol_handles.get_jArray();
+}
+
+// Combine left and right join results into a column pointer array that can be returned to the JVM.
+jlongArray combine_join_results(JNIEnv *env, cudf::table &left_results,
+                                cudf::table &right_results) {
+  std::vector<std::unique_ptr<cudf::column>> left_cols = left_results.release();
+  std::vector<std::unique_ptr<cudf::column>> right_cols = right_results.release();
+  return combine_join_results(env, std::move(left_cols), std::move(right_cols));
 }
 
 } // namespace
@@ -1455,109 +1610,143 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_readArrowIPCEnd(JNIEnv *env, jc
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftJoin(
-    JNIEnv *env, jclass, jlong left_table, jintArray left_col_join_indices, jlong right_table,
-    jintArray right_col_join_indices, jboolean compare_nulls_equal) {
-  JNI_NULL_CHECK(env, left_table, "left_table is null", NULL);
-  JNI_NULL_CHECK(env, left_col_join_indices, "left_col_join_indices is null", NULL);
-  JNI_NULL_CHECK(env, right_table, "right_table is null", NULL);
-  JNI_NULL_CHECK(env, right_col_join_indices, "right_col_join_indices is null", NULL);
+    JNIEnv *env, jclass, jlong j_left_table, jintArray j_left_key_indices, jlong j_right_table,
+    jintArray j_right_key_indices, jboolean compare_nulls_equal) {
+  JNI_NULL_CHECK(env, j_left_table, "left_table is null", NULL);
+  JNI_NULL_CHECK(env, j_left_key_indices, "left_col_join_indices is null", NULL);
+  JNI_NULL_CHECK(env, j_right_table, "right_table is null", NULL);
+  JNI_NULL_CHECK(env, j_right_key_indices, "right_col_join_indices is null", NULL);
 
   try {
     cudf::jni::auto_set_device(env);
-    cudf::table_view *n_left_table = reinterpret_cast<cudf::table_view *>(left_table);
-    cudf::table_view *n_right_table = reinterpret_cast<cudf::table_view *>(right_table);
-    cudf::jni::native_jintArray left_join_cols_arr(env, left_col_join_indices);
-    std::vector<cudf::size_type> left_join_cols(
-        left_join_cols_arr.data(), left_join_cols_arr.data() + left_join_cols_arr.size());
-    cudf::jni::native_jintArray right_join_cols_arr(env, right_col_join_indices);
-    std::vector<cudf::size_type> right_join_cols(
-        right_join_cols_arr.data(), right_join_cols_arr.data() + right_join_cols_arr.size());
+    auto left_in_table = reinterpret_cast<cudf::table_view *>(j_left_table);
+    auto right_in_table = reinterpret_cast<cudf::table_view *>(j_right_table);
+    cudf::jni::native_jintArray left_key_indices(env, j_left_key_indices);
+    auto left_keys_table = cudf::jni::get_keys_table(left_in_table, left_key_indices);
+    left_key_indices.cancel();
+    cudf::jni::native_jintArray right_key_indices(env, j_right_key_indices);
+    auto right_keys_table = cudf::jni::get_keys_table(right_in_table, right_key_indices);
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
 
-    int dedupe_size = left_join_cols.size();
-    std::vector<std::pair<cudf::size_type, cudf::size_type>> dedupe(dedupe_size);
-    for (int i = 0; i < dedupe_size; i++) {
-      dedupe[i].first = left_join_cols[i];
-      dedupe[i].second = right_join_cols[i];
-    }
+    // compute gather maps for the left and right tables that can produce the join result rows
+    auto join_maps = cudf::left_join(left_keys_table, right_keys_table, nulleq);
+    CUDF_EXPECTS(join_maps.first->size() <= std::numeric_limits<cudf::size_type>::max(),
+                 "join result exceeds maximum column length");
+    auto num_join_rows = static_cast<cudf::size_type>(join_maps.first->size());
 
-    std::unique_ptr<cudf::table> result =
-        cudf::left_join(*n_left_table, *n_right_table, left_join_cols, right_join_cols, dedupe,
-                        static_cast<bool>(compare_nulls_equal) ? cudf::null_equality::EQUAL :
-                                                                 cudf::null_equality::UNEQUAL);
+    // compute the join result rows for the left table columns
+    auto left_gather_col = cudf::column_view(cudf::data_type{cudf::type_id::INT32}, num_join_rows,
+                                             join_maps.first->data());
+    auto left_out_table =
+        cudf::gather(*left_in_table, left_gather_col, cudf::out_of_bounds_policy::DONT_CHECK);
 
-    return cudf::jni::convert_table_for_return(env, result);
+    // compute the join result rows for the right table columns
+    auto right_non_keys_table = cudf::jni::get_non_keys_table(right_in_table, right_key_indices);
+    right_key_indices.cancel();
+    auto right_gather_col = cudf::column_view(cudf::data_type{cudf::type_id::INT32}, num_join_rows,
+                                              join_maps.second->data());
+    auto right_out_table =
+        cudf::gather(right_non_keys_table, right_gather_col, cudf::out_of_bounds_policy::NULLIFY);
+
+    return cudf::jni::combine_join_results(env, *left_out_table, *right_out_table);
   }
   CATCH_STD(env, NULL);
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerJoin(
-    JNIEnv *env, jclass, jlong left_table, jintArray left_col_join_indices, jlong right_table,
-    jintArray right_col_join_indices, jboolean compare_nulls_equal) {
-  JNI_NULL_CHECK(env, left_table, "left_table is null", NULL);
-  JNI_NULL_CHECK(env, left_col_join_indices, "left_col_join_indices is null", NULL);
-  JNI_NULL_CHECK(env, right_table, "right_table is null", NULL);
-  JNI_NULL_CHECK(env, right_col_join_indices, "right_col_join_indices is null", NULL);
+    JNIEnv *env, jclass, jlong j_left_table, jintArray j_left_key_indices, jlong j_right_table,
+    jintArray j_right_key_indices, jboolean compare_nulls_equal) {
+  JNI_NULL_CHECK(env, j_left_table, "left_table is null", NULL);
+  JNI_NULL_CHECK(env, j_left_key_indices, "left_col_join_indices is null", NULL);
+  JNI_NULL_CHECK(env, j_right_table, "right_table is null", NULL);
+  JNI_NULL_CHECK(env, j_right_key_indices, "right_col_join_indices is null", NULL);
 
   try {
     cudf::jni::auto_set_device(env);
-    cudf::table_view *n_left_table = reinterpret_cast<cudf::table_view *>(left_table);
-    cudf::table_view *n_right_table = reinterpret_cast<cudf::table_view *>(right_table);
-    cudf::jni::native_jintArray left_join_cols_arr(env, left_col_join_indices);
-    std::vector<cudf::size_type> left_join_cols(
-        left_join_cols_arr.data(), left_join_cols_arr.data() + left_join_cols_arr.size());
-    cudf::jni::native_jintArray right_join_cols_arr(env, right_col_join_indices);
-    std::vector<cudf::size_type> right_join_cols(
-        right_join_cols_arr.data(), right_join_cols_arr.data() + right_join_cols_arr.size());
+    auto left_in_table = reinterpret_cast<cudf::table_view *>(j_left_table);
+    auto right_in_table = reinterpret_cast<cudf::table_view *>(j_right_table);
+    cudf::jni::native_jintArray left_key_indices(env, j_left_key_indices);
+    auto left_keys_table = cudf::jni::get_keys_table(left_in_table, left_key_indices);
+    left_key_indices.cancel();
+    cudf::jni::native_jintArray right_key_indices(env, j_right_key_indices);
+    auto right_keys_table = cudf::jni::get_keys_table(right_in_table, right_key_indices);
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
 
-    int dedupe_size = left_join_cols.size();
-    std::vector<std::pair<cudf::size_type, cudf::size_type>> dedupe(dedupe_size);
-    for (int i = 0; i < dedupe_size; i++) {
-      dedupe[i].first = left_join_cols[i];
-      dedupe[i].second = right_join_cols[i];
-    }
+    // compute gather maps for the left and right tables that can produce the join result rows
+    auto join_maps = cudf::inner_join(left_keys_table, right_keys_table, nulleq);
+    CUDF_EXPECTS(join_maps.first->size() <= std::numeric_limits<cudf::size_type>::max(),
+                 "join result exceeds maximum column length");
+    auto num_join_rows = static_cast<cudf::size_type>(join_maps.first->size());
 
-    std::unique_ptr<cudf::table> result =
-        cudf::inner_join(*n_left_table, *n_right_table, left_join_cols, right_join_cols, dedupe,
-                         static_cast<bool>(compare_nulls_equal) ? cudf::null_equality::EQUAL :
-                                                                  cudf::null_equality::UNEQUAL);
+    // compute the join result rows for the left table columns
+    auto left_gather_col = cudf::column_view(cudf::data_type{cudf::type_id::INT32}, num_join_rows,
+                                             join_maps.first->data());
+    auto left_out_table =
+        cudf::gather(*left_in_table, left_gather_col, cudf::out_of_bounds_policy::DONT_CHECK);
 
-    return cudf::jni::convert_table_for_return(env, result);
+    // compute the join result rows for the right table columns
+    auto right_non_keys_table = cudf::jni::get_non_keys_table(right_in_table, right_key_indices);
+    right_key_indices.cancel();
+    auto right_gather_col = cudf::column_view(cudf::data_type{cudf::type_id::INT32}, num_join_rows,
+                                              join_maps.second->data());
+    auto right_out_table = cudf::gather(right_non_keys_table, right_gather_col,
+                                        cudf::out_of_bounds_policy::DONT_CHECK);
+
+    return cudf::jni::combine_join_results(env, *left_out_table, *right_out_table);
   }
   CATCH_STD(env, NULL);
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_fullJoin(
-    JNIEnv *env, jclass, jlong left_table, jintArray left_col_join_indices, jlong right_table,
-    jintArray right_col_join_indices, jboolean compare_nulls_equal) {
-  JNI_NULL_CHECK(env, left_table, "left_table is null", NULL);
-  JNI_NULL_CHECK(env, left_col_join_indices, "left_col_join_indices is null", NULL);
-  JNI_NULL_CHECK(env, right_table, "right_table is null", NULL);
-  JNI_NULL_CHECK(env, right_col_join_indices, "right_col_join_indices is null", NULL);
+    JNIEnv *env, jclass, jlong j_left_table, jintArray j_left_key_indices, jlong j_right_table,
+    jintArray j_right_key_indices, jboolean compare_nulls_equal) {
+  JNI_NULL_CHECK(env, j_left_table, "left_table is null", NULL);
+  JNI_NULL_CHECK(env, j_left_key_indices, "left_col_join_indices is null", NULL);
+  JNI_NULL_CHECK(env, j_right_table, "right_table is null", NULL);
+  JNI_NULL_CHECK(env, j_right_key_indices, "right_col_join_indices is null", NULL);
 
   try {
     cudf::jni::auto_set_device(env);
-    cudf::table_view *n_left_table = reinterpret_cast<cudf::table_view *>(left_table);
-    cudf::table_view *n_right_table = reinterpret_cast<cudf::table_view *>(right_table);
-    cudf::jni::native_jintArray left_join_cols_arr(env, left_col_join_indices);
-    std::vector<cudf::size_type> left_join_cols(
-        left_join_cols_arr.data(), left_join_cols_arr.data() + left_join_cols_arr.size());
-    cudf::jni::native_jintArray right_join_cols_arr(env, right_col_join_indices);
-    std::vector<cudf::size_type> right_join_cols(
-        right_join_cols_arr.data(), right_join_cols_arr.data() + right_join_cols_arr.size());
+    auto left_in_table = reinterpret_cast<cudf::table_view *>(j_left_table);
+    auto right_in_table = reinterpret_cast<cudf::table_view *>(j_right_table);
+    cudf::jni::native_jintArray left_key_indices(env, j_left_key_indices);
+    auto left_keys_table = cudf::jni::get_keys_table(left_in_table, left_key_indices);
+    cudf::jni::native_jintArray right_key_indices(env, j_right_key_indices);
+    auto right_keys_table = cudf::jni::get_keys_table(right_in_table, right_key_indices);
+    auto nulleq = compare_nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL;
 
-    int dedupe_size = left_join_cols.size();
-    std::vector<std::pair<cudf::size_type, cudf::size_type>> dedupe(dedupe_size);
-    for (int i = 0; i < dedupe_size; i++) {
-      dedupe[i].first = left_join_cols[i];
-      dedupe[i].second = right_join_cols[i];
+    // compute gather maps for the left and right tables that can produce the join result rows
+    auto join_maps = cudf::full_join(left_keys_table, right_keys_table, nulleq);
+    CUDF_EXPECTS(join_maps.first->size() <= std::numeric_limits<cudf::size_type>::max(),
+                 "join result exceeds maximum column length");
+    auto num_join_rows = static_cast<cudf::size_type>(join_maps.first->size());
+
+    // compute the join result rows for the left table columns
+    auto left_gather_col = cudf::column_view(cudf::data_type{cudf::type_id::INT32}, num_join_rows,
+                                             join_maps.first->data());
+    auto left_out_table =
+        cudf::gather(*left_in_table, left_gather_col, cudf::out_of_bounds_policy::NULLIFY);
+    // Replace any nulls in the left key column results with the right key column results.
+    std::vector<std::unique_ptr<cudf::column>> result_cols = left_out_table->release();
+    auto right_gather_col = cudf::column_view(cudf::data_type{cudf::type_id::INT32}, num_join_rows,
+                                              join_maps.second->data());
+    for (int i = 0; i < left_key_indices.size(); ++i) {
+      std::unique_ptr<cudf::column> &colptr = result_cols[left_key_indices[i]];
+      auto right_key_col = right_in_table->column(right_key_indices[i]);
+      auto gathered = cudf::gather(cudf::table_view{{right_key_col}}, right_gather_col,
+                                   cudf::out_of_bounds_policy::NULLIFY);
+      auto replaced_col = cudf::replace_nulls(*colptr, gathered->get_column(0));
+      colptr.reset(replaced_col.release());
     }
+    left_key_indices.cancel();
 
-    std::unique_ptr<cudf::table> result =
-        cudf::full_join(*n_left_table, *n_right_table, left_join_cols, right_join_cols, dedupe,
-                        static_cast<bool>(compare_nulls_equal) ? cudf::null_equality::EQUAL :
-                                                                 cudf::null_equality::UNEQUAL);
+    // compute the join result rows for the right table columns
+    auto right_non_keys_table = cudf::jni::get_non_keys_table(right_in_table, right_key_indices);
+    right_key_indices.cancel();
+    auto right_out_table =
+        cudf::gather(right_non_keys_table, right_gather_col, cudf::out_of_bounds_policy::NULLIFY);
 
-    return cudf::jni::convert_table_for_return(env, result);
+    return cudf::jni::combine_join_results(env, std::move(result_cols), right_out_table->release());
   }
   CATCH_STD(env, NULL);
 }
@@ -1580,13 +1769,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftSemiJoin(
     cudf::jni::native_jintArray right_join_cols_arr(env, right_col_join_indices);
     std::vector<cudf::size_type> right_join_cols(
         right_join_cols_arr.data(), right_join_cols_arr.data() + right_join_cols_arr.size());
-    std::vector<cudf::size_type> return_cols(n_left_table->num_columns());
-    for (cudf::size_type i = 0; i < n_left_table->num_columns(); ++i) {
-      return_cols[i] = i;
-    }
 
     std::unique_ptr<cudf::table> result = cudf::left_semi_join(
-        *n_left_table, *n_right_table, left_join_cols, right_join_cols, return_cols,
+        *n_left_table, *n_right_table, left_join_cols, right_join_cols,
         static_cast<bool>(compare_nulls_equal) ? cudf::null_equality::EQUAL :
                                                  cudf::null_equality::UNEQUAL);
 
@@ -1613,19 +1798,60 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftAntiJoin(
     cudf::jni::native_jintArray right_join_cols_arr(env, right_col_join_indices);
     std::vector<cudf::size_type> right_join_cols(
         right_join_cols_arr.data(), right_join_cols_arr.data() + right_join_cols_arr.size());
-    std::vector<cudf::size_type> return_cols(n_left_table->num_columns());
-    for (cudf::size_type i = 0; i < n_left_table->num_columns(); ++i) {
-      return_cols[i] = i;
-    }
 
     std::unique_ptr<cudf::table> result = cudf::left_anti_join(
-        *n_left_table, *n_right_table, left_join_cols, right_join_cols, return_cols,
+        *n_left_table, *n_right_table, left_join_cols, right_join_cols,
         static_cast<bool>(compare_nulls_equal) ? cudf::null_equality::EQUAL :
                                                  cudf::null_equality::UNEQUAL);
 
     return cudf::jni::convert_table_for_return(env, result);
   }
   CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftJoinGatherMaps(
+    JNIEnv *env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal) {
+  return cudf::jni::join_gather_maps(
+      env, j_left_keys, j_right_keys, compare_nulls_equal,
+      [](cudf::table_view const &left, cudf::table_view const &right, cudf::null_equality nulleq) {
+        return cudf::left_join(left, right, nulleq);
+      });
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerJoinGatherMaps(
+    JNIEnv *env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal) {
+  return cudf::jni::join_gather_maps(
+      env, j_left_keys, j_right_keys, compare_nulls_equal,
+      [](cudf::table_view const &left, cudf::table_view const &right, cudf::null_equality nulleq) {
+        return cudf::inner_join(left, right, nulleq);
+      });
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_fullJoinGatherMaps(
+    JNIEnv *env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal) {
+  return cudf::jni::join_gather_maps(
+      env, j_left_keys, j_right_keys, compare_nulls_equal,
+      [](cudf::table_view const &left, cudf::table_view const &right, cudf::null_equality nulleq) {
+        return cudf::full_join(left, right, nulleq);
+      });
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftSemiJoinGatherMap(
+    JNIEnv *env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal) {
+  return cudf::jni::join_gather_single_map(
+      env, j_left_keys, j_right_keys, compare_nulls_equal,
+      [](cudf::table_view const &left, cudf::table_view const &right, cudf::null_equality nulleq) {
+        return cudf::left_semi_join(left, right, nulleq);
+      });
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftAntiJoinGatherMap(
+    JNIEnv *env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal) {
+  return cudf::jni::join_gather_single_map(
+      env, j_left_keys, j_right_keys, compare_nulls_equal,
+      [](cudf::table_view const &left, cudf::table_view const &right, cudf::null_equality nulleq) {
+        return cudf::left_anti_join(left, right, nulleq);
+      });
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_crossJoin(JNIEnv *env, jclass,
@@ -1781,7 +2007,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_roundRobinPartition(
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByAggregate(
     JNIEnv *env, jclass, jlong input_table, jintArray keys,
-    jintArray aggregate_column_indices, jlongArray agg_instances, jboolean ignore_null_keys) {
+    jintArray aggregate_column_indices, jlongArray agg_instances, jboolean ignore_null_keys,
+    jboolean jkey_sorted, jbooleanArray jkeys_sort_desc, jbooleanArray jkeys_null_first) {
   JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, keys, "input keys are null", NULL);
   JNI_NULL_CHECK(env, aggregate_column_indices, "input aggregate_column_indices are null", NULL);
@@ -1800,8 +2027,16 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByAggregate(
     }
 
     cudf::table_view n_keys_table(n_keys_cols);
-    cudf::groupby::groupby grouper(n_keys_table, ignore_null_keys ? cudf::null_policy::EXCLUDE :
-                                                                    cudf::null_policy::INCLUDE);
+    auto column_order = cudf::jni::resolve_column_order(env, jkeys_sort_desc,
+                                                        n_keys.size());
+    auto null_precedence = cudf::jni::resolve_null_precedence(env, jkeys_null_first,
+                                                              n_keys.size());
+    cudf::groupby::groupby grouper(n_keys_table,
+                                   ignore_null_keys ? cudf::null_policy::EXCLUDE
+                                                    : cudf::null_policy::INCLUDE,
+                                   jkey_sorted ? cudf::sorted::YES : cudf::sorted::NO,
+                                   column_order,
+                                   null_precedence);
 
     // Aggregates are passed in already grouped by column, so we just need to fill it in
     // as we go.
@@ -1859,7 +2094,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gather(JNIEnv *env, jclas
     cudf::jni::auto_set_device(env);
     cudf::table_view *input = reinterpret_cast<cudf::table_view *>(j_input);
     cudf::column_view *map = reinterpret_cast<cudf::column_view *>(j_map);
-    std::unique_ptr<cudf::table> result = cudf::gather(*input, *map);
+    auto bounds_policy =
+        check_bounds ? cudf::out_of_bounds_policy::NULLIFY : cudf::out_of_bounds_policy::DONT_CHECK;
+    std::unique_ptr<cudf::table> result = cudf::gather(*input, *map, bounds_policy);
     return cudf::jni::convert_table_for_return(env, result);
   }
   CATCH_STD(env, 0);
@@ -2178,6 +2415,122 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_explodeOuterPosition(JNIE
     return cudf::jni::convert_table_for_return(env, exploded);
   }
   CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_rowBitCount(JNIEnv* env, jclass, jlong j_table) {
+  JNI_NULL_CHECK(env, j_table, "table is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto t = reinterpret_cast<cudf::table_view*>(j_table);
+    std::unique_ptr<cudf::column> result = cudf::row_bit_count(*t);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv *env, jclass,
+                                                                    jlong jinput_table,
+                                                                    jintArray jkey_indices,
+                                                                    jboolean jignore_null_keys,
+                                                                    jboolean jkey_sorted,
+                                                                    jbooleanArray jkeys_sort_desc,
+                                                                    jbooleanArray jkeys_null_first) {
+  JNI_NULL_CHECK(env, jinput_table, "table native handle is null", 0);
+  JNI_NULL_CHECK(env, jkey_indices, "key indices are null", 0);
+  // Two main steps to split the groups in the input table.
+  //    1) Calls `cudf::groupby::groupby::get_groups` to get the group offsets and
+  //       the grouped table.
+  //    2) Calls `cudf::contiguous_split` to execute the split over the grouped table
+  //       according to the group offsets.
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::jni::native_jintArray n_key_indices(env, jkey_indices);
+    cudf::table_view *input_table = reinterpret_cast<cudf::table_view *>(jinput_table);
+
+    // Prepares arguments for the groupby:
+    //   (keys, null_handling, keys_are_sorted, column_order, null_precedence)
+    std::vector<cudf::size_type> key_indices(n_key_indices.data(),
+                                             n_key_indices.data() + n_key_indices.size());
+    auto keys = input_table->select(key_indices);
+    auto null_handling = jignore_null_keys ? cudf::null_policy::EXCLUDE
+                                           : cudf::null_policy::INCLUDE;
+    auto keys_are_sorted = jkey_sorted ? cudf::sorted::YES : cudf::sorted::NO;
+    auto column_order = cudf::jni::resolve_column_order(env, jkeys_sort_desc,
+                                                        key_indices.size());
+    auto null_precedence = cudf::jni::resolve_null_precedence(env, jkeys_null_first,
+                                                              key_indices.size());
+
+    // Constructs a groupby
+    cudf::groupby::groupby grouper(keys, null_handling, keys_are_sorted,
+                                   column_order, null_precedence);
+
+    // 1) Gets the groups(keys, offsets, values) from groupby.
+    //
+    // Uses only the non-key columns as the input values instead of the whole table,
+    // to avoid duplicated key columns in output of `get_groups`.
+    // The code looks like a little more complicated, but it can reduce the peak memory.
+    auto num_value_cols = input_table->num_columns() - key_indices.size();
+    std::vector<cudf::size_type> value_indices;
+    value_indices.reserve(num_value_cols);
+    // column indices start with 0.
+    cudf::size_type index = 0;
+    while (value_indices.size() < num_value_cols) {
+      if (std::find(key_indices.begin(), key_indices.end(), index) == key_indices.end()) {
+        // not key column, so adds it as value column.
+        value_indices.emplace_back(index);
+      }
+      index ++;
+    }
+    cudf::table_view values_view = input_table->select(value_indices);
+    cudf::groupby::groupby::groups groups = grouper.get_groups(values_view);
+
+    // When builds the table view from keys and values of 'groups', restores the
+    // original order of columns (same order with that in input table).
+    std::vector<cudf::column_view> grouped_cols(key_indices.size() + num_value_cols);
+    // key columns
+    auto key_view = groups.keys->view();
+    auto key_view_it = key_view.begin();
+    for (auto key_id : key_indices) {
+      grouped_cols.at(key_id) = std::move(*key_view_it);
+      key_view_it ++;
+    }
+    // value columns
+    auto value_view = groups.values->view();
+    auto value_view_it = value_view.begin();
+    for (auto value_id : value_indices) {
+      grouped_cols.at(value_id) = std::move(*value_view_it);
+      value_view_it ++;
+    }
+    cudf::table_view grouped_table(grouped_cols);
+    // When no key columns, uses the input table instead, because the output
+    // of 'get_groups' is empty.
+    auto& grouped_view = key_indices.empty() ? *input_table : grouped_table;
+
+    // Resolves the split indices from offsets vector directly to avoid copying. Since
+    // the offsets vector may be very large if there are too many small groups.
+    std::vector<cudf::size_type>& split_indices = groups.offsets;
+    // Offsets laysout is [0, split indices..., num_rows] or [0] for empty keys, so
+    // need to removes the first and last elements.
+    split_indices.erase(split_indices.begin());
+    if (!split_indices.empty()) { split_indices.pop_back(); }
+
+    // 2) Splits the groups.
+    std::vector<cudf::packed_table> result =
+        cudf::contiguous_split(grouped_view, split_indices);
+    // Release the grouped table right away after split done.
+    groups.keys.reset(nullptr);
+    groups.values.reset(nullptr);
+
+    //  Returns the split result.
+    cudf::jni::native_jobjectArray<jobject> n_result =
+        cudf::jni::contiguous_table_array(env, result.size());
+    for (size_t i = 0; i < result.size(); i++) {
+      n_result.set(i, cudf::jni::contiguous_table_from(env, result[i].data,
+                                                       result[i].table.num_rows()));
+    }
+    return n_result.wrapped();
+  }
+  CATCH_STD(env, NULL);
 }
 
 } // extern "C"

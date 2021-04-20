@@ -312,6 +312,9 @@ cpdef write_parquet(
         num_index_cols_meta = 0
 
     for i, name in enumerate(table._column_names, num_index_cols_meta):
+        if not isinstance(name, str):
+            raise ValueError("parquet must have string column names")
+
         tbl_meta.get().column_metadata[i].set_name(name.encode())
         _set_col_metadata(
             table[name]._column, tbl_meta.get().column_metadata[i]

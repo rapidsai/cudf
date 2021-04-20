@@ -1,9 +1,12 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
+import decimal
 
 import numpy as np
+import pyarrow as pa
 
 from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
 from cudf.core.column.column import ColumnBase
+from cudf.core.dtypes import Decimal64Dtype
 from cudf.core.index import Index
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
@@ -112,8 +115,16 @@ class Scalar(object):
         self._host_value = self._device_value._to_host_scalar()
 
     def _preprocess_host_value(self, value, dtype):
-        value = to_cudf_compatible_scalar(value, dtype=dtype)
         valid = not _is_null_host_scalar(value)
+
+        if isinstance(dtype, Decimal64Dtype):
+            value = pa.scalar(
+                value, type=pa.decimal128(dtype.precision, dtype.scale)
+            ).as_py()
+        if isinstance(value, decimal.Decimal) and dtype is None:
+            dtype = Decimal64Dtype._from_decimal(value)
+
+        value = to_cudf_compatible_scalar(value, dtype=dtype)
 
         if dtype is None:
             if not valid:
@@ -131,10 +142,9 @@ class Scalar(object):
                     )
             else:
                 dtype = value.dtype
-        dtype = np.dtype(dtype)
 
-        # temporary
-        dtype = np.dtype("object") if dtype.char == "U" else dtype
+        if not isinstance(dtype, Decimal64Dtype):
+            dtype = np.dtype(dtype)
 
         if not valid:
             value = NA
@@ -341,7 +351,7 @@ class Scalar(object):
         return getattr(self.value, op)()
 
     def astype(self, dtype):
-        return Scalar(self.device_value, dtype)
+        return Scalar(self.value, dtype)
 
 
 class _NAType(object):

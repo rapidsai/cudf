@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import pandas as pd
 
@@ -134,11 +134,16 @@ def copy_range(Column input_column,
                            input_begin, input_end, target_begin)
 
 
-def gather(Table source_table, Column gather_map, bool keep_index=True):
+def gather(
+    Table source_table,
+    Column gather_map,
+    bool keep_index=True,
+    bool nullify=False
+):
     if not pd.api.types.is_integer_dtype(gather_map.dtype):
         raise ValueError("Gather map is not integer dtype.")
 
-    if len(gather_map) > 0:
+    if len(gather_map) > 0 and not nullify:
         gm_min, gm_max = minmax(gather_map)
         if gm_min < -len(source_table) or gm_max >= len(source_table):
             raise IndexError(f"Gather map index with min {gm_min},"
@@ -154,7 +159,8 @@ def gather(Table source_table, Column gather_map, bool keep_index=True):
         source_table_view = source_table.data_view()
     cdef column_view gather_map_view = gather_map.view()
     cdef cpp_copying.out_of_bounds_policy policy = (
-        cpp_copying.out_of_bounds_policy.DONT_CHECK
+        cpp_copying.out_of_bounds_policy.NULLIFY if nullify
+        else cpp_copying.out_of_bounds_policy.DONT_CHECK
     )
 
     with nogil:
@@ -558,11 +564,11 @@ def copy_if_else(object lhs, object rhs, Column boolean_mask):
             return _copy_if_else_column_column(lhs, rhs, boolean_mask)
         else:
             return _copy_if_else_column_scalar(
-                lhs, as_device_scalar(rhs, lhs.dtype), boolean_mask)
+                lhs, as_device_scalar(rhs), boolean_mask)
     else:
         if isinstance(rhs, Column):
             return _copy_if_else_scalar_column(
-                as_device_scalar(lhs, rhs.dtype), rhs, boolean_mask)
+                as_device_scalar(lhs), rhs, boolean_mask)
         else:
             if lhs is None and rhs is None:
                 return lhs
@@ -679,7 +685,9 @@ def get_element(Column input_column, size_type index):
             cpp_copying.get_element(col_view, index)
         )
 
-    return DeviceScalar.from_unique_ptr(move(c_output))
+    return DeviceScalar.from_unique_ptr(
+        move(c_output), dtype=input_column.dtype
+    )
 
 
 def sample(Table input, size_type n,
