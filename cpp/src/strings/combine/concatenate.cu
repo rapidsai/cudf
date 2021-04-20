@@ -17,14 +17,12 @@
 #include <strings/utilities.cuh>
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/utilities.hpp>
-#include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
@@ -34,8 +32,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/logical.h>
-
-#include <algorithm>
 
 namespace cudf {
 namespace strings {
