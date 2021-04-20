@@ -915,10 +915,14 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
 {
   const auto length                                        = strm_desc.stream_size;
   (*streams)[enc_stream.ids[strm_desc.stream_type]].length = length;
-  if (length != 0) {
-    const auto *stream_in = (compression_kind_ == NONE)
-                              ? enc_stream.data_ptrs[strm_desc.stream_type]
-                              : (compressed_data + strm_desc.bfr_offset);
+  if (length == 0) { return; }
+
+  const auto *stream_in = (compression_kind_ == NONE) ? enc_stream.data_ptrs[strm_desc.stream_type]
+                                                      : (compressed_data + strm_desc.bfr_offset);
+
+  if (out_sink_->is_device_write_preferred(length)) {
+    out_sink_->device_write(stream_in, length, stream);
+  } else {
     CUDA_TRY(
       cudaMemcpyAsync(stream_out, stream_in, length, cudaMemcpyDeviceToHost, stream.value()));
     stream.synchronize();

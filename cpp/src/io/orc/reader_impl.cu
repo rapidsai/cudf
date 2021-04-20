@@ -503,10 +503,16 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           len += stream_info[stream_count].length;
           stream_count++;
         }
-        const auto buffer = _source->host_read(offset, len);
-        CUDA_TRY(
-          cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyHostToDevice, stream.value()));
-        stream.synchronize();
+        if (_source->is_device_read_preferred(len)) {
+          auto read_size = _source->device_read(offset, len, d_dst, stream);
+          // TODO : Should the return value be compared against len?
+          // Can they be different? If so, is that a bug?
+        } else {
+          const auto buffer = _source->host_read(offset, len);
+          CUDA_TRY(
+            cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyHostToDevice, stream.value()));
+          stream.synchronize();
+        }
       }
 
       // Update chunks to reference streams pointers

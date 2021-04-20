@@ -367,9 +367,20 @@ table_with_metadata reader::impl::read(avro_reader_options const &options,
     }
 
     if (_metadata->total_data_size > 0) {
-      const auto buffer =
-        _source->host_read(_metadata->block_list[0].offset, _metadata->total_data_size);
-      rmm::device_buffer block_data(buffer->data(), buffer->size(), stream);
+      rmm::device_buffer block_data;
+      if (_source->is_device_read_preferred(_metadata->total_data_size)) {
+        rmm::device_buffer data(_metadata->total_data_size, stream);
+        auto read_size = _source->device_read(_metadata->block_list[0].offset,
+                                              _metadata->total_data_size,
+                                              static_cast<uint8_t *>(data.data()),
+                                              stream);
+        data.resize(read_size);
+        block_data = data;
+      } else {
+        const auto buffer =
+          _source->host_read(_metadata->block_list[0].offset, _metadata->total_data_size);
+        block_data = rmm::device_buffer{buffer->data(), buffer->size(), stream};
+      }
 
       if (_metadata->codec != "" && _metadata->codec != "null") {
         auto decomp_block_data = decompress_data(block_data, stream);
