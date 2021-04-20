@@ -72,15 +72,22 @@ TEST_F(StringsCombineTest, Concatenate)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    cudf::test::strings_column_wrapper expected{
-      "eee:xyz", "bb:abc", "_:d", ":éa", "aa:", "bbb:_", "ééé:f"};
+    std::vector<const char*> h_expected{"eee:xyz", "bb:abc", "_:d", ":éa", "aa:", "bbb:_", "ééé:f"};
+    cudf::test::strings_column_wrapper expected(
+      h_expected.begin(),
+      h_expected.end(),
+      thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
     auto results =
       cudf::strings::concatenate(table, cudf::string_scalar(":"), cudf::string_scalar("_"));
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
   {
-    cudf::test::strings_column_wrapper expected{"eeexyz", "bbabc", "d", "éa", "aa", "bbb", "éééf"};
+    std::vector<const char*> h_expected{"eeexyz", "bbabc", "d", "éa", "aa", "bbb", "éééf"};
+    cudf::test::strings_column_wrapper expected(
+      h_expected.begin(),
+      h_expected.end(),
+      thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
 
     auto results =
       cudf::strings::concatenate(table, cudf::string_scalar(""), cudf::string_scalar(""));

@@ -17,11 +17,14 @@
 #include <strings/utilities.cuh>
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
@@ -31,6 +34,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/logical.h>
+
+#include <algorithm>
 
 namespace cudf {
 namespace strings {
@@ -59,7 +64,7 @@ struct concat_strings_fn {
       });
     // handle a null row
     if (null_element && !d_narep.is_valid()) {
-      if (!d_chars) d_offsets[idx] = size_type{-1};  // negative size means null string
+      if (!d_chars) d_offsets[idx] = 0;
       return;
     }
 
@@ -109,12 +114,23 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   // Create device views from the strings columns.
   auto d_table = table_device_view::create(strings_columns, stream);
   concat_strings_fn fn{*d_table, d_separator, d_narep};
-  auto [offsets_column, chars_column, null_mask, null_count] =
-    make_strings_children_with_null_mask(fn, strings_count, stream, mr);
+  auto children = make_strings_children(fn, strings_count, stream, mr);
+
+  // create resulting null mask
+  auto [null_mask, null_count] = cudf::detail::valid_if(
+    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_counting_iterator<size_type>(strings_count),
+    [d_table = *d_table, d_narep] __device__(size_type idx) {
+      bool null_element = thrust::any_of(
+        thrust::seq, d_table.begin(), d_table.end(), [idx](auto col) { return col.is_null(idx); });
+      return (!null_element || d_narep.is_valid());
+    },
+    stream,
+    mr);
 
   return make_strings_column(strings_count,
-                             std::move(offsets_column),
-                             std::move(chars_column),
+                             std::move(children.first),
+                             std::move(children.second),
                              null_count,
                              std::move(null_mask),
                              stream,
@@ -147,7 +163,7 @@ struct multi_separator_concat_fn {
 
     if ((d_separators.is_null(idx) && !d_separator_narep.is_valid()) ||
         (all_nulls && !d_narep.is_valid())) {
-      if (!d_chars) d_offsets[idx] = size_type{-1};  // negative size means null string
+      if (!d_chars) d_offsets[idx] = 0;
       return;
     }
 
@@ -158,7 +174,7 @@ struct multi_separator_concat_fn {
     // there is at least one non-null column value
     auto const d_separator = d_separators.is_valid(idx) ? d_separators.element<string_view>(idx)
                                                         : d_separator_narep.value();
-    auto const d_null_rep = d_narep.is_valid() ? d_narep.value() : string_view{};
+    auto const d_null_rep  = d_narep.is_valid() ? d_narep.value() : string_view{};
 
     // write output entry for this row
     bool colval_written = false;  // state variable for writing separators
@@ -186,7 +202,6 @@ struct multi_separator_concat_fn {
     if (!d_chars) d_offsets[idx] = bytes;
   }
 };
-
 }  // namespace
 
 std::unique_ptr<column> concatenate(table_view const& strings_columns,
@@ -221,12 +236,26 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   auto d_table = table_device_view::create(strings_columns, stream);
 
   multi_separator_concat_fn mscf{*d_table, separator_col_view, separator_rep, col_rep};
-  auto [offsets_column, chars_column, null_mask, null_count] =
-    make_strings_children_with_null_mask(mscf, strings_count, stream, mr);
+  auto children = make_strings_children(mscf, strings_count, stream, mr);
+
+  // Create resulting null mask
+  auto [null_mask, null_count] = cudf::detail::valid_if(
+    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_counting_iterator<size_type>(strings_count),
+    [d_table = *d_table, separator_col_view, separator_rep, col_rep] __device__(size_type ridx) {
+      if (!separator_col_view.is_valid(ridx) && !separator_rep.is_valid()) return false;
+      bool all_nulls =
+        thrust::all_of(thrust::seq, d_table.begin(), d_table.end(), [ridx](auto const& col) {
+          return col.is_null(ridx);
+        });
+      return all_nulls ? col_rep.is_valid() : true;
+    },
+    stream,
+    mr);
 
   return make_strings_column(strings_count,
-                             std::move(offsets_column),
-                             std::move(chars_column),
+                             std::move(children.first),
+                             std::move(children.second),
                              null_count,
                              std::move(null_mask),
                              stream,
