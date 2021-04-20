@@ -5169,7 +5169,7 @@ public class TableTest extends CudfTestBase {
       Table.TestBuilder expectedBuilder = new Table.TestBuilder();
       if (pos) {
         if (outer) {
-          expectedBuilder.column(0, 1, 2, 0, 1, 0, null, null);
+          expectedBuilder.column(0, 1, 2, 0, 1, 0, 0, null);
         } else {
           expectedBuilder.column(0, 1, 2, 0, 1, 0, 0);
         }
