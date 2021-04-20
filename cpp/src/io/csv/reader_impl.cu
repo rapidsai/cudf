@@ -438,8 +438,6 @@ reader::impl::load_data_and_gather_row_offsets(host_span<char const> data,
                              target_pos - buffer_pos - previous_data_size,
                              cudaMemcpyDefault,
                              stream.value()));
-    // data_.insert(data_.end(), data.begin() + buffer_pos + data_.size(), data.begin() +
-    // target_pos);
 
     // Pass 1: Count the potential number of rows in each character block for each
     // possible parser state at the beginning of the block.
