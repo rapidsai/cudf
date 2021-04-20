@@ -1157,6 +1157,21 @@ def test_dataframe_setitem_loc(key, value, pdf_gdf):
 
 
 @pytest.mark.parametrize(
+    "key, value",
+    [
+        (("one", "a"), 5),
+        ((slice(None), "a"), range(3)),
+        ((slice(None), "a"), [3, 2, 1]),
+    ],
+)
+def test_dataframe_setitem_loc_empty_df(key, value):
+    pdf, gdf = pd.DataFrame(), cudf.DataFrame()
+    pdf.loc[key] = value
+    gdf.loc[key] = value
+    assert_eq(pdf, gdf, check_dtype=False)
+
+
+@pytest.mark.parametrize(
     "key,value",
     [
         ((0, 0), 5.0),

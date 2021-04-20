@@ -413,18 +413,27 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         try:
             columns = self._get_column_selection(key[1])
         except KeyError:
-            if isinstance(key[0], slice):
+            if not self._df.empty and isinstance(key[0], slice):
                 pos_range = get_label_range_or_mask(
                     self._df.index, key[0].start, key[0].stop, key[0].step
                 )
                 idx = self._df.index[pos_range]
+            elif self._df.empty and isinstance(key[0], slice):
+                idx = None
             else:
                 idx = cudf.Index(key[0])
             if is_scalar(value):
-                value = as_column(value, length=len(idx))
-            new_col = cudf.Series(value, index=idx)._align_to_index(
-                self._df.index, how="right"
-            )
+                length = len(idx) if idx is not None else 1
+                value = as_column(value, length=length)
+
+            new_col = cudf.Series(value, index=idx)
+            if not self._df.empty:
+                new_col = new_col._align_to_index(self._df.index, how="right")
+
+            if self._df.empty:
+                self._df.index = (
+                    idx if idx is not None else cudf.RangeIndex(len(new_col))
+                )
             self._df._data.insert(key[1], new_col)
         else:
             for col in columns:
