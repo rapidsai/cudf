@@ -492,9 +492,8 @@ void reader::impl::set_data_types(rmm::cuda_stream_view stream)
                      std::cend(dtype),
                      std::inserter(col_type_map, col_type_map.end()),
                      [&](auto const &ts) -> std::pair<std::string, data_type> {
-                       // When C++17, use structured bindings: auto const& [col_name, type_str] = ..
-                       auto split = split_on_colon(ts);
-                       return {split.first, convert_string_to_dtype(split.second)};
+                       auto const &[col_name, type_str] = split_on_colon(ts);
+                       return {col_name, convert_string_to_dtype(type_str)};
                      });
 
       // Using the map here allows O(n log n) complexity

@@ -2,6 +2,7 @@
 import decimal
 
 import numpy as np
+import pyarrow as pa
 
 from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
 from cudf.core.column.column import ColumnBase
@@ -114,44 +115,36 @@ class Scalar(object):
         self._host_value = self._device_value._to_host_scalar()
 
     def _preprocess_host_value(self, value, dtype):
-        if isinstance(dtype, Decimal64Dtype):
-            # TODO: Support coercion from decimal.Decimal to different dtype
-            # TODO: Support coercion from integer to Decimal64Dtype
-            raise NotImplementedError(
-                "dtype as cudf.Decimal64Dtype is not supported. Pass a "
-                "decimal.Decimal to construct a DecimalScalar."
-            )
-        if isinstance(value, decimal.Decimal) and dtype is not None:
-            raise TypeError(f"Can not coerce decimal to {dtype}")
-
-        value = to_cudf_compatible_scalar(value, dtype=dtype)
         valid = not _is_null_host_scalar(value)
 
-        if isinstance(value, decimal.Decimal):
-            # 0.0042 -> Decimal64Dtype(2, 4)
+        if isinstance(dtype, Decimal64Dtype):
+            value = pa.scalar(
+                value, type=pa.decimal128(dtype.precision, dtype.scale)
+            ).as_py()
+        if isinstance(value, decimal.Decimal) and dtype is None:
             dtype = Decimal64Dtype._from_decimal(value)
 
-        else:
-            if dtype is None:
-                if not valid:
-                    if isinstance(value, (np.datetime64, np.timedelta64)):
-                        unit, _ = np.datetime_data(value)
-                        if unit == "generic":
-                            raise TypeError(
-                                "Cant convert generic NaT to null scalar"
-                            )
-                        else:
-                            dtype = value.dtype
-                    else:
-                        raise TypeError(
-                            "dtype required when constructing a null scalar"
-                        )
-                else:
-                    dtype = value.dtype
-            dtype = np.dtype(dtype)
+        value = to_cudf_compatible_scalar(value, dtype=dtype)
 
-            # temporary
-            dtype = np.dtype("object") if dtype.char == "U" else dtype
+        if dtype is None:
+            if not valid:
+                if isinstance(value, (np.datetime64, np.timedelta64)):
+                    unit, _ = np.datetime_data(value)
+                    if unit == "generic":
+                        raise TypeError(
+                            "Cant convert generic NaT to null scalar"
+                        )
+                    else:
+                        dtype = value.dtype
+                else:
+                    raise TypeError(
+                        "dtype required when constructing a null scalar"
+                    )
+            else:
+                dtype = value.dtype
+
+        if not isinstance(dtype, Decimal64Dtype):
+            dtype = np.dtype(dtype)
 
         if not valid:
             value = NA
@@ -358,7 +351,7 @@ class Scalar(object):
         return getattr(self.value, op)()
 
     def astype(self, dtype):
-        return Scalar(self.device_value, dtype)
+        return Scalar(self.value, dtype)
 
 
 class _NAType(object):

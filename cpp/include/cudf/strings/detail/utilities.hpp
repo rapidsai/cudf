@@ -30,7 +30,6 @@ namespace detail {
  * This will return the properly sized column to be filled in by the caller.
  *
  * @param strings_count Number of strings in the column.
- * @param null_count Number of null string entries in the column.
  * @param bytes Number of bytes for the chars column.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
@@ -38,7 +37,6 @@ namespace detail {
  */
 std::unique_ptr<column> create_chars_child_column(
   size_type strings_count,
-  size_type null_count,
   size_type bytes,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

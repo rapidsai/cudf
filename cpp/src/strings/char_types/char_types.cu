@@ -173,8 +173,7 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
 
   // this utility calls filterer to build the offsets and chars columns
-  auto children = cudf::strings::detail::make_strings_children(
-    filterer, strings_count, strings.null_count(), stream, mr);
+  auto children = cudf::strings::detail::make_strings_children(filterer, strings_count, stream, mr);
 
   // return new strings column
   return make_strings_column(strings_count,

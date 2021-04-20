@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "csv.h"
+#include "csv_common.h"
 #include "csv_gpu.h"
 
 #include <cudf/detail/utilities/trie.cuh>

@@ -32,6 +32,8 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <thrust/iterator/counting_iterator.h>
+
 #include <tests/interop/arrow_utils.hpp>
 
 std::unique_ptr<cudf::table> get_cudf_table()
@@ -76,17 +78,17 @@ TEST_F(FromArrowTest, EmptyTable)
 
 TEST_F(FromArrowTest, DateTimeTable)
 {
-  auto data = {1, 2, 3, 4, 5, 6};
+  auto data = std::vector<int64_t>{1, 2, 3, 4, 5, 6};
 
-  auto col =
-    cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>(data);
+  auto col = cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>(
+    data.begin(), data.end());
 
   cudf::table_view expected_table_view({col});
 
   std::shared_ptr<arrow::Array> arr;
-  arrow::TimestampBuilder timestamp_builder(timestamp(arrow::TimeUnit::type::MILLI),
+  arrow::TimestampBuilder timestamp_builder(arrow::timestamp(arrow::TimeUnit::type::MILLI),
                                             arrow::default_memory_pool());
-  timestamp_builder.AppendValues(std::vector<int64_t>{1, 2, 3, 4, 5, 6});
+  timestamp_builder.AppendValues(data);
   CUDF_EXPECTS(timestamp_builder.Finish(&arr).ok(), "Failed to build array");
 
   std::vector<std::shared_ptr<arrow::Field>> schema_vector({arrow::field("a", arr->type())});
@@ -337,16 +339,141 @@ TEST_P(FromArrowTestSlice, SliceTest)
   auto start           = std::get<0>(GetParam());
   auto end             = std::get<1>(GetParam());
 
-  auto sliced_cudf_table = cudf::slice(cudf_table_view, {start, end})[0];
-  cudf::table expected_cudf_table{sliced_cudf_table};
-  auto sliced_arrow_table = arrow_table->Slice(start, end - start);
-  auto got_cudf_table     = cudf::from_arrow(*sliced_arrow_table);
+  auto sliced_cudf_table   = cudf::slice(cudf_table_view, {start, end})[0];
+  auto expected_cudf_table = cudf::table{sliced_cudf_table};
+  auto sliced_arrow_table  = arrow_table->Slice(start, end - start);
+  auto got_cudf_table      = cudf::from_arrow(*sliced_arrow_table);
 
   // This has been added to take-care of empty string column issue with no children
   if (got_cudf_table->num_rows() == 0 and expected_cudf_table.num_rows() == 0) {
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_cudf_table.view(), got_cudf_table->view());
   } else {
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table.view(), got_cudf_table->view());
+  }
+}
+
+template <typename T>
+using fp_wrapper = cudf::test::fixed_point_column_wrapper<T>;
+
+TEST_F(FromArrowTest, FixedPointTable)
+{
+  using namespace numeric;
+  auto constexpr BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+
+  for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const data     = std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
+    auto const col      = fp_wrapper<int64_t>({1, 2, 3, 4, 5, 6}, scale_type{i});
+    auto const expected = cudf::table_view({col});
+
+    std::shared_ptr<arrow::Array> arr;
+    arrow::Decimal128Builder decimal_builder(arrow::decimal(10, -i), arrow::default_memory_pool());
+    decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(data.data()),
+                                 data.size() / BIT_WIDTH_RATIO);
+    CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
+
+    auto const field         = arrow::field("a", arr->type());
+    auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
+    auto const schema        = std::make_shared<arrow::Schema>(schema_vector);
+    auto const arrow_table   = arrow::Table::Make(schema, {arr});
+
+    auto got_cudf_table = cudf::from_arrow(*arrow_table);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
+  }
+}
+
+TEST_F(FromArrowTest, FixedPointTableLarge)
+{
+  using namespace numeric;
+  auto constexpr BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+  auto constexpr NUM_ELEMENTS    = 1000;
+
+  for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
+    auto every_other = [](auto i) { return i % BIT_WIDTH_RATIO ? 0 : i / BIT_WIDTH_RATIO; };
+    auto transform   = cudf::detail::make_counting_transform_iterator(BIT_WIDTH_RATIO, every_other);
+    auto const data  = std::vector<int64_t>(transform, transform + NUM_ELEMENTS * BIT_WIDTH_RATIO);
+    auto iota        = thrust::make_counting_iterator(1);
+    auto const col   = fp_wrapper<int64_t>(iota, iota + NUM_ELEMENTS, scale_type{i});
+    auto const expected = cudf::table_view({col});
+
+    std::shared_ptr<arrow::Array> arr;
+    arrow::Decimal128Builder decimal_builder(arrow::decimal(10, -i), arrow::default_memory_pool());
+    decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(data.data()), NUM_ELEMENTS);
+    CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
+
+    auto const field         = arrow::field("a", arr->type());
+    auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
+    auto const schema        = std::make_shared<arrow::Schema>(schema_vector);
+    auto const arrow_table   = arrow::Table::Make(schema, {arr});
+
+    auto got_cudf_table = cudf::from_arrow(*arrow_table);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
+  }
+}
+
+TEST_F(FromArrowTest, FixedPointTableNulls)
+{
+  using namespace numeric;
+  auto constexpr BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+
+  for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const data = std::vector<int64_t>{1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0};
+    auto const col =
+      fp_wrapper<int64_t>({1, 2, 3, 4, 5, 6, 0, 0}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{i});
+    auto const expected = cudf::table_view({col});
+
+    std::shared_ptr<arrow::Array> arr;
+    arrow::Decimal128Builder decimal_builder(arrow::decimal(10, -i), arrow::default_memory_pool());
+    decimal_builder.AppendValues(reinterpret_cast<const uint8_t*>(data.data()),
+                                 data.size() / BIT_WIDTH_RATIO);
+    decimal_builder.AppendNull();
+    decimal_builder.AppendNull();
+
+    CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
+
+    auto const field         = arrow::field("a", arr->type());
+    auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
+    auto const schema        = std::make_shared<arrow::Schema>(schema_vector);
+    auto const arrow_table   = arrow::Table::Make(schema, {arr});
+
+    auto got_cudf_table = cudf::from_arrow(*arrow_table);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
+  }
+}
+
+TEST_F(FromArrowTest, FixedPointTableNullsLarge)
+{
+  using namespace numeric;
+  auto constexpr BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
+  auto constexpr NUM_ELEMENTS    = 1000;
+
+  for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
+    auto every_other = [](auto i) { return i % BIT_WIDTH_RATIO ? 0 : i / BIT_WIDTH_RATIO; };
+    auto transform   = cudf::detail::make_counting_transform_iterator(BIT_WIDTH_RATIO, every_other);
+    auto const data  = std::vector<int64_t>(transform, transform + NUM_ELEMENTS * BIT_WIDTH_RATIO);
+    auto iota        = thrust::make_counting_iterator(1);
+    auto const col   = fp_wrapper<int64_t>(iota, iota + NUM_ELEMENTS, transform, scale_type{i});
+    auto const expected = cudf::table_view({col});
+
+    std::shared_ptr<arrow::Array> arr;
+    arrow::Decimal128Builder decimal_builder(arrow::decimal(10, -i), arrow::default_memory_pool());
+    for (int64_t i = 0; i < NUM_ELEMENTS / BIT_WIDTH_RATIO; ++i) {
+      decimal_builder.Append(reinterpret_cast<const uint8_t*>(data.data() + 4 * i));
+      decimal_builder.AppendNull();
+    }
+
+    CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
+
+    auto const field         = arrow::field("a", arr->type());
+    auto const schema_vector = std::vector<std::shared_ptr<arrow::Field>>({field});
+    auto const schema        = std::make_shared<arrow::Schema>(schema_vector);
+    auto const arrow_table   = arrow::Table::Make(schema, {arr});
+
+    auto got_cudf_table = cudf::from_arrow(*arrow_table);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_cudf_table->view());
   }
 }
 

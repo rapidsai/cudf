@@ -196,14 +196,14 @@ class Merge(object):
 
     def _compute_join_keys(self):
         # Computes self._keys
+        left_keys = []
+        right_keys = []
         if (
             self.left_index
             or self.right_index
             or self.left_on
             or self.right_on
         ):
-            left_keys = []
-            right_keys = []
             if self.left_index:
                 left_keys.extend(
                     [
@@ -234,14 +234,25 @@ class Merge(object):
                         for on in _coerce_to_tuple(self.right_on)
                     ]
                 )
+        elif self.on:
+            on_names = _coerce_to_tuple(self.on)
+            for on in on_names:
+                # If `on` is provided, Merge on columns if present,
+                # otherwise default to indexes.
+                if on in self.lhs._data:
+                    left_keys.append(_Indexer(name=on, column=True))
+                else:
+                    left_keys.append(_Indexer(name=on, index=True))
+                if on in self.rhs._data:
+                    right_keys.append(_Indexer(name=on, column=True))
+                else:
+                    right_keys.append(_Indexer(name=on, index=True))
+
         else:
-            # Use `on` if provided. Otherwise,
-            # implicitly use identically named columns as the key columns:
-            on_names = (
-                _coerce_to_tuple(self.on)
-                if self.on is not None
-                else set(self.lhs._data) & set(self.rhs._data)
-            )
+            # if `on` is not provided and we're not merging
+            # index with column or on both indexes, then use
+            # the intersection  of columns in both frames
+            on_names = set(self.lhs._data) & set(self.rhs._data)
             left_keys = [_Indexer(name=on, column=True) for on in on_names]
             right_keys = [_Indexer(name=on, column=True) for on in on_names]
 
@@ -384,12 +395,16 @@ class Merge(object):
         if how not in {"left", "inner", "outer", "leftanti", "leftsemi"}:
             raise NotImplementedError(f"{how} merge not supported yet")
 
-        # Passing 'on' with 'left_on' or 'right_on' is ambiguous
-        if on and (left_on or right_on):
-            raise ValueError(
-                'Can only pass argument "on" OR "left_on" '
-                'and "right_on", not a combination of both.'
-            )
+        if on:
+            if left_on or right_on:
+                # Passing 'on' with 'left_on' or 'right_on' is ambiguous
+                raise ValueError(
+                    'Can only pass argument "on" OR "left_on" '
+                    'and "right_on", not a combination of both.'
+                )
+            else:
+                # the validity of 'on' being checked by _Indexer
+                return
 
         # Can't merge on unnamed Series
         if (isinstance(lhs, cudf.Series) and not lhs.name) or (

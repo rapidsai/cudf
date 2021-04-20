@@ -1,13 +1,10 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
-from distutils.version import LooseVersion
-
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-import dask
 from dask.dataframe.categorical import categorical_dtype_dispatch
 from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
 from dask.dataframe.methods import (
@@ -31,7 +28,6 @@ from .core import DataFrame, Index, Series
 get_parallel_type.register(cudf.DataFrame, lambda _: DataFrame)
 get_parallel_type.register(cudf.Series, lambda _: Series)
 get_parallel_type.register(cudf.Index, lambda _: Index)
-DASK_VERSION = LooseVersion(dask.__version__)
 
 
 @meta_nonempty.register(cudf.Index)
@@ -76,18 +72,20 @@ def _get_non_empty_data(s):
             if len(s._column.categories)
             else [UNKNOWN_CATEGORIES]
         )
-        codes = column.full(size=2, fill_value=0, dtype="int32")
+        codes = cudf.core.column.full(size=2, fill_value=0, dtype="int32")
         ordered = s._column.ordered
-        data = column.build_categorical_column(
+        data = cudf.core.column.build_categorical_column(
             categories=categories, codes=codes, ordered=ordered
         )
     elif is_string_dtype(s.dtype):
         data = pa.array(["cat", "dog"])
     else:
         if pd.api.types.is_numeric_dtype(s.dtype):
-            data = column.as_column(cp.arange(start=0, stop=2, dtype=s.dtype))
+            data = cudf.core.column.as_column(
+                cp.arange(start=0, stop=2, dtype=s.dtype)
+            )
         else:
-            data = column.as_column(
+            data = cudf.core.column.as_column(
                 cp.arange(start=0, stop=2, dtype="int64")
             ).astype(s.dtype)
     return data
@@ -205,45 +203,26 @@ def make_meta_object(x, index=None):
     raise TypeError(f"Don't know how to create metadata from {x}")
 
 
-if DASK_VERSION > "2021.03.1":
+@concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
+def concat_cudf(
+    dfs,
+    axis=0,
+    join="outer",
+    uniform=False,
+    filter_warning=True,
+    sort=None,
+    ignore_index=False,
+    **kwargs,
+):
+    assert join == "outer"
 
-    @concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
-    def concat_cudf(
-        dfs,
-        axis=0,
-        join="outer",
-        uniform=False,
-        filter_warning=True,
-        sort=None,
-        ignore_index=False,
-        **kwargs,
-    ):
-        assert join == "outer"
+    ignore_order = kwargs.get("ignore_order", False)
+    if ignore_order:
+        raise NotImplementedError(
+            "ignore_order parameter is not yet supported in dask-cudf"
+        )
 
-        ignore_order = kwargs.get("ignore_order", False)
-        if ignore_order:
-            raise NotImplementedError(
-                "ignore_order parameter is not yet supported in dask-cudf"
-            )
-
-        return cudf.concat(dfs, axis=axis, ignore_index=ignore_index)
-
-
-else:
-
-    @concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
-    def concat_cudf(
-        dfs,
-        axis=0,
-        join="outer",
-        uniform=False,
-        filter_warning=True,
-        sort=None,
-        ignore_index=False,
-    ):
-        assert join == "outer"
-
-        return cudf.concat(dfs, axis=axis, ignore_index=ignore_index)
+    return cudf.concat(dfs, axis=axis, ignore_index=ignore_index)
 
 
 @categorical_dtype_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
@@ -267,8 +246,6 @@ try:
 
     from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
 
-    from cudf.core.column import column
-
     def safe_hash(frame):
         index = frame.index
         if isinstance(frame, cudf.DataFrame):
@@ -288,7 +265,7 @@ try:
         if isinstance(ind, cudf.MultiIndex):
             return safe_hash(ind.to_frame(index=False))
 
-        col = column.as_column(ind)
+        col = cudf.core.column.as_column(ind)
         return safe_hash(cudf.Series(col))
 
     @group_split_dispatch.register((cudf.Series, cudf.DataFrame))

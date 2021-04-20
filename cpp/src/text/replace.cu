@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -223,8 +223,7 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& st
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
 
   // this utility calls replacer to build the offsets and chars columns
-  auto children = cudf::strings::detail::make_strings_children(
-    replacer, strings_count, strings.null_count(), stream, mr);
+  auto children = cudf::strings::detail::make_strings_children(replacer, strings_count, stream, mr);
 
   // return new strings column
   return cudf::make_strings_column(strings_count,
@@ -258,8 +257,7 @@ std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& str
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
 
   // this utility calls filterer to build the offsets and chars columns
-  auto children = cudf::strings::detail::make_strings_children(
-    filterer, strings_count, strings.null_count(), stream, mr);
+  auto children = cudf::strings::detail::make_strings_children(filterer, strings_count, stream, mr);
 
   // return new strings column
   return cudf::make_strings_column(strings_count,
