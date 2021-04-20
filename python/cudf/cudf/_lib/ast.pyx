@@ -1,6 +1,5 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
-import numpy as np
 from enum import Enum
 
 from cython.operator cimport dereference
@@ -82,8 +81,7 @@ cdef class Literal(Node):
 cdef class ColumnReference(Node):
     def __cinit__(self, index):
         cdef size_type idx = index
-        self.c_obj = make_shared[libcudf_ast.column_reference](
-            idx)
+        self.c_obj = make_shared[libcudf_ast.column_reference](idx)
         self.c_node = <shared_ptr[libcudf_ast.node]> self.c_obj
 
 
@@ -95,16 +93,16 @@ cdef class Expression(Node):
         cdef libcudf_ast.ast_operator op_value = <libcudf_ast.ast_operator> (
             <underlying_type_ast_operator> op.value)
 
-        # left and right are either Expression, ColumnReference, or Literal
-        cdef const libcudf_ast.node *c_left = left._get_ptr()
-        cdef const libcudf_ast.node *c_right = right._get_ptr()
-
         if right is None:
             self.c_obj = make_shared[libcudf_ast.expression](
-                op_value, <const libcudf_ast.node &>dereference(c_left))
+                op_value,
+                <const libcudf_ast.node &>dereference(left._get_ptr())
+            )
         else:
             self.c_obj = make_shared[libcudf_ast.expression](
-                op_value, <const libcudf_ast.node &>dereference(c_left),
-                <const libcudf_ast.node &>dereference(c_right))
+                op_value,
+                <const libcudf_ast.node &>dereference(left._get_ptr()),
+                <const libcudf_ast.node &>dereference(right._get_ptr())
+            )
 
         self.c_node = <shared_ptr[libcudf_ast.node]> self.c_obj
