@@ -182,8 +182,10 @@ make_strings_children_with_null_mask(
   if (!size_and_exec_fn.d_chars) { size_and_exec_fn.d_chars = reinterpret_cast<char*>(0x1); }
   for_each_fn(size_and_exec_fn);
 
-  return std::make_tuple(
-    std::move(offsets_column), std::move(chars_column), std::move(null_mask), null_count);
+  return std::make_tuple(std::move(offsets_column),
+                         std::move(chars_column),
+                         null_count > 0 ? std::move(null_mask) : rmm::device_buffer{},
+                         null_count);
 }
 
 /**
