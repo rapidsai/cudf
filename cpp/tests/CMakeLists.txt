@@ -309,7 +309,6 @@ ConfigureTest(DISPATCHER_TEST types/type_dispatcher_test.cu)
 ###################################################################################################
 # - strings test ----------------------------------------------------------------------------------
 ConfigureTest(STRINGS_TEST
-    strings/factories_test.cu
     strings/array_tests.cu
     strings/attrs_tests.cpp
     strings/booleans_tests.cpp
@@ -321,6 +320,7 @@ ConfigureTest(STRINGS_TEST
     strings/datetime_tests.cpp
     strings/durations_tests.cpp
     strings/extract_tests.cpp
+    strings/factories_test.cu
     strings/fill_tests.cpp
     strings/findall_tests.cpp
     strings/find_tests.cpp
