@@ -128,7 +128,7 @@ auto make_strings_children(
  * @param strings_count Number of strings.
  * @param mr Device memory resource used to allocate the returned columns' device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @return offsets child column and chars child column for a strings column
+ * @return offsets child column and chars child column for a strings column.
  */
 template <typename SizeAndExecuteFunction>
 std::tuple<std::unique_ptr<column>, std::unique_ptr<column>, rmm::device_buffer, size_type>
