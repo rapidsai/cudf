@@ -71,6 +71,7 @@ cdef class Node:
 
 cdef class Literal(Node):
     def __cinit__(self, value):
+        # TODO: Generalize this to other types of literals.
         cdef float val = value
         self.c_scalar = make_shared[numeric_scalar[float]](val, True)
         self.c_obj = make_shared[libcudf_ast.literal](

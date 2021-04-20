@@ -2,20 +2,16 @@
 
 from libcpp.memory cimport unique_ptr
 
-from libc.stdint cimport (
-    int32_t, int64_t
-)
-from libcpp cimport bool
-from libcpp.string cimport string
-
-from cudf._lib.cpp.types cimport data_type, size_type
-from cudf._lib.cpp.wrappers.decimals cimport scale_type
+from cudf._lib.cpp.types cimport size_type
 
 from cudf._lib.cpp.scalar.scalar cimport (
     numeric_scalar,
     timestamp_scalar,
     duration_scalar
 )
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.table.table_view cimport table_view
+
 
 cdef extern from "cudf/ast/operators.hpp" namespace "cudf::ast" nogil:
     ctypedef enum ast_operator:
@@ -92,3 +88,9 @@ cdef extern from "cudf/ast/linearizer.hpp" namespace "cudf::ast" nogil:
     cdef cppclass expression(node):
         expression(ast_operator, const node &)
         expression(ast_operator, const node&, const node&)
+
+cdef extern from "cudf/ast/transform.hpp" namespace "cudf::ast" nogil:
+    cdef unique_ptr[column] compute_column(
+        const table_view table,
+        const expression &expr
+    )
