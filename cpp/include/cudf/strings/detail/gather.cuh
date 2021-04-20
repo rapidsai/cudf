@@ -126,21 +126,6 @@ __global__ void gather_chars_fn_string_parallel(StringIterator strings_begin,
 // index. To improve the binary search performance, fixed number of strings per threadblock is
 // used. This strategy is best suited for small strings.
 
-// Binary search `value` in `offsets` of length `nelements`. Require `nelements` to be less than or
-// equal to `strings_per_threadblock`. Require `strings_per_threadblock` to be an exponential of 2.
-template <int strings_per_threadblock>
-__forceinline__ __device__ size_type binary_search(int32_t* offsets,
-                                                   int32_t value,
-                                                   size_type nelements)
-{
-  size_type idx = 0;
-#pragma unroll
-  for (size_type i = strings_per_threadblock / 2; i > 0; i /= 2) {
-    if (idx + i < nelements && offsets[idx + i] <= value) idx += i;
-  }
-  return idx;
-}
-
 template <int strings_per_threadblock, typename StringIterator, typename MapIterator>
 __global__ void gather_chars_fn_char_parallel(StringIterator strings_begin,
                                               char* out_chars,
@@ -169,8 +154,12 @@ __global__ void gather_chars_fn_char_parallel(StringIterator strings_begin,
        out_ibyte < out_offsets_threadblock[strings_current_threadblock];
        out_ibyte += blockDim.x) {
     // binary search for the string index corresponding to out_ibyte
-    size_type string_idx = binary_search<strings_per_threadblock>(
-      out_offsets_threadblock, out_ibyte, strings_current_threadblock);
+    auto const string_idx_iter =
+      thrust::prev(thrust::upper_bound(thrust::seq,
+                                       out_offsets_threadblock,
+                                       out_offsets_threadblock + strings_current_threadblock,
+                                       out_ibyte));
+    size_type string_idx = thrust::distance(out_offsets_threadblock, string_idx_iter);
 
     // calculate which character to load within the string
     int32_t icharacter = out_ibyte - out_offsets_threadblock[string_idx];
