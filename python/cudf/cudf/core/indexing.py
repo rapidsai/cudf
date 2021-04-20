@@ -410,10 +410,25 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 "DataFrames with a MultiIndex"
             )
 
-        columns = self._get_column_selection(key[1])
-
-        for col in columns:
-            self._df[col].loc[key[0]] = value
+        try:
+            columns = self._get_column_selection(key[1])
+        except KeyError:
+            if isinstance(key[0], slice):
+                pos_range = get_label_range_or_mask(
+                    self._df.index, key[0].start, key[0].stop, key[0].step
+                )
+                idx = self._df.index[pos_range]
+            else:
+                idx = cudf.Index(key[0])
+            if is_scalar(value):
+                value = as_column(value, length=len(idx))
+            new_col = cudf.Series(value, index=idx)._align_to_index(
+                self._df.index, how="right"
+            )
+            self._df._data.insert(key[1], new_col)
+        else:
+            for col in columns:
+                self._df[col].loc[key[0]] = value
 
     def _get_column_selection(self, arg):
         return self._df._get_columns_by_label(arg)

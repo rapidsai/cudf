@@ -1136,8 +1136,17 @@ def test_dataframe_setitem_iloc(key, value, pdf_gdf):
         (("one", "a"), 5),
         ((slice(None), "a"), 5),
         ((slice(None), "a"), range(3)),
+        ((slice(None), "a"), [3, 2, 1]),
         ((slice(None, "two"), "a"), range(2)),
+        ((slice(None, "two"), "a"), [4, 5]),
         ((["one", "two"], "a"), 5),
+        (("one", "c"), 5),
+        ((["one", "two"], "c"), 5),
+        ((slice(None), "c"), 5),
+        ((slice(None), "c"), range(3)),
+        ((slice(None), "c"), [3, 2, 1]),
+        ((slice(None, "two"), "c"), range(2)),
+        ((slice(None, "two"), "c"), [4, 5]),
     ],
 )
 def test_dataframe_setitem_loc(key, value, pdf_gdf):
