@@ -70,3 +70,10 @@ cdef extern from "cudf/ast/linearizer.hpp" namespace "cudf::ast" nogil:
         LEFT "cudf::ast::table_reference::LEFT"
         RIGHT "cudf::ast::table_reference::RIGHT"
         OUTPUT "cudf::ast::table_reference::OUTPUT"
+
+    cdef cppclass literal:
+        # Due to https://github.com/cython/cython/issues/3198, we need to
+        # specify a return type for templated constructors.
+        literal literal[T](numeric_scalar[T] &)
+        literal literal[T](timestamp_scalar[T] &)
+        literal literal[T](duration_scalar[T] &)

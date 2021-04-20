@@ -3,18 +3,7 @@
 import numpy as np
 from enum import Enum
 
-# from libc.stdint cimport uint32_t
-# from libcpp cimport bool as cbool
-# from libcpp.memory cimport unique_ptr
-# from libcpp.utility cimport move
-#
-# from cudf._lib.column cimport Column
-# from cudf._lib.replace import replace_nulls
-#
-# from cudf._lib.cpp.labeling cimport inclusive
-# from cudf._lib.cpp.labeling cimport label_bins as cpp_label_bins
-# from cudf._lib.cpp.column.column cimport column
-# from cudf._lib.cpp.column.column_view cimport column_view
+from cython.operator cimport dereference
 
 cimport cudf._lib.cpp.ast as libcudf_ast
 
@@ -70,3 +59,13 @@ class TableReference(Enum):
     LEFT = libcudf_ast.table_reference.LEFT
     RIGHT = libcudf_ast.table_reference.RIGHT
     OUTPUT = libcudf_ast.table_reference.OUTPUT
+
+
+cdef class Literal:
+    def __cinit__(self, value):
+        self.c_scalar = new numeric_scalar[float](value, True)
+        self.c_literal = new libcudf_ast.literal(
+            <numeric_scalar[float] &>dereference(self.c_scalar))
+
+    def __dealloc__(self):
+        del self.c_literal
