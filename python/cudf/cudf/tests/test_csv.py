@@ -79,6 +79,16 @@ def make_numpy_mixed_dataframe():
     return df
 
 
+@pytest.fixture
+def pd_mixed_dataframe():
+    return make_numpy_mixed_dataframe()
+
+
+@pytest.fixture
+def cudf_mixed_dataframe():
+    return cudf.from_pandas(make_numpy_mixed_dataframe())
+
+
 def make_all_numeric_dataframe():
     df = pd.DataFrame()
 
@@ -237,12 +247,13 @@ def test_csv_reader_datetime(parse_dates):
 
 @pytest.mark.parametrize("pandas_arg", [{"delimiter": "|"}, {"sep": "|"}])
 @pytest.mark.parametrize("cudf_arg", [{"sep": "|"}, {"delimiter": "|"}])
-def test_csv_reader_mixed_data_delimiter_sep(tmpdir, pandas_arg, cudf_arg):
+def test_csv_reader_mixed_data_delimiter_sep(
+    tmpdir, pandas_arg, cudf_arg, pd_mixed_dataframe
+):
 
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file3.csv")
 
-    df = make_numpy_mixed_dataframe()
-    df.to_csv(fname, sep="|", index=False, header=False)
+    pd_mixed_dataframe.to_csv(fname, sep="|", index=False, header=False)
 
     gdf1 = read_csv(
         str(fname),
@@ -331,12 +342,11 @@ def test_csv_reader_dtype_extremes(use_names):
     assert_eq(gdf, pdf)
 
 
-def test_csv_reader_skiprows_skipfooter(tmpdir):
+def test_csv_reader_skiprows_skipfooter(tmpdir, pd_mixed_dataframe):
 
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file5.csv")
 
-    df = make_numpy_mixed_dataframe()
-    df.to_csv(
+    pd_mixed_dataframe.to_csv(
         fname, columns=["Integer", "Date", "Float"], index=False, header=False
     )
 
@@ -445,10 +455,9 @@ def test_csv_reader_strings_quotechars(tmpdir):
     assert df["text"][3] == "f,,!.,"
 
 
-def test_csv_reader_usecols_int_char(tmpdir):
+def test_csv_reader_usecols_int_char(tmpdir, pd_mixed_dataframe):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file10.csv")
-    df = make_numpy_mixed_dataframe()
-    df.to_csv(
+    pd_mixed_dataframe.to_csv(
         fname,
         columns=["Integer", "Date", "Float", "Integer2"],
         index=False,
@@ -662,11 +671,13 @@ def test_csv_reader_buffer_strings():
         ("", None, None),
     ],
 )
-def test_csv_reader_compression(tmpdir, ext, out_comp, in_comp):
+def test_csv_reader_compression(
+    tmpdir, ext, out_comp, in_comp, pd_mixed_dataframe
+):
 
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_compression" + ext)
 
-    df = make_numpy_mixed_dataframe()
+    df = pd_mixed_dataframe
     df.to_csv(fname, index=False, header=False, compression=out_comp)
 
     gdf = read_csv(fname, names=list(df.columns.values), compression=in_comp)
@@ -1503,8 +1514,8 @@ def test_csv_writer_datetime_data(tmpdir):
 
 @pytest.mark.parametrize("line_terminator", ["\r", "\n", "\t", np.str_("\n")])
 @pytest.mark.parametrize("sep", [",", "/", np.str_(",")])
-def test_csv_writer_terminator_sep(line_terminator, sep):
-    df = cudf.from_pandas(make_numpy_mixed_dataframe())
+def test_csv_writer_terminator_sep(line_terminator, sep, cudf_mixed_dataframe):
+    df = cudf_mixed_dataframe
 
     buffer = BytesIO()
     df.to_csv(buffer, line_terminator=line_terminator, sep=sep, index=False)
@@ -1516,8 +1527,10 @@ def test_csv_writer_terminator_sep(line_terminator, sep):
 @pytest.mark.parametrize(
     "line_terminator", ["\r\n", "ABC", "\t\t", np.str_("\r\n")]
 )
-def test_csv_writer_multichar_terminator(line_terminator):
-    df = cudf.from_pandas(make_numpy_mixed_dataframe())
+def test_csv_writer_multichar_terminator(
+    line_terminator, cudf_mixed_dataframe
+):
+    df = cudf_mixed_dataframe
 
     default_terminator_csv = StringIO()
     df.to_csv(default_terminator_csv)
@@ -1547,8 +1560,10 @@ def test_csv_writer_multichar_terminator(line_terminator):
 @pytest.mark.parametrize(
     "index", [True, False, np.bool_(True), np.bool_(False)]
 )
-def test_csv_writer_column_and_header_options(columns, header, index):
-    pdf = make_numpy_mixed_dataframe()
+def test_csv_writer_column_and_header_options(
+    columns, header, index, pd_mixed_dataframe
+):
+    pdf = pd_mixed_dataframe
     df = cudf.from_pandas(pdf)
 
     cudf_buffer = BytesIO()
@@ -1566,8 +1581,8 @@ def test_csv_writer_column_and_header_options(columns, header, index):
     assert_eq(expected, got)
 
 
-def test_csv_writer_empty_columns_parameter():
-    df = cudf.from_pandas(make_numpy_mixed_dataframe())
+def test_csv_writer_empty_columns_parameter(cudf_mixed_dataframe):
+    df = cudf_mixed_dataframe
 
     buffer = BytesIO()
     with pytest.raises(RuntimeError):
