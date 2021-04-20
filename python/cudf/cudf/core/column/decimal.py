@@ -121,7 +121,7 @@ class DecimalColumn(ColumnBase):
 
     def quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
-    ) -> "cudf.core.column.DecimalColumn":
+    ) -> ColumnBase:
         if isinstance(q, Number) or cudf.utils.dtypes.is_list_like(q):
             np_array_q = np.asarray(q)
             if np.logical_or(np_array_q < 0, np_array_q > 1).any():
@@ -139,7 +139,7 @@ class DecimalColumn(ColumnBase):
             )
         return result
 
-    def median(self, skipna: bool = None) -> "cudf.core.column.DecimalColumn":
+    def median(self, skipna: bool = None) -> ColumnBase:
         skipna = True if skipna is None else skipna
 
         if not skipna and self.has_nulls:
