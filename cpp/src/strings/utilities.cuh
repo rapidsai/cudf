@@ -152,7 +152,7 @@ make_strings_children_with_null_mask(
                        size_and_exec_fn);
   };
 
-  // Compute the string sizes, storing in d_offsets (negative output sizes mean null strings)
+  // Compute the string sizes, storing in `d_offsets` (negative output sizes mean null strings)
   for_each_fn(size_and_exec_fn);
 
   // Use the string sizes to compute null_mask and null_count of the output strings column
@@ -170,16 +170,17 @@ make_strings_children_with_null_mask(
     rmm::exec_policy(stream), iter_trans_begin, iter_trans_begin + strings_count + 1, d_offsets);
 
   // Now build the chars column
-  auto const bytes = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
-  std::unique_ptr<column> chars_column =
-    create_chars_child_column(strings_count, bytes, stream, mr);
-  size_and_exec_fn.d_chars = chars_column->mutable_view().template data<char>();
+  auto const bytes  = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
+  auto chars_column = create_chars_child_column(strings_count, bytes, stream, mr);
 
-  // If all the strings are empty or null, the d_chars pointer will has nullptr value.
-  // Thus, we need to set an arbitrary pointer value to d_chars to prevent the string sizes to be
-  // computed again. It is safe to do so, because in this case the string column has all empty, or
-  // all null string elements so nothing will be copied onto d_chars.
-  if (!size_and_exec_fn.d_chars) { size_and_exec_fn.d_chars = reinterpret_cast<char*>(0x1); }
+  // If all the strings are empty or null, `bytes` will be `0` thus the `d_chars` pointer will has
+  // `nullptr` value. Thus, we need to set an arbitrary pointer value to d_chars to prevent the
+  // string sizes to be computed again. It is safe to do so, because in this case the strings column
+  // has all empty or all null string elements so nothing will be copied onto `d_chars`.
+  size_and_exec_fn.d_chars =
+    bytes > 0 ? chars_column->mutable_view().template data<char>() : reinterpret_cast<char*>(0x1);
+
+  // Execute the function fn to do whatever needed
   for_each_fn(size_and_exec_fn);
 
   return std::make_tuple(std::move(offsets_column),
