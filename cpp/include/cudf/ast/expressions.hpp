@@ -21,6 +21,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <cstdint>
+
 namespace cudf {
 namespace ast {
 
@@ -53,7 +55,7 @@ struct expression {
 /**
  * @brief Enum of supported operators.
  */
-enum class ast_operator {
+enum class ast_operator : int32_t {
   // Binary operators
   ADD,         ///< operator +
   SUB,         ///< operator -

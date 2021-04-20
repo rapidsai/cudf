@@ -65,21 +65,30 @@ cdef extern from "cudf/ast/operators.hpp" namespace "cudf::ast" nogil:
         BIT_INVERT "cudf::ast::ast_operator::BIT_INVERT"
         NOT "cudf::ast::ast_operator::NOT"
 
+cdef extern from "cudf/ast/detail/linearizer.hpp" \
+        namespace "cudf::ast::detail" nogil:
+    cdef cppclass node:
+        pass
+
 cdef extern from "cudf/ast/linearizer.hpp" namespace "cudf::ast" nogil:
     ctypedef enum table_reference:
         LEFT "cudf::ast::table_reference::LEFT"
         RIGHT "cudf::ast::table_reference::RIGHT"
         OUTPUT "cudf::ast::table_reference::OUTPUT"
 
-    cdef cppclass literal:
+    cdef cppclass literal(node):
         # Due to https://github.com/cython/cython/issues/3198, we need to
         # specify a return type for templated constructors.
         literal literal[T](numeric_scalar[T] &) except +
         literal literal[T](timestamp_scalar[T] &) except +
         literal literal[T](duration_scalar[T] &) except +
 
-    cdef cppclass column_reference:
+    cdef cppclass column_reference(node):
         # Allow for default C++ parameters by declaring multiple constructors
         # with the default parameters optionally omitted.
         column_reference(size_type) except +
         column_reference(size_type, table_reference) except +
+
+    cdef cppclass expression(node):
+        expression(ast_operator, const node &)
+        expression(ast_operator, const node&, const node&)

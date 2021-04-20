@@ -5,7 +5,8 @@ from enum import Enum
 
 from cython.operator cimport dereference
 from cudf._lib.cpp.types cimport size_type
-from libcpp.memory cimport make_unique
+from libcpp.memory cimport make_shared, shared_ptr
+from cudf._lib.ast cimport underlying_type_ast_operator
 
 cimport cudf._lib.cpp.ast as libcudf_ast
 
@@ -63,16 +64,46 @@ class TableReference(Enum):
     OUTPUT = libcudf_ast.table_reference.OUTPUT
 
 
-cdef class Literal:
+cdef class Node:
+    cdef libcudf_ast.node * _get_ptr(self):
+        return self.c_node.get()
+
+
+cdef class Literal(Node):
     def __cinit__(self, value):
         cdef float val = value
-        self.c_scalar = make_unique[numeric_scalar[float]](val, True)
-        self.c_literal = make_unique[libcudf_ast.literal](
+        self.c_scalar = make_shared[numeric_scalar[float]](val, True)
+        self.c_obj = make_shared[libcudf_ast.literal](
             <numeric_scalar[float] &>dereference(self.c_scalar))
+        self.c_node = <shared_ptr[libcudf_ast.node]> self.c_obj
 
 
-cdef class ColumnReference:
+cdef class ColumnReference(Node):
     def __cinit__(self, index):
         cdef size_type idx = index
-        self.c_column_reference = make_unique[libcudf_ast.column_reference](
+        self.c_obj = make_shared[libcudf_ast.column_reference](
             idx)
+        self.c_node = <shared_ptr[libcudf_ast.node]> self.c_obj
+
+
+cdef class Expression(Node):
+    def __cinit__(self, op, Node left, Node right=None):
+        # This awkward double casting appears to be the only way to get Cython
+        # to generate valid C++ that doesn't try to apply the shift operator
+        # directly to values of the enum (which is invalid).
+        cdef libcudf_ast.ast_operator op_value = <libcudf_ast.ast_operator> (
+            <underlying_type_ast_operator> op.value)
+
+        # left and right are either Expression, ColumnReference, or Literal
+        cdef const libcudf_ast.node *c_left = left._get_ptr()
+        cdef const libcudf_ast.node *c_right = right._get_ptr()
+
+        if right is None:
+            self.c_obj = make_shared[libcudf_ast.expression](
+                op_value, <const libcudf_ast.node &>dereference(c_left))
+        else:
+            self.c_obj = make_shared[libcudf_ast.expression](
+                op_value, <const libcudf_ast.node &>dereference(c_left),
+                <const libcudf_ast.node &>dereference(c_right))
+
+        self.c_node = <shared_ptr[libcudf_ast.node]> self.c_obj
