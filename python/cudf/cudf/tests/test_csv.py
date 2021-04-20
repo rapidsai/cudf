@@ -1575,7 +1575,7 @@ def test_csv_writer_column_and_header_options(
     got = cudf.read_csv(cudf_buffer, header=0 if header else None)
 
     expected_column_cnt = (
-        (1 if index else 0) + len(columns) if columns else got.shape[1]
+        (1 if index else 0) + len(columns) if columns else pdf.shape[1]
     )
     assert_eq(expected_column_cnt, got.shape[1])
     assert_eq(expected, got)
