@@ -116,7 +116,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                              std::move(offsets_column),
                              std::move(chars_column),
                              null_count,
-                             (null_count) ? std::move(null_mask) : rmm::device_buffer{},
+                             std::move(null_mask),
                              stream,
                              mr);
 }
@@ -158,7 +158,7 @@ struct multi_separator_concat_fn {
     // there is at least one non-null column value
     auto const d_separator = d_separators.is_valid(idx) ? d_separators.element<string_view>(idx)
                                                         : d_separator_narep.value();
-    auto const d_null_rep  = d_narep.is_valid() ? d_narep.value() : string_view{};
+    auto const d_null_rep = d_narep.is_valid() ? d_narep.value() : string_view{};
 
     // write output entry for this row
     bool colval_written = false;  // state variable for writing separators
@@ -228,7 +228,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                              std::move(offsets_column),
                              std::move(chars_column),
                              null_count,
-                             (null_count) ? std::move(null_mask) : rmm::device_buffer{},
+                             std::move(null_mask),
                              stream,
                              mr);
 }
