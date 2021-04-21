@@ -346,7 +346,6 @@ __device__ void evaluate_row_expression(detail::row_evaluator const& evaluator,
  *
  */
 struct ast_plan {
- public:
   ast_plan(linearizer const& expr_linearizer,
            rmm::cuda_stream_view stream,
            rmm::mr::device_memory_resource* mr)
@@ -381,14 +380,6 @@ struct ast_plan {
     _device_operator_source_indices =
       reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]);
   }
-
-  auto device_data_references() const { return _device_data_references; }
-  auto device_literals() const { return _device_literals; }
-  auto device_operators() const { return _device_operators; }
-  auto device_operator_source_indices() const { return _device_operator_source_indices; }
-
- private:
-  using buffer_type = std::pair<std::unique_ptr<char[]>, int>;
 
   /**
    * @brief Helper function for adding components (operators, literals, etc) to AST plan
