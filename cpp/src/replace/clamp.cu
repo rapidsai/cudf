@@ -121,8 +121,8 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
       size_type idx) {
       if (d_input.is_null(idx)) { return; }
       auto input_element      = d_input.element<string_view>(idx);
-      const auto d_lo         = lo_itr->value_or(input_element);
-      const auto d_hi         = hi_itr->value_or(input_element);
+      const auto d_lo         = (*lo_itr).value_or(input_element);
+      const auto d_hi         = (*hi_itr).value_or(input_element);
       const auto d_lo_replace = *(*lo_replace_itr);
       const auto d_hi_replace = *(*hi_replace_itr);
 
