@@ -504,11 +504,11 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           stream_count++;
         }
         if (_source->is_device_read_preferred(len)) {
-          auto read_size = _source->device_read(offset, len, d_dst, stream);
-          // TODO : Should the return value be compared against len?
-          // Can they be different? If so, is that a bug?
+          CUDF_EXPECTS(_source->device_read(offset, len, d_dst, stream) == len,
+                       "Unexpected discrepancy in bytes read.");
         } else {
           const auto buffer = _source->host_read(offset, len);
+          CUDF_EXPECTS(buffer->size() == len, "Unexpected discrepancy in bytes read.");
           CUDA_TRY(
             cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyHostToDevice, stream.value()));
           stream.synchronize();
