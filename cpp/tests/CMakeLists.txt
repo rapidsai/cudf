@@ -230,7 +230,9 @@ ConfigureTest(SPAN_TEST utilities_tests/span_tests.cu)
 ConfigureTest(ITERATOR_TEST
     iterator/value_iterator_test.cu
     iterator/pair_iterator_test.cu
-    iterator/scalar_iterator_test.cu)
+    iterator/scalar_iterator_test.cu
+    iterator/optional_iterator_test.cu
+    )
 
 ###################################################################################################
 # - device atomics tests --------------------------------------------------------------------------
@@ -280,7 +282,10 @@ ConfigureTest(FILLING_TEST
 
 ###################################################################################################
 # - search test -----------------------------------------------------------------------------------
-ConfigureTest(SEARCH_TEST search/search_test.cpp)
+ConfigureTest(SEARCH_TEST
+    search/search_dictionary_test.cpp
+    search/search_struct_test.cpp
+    search/search_test.cpp)
 
 ###################################################################################################
 # - reshape test ----------------------------------------------------------------------------------

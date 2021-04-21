@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include <io/orc/orc.h>
-#include <io/orc/orc_field_reader.hpp>
-#include <io/orc/orc_field_writer.hpp>
+#include "orc.h"
 #include <string>
+#include "orc_field_reader.hpp"
+#include "orc_field_writer.hpp"
 
 namespace cudf {
 namespace io {
@@ -104,8 +104,9 @@ void ProtobufReader::read(StripeFooter &s, size_t maxlen)
 
 void ProtobufReader::read(Stream &s, size_t maxlen)
 {
-  auto op = std::make_tuple(
-    make_field_reader(1, s.kind), make_field_reader(2, s.column), make_field_reader(3, s.length));
+  auto op = std::make_tuple(make_field_reader(1, s.kind),
+                            make_field_reader(2, s.column_id),
+                            make_field_reader(3, s.length));
   function_builder(s, maxlen, op);
 }
 
@@ -318,7 +319,7 @@ size_t ProtobufWriter::write(const Stream &s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.kind);
-  w.field_uint(2, s.column);
+  if (s.column_id) w.field_uint(2, *s.column_id);
   w.field_uint(3, s.length);
   return w.value();
 }
