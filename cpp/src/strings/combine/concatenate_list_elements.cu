@@ -111,8 +111,8 @@ struct compute_size_and_concatenate_fn {
 struct scalar_separator_fn {
   string_scalar_device_view const d_separator;
 
-  __device__ inline bool is_null_list(column_device_view const& lists_dv,
-                                      size_type const idx) const noexcept
+  __device__ inline bool is_null_list(column_device_view const& lists_dv, size_type const idx) const
+    noexcept
   {
     return lists_dv.is_null(idx);
   }
@@ -178,8 +178,8 @@ struct column_separator_fn {
   column_device_view const separators_dv;
   string_scalar_device_view const sep_narep_dv;
 
-  __device__ inline bool is_null_list(column_device_view const& lists_dv,
-                                      size_type const idx) const noexcept
+  __device__ inline bool is_null_list(column_device_view const& lists_dv, size_type const idx) const
+    noexcept
   {
     return lists_dv.is_null(idx) or (separators_dv.is_null(idx) and not sep_narep_dv.is_valid());
   }
