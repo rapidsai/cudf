@@ -20,6 +20,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/detail/sorting.hpp>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -32,6 +33,46 @@ namespace cudf {
 namespace lists {
 namespace detail {
 namespace {
+/**
+ * @brief Generate list offsets for the output lists column from the table_view of the input lists
+ * columns.
+ */
+std::unique_ptr<column> generate_list_offsets(table_view const& lists_columns,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr)
+{
+  auto const num_cols    = lists_columns.num_columns();
+  auto const output_size = lists_columns.num_rows() * num_cols + 1;
+
+  static_assert(sizeof(offset_type) == sizeof(int32_t));
+  static_assert(sizeof(size_type) == sizeof(int32_t));
+  auto list_offsets = make_numeric_column(
+    data_type{type_id::INT32}, output_size, mask_state::UNALLOCATED, stream, mr);
+  auto const d_out_offsets = list_offsets->mutable_view().begin<offset_type>();
+  auto const table_dv_ptr  = table_device_view::create(lists_columns);
+
+  // Compute list sizes
+  thrust::transform(rmm::exec_policy(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(output_size - 1),
+                    d_out_offsets,
+                    [num_cols, table_dv = *table_dv_ptr] __device__(size_type const idx) {
+                      auto const col_id   = idx % num_cols;
+                      auto const list_id  = idx / num_cols;
+                      auto const d_column = table_dv.column(col_id);
+                      if (d_column.is_null(list_id)) { return size_type{0}; }
+                      auto const d_offsets =
+                        d_column.child(lists_column_view::offsets_column_index).data<size_type>() +
+                        d_column.offset();
+                      return d_offsets[list_id + 1] - d_offsets[list_id];
+                    });
+
+  // Compute offsets from sizes
+  thrust::exclusive_scan(
+    rmm::exec_policy(stream), d_out_offsets, d_out_offsets + output_size, d_out_offsets);
+
+  return list_offsets;
+}
 
 }  // anonymous namespace
 
@@ -64,10 +105,9 @@ std::unique_ptr<column> interleave_columns(table_view const& lists_columns,
   auto const num_rows = lists_columns.num_rows();
   if (num_rows == 0) { return cudf::empty_like(lists_columns.column(0)); }
 
-  static_assert(sizeof(offset_type) == sizeof(int32_t));
-  auto lists_offsets = make_numeric_column(
-    data_type{type_id::INT32}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
-  auto const output_offsets_ptr = lists_offsets->mutable_view().begin<offset_type>();
+  auto const list_offsets = generate_list_offsets(lists_columns, stream, mr);
+
+  type_dispatcher();
 
   auto lists_entries = std::make_unique<column>();
 
