@@ -30,16 +30,17 @@ namespace detail {
  * @code{.pseudo}
  * s1 = [{0, 1}, {2, 3, 4}, {5}, {}, {6, 7}]
  * s2 = [{8}, {9}, {}, {10, 11, 12}, {13, 14, 15, 16}]
- * r = interleave_columns(s1, s2)
+ * r = lists::interleave_columns(s1, s2)
  * r is now [{0, 1}, {8}, {2, 3, 4}, {9}, {5}, {}, {}, {10, 11, 12}, {6, 7}, {13, 14, 15, 16}]
  * @endcode
  *
- * @throws cudf::logic_error if columns of the input table are not lists columns.
+ * @throws cudf::logic_error if any column of the input table is not a lists columns.
+ * @throws cudf::logic_error if any lists column contains nested type.
+ * @throws cudf::logic_error if all lists columns do not have the same entry type.
  *
- * @param input  Table containing columns to interleave.
+ * @param input  Table containing lists columns to interleave.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr     Device memory resource used to allocate the returned column's device
- * memory.
+ * @param mr     Device memory resource used to allocate the returned column's device memory.
  * @return       The interleaved columns as a single column.
  */
 std::unique_ptr<column> interleave_columns(
