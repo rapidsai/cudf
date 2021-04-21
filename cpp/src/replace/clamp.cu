@@ -74,12 +74,12 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_cha
   return std::make_pair(std::move(offsets_column), std::move(chars_column));
 }
 
-template <typename OptionalScalarIterator>
+template <typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& input,
                                                   OptionalScalarIterator const& lo_itr,
-                                                  OptionalScalarIterator const& lo_replace_itr,
+                                                  ReplaceScalarIterator const& lo_replace_itr,
                                                   OptionalScalarIterator const& hi_itr,
-                                                  OptionalScalarIterator const& hi_replace_itr,
+                                                  ReplaceScalarIterator const& hi_replace_itr,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
@@ -90,18 +90,16 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
   // build offset column
   auto offsets_transformer = [lo_itr, hi_itr, lo_replace_itr, hi_replace_itr] __device__(
                                string_view element, bool is_valid = true) {
-    const auto d_lo         = *(*lo_itr);
-    const auto d_hi         = *(*hi_itr);
+    const auto d_lo         = (*lo_itr).value_or(element);
+    const auto d_hi         = (*hi_itr).value_or(element);
     const auto d_lo_replace = *(*lo_replace_itr);
     const auto d_hi_replace = *(*hi_replace_itr);
-    const auto lo_valid     = (*lo_itr).has_value();
-    const auto hi_valid     = (*hi_itr).has_value();
     size_type bytes         = 0;
 
     if (is_valid) {
-      if (lo_valid and element < d_lo) {
+      if (element < d_lo) {
         bytes = d_lo_replace.size_bytes();
-      } else if (hi_valid and d_hi < element) {
+      } else if (d_hi < element) {
         bytes = d_hi_replace.size_bytes();
       } else {
         bytes = element.size_bytes();
@@ -123,16 +121,14 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
       size_type idx) {
       if (d_input.is_null(idx)) { return; }
       auto input_element      = d_input.element<string_view>(idx);
-      const auto d_lo         = *(*lo_itr);
-      const auto d_hi         = *(*hi_itr);
+      const auto d_lo         = (*lo_itr).value_or(input_element);
+      const auto d_hi         = (*hi_itr).value_or(input_element);
       const auto d_lo_replace = *(*lo_replace_itr);
       const auto d_hi_replace = *(*hi_replace_itr);
-      const auto lo_valid     = (*lo_itr).has_value();
-      const auto hi_valid     = (*hi_itr).has_value();
 
-      if (lo_valid and input_element < d_lo) {
+      if (input_element < d_lo) {
         memcpy(d_chars + d_offsets[idx], d_lo_replace.data(), d_lo_replace.size_bytes());
-      } else if (hi_valid and d_hi < input_element) {
+      } else if (d_hi < input_element) {
         memcpy(d_chars + d_offsets[idx], d_hi_replace.data(), d_hi_replace.size_bytes());
       } else {
         memcpy(d_chars + d_offsets[idx], input_element.data(), input_element.size_bytes());
@@ -153,13 +149,13 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
                              mr);
 }
 
-template <typename T, typename OptionalScalarIterator>
+template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamper(
   column_view const& input,
   OptionalScalarIterator const& lo_itr,
-  OptionalScalarIterator const& lo_replace_itr,
+  ReplaceScalarIterator const& lo_replace_itr,
   OptionalScalarIterator const& hi_itr,
-  OptionalScalarIterator const& hi_replace_itr,
+  ReplaceScalarIterator const& hi_replace_itr,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -200,13 +196,13 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
   return output;
 }
 
-template <typename T, typename OptionalScalarIterator>
+template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::enable_if_t<std::is_same<T, string_view>::value, std::unique_ptr<cudf::column>> clamper(
   column_view const& input,
   OptionalScalarIterator const& lo_itr,
-  OptionalScalarIterator const& lo_replace_itr,
+  ReplaceScalarIterator const& lo_replace_itr,
   OptionalScalarIterator const& hi_itr,
-  OptionalScalarIterator const& hi_replace_itr,
+  ReplaceScalarIterator const& hi_replace_itr,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -215,13 +211,13 @@ std::enable_if_t<std::is_same<T, string_view>::value, std::unique_ptr<cudf::colu
 
 }  // namespace
 
-template <typename T, typename OptionalScalarIterator>
+template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::unique_ptr<column> clamp(
   column_view const& input,
   OptionalScalarIterator const& lo_itr,
-  OptionalScalarIterator const& lo_replace_itr,
+  ReplaceScalarIterator const& lo_replace_itr,
   OptionalScalarIterator const& hi_itr,
-  OptionalScalarIterator const& hi_replace_itr,
+  ReplaceScalarIterator const& hi_replace_itr,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -243,8 +239,8 @@ struct dispatch_clamp {
 
     auto lo_itr = make_optional_iterator<T>(lo, contains_nulls::DYNAMIC{}, !lo.is_valid(stream));
     auto hi_itr = make_optional_iterator<T>(hi, contains_nulls::DYNAMIC{}, !hi.is_valid(stream));
-    auto lo_replace_itr = make_optional_iterator<T>(lo_replace, contains_nulls::DYNAMIC{}, false);
-    auto hi_replace_itr = make_optional_iterator<T>(hi_replace, contains_nulls::DYNAMIC{}, false);
+    auto lo_replace_itr = make_optional_iterator<T>(lo_replace, contains_nulls::NO{});
+    auto hi_replace_itr = make_optional_iterator<T>(hi_replace, contains_nulls::NO{});
 
     return clamp<T>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, stream, mr);
   }
