@@ -247,6 +247,7 @@ add_library(cudf
     src/io/parquet/reader_impl.cu
     src/io/parquet/writer_impl.cu
     src/io/statistics/column_stats.cu
+    src/io/utilities/column_buffer.cpp
     src/io/utilities/data_sink.cpp
     src/io/utilities/datasource.cpp
     src/io/utilities/file_io_utilities.cpp
@@ -320,7 +321,8 @@ add_library(cudf
     src/strings/case.cu
     src/strings/char_types/char_cases.cu
     src/strings/char_types/char_types.cu
-    src/strings/combine.cu
+    src/strings/combine/concatenate.cu
+    src/strings/combine/join.cu
     src/strings/contains.cu
     src/strings/convert/convert_booleans.cu
     src/strings/convert/convert_datetime.cu

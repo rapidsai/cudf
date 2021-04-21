@@ -18,33 +18,10 @@
 
 package ai.rapids.cudf;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 /**
- * This class represents settings for writing Parquet files. It includes meta data information
- * that will be used by the Parquet writer to write the file
+ * Settings for writing Parquet files.
  */
-public final class ParquetWriterOptions extends ParquetColumnWriterOptions.ParquetStructColumnWriterOptions {
-  private final CompressionType compressionType;
-  private final Map<String, String> metadata;
-  private final StatisticsFrequency statsGranularity;
-
-  private ParquetWriterOptions(Builder builder) {
-    super(builder);
-    this.statsGranularity = builder.statsGranularity;
-    this.compressionType = builder.compressionType;
-    this.metadata = builder.metadata;
-  }
-
-  String[] getMetadataKeys() {
-    return metadata.keySet().toArray(new String[metadata.size()]);
-  }
-
-  String[] getMetadataValues() {
-    return metadata.values().toArray(new String[metadata.size()]);
-  }
-
+public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
   public enum StatisticsFrequency {
     /** Do not generate statistics */
     NONE(0),
@@ -62,61 +39,32 @@ public final class ParquetWriterOptions extends ParquetColumnWriterOptions.Parqu
     }
   }
 
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  public StatisticsFrequency getStatisticsFrequency() {
-    return statsGranularity;
-  }
-
-  public CompressionType getCompressionType() {
-    return compressionType;
-  }
-
-  public Map<String, String> getMetadata() {
-    return metadata;
-  }
-
-  public static class Builder extends ParquetColumnWriterOptions.AbstractStructBuilder<Builder> {
+  public static class Builder extends CMWriterBuilder<Builder> {
     private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
-    final Map<String, String> metadata = new LinkedHashMap<>();
-    CompressionType compressionType = CompressionType.AUTO;
-
-    public Builder() {
-      super();
-    }
-
-    /**
-     * Add a metadata key and a value
-     * @param key
-     * @param value
-     */
-    public Builder withMetadata(String key, String value) {
-      this.metadata.put(key, value);
-      return this;
-    }
-
-    /**
-     * Add a map of metadata keys and values
-     * @param metadata
-     */
-    public Builder withMetadata(Map<String, String> metadata) {
-      this.metadata.putAll(metadata);
-      return this;
-    }
-
-    /**
-     * Set the compression type to use for writing
-     * @param compression
-     */
-    public Builder withCompressionType(CompressionType compression) {
-      this.compressionType = compression;
-      return this;
-    }
+    private boolean isTimestampTypeInt96 = false;
+    private int[] precisionValues = null;
 
     public Builder withStatisticsFrequency(StatisticsFrequency statsGranularity) {
       this.statsGranularity = statsGranularity;
+      return this;
+    }
+
+    /**
+     * Set whether the timestamps should be written in INT96
+     */
+    public Builder withTimestampInt96(boolean int96) {
+      this.isTimestampTypeInt96 = int96;
+      return this;
+    }
+
+    /**
+     * This is a temporary hack to make things work.  This API will go away once we can update the
+     * parquet APIs properly.
+     * @param precisionValues a value for each column, non-decimal columns are ignored.
+     * @return this for chaining.
+     */
+    public Builder withDecimalPrecisions(int ... precisionValues) {
+      this.precisionValues = precisionValues;
       return this;
     }
 
@@ -124,4 +72,40 @@ public final class ParquetWriterOptions extends ParquetColumnWriterOptions.Parqu
       return new ParquetWriterOptions(this);
     }
   }
+
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  private final StatisticsFrequency statsGranularity;
+
+  private ParquetWriterOptions(Builder builder) {
+    super(builder);
+    this.statsGranularity = builder.statsGranularity;
+    this.isTimestampTypeInt96 = builder.isTimestampTypeInt96;
+    this.precisions = builder.precisionValues;
+  }
+
+  public StatisticsFrequency getStatisticsFrequency() {
+    return statsGranularity;
+  }
+
+  /**
+   * Return the flattened list of precisions if set otherwise empty array will be returned.
+   * For a definition of what `flattened` means please look at {@link Builder#withDecimalPrecisions}
+   */
+  public int[] getPrecisions() {
+    return precisions;
+  }
+
+  /**
+   * Returns true if the writer is expected to write timestamps in INT96
+   */
+  public boolean isTimestampTypeInt96() {
+    return isTimestampTypeInt96;
+  }
+
+  private boolean isTimestampTypeInt96;
+
+  private int[] precisions;
 }

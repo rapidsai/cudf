@@ -37,11 +37,9 @@
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <rmm/cuda_stream_view.hpp>
-#include "cudf/types.hpp"
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
-#include "jni_utils.hpp"
 #include "row_conversion.hpp"
 
 #include <algorithm>
@@ -614,6 +612,48 @@ jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &t
   return convert_table_for_return(env, table_result, extra);
 }
 
+// Convert the JNI boolean array of key column sort order to a vector of cudf::order
+// for groupby.
+std::vector<cudf::order> resolve_column_order(JNIEnv *env, jbooleanArray jkeys_sort_desc,
+                                              int key_size) {
+  cudf::jni::native_jbooleanArray keys_sort_desc(env, jkeys_sort_desc);
+  auto keys_sort_num = keys_sort_desc.size();
+  // The number of column order should be 0 or equal to the number of key.
+  if (keys_sort_num != 0 && keys_sort_num != key_size) {
+    throw cudf::jni::jni_exception("key-column and key-sort-order size mismatch.");
+  }
+
+  std::vector<cudf::order> column_order(keys_sort_num);
+  if (keys_sort_num > 0) {
+    std::transform(keys_sort_desc.data(), keys_sort_desc.data() + keys_sort_num,
+        column_order.begin(),
+        [](jboolean is_desc) { return is_desc ? cudf::order::DESCENDING
+                                              : cudf::order::ASCENDING; });
+  }
+  return column_order;
+}
+
+// Convert the JNI boolean array of key column null order to a vector of cudf::null_order
+// for groupby.
+std::vector<cudf::null_order> resolve_null_precedence(JNIEnv *env, jbooleanArray jkeys_null_first,
+                                                      int key_size) {
+  cudf::jni::native_jbooleanArray keys_null_first(env, jkeys_null_first);
+  auto null_order_num = keys_null_first.size();
+  // The number of null order should be 0 or equal to the number of key.
+  if (null_order_num != 0 && null_order_num != key_size) {
+    throw cudf::jni::jni_exception("key-column and key-null-order size mismatch.");
+  }
+
+  std::vector<cudf::null_order> null_precedence(null_order_num);
+  if (null_order_num > 0) {
+    std::transform(keys_null_first.data(), keys_null_first.data() + null_order_num,
+        null_precedence.begin(),
+        [](jboolean null_before) { return null_before ? cudf::null_order::BEFORE
+                                                      : cudf::null_order::AFTER; });
+  }
+  return null_precedence;
+}
+
 namespace {
 
 // Check that window parameters are valid.
@@ -1070,102 +1110,56 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
   CATCH_STD(env, NULL);
 }
 
-int set_column_metadata(cudf::io::column_in_metadata &column_metadata,
-                         std::vector<std::string> &col_names, 
-                         cudf::jni::native_jbooleanArray &nullability,
-                         cudf::jni::native_jbooleanArray &isInt96,
-                         cudf::jni::native_jintArray &precisions,
-                         cudf::jni::native_jintArray &children, int read_index) {
-  int write_index = 0;
-  int num_children = children[read_index++];
-  column_metadata.children.resize(num_children);
-  for (int i = 0 ; i < num_children; i++, write_index++) {
-    column_metadata.child(write_index)
-        .set_name(col_names[read_index])
-        .set_decimal_precision(precisions[read_index])
-        .set_int96_timestamps(isInt96[read_index])
-        .set_nullability(nullability[read_index]);
-    if (children[read_index] > 0) {
-      read_index = set_column_metadata(column_metadata.child(write_index), col_names, nullability,
-                          isInt96, precisions, children, read_index);
-    }
-    else {
-      read_index++;
-    }
-  }
-  return read_index;
-}
-
-void createTableMetaData(JNIEnv *env, jobjectArray &j_col_names, jintArray &j_children,
-                          jbooleanArray &j_col_nullability, jobjectArray &j_metadata_keys,
-                          jobjectArray &j_metadata_values, jint j_compression, jint j_stats_freq,
-                          jbooleanArray &j_isInt96, jintArray &j_precisions,
-                          cudf::io::table_input_metadata& metadata) {
-  cudf::jni::auto_set_device(env);
-  cudf::jni::native_jstringArray col_names(env, j_col_names);
-  cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
-  cudf::jni::native_jbooleanArray isInt96(env, j_isInt96);
-  cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
-  cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
-  cudf::jni::native_jintArray precisions(env, j_precisions);
-  cudf::jni::native_jintArray children(env, j_children);
-
-  auto cpp_names = col_names.as_cpp_vector();
-
-  int top_level_children =
-      children[0]; // this should never be 0, because a table must have columns
-
-  // first value are dummy when reading
-  // but we write at index 0
-  metadata.column_metadata.resize(top_level_children);
-  int read_index = 1; // the read_index, which will be used to read the arrays
-  for (int i = read_index, write_index = 0; i <= top_level_children; i++, write_index++) {
-    metadata.column_metadata[write_index]
-        .set_name(cpp_names[read_index])
-        .set_nullability(col_nullability[read_index])
-        .set_int96_timestamps(isInt96[read_index])
-        .set_decimal_precision(precisions[read_index]);
-
-    if (children[read_index] > 0) {
-      read_index = set_column_metadata(metadata.column_metadata[write_index], cpp_names,
-                                       col_nullability, isInt96, precisions, children, read_index);
-    } else {
-      read_index++;
-    }
-  }
-  for (auto i = 0; i < meta_keys.size(); ++i) {
-    metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
-  }
-
-}
-
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
-    JNIEnv *env, jclass, jobjectArray j_col_names, jintArray j_children,
-    jbooleanArray j_col_nullability, jobjectArray j_metadata_keys, jobjectArray j_metadata_values,
-    jint j_compression, jint j_stats_freq, jbooleanArray j_isInt96, jintArray j_precisions,
-    jobject consumer) {
+    JNIEnv *env, jclass, jobjectArray j_col_names, jbooleanArray j_col_nullability,
+    jobjectArray j_metadata_keys, jobjectArray j_metadata_values, jint j_compression,
+    jint j_stats_freq, jboolean j_isInt96, jintArray j_precisions, jobject consumer) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
   JNI_NULL_CHECK(env, j_metadata_values, "null metadata values", 0);
   JNI_NULL_CHECK(env, consumer, "null consumer", 0);
   try {
+    cudf::jni::auto_set_device(env);
+    using namespace cudf::io;
+    cudf::jni::native_jstringArray col_names(env, j_col_names);
+    cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
+    cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
+    cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
+    cudf::jni::native_jintArray precisions(env, j_precisions);
+
+    auto cpp_names = col_names.as_cpp_vector();
+    table_input_metadata metadata;
+    metadata.column_metadata.resize(col_nullability.size());
+    for (int i = 0; i < col_nullability.size(); i++) {
+       metadata.column_metadata[i]
+           .set_name(cpp_names[i])
+           .set_nullability(col_nullability[i])
+           .set_int96_timestamps(j_isInt96);
+    }
+
+    // Precisions is not always set
+    for (int i = 0; i < precisions.size(); i++) {
+       metadata.column_metadata[i]
+           .set_decimal_precision(precisions[i]);
+    }
+
+    for (auto i = 0; i < meta_keys.size(); ++i) {
+      metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
+    }
+
     std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
         new cudf::jni::jni_writer_data_sink(env, consumer));
-    
-    using namespace cudf::io;
     sink_info sink{data_sink.get()};
-    table_input_metadata metadata;
-    createTableMetaData(env, j_col_names, j_children, j_col_nullability, j_metadata_keys,
-                         j_metadata_values, j_compression, j_stats_freq, j_isInt96, j_precisions,
-                         metadata);
-
+    std::vector<uint8_t> const v_precisions(
+        precisions.data(), precisions.data() + precisions.size());
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
             .metadata(&metadata)
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
             .build();
+
     auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
     cudf::jni::native_parquet_writer_handle *ret =
         new cudf::jni::native_parquet_writer_handle(std::move(writer_ptr), std::move(data_sink));
@@ -1175,22 +1169,44 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
 }
 
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
-    JNIEnv *env, jclass, jobjectArray j_col_names, jintArray j_children,
-    jbooleanArray j_col_nullability, jobjectArray j_metadata_keys, jobjectArray j_metadata_values,
-    jint j_compression, jint j_stats_freq, jbooleanArray j_isInt96, jintArray j_precisions,
-    jstring j_output_path) {
+    JNIEnv *env, jclass, jobjectArray j_col_names, jbooleanArray j_col_nullability,
+    jobjectArray j_metadata_keys, jobjectArray j_metadata_values, jint j_compression,
+    jint j_stats_freq, jboolean j_isInt96, jintArray j_precisions, jstring j_output_path) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
   JNI_NULL_CHECK(env, j_metadata_values, "null metadata values", 0);
   JNI_NULL_CHECK(env, j_output_path, "null output path", 0);
   try {
+    cudf::jni::auto_set_device(env);
+    using namespace cudf::io;
+    cudf::jni::native_jstringArray col_names(env, j_col_names);
+    cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
+    cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
+    cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
     cudf::jni::native_jstring output_path(env, j_output_path);
+    cudf::jni::native_jintArray precisions(env, j_precisions);
 
-    using namespace cudf::io;                     
+    auto cpp_names = col_names.as_cpp_vector();
     table_input_metadata metadata;
-    createTableMetaData(env, j_col_names, j_children, j_col_nullability, j_metadata_keys,
-                         j_metadata_values, j_compression, j_stats_freq, j_isInt96, j_precisions, metadata);
+    metadata.column_metadata.resize(col_nullability.size());
+    for (int i = 0; i < col_nullability.size(); i++) {
+       metadata.column_metadata[i]
+           .set_name(cpp_names[i])
+           .set_nullability(col_nullability[i])
+           .set_int96_timestamps(j_isInt96);
+    }
+
+    // Precisions is not always set
+    for (int i = 0; i < precisions.size(); i++) {
+       metadata.column_metadata[i]
+           .set_decimal_precision(precisions[i]);
+    }
+
+    for (auto i = 0; i < meta_keys.size(); ++i) {
+      metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
+    }
+
     sink_info sink{output_path.get()};
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
@@ -1859,7 +1875,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_crossJoin(JNIEnv *env, jc
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_interleaveColumns(JNIEnv *env, jclass,
                                                                     jlongArray j_cudf_table_view) {
 
-  JNI_NULL_CHECK(env, j_cudf_table_view, "table is null", 0);  try {
+  JNI_NULL_CHECK(env, j_cudf_table_view, "table is null", 0);
+  try {
     cudf::jni::auto_set_device(env);
     cudf::table_view *table_view = reinterpret_cast<cudf::table_view *>(j_cudf_table_view);
     std::unique_ptr<cudf::column> result = cudf::interleave_columns(*table_view);
@@ -1990,7 +2007,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_roundRobinPartition(
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByAggregate(
     JNIEnv *env, jclass, jlong input_table, jintArray keys,
-    jintArray aggregate_column_indices, jlongArray agg_instances, jboolean ignore_null_keys) {
+    jintArray aggregate_column_indices, jlongArray agg_instances, jboolean ignore_null_keys,
+    jboolean jkey_sorted, jbooleanArray jkeys_sort_desc, jbooleanArray jkeys_null_first) {
   JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, keys, "input keys are null", NULL);
   JNI_NULL_CHECK(env, aggregate_column_indices, "input aggregate_column_indices are null", NULL);
@@ -2009,8 +2027,16 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_groupByAggregate(
     }
 
     cudf::table_view n_keys_table(n_keys_cols);
-    cudf::groupby::groupby grouper(n_keys_table, ignore_null_keys ? cudf::null_policy::EXCLUDE :
-                                                                    cudf::null_policy::INCLUDE);
+    auto column_order = cudf::jni::resolve_column_order(env, jkeys_sort_desc,
+                                                        n_keys.size());
+    auto null_precedence = cudf::jni::resolve_null_precedence(env, jkeys_null_first,
+                                                              n_keys.size());
+    cudf::groupby::groupby grouper(n_keys_table,
+                                   ignore_null_keys ? cudf::null_policy::EXCLUDE
+                                                    : cudf::null_policy::INCLUDE,
+                                   jkey_sorted ? cudf::sorted::YES : cudf::sorted::NO,
+                                   column_order,
+                                   null_precedence);
 
     // Aggregates are passed in already grouped by column, so we just need to fill it in
     // as we go.
@@ -2400,6 +2426,111 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_rowBitCount(JNIEnv* env, jclas
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
+}
+
+JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplitGroups(JNIEnv *env, jclass,
+                                                                    jlong jinput_table,
+                                                                    jintArray jkey_indices,
+                                                                    jboolean jignore_null_keys,
+                                                                    jboolean jkey_sorted,
+                                                                    jbooleanArray jkeys_sort_desc,
+                                                                    jbooleanArray jkeys_null_first) {
+  JNI_NULL_CHECK(env, jinput_table, "table native handle is null", 0);
+  JNI_NULL_CHECK(env, jkey_indices, "key indices are null", 0);
+  // Two main steps to split the groups in the input table.
+  //    1) Calls `cudf::groupby::groupby::get_groups` to get the group offsets and
+  //       the grouped table.
+  //    2) Calls `cudf::contiguous_split` to execute the split over the grouped table
+  //       according to the group offsets.
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::jni::native_jintArray n_key_indices(env, jkey_indices);
+    cudf::table_view *input_table = reinterpret_cast<cudf::table_view *>(jinput_table);
+
+    // Prepares arguments for the groupby:
+    //   (keys, null_handling, keys_are_sorted, column_order, null_precedence)
+    std::vector<cudf::size_type> key_indices(n_key_indices.data(),
+                                             n_key_indices.data() + n_key_indices.size());
+    auto keys = input_table->select(key_indices);
+    auto null_handling = jignore_null_keys ? cudf::null_policy::EXCLUDE
+                                           : cudf::null_policy::INCLUDE;
+    auto keys_are_sorted = jkey_sorted ? cudf::sorted::YES : cudf::sorted::NO;
+    auto column_order = cudf::jni::resolve_column_order(env, jkeys_sort_desc,
+                                                        key_indices.size());
+    auto null_precedence = cudf::jni::resolve_null_precedence(env, jkeys_null_first,
+                                                              key_indices.size());
+
+    // Constructs a groupby
+    cudf::groupby::groupby grouper(keys, null_handling, keys_are_sorted,
+                                   column_order, null_precedence);
+
+    // 1) Gets the groups(keys, offsets, values) from groupby.
+    //
+    // Uses only the non-key columns as the input values instead of the whole table,
+    // to avoid duplicated key columns in output of `get_groups`.
+    // The code looks like a little more complicated, but it can reduce the peak memory.
+    auto num_value_cols = input_table->num_columns() - key_indices.size();
+    std::vector<cudf::size_type> value_indices;
+    value_indices.reserve(num_value_cols);
+    // column indices start with 0.
+    cudf::size_type index = 0;
+    while (value_indices.size() < num_value_cols) {
+      if (std::find(key_indices.begin(), key_indices.end(), index) == key_indices.end()) {
+        // not key column, so adds it as value column.
+        value_indices.emplace_back(index);
+      }
+      index ++;
+    }
+    cudf::table_view values_view = input_table->select(value_indices);
+    cudf::groupby::groupby::groups groups = grouper.get_groups(values_view);
+
+    // When builds the table view from keys and values of 'groups', restores the
+    // original order of columns (same order with that in input table).
+    std::vector<cudf::column_view> grouped_cols(key_indices.size() + num_value_cols);
+    // key columns
+    auto key_view = groups.keys->view();
+    auto key_view_it = key_view.begin();
+    for (auto key_id : key_indices) {
+      grouped_cols.at(key_id) = std::move(*key_view_it);
+      key_view_it ++;
+    }
+    // value columns
+    auto value_view = groups.values->view();
+    auto value_view_it = value_view.begin();
+    for (auto value_id : value_indices) {
+      grouped_cols.at(value_id) = std::move(*value_view_it);
+      value_view_it ++;
+    }
+    cudf::table_view grouped_table(grouped_cols);
+    // When no key columns, uses the input table instead, because the output
+    // of 'get_groups' is empty.
+    auto& grouped_view = key_indices.empty() ? *input_table : grouped_table;
+
+    // Resolves the split indices from offsets vector directly to avoid copying. Since
+    // the offsets vector may be very large if there are too many small groups.
+    std::vector<cudf::size_type>& split_indices = groups.offsets;
+    // Offsets laysout is [0, split indices..., num_rows] or [0] for empty keys, so
+    // need to removes the first and last elements.
+    split_indices.erase(split_indices.begin());
+    if (!split_indices.empty()) { split_indices.pop_back(); }
+
+    // 2) Splits the groups.
+    std::vector<cudf::packed_table> result =
+        cudf::contiguous_split(grouped_view, split_indices);
+    // Release the grouped table right away after split done.
+    groups.keys.reset(nullptr);
+    groups.values.reset(nullptr);
+
+    //  Returns the split result.
+    cudf::jni::native_jobjectArray<jobject> n_result =
+        cudf::jni::contiguous_table_array(env, result.size());
+    for (size_t i = 0; i < result.size(); i++) {
+      n_result.set(i, cudf::jni::contiguous_table_from(env, result[i].data,
+                                                       result[i].table.num_rows()));
+    }
+    return n_result.wrapped();
+  }
+  CATCH_STD(env, NULL);
 }
 
 } // extern "C"
