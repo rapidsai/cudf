@@ -19,12 +19,7 @@ from cudf._lib.types cimport (
 )
 from cudf._lib.types import Interpolation
 
-try:
-    # Numba >= 0.49
-    from numba.np import numpy_support
-except ImportError:
-    # Numba <= 0.49
-    from numba import numpy_support
+from numba.np import numpy_support
 
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.aggregation as libcudf_aggregation

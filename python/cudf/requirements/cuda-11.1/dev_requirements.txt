@@ -16,7 +16,7 @@ hypothesis
 mimesis
 mypy==0.782
 nbsphinx
-numba>=0.49.0,!=0.51.0
+numba>=>=0.53.1
 numpy
 numpydoc
 nvtx>=0.2.1
