@@ -131,6 +131,58 @@ def evaluate_expression(df, expr):
     return evaluate_expression_internal(df, expr)
 
 
+# This dictionary encodes the mapping from Python AST operators to their cudf
+# counterparts.
+python_cudf_ast_map = {
+    # TODO: Mapping TBD for commented out operators.
+    # Binary operators
+    ast.Add: ASTOperator.ADD,
+    ast.Sub: ASTOperator.SUB,
+    ast.Mult: ASTOperator.MUL,
+    ast.Div: ASTOperator.DIV,
+    # ast.True: ASTOperator.TRUE_DIV,
+    ast.FloorDiv: ASTOperator.FLOOR_DIV,
+    ast.Mod: ASTOperator.PYMOD,
+    # ast.Pymod: ASTOperator.PYMOD,
+    ast.Pow: ASTOperator.POW,
+    ast.Eq: ASTOperator.EQUAL,
+    ast.NotEq: ASTOperator.NOT_EQUAL,
+    ast.Lt: ASTOperator.LESS,
+    ast.Gt: ASTOperator.GREATER,
+    ast.LtE: ASTOperator.LESS_EQUAL,
+    ast.GtE: ASTOperator.GREATER_EQUAL,
+    ast.BitAnd: ASTOperator.BITWISE_AND,
+    ast.BitOr: ASTOperator.BITWISE_OR,
+    ast.BitXor: ASTOperator.BITWISE_XOR,
+    ast.And: ASTOperator.LOGICAL_AND,
+    ast.Or: ASTOperator.LOGICAL_OR,
+    # Unary operators
+    # ast.Identity: ASTOperator.IDENTITY,
+    # ast.Sin: ASTOperator.SIN,
+    # ast.Cos: ASTOperator.COS,
+    # ast.Tan: ASTOperator.TAN,
+    # ast.Arcsin: ASTOperator.ARCSIN,
+    # ast.Arccos: ASTOperator.ARCCOS,
+    # ast.Arctan: ASTOperator.ARCTAN,
+    # ast.Sinh: ASTOperator.SINH,
+    # ast.Cosh: ASTOperator.COSH,
+    # ast.Tanh: ASTOperator.TANH,
+    # ast.Arcsinh: ASTOperator.ARCSINH,
+    # ast.Arccosh: ASTOperator.ARCCOSH,
+    # ast.Arctanh: ASTOperator.ARCTANH,
+    # ast.Exp: ASTOperator.EXP,
+    # ast.Log: ASTOperator.LOG,
+    # ast.Sqrt: ASTOperator.SQRT,
+    # ast.Cbrt: ASTOperator.CBRT,
+    # ast.Ceil: ASTOperator.CEIL,
+    # ast.Floor: ASTOperator.FLOOR,
+    # ast.Abs: ASTOperator.ABS,
+    # ast.Rint: ASTOperator.RINT,
+    # ast.Bit: ASTOperator.BIT_INVERT,
+    # ast.Not: ASTOperator.NOT,
+}
+
+
 cpdef ast_visit(node, df, list stack, list temporaries):
     # Base cases: Name
     if isinstance(node, ast.Name):
@@ -138,18 +190,16 @@ cpdef ast_visit(node, df, list stack, list temporaries):
     else:
         for field, value in ast.iter_fields(node):
             if isinstance(value, ast.UnaryOp):
-                # TODO: Make actual map, for now just replacing with IDENTITy
-                # Should be mapping value.op -> ASTOperator.OPERATOR
                 ast_visit(value.operand, df, stack, temporaries)
+                op = python_cudf_ast_map[type(value.op)]
                 temporaries.append(stack.pop())
-                stack.append(Expression(ASTOperator.IDENTITY, temporaries[-1]))
+                stack.append(Expression(op, temporaries[-1]))
             elif isinstance(value, ast.BinOp):
-                # TODO: Make actual map, for now just replacing with +
-                # pass
                 ast_visit(value.left, df, stack, temporaries)
                 ast_visit(value.right, df, stack, temporaries)
                 temporaries.append(stack.pop())
                 temporaries.append(stack.pop())
+                op = python_cudf_ast_map[type(value.op)]
                 stack.append(Expression(
                     ASTOperator.ADD, temporaries[-1], temporaries[-2]))
             elif isinstance(value, list):

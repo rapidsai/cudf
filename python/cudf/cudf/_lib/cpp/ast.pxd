@@ -66,7 +66,7 @@ cdef extern from "cudf/ast/detail/linearizer.hpp" \
     cdef cppclass node:
         pass
 
-cdef extern from "cudf/ast/linearizer.hpp" namespace "cudf::ast" nogil:
+cdef extern from "cudf/ast/nodes.hpp" namespace "cudf::ast" nogil:
     ctypedef enum table_reference:
         LEFT "cudf::ast::table_reference::LEFT"
         RIGHT "cudf::ast::table_reference::RIGHT"
