@@ -15,7 +15,7 @@
  */
 
 #include <cudf/ast/detail/transform.cuh>
-#include <cudf/ast/linearizer.hpp>
+#include <cudf/ast/nodes.hpp>
 #include <cudf/ast/operators.hpp>
 #include <cudf/ast/transform.hpp>
 #include <cudf/column/column_device_view.cuh>
