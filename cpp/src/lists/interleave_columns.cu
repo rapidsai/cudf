@@ -43,19 +43,20 @@ generate_list_offsets_and_validities(table_view const& input,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  auto const num_cols    = input.num_columns();
-  auto const output_size = input.num_rows() * num_cols + 1;
+  auto const num_cols        = input.num_columns();
+  auto const num_rows        = input.num_columns();
+  auto const num_output_rows = num_rows * num_cols;
 
   // The output offsets column
   static_assert(sizeof(offset_type) == sizeof(int32_t));
   static_assert(sizeof(size_type) == sizeof(int32_t));
   auto list_offsets = make_numeric_column(
-    data_type{type_id::INT32}, output_size, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_id::INT32}, num_output_rows + 1, mask_state::UNALLOCATED, stream, mr);
   auto const d_out_offsets = list_offsets->mutable_view().begin<offset_type>();
   auto const table_dv_ptr  = table_device_view::create(input);
 
   // The array of int8_t to store element validities
-  auto validities = has_null_mask ? rmm::device_uvector<int8_t>(output_size - 1, stream)
+  auto validities = has_null_mask ? rmm::device_uvector<int8_t>(num_output_rows, stream)
                                   : rmm::device_uvector<int8_t>(0, stream);
   thrust::uninitialized_fill(
     rmm::exec_policy(stream), validities.begin(), validities.end(), int8_t{1});
@@ -63,7 +64,7 @@ generate_list_offsets_and_validities(table_view const& input,
   // Compute list sizes
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(output_size - 1),
+                    thrust::make_counting_iterator<size_type>(num_output_rows),
                     d_out_offsets,
                     [num_cols,
                      table_dv     = *table_dv_ptr,
@@ -84,7 +85,7 @@ generate_list_offsets_and_validities(table_view const& input,
 
   // Compute offsets from sizes
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_out_offsets, d_out_offsets + output_size, d_out_offsets);
+    rmm::exec_policy(stream), d_out_offsets, d_out_offsets + num_output_rows + 1, d_out_offsets);
 
   return {std::move(list_offsets), std::move(validities)};
 }
