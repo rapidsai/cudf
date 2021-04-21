@@ -307,8 +307,9 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const &build,
   CUDF_EXPECTS(build.num_rows() < cudf::detail::MAX_JOIN_SIZE,
                "Build column size is too big for hash join");
 
-  auto flattened_build = structs::detail::flatten_nested_columns(build, {}, {}, true);
-  _build               = std::get<0>(flattened_build);
+  auto flattened_build = structs::detail::flatten_nested_columns(
+    build, {}, {}, structs::detail::column_nullability::FORCE);
+  _build = std::get<0>(flattened_build);
   // need to store off the owning structures for some of the views in _build
   _created_null_columns = std::move(std::get<3>(flattened_build));
 
@@ -362,7 +363,8 @@ hash_join::hash_join_impl::compute_hash_join(cudf::table_view const &probe,
   CUDF_EXPECTS(probe.num_rows() < cudf::detail::MAX_JOIN_SIZE,
                "Probe column size is too big for hash join");
 
-  auto flattened_probe             = structs::detail::flatten_nested_columns(probe, {}, {}, true);
+  auto flattened_probe = structs::detail::flatten_nested_columns(
+    probe, {}, {}, structs::detail::column_nullability::FORCE);
   auto const flattened_probe_table = std::get<0>(flattened_probe);
 
   CUDF_EXPECTS(_build.num_columns() == flattened_probe_table.num_columns(),

@@ -23,6 +23,13 @@ namespace cudf {
 namespace structs {
 namespace detail {
 
+enum class column_nullability {
+  // generate a null column if the incoming column has nulls
+  MATCH_INCOMING,
+  // always generate a null column
+  FORCE
+};
+
 /**
  * @brief Flatten the children of the input columns into a vector where the i'th element
  * is a vector of column_views representing the i'th child from each input column_view.
@@ -57,7 +64,7 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
  * @param input input table to be flattened
  * @param column_order column order for input table
  * @param null_precedence null order for input table
- * @param force_nullability_columns force output to have nullability columns even if input columns
+ * @param nullability force output to have nullability columns even if input columns
  * are all valid
  * @return tuple with flattened table, flattened column order, flattened null precedence,
  * vector of boolean columns (struct validity).
@@ -69,7 +76,7 @@ std::tuple<table_view,
 flatten_nested_columns(table_view const& input,
                        std::vector<order> const& column_order,
                        std::vector<null_order> const& null_precedence,
-                       bool force_nullability_columns = false);
+                       column_nullability nullability = column_nullability::MATCH_INCOMING);
 
 }  // namespace detail
 }  // namespace structs
