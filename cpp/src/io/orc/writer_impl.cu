@@ -1076,11 +1076,7 @@ void writer::impl::write(table_view const &table)
   }
 
   auto streams  = create_streams(orc_columns, stripe_bounds);
-  auto enc_data = encode_columns(*device_columns,
-                                 orc_columns,
-                                 str_col_ids,
-                                 stripe_bounds,
-                                 streams);
+  auto enc_data = encode_columns(*device_columns, orc_columns, str_col_ids, stripe_bounds, streams);
   dict_data.release();
   dict_index.release();
   stream.synchronize();
