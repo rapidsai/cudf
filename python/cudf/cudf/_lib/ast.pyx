@@ -183,36 +183,46 @@ python_cudf_ast_map = {
 }
 
 
-cpdef ast_visit(node, df, list stack, list temporaries):
+cdef ast_visit(node, list col_names, list expressions, list column_references):
     # Base cases: Name
     if isinstance(node, ast.Name):
-        temporaries.append(ColumnReference(df.columns.get_loc(node.id) + 1))
+        column_references.append(ColumnReference(col_names.index(node.id)))
     else:
         for field, value in ast.iter_fields(node):
             if isinstance(value, ast.UnaryOp):
-                ast_visit(value.operand, df, stack, temporaries)
+                ast_visit(value.operand, col_names, expressions,
+                          column_references)
                 op = python_cudf_ast_map[type(value.op)]
-                stack.append(Expression(op, temporaries[-1]))
+                expressions.append(Expression(op, column_references[-1]))
             elif isinstance(value, ast.BinOp):
-                ast_visit(value.left, df, stack, temporaries)
-                ast_visit(value.right, df, stack, temporaries)
+                ast_visit(value.left, col_names, expressions,
+                          column_references)
+                ast_visit(value.right, col_names, expressions,
+                          column_references)
                 op = python_cudf_ast_map[type(value.op)]
-                stack.append(Expression(
-                    ASTOperator.ADD, temporaries[-2], temporaries[-1]))
+                expressions.append(Expression(
+                    ASTOperator.ADD, column_references[-2],
+                    column_references[-1]))
             elif isinstance(value, list):
                 for item in value:
                     if isinstance(item, ast.AST):
-                        ast_visit(item, df, stack, temporaries)
+                        ast_visit(item, col_names, expressions,
+                                  column_references)
             elif isinstance(value, ast.AST):
-                ast_visit(value, df, stack, temporaries)
+                ast_visit(value, col_names, expressions, column_references)
+
+
+def ast_visit_external(node, df, list expressions, list column_references):
+    ast_visit(node, df.columns.tolist(), expressions, column_references)
 
 
 def make_and_evaluate_expression(expr, df):
     """Create a cudf evaluable expression from a string and evaluate it."""
     # Important: both make and evaluate must be coupled to guarantee that the
-    # temporaries created (the owning ColumnReferences and Literals) remain in
-    # scope.
-    stack = []
-    temporaries = []
-    ast_visit(ast.parse(expr), df, stack, temporaries)
-    return evaluate_expression(df, stack[-1])
+    # column_references created (the owning ColumnReferences and Literals)
+    # remain in scope.
+    expressions = []
+    column_references = []
+    ast_visit(ast.parse(expr), df.columns.tolist(), expressions,
+              column_references)
+    return evaluate_expression(df, expressions[-1])
