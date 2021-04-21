@@ -37,13 +37,6 @@ using char_utf8 = uint32_t;  ///< UTF-8 characters are 1-4 bytes
 constexpr cudf::size_type UNKNOWN_STRING_LENGTH{-1};
 
 /**
- * @brief The char width is initialized to this value as a place-holder.
- *
- * The byte-width of the characters in a string is computed on-demand.
- */
-constexpr int8_t UNKNOWN_CHAR_WIDTH{-1};
-
-/**
  * @brief This value is assigned to the _char_width member if the string
  * contains characters of different widths.
  */
@@ -314,7 +307,7 @@ class string_view {
   /**
    * @brief Default constructor represents an empty string.
    */
-  CUDA_HOST_DEVICE_CALLABLE string_view() : _data(""), _bytes(0), _length(0), _char_width(0) {}
+  CUDA_HOST_DEVICE_CALLABLE string_view() : _data(""), _bytes(0), _length(0) {}
 
   /**
    * @brief Create instance from existing device char array.
@@ -323,7 +316,7 @@ class string_view {
    * @param bytes Number of bytes in data array.
    */
   CUDA_HOST_DEVICE_CALLABLE string_view(const char* data, size_type bytes)
-    : _data(data), _bytes(bytes), _length(UNKNOWN_STRING_LENGTH), _char_width(UNKNOWN_CHAR_WIDTH)
+    : _data(data), _bytes(bytes), _length(UNKNOWN_STRING_LENGTH)
   {
   }
 
@@ -334,10 +327,9 @@ class string_view {
   string_view& operator=(string_view&&) = default;
 
  private:
-  const char* _data{};           ///< Pointer to device memory contain char array for this string
-  size_type _bytes{};            ///< Number of bytes in _data for this string
-  mutable size_type _length{};   ///< Number of characters in this string (computed)
-  mutable int8_t _char_width{};  ///< Number of bytes per character if uniform width (computed)
+  const char* _data{};          ///< Pointer to device memory contain char array for this string
+  size_type _bytes{};           ///< Number of bytes in _data for this string
+  mutable size_type _length{};  ///< Number of characters in this string (computed)
 
   /**
    * @brief Return the character position of the given byte offset.
