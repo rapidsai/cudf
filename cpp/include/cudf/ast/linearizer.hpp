@@ -38,17 +38,10 @@ enum class table_reference {
   OUTPUT  // Column index in the output table
 };
 
-// Forward declaration
-class literal;
-class column_reference;
-class expression;
-
 /**
  * @brief A literal value used in an abstract syntax tree.
  */
 class literal : public detail::node {
-  friend class detail::linearizer;
-
  public:
   /**
    * @brief Construct a new literal object.
@@ -90,7 +83,6 @@ class literal : public detail::node {
    */
   cudf::data_type get_data_type() const { return get_value().type(); }
 
- private:
   /**
    * @brief Get the value object.
    *
@@ -106,6 +98,7 @@ class literal : public detail::node {
    */
   cudf::size_type accept(detail::linearizer& visitor) const override;
 
+ private:
   const cudf::detail::fixed_width_scalar_device_view_base value;
 };
 
@@ -113,8 +106,6 @@ class literal : public detail::node {
  * @brief A node referring to data from a column in a table.
  */
 class column_reference : public detail::node {
-  friend class detail::linearizer;
-
  public:
   /**
    * @brief Construct a new column reference object
@@ -175,7 +166,6 @@ class column_reference : public detail::node {
     return table.column(get_column_index()).type();
   }
 
- private:
   /**
    * @brief Accepts a visitor class.
    *
@@ -184,6 +174,7 @@ class column_reference : public detail::node {
    */
   cudf::size_type accept(detail::linearizer& visitor) const override;
 
+ private:
   cudf::size_type column_index;
   table_reference table_source;
 };
@@ -192,8 +183,6 @@ class column_reference : public detail::node {
  * @brief An expression node holds an operator and zero or more operands.
  */
 class expression : public detail::node {
-  friend class detail::linearizer;
-
  public:
   /**
    * @brief Construct a new unary expression object.
@@ -256,7 +245,6 @@ class expression : public detail::node {
    */
   std::vector<std::reference_wrapper<const node>> get_operands() const { return operands; }
 
- private:
   /**
    * @brief Accepts a visitor class.
    *
@@ -265,6 +253,7 @@ class expression : public detail::node {
    */
   cudf::size_type accept(detail::linearizer& visitor) const override;
 
+ private:
   const ast_operator op;
   const std::vector<std::reference_wrapper<const node>> operands;
 };
