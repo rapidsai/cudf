@@ -180,7 +180,6 @@ else
 
     gpuci_logger "Installing $CUDF_CONDA_FILE & $KAFKA_CONDA_FILE"
     conda install -c ${CONDA_ARTIFACT_PATH} "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
-    conda install -c conda-forge transformers
 
     install_dask
 
