@@ -43,7 +43,7 @@ void BM_scatter(benchmark::State& state)
   const cudf::size_type n_cols = (cudf::size_type)state.range(1);
 
   // Every element is valid
-  auto data = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
 
   // Gather indices
   std::vector<cudf::size_type> host_map_data(source_size);

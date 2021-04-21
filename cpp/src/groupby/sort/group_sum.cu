@@ -15,6 +15,7 @@
  */
 
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/utilities/span.hpp>
 #include <groupby/sort/group_single_pass_reduction_util.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -24,7 +25,7 @@ namespace groupby {
 namespace detail {
 std::unique_ptr<column> group_sum(column_view const& values,
                                   size_type num_groups,
-                                  rmm::device_vector<size_type> const& group_labels,
+                                  cudf::device_span<size_type const> group_labels,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {

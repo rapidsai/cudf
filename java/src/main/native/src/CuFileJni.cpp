@@ -218,7 +218,8 @@ public:
       }
     }
 
-    CUDF_EXPECTS(status == buffer.size(), "Size of bytes read is different from buffer size");
+    CUDF_EXPECTS(static_cast<std::size_t>(status) == buffer.size(),
+                 "Size of bytes read is different from buffer size");
   }
 
   /**
@@ -239,7 +240,8 @@ public:
       }
     }
 
-    CUDF_EXPECTS(status == buffer.size(), "Size of bytes written is different from buffer size");
+    CUDF_EXPECTS(static_cast<std::size_t>(status) == buffer.size(),
+                 "Size of bytes written is different from buffer size");
   }
 
   /**

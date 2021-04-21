@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <structs/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_vector.hpp>
@@ -34,10 +35,12 @@ auto is_sorted(cudf::table_view const& in,
                std::vector<null_order> const& null_precedence,
                rmm::cuda_stream_view stream)
 {
-  auto in_d = table_device_view::create(in);
-  rmm::device_vector<order> d_column_order(column_order);
+  // 0-table_view, 1-column_order, 2-null_precedence, 3-validity_columns
+  auto flattened = structs::detail::flatten_nested_columns(in, column_order, null_precedence);
+  auto in_d      = table_device_view::create(std::get<0>(flattened), stream);
+  rmm::device_vector<order> d_column_order(std::get<1>(flattened));
   rmm::device_vector<null_order> const d_null_precedence =
-    (has_nulls) ? rmm::device_vector<null_order>{null_precedence}
+    (has_nulls) ? rmm::device_vector<null_order>{std::get<2>(flattened)}
                 : rmm::device_vector<null_order>{};
   auto ineq_op = row_lexicographic_comparator<has_nulls>(
     *in_d, *in_d, d_column_order.data().get(), d_null_precedence.data().get());

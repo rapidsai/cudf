@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -101,21 +101,26 @@ struct dispatch_to_arrow {
     rmm::cuda_stream_view stream)
   {
     std::vector<std::shared_ptr<arrow::Array>> child_arrays;
-    std::vector<size_type> child_indices(input_view.num_children());
-    std::iota(child_indices.begin(), child_indices.end(), 0);
-    std::transform(child_indices.begin(),
-                   child_indices.end(),
-                   metadata.begin(),
-                   std::back_inserter(child_arrays),
-                   [&input_view, &ar_mr, &stream](auto const& i, auto const& meta) {
-                     auto c = input_view.child(i);
-                     return type_dispatcher(
-                       c.type(), dispatch_to_arrow{}, c, c.type().id(), meta, ar_mr, stream);
-                   });
+    std::transform(
+      input_view.child_begin(),
+      input_view.child_end(),
+      metadata.begin(),
+      std::back_inserter(child_arrays),
+      [&ar_mr, &stream](auto const& child, auto const& meta) {
+        return type_dispatcher(
+          child.type(), dispatch_to_arrow{}, child, child.type().id(), meta, ar_mr, stream);
+      });
     return child_arrays;
   }
 
-  template <typename T>
+  template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
+  std::shared_ptr<arrow::Array> operator()(
+    column_view, cudf::type_id, column_metadata const&, arrow::MemoryPool*, rmm::cuda_stream_view)
+  {
+    CUDF_FAIL("Unsupported type for to_arrow.");
+  }
+
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   std::shared_ptr<arrow::Array> operator()(column_view input_view,
                                            cudf::type_id id,
                                            column_metadata const& metadata,

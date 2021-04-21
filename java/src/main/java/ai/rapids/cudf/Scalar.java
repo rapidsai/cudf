@@ -675,7 +675,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     }
 
     @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       if (scalarHandle != 0) {
         if (logErrorIfNotClean) {
           LOG.error("A SCALAR WAS LEAKED(ID: " + id + " " + Long.toHexString(scalarHandle) + ")");

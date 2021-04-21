@@ -31,7 +31,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <algorithm>
 #include <array>
@@ -139,7 +139,7 @@ struct orc_stream_info {
   }
   uint64_t offset;      // offset in file
   size_t dst_pos;       // offset in memory relative to start of compressed stripe data
-  uint32_t length;      // length in file
+  size_t length;        // length in file
   uint32_t gdf_idx;     // column index
   uint32_t stripe_idx;  // stripe index
 };
@@ -223,7 +223,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   const OrcDecompressor *decompressor,
   std::vector<orc_stream_info> &stream_info,
   size_t num_stripes,
-  rmm::device_vector<gpu::RowGroup> &row_groups,
+  device_span<gpu::RowGroup> row_groups,
   size_t row_index_stride,
   rmm::cuda_stream_view stream)
 {
@@ -254,9 +254,9 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   CUDF_EXPECTS(total_decomp_size > 0, "No decompressible data found");
 
   rmm::device_buffer decomp_data(total_decomp_size, stream);
-  rmm::device_vector<gpu_inflate_input_s> inflate_in(num_compressed_blocks +
-                                                     num_uncompressed_blocks);
-  rmm::device_vector<gpu_inflate_status_s> inflate_out(num_compressed_blocks);
+  rmm::device_uvector<gpu_inflate_input_s> inflate_in(
+    num_compressed_blocks + num_uncompressed_blocks, stream);
+  rmm::device_uvector<gpu_inflate_status_s> inflate_out(num_compressed_blocks, stream);
 
   // Parse again to populate the decompression input/output buffers
   size_t decomp_offset      = 0;
@@ -265,9 +265,9 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   for (size_t i = 0; i < compinfo.size(); ++i) {
     auto dst_base                 = static_cast<uint8_t *>(decomp_data.data());
     compinfo[i].uncompressed_data = dst_base + decomp_offset;
-    compinfo[i].decctl            = inflate_in.data().get() + start_pos;
-    compinfo[i].decstatus         = inflate_out.data().get() + start_pos;
-    compinfo[i].copyctl           = inflate_in.data().get() + start_pos_uncomp;
+    compinfo[i].decctl            = inflate_in.data() + start_pos;
+    compinfo[i].decstatus         = inflate_out.data() + start_pos;
+    compinfo[i].copyctl           = inflate_in.data() + start_pos_uncomp;
 
     stream_info[i].dst_pos = decomp_offset;
     decomp_offset += compinfo[i].max_uncompressed_size;
@@ -285,19 +285,18 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   if (num_compressed_blocks > 0) {
     switch (decompressor->GetKind()) {
       case orc::ZLIB:
-        CUDA_TRY(gpuinflate(
-          inflate_in.data().get(), inflate_out.data().get(), num_compressed_blocks, 0, stream));
+        CUDA_TRY(
+          gpuinflate(inflate_in.data(), inflate_out.data(), num_compressed_blocks, 0, stream));
         break;
       case orc::SNAPPY:
-        CUDA_TRY(gpu_unsnap(
-          inflate_in.data().get(), inflate_out.data().get(), num_compressed_blocks, stream));
+        CUDA_TRY(gpu_unsnap(inflate_in.data(), inflate_out.data(), num_compressed_blocks, stream));
         break;
       default: CUDF_EXPECTS(false, "Unexpected decompression dispatch"); break;
     }
   }
   if (num_uncompressed_blocks > 0) {
     CUDA_TRY(gpu_copy_uncompressed_blocks(
-      inflate_in.data().get() + num_compressed_blocks, num_uncompressed_blocks, stream));
+      inflate_in.data() + num_compressed_blocks, num_uncompressed_blocks, stream));
   }
   gpu::PostDecompressionReassemble(compinfo.device_ptr(), compinfo.size(), stream);
 
@@ -324,7 +323,7 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
 
   if (not row_groups.empty()) {
     chunks.host_to_device(stream);
-    gpu::ParseRowGroupIndex(row_groups.data().get(),
+    gpu::ParseRowGroupIndex(row_groups.data(),
                             compinfo.device_ptr(),
                             chunks.device_ptr(),
                             num_columns,
@@ -341,8 +340,8 @@ void reader::impl::decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks
                                       size_t num_dicts,
                                       size_t skip_rows,
                                       size_t num_rows,
-                                      timezone_table const &tz_table,
-                                      const rmm::device_vector<gpu::RowGroup> &row_groups,
+                                      timezone_table_view tz_table,
+                                      device_span<gpu::RowGroup const> row_groups,
                                       size_t row_index_stride,
                                       std::vector<column_buffer> &out_buffers,
                                       rmm::cuda_stream_view stream)
@@ -360,24 +359,19 @@ void reader::impl::decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks
   }
 
   // Allocate global dictionary for deserializing
-  rmm::device_vector<gpu::DictionaryEntry> global_dict(num_dicts);
+  rmm::device_uvector<gpu::DictionaryEntry> global_dict(num_dicts, stream);
 
   chunks.host_to_device(stream);
-  gpu::DecodeNullsAndStringDictionaries(chunks.device_ptr(),
-                                        global_dict.data().get(),
-                                        num_columns,
-                                        num_stripes,
-                                        num_rows,
-                                        skip_rows,
-                                        stream);
+  gpu::DecodeNullsAndStringDictionaries(
+    chunks.device_ptr(), global_dict.data(), num_columns, num_stripes, num_rows, skip_rows, stream);
   gpu::DecodeOrcColumnData(chunks.device_ptr(),
-                           global_dict.data().get(),
+                           global_dict.data(),
                            num_columns,
                            num_stripes,
                            num_rows,
                            skip_rows,
-                           tz_table.view(),
-                           row_groups.data().get(),
+                           tz_table,
+                           row_groups.data(),
                            row_groups.size() / num_columns,
                            row_index_stride,
                            stream);
@@ -424,6 +418,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 {
   std::vector<std::unique_ptr<column>> out_columns;
   table_metadata out_metadata;
+
+  // There are no columns in table
+  if (_selected_columns.size() == 0) return {std::make_unique<table>(), std::move(out_metadata)};
 
   // Select only stripes required (aka row groups)
   const auto selected_stripes = _metadata->select_stripes(stripes, skip_rows, num_rows);
@@ -535,9 +532,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           chunk.ts_clock_rate = to_clockrate(_timestamp_type.id());
         }
         for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
-          if (chunk.strm_len[k] > 0) {
-            chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
-          }
+          chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
         }
       }
       stripe_start_row += stripe_info->numberOfRows;
@@ -550,7 +545,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // Process dataset chunk pages into output columns
     if (stripe_data.size() != 0) {
       // Setup row group descriptors if using indexes
-      rmm::device_vector<gpu::RowGroup> row_groups(num_rowgroups * num_columns);
+      rmm::device_uvector<gpu::RowGroup> row_groups(num_rowgroups * num_columns, stream);
       if (_metadata->ps.compression != orc::NONE) {
         auto decomp_data = decompress_stripe_data(chunks,
                                                   stripe_data,
@@ -563,9 +558,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         stripe_data.clear();
         stripe_data.push_back(std::move(decomp_data));
       } else {
-        if (not row_groups.empty()) {
+        if (not row_groups.is_empty()) {
           chunks.host_to_device(stream);
-          gpu::ParseRowGroupIndex(row_groups.data().get(),
+          gpu::ParseRowGroupIndex(row_groups.data(),
                                   nullptr,
                                   chunks.device_ptr(),
                                   num_columns,
@@ -579,7 +574,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       // Setup table for converting timestamp columns from local to UTC time
       auto const tz_table =
         _has_timestamp_column
-          ? build_timezone_transition_table(selected_stripes[0].second->writerTimezone)
+          ? build_timezone_transition_table(selected_stripes[0].second->writerTimezone, stream)
           : timezone_table{};
 
       std::vector<column_buffer> out_buffers;
@@ -598,7 +593,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                          num_dict_entries,
                          skip_rows,
                          num_rows,
-                         tz_table,
+                         tz_table.view(),
                          row_groups,
                          _metadata->get_row_index_stride(),
                          out_buffers,

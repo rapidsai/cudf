@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-#include <cudf/copying.hpp>
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
 
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
 #include <cudf/column/column.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -46,7 +46,7 @@ TEST_F(SampleTest, FailCaseRowMultipleSampling)
 TEST_F(SampleTest, RowMultipleSamplingDisallowed)
 {
   cudf::size_type const n_samples = 1024;
-  auto data = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
   cudf::test::fixed_width_column_wrapper<int16_t> col1(data, data + n_samples);
 
   cudf::table_view input({col1});
@@ -62,7 +62,7 @@ TEST_F(SampleTest, RowMultipleSamplingDisallowed)
 TEST_F(SampleTest, TestReproducibilityWithSeed)
 {
   cudf::size_type const n_samples = 1024;
-  auto data = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
   cudf::test::fixed_width_column_wrapper<int16_t> col1(data, data + n_samples);
 
   cudf::table_view input({col1});
@@ -93,7 +93,7 @@ TEST_P(SampleBasicTest, CombinationOfParameters)
   cudf::size_type const n_samples          = std::get<0>(GetParam());
   cudf::sample_with_replacement multi_smpl = std::get<1>(GetParam());
 
-  auto data = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto data = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
   cudf::test::fixed_width_column_wrapper<int16_t> col1(data, data + table_size);
   cudf::test::fixed_width_column_wrapper<float> col2(data, data + table_size);
 

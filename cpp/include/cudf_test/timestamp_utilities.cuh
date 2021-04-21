@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,9 @@
 
 #pragma once
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/wrappers/timestamps.hpp>
+
 #include <cudf_test/column_wrapper.hpp>
 
 #include <thrust/logical.h>
@@ -57,14 +59,15 @@ inline cudf::test::fixed_width_column_wrapper<T, int64_t> generate_timestamps(in
   auto min   = std::min(lhs, rhs);
   auto max   = std::max(lhs, rhs);
   auto range = max - min;
-  auto iter  = cudf::test::make_counting_transform_iterator(0, [=](auto i) {
+  auto iter  = cudf::detail::make_counting_transform_iterator(0, [=](auto i) {
     return cuda::std::chrono::floor<ToDuration>(
              cuda::std::chrono::milliseconds(min + (range / count) * i))
       .count();
   });
 
   if (nullable) {
-    auto mask = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+    auto mask =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
     return cudf::test::fixed_width_column_wrapper<T, int64_t>(iter, iter + count, mask);
   } else {
     // This needs to be in an else to quash `statement_not_reachable` warnings

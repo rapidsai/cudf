@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/sorting.hpp>
@@ -66,16 +67,14 @@ rmm::device_vector<size_type> sorted_dense_rank(column_view input_col,
   if (input_col.has_nulls()) {
     auto conv = unique_comparator<true, size_type, decltype(sorted_index_order)>(
       *device_table, sorted_index_order);
-    auto unique_it =
-      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), conv);
+    auto unique_it = cudf::detail::make_counting_transform_iterator(0, conv);
 
     thrust::inclusive_scan(
       rmm::exec_policy(stream), unique_it, unique_it + input_size, dense_rank_sorted.data().get());
   } else {
     auto conv = unique_comparator<false, size_type, decltype(sorted_index_order)>(
       *device_table, sorted_index_order);
-    auto unique_it =
-      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), conv);
+    auto unique_it = cudf::detail::make_counting_transform_iterator(0, conv);
 
     thrust::inclusive_scan(
       rmm::exec_policy(stream), unique_it, unique_it + input_size, dense_rank_sorted.data().get());

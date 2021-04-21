@@ -105,12 +105,8 @@ static void BM_join(benchmark::State &state)
   for (auto _ : state) {
     cuda_event_timer raii(state, true, 0);
 
-    auto result = cudf::inner_join(probe_table,
-                                   build_table,
-                                   columns_to_join,
-                                   columns_to_join,
-                                   {{0, 0}},
-                                   cudf::null_equality::UNEQUAL);
+    auto result = cudf::inner_join(
+      probe_table, build_table, columns_to_join, columns_to_join, cudf::null_equality::UNEQUAL);
   }
 }
 

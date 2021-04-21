@@ -1,6 +1,7 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 from enum import IntEnum
+from cudf.utils.dtypes import is_decimal_dtype
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -24,9 +25,10 @@ from cudf._lib.cpp.unary cimport (
     unary_operator,
 )
 
-from cudf._lib.types cimport underlying_type_t_type_id
+from cudf._lib.types cimport underlying_type_t_type_id, dtype_to_data_type
 
 cimport cudf._lib.cpp.unary as libcudf_unary
+cimport cudf._lib.cpp.types as libcudf_types
 
 
 class UnaryOp(IntEnum):
@@ -93,20 +95,17 @@ def is_valid(Column input):
 
 def cast(Column input, object dtype=np.float64):
     cdef column_view c_input = input.view()
-    cdef type_id tid = (
-        <type_id> (
-            <underlying_type_t_type_id> (
-                np_to_cudf_types[np.dtype(dtype)]
-            )
-        )
-    )
-    cdef data_type c_dtype = data_type(tid)
+    cdef data_type c_dtype = dtype_to_data_type(dtype)
+
     cdef unique_ptr[column] c_result
 
     with nogil:
         c_result = move(libcudf_unary.cast(c_input, c_dtype))
 
-    return Column.from_unique_ptr(move(c_result))
+    result = Column.from_unique_ptr(move(c_result))
+    if is_decimal_dtype(result.dtype):
+        result.dtype.precision = dtype.precision
+    return result
 
 
 def is_nan(Column input):

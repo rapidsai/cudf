@@ -38,36 +38,6 @@ inline __device__ uint32_t ballot(int pred) { return __ballot_sync(~0, pred); }
 
 // Warp reduction helpers
 template <typename T>
-inline __device__ T WarpReduceSum2(T acc)
-{
-  return acc + shuffle_xor(acc, 1);
-}
-template <typename T>
-inline __device__ T WarpReduceSum4(T acc)
-{
-  acc = WarpReduceSum2(acc);
-  return acc + shuffle_xor(acc, 2);
-}
-template <typename T>
-inline __device__ T WarpReduceSum8(T acc)
-{
-  acc = WarpReduceSum4(acc);
-  return acc + shuffle_xor(acc, 4);
-}
-template <typename T>
-inline __device__ T WarpReduceSum16(T acc)
-{
-  acc = WarpReduceSum8(acc);
-  return acc + shuffle_xor(acc, 8);
-}
-template <typename T>
-inline __device__ T WarpReduceSum32(T acc)
-{
-  acc = WarpReduceSum16(acc);
-  return acc + shuffle_xor(acc, 16);
-}
-
-template <typename T>
 inline __device__ T WarpReduceOr2(T acc)
 {
   return acc | shuffle_xor(acc, 1);

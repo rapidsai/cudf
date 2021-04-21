@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,6 +71,65 @@ std::unique_ptr<column> to_integers(
  */
 std::unique_ptr<column> from_integers(
   column_view const& integers,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns a boolean column identifying strings in which all
+ * characters are valid for conversion to integers.
+ *
+ * The output row entry will be set to `true` if the corresponding string element
+ * have all characters in [-+0-9]. The optional sign character must only be in the first
+ * position. Notice that the the integer value is not checked to be within its storage limits.
+ * For strict integer type check, use the other `is_integer()` API which accepts `data_type`
+ * argument.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ['123', '-456', '', 'A', '+7']
+ * b = s.is_integer(s)
+ * b is [true, true, false, false, true]
+ * @endcode
+ *
+ * Any null row results in a null entry for that row in the output column.
+ *
+ * @param strings  Strings instance for this operation.
+ * @param mr       Device memory resource used to allocate the returned column's device memory.
+ * @return         New column of boolean results for each string.
+ */
+std::unique_ptr<column> is_integer(
+  strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns a boolean column identifying strings in which all
+ * characters are valid for conversion to integers.
+ *
+ * The output row entry will be set to `true` if the corresponding string element
+ * has all characters in [-+0-9]. The optional sign character must only be in the first
+ * position. Also, the integer component must fit within the size limits of the underlying
+ * storage type, which is provided by the int_type parameter.
+ *
+ * @code{.pseudo}
+ * Example:
+ * s = ['123456', '-456', '', 'A', '+7']
+ *
+ * output1 = s.is_integer(s, data_type{type_id::INT32})
+ * output1 is [true, true, false, false, true]
+ *
+ * output2 = s.is_integer(s, data_type{type_id::INT8})
+ * output2 is [false, false, false, false, true]
+ * @endcode
+ *
+ * Any null row results in a null entry for that row in the output column.
+ *
+ * @param strings  Strings instance for this operation.
+ * @param int_type Integer type used for checking underflow and overflow.
+ * @param mr       Device memory resource used to allocate the returned column's device memory.
+ * @return         New column of boolean results for each string.
+ */
+std::unique_ptr<column> is_integer(
+  strings_column_view const& strings,
+  data_type int_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

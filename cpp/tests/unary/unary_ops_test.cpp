@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/unary.hpp>
 
 template <typename T>
@@ -26,12 +27,12 @@ cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type s
                                                                cudf::size_type size,
                                                                bool nullable)
 {
-  auto iter = cudf::test::make_counting_transform_iterator(start, [](auto i) { return T(i); });
+  auto iter = cudf::detail::make_counting_transform_iterator(start, [](auto i) { return T(i); });
 
   if (not nullable) {
     return cudf::test::fixed_width_column_wrapper<T>(iter, iter + size);
   } else {
-    auto valids = cudf::test::make_counting_transform_iterator(
+    auto valids = cudf::detail::make_counting_transform_iterator(
       0, [](auto i) { return i % 2 == 0 ? true : false; });
     return cudf::test::fixed_width_column_wrapper<T>(iter, iter + size, valids);
   }
@@ -43,11 +44,11 @@ cudf::test::fixed_width_column_wrapper<T> create_expected_columns(cudf::size_typ
                                                                   bool nulls_to_be)
 {
   if (not nullable) {
-    auto iter = cudf::test::make_counting_transform_iterator(
+    auto iter = cudf::detail::make_counting_transform_iterator(
       0, [nulls_to_be](auto i) { return not nulls_to_be; });
     return cudf::test::fixed_width_column_wrapper<T>(iter, iter + size);
   } else {
-    auto iter = cudf::test::make_counting_transform_iterator(
+    auto iter = cudf::detail::make_counting_transform_iterator(
       0, [nulls_to_be](auto i) { return i % 2 == 0 ? not nulls_to_be : nulls_to_be; });
     return cudf::test::fixed_width_column_wrapper<T>(iter, iter + size);
   }
@@ -303,7 +304,8 @@ TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryAbsLarge)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
   auto a = thrust::make_counting_iterator(-2000);
-  auto b = cudf::test::make_counting_transform_iterator(-2000, [](auto e) { return std::abs(e); });
+  auto b =
+    cudf::detail::make_counting_transform_iterator(-2000, [](auto e) { return std::abs(e); });
   auto const input    = fp_wrapper{a, a + 4000, scale_type{-1}};
   auto const expected = fp_wrapper{b, b + 4000, scale_type{-1}};
   auto const result   = cudf::unary_operation(input, cudf::unary_operator::ABS);
@@ -333,7 +335,8 @@ TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryCeilLarge)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
   auto a = thrust::make_counting_iterator(-5000);
-  auto b = cudf::test::make_counting_transform_iterator(-5000, [](int e) { return (e / 10) * 10; });
+  auto b =
+    cudf::detail::make_counting_transform_iterator(-5000, [](int e) { return (e / 10) * 10; });
   auto const input    = fp_wrapper{a, a + 4000, scale_type{-1}};
   auto const expected = fp_wrapper{b, b + 4000, scale_type{-1}};
   auto const result   = cudf::unary_operation(input, cudf::unary_operator::CEIL);
@@ -363,7 +366,8 @@ TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryFloorLarge)
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
   auto a = thrust::make_counting_iterator(100);
-  auto b = cudf::test::make_counting_transform_iterator(100, [](auto e) { return (e / 10) * 10; });
+  auto b =
+    cudf::detail::make_counting_transform_iterator(100, [](auto e) { return (e / 10) * 10; });
   auto const input    = fp_wrapper{a, a + 4000, scale_type{-1}};
   auto const expected = fp_wrapper{b, b + 4000, scale_type{-1}};
   auto const result   = cudf::unary_operation(input, cudf::unary_operator::FLOOR);

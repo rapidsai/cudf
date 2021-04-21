@@ -538,26 +538,28 @@ std::vector<int> metadata::select_columns(std::vector<std::string> use_names,
   if (not use_names.empty()) {
     int index = 0;
     for (const auto &use_name : use_names) {
+      bool name_found = false;
       for (int i = 0; i < get_num_columns(); ++i, ++index) {
         if (index >= get_num_columns()) { index = 0; }
         if (get_column_name(index) == use_name) {
+          name_found = true;
           selection.emplace_back(index);
           if (ff.types[index].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
           index++;
           break;
         }
       }
+      CUDF_EXPECTS(name_found, "Unknown column name : " + std::string(use_name));
     }
   } else {
     // For now, only select all leaf nodes
-    for (int i = 0; i < get_num_columns(); ++i) {
+    for (int i = 1; i < get_num_columns(); ++i) {
       if (ff.types[i].subtypes.empty()) {
         selection.emplace_back(i);
         if (ff.types[i].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
       }
     }
   }
-  CUDF_EXPECTS(selection.size() > 0, "Filtered out all columns");
 
   return selection;
 }

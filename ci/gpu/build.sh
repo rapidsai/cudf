@@ -24,6 +24,7 @@ cd $WORKSPACE
 
 # Determine CUDA release version
 export CUDA_REL=${CUDA_VERSION%.*}
+export CONDA_ARTIFACT_PATH=${WORKSPACE}/ci/artifacts/cudf/cpu/.conda-bld/
 
 # Parse git describe
 export GIT_DESCRIBE_TAG=`git describe --tags`
@@ -170,15 +171,15 @@ else
         ${gt} --gtest_output=xml:${WORKSPACE}/test-results/
     done
 
-    CUDF_CONDA_FILE=`find $WORKSPACE/ci/artifacts/cudf/cpu/conda-bld/ -name "libcudf-*.tar.bz2"`
+    CUDF_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf-*.tar.bz2"`
     CUDF_CONDA_FILE=`basename "$CUDF_CONDA_FILE" .tar.bz2` #get filename without extension
     CUDF_CONDA_FILE=${CUDF_CONDA_FILE//-/=} #convert to conda install
-    KAFKA_CONDA_FILE=`find $WORKSPACE/ci/artifacts/cudf/cpu/conda-bld/ -name "libcudf_kafka-*.tar.bz2"`
+    KAFKA_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf_kafka-*.tar.bz2"`
     KAFKA_CONDA_FILE=`basename "$KAFKA_CONDA_FILE" .tar.bz2` #get filename without extension
     KAFKA_CONDA_FILE=${KAFKA_CONDA_FILE//-/=} #convert to conda install
 
     gpuci_logger "Installing $CUDF_CONDA_FILE & $KAFKA_CONDA_FILE"
-    conda install -c $WORKSPACE/ci/artifacts/cudf/cpu/conda-bld/ "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
+    conda install -c ${CONDA_ARTIFACT_PATH} "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
 
     install_dask
 
@@ -219,5 +220,9 @@ py.test -n 6 --cache-clear --basetemp=${WORKSPACE}/custreamz-cuda-tmp --junitxml
 gpuci_logger "Test notebooks"
 ${WORKSPACE}/ci/gpu/test-notebooks.sh 2>&1 | tee nbtest.log
 python ${WORKSPACE}/ci/utils/nbtestlog2junitxml.py nbtest.log
+
+if [ -n "${CODECOV_TOKEN}" ]; then
+    codecov -t $CODECOV_TOKEN
+fi
 
 return ${EXITCODE}

@@ -1,4 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 import functools
 from collections import OrderedDict
 from collections.abc import Sequence
@@ -193,7 +194,7 @@ def initfunc(f):
     return wrapper
 
 
-def get_null_series(size, dtype=np.bool):
+def get_null_series(size, dtype=np.bool_):
     """
     Creates a null series of provided dtype and size
 
@@ -277,36 +278,6 @@ class cached_property:
             value = self.func(instance)
             setattr(instance, self.func.__name__, value)
             return value
-
-
-class ColumnValuesMappingMixin:
-    """
-    Coerce provided values for the mapping to Columns.
-    """
-
-    def __setitem__(self, key, value):
-
-        value = column.as_column(value)
-        super().__setitem__(key, value)
-
-
-class EqualLengthValuesMappingMixin:
-    """
-    Require all values in the mapping to have the same length.
-    """
-
-    def __setitem__(self, key, value):
-        if len(self) > 0:
-            first = next(iter(self.values()))
-            if len(value) != len(first):
-                raise ValueError("All values must be of equal length")
-        super().__setitem__(key, value)
-
-
-class OrderedColumnDict(
-    ColumnValuesMappingMixin, EqualLengthValuesMappingMixin, OrderedDict
-):
-    pass
 
 
 class NestedMappingMixin:
@@ -621,4 +592,47 @@ def _categorical_scalar_broadcast_to(cat_scalar, size):
         size=codes.size,
         offset=codes.offset,
         ordered=ordered,
+    )
+
+
+def _create_pandas_series(
+    data=None, index=None, dtype=None, name=None, copy=False, fastpath=False
+):
+    """
+    Wrapper to create a Pandas Series. If the length of data is 0 and
+    dtype is not passed, this wrapper defaults the dtype to `float64`.
+
+    Parameters
+    ----------
+    data : array-like, Iterable, dict, or scalar value
+        Contains data stored in Series. If data is a dict, argument
+        order is maintained.
+    index : array-like or Index (1d)
+        Values must be hashable and have the same length as data.
+        Non-unique index values are allowed. Will default to
+        RangeIndex (0, 1, 2, …, n) if not provided.
+        If data is dict-like and index is None, then the keys
+        in the data are used as the index. If the index is not None,
+        the resulting Series is reindexed with the index values.
+    dtype : str, numpy.dtype, or ExtensionDtype, optional
+        Data type for the output Series. If not specified, this
+        will be inferred from data. See the user guide for more usages.
+    name : str, optional
+        The name to give to the Series.
+    copy : bool, default False
+        Copy input data.
+
+    Returns
+    -------
+    pd.Series
+    """
+    if (data is None or len(data) == 0) and dtype is None:
+        dtype = "float64"
+    return pd.Series(
+        data=data,
+        index=index,
+        dtype=dtype,
+        name=name,
+        copy=copy,
+        fastpath=fastpath,
     )

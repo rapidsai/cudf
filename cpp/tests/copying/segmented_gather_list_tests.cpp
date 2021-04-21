@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/lists/detail/gather.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 
@@ -119,7 +120,7 @@ TYPED_TEST(SegmentedGatherTest, GatherNulls)
 {
   using T = TypeParam;
 
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
   // List<T>
@@ -223,7 +224,7 @@ TYPED_TEST(SegmentedGatherTest, GatherNestedNulls)
 {
   using T = TypeParam;
 
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
   // List<List<T>>
@@ -238,7 +239,7 @@ TYPED_TEST(SegmentedGatherTest, GatherNestedNulls)
     auto results =
       cudf::lists::detail::segmented_gather(lists_column_view{list}, lists_column_view{gather_map});
 
-    auto trues = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+    auto trues = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
     LCW<T> expected{{{{2, 3}, valids}, {4, 5}},
                     {{{6, 7, 8}, {12, 13, 14}}, trues},
@@ -320,7 +321,8 @@ TYPED_TEST(SegmentedGatherTest, GatherSliced)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
   }
 
-  auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
 
   // List<List<List<T>>>
   {
@@ -463,7 +465,8 @@ TEST_F(SegmentedGatherTestFloat, Fails)
     cudf::lists::detail::segmented_gather(lists_column_view{list}, lists_column_view{nonlist_map2}),
     "Gather map should be list column of index type");
 
-  auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
   LCW<int8_t> nulls_map{{{3, 2, 1, 0}, {0}, {0}, {0, 1}}, valids};
   CUDF_EXPECT_THROW_MESSAGE(
     cudf::lists::detail::segmented_gather(lists_column_view{list}, lists_column_view{nulls_map}),

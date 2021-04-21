@@ -36,6 +36,7 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -153,7 +154,7 @@ __global__ void replace_nulls(cudf::column_device_view input,
  *        `replace_nulls` with the appropriate data types.
  */
 struct replace_nulls_column_kernel_forwarder {
-  template <typename col_type, std::enable_if_t<cudf::is_fixed_width<col_type>()>* = nullptr>
+  template <typename col_type, CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<col_type>())>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            cudf::column_view const& replacement,
                                            rmm::cuda_stream_view stream,
@@ -192,7 +193,7 @@ struct replace_nulls_column_kernel_forwarder {
     return output;
   }
 
-  template <typename col_type, std::enable_if_t<not cudf::is_fixed_width<col_type>()>* = nullptr>
+  template <typename col_type, CUDF_ENABLE_IF(not cudf::is_rep_layout_compatible<col_type>())>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& input,
                                            cudf::column_view const& replacement,
                                            rmm::cuda_stream_view stream,
@@ -308,17 +309,16 @@ struct replace_nulls_scalar_kernel_forwarder {
       cudf::allocate_like(input, cudf::mask_allocation_policy::NEVER, mr);
     auto output_view = output->mutable_view();
 
-    using Type       = cudf::device_storage_type_t<col_type>;
     using ScalarType = cudf::scalar_type_t<col_type>;
     auto s1          = static_cast<ScalarType const&>(replacement);
     auto device_in   = cudf::column_device_view::create(input);
 
-    auto func = replace_nulls_functor<Type>{s1.data()};
+    auto func = replace_nulls_functor<col_type>{s1.data()};
     thrust::transform(rmm::exec_policy(stream),
-                      input.data<Type>(),
-                      input.data<Type>() + input.size(),
+                      input.data<col_type>(),
+                      input.data<col_type>() + input.size(),
                       cudf::detail::make_validity_iterator(*device_in),
-                      output_view.data<Type>(),
+                      output_view.data<col_type>(),
                       func);
     return output;
   }
@@ -424,10 +424,9 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
   CUDF_EXPECTS(replacement.size() == input.size(), "Column size mismatch");
 
   if (input.is_empty()) { return cudf::empty_like(input); }
+  if (!input.has_nulls()) { return std::make_unique<cudf::column>(input, stream, mr); }
 
-  if (!input.has_nulls()) { return std::make_unique<cudf::column>(input); }
-
-  return cudf::type_dispatcher(
+  return cudf::type_dispatcher<dispatch_storage_type>(
     input.type(), replace_nulls_column_kernel_forwarder{}, input, replacement, stream, mr);
 }
 
@@ -437,12 +436,11 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) { return cudf::empty_like(input); }
-
   if (!input.has_nulls() || !replacement.is_valid()) {
     return std::make_unique<cudf::column>(input, stream, mr);
   }
 
-  return cudf::type_dispatcher(
+  return cudf::type_dispatcher<dispatch_storage_type>(
     input.type(), replace_nulls_scalar_kernel_forwarder{}, input, replacement, stream, mr);
 }
 
@@ -452,7 +450,6 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) { return cudf::empty_like(input); }
-
   if (!input.has_nulls()) { return std::make_unique<cudf::column>(input, stream, mr); }
 
   return replace_nulls_policy_impl(input, replace_policy, stream, mr);

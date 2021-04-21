@@ -49,6 +49,9 @@ function sed_runner() {
 # cpp update
 sed_runner 's/'"CUDA_DATAFRAME VERSION .* LANGUAGES"'/'"CUDA_DATAFRAME VERSION ${NEXT_FULL_TAG} LANGUAGES"'/g' cpp/CMakeLists.txt
 
+# cpp libcudf_kafka update
+sed_runner 's/'"CUDA_KAFKA VERSION .* LANGUAGES"'/'"CUDA_KAFKA VERSION ${NEXT_FULL_TAG} LANGUAGES"'/g' cpp/libcudf_kafka/CMakeLists.txt
+
 # doxyfile update
 sed_runner 's/PROJECT_NUMBER         = .*/PROJECT_NUMBER         = '${NEXT_FULL_TAG}'/g' cpp/doxygen/Doxyfile
 

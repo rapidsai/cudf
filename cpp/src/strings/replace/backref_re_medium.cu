@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,17 +24,17 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
-//
 children_pair replace_with_backrefs_medium(column_device_view const& d_strings,
                                            reprog_device& d_prog,
                                            string_view const& d_repl_template,
-                                           rmm::device_vector<backref_type>& backrefs,
+                                           device_span<backref_type> backrefs,
                                            size_type null_count,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
+  using Iterator = decltype(backrefs.begin());
   return make_strings_children(
-    backrefs_fn<RX_STACK_MEDIUM>{
+    backrefs_fn<Iterator, RX_STACK_MEDIUM>{
       d_strings, d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
     d_strings.size(),
     null_count,

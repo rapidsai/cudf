@@ -17,9 +17,10 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/sorting.hpp>
-#include <cudf/strings/copying.hpp>
+#include <cudf/strings/detail/copying.hpp>
 #include <cudf/strings/detail/scatter.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -32,6 +33,7 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
+
 #include <vector>
 
 struct StringsColumnTest : public cudf::test::BaseFixture {
@@ -69,20 +71,17 @@ TEST_P(SliceParmsTest, Slice)
     h_strings.begin(),
     h_strings.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+
   cudf::size_type start = 3;
   cudf::size_type end   = GetParam();
-  std::vector<const char*> h_expected;
-  if (end > start) {
-    for (cudf::size_type idx = start; (idx < end) && (idx < (cudf::size_type)h_strings.size());
-         ++idx)
-      h_expected.push_back(h_strings[idx]);
-  }
-  auto strings_view = cudf::strings_column_view(strings);
-  auto results      = cudf::strings::detail::copy_slice(strings_view, start, end);
+  auto results = cudf::strings::detail::copy_slice(cudf::strings_column_view(strings), start, end);
 
-  cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
-  // thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  cudf::test::strings_column_wrapper expected(
+    h_strings.begin() + start,
+    h_strings.begin() + end,
+    thrust::make_transform_iterator(h_strings.begin() + start,
+                                    [](auto str) { return str != nullptr; }));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
 TEST_P(SliceParmsTest, SliceAllNulls)
@@ -92,42 +91,29 @@ TEST_P(SliceParmsTest, SliceAllNulls)
     h_strings.begin(),
     h_strings.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+
   cudf::size_type start = 3;
   cudf::size_type end   = GetParam();
-  std::vector<const char*> h_expected;
-  if (end > start) {
-    for (cudf::size_type idx = start; (idx < end) && (idx < (cudf::size_type)h_strings.size());
-         ++idx)
-      h_expected.push_back(h_strings[idx]);
-  }
-  auto strings_view = cudf::strings_column_view(strings);
-  auto results      = cudf::strings::detail::copy_slice(strings_view, start, end);
+  auto results = cudf::strings::detail::copy_slice(cudf::strings_column_view(strings), start, end);
+
   cudf::test::strings_column_wrapper expected(
-    h_expected.begin(),
-    h_expected.end(),
-    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+    h_strings.begin() + start,
+    h_strings.begin() + end,
+    thrust::make_transform_iterator(h_strings.begin() + start,
+                                    [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
 TEST_P(SliceParmsTest, SliceAllEmpty)
 {
   std::vector<const char*> h_strings{"", "", "", "", "", "", ""};
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
+
   cudf::size_type start = 3;
   cudf::size_type end   = GetParam();
-  std::vector<const char*> h_expected;
-  if (end > start) {
-    for (cudf::size_type idx = start; (idx < end) && (idx < (cudf::size_type)h_strings.size());
-         ++idx)
-      h_expected.push_back(h_strings[idx]);
-  }
-  auto strings_view = cudf::strings_column_view(strings);
-  auto results      = cudf::strings::detail::copy_slice(strings_view, start, end);
-  cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
-  // thrust::make_transform_iterator( h_expected.begin(), [] (auto str) { return str!=nullptr; }));
+  auto results = cudf::strings::detail::copy_slice(cudf::strings_column_view(strings), start, end);
+
+  cudf::test::strings_column_wrapper expected(h_strings.begin() + start, h_strings.begin() + end);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
@@ -211,8 +197,8 @@ TEST_F(StringsColumnTest, Scatter)
   scatter_map.push_back(1);
 
   auto source_column = cudf::column_device_view::create(source.parent());
-  auto begin = thrust::make_transform_iterator(thrust::make_counting_iterator<cudf::size_type>(0),
-                                               column_to_string_view_vector{*source_column});
+  auto begin =
+    cudf::detail::make_counting_transform_iterator(0, column_to_string_view_vector{*source_column});
 
   auto results =
     cudf::strings::detail::scatter(begin, begin + source.size(), scatter_map.begin(), target);

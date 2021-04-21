@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,8 @@ namespace {
  *
  * The backref numbers are expected to be 1-based.
  *
- * Returns a modified string without back-ref indicators.
+ * Returns a modified string without back-ref indicators and a vector of backref
+ * byte position pairs.
  * ```
  * Example:
  *    for input string:    'hello \2 and \1'
@@ -51,8 +52,9 @@ namespace {
  *    returned string is:  'hello  and '
  * ```
  */
-std::string parse_backrefs(std::string const& repl, std::vector<backref_type>& backrefs)
+std::pair<std::string, std::vector<backref_type>> parse_backrefs(std::string const& repl)
 {
+  std::vector<backref_type> backrefs;
   std::string str = repl;  // make a modifiable copy
   std::smatch m;
   std::regex ex("(\\\\\\d+)");  // this searches for backslash-number(s); example "\1"
@@ -60,21 +62,19 @@ std::string parse_backrefs(std::string const& repl, std::vector<backref_type>& b
   size_type byte_offset = 0;
   while (std::regex_search(str, m, ex)) {
     if (m.size() == 0) break;
-    backref_type item;
-    std::string bref   = m[0];
-    size_type position = static_cast<size_type>(m.position(0));
-    size_type length   = static_cast<size_type>(bref.length());
+    std::string const backref = m[0];
+    size_type const position  = static_cast<size_type>(m.position(0));
+    size_type const length    = static_cast<size_type>(backref.length());
     byte_offset += position;
-    item.first = std::atoi(bref.c_str() + 1);  // back-ref index number
-    CUDF_EXPECTS(item.first > 0, "Back-reference numbers must be greater than 0");
-    item.second = byte_offset;  // position within the string
+    size_type const index = std::atoi(backref.c_str() + 1);  // back-ref index number
+    CUDF_EXPECTS(index > 0, "Back-reference numbers must be greater than 0");
     rtn += str.substr(0, position);
     str = str.substr(position + length);
-    backrefs.push_back(item);
+    backrefs.push_back({index, byte_offset});
   }
   if (!str.empty())  // add the remainder
     rtn += str;      // of the string
-  return rtn;
+  return {rtn, backrefs};
 }
 
 }  // namespace
@@ -87,54 +87,54 @@ std::unique_ptr<column> replace_with_backrefs(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings.is_empty()) return make_empty_strings_column(stream, mr);
 
   CUDF_EXPECTS(!pattern.empty(), "Parameter pattern must not be empty");
   CUDF_EXPECTS(!repl.empty(), "Parameter repl must not be empty");
 
-  auto strings_column = column_device_view::create(strings.parent(), stream);
-  auto d_strings      = *strings_column;
+  auto d_strings = column_device_view::create(strings.parent(), stream);
   // compile regex into device object
-  auto prog   = reprog_device::create(pattern, get_character_flags_table(), strings_count, stream);
-  auto d_prog = *prog;
-  auto regex_insts = d_prog.insts_counts();
+  auto d_prog = reprog_device::create(pattern, get_character_flags_table(), strings.size(), stream);
+  auto const regex_insts = d_prog->insts_counts();
 
   // parse the repl string for backref indicators
-  std::vector<backref_type> h_backrefs;
-  std::string repl_template = parse_backrefs(repl, h_backrefs);
-  rmm::device_vector<backref_type> backrefs(h_backrefs);
-  string_scalar repl_scalar(repl_template);
-  string_view d_repl_template{repl_scalar.data(), repl_scalar.size()};
+  auto const parse_result = parse_backrefs(repl);
+  rmm::device_uvector<backref_type> backrefs(parse_result.second.size(), stream);
+  CUDA_TRY(cudaMemcpyAsync(backrefs.data(),
+                           parse_result.second.data(),
+                           sizeof(backref_type) * backrefs.size(),
+                           cudaMemcpyHostToDevice,
+                           stream.value()));
+  string_scalar repl_scalar(parse_result.first, true, stream);
+  string_view const d_repl_template = repl_scalar.value();
 
-  // copy null mask
-  auto null_mask  = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
-  auto null_count = strings.null_count();
+  using BackRefIterator = decltype(backrefs.begin());
 
   // create child columns
-  children_pair children(nullptr, nullptr);
-  // Each invocation is predicated on the stack size
-  // which is dependent on the number of regex instructions
-  if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS)) {
-    children = make_strings_children(
-      backrefs_fn<RX_STACK_SMALL>{
-        d_strings, d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
-      strings_count,
-      null_count,
-      stream,
-      mr);
-  } else if (regex_insts <= RX_MEDIUM_INSTS)
-    children = replace_with_backrefs_medium(
-      d_strings, d_prog, d_repl_template, backrefs, null_count, stream, mr);
-  else
-    children = replace_with_backrefs_large(
-      d_strings, d_prog, d_repl_template, backrefs, null_count, stream, mr);
+  children_pair children = [&] {
+    // Each invocation is predicated on the stack size
+    // which is dependent on the number of regex instructions
+    if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS)) {
+      return make_strings_children(
+        backrefs_fn<BackRefIterator, RX_STACK_SMALL>{
+          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
+        strings.size(),
+        strings.null_count(),
+        stream,
+        mr);
+    } else if (regex_insts <= RX_MEDIUM_INSTS)
+      return replace_with_backrefs_medium(
+        *d_strings, *d_prog, d_repl_template, backrefs, strings.null_count(), stream, mr);
+    else
+      return replace_with_backrefs_large(
+        *d_strings, *d_prog, d_repl_template, backrefs, strings.null_count(), stream, mr);
+  }();
 
-  return make_strings_column(strings_count,
+  return make_strings_column(strings.size(),
                              std::move(children.first),
                              std::move(children.second),
-                             null_count,
-                             std::move(null_mask),
+                             strings.null_count(),
+                             cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                              stream,
                              mr);
 }

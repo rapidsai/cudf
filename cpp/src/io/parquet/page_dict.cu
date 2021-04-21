@@ -36,7 +36,7 @@ struct dict_state_s {
   uint32_t num_dict_entries;    //!< Dictionary entries in current fragment to add
   uint32_t frag_dict_size;
   EncColumnChunk ck;
-  EncColumnDesc col;
+  parquet_column_device_view col;
   PageFragment frag;
   volatile uint32_t scratch_red[32];
   uint16_t frag_dict[max_page_fragment_size];
@@ -52,8 +52,10 @@ inline __device__ uint32_t uint64_hash16(uint64_t v)
   return uint32_hash16((uint32_t)(v + (v >> 32)));
 }
 
-inline __device__ uint32_t nvstr_hash16(const uint8_t *p, uint32_t len)
+inline __device__ uint32_t hash_string(const string_view &val)
 {
+  const char *p = val.data();
+  uint32_t len  = val.size_bytes();
   uint32_t hash = len;
   if (len > 0) {
     uint32_t align_p    = 3 & reinterpret_cast<uintptr_t>(p);
@@ -105,8 +107,11 @@ __device__ void FetchDictionaryFragment(dict_state_s *s,
 }
 
 /// Generate dictionary indices in ascending row order
+template <int block_size>
 __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t)
 {
+  using block_scan = cub::BlockScan<uint32_t, block_size>;
+  __shared__ typename block_scan::TempStorage temp_storage;
   uint32_t *dict_index      = s->col.dict_index;
   uint32_t *dict_data       = s->col.dict_data + s->ck.start_row;
   uint32_t num_dict_entries = 0;
@@ -120,13 +125,11 @@ __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t)
       (is_valid &&
        dict_idx ==
          row);  // Any value that doesn't have bit31 set should have dict_idx=row at this point
-    uint32_t umask = ballot(is_unique);
-    uint32_t pos   = num_dict_entries + __popc(umask & ((1 << (t & 0x1f)) - 1));
-    if (!(t & 0x1f)) { s->scratch_red[t >> 5] = __popc(umask); }
-    num_dict_entries += __syncthreads_count(is_unique);
-    if (t < 32) { s->scratch_red[t] = WarpReducePos32(s->scratch_red[t], t); }
-    __syncthreads();
-    if (t >= 32) { pos += s->scratch_red[(t - 32) >> 5]; }
+    uint32_t block_num_dict_entries;
+    uint32_t pos;
+    block_scan(temp_storage).ExclusiveSum(is_unique, pos, block_num_dict_entries);
+    pos += num_dict_entries;
+    num_dict_entries += block_num_dict_entries;
     if (is_valid && is_unique) {
       dict_data[pos]  = row;
       dict_index[row] = pos;
@@ -150,8 +153,8 @@ __global__ void __launch_bounds__(block_size, 1)
   gpuBuildChunkDictionaries(EncColumnChunk *chunks, uint32_t *dev_scratch)
 {
   __shared__ __align__(8) dict_state_s state_g;
-  using warp_reduce = cub::WarpReduce<uint32_t>;
-  __shared__ typename warp_reduce::TempStorage temp_storage[block_size / 32];
+  using block_reduce = cub::BlockReduce<uint32_t, block_size>;
+  __shared__ typename block_reduce::TempStorage temp_storage;
 
   dict_state_s *const s = &state_g;
   uint32_t t            = threadIdx.x;
@@ -180,7 +183,7 @@ __global__ void __launch_bounds__(block_size, 1)
   } else if (dtype == INT96) {
     dtype_len_in = 8;
   } else {
-    dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len;
+    dtype_len_in = dtype_len;
   }
   __syncthreads();
   while (s->row_cnt < s->ck.num_rows) {
@@ -205,7 +208,7 @@ __global__ void __launch_bounds__(block_size, 1)
         if (dtype == BYTE_ARRAY) {
           auto str1 = s->col.leaf_column->element<string_view>(row);
           len += str1.size_bytes();
-          hash = nvstr_hash16(reinterpret_cast<const uint8_t *>(str1.data()), str1.size_bytes());
+          hash = hash_string(str1);
           // Walk the list of rows with the same hash
           next_addr = &s->hashmap[hash];
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
@@ -250,15 +253,11 @@ __global__ void __launch_bounds__(block_size, 1)
         }
       }
       // Count the non-duplicate entries
-      frag_dict_size = warp_reduce(temp_storage[t / 32]).Sum((is_valid && !is_dupe) ? len : 0);
-      if (!(t & 0x1f)) { s->scratch_red[t >> 5] = frag_dict_size; }
+      frag_dict_size   = block_reduce(temp_storage).Sum((is_valid && !is_dupe) ? len : 0);
       new_dict_entries = __syncthreads_count(is_valid && !is_dupe);
-      if (t < 32) {
-        frag_dict_size = warp_reduce(temp_storage[t / 32]).Sum(s->scratch_red[t]);
-        if (t == 0) {
-          s->frag_dict_size += frag_dict_size;
-          s->num_dict_entries += new_dict_entries;
-        }
+      if (t == 0) {
+        s->frag_dict_size += frag_dict_size;
+        s->num_dict_entries += new_dict_entries;
       }
       if (is_valid) {
         if (!is_dupe) {
@@ -309,7 +308,7 @@ __global__ void __launch_bounds__(block_size, 1)
     __syncthreads();
   }
   __syncthreads();
-  GenerateDictionaryIndices(s, t);
+  GenerateDictionaryIndices<block_size>(s, t);
   if (!t) {
     chunks[blockIdx.x].num_dict_fragments = s->ck.num_dict_fragments;
     chunks[blockIdx.x].dictionary_size    = s->dictionary_size;

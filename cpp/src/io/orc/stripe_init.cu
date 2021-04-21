@@ -485,7 +485,7 @@ void __host__ PostDecompressionReassemble(CompressedStreamInfo *strm_info,
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
  * @param[in] num_rowgroups Number of row groups
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void __host__ ParseRowGroupIndex(RowGroup *row_groups,
                                  CompressedStreamInfo *strm_info,

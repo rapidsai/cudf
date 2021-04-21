@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
@@ -27,9 +28,10 @@
 #include <text/utilities/tokenize_ops.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/count.h>
+#include <thrust/copy.h>
 #include <thrust/transform.h>
 
 namespace nvtext {
@@ -70,24 +72,25 @@ std::unique_ptr<cudf::column> tokenize_fn(cudf::size_type strings_count,
     token_count_fn(strings_count, tokenizer, stream, rmm::mr::get_current_device_resource());
   auto d_token_counts = token_counts->view();
   // create token-index offsets from the counts
-  rmm::device_vector<int32_t> token_offsets(strings_count + 1);
+  rmm::device_uvector<int32_t> token_offsets(strings_count + 1, stream);
   thrust::inclusive_scan(rmm::exec_policy(stream),
                          d_token_counts.template begin<int32_t>(),
                          d_token_counts.template end<int32_t>(),
                          token_offsets.begin() + 1);
-  CUDA_TRY(cudaMemsetAsync(token_offsets.data().get(), 0, sizeof(int32_t), stream.value()));
-  auto const total_tokens = token_offsets.back();
+  int32_t const zero = 0;
+  token_offsets.set_element_async(0, zero, stream);
+  auto const total_tokens = token_offsets.back_element(stream);
   // build a list of pointers to each token
-  rmm::device_vector<string_index_pair> tokens(total_tokens);
+  rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
   // now go get the tokens
-  tokenizer.d_offsets = token_offsets.data().get();
-  tokenizer.d_tokens  = tokens.data().get();
+  tokenizer.d_offsets = token_offsets.data();
+  tokenizer.d_tokens  = tokens.data();
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count,
                      tokenizer);
   // create the strings column using the tokens pointers
-  return cudf::make_strings_column(tokens, stream, mr);
+  return cudf::strings::detail::make_strings_column(tokens.begin(), tokens.end(), stream, mr);
 }
 
 }  // namespace

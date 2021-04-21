@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/filling.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -56,7 +57,7 @@ TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + num_values);
 
   static_assert(repeat_count > 0, "repeat_count should be larger than 0.");
-  auto expected_elements = cudf::test::make_counting_transform_iterator(
+  auto expected_elements = cudf::detail::make_counting_transform_iterator(
     0, [repeat_count](auto i) { return i / repeat_count; });
   auto expected =
     cudf::test::fixed_width_column_wrapper<T, typename decltype(expected_elements)::value_type>(

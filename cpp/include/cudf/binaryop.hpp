@@ -178,5 +178,29 @@ std::unique_ptr<column> binary_operation(
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Computes the `scale` for a `fixed_point` number based on given binary operator `op`
+ *
+ * @param op           The binary_operator used for two `fixed_point` numbers
+ * @param left_scale   Scale of left `fixed_point` number
+ * @param right_scale  Scale of right `fixed_point` number
+ * @return             The resulting `scale` of the computed `fixed_point` number
+ */
+int32_t binary_operation_fixed_point_scale(binary_operator op,
+                                           int32_t left_scale,
+                                           int32_t right_scale);
+
+/**
+ * @brief Computes the `data_type` for a `fixed_point` number based on given binary operator `op`
+ *
+ * @param op   The binary_operator used for two `fixed_point` numbers
+ * @param lhs  `cudf::data_type` of left `fixed_point` number
+ * @param rhs  `cudf::data_type` of right `fixed_point` number
+ * @return     The resulting `cudf::data_type` of the computed `fixed_point` number
+ */
+cudf::data_type binary_operation_fixed_point_output_type(binary_operator op,
+                                                         cudf::data_type const& lhs,
+                                                         cudf::data_type const& rhs);
+
 /** @} */  // end of group
 }  // namespace cudf

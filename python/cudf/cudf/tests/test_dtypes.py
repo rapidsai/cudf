@@ -11,6 +11,7 @@ from cudf.core.dtypes import (
     Decimal64Dtype,
     ListDtype,
     StructDtype,
+    IntervalDtype,
 )
 from cudf.tests.utils import assert_eq
 
@@ -145,3 +146,12 @@ def test_max_precision():
     Decimal64Dtype(scale=0, precision=18)
     with pytest.raises(ValueError):
         Decimal64Dtype(scale=0, precision=19)
+
+
+@pytest.mark.parametrize("fields", ["int64", "int32"])
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+def test_interval_dtype_pyarrow_round_trip(fields, closed):
+    pa_array = pd.core.arrays._arrow_utils.ArrowIntervalType(fields, closed)
+    expect = pa_array
+    got = IntervalDtype.from_arrow(expect).to_arrow()
+    assert expect.equals(got)

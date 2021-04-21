@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -193,7 +193,7 @@ struct minmax_functor {
     auto maximum     = new ScalarType(T{}, true, stream, mr);
     // copy dev_result to the output scalars
     device_single_thread(assign_min_max<T>{dev_result.data(), minimum->data(), maximum->data()},
-                         stream.value());
+                         stream);
     return {std::unique_ptr<scalar>(minimum), std::unique_ptr<scalar>(maximum)};
   }
 
@@ -252,8 +252,8 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
   if (col.null_count() == col.size()) {
     // this handles empty and all-null columns
     // return scalars with valid==false
-    return {make_default_constructed_scalar(col.type()),
-            make_default_constructed_scalar(col.type())};
+    return {make_default_constructed_scalar(col.type(), stream, mr),
+            make_default_constructed_scalar(col.type(), stream, mr)};
   }
 
   return type_dispatcher(col.type(), minmax_functor{}, col, stream, mr);

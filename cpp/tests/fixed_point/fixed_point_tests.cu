@@ -596,8 +596,9 @@ TEST_F(FixedPointTest, PositiveScaleWithValuesOutsideUnderlyingType32)
   auto const expected1 = fp_wrapper{{150000000}, scale_type{6}};
   auto const expected2 = fp_wrapper{{50000000}, scale_type{6}};
 
-  auto const result1 = cudf::binary_operation(a, b, cudf::binary_operator::ADD, {});
-  auto const result2 = cudf::binary_operation(a, c, cudf::binary_operator::DIV, {});
+  auto const type    = cudf::data_type{cudf::type_id::DECIMAL32, 6};
+  auto const result1 = cudf::binary_operation(a, b, cudf::binary_operator::ADD, type);
+  auto const result2 = cudf::binary_operation(a, c, cudf::binary_operator::DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
@@ -618,8 +619,9 @@ TEST_F(FixedPointTest, PositiveScaleWithValuesOutsideUnderlyingType64)
   auto const expected1 = fp_wrapper{{150000000}, scale_type{100}};
   auto const expected2 = fp_wrapper{{50000000}, scale_type{100}};
 
-  auto const result1 = cudf::binary_operation(a, b, cudf::binary_operator::ADD, {});
-  auto const result2 = cudf::binary_operation(a, c, cudf::binary_operator::DIV, {});
+  auto const type    = cudf::data_type{cudf::type_id::DECIMAL64, 100};
+  auto const result1 = cudf::binary_operation(a, b, cudf::binary_operator::ADD, type);
+  auto const result2 = cudf::binary_operation(a, c, cudf::binary_operator::DIV, type);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
@@ -630,6 +632,7 @@ TYPED_TEST(FixedPointTestBothReps, ExtremelyLargeNegativeScale)
   // This is testing fixed_point values with an extremely large negative scale. The fixed_point
   // implementation should be able to handle any scale representable by an int32_t
 
+  using decimalXX  = fixed_point<TypeParam, Radix::BASE_10>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<TypeParam>;
 
   auto const a = fp_wrapper{{10}, scale_type{-201}};
@@ -639,8 +642,11 @@ TYPED_TEST(FixedPointTestBothReps, ExtremelyLargeNegativeScale)
   auto const expected1 = fp_wrapper{{150}, scale_type{-202}};
   auto const expected2 = fp_wrapper{{5}, scale_type{-201}};
 
-  auto const result1 = cudf::binary_operation(a, b, cudf::binary_operator::ADD, {});
-  auto const result2 = cudf::binary_operation(a, c, cudf::binary_operator::DIV, {});
+  auto const type1   = cudf::data_type{cudf::type_to_id<decimalXX>(), -202};
+  auto const result1 = cudf::binary_operation(a, b, cudf::binary_operator::ADD, type1);
+
+  auto const type2   = cudf::data_type{cudf::type_to_id<decimalXX>(), -201};
+  auto const result2 = cudf::binary_operation(a, c, cudf::binary_operator::DIV, type2);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result1->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result2->view());
