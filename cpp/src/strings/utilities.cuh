@@ -105,8 +105,14 @@ auto make_strings_children(
   auto const bytes = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
   std::unique_ptr<column> chars_column =
     create_chars_child_column(strings_count, bytes, stream, mr);
-  size_and_exec_fn.d_chars = chars_column->mutable_view().template data<char>();
-  for_each_fn(size_and_exec_fn);
+
+  // Execute the function fn again to fill the chars column.
+  // Note that if the output chars column has zero size, the function fn should not be called to
+  // avoid accidentally overwriting the offsets.
+  if (bytes > 0) {
+    size_and_exec_fn.d_chars = chars_column->mutable_view().template data<char>();
+    for_each_fn(size_and_exec_fn);
+  }
 
   return std::make_pair(std::move(offsets_column), std::move(chars_column));
 }
@@ -118,9 +124,7 @@ auto make_strings_children(
  *
  * @tparam SizeAndExecuteFunction Function must accept an index and return a size.
  *         It must have members `d_offsets`, `d_chars`, and `d_validities` which are set to memory
- *         containing the offsets column, chars column and string validities during write. In
- *         addition, it must contain a boolean flag `first_pass` to indicate whether it is the first
- *         time the function is being calling.
+ *         containing the offsets column, chars column and string validities during write.
  *
  * @param size_and_exec_fn This is called twice. Once for the output size of each string, which is
  *                         written into the `d_offsets` array. After that, `d_chars` is set and this
@@ -166,7 +170,6 @@ make_strings_children_with_null_mask(
   // During execution, we need to check the `first_pass` boolean flag, not
   // checking `!d_chars`. This is because `d_chars` can have nullptr value in the
   // situations when the strings column has all zero-size or all-null strings.
-  size_and_exec_fn.first_pass = true;
   for_each_fn(size_and_exec_fn);
 
   // Compute the offsets from string sizes
@@ -178,11 +181,12 @@ make_strings_children_with_null_mask(
   auto chars_column = create_chars_child_column(strings_count, bytes, stream, mr);
 
   // Execute the function fn again to fill the chars column.
-  // During filling the `d_chars` array, we need to check the `first_pass` boolean flag, not
-  // checking `d_chars != nullptr`.
-  size_and_exec_fn.first_pass = false;
-  size_and_exec_fn.d_chars    = chars_column->mutable_view().template data<char>();
-  for_each_fn(size_and_exec_fn);
+  // Note that if the output chars column has zero size, the function fn should not be called to
+  // avoid accidentally overwriting the offsets.
+  if (bytes > 0) {
+    size_and_exec_fn.d_chars = chars_column->mutable_view().template data<char>();
+    for_each_fn(size_and_exec_fn);
+  }
 
   // Finally compute null mask and null count from the validities array
   auto [null_mask, null_count] = cudf::detail::valid_if(

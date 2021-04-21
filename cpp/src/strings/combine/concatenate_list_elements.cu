@@ -49,26 +49,21 @@ struct concat_strings_fn {
   string_view const separator;
 
   offset_type* d_offsets{nullptr};
+
+  // If d_chars == nullptr: only compute sizes of the output strings.
+  // If d_chars != nullptr: only concatenate strings.
   char* d_chars{nullptr};
 
   // This array is initialized to contain all `1` values, thus we only need to set `0` for the rows
   // corresponding to null string elements.
   int8_t* d_validities{nullptr};
 
-  // If first_pass: only compute sizes of the output strings.
-  // If not first_pass: only concatenate strings.
-  //
-  // We need to use this boolean flag instead of checking `d_chars != nullptr `, as `d_chars` can
-  // have nullptr value in the situations when the strings column has all zero-size or all-null
-  // strings. Checking `d_chars != nullptr` in such cases may produce incorrect results.
-  bool first_pass{true};
-
   __device__ void operator()(size_type const idx)
   {
-    // If the row `idx` is known to be a null string
-    if (not first_pass and not d_validities[idx]) { return; }
+    // If this is the second pass, and the row `idx` is known to be a null string
+    if (d_chars and not d_validities[idx]) { return; }
 
-    if (first_pass and lists_dv.is_null(idx)) {
+    if (not d_chars and lists_dv.is_null(idx)) {
       d_offsets[idx]    = 0;
       d_validities[idx] = 0;  // null output string
       return;
@@ -77,11 +72,11 @@ struct concat_strings_fn {
     auto const separator_size = separator.size_bytes();
     auto size_bytes           = size_type{0};
     bool written              = false;
-    char* output_ptr          = first_pass ? nullptr : d_chars + d_offsets[idx];
+    char* output_ptr          = d_chars ? d_chars + d_offsets[idx] : nullptr;
 
     for (size_type str_idx = list_offsets[idx], idx_end = list_offsets[idx + 1]; str_idx < idx_end;
          ++str_idx) {
-      if (first_pass and strings_dv.is_null(str_idx) and not string_narep_dv.is_valid()) {
+      if (not d_chars and strings_dv.is_null(str_idx) and not string_narep_dv.is_valid()) {
         d_offsets[idx]    = 0;
         d_validities[idx] = 0;  // null output string
         return;  // early termination: the entire list of strings will result in a null string
@@ -98,7 +93,7 @@ struct concat_strings_fn {
     }
 
     // Separator is inserted only in between strings
-    if (first_pass) { d_offsets[idx] = static_cast<size_type>(size_bytes - separator_size); }
+    if (not d_chars) { d_offsets[idx] = static_cast<size_type>(size_bytes - separator_size); }
   }
 };
 
@@ -161,26 +156,21 @@ struct concat_strings_multi_separators_fn {
   string_scalar_device_view const sep_narep_dv;
 
   offset_type* d_offsets{nullptr};
+
+  // If d_chars == nullptr: only compute sizes of the output strings.
+  // If d_chars != nullptr: only concatenate strings.
   char* d_chars{nullptr};
 
   // This array is initialized to contain all `1` values, thus we only need to set `0` for the rows
   // corresponding to null string elements.
   int8_t* d_validities{nullptr};
 
-  // If first_pass: only compute sizes of the output strings.
-  // If not first_pass: only concatenate strings.
-  //
-  // We need to use this boolean flag instead of checking `d_chars != nullptr `, as `d_chars` can
-  // have nullptr value in the situations when the strings column has all zero-size or all-null
-  // strings. Checking `d_chars != nullptr` in such cases may produce incorrect results.
-  bool first_pass{true};
-
   __device__ void operator()(size_type const idx)
   {
     // If the row `idx` is known to be a null string
-    if (not first_pass and not d_validities[idx]) { return; }
+    if (d_chars and not d_validities[idx]) { return; }
 
-    if (first_pass and
+    if (not d_chars and
         (lists_dv.is_null(idx) or (separators_dv.is_null(idx) and not sep_narep_dv.is_valid()))) {
       d_offsets[idx]    = 0;
       d_validities[idx] = 0;  // null output string
@@ -192,11 +182,11 @@ struct concat_strings_multi_separators_fn {
     auto const separator_size = separator.size_bytes();
     auto size_bytes           = size_type{0};
     bool written              = false;
-    char* output_ptr          = first_pass ? nullptr : d_chars + d_offsets[idx];
+    char* output_ptr          = d_chars ? d_chars + d_offsets[idx] : nullptr;
 
     for (size_type str_idx = list_offsets[idx], idx_end = list_offsets[idx + 1]; str_idx < idx_end;
          ++str_idx) {
-      if (first_pass and strings_dv.is_null(str_idx) and not string_narep_dv.is_valid()) {
+      if (not d_chars and strings_dv.is_null(str_idx) and not string_narep_dv.is_valid()) {
         d_offsets[idx]    = 0;
         d_validities[idx] = 0;  // null output string
         return;  // early termination: the entire list of strings will result in a null string
@@ -213,7 +203,7 @@ struct concat_strings_multi_separators_fn {
     }
 
     // Separator is inserted only in between strings
-    if (first_pass) { d_offsets[idx] = static_cast<size_type>(size_bytes - separator_size); }
+    if (not d_chars) { d_offsets[idx] = static_cast<size_type>(size_bytes - separator_size); }
   }
 };
 
