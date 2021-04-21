@@ -25,7 +25,7 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from numba import cuda, njit
+from numba import cuda
 
 import cudf
 from cudf import _lib as libcudf
@@ -41,8 +41,7 @@ from cudf._lib.transform import bools_to_mask
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
-from cudf.core.dtypes import CategoricalDtype
-from cudf.core.dtypes import IntervalDtype
+from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
     NUMERIC_TYPES,
@@ -358,13 +357,21 @@ class ColumnBase(Column, Serializable):
                 pa.null(), len(self), [pa.py_buffer((b""))]
             )
 
-        return libcudf.interop.to_arrow(
+        result = libcudf.interop.to_arrow(
             libcudf.table.Table(
                 cudf.core.column_accessor.ColumnAccessor({"None": self})
             ),
             [["None"]],
             keep_index=False,
         )["None"].chunk(0)
+
+        if isinstance(self.dtype, cudf.Decimal64Dtype):
+            result = result.view(
+                pa.decimal128(
+                    scale=result.type.scale, precision=self.dtype.precision
+                )
+            )
+        return result
 
     @classmethod
     def from_arrow(cls, array: pa.Array) -> ColumnBase:
@@ -430,9 +437,13 @@ class ColumnBase(Column, Serializable):
         elif isinstance(array.type, pa.Decimal128Type):
             return cudf.core.column.DecimalColumn.from_arrow(array)
 
-        return libcudf.interop.from_arrow(data, data.column_names)._data[
+        result = libcudf.interop.from_arrow(data, data.column_names)._data[
             "None"
         ]
+
+        if isinstance(result.dtype, cudf.Decimal64Dtype):
+            result.dtype.precision = array.type.precision
+        return result
 
     def _get_mask_as_column(self) -> ColumnBase:
         return libcudf.transform.mask_to_bools(
@@ -444,6 +455,16 @@ class ColumnBase(Column, Serializable):
 
     def default_na_value(self) -> Any:
         raise NotImplementedError()
+
+    def applymap(
+        self, udf: Callable[[ScalarLike], ScalarLike], out_dtype: Dtype = None
+    ) -> ColumnBase:
+        """Apply an element-wise function to the values in the Column."""
+        # Subclasses that support applymap must override this behavior.
+        raise TypeError(
+            "User-defined functions are currently not supported on data "
+            f"with dtype {self.dtype}."
+        )
 
     def to_gpu_array(self, fillna=None) -> "cuda.devicearray.DeviceNDArray":
         """Get a dense numba device array for the data.
@@ -1874,7 +1895,9 @@ def as_column(
                 col = col.set_mask(mask)
         elif np.issubdtype(col.dtype, np.datetime64):
             if nan_as_null or (mask is None and nan_as_null is None):
-                col = utils.time_col_replace_nulls(col)
+                # Ignore typing error since this method is only defined for
+                # DatetimeColumn, not the ColumnBase class.
+                col = col._make_copy_with_na_as_null()  # type: ignore
         return col
 
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
@@ -1995,7 +2018,7 @@ def as_column(
                 data = as_column(
                     buffer, dtype=arbitrary.dtype, nan_as_null=nan_as_null
                 )
-                data = utils.time_col_replace_nulls(data)
+                data = data._make_copy_with_na_as_null()
                 mask = data.mask
 
             data = cudf.core.column.datetime.DatetimeColumn(
@@ -2015,7 +2038,7 @@ def as_column(
                 data = as_column(
                     buffer, dtype=arbitrary.dtype, nan_as_null=nan_as_null
                 )
-                data = utils.time_col_replace_nulls(data)
+                data = data._make_copy_with_na_as_null()
                 mask = data.mask
 
             data = cudf.core.column.timedelta.TimeDeltaColumn(
@@ -2194,58 +2217,6 @@ def _construct_array(
             else np.dtype(native_dtype),
         )
     return arbitrary
-
-
-def column_applymap(
-    udf: Callable[[ScalarLike], ScalarLike],
-    column: ColumnBase,
-    out_dtype: Dtype,
-) -> ColumnBase:
-    """Apply an element-wise function to transform the values in the Column.
-
-    Parameters
-    ----------
-    udf : function
-        Wrapped by numba jit for call on the GPU as a device function.
-    column : Column
-        The source column.
-    out_dtype  : numpy.dtype
-        The dtype for use in the output.
-
-    Returns
-    -------
-    result : Column
-    """
-    core = njit(udf)
-    results = column_empty(len(column), dtype=out_dtype)
-    values = column.data_array_view
-    if column.nullable:
-        # For masked columns
-        @cuda.jit
-        def kernel_masked(values, masks, results):
-            i = cuda.grid(1)
-            # in range?
-            if i < values.size:
-                # valid?
-                if utils.mask_get(masks, i):
-                    # call udf
-                    results[i] = core(values[i])
-
-        masks = column.mask_array_view
-        kernel_masked.forall(len(column))(values, masks, results)
-    else:
-        # For non-masked columns
-        @cuda.jit
-        def kernel_non_masked(values, results):
-            i = cuda.grid(1)
-            # in range?
-            if i < values.size:
-                # call udf
-                results[i] = core(values[i])
-
-        kernel_non_masked.forall(len(column))(values, results)
-
-    return as_column(results)
 
 
 def _data_from_cuda_array_interface_desc(obj) -> Buffer:

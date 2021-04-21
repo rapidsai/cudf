@@ -180,7 +180,7 @@ std::unique_ptr<cudf::column> normalize_spaces(
 
   // build offsets and children using the normalize_space_fn
   auto children = cudf::strings::detail::make_strings_children(
-    normalize_spaces_fn{*d_strings}, strings.size(), strings.null_count(), stream, mr);
+    normalize_spaces_fn{*d_strings}, strings.size(), stream, mr);
 
   return cudf::make_strings_column(strings.size(),
                                    std::move(children.first),
@@ -225,11 +225,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
 
   // build offsets and children using the codepoint_to_utf8_fn
   auto children = cudf::strings::detail::make_strings_children(
-    codepoint_to_utf8_fn{*d_strings, cp_chars, cp_offsets},
-    strings.size(),
-    strings.null_count(),
-    stream,
-    mr);
+    codepoint_to_utf8_fn{*d_strings, cp_chars, cp_offsets}, strings.size(), stream, mr);
 
   return cudf::make_strings_column(strings.size(),
                                    std::move(children.first),
