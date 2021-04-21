@@ -314,7 +314,9 @@ ConfigureTest(STRINGS_TEST
     strings/booleans_tests.cpp
     strings/case_tests.cpp
     strings/chars_types_tests.cpp
-    strings/combine_tests.cpp
+    strings/combine/concatenate_list_elements_tests.cpp
+    strings/combine/concatenate_tests.cpp
+    strings/combine/join_strings_tests
     strings/concatenate_tests.cpp
     strings/contains_tests.cpp
     strings/datetime_tests.cpp
