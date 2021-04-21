@@ -174,7 +174,7 @@ namespace {
  * sizes, output string validities, and concatenating strings within list elements; used when the
  * separators are given as a strings column.
  */
-struct column_separator_fn {
+struct column_separators_fn {
   column_device_view const separators_dv;
   string_scalar_device_view const sep_narep_dv;
 
@@ -219,7 +219,7 @@ std::unique_ptr<column> concatenate_list_elements(lists_column_view const& lists
   auto const sep_dv_ptr      = column_device_view::create(separators.parent(), stream);
   auto const sep_narep_dv    = get_scalar_device_view(const_cast<string_scalar&>(separator_narep));
 
-  auto const func    = column_separator_fn{*sep_dv_ptr, sep_narep_dv};
+  auto const func    = column_separators_fn{*sep_dv_ptr, sep_narep_dv};
   auto const comp_fn = compute_size_and_concatenate_fn<decltype(func)>{
     func,
     *lists_dv_ptr,
