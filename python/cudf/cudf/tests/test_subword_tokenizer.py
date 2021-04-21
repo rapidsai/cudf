@@ -65,3 +65,26 @@ def test_subword_tokenize(
         add_special_tokens=add_special_tokens,
     )
     assert_equal_tokenization_outputs(hf_output, cudf_output)
+
+
+def test_subword_tokenize_with_truncation(datadir):
+    vocab_dir = os.path.join(datadir, "bert_base_cased_sampled")
+    vocab_hash = os.path.join(vocab_dir, "vocab-hash.txt")
+    str_series = cudf.Series(["Test error"])
+    cudf_tokenizer = SubwordTokenizer(vocab_hash)
+
+    error_msg = (
+        "Adding special tokens is not supported with truncation = False. "
+        "Custom Cupy kernel can potentially "
+        "be used to add it. For reference "
+        "see: _bert_add_special_tokens"
+    )
+
+    with pytest.raises(NotImplementedError, match=error_msg):
+        cudf_tokenizer(
+            str_series,
+            max_length=64,
+            max_num_rows=len(str_series),
+            truncation=False,
+            add_special_tokens=True,
+        )

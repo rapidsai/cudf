@@ -9,7 +9,7 @@ from cudf._lib.nvtext.subword_tokenize import (
 )
 
 
-def _cast_to_appripate_type(ar, cast_type):
+def _cast_to_appropriate_type(ar, cast_type):
     if cast_type == "cp":
         return ar
 
@@ -166,27 +166,29 @@ class SubwordTokenizer:
             raise NotImplementedError(error_msg)
 
         if truncation in (False, "do_not_truncate"):
+            if add_special_tokens:
+                error_msg = (
+                    "Adding special tokens is not supported "
+                    f"with truncation = {truncation}. "
+                )
+                recommendation = (
+                    "Custom Cupy kernel can potentially "
+                    "be used to add it. For reference "
+                    "see: _bert_add_special_tokens"
+                )
+                raise NotImplementedError(error_msg + recommendation)
+
             truncation = False
             warning_msg = (
                 "When truncation is not True, the behaviour currently differs "
                 "from HuggingFace as cudf always returns overflowing tokens"
             )
             warn(warning_msg)
-            if add_special_tokens:
-                error_msg = (
-                    f"Adding special tokens is not supported"
-                    f"with truncation = {truncation}. "
-                )
-                recommendation = (
-                    "Custom Cupy kernel can potentially"
-                    "be used to add it. For reference "
-                    "see: _bert_add_special_tokens "
-                )
-                raise NotImplementedError(error_msg + recommendation)
 
         if padding != "max_length":
             error_msg = (
-                "Currently padding to the provided max_length is supported"
+                "Only padding to the provided max_length"
+                "is currently supported"
             )
             raise NotImplementedError(error_msg)
 
@@ -194,9 +196,9 @@ class SubwordTokenizer:
             error_msg = "Stride should be less than max_length"
             raise ValueError(error_msg)
 
-        if return_tensors not in ["cp", "pt", "tf"]:
+        if return_tensors not in {"cp", "pt", "tf"}:
             error_msg = (
-                "Only cupy(cp), pytorch(pt) and tensorflow(tf)"
+                "Only cupy(cp), pytorch(pt) and tensorflow(tf) "
                 "tensors are supported"
             )
             raise NotImplementedError(error_msg)
@@ -214,20 +216,19 @@ class SubwordTokenizer:
             max_rows_tensor=max_num_rows,
         )
 
-        tokenizer_output = dict()
-        tokenizer_output["input_ids"] = cp.asarray(input_ids).reshape(
-            -1, max_length
-        )
-        tokenizer_output["attention_mask"] = cp.asarray(
-            attention_mask
-        ).reshape(-1, max_length)
-        tokenizer_output["metadata"] = cp.asarray(metadata).reshape(-1, 3)
+        tokenizer_output = {
+            "input_ids": cp.asarray(input_ids).reshape(-1, max_length),
+            "attention_mask": cp.asarray(attention_mask).reshape(
+                -1, max_length
+            ),
+            "metadata": cp.asarray(metadata).reshape(-1, 3),
+        }
 
         if add_special_tokens:
             tokenizer_output = _bert_add_special_tokens(tokenizer_output)
 
         tokenizer_output = {
-            k: _cast_to_appripate_type(v, return_tensors)
+            k: _cast_to_appropriate_type(v, return_tensors)
             for k, v in tokenizer_output.items()
         }
 
@@ -235,7 +236,11 @@ class SubwordTokenizer:
 
 
 def _bert_add_special_tokens(token_o):
-
+    """
+    Adds special tokens (CLS,SEP) which are often used by pre-trained BERT
+    models to input_ids and adjusts attention_mask and metadata to account
+    for them.
+    """
     max_length = token_o["input_ids"].shape[1]
     seq_end_col = max_length - (token_o["input_ids"][:, ::-1] != 0).argmax(1)
     # clipping to take overflow into account
@@ -245,12 +250,16 @@ def _bert_add_special_tokens(token_o):
     _bert_add_special_tokens_attention_mask(
         token_o["attention_mask"], seq_end_col
     )
-    _bert_add_spedical_tokens_metadata(token_o["metadata"], max_length)
+    _bert_add_special_tokens_metadata(token_o["metadata"], max_length)
 
     return token_o
 
 
 def _bert_add_special_tokens_input_ids(input_ids, seq_end_col):
+    """
+    Add token ids for special tokens ([CLS] and [SEP]) to
+    the start and end of each sequence
+    """
     # Mark sequence start with [CLS] token mapping to the start of sequence
     input_ids[:, 1:-1] = input_ids[:, 0:-2]
     input_ids[:, 0] = 101
@@ -262,6 +271,9 @@ def _bert_add_special_tokens_input_ids(input_ids, seq_end_col):
 
 
 def _bert_add_special_tokens_attention_mask(attention_mask, seq_end_col):
+    """
+    Mark attention mask for special tokens ([CLS] and [SEP]) with 1
+    """
     # Copy attention masks for all but last two
     attention_mask[:, 1:-1] = attention_mask[:, 0:-2]
     # Mark [CLS] token with 1
@@ -272,7 +284,10 @@ def _bert_add_special_tokens_attention_mask(attention_mask, seq_end_col):
     ] = 1
 
 
-def _bert_add_spedical_tokens_metadata(metadata, max_length):
+def _bert_add_special_tokens_metadata(metadata, max_length):
+    """
+    Edit metadata to account for the added special tokens ([CLS] and [SEP])
+    """
     # metadata seq starts from plus 1
     metadata[:, 1] = metadata[:, 1] + 1
     # clip done to take overflow into account
