@@ -90,8 +90,8 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
   // build offset column
   auto offsets_transformer = [lo_itr, hi_itr, lo_replace_itr, hi_replace_itr] __device__(
                                string_view element, bool is_valid = true) {
-    const auto d_lo         = (*lo_itr).value_or(element);
-    const auto d_hi         = (*hi_itr).value_or(element);
+    const auto d_lo         = lo_itr->value_or(element);
+    const auto d_hi         = hi_itr->value_or(element);
     const auto d_lo_replace = *(*lo_replace_itr);
     const auto d_hi_replace = *(*hi_replace_itr);
     size_type bytes         = 0;
