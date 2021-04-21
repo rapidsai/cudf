@@ -186,25 +186,33 @@ python_cudf_ast_map = {
 cpdef ast_visit(node, df, list stack, list temporaries):
     # Base cases: Name
     if isinstance(node, ast.Name):
-        stack.append(ColumnReference(df.columns.get_loc(node.id) + 1))
+        temporaries.append(ColumnReference(df.columns.get_loc(node.id) + 1))
     else:
         for field, value in ast.iter_fields(node):
             if isinstance(value, ast.UnaryOp):
                 ast_visit(value.operand, df, stack, temporaries)
                 op = python_cudf_ast_map[type(value.op)]
-                temporaries.append(stack.pop())
                 stack.append(Expression(op, temporaries[-1]))
             elif isinstance(value, ast.BinOp):
                 ast_visit(value.left, df, stack, temporaries)
                 ast_visit(value.right, df, stack, temporaries)
-                temporaries.append(stack.pop())
-                temporaries.append(stack.pop())
                 op = python_cudf_ast_map[type(value.op)]
                 stack.append(Expression(
-                    ASTOperator.ADD, temporaries[-1], temporaries[-2]))
+                    ASTOperator.ADD, temporaries[-2], temporaries[-1]))
             elif isinstance(value, list):
                 for item in value:
                     if isinstance(item, ast.AST):
                         ast_visit(item, df, stack, temporaries)
             elif isinstance(value, ast.AST):
                 ast_visit(value, df, stack, temporaries)
+
+
+def make_and_evaluate_expression(expr, df):
+    """Create a cudf evaluable expression from a string and evaluate it."""
+    # Important: both make and evaluate must be coupled to guarantee that the
+    # temporaries created (the owning ColumnReferences and Literals) remain in
+    # scope.
+    stack = []
+    temporaries = []
+    ast_visit(ast.parse(expr), df, stack, temporaries)
+    return evaluate_expression(df, stack[-1])
