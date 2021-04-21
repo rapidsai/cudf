@@ -117,18 +117,20 @@ auto make_strings_children(
  * well as create the output.
  *
  * @tparam SizeAndExecuteFunction Function must accept an index and return a size.
- *         It must have members d_offsets and d_chars which are set to memory containing
- *         the offsets and chars columns during write. In addition, it must also output negative
- *         index values to the d_offsets array to specify that the corresponding string rows are
- *         null elements.
+ *         It must have members `d_offsets`, `d_chars`, and `d_validities` which are set to memory
+ *         containing the offsets column, chars column and string validities during write. In
+ *         addition, it must contain a boolean flag `first_pass` to indicate whether it is the first
+ *         time the function is being calling.
  *
- * @param size_and_exec_fn This is called twice. Once for the output size of each string.
- *        After that, the d_offsets and d_chars are set and this is called again to fill in the
- *        chars memory.
+ * @param size_and_exec_fn This is called twice. Once for the output size of each string, which is
+ *                         written into the `d_offsets` array. After that, `d_chars` is set and this
+ *                         is called again to fill in the chars memory. The `d_validities` array may
+ *                         be modified to set the value `0` for the corresponding rows that contain
+ *                         null string elements.
  * @param strings_count Number of strings.
  * @param mr Device memory resource used to allocate the returned columns' device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @return offsets child column and chars child column for a strings column.
+ * @return offsets child column, chars child column, null_mask, and null_count for a strings column.
  */
 template <typename SizeAndExecuteFunction>
 std::tuple<std::unique_ptr<column>, std::unique_ptr<column>, rmm::device_buffer, size_type>
@@ -144,6 +146,14 @@ make_strings_children_with_null_mask(
   auto d_offsets             = offsets_view.template data<int32_t>();
   size_and_exec_fn.d_offsets = d_offsets;
 
+  auto validities               = rmm::device_uvector<int8_t>(strings_count, stream);
+  size_and_exec_fn.d_validities = validities.begin();
+
+  // Initialize the string validities to be all-valid (which can be modified later during calling to
+  // `for_each_fn`)
+  thrust::uninitialized_fill(
+    rmm::exec_policy(stream), validities.begin(), validities.end(), int8_t{1});
+
   // This is called twice: once for offsets and once for chars
   auto for_each_fn = [strings_count, stream](SizeAndExecuteFunction& size_and_exec_fn) {
     thrust::for_each_n(rmm::exec_policy(stream),
@@ -152,36 +162,35 @@ make_strings_children_with_null_mask(
                        size_and_exec_fn);
   };
 
-  // Compute the string sizes, storing in `d_offsets` (negative output sizes mean null strings)
+  // Compute the string sizes, storing in `d_offsets`
+  // During execution, we need to check the `first_pass` boolean flag, not
+  // checking `!d_chars`. This is because `d_chars` can have nullptr value in the
+  // situations when the strings column has all zero-size or all-null strings.
+  size_and_exec_fn.first_pass = true;
   for_each_fn(size_and_exec_fn);
 
-  // Use the string sizes to compute null_mask and null_count of the output strings column
-  auto [null_mask, null_count] = cudf::detail::valid_if(
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(strings_count),
-    [d_offsets] __device__(auto const idx) { return d_offsets[idx] >= 0; },
-    stream,
-    mr);
-
-  // Compute the offsets
-  auto const iter_trans_begin = thrust::make_transform_iterator(
-    d_offsets, [] __device__(auto const size) { return size < 0 ? 0 : size; });
+  // Compute the offsets from string sizes
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), iter_trans_begin, iter_trans_begin + strings_count + 1, d_offsets);
+    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
 
   // Now build the chars column
   auto const bytes  = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
   auto chars_column = create_chars_child_column(strings_count, bytes, stream, mr);
 
-  // If all the strings are empty or null, `bytes` will be `0` thus the `d_chars` pointer will has
-  // `nullptr` value. Thus, we need to set an arbitrary pointer value to `d_chars` to prevent the
-  // string sizes to be computed again. It is safe to do so, because in this case the strings column
-  // has all empty or all null string elements so nothing will be copied onto `d_chars`.
-  size_and_exec_fn.d_chars =
-    bytes > 0 ? chars_column->mutable_view().template data<char>() : reinterpret_cast<char*>(0x1);
-
-  // Execute the function fn to do whatever needed after the offsets have been computed
+  // Execute the function fn again to fill the chars column.
+  // During filling the `d_chars` array, we need to check the `first_pass` boolean flag, not
+  // checking `d_chars != nullptr`.
+  size_and_exec_fn.first_pass = false;
+  size_and_exec_fn.d_chars    = chars_column->mutable_view().template data<char>();
   for_each_fn(size_and_exec_fn);
+
+  // Finally compute null mask and null count from the validities array
+  auto [null_mask, null_count] = cudf::detail::valid_if(
+    validities.begin(),
+    validities.end(),
+    [] __device__(auto const valid) { return valid; },
+    stream,
+    mr);
 
   return std::make_tuple(std::move(offsets_column),
                          std::move(chars_column),
