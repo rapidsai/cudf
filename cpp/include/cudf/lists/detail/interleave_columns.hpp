@@ -38,14 +38,15 @@ namespace detail {
  * @throws cudf::logic_error if any lists column contains nested type.
  * @throws cudf::logic_error if all lists columns do not have the same entry type.
  *
- * @param input  Table containing lists columns to interleave.
+ * @param input Table containing lists columns to interleave.
+ * @param has_null_mask A boolean flag indicating that the input columns have null mask.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr     Device memory resource used to allocate the returned column's device memory.
- * @return       The interleaved columns as a single column.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return The interleaved columns as a single column.
  */
 std::unique_ptr<column> interleave_columns(
-  table_view const& lists_columns,
-  bool create_mask,
+  table_view const& input,
+  bool has_null_mask,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
