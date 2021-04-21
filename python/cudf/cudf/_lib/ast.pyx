@@ -1,6 +1,7 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 from enum import Enum
+import ast
 
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.dataframe import DataFrame
@@ -128,3 +129,32 @@ cdef evaluate_expression_internal(Table values, Expression expr):
 
 def evaluate_expression(df, expr):
     return evaluate_expression_internal(df, expr)
+
+
+cpdef ast_visit(node, df, list stack, list temporaries):
+    # Base cases: Name
+    if isinstance(node, ast.Name):
+        stack.append(ColumnReference(df.columns.get_loc(node.id) + 1))
+    else:
+        for field, value in ast.iter_fields(node):
+            if isinstance(value, ast.UnaryOp):
+                # TODO: Make actual map, for now just replacing with IDENTITy
+                # Should be mapping value.op -> ASTOperator.OPERATOR
+                ast_visit(value.operand, df, stack, temporaries)
+                temporaries.append(stack.pop())
+                stack.append(Expression(ASTOperator.IDENTITY, temporaries[-1]))
+            elif isinstance(value, ast.BinOp):
+                # TODO: Make actual map, for now just replacing with +
+                # pass
+                ast_visit(value.left, df, stack, temporaries)
+                ast_visit(value.right, df, stack, temporaries)
+                temporaries.append(stack.pop())
+                temporaries.append(stack.pop())
+                stack.append(Expression(
+                    ASTOperator.ADD, temporaries[-1], temporaries[-2]))
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, ast.AST):
+                        ast_visit(item, df, stack, temporaries)
+            elif isinstance(value, ast.AST):
+                ast_visit(value, df, stack, temporaries)
