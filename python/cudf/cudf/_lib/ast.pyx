@@ -188,7 +188,7 @@ cdef ast_visit(node, list col_names, list expressions, list column_references):
     if isinstance(node, ast.Name):
         column_references.append(ColumnReference(col_names.index(node.id)))
     else:
-        for field, value in ast.iter_fields(node):
+        for value in ast.iter_child_nodes(node):
             if isinstance(value, ast.UnaryOp):
                 ast_visit(value.operand, col_names, expressions,
                           column_references)
@@ -201,7 +201,7 @@ cdef ast_visit(node, list col_names, list expressions, list column_references):
                           column_references)
                 op = python_cudf_ast_map[type(value.op)]
                 expressions.append(Expression(
-                    ASTOperator.ADD, column_references[-2],
+                    op, column_references[-2],
                     column_references[-1]))
             elif isinstance(value, list):
                 for item in value:
@@ -210,6 +210,43 @@ cdef ast_visit(node, list col_names, list expressions, list column_references):
                                   column_references)
             elif isinstance(value, ast.AST):
                 ast_visit(value, col_names, expressions, column_references)
+
+
+cdef ast_visit_manual_stack(node, list col_names, list expressions, list
+                            column_references):
+    """Perform a non-recursive tree traversal using a manual approach."""
+    stack = list(ast.iter_child_nodes(node))
+    while stack:
+        node = stack.pop()
+        # Base cases: Name
+        if isinstance(node, ast.Name):
+            column_references.append(ColumnReference(col_names.index(node.id)))
+        else:
+            # This bit is tricky. I need to parse the operand, then come
+            # back to create the unary op once the operand has been
+            # translated. Same applies for binary ops. To handle this, I
+            # need to push back a sentinel of sorts that can be used to
+            # trigger the new behavior _after_ the operands have been
+            # parsed.
+            if isinstance(node, ast.UnaryOp):
+                stack.append(node.op)
+                stack.append(node.operand)
+            elif isinstance(node, ast.unaryop):
+                op = python_cudf_ast_map[type(node)]
+                expressions.append(Expression(op, column_references[-1]))
+            elif isinstance(node, ast.BinOp):
+                stack.append(node.op)
+                stack.append(node.left)
+                stack.append(node.right)
+            elif isinstance(node, (ast.operator, ast.cmpop, ast.boolop)):
+                op = python_cudf_ast_map[type(node)]
+                expressions.append(Expression(
+                    op, column_references[-2],
+                    column_references[-1]))
+            elif isinstance(node, list):
+                stack.extend(node)
+            elif isinstance(node, ast.AST):
+                stack.extend(ast.iter_child_nodes(node))
 
 
 def ast_visit_external(node, df, list expressions, list column_references):
@@ -225,4 +262,16 @@ def make_and_evaluate_expression(expr, df):
     column_references = []
     ast_visit(ast.parse(expr), df.columns.tolist(), expressions,
               column_references)
+    return evaluate_expression(df, expressions[-1])
+
+
+def make_and_evaluate_expression_nostack(expr, df):
+    """Create a cudf evaluable expression from a string and evaluate it."""
+    # Important: both make and evaluate must be coupled to guarantee that the
+    # column_references created (the owning ColumnReferences and Literals)
+    # remain in scope.
+    expressions = []
+    column_references = []
+    ast_visit_manual_stack(ast.parse(expr), df.columns.tolist(), expressions,
+                           column_references)
     return evaluate_expression(df, expressions[-1])
