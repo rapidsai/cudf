@@ -927,7 +927,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
   };
 
   // Brotli scratch memory for decompressing
-  rmm::device_vector<uint8_t> debrotli_scratch;
+  rmm::device_buffer debrotli_scratch;
 
   // Count the exact number of compressed pages
   size_t num_comp_pages    = 0;
@@ -943,7 +943,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
       num_comp_pages++;
     });
     if (codec.first == parquet::BROTLI && codec.second > 0) {
-      debrotli_scratch.resize(get_gpu_debrotli_scratch_size(codec.second));
+      debrotli_scratch.resize(get_gpu_debrotli_scratch_size(codec.second), stream);
     }
   }
 
@@ -1001,7 +1001,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
         case parquet::BROTLI:
           CUDA_TRY(gpu_debrotli(inflate_in.device_ptr(start_pos),
                                 inflate_out.device_ptr(start_pos),
-                                debrotli_scratch.data().get(),
+                                debrotli_scratch.data(),
                                 debrotli_scratch.size(),
                                 argc - start_pos,
                                 stream));
@@ -1052,10 +1052,10 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
   int target_page_index = 0;
   int src_info_index    = 0;
   for (size_t idx = 0; idx < chunks.size(); idx++) {
-    int src_col_schema = chunks[idx].src_col_schema;
-    auto &schema       = _metadata->get_schema(src_col_schema);
-    auto const per_page_nesting_info_size =
-      max(schema.max_definition_level + 1, _metadata->get_output_nesting_depth(src_col_schema));
+    int src_col_schema                    = chunks[idx].src_col_schema;
+    auto &schema                          = _metadata->get_schema(src_col_schema);
+    auto const per_page_nesting_info_size = std::max(
+      schema.max_definition_level + 1, _metadata->get_output_nesting_depth(src_col_schema));
 
     // skip my dict pages
     target_page_index += chunks[idx].num_dict_pages;
@@ -1083,7 +1083,7 @@ void reader::impl::allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc>
     int max_depth = _metadata->get_output_nesting_depth(src_col_schema);
 
     // # of nesting infos stored per page for this column
-    auto const per_page_nesting_info_size = max(schema.max_definition_level + 1, max_depth);
+    auto const per_page_nesting_info_size = std::max(schema.max_definition_level + 1, max_depth);
 
     // if this column has lists, generate depth remapping
     std::map<int, std::pair<std::vector<int>, std::vector<int>>> depth_remapping;
@@ -1199,7 +1199,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
 
   // Build index for string dictionaries since they can't be indexed
   // directly due to variable-sized elements
-  rmm::device_vector<gpu::nvstrdesc_s> str_dict_index;
+  rmm::device_vector<string_index_pair> str_dict_index;
   if (total_str_dict_indexes > 0) { str_dict_index.resize(total_str_dict_indexes); }
 
   // TODO (dm): hd_vec should have begin and end iterator members

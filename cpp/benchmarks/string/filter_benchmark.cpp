@@ -50,7 +50,7 @@ static void BM_filter_chars(benchmark::State& state, FilterAPI api)
     {cudf::char_utf8{'a'}, cudf::char_utf8{'c'}}};
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, 0);
+    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
     switch (api) {
       case filter: cudf::strings::filter_characters_of_type(input, types); break;
       case filter_chars: cudf::strings::filter_characters(input, filter_table); break;

@@ -85,7 +85,12 @@ def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
         columns = list(schema)
 
     with fs.open(paths[0], "rb") as f:
-        meta = cudf.read_orc(f, stripes=[0], columns=columns, **kwargs)
+        meta = cudf.read_orc(
+            f,
+            stripes=[0] if nstripes_per_file[0] else None,
+            columns=columns,
+            **kwargs,
+        )
 
     name = "read-orc-" + tokenize(fs_token, path, columns, **kwargs)
     dsk = {}

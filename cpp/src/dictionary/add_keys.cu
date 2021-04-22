@@ -63,6 +63,7 @@ std::unique_ptr<column> add_keys(
                                                   std::vector<size_type>{0},  // only one key column
                                                   duplicate_keep_option::KEEP_FIRST,
                                                   null_equality::EQUAL,
+                                                  null_order::BEFORE,
                                                   stream,
                                                   mr)
                       ->release();

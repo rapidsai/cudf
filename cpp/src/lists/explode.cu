@@ -36,6 +36,11 @@
 
 namespace cudf {
 namespace detail {
+
+// explode column gather map uses cudf::out_of_bounds_policy::NULLIFY to
+// fill nulls where there are invalid indices
+constexpr size_type InvalidIndex = -1;
+
 namespace {
 
 std::unique_ptr<table> build_table(
@@ -62,27 +67,35 @@ std::unique_ptr<table> build_table(
 
   std::vector<std::unique_ptr<column>> columns = gathered_table.release()->release();
 
-  auto inserted = columns.insert(columns.begin() + explode_column_idx,
-                                 explode_col_gather_map
-                                   ? std::move(detail::gather(table_view({sliced_child}),
-                                                              explode_col_gather_map->begin(),
-                                                              explode_col_gather_map->end(),
-                                                              cudf::out_of_bounds_policy::NULLIFY,
-                                                              stream,
-                                                              mr)
-                                                 ->release()[0])
-                                   : std::make_unique<column>(sliced_child, stream, mr));
+  columns.insert(columns.begin() + explode_column_idx,
+                 explode_col_gather_map
+                   ? std::move(detail::gather(table_view({sliced_child}),
+                                              explode_col_gather_map->begin(),
+                                              explode_col_gather_map->end(),
+                                              cudf::out_of_bounds_policy::NULLIFY,
+                                              stream,
+                                              mr)
+                                 ->release()[0])
+                   : std::make_unique<column>(sliced_child, stream, mr));
 
   if (position_array) {
     size_type position_size = position_array->size();
-    // the null mask for position matches the exploded column's gather map, so copy it over
-    rmm::device_buffer nullmask =
-      explode_col_gather_map ? copy_bitmask(*inserted->get()) : rmm::device_buffer(0, stream);
+    // build the null mask for position based on invalid entries in gather map
+    auto nullmask = explode_col_gather_map ? valid_if(
+                                               explode_col_gather_map->begin(),
+                                               explode_col_gather_map->end(),
+                                               [] __device__(auto i) { return i != InvalidIndex; },
+                                               stream,
+                                               mr)
+                                           : std::pair<rmm::device_buffer, size_type>{
+                                               rmm::device_buffer(0, stream), size_type{0}};
+
     columns.insert(columns.begin() + explode_column_idx,
                    std::make_unique<column>(data_type(type_to_id<size_type>()),
                                             position_size,
                                             position_array->release(),
-                                            std::move(nullmask)));
+                                            nullmask.first,
+                                            nullmask.second));
   }
 
   return std::make_unique<table>(std::move(columns));
@@ -243,8 +256,7 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
                              : offsets[idx] + null_or_empty_offset_p[idx] - 1;
       gather_map_p[invalid_index] = idx;
 
-      // negative one to indicate a null value
-      explode_col_gather_map_p[invalid_index] = -1;
+      explode_col_gather_map_p[invalid_index] = InvalidIndex;
       if (include_position) { position_array[invalid_index] = 0; }
     }
   };
