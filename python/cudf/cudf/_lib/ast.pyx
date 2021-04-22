@@ -183,37 +183,48 @@ python_cudf_ast_map = {
 }
 
 
-cpdef ast_visit(node, list col_names, list nodes):
+cpdef ast_visit(node, list col_names, list stack, list nodes):
     # Base cases: Name
     if isinstance(node, ast.Name):
-        nodes.append(ColumnReference(col_names.index(node.id)))
+        stack.append(ColumnReference(col_names.index(node.id) + 1))
     else:
         for value in ast.iter_child_nodes(node):
             if isinstance(value, ast.UnaryOp):
-                ast_visit(value.operand, col_names, nodes)
+                # TODO: I think here we can optimize by just calling on
+                # value.operand, need to verify.
+                ast_visit(value.operand, col_names, stack, nodes)
                 op = python_cudf_ast_map[type(value.op)]
-                nodes.append(Expression(op, nodes[-1]))
+                operand = stack.pop()
+                nodes.append(operand)
+                stack.append(Expression(op, operand))
             elif isinstance(value, ast.BinOp):
-                ast_visit(value.left, col_names, nodes)
-                ast_visit(value.right, col_names, nodes)
+                ast_visit(value, col_names, stack, nodes)
                 op = python_cudf_ast_map[type(value.op)]
-                nodes.append(Expression(op, nodes[-2], nodes[-1]))
+                # TODO: This assumes that left is parsed before right
+                # (alphabetically).
+                right = stack.pop()
+                left = stack.pop()
+                nodes.append(right)
+                nodes.append(left)
+                stack.append(Expression(op, left, right))
             elif isinstance(value, list):
                 for item in value:
                     if isinstance(item, ast.AST):
-                        ast_visit(item, col_names, nodes)
+                        ast_visit(item, col_names, stack, nodes)
             elif isinstance(value, ast.AST):
-                ast_visit(value, col_names, nodes)
+                ast_visit(value, col_names, stack, nodes)
 
 
 def make_and_evaluate_expression(expr, df):
     """Create a cudf evaluable expression from a string and evaluate it."""
     # Important: both make and evaluate must be coupled to guarantee that the
-    # nodes created (the owning ColumnReferences and Literals)
-    # remain in scope.
+    # nodes created (the owning ColumnReferences and Literals) remain in scope.
+    stack = []
     nodes = []
-    ast_visit(ast.parse(expr), df.columns.tolist(), nodes)
-    return evaluate_expression(df, nodes[-1])
+    ast_visit(ast.parse(expr), df.columns.tolist(), stack, nodes)
+    # At the end, all the stack contains is the expression to evaluate.
+    expr = stack[0]
+    return evaluate_expression(df, stack[-1])
 
 
 cdef ast_visit_manual_stack(node, list col_names, list expressions, list
@@ -224,7 +235,7 @@ cdef ast_visit_manual_stack(node, list col_names, list expressions, list
         node = stack.pop()
         # Base cases: Name
         if isinstance(node, ast.Name):
-            nodes.append(ColumnReference(col_names.index(node.id)))
+            nodes.append(ColumnReference(col_names.index(node.id) + 1))
         else:
             # This bit is tricky. I need to parse the operand, then come
             # back to create the unary op once the operand has been
@@ -265,5 +276,5 @@ def make_and_evaluate_expression_nostack(expr, df):
     return evaluate_expression(df, expressions[-1])
 
 
-def ast_visit_external(node, df, list nodes):
-    ast_visit(node, df.columns.tolist(), nodes)
+def ast_visit_external(node, df, list stack, list nodes):
+    ast_visit(node, df.columns.tolist(), stack, nodes)
