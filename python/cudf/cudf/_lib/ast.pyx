@@ -9,7 +9,7 @@ from cudf.core.dataframe import DataFrame
 
 from cython.operator cimport dereference
 from cudf._lib.cpp.types cimport size_type
-from libcpp.memory cimport make_shared, shared_ptr, unique_ptr, static_pointer_cast
+from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 from cudf._lib.ast cimport underlying_type_ast_operator
 from cudf._lib.column cimport Column
@@ -80,14 +80,16 @@ cdef class Literal(Node):
     def __cinit__(self, value):
         # TODO: Generalize this to other types of literals.
         cdef float val = value
-        self.c_scalar = make_shared[numeric_scalar[float]](val, True)
-        self.c_obj = <shared_ptr[libcudf_ast.node]> make_shared[libcudf_ast.literal](
-            <numeric_scalar[float] &>dereference(self.c_scalar))
+        self.c_scalar = make_unique[numeric_scalar[float]](val, True)
+        self.c_obj = <unique_ptr[libcudf_ast.node]> make_unique[
+            libcudf_ast.literal](
+                <numeric_scalar[float] &>dereference(self.c_scalar))
 
 
 cdef class ColumnReference(Node):
     def __cinit__(self, size_type index):
-        self.c_obj = <shared_ptr[libcudf_ast.node]> make_shared[libcudf_ast.column_reference](index)
+        self.c_obj = <unique_ptr[libcudf_ast.node]> make_unique[
+            libcudf_ast.column_reference](index)
 
 
 cdef class Expression(Node):
@@ -99,21 +101,20 @@ cdef class Expression(Node):
             <underlying_type_ast_operator> op.value)
 
         if right is None:
-            self.c_obj = <shared_ptr[libcudf_ast.node]> make_shared[libcudf_ast.expression](
-                op_value, dereference(left.c_obj)
-            )
+            self.c_obj = <unique_ptr[libcudf_ast.node]> make_unique[
+                libcudf_ast.expression](op_value, dereference(left.c_obj))
         else:
-            self.c_obj = <shared_ptr[libcudf_ast.node]> make_shared[libcudf_ast.expression](
-                op_value, dereference(left.c_obj), dereference(right.c_obj)
+            self.c_obj = <unique_ptr[libcudf_ast.node]> make_unique[
+                libcudf_ast.expression](
+                    op_value, dereference(left.c_obj), dereference(right.c_obj)
             )
 
 
 cdef evaluate_expression_internal(Table values, Expression expr):
     result_data = ColumnAccessor()
-    cdef shared_ptr[libcudf_ast.expression] c_expr_ptr = static_pointer_cast[libcudf_ast.expression, libcudf_ast.node](expr.c_obj)
     cdef unique_ptr[column] col = libcudf_ast.compute_column(
         values.view(),
-        dereference(c_expr_ptr.get())
+        <libcudf_ast.expression &> dereference(expr.c_obj.get())
     )
     result_data['result'] = Column.from_unique_ptr(move(col))
     result_table = Table(data=result_data)

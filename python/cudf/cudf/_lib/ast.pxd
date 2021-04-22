@@ -1,6 +1,6 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
-from libcpp.memory cimport shared_ptr
+from libcpp.memory cimport unique_ptr
 
 from libc.stdint cimport int32_t
 from cudf._lib.cpp.scalar.scalar cimport numeric_scalar
@@ -13,11 +13,11 @@ ctypedef int32_t underlying_type_ast_operator
 
 
 cdef class Node:
-    cdef shared_ptr[node] c_obj
+    cdef unique_ptr[node] c_obj
 
 
 cdef class Literal(Node):
-    cdef shared_ptr[numeric_scalar[float]] c_scalar
+    cdef unique_ptr[numeric_scalar[float]] c_scalar
 
 
 cdef class ColumnReference(Node):
