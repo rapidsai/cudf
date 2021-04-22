@@ -176,9 +176,7 @@ python_cudf_ast_map = {
 cpdef ast_visit(node, list col_names, list stack, list nodes):
     # Base cases: Name
     if isinstance(node, ast.Name):
-        idx = col_names.index(node.id) + 1
-        ref = ColumnReference(idx)
-        stack.append(ref)
+        stack.append(ColumnReference(col_names.index(node.id) + 1))
     else:
         for field in node._fields:
             value = getattr(node, field)
@@ -187,21 +185,16 @@ cpdef ast_visit(node, list col_names, list stack, list nodes):
                 # value.operand, need to verify.
                 ast_visit(value.operand, col_names, stack, nodes)
                 op = python_cudf_ast_map[type(value.op)]
-                operand = stack.pop()
-                nodes.append(operand)
-                expr = Expression(op, operand)
-                stack.append(expr)
+                nodes.append(stack.pop())
+                stack.append(Expression(op, nodes[-1]))
             elif isinstance(value, ast.BinOp):
                 ast_visit(value, col_names, stack, nodes)
                 op = python_cudf_ast_map[type(value.op)]
                 # TODO: This assumes that left is parsed before right
                 # (alphabetically).
-                right = stack.pop()
-                left = stack.pop()
-                nodes.append(right)
-                nodes.append(left)
-                expr = Expression(op, left, right)
-                stack.append(expr)
+                nodes.append(stack.pop())
+                nodes.append(stack.pop())
+                stack.append(Expression(op, nodes[-1], nodes[-2]))
             elif isinstance(value, list):
                 for item in value:
                     if isinstance(item, ast.AST):
