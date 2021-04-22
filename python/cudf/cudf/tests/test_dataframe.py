@@ -7800,6 +7800,7 @@ def test_equals_dtypes():
     [
         pd.DataFrame({"a": [10, 11, 12]}, index=["a", "b", "z"]),
         pd.DataFrame({"z": ["a"]}),
+        pd.DataFrame({"a": [], "b": []}),
     ],
 )
 @pytest.mark.parametrize(
