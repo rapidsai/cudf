@@ -165,7 +165,7 @@ BENCHMARK_REGISTER_F(OrcRead, column_selection)
                   int32_t(column_selection::SECOND_HALF)},
                  {int32_t(row_selection::ALL)},
                  {1},
-                 {0b111},  // defaults
+                 {0b11},  // defaults
                  {int32_t(cudf::type_id::EMPTY)}})
   ->Unit(benchmark::kMillisecond)
   ->UseManualTime();
@@ -176,7 +176,7 @@ BENCHMARK_REGISTER_F(OrcRead, row_selection)
   ->ArgsProduct({{int32_t(column_selection::ALL)},
                  {int32_t(row_selection::STRIPES), int32_t(row_selection::NROWS)},
                  {1, 8},
-                 {0b111},  // defaults
+                 {0b11},  // defaults
                  {int32_t(cudf::type_id::EMPTY)}})
   ->Unit(benchmark::kMillisecond)
   ->UseManualTime();
@@ -187,7 +187,7 @@ BENCHMARK_REGISTER_F(OrcRead, misc_options)
   ->ArgsProduct({{int32_t(column_selection::ALL)},
                  {int32_t(row_selection::NROWS)},
                  {1},
-                 {0b111, 0b110, 0b101, 0b011},  // `true` is default for each boolean parameter here
+                 {0b11, 0b10, 0b01},  // `true` is default for each boolean parameter here
                  {int32_t(cudf::type_id::EMPTY), int32_t(cudf::type_id::TIMESTAMP_NANOSECONDS)}})
   ->Unit(benchmark::kMillisecond)
   ->UseManualTime();
