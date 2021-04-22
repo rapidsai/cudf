@@ -7945,7 +7945,7 @@ def _setitem_with_dataframe(
             "Number of Input Columns must be same replacement Dataframe"
         )
 
-    if not input_df.index.equals(replace_df.index):
+    if len(input_df) != 0 and not input_df.index.equals(replace_df.index):
         replace_df = replace_df.reindex(input_df.index)
 
     for col_1, col_2 in zip(input_cols, replace_df.columns):
