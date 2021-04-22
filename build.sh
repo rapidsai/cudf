@@ -18,7 +18,7 @@ ARGS=$*
 REPODIR=$(cd $(dirname $0); pwd)
 
 VALIDARGS="clean libcudf cudf dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn --ptds -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [-l]
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_examples] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [-l]
    clean                - remove all existing build artifacts and configuration (start
                           over)
    libcudf              - build the cudf C++ code only
@@ -26,6 +26,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafk
    dask_cudf            - build the dask_cudf Python package
    benchmarks           - build benchmarks
    tests                - build tests
+   libcudf_examples     - build libcudf examples
    libcudf_kafka        - build the libcudf_kafka C++ code only
    cudf_kafka           - build the cudf_kafka Python package
    custreamz            - build the custreamz Python package
@@ -187,6 +188,14 @@ if buildAll || hasArg dask_cudf; then
     else
         PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL}
     fi
+fi
+
+# Configure, build libcudf examples
+if hasArg libcudf_examples; then
+    # Configure basic example
+    cmake -S $REPODIR/cpp/example/basic -B $REPODIR/cpp/example/basic/build
+    cd ${$REPODIR}/cpp/example/basic/build
+    cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG}
 fi
 
 # Build libcudf_kafka library
