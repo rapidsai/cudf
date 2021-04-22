@@ -113,7 +113,7 @@ static void BM_case(benchmark::State& state, QueryArg&&... query_arg)
   std::string json_path(query_arg...);
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, 0);
+    cuda_event_timer raii(state, true);
     auto result = cudf::strings::get_json_object(scv, json_path);
     cudaStreamSynchronize(0);
   }

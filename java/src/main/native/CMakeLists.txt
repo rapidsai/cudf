@@ -274,7 +274,7 @@ target_compile_definitions(cudfjni
 if(USE_GDS)
     add_library(cufilejni SHARED "src/CuFileJni.cpp")
     target_include_directories(cufilejni PRIVATE "${cuFile_INCLUDE_DIRS}")
-    target_link_libraries(cufilejni PRIVATE "${cuFile_LIBRARIES}")
+    target_link_libraries(cufilejni PRIVATE cudfjni "${cuFile_LIBRARIES}")
 endif(USE_GDS)
 
 ###################################################################################################

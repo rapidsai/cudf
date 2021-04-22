@@ -16,8 +16,6 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/copy.hpp>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 #include <cudf_test/base_fixture.hpp>
@@ -47,7 +45,7 @@ TYPED_TEST(RowBitCountTyped, SimpleTypes)
   // expect size of the type per row
   auto expected = make_fixed_width_column(data_type{type_id::INT32}, 16);
   cudf::mutable_column_view mcv(*expected);
-  thrust::fill(rmm::exec_policy(0),
+  thrust::fill(rmm::exec_policy(rmm::cuda_stream_default),
                mcv.begin<size_type>(),
                mcv.end<size_type>(),
                sizeof(device_storage_type_t<T>) * CHAR_BIT);
@@ -70,7 +68,7 @@ TYPED_TEST(RowBitCountTyped, SimpleTypesWithNulls)
   // expect size of the type + 1 bit per row
   auto expected = make_fixed_width_column(data_type{type_id::INT32}, 16);
   cudf::mutable_column_view mcv(*expected);
-  thrust::fill(rmm::exec_policy(0),
+  thrust::fill(rmm::exec_policy(rmm::cuda_stream_default),
                mcv.begin<size_type>(),
                mcv.end<size_type>(),
                (sizeof(device_storage_type_t<T>) * CHAR_BIT) + 1);
@@ -490,7 +488,7 @@ TEST_F(RowBitCount, Table)
   auto expected   = cudf::make_fixed_width_column(data_type{type_id::INT32}, t.num_rows());
   cudf::mutable_column_view mcv(*expected);
   thrust::transform(
-    rmm::exec_policy(0),
+    rmm::exec_policy(rmm::cuda_stream_default),
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(0) + t.num_rows(),
     mcv.begin<size_type>(),
@@ -586,7 +584,7 @@ TEST_F(RowBitCount, EmptyTable)
   }
 
   {
-    auto strings = cudf::strings::detail::make_empty_strings_column(0);
+    auto strings = cudf::make_empty_column(data_type{type_id::STRING});
     auto ints    = cudf::make_empty_column(data_type{type_id::INT32});
     cudf::table_view empty({*strings, *ints});
 
