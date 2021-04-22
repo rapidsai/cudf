@@ -1070,6 +1070,13 @@ def test_dataframe_setitem_index_len1():
     np.testing.assert_equal(gdf.b.to_array(), [0])
 
 
+def test_empty_dataframe_setitem_df():
+    gdf1 = cudf.DataFrame()
+    gdf2 = cudf.DataFrame({"a": [1, 2, 3, 4, 5]})
+    gdf1["a"] = gdf2["a"]
+    assert_eq(gdf1, gdf2)
+
+
 def test_assign():
     gdf = cudf.DataFrame({"x": [1, 2, 3]})
     gdf2 = gdf.assign(y=gdf.x + 1)
