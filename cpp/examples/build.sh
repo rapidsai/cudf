@@ -6,11 +6,15 @@
 
 # Add libcudf examples build scripts down below
 
+# Parallelism control
+PARALLEL_LEVEL=${PARALLEL_LEVEL:-4}
+
 ################################################################################
 # Basic example
+BASIC_EXAMPLE_DIR=basic
+BASIC_EXAMPLE_BUILD_DIR=${BASIC_EXAMPLE_DIR}/build
 
 # Configure
-cmake -S $REPODIR/cpp/example/basic -B $REPODIR/cpp/example/basic/build
+cmake -S ${BASIC_EXAMPLE_DIR} -B ${BASIC_EXAMPLE_BUILD_DIR}
 # Build
-cd ${$REPODIR}/cpp/example/basic/build
-cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG}
+cmake --build ${BASIC_EXAMPLE_DIR} -j${PARALLEL_LEVEL}
