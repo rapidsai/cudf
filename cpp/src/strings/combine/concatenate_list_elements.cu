@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,8 +59,7 @@ struct compute_size_and_concatenate_fn {
   // If d_chars != nullptr: only concatenate strings.
   char* d_chars{nullptr};
 
-  // This array is initialized to contain all `1` values, thus we only need to set `0` for the rows
-  // corresponding to null output elements.
+  // We need to set `1` or `0` for the validities of the output strings.
   int8_t* d_validities{nullptr};
 
   __device__ void operator()(size_type const idx)
@@ -70,7 +69,7 @@ struct compute_size_and_concatenate_fn {
 
     if (not d_chars and func.is_null_list(lists_dv, idx)) {
       d_offsets[idx]    = 0;
-      d_validities[idx] = 0;  // null output string
+      d_validities[idx] = false;
       return;
     }
 
@@ -84,7 +83,7 @@ struct compute_size_and_concatenate_fn {
          ++str_idx) {
       if (not d_chars and (strings_dv.is_null(str_idx) and not string_narep_dv.is_valid())) {
         d_offsets[idx]    = 0;
-        d_validities[idx] = 0;  // null output string
+        d_validities[idx] = false;
         return;  // early termination: the entire list of strings will result in a null string
       }
       auto const d_str = strings_dv.is_null(str_idx) ? string_narep_dv.value()
@@ -99,7 +98,10 @@ struct compute_size_and_concatenate_fn {
     }
 
     // Separator is inserted only in between strings
-    if (not d_chars) { d_offsets[idx] = static_cast<size_type>(size_bytes - separator_size); }
+    if (not d_chars) {
+      d_offsets[idx]    = static_cast<size_type>(size_bytes - separator_size);
+      d_validities[idx] = true;
+    }
   }
 };
 
@@ -111,16 +113,13 @@ struct compute_size_and_concatenate_fn {
 struct scalar_separator_fn {
   string_scalar_device_view const d_separator;
 
-  __device__ inline bool is_null_list(column_device_view const& lists_dv, size_type const idx) const
+  __device__ bool is_null_list(column_device_view const& lists_dv, size_type const idx) const
     noexcept
   {
     return lists_dv.is_null(idx);
   }
 
-  __device__ inline string_view separator(size_type const) const noexcept
-  {
-    return d_separator.value();
-  }
+  __device__ string_view separator(size_type const) const noexcept { return d_separator.value(); }
 };
 
 }  // namespace
@@ -178,13 +177,13 @@ struct column_separators_fn {
   column_device_view const separators_dv;
   string_scalar_device_view const sep_narep_dv;
 
-  __device__ inline bool is_null_list(column_device_view const& lists_dv, size_type const idx) const
+  __device__ bool is_null_list(column_device_view const& lists_dv, size_type const idx) const
     noexcept
   {
     return lists_dv.is_null(idx) or (separators_dv.is_null(idx) and not sep_narep_dv.is_valid());
   }
 
-  __device__ inline string_view separator(size_type const idx) const noexcept
+  __device__ string_view separator(size_type const idx) const noexcept
   {
     return separators_dv.is_valid(idx) ? separators_dv.element<string_view>(idx)
                                        : sep_narep_dv.value();
