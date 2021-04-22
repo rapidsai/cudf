@@ -347,6 +347,7 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
   stripe_dict.device_to_host(stream, true);
 }
 
+// DECIMAL: need total size on the host
 orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
                                          host_span<stripe_rowgroups const> stripe_bounds)
 {
@@ -469,6 +470,8 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
         data2_kind        = SECONDARY;
         encoding_kind     = DIRECT_V2;
         break;
+        // DECIMAL: data_size computed via varint_len + scan_by_key + "skip scan"
+        // data2_size (scale) RLE estimate OR compute exact since all elems are same
       default: CUDF_FAIL("Unsupported ORC type kind");
     }
 
@@ -505,7 +508,8 @@ orc_streams::orc_stream_offsets orc_streams::compute_offsets(
   host_span<orc_column_view const> columns, size_t num_rowgroups) const
 {
   std::vector<size_t> strm_offsets(streams.size());
-  size_t str_data_size = 0;
+  size_t str_data_size =
+    0;  // DECIMAL: rename to non_rle_data; decimal DATA stream should be in there
   size_t rle_data_size = 0;
   for (size_t i = 0; i < streams.size(); ++i) {
     const auto &stream = streams[i];
@@ -518,7 +522,8 @@ orc_streams::orc_stream_offsets orc_streams::compute_offsets(
       if (column.orc_kind() != TypeKind::STRING) return false;
 
       // Dictionary encoded string column dictionary characters or
-      // directly encoded string column characters
+      // directly encoded string column characters or
+      // DECIMAL: add decimal data condition
       return ((stream.kind == DICTIONARY_DATA && column.orc_encoding() == DICTIONARY_V2) ||
               (stream.kind == DATA && column.orc_encoding() == DIRECT_V2));
     }();
@@ -540,6 +545,7 @@ struct segmented_valid_cnt_input {
   std::vector<size_type> indices;
 };
 
+// DECIMAL: need per-rowgroup sizes on the host, need elem sizes on device
 encoded_data writer::impl::encode_columns(const table_device_view &view,
                                           host_span<orc_column_view const> columns,
                                           std::vector<int> const &str_col_ids,
@@ -575,7 +581,6 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
           ck.dtype_len = column.type_width();
         }
         ck.scale = column.clockscale();
-        // Only need to check row groups that end within the stripe
       }
     }
   }
@@ -654,7 +659,9 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
               // Pass-through
               strm.lengths[strm_type]   = ck.num_rows * ck.dtype_len;
               strm.data_ptrs[strm_type] = nullptr;
-            } else {
+
+            }  // DECIMAL: if decimal data, use partial sums for offsets/lengths
+            else {
               strm.lengths[strm_type]   = streams[strm_id].length;
               strm.data_ptrs[strm_type] = encoded_data.data() + stream_offsets.str_data_size +
                                           stream_offsets.offsets[strm_id] +
@@ -679,6 +686,8 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
     gpu::EncodeStripeDictionaries(
       d_stripe_dict, chunks, str_col_ids.size(), stripe_bounds.size(), chunk_streams, stream);
   }
+
+  // DECIMAL: add encode here, bail on decimal type in EncodeOrcColumnData
 
   gpu::EncodeOrcColumnData(chunks, chunk_streams, stream);
   stream.synchronize();
@@ -1074,6 +1083,17 @@ void writer::impl::write(table_view const &table)
     build_dictionaries(
       orc_columns.data(), str_col_ids, stripe_bounds, dict, dict_index.data(), stripe_dict);
   }
+
+  // DECIMAL: will probably need a special step for decimal columns to attach element size arrays
+  //  consider combining individual sizes + rg sizes + total size in a single class
+
+  // DECIMAL: to get the required info:
+  //  1. compute elem sizes on device;
+  //  2. scan per rowgroup(device);
+  //  3. Copy last elems in each rowgroup to host;
+  //  4. Accumulate to get total size;
+  // Note: per-element size is only needed on device; per-RG sizeis needed to init streams (host);
+  // total size is used on host
 
   auto streams  = create_streams(orc_columns, stripe_bounds);
   auto enc_data = encode_columns(*device_columns, orc_columns, str_col_ids, stripe_bounds, streams);

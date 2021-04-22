@@ -643,6 +643,7 @@ __global__ void __launch_bounds__(block_size)
     s->chunk  = chunks[col_id][group_id];
     s->stream = streams[col_id][group_id];
   }
+  // DECIMAL: return if decimal type
   if (t < CI_NUM_STREAMS) { s->strm_pos[t] = 0; }
   __syncthreads();
   if (!t) {
