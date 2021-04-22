@@ -13,22 +13,16 @@ ctypedef int32_t underlying_type_ast_operator
 
 
 cdef class Node:
-    # Using a shared pointer here to standardize getting the underlying raw
-    # pointer for passing to C++ across all subclasses.
-    # TODO: Consider making this a weak pointer. Probably not worth the extra
-    # effort though since these classes are part of a hierarchy anyway.
-    cdef shared_ptr[node] c_node
-    cdef node * _get_ptr(self)
+    cdef shared_ptr[node] c_obj
 
 
 cdef class Literal(Node):
     cdef shared_ptr[numeric_scalar[float]] c_scalar
-    cdef shared_ptr[literal] c_obj
 
 
 cdef class ColumnReference(Node):
-    cdef shared_ptr[column_reference] c_obj
+    pass
 
 
 cdef class Expression(Node):
-    cdef shared_ptr[expression] c_obj
+    pass
