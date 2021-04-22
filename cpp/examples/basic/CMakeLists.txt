@@ -18,7 +18,7 @@ include(${CPM_DOWNLOAD_LOCATION})
 
 CPMAddPackage(NAME  cudf
     GIT_REPOSITORY  https://github.com/rapidsai/cudf
-    GIT_TAG         branch-0.19
+    GIT_TAG         main
     GIT_SHALLOW     TRUE
     SOURCE_SUBDIR   cpp
     OPTIONS         "BUILD_TESTS OFF"
