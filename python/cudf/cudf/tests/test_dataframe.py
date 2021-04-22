@@ -2002,6 +2002,27 @@ def test_quantile(q, numeric_only):
         )
 
 
+@pytest.mark.parametrize("q", [0.2, 1, 0.001, [0.5], [], [0.005, 0.8, 0.03]])
+@pytest.mark.parametrize("interpolation", ["higher", "lower", "nearest"])
+def test_decimal_quantile(q, interpolation):
+    data = ["244.8", "32.24", "2.22", "98.14", "453.23", "5.45"]
+    gdf = cudf.DataFrame(
+        {"id": np.random.randint(0, 10, size=len(data)), "val": data}
+    )
+    gdf["id"] = gdf["id"].astype("float64")
+    gdf["val"] = gdf["val"].astype(cudf.Decimal64Dtype(7, 2))
+    pdf = gdf.to_pandas()
+
+    got = gdf.quantile(q, numeric_only=False, interpolation=interpolation)
+    expected = pdf.quantile(
+        q if isinstance(q, list) else [q],
+        numeric_only=False,
+        interpolation=interpolation,
+    )
+
+    assert_eq(got, expected)
+
+
 def test_empty_quantile():
     pdf = pd.DataFrame({"x": []})
     df = cudf.DataFrame({"x": []})

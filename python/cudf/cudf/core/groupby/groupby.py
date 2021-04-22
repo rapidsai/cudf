@@ -587,6 +587,10 @@ class GroupBy(Serializable):
         """Compute the column-wise sum of the values in each group."""
         return self.agg("sum")
 
+    def prod(self):
+        """Compute the column-wise product of the values in each group."""
+        return self.agg("prod")
+
     def idxmin(self):
         """Get the column-wise index of the minimum value in each group."""
         return self.agg("idxmin")

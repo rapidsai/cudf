@@ -163,6 +163,7 @@ cdef class Aggregation:
         cdef Aggregation agg = cls()
         agg.c_obj = move(libcudf_aggregation.make_product_aggregation())
         return agg
+    prod = product
 
     @classmethod
     def sum_of_squares(cls):

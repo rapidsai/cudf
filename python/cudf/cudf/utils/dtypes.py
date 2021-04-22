@@ -283,6 +283,8 @@ def cudf_dtype_from_pydata_dtype(dtype):
 
     if is_categorical_dtype(dtype):
         return cudf.core.dtypes.CategoricalDtype
+    elif is_decimal_dtype(dtype):
+        return cudf.core.dtypes.Decimal64Dtype
     elif dtype in cudf._lib.types.np_to_cudf_types:
         return dtype.type
 
