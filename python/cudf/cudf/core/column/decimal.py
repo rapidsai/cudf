@@ -1,6 +1,5 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
-import pickle
 from decimal import Decimal
 from numbers import Number
 from typing import Any, Sequence, Tuple, Union, cast
@@ -231,36 +230,16 @@ class DecimalColumn(ColumnBase):
         return self._copy_type_metadata(result)
 
     def serialize(self) -> Tuple[dict, list]:
-        header = {}
-        frames = []
-        header["type-serialized"] = pickle.dumps(type(self))
+        header, frames = super().serialize()
         header["dtype"] = self.dtype.serialize()
         header["size"] = self.size
-        if self.data is not None:
-            data_header, data_frames = self.data.serialize()
-            header["data"] = data_header
-            frames.extend(data_frames)
-
-        if self.mask is not None:
-            mask_header, mask_frames = self.mask.serialize()
-            header["mask"] = mask_header
-            frames.extend(mask_frames)
-
-        header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> ColumnBase:
         dtype = cudf.Decimal64Dtype.deserialize(*header["dtype"])
-        data = Buffer.deserialize(header["data"], [frames[0]])
-        mask = None
-        if "mask" in header:
-            mask = Buffer.deserialize(header["mask"], [frames[1]])
-
-        size = header["size"]
-        return cudf.core.column.build_column(
-            data=data, dtype=dtype, mask=mask, size=size
-        )
+        header["dtype"] = dtype
+        return super().deserialize(header, frames)
 
 
 def _binop_scale(l_dtype, r_dtype, op):
