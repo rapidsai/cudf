@@ -101,7 +101,6 @@ template <typename TieType,
           typename Transformer,
           typename TieIterator>
 void tie_break_ranks_transform(cudf::device_span<size_type const> dense_rank_sorted,
-                               cudf::device_span<TieType> tie_sorted,
                                TieIterator tie_iter,
                                column_view const &sorted_order_view,
                                outputIterator rank_iter,
@@ -112,6 +111,7 @@ void tie_break_ranks_transform(cudf::device_span<size_type const> dense_rank_sor
   auto const input_size = sorted_order_view.size();
   // algorithm: reduce_by_key(dense_rank, 1, n, reduction_tie_breaker)
   // reduction_tie_breaker = min, max, min_count
+  rmm::device_uvector<TieType> tie_sorted(sorted_order_view.size(), stream);
   thrust::reduce_by_key(rmm::exec_policy(stream),
                         dense_rank_sorted.begin(),
                         dense_rank_sorted.end(),
@@ -168,9 +168,7 @@ void rank_min(cudf::device_span<size_type const> group_keys,
   // min of first in the group
   // All equal values have min of ranks among them.
   // algorithm: reduce_by_key(dense_rank, 1, n, min), scatter
-  rmm::device_uvector<size_type> tie_sorted(sorted_order_view.size(), stream);
   tie_break_ranks_transform<size_type>(group_keys,
-                                       tie_sorted,
                                        thrust::make_counting_iterator<size_type>(1),
                                        sorted_order_view,
                                        rank_mutable_view.begin<outputType>(),
@@ -188,9 +186,7 @@ void rank_max(cudf::device_span<size_type const> group_keys,
   // max of first in the group
   // All equal values have max of ranks among them.
   // algorithm: reduce_by_key(dense_rank, 1, n, max), scatter
-  rmm::device_uvector<size_type> tie_sorted(sorted_order_view.size(), stream);
   tie_break_ranks_transform<size_type>(group_keys,
-                                       tie_sorted,
                                        thrust::make_counting_iterator<size_type>(1),
                                        sorted_order_view,
                                        rank_mutable_view.begin<outputType>(),
@@ -210,18 +206,18 @@ void rank_average(cudf::device_span<size_type const> group_keys,
   // Calculate Min of ranks and Count of equal values
   // algorithm: reduce_by_key(dense_rank, 1, n, min_count)
   //            transform(min+(count-1)/2), scatter
-  using MinCount = thrust::tuple<size_type, size_type>;
-  rmm::device_vector<MinCount> tie_sorted(sorted_order_view.size());
+  using MinCount = thrust::pair<size_type, size_type>;
   tie_break_ranks_transform<MinCount>(
     group_keys,
-    tie_sorted,
-    thrust::make_zip_iterator(thrust::make_tuple(thrust::make_counting_iterator<size_type>(1),
-                                                 thrust::make_constant_iterator<size_type>(1))),
+    cudf::detail::make_counting_transform_iterator(1,
+                                                   [] __device__(auto i) {
+                                                     return MinCount{i, 1};
+                                                   }),
     sorted_order_view,
     rank_mutable_view.begin<double>(),
     [] __device__(auto rank_count1, auto rank_count2) {
-      return MinCount{std::min(thrust::get<0>(rank_count1), thrust::get<0>(rank_count2)),
-                      thrust::get<1>(rank_count1) + thrust::get<1>(rank_count2)};
+      return MinCount{std::min(rank_count1.first, rank_count2.first),
+                      rank_count1.second + rank_count2.second};
     },
     [] __device__(MinCount minrank_count) {  // min+(count-1)/2
       return static_cast<double>(thrust::get<0>(minrank_count)) +
