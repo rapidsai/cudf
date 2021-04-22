@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/valid_if.cuh>
@@ -34,8 +35,8 @@ namespace lists {
 namespace detail {
 namespace {
 /**
- * @brief Generate list offsets for the output lists column from the table_view of the input lists
- * columns.
+ * @brief Generate list offsets and list validities for the output lists column from the table_view
+ * of the input lists columns.
  */
 std::pair<std::unique_ptr<column>, rmm::device_uvector<int8_t>>
 generate_list_offsets_and_validities(table_view const& input,
@@ -43,49 +44,49 @@ generate_list_offsets_and_validities(table_view const& input,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  auto const num_cols        = input.num_columns();
-  auto const num_rows        = input.num_columns();
-  auto const num_output_rows = num_rows * num_cols;
+  auto const num_cols  = input.num_columns();
+  auto const num_rows  = input.num_rows();
+  auto const num_lists = num_rows * num_cols;
 
   // The output offsets column
   static_assert(sizeof(offset_type) == sizeof(int32_t));
   static_assert(sizeof(size_type) == sizeof(int32_t));
   auto list_offsets = make_numeric_column(
-    data_type{type_id::INT32}, num_output_rows + 1, mask_state::UNALLOCATED, stream, mr);
+    data_type{type_id::INT32}, num_lists + 1, mask_state::UNALLOCATED, stream, mr);
   auto const d_out_offsets = list_offsets->mutable_view().begin<offset_type>();
   auto const table_dv_ptr  = table_device_view::create(input);
 
   // The array of int8_t to store element validities
-  auto validities = has_null_mask ? rmm::device_uvector<int8_t>(num_output_rows, stream)
+  auto validities = has_null_mask ? rmm::device_uvector<int8_t>(num_lists, stream)
                                   : rmm::device_uvector<int8_t>(0, stream);
-  thrust::uninitialized_fill(
-    rmm::exec_policy(stream), validities.begin(), validities.end(), int8_t{1});
 
   // Compute list sizes
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(num_output_rows),
+                    thrust::make_counting_iterator<size_type>(num_lists),
                     d_out_offsets,
                     [num_cols,
                      table_dv     = *table_dv_ptr,
                      d_validities = validities.begin(),
-                     has_null_mask] __device__(size_type const idx) {
-                      auto const col_id   = idx % num_cols;
-                      auto const list_id  = idx / num_cols;
-                      auto const d_column = table_dv.column(col_id);
-                      if (d_column.is_null(list_id)) {
-                        if (has_null_mask) { d_validities[idx] = 0; }
-                        return size_type{0};
+                     has_null_mask] __device__(size_type const dst_list_id) {
+                      auto const src_col_id  = dst_list_id % num_cols;
+                      auto const src_list_id = dst_list_id / num_cols;
+                      auto const& src_col    = table_dv.column(src_col_id);
+                      auto const is_valid    = src_col.is_valid(src_list_id);
+
+                      if (has_null_mask) {
+                        d_validities[dst_list_id] = static_cast<int8_t>(is_valid);
                       }
+                      if (not is_valid) { return size_type{0}; }
                       auto const d_offsets =
-                        d_column.child(lists_column_view::offsets_column_index).data<size_type>() +
-                        d_column.offset();
-                      return d_offsets[list_id + 1] - d_offsets[list_id];
+                        src_col.child(lists_column_view::offsets_column_index).data<size_type>() +
+                        src_col.offset();
+                      return d_offsets[src_list_id + 1] - d_offsets[src_list_id];
                     });
 
   // Compute offsets from sizes
   thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_out_offsets, d_out_offsets + num_output_rows + 1, d_out_offsets);
+    rmm::exec_policy(stream), d_out_offsets, d_out_offsets + num_lists + 1, d_out_offsets);
 
   return {std::move(list_offsets), std::move(validities)};
 }
@@ -95,89 +96,98 @@ generate_list_offsets_and_validities(table_view const& input,
  */
 struct copy_list_entries_fn {
   template <class T>
-  std::enable_if_t<not std::is_same_v<T, cudf::string_view> and not cudf::is_fixed_width<T>(),
-                   std::unique_ptr<column>>
-  operator()(table_view const& input,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr) const
+  std::enable_if_t<std::is_same_v<T, cudf::string_view>, std::unique_ptr<column>> operator()(
+    table_view const& input,
+    column_view const& list_offsets,
+    bool has_null_mask,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr) const noexcept
   {
-    // Currently, only support string_view and fixed-width types
-    CUDF_FAIL("Called `copy_list_entries_fn()` on non-supported types.");
+    return nullptr;
   }
 
   template <class T>
   std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<column>> operator()(
     table_view const& input,
+    column_view const& list_offsets,
+    bool has_null_mask,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const noexcept
   {
-    return nullptr;
+    auto const child_col   = lists_column_view(*input.begin()).child();
+    auto const num_cols    = input.num_columns();
+    auto const num_rows    = input.num_rows();
+    auto const num_lists   = num_rows * num_cols;
+    auto const output_size = cudf::detail::get_value<size_type>(list_offsets, num_lists, stream);
+
+    std::vector<column_view> child_views, offsets_views;
+    for (auto const& col : input) {
+      auto const list_col = lists_column_view(col);
+      child_views.emplace_back(list_col.child());
+      offsets_views.emplace_back(list_col.offsets());
+    }
+    auto const child_cols_ptr   = table_device_view::create(table_view{child_views});
+    auto const offsets_cols_ptr = table_device_view::create(table_view{offsets_views});
+
+    auto output = allocate_like(child_col, output_size, mask_allocation_policy::NEVER, stream, mr);
+    auto output_dv_ptr = mutable_column_device_view::create(*output);
+
+    // The array of int8_t to store element validities
+    auto validities = has_null_mask ? rmm::device_uvector<int8_t>(output_size, stream)
+                                    : rmm::device_uvector<int8_t>(0, stream);
+
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       num_lists,
+                       [num_cols,
+                        child_cols   = *child_cols_ptr,
+                        offsets_cols = *offsets_cols_ptr,
+                        d_validities = validities.begin(),
+                        dst_offsets  = list_offsets.begin<offset_type>(),
+                        d_output     = output_dv_ptr->begin<T>(),
+                        has_null_mask] __device__(size_type const dst_list_id) {
+                         auto const src_col_id   = dst_list_id % num_cols;
+                         auto const src_list_id  = dst_list_id / num_cols;
+                         auto const& src_col     = child_cols.column(src_col_id);
+                         auto const& src_offsets = offsets_cols.column(src_col_id);
+
+                         auto write_idx = dst_offsets[dst_list_id];
+                         for (auto read_idx = src_offsets.element<size_type>(src_list_id),
+                                   idx_end  = src_offsets.element<size_type>(src_list_id + 1);
+                              read_idx < idx_end;
+                              ++read_idx, ++write_idx) {
+                           auto const is_valid = src_col.is_valid(read_idx);
+                           if (has_null_mask) {
+                             d_validities[dst_list_id] = static_cast<int8_t>(is_valid);
+                           }
+                           d_output[write_idx] = is_valid ? src_col.element<T>(read_idx) : T{};
+                         }
+                       });
+
+    if (has_null_mask) {
+      auto [null_mask, null_count] = cudf::detail::valid_if(
+        validities.begin(),
+        validities.end(),
+        [] __device__(auto const valid) { return valid; },
+        stream,
+        mr);
+      if (null_count > 0) { output->set_null_mask(null_mask, null_count); }
+    }
+
+    return output;
   }
 
   template <class T>
-  std::enable_if_t<std::is_same_v<T, cudf::string_view>, std::unique_ptr<column>> operator()(
-    table_view const& input,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr) const noexcept
+  std::enable_if_t<not std::is_same_v<T, cudf::string_view> and not cudf::is_fixed_width<T>(),
+                   std::unique_ptr<column>>
+  operator()(table_view const&,
+             column_view const&,
+             bool,
+             rmm::cuda_stream_view,
+             rmm::mr::device_memory_resource*) const
   {
-    return nullptr;
-  }
-};
-
-/**
- * @brief Concatenate strings functor.
- *
- * This will concatenate the strings within each list element of the given string lists column
- * and apply the separator. The null-replacement string scalar `string_narep_dv` (if valid) is
- * used in place of any null string.
- */
-struct concat_strings_fn {
-  column_device_view const lists_dv;
-  offset_type const* const list_offsets;
-  column_device_view const strings_dv;
-  string_scalar_device_view const string_narep_dv;
-  string_view const separator;
-
-  offset_type* d_offsets{nullptr};
-
-  // If `d_chars == nullptr`: only compute sizes of the output strings.
-  // If `d_chars != nullptr`: only concatenate strings.
-  char* d_chars{nullptr};
-
-  __device__ void operator()(size_type idx)
-  {
-    if (lists_dv.is_null(idx)) {
-      if (!d_chars) { d_offsets[idx] = size_type{-1}; }  // negative size means null string
-      return;
-    }
-
-    // If the string offsets have been computed and the row `idx` is known to be a null string
-    if (d_chars && d_offsets[idx] == d_offsets[idx + 1]) { return; }
-
-    auto const separator_size = separator.size_bytes();
-    auto size_bytes           = size_type{0};
-    bool written              = false;
-    char* output_ptr          = d_chars ? d_chars + d_offsets[idx] : nullptr;
-
-    for (size_type str_idx = list_offsets[idx], idx_end = list_offsets[idx + 1]; str_idx < idx_end;
-         ++str_idx) {
-      if (strings_dv.is_null(str_idx) && !string_narep_dv.is_valid()) {
-        if (!d_chars) { d_offsets[idx] = size_type{-1}; }  // negative size means null string
-        return;  // early termination: the entire list of strings will result in a null string
-      }
-      auto const d_str = strings_dv.is_null(str_idx) ? string_narep_dv.value()
-                                                     : strings_dv.element<string_view>(str_idx);
-      size_bytes += separator_size + d_str.size_bytes();
-      if (output_ptr) {
-        // Separator is inserted only in between strings
-        if (written) { output_ptr = detail::copy_string(output_ptr, separator); }
-        output_ptr = detail::copy_string(output_ptr, d_str);
-        written    = true;
-      }
-    }
-
-    // Separator is inserted only in between strings
-    if (!d_chars) { d_offsets[idx] = static_cast<size_type>(size_bytes - separator_size); }
+    // Currently, only support string_view and fixed-width types
+    CUDF_FAIL("Called `copy_list_entries_fn()` on non-supported types.");
   }
 };
 
@@ -212,12 +222,12 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
 
   // Copy entries from the input lists columns to the output lists column - this needed to be
   // specialized for different types
-  auto list_entries = type_dispatcher(entry_type, copy_list_entries_fn{}, input, stream, mr);
-
-  auto const num_output_rows = input.num_rows() * input.num_columns();
+  auto const output_size = input.num_rows() * input.num_columns();
+  auto list_entries      = type_dispatcher<dispatch_storage_type>(
+    entry_type, copy_list_entries_fn{}, input, list_offsets->view(), has_null_mask, stream, mr);
 
   if (not has_null_mask) {
-    return make_lists_column(num_output_rows,
+    return make_lists_column(output_size,
                              std::move(list_offsets),
                              std::move(list_entries),
                              0,
@@ -233,7 +243,7 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
     stream,
     mr);
 
-  return make_lists_column(num_output_rows,
+  return make_lists_column(output_size,
                            std::move(list_offsets),
                            std::move(list_entries),
                            null_count,
