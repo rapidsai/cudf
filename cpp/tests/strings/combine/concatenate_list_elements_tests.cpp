@@ -33,7 +33,7 @@ using STR_LISTS = cudf::test::lists_column_wrapper<cudf::string_view>;
 using STR_COL   = cudf::test::strings_column_wrapper;
 using INT_LISTS = cudf::test::lists_column_wrapper<int32_t>;
 
-constexpr bool print_all{true};
+constexpr bool print_all{false};
 
 auto null_at(cudf::size_type idx)
 {
