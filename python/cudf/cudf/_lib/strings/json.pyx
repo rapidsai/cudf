@@ -16,7 +16,7 @@ from cudf._lib.cpp.strings.json cimport (
 
 def get_json_object(Column col, object py_json_path):
     """
-    """"
+    """
     cdef unique_ptr[column] c_result
 
     cdef column_view col_view = col.view()
@@ -24,7 +24,7 @@ def get_json_object(Column col, object py_json_path):
 
     cdef const string_scalar* scalar_json_path = <const string_scalar*>(
         json_path.get_raw_ptr()
-
+    )
     with nogil:
         c_result = move(cpp_get_json_object(
             col_view,

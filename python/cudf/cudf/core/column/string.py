@@ -1998,9 +1998,6 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(cpp_string_get(self._column, i))
 
-    def json_parse(self):
-        pass
-
     def split(
         self, pat: str = None, n: int = -1, expand: bool = None
     ) -> ParentType:

@@ -4,6 +4,7 @@ from __future__ import annotations
 import pyarrow as pa
 
 import cudf
+from cudf._lib.cpp.strings.json import get_json_object as cpp_get_json_object
 from cudf.core.column import ColumnBase
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.utils.dtypes import is_struct_dtype
@@ -151,3 +152,26 @@ class StructMethods(ColumnMethodsMixin):
             return self._return_or_inplace(self._column.children[pos])
         else:
             return self._return_or_inplace(self._column.children[key])
+
+    def extract_json(self, json_path):
+        """
+        Applies a JSONPath string to an input strings column
+        where each row in the column is a valid json string
+
+        Parameters
+        ----------
+        json_path: str
+            The JSONPath string to be applied to each row
+            of the input column
+
+        Returns
+        -------
+        Column: New strings column containing the retrieved json object strings
+
+        Examples
+        --------
+
+        """
+        return self._return_or_inplace(
+            cpp_get_json_object(self._column, json_path)
+        )

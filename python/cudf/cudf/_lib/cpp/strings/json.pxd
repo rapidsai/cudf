@@ -1,6 +1,7 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 
