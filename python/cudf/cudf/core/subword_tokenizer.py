@@ -1,13 +1,14 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 from __future__ import annotations
+from typing import Union
 import cupy as cp
 from warnings import warn
+
 from cudf._lib.nvtext.subword_tokenize import (
     subword_tokenize_inmem_hash as cpp_subword_tokenize,
     Hashed_Vocabulary as cpp_hashed_vocabulary,
 )
-import cudf
 
 
 def _cast_to_appropriate_type(ar, cast_type):
@@ -53,12 +54,12 @@ class SubwordTokenizer:
 
     def __call__(
         self,
-        text: "cudf.core.column.string.StringColumn",
+        text,
         max_length: int,
         max_num_rows: int,
         add_special_tokens: bool = True,
         padding: str = "max_length",
-        truncation: bool | str = False,
+        truncation: Union[bool, str] = False,
         stride: int = 0,
         return_tensors: str = "cp",
         return_token_type_ids: bool = False,
