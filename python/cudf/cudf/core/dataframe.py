@@ -456,10 +456,12 @@ class DataFrame(Frame, Serializable):
                 # need to return a masked array of nulls if an index is given.
                 row_count = 0 if index is None else len(index)
                 masked = index is not None
-                empty_column = cudf.core.column.column_empty(
-                    row_count=row_count, dtype=None, masked=masked,
-                )
-                data = {k: empty_column.copy(deep=True) for k in extra_cols}
+                data = {
+                    key: cudf.core.column.column_empty(
+                        row_count=row_count, dtype=None, masked=masked,
+                    )
+                    for key in extra_cols
+                }
 
         data, index = self._align_input_series_indices(data, index=index)
 
