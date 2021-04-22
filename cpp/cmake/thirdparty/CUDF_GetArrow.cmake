@@ -43,12 +43,14 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
         GIT_SHALLOW     TRUE
         SOURCE_SUBDIR   cpp
         OPTIONS         "CMAKE_VERBOSE_MAKEFILE ON"
+                        "CUDA_USE_STATIC_CUDA_RUNTIME ${CUDA_STATIC_RUNTIME}"
                         "ARROW_IPC ON"
                         "ARROW_CUDA ON"
                         "ARROW_DATASET ON"
                         "ARROW_WITH_BACKTRACE ON"
                         "ARROW_CXXFLAGS -w"
                         "ARROW_JEMALLOC OFF"
+                        "ARROW_S3 ON"
                         # Arrow modifies CMake's GLOBAL RULE_LAUNCH_COMPILE unless this is off
                         "ARROW_USE_CCACHE OFF"
                         "ARROW_ARMV8_ARCH ${ARROW_ARMV8_ARCH}"

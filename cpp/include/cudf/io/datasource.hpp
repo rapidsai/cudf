@@ -311,10 +311,11 @@ class arrow_io_source : public datasource {
    *
    * @param Apache Arrow Filesystem URI
    */
-  explicit arrow_io_source(std::string arrow_filesystem_uri)
+  explicit arrow_io_source(std::string arrow_filesystem_uri) : arrow_uri(arrow_filesystem_uri)
   {
     arrow::Result<std::shared_ptr<arrow::fs::FileSystem>> result =
-      arrow::fs::FileSystemFromUri(arrow_filesystem_uri);
+      arrow::fs::FileSystemFromUri(arrow_uri);
+    if (!result.ok()) { printf("Error: %s", result.status().ToString().c_str()); }
     CUDF_EXPECTS(
       result.ok(),
       "Failed to generate Arrow Filesystem instance from URI. Invalid/unknown URI provided.");
@@ -341,7 +342,11 @@ class arrow_io_source : public datasource {
    *
    * @param file The `arrow` object from which the data is read
    */
-  explicit arrow_io_source(std::shared_ptr<arrow::io::RandomAccessFile> file) : arrow_file(file) {}
+  explicit arrow_io_source(std::shared_ptr<arrow::io::RandomAccessFile> file) : arrow_file(file)
+  {
+    printf("Is this being called for some reason?????\n");
+    printf("Had seriously better not be!\n");
+  }
 
   /**
    * @brief Returns a buffer with a subset of data from the `arrow` source.
@@ -386,6 +391,7 @@ class arrow_io_source : public datasource {
 
  private:
   std::shared_ptr<arrow::io::RandomAccessFile> arrow_file;
+  std::string arrow_uri;
 };
 
 }  // namespace io
