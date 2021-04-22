@@ -110,7 +110,7 @@ public class Decompressor {
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
       if (!closed) {
         cleaner.delRef();
         cleaner.clean(false);
@@ -135,7 +135,7 @@ public class Decompressor {
       }
 
       @Override
-      protected boolean cleanImpl(boolean logErrorIfNotClean) {
+      protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
         boolean neededCleanup = false;
         long address = metadata;
         if (metadata != 0) {

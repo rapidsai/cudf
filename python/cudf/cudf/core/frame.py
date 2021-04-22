@@ -1,9 +1,12 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
+from __future__ import annotations
+
 import copy
 import functools
-import operator
 import warnings
-from collections import OrderedDict, abc as abc
+from collections import abc
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, TypeVar, Union
 
 import cupy
 import numpy as np
@@ -14,8 +17,9 @@ from pandas.api.types import is_dict_like, is_dtype_equal
 
 import cudf
 from cudf import _lib as libcudf
+from cudf._typing import ColumnLike, DataFrameOrSeries
 from cudf.core.column import as_column, build_categorical_column, column_empty
-from cudf.utils import utils
+from cudf.core.join import merge
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
@@ -24,6 +28,11 @@ from cudf.utils.dtypes import (
     min_scalar_type,
 )
 
+T = TypeVar("T", bound="Frame")
+
+if TYPE_CHECKING:
+    from cudf.core.column_accessor import ColumnAccessor
+
 
 class Frame(libcudf.table.Table):
     """
@@ -31,17 +40,21 @@ class Frame(libcudf.table.Table):
 
     Parameters
     ----------
-    data : OrderedColumnDict
-        An OrderedColumnDict mapping column names to Columns
+    data : dict
+        An dict mapping column names to Columns
     index : Table
         A Frame representing the (optional) index columns.
     """
 
+    _data: "ColumnAccessor"
+
     @classmethod
-    def _from_table(cls, table):
+    def _from_table(cls, table: Frame):
         return cls(table._data, index=table._index)
 
-    def _mimic_inplace(self, result, inplace=False):
+    def _mimic_inplace(
+        self: T, result: Frame, inplace: bool = False
+    ) -> Optional[Frame]:
         if inplace:
             for col in self._data:
                 if col in result._data:
@@ -50,6 +63,7 @@ class Frame(libcudf.table.Table):
                     )
             self._data = result._data
             self._index = result._index
+            return None
         else:
             return result
 
@@ -194,8 +208,90 @@ class Frame(libcudf.table.Table):
     def __len__(self):
         return self._num_rows
 
-    def copy(self, deep=True):
-        return Frame(self._data.copy(deep=deep))
+    def copy(self: T, deep: bool = True) -> T:
+        """
+        Make a copy of this object's indices and data.
+
+        When ``deep=True`` (default), a new object will be created with a
+        copy of the calling object's data and indices. Modifications to
+        the data or indices of the copy will not be reflected in the
+        original object (see notes below).
+        When ``deep=False``, a new object will be created without copying
+        the calling object's data or index (only references to the data
+        and index are copied). Any changes to the data of the original
+        will be reflected in the shallow copy (and vice versa).
+
+        Parameters
+        ----------
+        deep : bool, default True
+            Make a deep copy, including a copy of the data and the indices.
+            With ``deep=False`` neither the indices nor the data are copied.
+
+        Returns
+        -------
+        copy : Series or DataFrame
+            Object type matches caller.
+
+        Examples
+        --------
+        >>> s = cudf.Series([1, 2], index=["a", "b"])
+        >>> s
+        a    1
+        b    2
+        dtype: int64
+        >>> s_copy = s.copy()
+        >>> s_copy
+        a    1
+        b    2
+        dtype: int64
+
+        **Shallow copy versus default (deep) copy:**
+
+        >>> s = cudf.Series([1, 2], index=["a", "b"])
+        >>> deep = s.copy()
+        >>> shallow = s.copy(deep=False)
+
+        Shallow copy shares data and index with original.
+
+        >>> s is shallow
+        False
+        >>> s._column is shallow._column and s.index is shallow.index
+        True
+
+        Deep copy has own copy of data and index.
+
+        >>> s is deep
+        False
+        >>> s.values is deep.values or s.index is deep.index
+        False
+
+        Updates to the data shared by shallow copy and original is reflected
+        in both; deep copy remains unchanged.
+
+        >>> s['a'] = 3
+        >>> shallow['b'] = 4
+        >>> s
+        a    3
+        b    4
+        dtype: int64
+        >>> shallow
+        a    3
+        b    4
+        dtype: int64
+        >>> deep
+        a    1
+        b    2
+        dtype: int64
+        """
+        new_frame = self.__class__.__new__(type(self))
+        new_frame._data = self._data.copy(deep=deep)
+
+        if self._index is not None:
+            new_frame._index = self._index.copy(deep=deep)
+        else:
+            new_frame._index = None
+
+        return new_frame
 
     @classmethod
     @annotate("CONCAT", color="orange", domain="cudf_python")
@@ -236,11 +332,13 @@ class Frame(libcudf.table.Table):
                 np.intersect1d, all_columns_list
             )
             # get column names not present in all objs
-            non_intersecting_columns = (
-                functools.reduce(operator.or_, (obj.columns for obj in objs))
-                ^ intersecting_columns
+            union_of_columns = functools.reduce(
+                pd.Index.union, [obj.columns for obj in objs]
             )
-            names = OrderedDict.fromkeys(intersecting_columns).keys()
+            non_intersecting_columns = union_of_columns.symmetric_difference(
+                intersecting_columns
+            )
+            names = dict.fromkeys(intersecting_columns).keys()
 
             if axis == 0:
                 if ignore_index and (
@@ -266,7 +364,7 @@ class Frame(libcudf.table.Table):
         elif join == "outer":
             # Get a list of the unique table column names
             names = [name for f in objs for name in f._column_names]
-            names = OrderedDict.fromkeys(names).keys()
+            names = dict.fromkeys(names).keys()
 
         else:
             raise ValueError(
@@ -466,25 +564,34 @@ class Frame(libcudf.table.Table):
         else:
             return self._index.equals(other._index)
 
+    def _explode(self, explode_column: Any, ignore_index: bool):
+        """Helper function for `explode` in `Series` and `Dataframe`, explodes
+        a specified nested column. Other columns' corresponding rows are
+        duplicated. If ignore_index is set, the original index is not exploded
+        and will be replaced with a `RangeIndex`.
+        """
+        explode_column_num = self._column_names.index(explode_column)
+        if not ignore_index and self._index is not None:
+            explode_column_num += self._index.nlevels
+
+        res_tbl = libcudf.lists.explode_outer(
+            self, explode_column_num, ignore_index
+        )
+        res = self.__class__._from_table(res_tbl)
+
+        res._data.multiindex = self._data.multiindex
+        res._data._level_names = self._data._level_names
+
+        if not ignore_index and self._index is not None:
+            res.index.names = self._index.names
+        return res
+
     def _get_columns_by_label(self, labels, downcast=False):
         """
         Returns columns of the Frame specified by `labels`
 
-        If downcast is True, try and downcast from a DataFrame to a Series
         """
-        new_data = self._data.select_by_label(labels)
-        if downcast:
-            if is_scalar(labels):
-                nlevels = 1
-            elif isinstance(labels, tuple):
-                nlevels = len(labels)
-            if self._data.multiindex is False or nlevels == self._data.nlevels:
-                return self._constructor_sliced(
-                    new_data, name=labels, index=self.index
-                )
-        return self._constructor(
-            new_data, columns=new_data.to_pandas_index(), index=self.index
-        )
+        return self._data.select_by_label(labels)
 
     def _get_columns_by_index(self, indices):
         """
@@ -496,15 +603,18 @@ class Frame(libcudf.table.Table):
             data, columns=data.to_pandas_index(), index=self.index
         )
 
-    def _gather(self, gather_map, keep_index=True):
+    def _gather(self, gather_map, keep_index=True, nullify=False):
         if not pd.api.types.is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self.__class__._from_table(
             libcudf.copying.gather(
-                self, as_column(gather_map), keep_index=keep_index
+                self,
+                as_column(gather_map),
+                keep_index=keep_index,
+                nullify=nullify,
             )
         )
-        result._postprocess_columns(self)
+        result._copy_type_metadata(self, include_index=keep_index)
         if keep_index and self._index is not None:
             result._index.names = self._index.names
         return result
@@ -519,7 +629,7 @@ class Frame(libcudf.table.Table):
             self, columns_to_hash, num_partitions, keep_index
         )
         output = self.__class__._from_table(output)
-        output._postprocess_columns(self, include_index=keep_index)
+        output._copy_type_metadata(self, include_index=keep_index)
         return output, offsets
 
     def _as_column(self):
@@ -538,7 +648,7 @@ class Frame(libcudf.table.Table):
     def _scatter(self, key, value):
         result = self._from_table(libcudf.copying.scatter(value, key, self))
 
-        result._postprocess_columns(self)
+        result._copy_type_metadata(self)
         return result
 
     def _empty_like(self, keep_index=True):
@@ -546,66 +656,8 @@ class Frame(libcudf.table.Table):
             libcudf.copying.table_empty_like(self, keep_index)
         )
 
-        result._postprocess_columns(self, include_index=keep_index)
+        result._copy_type_metadata(self, include_index=keep_index)
         return result
-
-    def _slice(self, arg):
-        """
-       _slice : slice the frame as per the arg
-
-       Parameters
-       ----------
-       arg : should always be of type slice and doesn't handle step
-
-       """
-        from cudf.core.index import RangeIndex
-
-        num_rows = len(self)
-        if num_rows == 0:
-            return self
-        start, stop, stride = arg.indices(num_rows)
-
-        # This is just to handle RangeIndex type, stop
-        # it from materializing unnecessarily
-        keep_index = True
-        if self.index is not None and isinstance(self.index, RangeIndex):
-            if self._num_columns == 0:
-                result = self._empty_like(keep_index)
-                result._index = self.index[start:stop]
-                return result
-            keep_index = False
-
-        if start < 0:
-            start = start + num_rows
-        if stop < 0:
-            stop = stop + num_rows
-
-        if start > stop and (stride is None or stride == 1):
-            return self._empty_like(keep_index)
-        else:
-            start = len(self) if start > num_rows else start
-            stop = len(self) if stop > num_rows else stop
-
-            if stride is not None and stride != 1:
-                return self._gather(
-                    cudf.core.column.arange(
-                        start, stop=stop, step=stride, dtype=np.int32
-                    )
-                )
-            else:
-                result = self._from_table(
-                    libcudf.copying.table_slice(
-                        self, [start, stop], keep_index
-                    )[0]
-                )
-
-                result._postprocess_columns(self, include_index=keep_index)
-                # Adding index of type RangeIndex back to
-                # result
-                if keep_index is False and self.index is not None:
-                    result.index = self.index[start:stop]
-                result.columns = self.columns
-                return result
 
     def clip(self, lower=None, upper=None, inplace=False, axis=1):
         """
@@ -730,90 +782,9 @@ class Frame(libcudf.table.Table):
         for i, name in enumerate(self._data):
             output._data[name] = self._data[name].clip(lower[i], upper[i])
 
-        output._postprocess_columns(self, include_index=False)
+        output._copy_type_metadata(self, include_index=False)
 
         return self._mimic_inplace(output, inplace=inplace)
-
-    def _normalize_scalars(self, other):
-        """
-        Try to normalizes scalar values as per self dtype
-        """
-        if (
-            other is not None
-            and (isinstance(other, float) and not np.isnan(other))
-        ) and (self.dtype.type(other) != other):
-            raise TypeError(
-                f"Cannot safely cast non-equivalent "
-                f"{type(other).__name__} to {self.dtype.name}"
-            )
-
-        return (
-            self.dtype.type(other)
-            if (
-                other is not None
-                and (isinstance(other, float) and not np.isnan(other))
-            )
-            else other
-        )
-
-    def _normalize_columns_and_scalars_type(self, other):
-        """
-        Try to normalize the other's dtypes as per self.
-
-        Parameters
-        ----------
-
-        self : Can be a DataFrame or Series or Index
-        other : Can be a DataFrame, Series, Index, Array
-            like object or a scalar value
-
-            if self is DataFrame, other can be only a
-            scalar or array like with size of number of columns
-            in DataFrame or a DataFrame with same dimension
-
-            if self is Series, other can be only a scalar or
-            a series like with same length as self
-
-        Returns:
-        --------
-        A dataframe/series/list/scalar form of normalized other
-        """
-        if isinstance(self, cudf.DataFrame) and isinstance(
-            other, cudf.DataFrame
-        ):
-            return [
-                other[self_col].astype(self._data[self_col].dtype)._column
-                for self_col in self._data.names
-            ]
-
-        elif isinstance(self, (cudf.Series, cudf.Index)) and not is_scalar(
-            other
-        ):
-            other = as_column(other)
-            return other.astype(self.dtype)
-
-        else:
-            # Handles scalar or list/array like scalars
-            if isinstance(self, (cudf.Series, cudf.Index)) and is_scalar(
-                other
-            ):
-                return self._normalize_scalars(other)
-
-            elif isinstance(self, cudf.DataFrame):
-                out = []
-                if is_scalar(other):
-                    other = [other for i in range(len(self._data.names))]
-                out = [
-                    self[in_col_name]._normalize_scalars(sclr)
-                    for in_col_name, sclr in zip(self._data.names, other)
-                ]
-
-                return out
-            else:
-                raise ValueError(
-                    f"Inappropriate input {type(self)} "
-                    f"and other {type(other)} combination"
-                )
 
     def where(self, cond, other=None, inplace=False):
         """
@@ -868,133 +839,9 @@ class Frame(libcudf.table.Table):
         dtype: int64
         """
 
-        if isinstance(self, cudf.DataFrame):
-            if hasattr(cond, "__cuda_array_interface__"):
-                cond = cudf.DataFrame(
-                    cond, columns=self._data.names, index=self.index
-                )
-            elif not isinstance(cond, cudf.DataFrame):
-                cond = self.from_pandas(pd.DataFrame(cond))
-
-            common_cols = set(self._data.names).intersection(
-                set(cond._data.names)
-            )
-            if len(common_cols) > 0:
-                # If `self` and `cond` are having unequal index,
-                # then re-index `cond`.
-                if not self.index.equals(cond.index):
-                    cond = cond.reindex(self.index)
-            else:
-                if cond.shape != self.shape:
-                    raise ValueError(
-                        """Array conditional must be same shape as self"""
-                    )
-                # Setting `self` column names to `cond`
-                # as `cond` has no column names.
-                cond.columns = self.columns
-
-            other = self._normalize_columns_and_scalars_type(other)
-            out_df = cudf.DataFrame(index=self.index)
-            if len(self._columns) != len(other):
-                raise ValueError(
-                    """Replacement list length or number of dataframe columns
-                    should be equal to Number of columns of dataframe"""
-                )
-
-            for column_name, other_column in zip(self._data.names, other):
-                input_col = self._data[column_name]
-                if column_name in cond._data:
-                    if isinstance(
-                        input_col, cudf.core.column.CategoricalColumn
-                    ):
-                        if np.isscalar(other_column):
-                            try:
-                                other_column = input_col._encode(other_column)
-                            except ValueError:
-                                # When other is not present in categories,
-                                # fill with Null.
-                                other_column = None
-                        elif hasattr(other_column, "codes"):
-                            other_column = other_column.codes
-                        input_col = input_col.codes
-
-                    result = libcudf.copying.copy_if_else(
-                        input_col, other_column, cond._data[column_name]
-                    )
-
-                    if isinstance(
-                        self._data[column_name],
-                        cudf.core.column.CategoricalColumn,
-                    ):
-                        result = build_categorical_column(
-                            categories=self._data[column_name].categories,
-                            codes=as_column(
-                                result.base_data, dtype=result.dtype
-                            ),
-                            mask=result.base_mask,
-                            size=result.size,
-                            offset=result.offset,
-                            ordered=self._data[column_name].ordered,
-                        )
-                else:
-                    from cudf._lib.null_mask import MaskState, create_null_mask
-
-                    out_mask = create_null_mask(
-                        len(input_col), state=MaskState.ALL_NULL
-                    )
-                    result = input_col.set_mask(out_mask)
-                out_df[column_name] = self[column_name].__class__(result)
-
-            return self._mimic_inplace(out_df, inplace=inplace)
-
-        else:
-
-            if isinstance(other, cudf.DataFrame):
-                raise NotImplementedError(
-                    "cannot align with a higher dimensional Frame"
-                )
-
-            other = self._normalize_columns_and_scalars_type(other)
-
-            cond = as_column(cond)
-            if len(cond) != len(self):
-                raise ValueError(
-                    """Array conditional must be same shape as self"""
-                )
-            input_col = self._data[self.name]
-            if isinstance(input_col, cudf.core.column.CategoricalColumn):
-                if np.isscalar(other):
-                    try:
-                        other = input_col._encode(other)
-                    except ValueError:
-                        # When other is not present in categories,
-                        # fill with Null.
-                        other = None
-                elif hasattr(other, "codes"):
-                    other = other.codes
-
-                input_col = input_col.codes
-
-            result = libcudf.copying.copy_if_else(input_col, other, cond)
-
-            if is_categorical_dtype(self.dtype):
-                result = build_categorical_column(
-                    categories=self._data[self.name].categories,
-                    codes=as_column(result.base_data, dtype=result.dtype),
-                    mask=result.base_mask,
-                    size=result.size,
-                    offset=result.offset,
-                    ordered=self._data[self.name].ordered,
-                )
-
-            if isinstance(self, cudf.Index):
-                from cudf.core.index import as_index
-
-                result = as_index(result, name=self.name)
-            else:
-                result = self._copy_construct(data=result)
-
-            return self._mimic_inplace(result, inplace=inplace)
+        return cudf.core._internals.where(
+            frame=self, cond=cond, other=other, inplace=inplace
+        )
 
     def mask(self, cond, other=None, inplace=False):
         """
@@ -1073,7 +920,7 @@ class Frame(libcudf.table.Table):
         result = partitioned._split(output_offsets, keep_index=keep_index)
 
         for frame in result:
-            frame._postprocess_columns(self, include_index=keep_index)
+            frame._copy_type_metadata(self, include_index=keep_index)
 
         if npartitions:
             for _ in range(npartitions - len(result)):
@@ -1161,7 +1008,7 @@ class Frame(libcudf.table.Table):
             map_index = as_column(map_index)
 
         # Convert float to integer
-        if map_index.dtype == np.float:
+        if map_index.dtype.kind == "f":
             map_index = map_index.astype(np.int32)
 
         # Convert string or categorical to integer
@@ -1295,7 +1142,9 @@ class Frame(libcudf.table.Table):
         0  Alfred  Batmobile 1940-04-25
         """
         if axis == 0:
-            result = self._drop_na_rows(how=how, subset=subset, thresh=thresh)
+            result = self._drop_na_rows(
+                how=how, subset=subset, thresh=thresh, drop_nan=True
+            )
         else:
             result = self._drop_na_columns(
                 how=how, subset=subset, thresh=thresh
@@ -1442,7 +1291,9 @@ class Frame(libcudf.table.Table):
 
         return self._mimic_inplace(result, inplace=inplace)
 
-    def _drop_na_rows(self, how="any", subset=None, thresh=None):
+    def _drop_na_rows(
+        self, how="any", subset=None, thresh=None, drop_nan=False
+    ):
         """
         Drops null rows from `self`.
 
@@ -1474,12 +1325,23 @@ class Frame(libcudf.table.Table):
         ]
         if len(subset_cols) == 0:
             return self.copy(deep=True)
-        result = self.__class__._from_table(
+
+        frame = self.copy(deep=False)
+        if drop_nan:
+            for name, col in frame._data.items():
+                if name in subset and isinstance(
+                    col, cudf.core.column.NumericalColumn
+                ):
+                    frame._data[name] = col.nans_to_nulls()
+                else:
+                    frame._data[name] = col
+
+        result = frame.__class__._from_table(
             libcudf.stream_compaction.drop_nulls(
-                self, how=how, keys=subset, thresh=thresh
+                frame, how=how, keys=subset, thresh=thresh
             )
         )
-        result._postprocess_columns(self)
+        result._copy_type_metadata(frame)
         return result
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
@@ -1500,7 +1362,10 @@ class Frame(libcudf.table.Table):
                 thresh = len(df)
 
         for col in self._data.names:
-            if (len(df[col]) - df[col].null_count) < thresh:
+            no_threshold_valid_count = (
+                len(df[col]) - df[col].nans_to_nulls().null_count
+            ) < thresh
+            if no_threshold_valid_count:
                 continue
             out_cols.append(col)
 
@@ -1512,16 +1377,13 @@ class Frame(libcudf.table.Table):
         rows corresponding to `False` is dropped
         """
         boolean_mask = as_column(boolean_mask)
-        if boolean_mask.has_nulls:
-            raise ValueError(
-                "cannot mask with boolean_mask containing null values"
-            )
+
         result = self.__class__._from_table(
             libcudf.stream_compaction.apply_boolean_mask(
                 self, as_column(boolean_mask)
             )
         )
-        result._postprocess_columns(self)
+        result._copy_type_metadata(self)
         return result
 
     def _quantiles(
@@ -1553,7 +1415,7 @@ class Frame(libcudf.table.Table):
             )
         )
 
-        result._postprocess_columns(self)
+        result._copy_type_metadata(self)
         return result
 
     def rank(
@@ -1608,10 +1470,16 @@ class Frame(libcudf.table.Table):
                 "na_option must be one of 'keep', 'top', or 'bottom'"
             )
 
-        # TODO code for selecting numeric columns
         source = self
         if numeric_only:
-            warnings.warn("numeric_only=True is not implemented yet")
+            numeric_cols = (
+                name
+                for name in self._data.names
+                if is_numerical_dtype(self._data[name])
+            )
+            source = self._get_columns_by_label(numeric_cols)
+            if source.empty:
+                return source.astype("float64")
 
         out_rank_table = libcudf.sort.rank_columns(
             source, method_enum, na_option, ascending, pct
@@ -1708,7 +1576,7 @@ class Frame(libcudf.table.Table):
             libcudf.filling.repeat(self, count)
         )
 
-        result._postprocess_columns(self)
+        result._copy_type_metadata(self)
         return result
 
     def _fill(self, fill_values, begin, end, inplace):
@@ -1748,6 +1616,117 @@ class Frame(libcudf.table.Table):
             "Implicit conversion to a host PyArrow Array via __arrow_array__ "
             "is not allowed, To explicitly construct a PyArrow Array, "
             "consider using .to_arrow()"
+        )
+
+    def round(self, decimals=0):
+        """
+        Round a DataFrame to a variable number of decimal places.
+
+        Parameters
+        ----------
+        decimals : int, dict, Series
+            Number of decimal places to round each column to. If an int is
+            given, round each column to the same number of places.
+            Otherwise dict and Series round to variable numbers of places.
+            Column names should be in the keys if `decimals` is a
+            dict-like, or in the index if `decimals` is a Series. Any
+            columns not included in `decimals` will be left as is. Elements
+            of `decimals` which are not columns of the input will be
+            ignored.
+
+        Returns
+        -------
+        DataFrame
+            A DataFrame with the affected columns rounded to the specified
+            number of decimal places.
+
+        Examples
+        --------
+        >>> df = cudf.DataFrame(
+                [(.21, .32), (.01, .67), (.66, .03), (.21, .18)],
+        ...     columns=['dogs', 'cats']
+        ... )
+        >>> df
+            dogs  cats
+        0  0.21  0.32
+        1  0.01  0.67
+        2  0.66  0.03
+        3  0.21  0.18
+
+        By providing an integer each column is rounded to the same number
+        of decimal places
+
+        >>> df.round(1)
+            dogs  cats
+        0   0.2   0.3
+        1   0.0   0.7
+        2   0.7   0.0
+        3   0.2   0.2
+
+        With a dict, the number of places for specific columns can be
+        specified with the column names as key and the number of decimal
+        places as value
+
+        >>> df.round({'dogs': 1, 'cats': 0})
+            dogs  cats
+        0   0.2   0.0
+        1   0.0   1.0
+        2   0.7   0.0
+        3   0.2   0.0
+
+        Using a Series, the number of places for specific columns can be
+        specified with the column names as index and the number of
+        decimal places as value
+
+        >>> decimals = cudf.Series([0, 1], index=['cats', 'dogs'])
+        >>> df.round(decimals)
+            dogs  cats
+        0   0.2   0.0
+        1   0.0   1.0
+        2   0.7   0.0
+        3   0.2   0.0
+        """
+
+        if isinstance(decimals, cudf.Series):
+            decimals = decimals.to_pandas()
+
+        if isinstance(decimals, (dict, pd.Series)):
+            if (
+                isinstance(decimals, pd.Series)
+                and not decimals.index.is_unique
+            ):
+                raise ValueError("Index of decimals must be unique")
+
+            cols = {
+                name: col.round(decimals[name])
+                if (
+                    name in decimals.keys()
+                    and pd.api.types.is_numeric_dtype(col.dtype)
+                )
+                else col.copy(deep=True)
+                for name, col in self._data.items()
+            }
+        elif isinstance(decimals, int):
+            cols = {
+                name: col.round(decimals)
+                if pd.api.types.is_numeric_dtype(col.dtype)
+                else col.copy(deep=True)
+                for name, col in self._data.items()
+            }
+        else:
+            raise TypeError(
+                "decimals must be an integer, a dict-like or a Series"
+            )
+
+        return self.__class__._from_table(
+            Frame(
+                data=cudf.core.column_accessor.ColumnAccessor(
+                    cols,
+                    multiindex=self._data.multiindex,
+                    level_names=self._data.level_names,
+                )
+            ),
+            index=self._index,
         )
 
     @annotate("SAMPLE", color="orange", domain="cudf_python")
@@ -1879,7 +1858,7 @@ class Frame(libcudf.table.Table):
                     keep_index=keep_index,
                 )
             )
-            result._postprocess_columns(self)
+            result._copy_type_metadata(self)
 
             return result
         else:
@@ -2056,20 +2035,44 @@ class Frame(libcudf.table.Table):
         else:
             result = cudf_category_frame
 
-        # In a scenario where column is of type list/other non
-        # pandas types, there will be no pandas metadata associated with
-        # given arrow table as those types can only originate from
-        # arrow.
+        # There are some special cases that need to be handled
+        # based on metadata.
         if pandas_dtypes:
             for name in result._data.names:
-                if pandas_dtypes[name] == "categorical":
+                dtype = None
+                if (
+                    len(result._data[name]) == 0
+                    and pandas_dtypes[name] == "categorical"
+                ):
+                    # When pandas_dtype is a categorical column and the size
+                    # of column is 0(i.e., empty) then we will have an
+                    # int8 column in result._data[name] returned by libcudf,
+                    # which needs to be type-casted to 'category' dtype.
                     dtype = "category"
-                elif pandas_dtypes[name] == "bool":
-                    dtype = pandas_dtypes[name]
-                else:
+                elif (
+                    pandas_dtypes[name] == "empty"
+                    and np_dtypes[name] == "object"
+                ):
+                    # When a string column has all null values, pandas_dtype is
+                    # is specified as 'empty' and np_dtypes as 'object',
+                    # hence handling this special case to type-cast the empty
+                    # float column to str column.
                     dtype = np_dtypes[name]
+                elif pandas_dtypes[
+                    name
+                ] == "object" and cudf.utils.dtypes.is_struct_dtype(
+                    np_dtypes[name]
+                ):
+                    # Incase of struct column, libcudf is not aware of names of
+                    # struct fields, hence renaming the struct fields is
+                    # necessary by extracting the field names from arrow
+                    # struct types.
+                    result._data[name] = result._data[name]._rename_fields(
+                        [field.name for field in data[name].type]
+                    )
 
-                result._data[name] = result._data[name].astype(dtype)
+                if dtype is not None:
+                    result._data[name] = result._data[name].astype(dtype)
 
         result = libcudf.table.Table(
             result._data.select_by_label(column_names)
@@ -2144,75 +2147,66 @@ class Frame(libcudf.table.Table):
             )
         )
 
-        result._postprocess_columns(self)
+        result._copy_type_metadata(self)
         return result
 
-    def replace(self, to_replace, replacement):
-        copy_data = self._data.copy()
+    def replace(self, to_replace: Any, replacement: Any) -> Frame:
+        if not (to_replace is None and replacement is None):
+            copy_data = self._data.copy(deep=False)
+            (
+                all_na_per_column,
+                to_replace_per_column,
+                replacements_per_column,
+            ) = _get_replacement_values_for_columns(
+                to_replace=to_replace,
+                value=replacement,
+                columns_dtype_map={
+                    col: copy_data._data[col].dtype for col in copy_data._data
+                },
+            )
 
-        for name, col in copy_data.items():
-            if not (to_replace is None and replacement is None):
+            for name, col in copy_data.items():
                 try:
-                    (
-                        col_all_nan,
-                        col_replacement,
-                        col_to_replace,
-                    ) = _get_replacement_values(
-                        to_replace=to_replace,
-                        replacement=replacement,
-                        col_name=name,
-                        column=col,
-                    )
-
                     copy_data[name] = col.find_and_replace(
-                        col_to_replace, col_replacement, col_all_nan
+                        to_replace_per_column[name],
+                        replacements_per_column[name],
+                        all_na_per_column[name],
                     )
-                except KeyError:
-                    # Do not change the copy_data[name]
-                    pass
+                except (KeyError, OverflowError):
+                    # We need to create a deep copy if :
+                    # i. `find_and_replace` was not successful or any of
+                    #    `to_replace_per_column`, `replacements_per_column`,
+                    #    `all_na_per_column` don't contain the `name`
+                    #    that exists in `copy_data`.
+                    # ii. There is an OverflowError while trying to cast
+                    #     `to_replace_per_column` to `replacements_per_column`.
+                    copy_data[name] = col.copy(deep=True)
+        else:
+            copy_data = self._data.copy(deep=True)
 
-            result = self._from_table(Frame(copy_data, self._index))
+        result = self._from_table(Frame(copy_data, self._index))
 
         return result
 
-    def _copy_categories(self, other, include_index=True):
+    def _copy_type_metadata(
+        self, other: Frame, include_index: bool = True
+    ) -> Frame:
         """
-        Utility that copies category information from `other`
-        to `self`.
+        Copy type metadata from each column of `other` to the corresponding
+        column of `self`.
+        See `ColumnBase._copy_type_metadata` for more information.
         """
         for name, col, other_col in zip(
             self._data.keys(), self._data.values(), other._data.values()
         ):
-            if isinstance(
-                other_col, cudf.core.column.CategoricalColumn
-            ) and not isinstance(col, cudf.core.column.CategoricalColumn):
-                self._data[name] = build_categorical_column(
-                    categories=other_col.categories,
-                    codes=as_column(col.base_data, dtype=col.dtype),
-                    mask=col.base_mask,
-                    ordered=other_col.ordered,
-                    size=col.size,
-                    offset=col.offset,
-                    null_count=col.null_count,
-                )
+            self._data.set_by_label(
+                name, other_col._copy_type_metadata(col), validate=False
+            )
+
         if include_index:
-            # include_index will still behave as False
-            # incase of self._index being a RangeIndex
-            if (
-                self._index is not None
-                and not isinstance(self._index, cudf.core.index.RangeIndex)
-                and isinstance(
-                    other._index,
-                    (cudf.core.index.CategoricalIndex, cudf.MultiIndex),
-                )
-            ):
-                self._index._postprocess_columns(
-                    other._index, include_index=False
-                )
+            if self._index is not None and other._index is not None:
+                self._index._copy_type_metadata(other._index)
                 # When other._index is a CategoricalIndex, there is
-                # possibility that corresposing self._index be GenericIndex
-                # with codes. So to update even the class signature, we
-                # have to reconstruct self._index:
                 if isinstance(
                     other._index, cudf.core.index.CategoricalIndex
                 ) and not isinstance(
@@ -2221,36 +2215,20 @@ class Frame(libcudf.table.Table):
                     self._index = cudf.core.index.Index._from_table(
                         self._index
                     )
+
         return self
 
-    def _copy_struct_names(self, other, include_index=True):
-        """
-        Utility that copies struct field names.
-        """
+    def _copy_interval_data(self, other, include_index=True):
         for name, col, other_col in zip(
             self._data.keys(), self._data.values(), other._data.values()
         ):
-            if isinstance(other_col, cudf.core.column.StructColumn):
-                self._data[name] = col._rename_fields(
-                    other_col.dtype.fields.keys()
-                )
-
-        if include_index and self._index is not None:
-            for name, col, other_col in zip(
-                self._index._data.keys(),
-                self._index._data.values(),
-                other._index._data.values(),
-            ):
-                if isinstance(other_col, cudf.core.column.StructColumn):
-                    self._index._data[name] = col._rename_fields(
-                        other_col.dtype.fields.keys()
-                    )
-
-        return self
+            if isinstance(other_col, cudf.core.column.IntervalColumn):
+                self._data[name] = cudf.core.column.IntervalColumn(col)
 
     def _postprocess_columns(self, other, include_index=True):
         self._copy_categories(other, include_index=include_index)
         self._copy_struct_names(other, include_index=include_index)
+        self._copy_interval_data(other, include_index=include_index)
 
     def _unaryop(self, op):
         data_columns = (col.unary_operator(op) for col in self._columns)
@@ -2482,7 +2460,7 @@ class Frame(libcudf.table.Table):
         The table containing the tiled "rows".
         """
         result = self.__class__._from_table(libcudf.reshape.tile(self, count))
-        result._postprocess_columns(self)
+        result._copy_type_metadata(self)
         return result
 
     def searchsorted(
@@ -2544,7 +2522,6 @@ class Frame(libcudf.table.Table):
         array([4, 4, 4, 0], dtype=int32)
         """
         # Call libcudf++ search_sorted primitive
-        from cudf.utils.dtypes import is_scalar
 
         scalar_flag = None
         if is_scalar(values):
@@ -2567,12 +2544,15 @@ class Frame(libcudf.table.Table):
         else:
             return result
 
-    def _get_sorted_inds(self, ascending=True, na_position="last"):
+    def _get_sorted_inds(self, by=None, ascending=True, na_position="last"):
         """
         Sort by the values.
 
         Parameters
         ----------
+        by: list, optional
+            Labels specifying columns to sort by. By default,
+            sort by all columns of `self`
         ascending : bool or list of bool, default True
             If True, sort values in ascending order, otherwise descending.
         na_position : {‘first’ or ‘last’}, default ‘last’
@@ -2607,11 +2587,17 @@ class Frame(libcudf.table.Table):
             )
             na_position = 0
 
+        to_sort = (
+            self
+            if by is None
+            else self._get_columns_by_label(by, downcast=False)
+        )
+
         # If given a scalar need to construct a sequence of length # of columns
         if np.isscalar(ascending):
-            ascending = [ascending] * self._num_columns
+            ascending = [ascending] * to_sort._num_columns
 
-        return libcudf.sort.order_by(self, ascending, na_position)
+        return libcudf.sort.order_by(to_sort, ascending, na_position)
 
     def sin(self):
         """
@@ -3142,77 +3128,6 @@ class Frame(libcudf.table.Table):
         """
         return self._unaryop("sqrt")
 
-    @staticmethod
-    def _validate_merge_cfg(
-        lhs,
-        rhs,
-        left_on,
-        right_on,
-        on,
-        how,
-        left_index=False,
-        right_index=False,
-        lsuffix=None,
-        rsuffix=None,
-    ):
-        """
-        Error for various combinations of merge input parameters
-        """
-        len_left_on = len(left_on) if left_on is not None else 0
-        len_right_on = len(right_on) if right_on is not None else 0
-
-        # must actually support the requested merge type
-        if how not in ["left", "inner", "outer", "leftanti", "leftsemi"]:
-            raise NotImplementedError(f"{how} merge not supported yet")
-
-        # Passing 'on' with 'left_on' or 'right_on' is potentially ambiguous
-        if on:
-            if left_on or right_on:
-                raise ValueError(
-                    'Can only pass argument "on" OR "left_on" '
-                    'and "right_on", not a combination of both.'
-                )
-
-        # Require same total number of columns to join on in both operands
-        if not (len_left_on + left_index * len(lhs.index.names)) == (
-            len_right_on + right_index * len(rhs.index.names)
-        ):
-            raise ValueError(
-                "Merge operands must have same number of join key columns"
-            )
-
-        # If nothing specified, must have common cols to use implicitly
-        same_named_columns = set(lhs._data.keys()) & set(rhs._data.keys())
-        if not (left_index or right_index):
-            if not (left_on or right_on):
-                if len(same_named_columns) == 0:
-                    raise ValueError("No common columns to perform merge on")
-
-        for name in same_named_columns:
-            if not (
-                name in left_on
-                and name in right_on
-                and (left_on.index(name) == right_on.index(name))
-            ):
-                if not (lsuffix or rsuffix):
-                    raise ValueError(
-                        "there are overlapping columns but "
-                        "lsuffix and rsuffix are not defined"
-                    )
-
-        if on:
-            on_keys = [on] if not isinstance(on, list) else on
-            for key in on_keys:
-                if not (key in lhs._data.keys() and key in rhs._data.keys()):
-                    raise KeyError(f"Key {on} not in both operands")
-        else:
-            for key in left_on:
-                if key not in lhs._data.keys():
-                    raise KeyError(f'Key "{key}" not in left operand')
-            for key in right_on:
-                if key not in rhs._data.keys():
-                    raise KeyError(f'Key "{key}" not in right operand')
-
     def _merge(
         self,
         right,
@@ -3223,84 +3138,33 @@ class Frame(libcudf.table.Table):
         right_index=False,
         how="inner",
         sort=False,
-        lsuffix=None,
-        rsuffix=None,
         method="hash",
         indicator=False,
         suffixes=("_x", "_y"),
     ):
-        # Merge doesn't support right, so just swap
+        lhs, rhs = self, right
         if how == "right":
-            return right._merge(
-                self,
-                on=on,
-                left_on=right_on,
-                right_on=left_on,
-                left_index=right_index,
-                right_index=left_index,
-                how="left",
-                sort=sort,
-                lsuffix=rsuffix,
-                rsuffix=lsuffix,
-                method=method,
-                indicator=indicator,
-                suffixes=suffixes,
-            )
+            # Merge doesn't support right, so just swap
+            how = "left"
+            lhs, rhs = right, self
+            left_on, right_on = right_on, left_on
+            left_index, right_index = right_index, left_index
+            suffixes = (suffixes[1], suffixes[0])
 
-        lhs = self
-        rhs = right
-
-        from cudf.core.join import Merge
-
-        mergeop = Merge(
+        return merge(
             lhs,
             rhs,
-            on,
-            left_on,
-            right_on,
-            left_index,
-            right_index,
-            how,
-            sort,
-            lsuffix,
-            rsuffix,
-            method,
-            indicator,
-            suffixes,
+            on=on,
+            left_on=left_on,
+            right_on=right_on,
+            left_index=left_index,
+            right_index=right_index,
+            how=how,
+            sort=sort,
+            method=method,
+            indicator=indicator,
+            suffixes=suffixes,
         )
-        to_return = mergeop.perform_merge()
-
-        # If sort=True, Pandas would sort on the key columns in the
-        # same order as given in 'on'. If the indices are used as
-        # keys, the index will be sorted. If one index is specified,
-        # the key column on the other side will be used to sort.
-        # If no index is specified, return a new RangeIndex
-        if sort:
-            to_sort = cudf.DataFrame()
-            if left_index and right_index:
-                by = list(to_return._index._data.columns)
-                if left_on and right_on:
-                    by.extend(to_return[mergeop.left_on]._data.columns)
-            elif left_index:
-                by = list(to_return[mergeop.right_on]._data.columns)
-            elif right_index:
-                by = list(to_return[mergeop.left_on]._data.columns)
-            else:
-                # left_on == right_on, or different names but same columns
-                # in both cases we can sort by either
-                by = [to_return._data[name] for name in mergeop.left_on]
-            for i, col in enumerate(by):
-                to_sort[i] = col
-            inds = to_sort.argsort()
-            if isinstance(to_return, cudf.Index):
-                to_return = to_return.take(inds)
-            else:
-                to_return = to_return.take(
-                    inds, keep_index=(left_index or right_index)
-                )
-            return to_return
-        else:
-            return to_return
 
     def _is_sorted(self, ascending=None, null_position=None):
         """
@@ -3393,17 +3257,21 @@ class Frame(libcudf.table.Table):
                 # double-argsort to map back from sorted to unsorted positions
                 df = df.take(index.argsort(ascending=True).argsort())
 
-        cols = OrderedDict()
         index = index if index is not None else df.index
         names = columns if columns is not None else list(df.columns)
-        for name in names:
-            if name in df._data:
-                cols[name] = df._data[name].copy(deep=deep)
-            else:
-                dtype = dtypes.get(name, np.float64)
-                cols[name] = column_empty(
-                    dtype=dtype, masked=True, row_count=len(index)
+        cols = {
+            name: (
+                df._data[name].copy(deep=deep)
+                if name in df._data
+                else column_empty(
+                    dtype=dtypes.get(name, np.float64),
+                    masked=True,
+                    row_count=len(index),
                 )
+            )
+            for name in names
+        }
+
         result = self.__class__._from_table(
             Frame(
                 data=cudf.core.column_accessor.ColumnAccessor(
@@ -3418,64 +3286,160 @@ class Frame(libcudf.table.Table):
         return self._mimic_inplace(result, inplace=inplace)
 
 
-def _get_replacement_values(to_replace, replacement, col_name, column):
+def _get_replacement_values_for_columns(
+    to_replace: Any, value: Any, columns_dtype_map: Dict[Any, Any]
+) -> Tuple[Dict[Any, bool], Dict[Any, Any], Dict[Any, Any]]:
+    """
+    Returns a per column mapping for the values to be replaced, new
+    values to be replaced with and if all the values are empty.
 
-    all_nan = False
-    if (
-        is_dict_like(to_replace)
-        and not isinstance(to_replace, cudf.Series)
-        and replacement is None
+    Parameters
+    ----------
+    to_replace : numeric, str, list-like or dict
+        Contains the values to be replaced.
+    value : numeric, str, list-like, or dict
+        Contains the values to replace `to_replace` with.
+    columns_dtype_map : dict
+        A column to dtype mapping representing dtype of columns.
+
+    Returns
+    -------
+    all_na_columns : dict
+        A dict mapping of all columns if they contain all na values
+    to_replace_columns : dict
+        A dict mapping of all columns and the existing values that
+        have to be replaced.
+    values_columns : dict
+        A dict mapping of all columns and the corresponding values
+        to be replaced with.
+    """
+    to_replace_columns: Dict[Any, Any] = {}
+    values_columns: Dict[Any, Any] = {}
+    all_na_columns: Dict[Any, Any] = {}
+
+    if is_scalar(to_replace) and is_scalar(value):
+        to_replace_columns = {col: [to_replace] for col in columns_dtype_map}
+        values_columns = {col: [value] for col in columns_dtype_map}
+    elif cudf.utils.dtypes.is_list_like(to_replace) or isinstance(
+        to_replace, cudf.core.column.ColumnBase
     ):
-        replacement = list(to_replace.values())
-        to_replace = list(to_replace.keys())
-    elif not is_scalar(to_replace):
-        if is_scalar(replacement):
-            all_nan = replacement is None
-            if all_nan:
-                replacement = [replacement] * len(to_replace)
-            # Do not broadcast numeric dtypes
-            elif pd.api.types.is_numeric_dtype(column.dtype):
-                if len(to_replace) > 0:
-                    replacement = [replacement]
-                else:
-                    # If to_replace is empty, replacement has to be empty.
-                    replacement = []
-            else:
-                replacement = utils.scalar_broadcast_to(
-                    replacement,
-                    (len(to_replace),),
-                    np.dtype(type(replacement)),
+        if is_scalar(value):
+            to_replace_columns = {col: to_replace for col in columns_dtype_map}
+            values_columns = {
+                col: [value]
+                if pd.api.types.is_numeric_dtype(columns_dtype_map[col])
+                else cudf.utils.utils.scalar_broadcast_to(
+                    value, (len(to_replace),), np.dtype(type(value)),
                 )
-        else:
-            # If both are non-scalar
-            if len(to_replace) != len(replacement):
+                for col in columns_dtype_map
+            }
+        elif cudf.utils.dtypes.is_list_like(value):
+            if len(to_replace) != len(value):
                 raise ValueError(
                     f"Replacement lists must be "
                     f"of same length."
-                    f"Expected {len(to_replace)}, got {len(replacement)}."
+                    f" Expected {len(to_replace)}, got {len(value)}."
                 )
-    else:
-        if not is_scalar(replacement):
+            else:
+                to_replace_columns = {
+                    col: to_replace for col in columns_dtype_map
+                }
+                values_columns = {col: value for col in columns_dtype_map}
+        elif cudf.utils.dtypes.is_column_like(value):
+            to_replace_columns = {col: to_replace for col in columns_dtype_map}
+            values_columns = {col: value for col in columns_dtype_map}
+        else:
             raise TypeError(
-                f"Incompatible types '{type(to_replace).__name__}' "
-                f"and '{type(replacement).__name__}' "
-                f"for *to_replace* and *replacement*."
+                "value argument must be scalar, list-like or Series"
             )
-        to_replace = [to_replace]
-        replacement = [replacement]
+    elif _is_series(to_replace):
+        if value is None:
+            to_replace_columns = {
+                col: as_column(to_replace.index) for col in columns_dtype_map
+            }
+            values_columns = {col: to_replace for col in columns_dtype_map}
+        elif is_dict_like(value):
+            to_replace_columns = {
+                col: to_replace[col]
+                for col in columns_dtype_map
+                if col in to_replace
+            }
+            values_columns = {
+                col: value[col] for col in to_replace_columns if col in value
+            }
+        elif is_scalar(value) or _is_series(value):
+            to_replace_columns = {
+                col: to_replace[col]
+                for col in columns_dtype_map
+                if col in to_replace
+            }
+            values_columns = {
+                col: [value] if is_scalar(value) else value[col]
+                for col in to_replace_columns
+                if col in value
+            }
+        else:
+            raise ValueError(
+                "Series.replace cannot use dict-like to_replace and non-None "
+                "value"
+            )
+    elif is_dict_like(to_replace):
+        if value is None:
+            to_replace_columns = {
+                col: list(to_replace.keys()) for col in columns_dtype_map
+            }
+            values_columns = {
+                col: list(to_replace.values()) for col in columns_dtype_map
+            }
+        elif is_dict_like(value):
+            to_replace_columns = {
+                col: to_replace[col]
+                for col in columns_dtype_map
+                if col in to_replace
+            }
+            values_columns = {
+                col: value[col] for col in columns_dtype_map if col in value
+            }
+        elif is_scalar(value) or _is_series(value):
+            to_replace_columns = {
+                col: to_replace[col]
+                for col in columns_dtype_map
+                if col in to_replace
+            }
+            values_columns = {
+                col: [value] if is_scalar(value) else value
+                for col in columns_dtype_map
+                if col in to_replace
+            }
+        else:
+            raise TypeError("value argument must be scalar, dict, or Series")
+    else:
+        raise TypeError(
+            "Expecting 'to_replace' to be either a scalar, array-like, "
+            "dict or None, got invalid type "
+            f"'{type(to_replace).__name__}'"
+        )
 
-    if is_dict_like(to_replace) and is_dict_like(replacement):
-        replacement = replacement[col_name]
-        to_replace = to_replace[col_name]
+    to_replace_columns = {
+        key: [value] if is_scalar(value) else value
+        for key, value in to_replace_columns.items()
+    }
+    values_columns = {
+        key: [value] if is_scalar(value) else value
+        for key, value in values_columns.items()
+    }
 
-        if is_scalar(replacement):
-            replacement = [replacement]
-        if is_scalar(to_replace):
-            to_replace = [to_replace]
+    for i in to_replace_columns:
+        if i in values_columns:
+            if isinstance(values_columns[i], list):
+                all_na = values_columns[i].count(None) == len(
+                    values_columns[i]
+                )
+            else:
+                all_na = False
+            all_na_columns[i] = all_na
 
-    if isinstance(replacement, list):
-        all_nan = replacement.count(None) == len(replacement)
-    return all_nan, replacement, to_replace
+    return all_na_columns, to_replace_columns, values_columns
 
 
 # If the dictionary array is a string array and of length `0`
@@ -3583,3 +3547,92 @@ def _reassign_categories(categories, cols, col_idxs):
                 offset=cols[name].offset,
                 size=cols[name].size,
             )
+
+
+def _is_series(obj):
+    """
+    Checks if the `obj` is of type `cudf.Series`
+    instead of checking for isinstance(obj, cudf.Series)
+    """
+    return isinstance(obj, Frame) and obj.ndim == 1 and obj._index is not None
+
+
+def _drop_rows_by_labels(
+    obj: DataFrameOrSeries,
+    labels: Union[ColumnLike, abc.Iterable, str],
+    level: Union[int, str],
+    errors: str,
+) -> DataFrameOrSeries:
+    """Remove rows specified by `labels`. If `errors=True`, an error is raised
+    if some items in `labels` do not exist in `obj._index`.
+
+    Will raise if level(int) is greater or equal to index nlevels
+    """
+    if isinstance(level, int) and level >= obj.index.nlevels:
+        raise ValueError("Param level out of bounds.")
+
+    if not isinstance(labels, (cudf.Series, cudf.Index)):
+        labels = as_column(labels)
+
+    if isinstance(obj._index, cudf.MultiIndex):
+        if level is None:
+            level = 0
+
+        levels_index = obj.index.get_level_values(level)
+        if errors == "raise" and not labels.isin(levels_index).all():
+            raise KeyError("One or more values not found in axis")
+
+        if isinstance(level, int):
+            ilevel = level
+        else:
+            ilevel = obj._index.names.index(level)
+
+        # 1. Merge Index df and data df along column axis:
+        # | id | ._index df | data column(s) |
+        idx_nlv = obj._index.nlevels
+        working_df = obj._index._source_data
+        working_df.columns = [i for i in range(idx_nlv)]
+        for i, col in enumerate(obj._data):
+            working_df[idx_nlv + i] = obj._data[col]
+        # 2. Set `level` as common index:
+        # | level | ._index df w/o level | data column(s) |
+        working_df = working_df.set_index(level)
+
+        # 3. Use "leftanti" join to drop
+        # TODO: use internal API with "leftanti" and specify left and right
+        # join keys to bypass logic check
+        to_join = cudf.DataFrame(index=cudf.Index(labels, name=level))
+        join_res = working_df.join(to_join, how="leftanti")
+
+        # 4. Reconstruct original layout, and rename
+        join_res.insert(
+            ilevel, name=join_res._index.name, value=join_res._index
+        )
+        join_res = join_res.reset_index(drop=True)
+
+        midx = cudf.MultiIndex.from_frame(
+            join_res.iloc[:, 0:idx_nlv], names=obj._index.names
+        )
+
+        if isinstance(obj, cudf.Series):
+            return obj.__class__._from_data(
+                join_res.iloc[:, idx_nlv:]._data, index=midx, name=obj.name
+            )
+        else:
+            return obj.__class__._from_data(
+                join_res.iloc[:, idx_nlv:]._data,
+                index=midx,
+                columns=obj.columns,
+            )
+
+    else:
+        if errors == "raise" and not labels.isin(obj.index).all():
+            raise KeyError("One or more values not found in axis")
+
+        key_df = cudf.DataFrame(index=labels)
+        if isinstance(obj, cudf.Series):
+            res = obj.to_frame(name="tmp").join(key_df, how="leftanti")["tmp"]
+            res.name = obj.name
+            return res
+        else:
+            return obj.join(key_df, how="leftanti")

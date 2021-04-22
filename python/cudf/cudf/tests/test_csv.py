@@ -1815,7 +1815,7 @@ def test_csv_reader_dtypes(dtype):
 
 
 @pytest.mark.parametrize(
-    "dtype", ["Int64", "UInt32", {"a": "UInt64", "b": "float64", "c": "Int32"}]
+    "dtype", ["Int64", "UInt32", {"a": "UInt64", "b": "Float64", "c": "Int32"}]
 )
 def test_csv_reader_nullable_dtypes(dtype):
     buf = "a,b,c\n1,10,111\n2,11,112\n3,12,113\n4,13,114\n"
@@ -1838,7 +1838,6 @@ def test_csv_reader_timedetla_dtypes(dtype):
     assert_eq(expected, actual)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/6719")
 @pytest.mark.parametrize(
     "dtype", sorted(list(cudf.utils.dtypes.DATETIME_TYPES))
 )
@@ -1955,3 +1954,24 @@ def test_csv_sep_error():
         rfunc_args_and_kwargs=([], {"sep": 1}),
         expected_error_message='"sep" must be string, not int',
     )
+
+
+def test_to_csv_encoding_error():
+    # TODO: Remove this test once following
+    # issue is fixed: https://github.com/rapidsai/cudf/issues/2957
+    df = cudf.DataFrame({"a": ["你好", "test"]})
+    encoding = "utf-8-sig"
+    error_message = (
+        f"Encoding {encoding} is not supported. "
+        + "Currently, only utf-8 encoding is supported."
+    )
+    with pytest.raises(NotImplementedError, match=re.escape(error_message)):
+        df.to_csv("test.csv", encoding=encoding)
+
+
+def test_to_csv_compression_error():
+    df = cudf.DataFrame({"a": ["test"]})
+    compression = "snappy"
+    error_message = "Writing compressed csv is not currently supported in cudf"
+    with pytest.raises(NotImplementedError, match=re.escape(error_message)):
+        df.to_csv("test.csv", compression=compression)

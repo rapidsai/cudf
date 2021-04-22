@@ -40,6 +40,7 @@ conda list --show-channel-urls
 #libcudf Doxygen build
 gpuci_logger "Build libcudf docs..."
 cd $PROJECT_WORKSPACE/cpp/doxygen
+wget "https://raw.githubusercontent.com/rapidsai/docs/gh-pages/api/librmm/${BRANCH_VERSION}/rmm.tag" || echo "Failed to download rmm Doxygen tag"
 doxygen Doxyfile
 
 #cudf Sphinx Build
@@ -60,4 +61,3 @@ done
 
 mv $PROJECT_WORKSPACE/docs/cudf/build/html/* $DOCS_WORKSPACE/api/cudf/$BRANCH_VERSION
 mv $PROJECT_WORKSPACE/cpp/doxygen/html/* $DOCS_WORKSPACE/api/libcudf/$BRANCH_VERSION
-

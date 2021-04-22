@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -162,6 +162,73 @@ auto nulls_before<cudf::string_view>()
   return strings_column_wrapper({"identical", "identical"}, {0, 1});
 }
 
+// ----- struct_view {"nestedInt" : {"Int" : 0 }, "float" : 1}
+
+template <typename T>
+typename std::enable_if<std::is_same<T, cudf::struct_view>::value, structs_column_wrapper>::type
+ascending()
+{
+  using T1           = int32_t;
+  auto int_col       = fixed_width_column_wrapper<int32_t>({std::numeric_limits<T1>::lowest(),
+                                                      T1(-100),
+                                                      T1(-10),
+                                                      T1(-10),
+                                                      T1(0),
+                                                      T1(10),
+                                                      T1(10),
+                                                      T1(100),
+                                                      std::numeric_limits<T1>::max()});
+  auto nestedInt_col = structs_column_wrapper{{int_col}};
+  auto float_col     = ascending<float>();
+  return structs_column_wrapper{{nestedInt_col, float_col}};
+}
+
+template <typename T>
+typename std::enable_if<std::is_same<T, cudf::struct_view>::value, structs_column_wrapper>::type
+descending()
+{
+  using T1           = int32_t;
+  auto int_col       = fixed_width_column_wrapper<int32_t>({std::numeric_limits<T1>::max(),
+                                                      T1(100),
+                                                      T1(10),
+                                                      T1(10),
+                                                      T1(0),
+                                                      T1(-10),
+                                                      T1(-10),
+                                                      T1(-100),
+                                                      std::numeric_limits<T1>::lowest()});
+  auto nestedInt_col = structs_column_wrapper{{int_col}};
+  auto float_col     = descending<float>();
+  return structs_column_wrapper{{nestedInt_col, float_col}};
+}
+
+template <>
+auto empty<cudf::struct_view>()
+{
+  auto int_col = fixed_width_column_wrapper<int32_t>();
+  auto col1    = structs_column_wrapper{{int_col}};
+  auto col2    = fixed_width_column_wrapper<float>();
+  return structs_column_wrapper{{col1, col2}};
+}
+
+template <>
+auto nulls_after<cudf::struct_view>()
+{
+  auto int_col = fixed_width_column_wrapper<int32_t>({1, 1});
+  auto col1    = structs_column_wrapper{{int_col}};
+  auto col2    = fixed_width_column_wrapper<float>({1, 1});
+  return structs_column_wrapper{{col1, col2}, {1, 0}};
+}
+
+template <>
+auto nulls_before<cudf::struct_view>()
+{
+  auto int_col = fixed_width_column_wrapper<int32_t>({1, 1});
+  auto col1    = structs_column_wrapper{{int_col}};
+  auto col2    = fixed_width_column_wrapper<float>({1, 1});
+  return structs_column_wrapper{{col1, col2}, {0, 1}};
+}
+
 }  // namespace testdata
 }  // anonymous namespace
 
@@ -172,7 +239,8 @@ template <typename T>
 struct IsSortedTest : public BaseFixture {
 };
 
-TYPED_TEST_CASE(IsSortedTest, ComparableTypes);
+using SupportedTypes = Concat<ComparableTypes, cudf::test::Types<cudf::struct_view>>;
+TYPED_TEST_CASE(IsSortedTest, SupportedTypes);
 
 TYPED_TEST(IsSortedTest, NoColumns)
 {

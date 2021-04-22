@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,8 +26,10 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        std::unique_ptr<aggregation> const& agg,
                                        rmm::mr::device_memory_resource* mr)
 {
+  auto defaults =
+    cudf::is_dictionary(input.type()) ? dictionary_column_view(input).indices() : input;
   return rolling_window(
-    input, empty_like(input)->view(), preceding_window, following_window, min_periods, agg, mr);
+    input, empty_like(defaults)->view(), preceding_window, following_window, min_periods, agg, mr);
 }
 
 namespace detail {
@@ -107,8 +109,10 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                             stream,
                                             mr);
   } else {
+    auto defaults_col =
+      cudf::is_dictionary(input.type()) ? dictionary_column_view(input).indices() : input;
     return cudf::detail::rolling_window(input,
-                                        empty_like(input)->view(),
+                                        empty_like(defaults_col)->view(),
                                         preceding_window.begin<size_type>(),
                                         following_window.begin<size_type>(),
                                         min_periods,

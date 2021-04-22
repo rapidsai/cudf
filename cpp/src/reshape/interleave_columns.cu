@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,9 +90,9 @@ struct interleave_columns_functor {
     auto d_results_offsets = offsets_column->view().template data<int32_t>();
 
     // Create the chars column
-    size_type bytes = thrust::device_pointer_cast(d_results_offsets)[num_strings];
-    auto chars_column =
-      strings::detail::create_chars_child_column(num_strings, null_count, bytes, stream, mr);
+    auto const bytes =
+      cudf::detail::get_value<int32_t>(offsets_column->view(), num_strings, stream);
+    auto chars_column = strings::detail::create_chars_child_column(num_strings, bytes, stream, mr);
     // Fill the chars column
     auto d_results_chars = chars_column->mutable_view().data<char>();
     thrust::for_each_n(
@@ -137,16 +137,14 @@ struct interleave_columns_functor {
     auto index_begin   = thrust::make_counting_iterator<size_type>(0);
     auto index_end     = thrust::make_counting_iterator<size_type>(output_size);
 
-    using Type = device_storage_type_t<T>;
-
     auto func_value = [input   = *device_input,
                        divisor = input.num_columns()] __device__(size_type idx) {
-      return input.column(idx % divisor).element<Type>(idx / divisor);
+      return input.column(idx % divisor).element<T>(idx / divisor);
     };
 
     if (not create_mask) {
       thrust::transform(
-        rmm::exec_policy(stream), index_begin, index_end, device_output->begin<Type>(), func_value);
+        rmm::exec_policy(stream), index_begin, index_end, device_output->begin<T>(), func_value);
 
       return output;
     }
@@ -159,7 +157,7 @@ struct interleave_columns_functor {
     thrust::transform_if(rmm::exec_policy(stream),
                          index_begin,
                          index_end,
-                         device_output->begin<Type>(),
+                         device_output->begin<T>(),
                          func_value,
                          func_validity);
 
@@ -193,12 +191,12 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   auto const output_needs_mask = std::any_of(
     std::cbegin(input), std::cend(input), [](auto const& col) { return col.nullable(); });
 
-  return type_dispatcher(dtype,
-                         detail::interleave_columns_functor{},
-                         input,
-                         output_needs_mask,
-                         rmm::cuda_stream_default,
-                         mr);
+  return type_dispatcher<dispatch_storage_type>(dtype,
+                                                detail::interleave_columns_functor{},
+                                                input,
+                                                output_needs_mask,
+                                                rmm::cuda_stream_default,
+                                                mr);
 }
 
 }  // namespace cudf

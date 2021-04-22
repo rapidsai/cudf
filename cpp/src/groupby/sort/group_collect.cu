@@ -19,6 +19,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -26,13 +27,13 @@ namespace cudf {
 namespace groupby {
 namespace detail {
 std::unique_ptr<column> group_collect(column_view const &values,
-                                      rmm::device_vector<size_type> const &group_offsets,
+                                      cudf::device_span<size_type const> group_offsets,
                                       size_type num_groups,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource *mr)
 {
   rmm::device_buffer offsets_data(
-    group_offsets.data().get(), group_offsets.size() * sizeof(cudf::size_type), stream, mr);
+    group_offsets.data(), group_offsets.size() * sizeof(cudf::size_type), stream, mr);
 
   auto offsets = std::make_unique<cudf::column>(
     cudf::data_type(cudf::type_to_id<cudf::size_type>()), num_groups + 1, std::move(offsets_data));

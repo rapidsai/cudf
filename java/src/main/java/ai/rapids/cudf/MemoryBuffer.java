@@ -46,7 +46,7 @@ abstract public class MemoryBuffer implements AutoCloseable {
     }
 
     @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       if (parent != null) {
         if (logErrorIfNotClean) {
           log.error("A SLICED BUFFER WAS LEAKED(ID: " + id + " parent: " + parent + ")");
@@ -144,6 +144,39 @@ abstract public class MemoryBuffer implements AutoCloseable {
    */
   public final long getAddress() {
     return address;
+  }
+
+  /**
+   * Copy a subset of src to this buffer starting at destOffset using the specified CUDA stream.
+   * The copy has completed when this returns, but the memory copy could overlap with
+   * operations occurring on other streams.
+   * @param destOffset the offset in this to start copying from.
+   * @param src what to copy from
+   * @param srcOffset offset into src to start out
+   * @param length how many bytes to copy
+   * @param stream CUDA stream to use
+   */
+  public final void copyFromMemoryBuffer(
+          long destOffset, MemoryBuffer src, long srcOffset, long length, Cuda.Stream stream) {
+    addressOutOfBoundsCheck(address + destOffset, length, "copy range dest");
+    src.addressOutOfBoundsCheck(src.address + srcOffset, length, "copy range src");
+    Cuda.memcpy(address + destOffset, src.address + srcOffset, length, CudaMemcpyKind.DEFAULT, stream);
+  }
+
+  /**
+   * Copy a subset of src to this buffer starting at destOffset using the specified CUDA stream.
+   * The copy is async and may not have completed when this returns.
+   * @param destOffset the offset in this to start copying from.
+   * @param src what to copy from
+   * @param srcOffset offset into src to start out
+   * @param length how many bytes to copy
+   * @param stream CUDA stream to use
+   */
+  public final void copyFromMemoryBufferAsync(
+          long destOffset, MemoryBuffer src, long srcOffset, long length, Cuda.Stream stream) {
+    addressOutOfBoundsCheck(address + destOffset, length, "copy range dest");
+    src.addressOutOfBoundsCheck(src.address + srcOffset, length, "copy range src");
+    Cuda.asyncMemcpy(address + destOffset, src.address + srcOffset, length, CudaMemcpyKind.DEFAULT, stream);
   }
 
   /**

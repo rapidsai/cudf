@@ -15,6 +15,7 @@
  */
 
 #include <hash/concurrent_unordered_multimap.cuh>
+#include <hash/hash_allocator.cuh>
 
 #include <cudf_test/base_fixture.hpp>
 
@@ -46,11 +47,15 @@ class MultimapTest : public cudf::test::BaseFixture {
   using value_type = typename T::value_type;
   using size_type  = int;
 
-  using multimap_type = concurrent_unordered_multimap<key_type,
-                                                      value_type,
-                                                      size_type,
-                                                      std::numeric_limits<key_type>::max(),
-                                                      std::numeric_limits<value_type>::max()>;
+  using multimap_type =
+    concurrent_unordered_multimap<key_type,
+                                  value_type,
+                                  size_type,
+                                  std::numeric_limits<key_type>::max(),
+                                  std::numeric_limits<value_type>::max(),
+                                  default_hash<key_type>,
+                                  equal_to<key_type>,
+                                  default_allocator<thrust::pair<key_type, value_type>>>;
 
   std::unique_ptr<multimap_type, std::function<void(multimap_type*)>> the_map;
 
@@ -90,13 +95,4 @@ TYPED_TEST(MultimapTest, InitialState)
   auto begin = this->the_map->begin();
   auto end   = this->the_map->end();
   EXPECT_NE(begin, end);
-}
-
-TYPED_TEST(MultimapTest, CheckUnusedValues)
-{
-  EXPECT_EQ(this->the_map->get_unused_key(), this->unused_key);
-
-  auto begin = this->the_map->begin();
-  EXPECT_EQ(begin->first, this->unused_key);
-  EXPECT_EQ(begin->second, this->unused_value);
 }

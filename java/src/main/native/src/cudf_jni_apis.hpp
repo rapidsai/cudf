@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,12 +23,23 @@
 namespace cudf {
 namespace jni {
 
+jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &table_result);
 
-jobject contiguous_table_from(JNIEnv *env, cudf::contiguous_split_result &split);
+//
+// ContiguousTable APIs
+//
+
+bool cache_contiguous_table_jni(JNIEnv *env);
+
+void release_contiguous_table_jni(JNIEnv *env);
+
+jobject contiguous_table_from(JNIEnv *env, cudf::packed_columns &split, long row_count);
 
 native_jobjectArray<jobject> contiguous_table_array(JNIEnv *env, jsize length);
 
-jlongArray convert_table_for_return(JNIEnv *env, std::unique_ptr<cudf::table> &table_result);
+//
+// HostMemoryBuffer APIs
+//
 
 /**
  * Allocate a HostMemoryBuffer

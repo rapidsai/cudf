@@ -1,5 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
-
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import logging
 import random
@@ -45,12 +44,16 @@ class JSONReader(IOFuzz):
         max_rows=100_000,
         max_columns=1000,
         max_string_length=None,
+        max_lists_length=None,
+        max_lists_nesting_depth=None,
     ):
         super().__init__(
             dirs=dirs,
             max_rows=max_rows,
             max_columns=max_columns,
             max_string_length=max_string_length,
+            max_lists_length=max_lists_length,
+            max_lists_nesting_depth=max_lists_nesting_depth,
         )
 
     def generate_input(self):
@@ -72,6 +75,10 @@ class JSONReader(IOFuzz):
                 # https://github.com/rapidsai/cudf/issues/6586
                 - set(cudf.utils.dtypes.DATETIME_TYPES)
             )
+            # TODO: Uncomment following after following
+            # issue is fixed:
+            # https://github.com/rapidsai/cudf/issues/7086
+            # dtypes_list.extend(["list"])
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
@@ -143,6 +150,10 @@ class JSONWriter(IOFuzz):
                 # https://github.com/rapidsai/cudf/issues/6586
                 - set(cudf.utils.dtypes.DATETIME_TYPES)
             )
+            # TODO: Uncomment following after following
+            # issue is fixed:
+            # https://github.com/rapidsai/cudf/issues/7086
+            # dtypes_list.extend(["list"])
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )

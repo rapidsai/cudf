@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -233,7 +233,7 @@ __device__ inline int32_t reprog_device::regexec(
           break;
         }
       }
-      itr = string_view::const_iterator(dstr, pos);
+      itr += (pos - itr.position());  // faster to increment position
     }
 
     if (((eos < 0) || (pos < eos)) && match == 0) {

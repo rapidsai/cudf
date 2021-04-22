@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,12 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+
 #include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -71,9 +73,8 @@ std::unique_ptr<column> modify_strings(strings_column_view const& strings,
   device_probe_functor d_probe_fctr{d_column, std::forward<Types>(args)...};
 
   // build offsets column -- calculate the size of each output string
-  auto offsets_transformer_itr =
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), d_probe_fctr);
-  auto offsets_column = detail::make_offsets_child_column(
+  auto offsets_transformer_itr = cudf::detail::make_counting_transform_iterator(0, d_probe_fctr);
+  auto offsets_column          = detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto offsets_view = offsets_column->view();
   auto d_new_offsets =
@@ -81,11 +82,11 @@ std::unique_ptr<column> modify_strings(strings_column_view const& strings,
                                             // one (`d_chars = ...`) doesn't
 
   // build the chars column -- convert characters based on case_flag parameter
-  size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
-  auto chars_column =
-    strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
-  auto chars_view = chars_column->mutable_view();
-  auto d_chars    = chars_view.data<char>();
+  auto const bytes =
+    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
+  auto chars_column = strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_view   = chars_column->mutable_view();
+  auto d_chars      = chars_view.data<char>();
 
   device_execute_functor d_execute_fctr{
     d_column, d_new_offsets, d_chars, std::forward<Types>(args)...};

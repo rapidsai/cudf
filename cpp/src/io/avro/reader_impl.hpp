@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,7 +97,7 @@ class reader::impl {
    */
   void decode_data(const rmm::device_buffer &block_data,
                    const std::vector<std::pair<uint32_t, uint32_t>> &dict,
-                   cudf::detail::device_span<gpu::nvstrdesc_s> global_dictionary,
+                   cudf::device_span<gpu::nvstrdesc_s> global_dictionary,
                    size_t num_rows,
                    std::vector<std::pair<int, std::string>> columns,
                    std::vector<column_buffer> &out_buffers,

@@ -196,5 +196,56 @@ TEST_F(groupby_dictionary_max_test, basic)
                   force_use_sort_impl::YES);
 }
 
+template <typename T>
+struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+};
+
+TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+
+TYPED_TEST(FixedPointTestBothReps, GroupBySortMaxDecimalAsValue)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+  using K          = int32_t;
+
+  for (auto const i : {2, 1, 0, -1, -2}) {
+    auto const scale = scale_type{i};
+    auto const keys  = fixed_width_column_wrapper<K>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+    auto const vals  = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
+
+    auto const expect_keys     = fixed_width_column_wrapper<K>{1, 2, 3};
+    auto const expect_vals_max = fp_wrapper{{6, 9, 8}, scale};
+
+    auto agg3 = cudf::make_max_aggregation();
+    test_single_agg(
+      keys, vals, expect_keys, expect_vals_max, std::move(agg3), force_use_sort_impl::YES);
+  }
+}
+
+// This test will not work until the following ptxas bug is fixed in 10.2
+// https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
+TYPED_TEST(FixedPointTestBothReps, DISABLED_GroupByHashMaxDecimalAsValue)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+  using K          = int32_t;
+
+  for (auto const i : {2, 1, 0, -1, -2}) {
+    auto const scale = scale_type{i};
+    auto const keys  = fixed_width_column_wrapper<K>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+    auto const vals  = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
+
+    auto const expect_keys     = fixed_width_column_wrapper<K>{1, 2, 3};
+    auto const expect_vals_max = fp_wrapper{{6, 9, 8}, scale};
+
+    auto agg7 = cudf::make_max_aggregation();
+    test_single_agg(keys, vals, expect_keys, expect_vals_max, std::move(agg7));
+  }
+}
+
 }  // namespace test
 }  // namespace cudf

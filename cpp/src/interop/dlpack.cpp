@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/interop.hpp>
+#include <cudf/lists/list_view.cuh>
+#include <cudf/structs/struct_view.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -23,16 +25,29 @@
 #include <dlpack/dlpack.h>
 
 #include <algorithm>
+#include <cudf/utilities/traits.hpp>
 
 namespace cudf {
 namespace {
 struct get_column_data_impl {
-  template <typename T>
+  template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
+  void const* operator()(column_view const& col)
+  {
+    CUDF_FAIL("Unsupported type to convert to dlpack.");
+  }
+
+  template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   void const* operator()(column_view const& col)
   {
     return col.data<T>();
   }
 };
+
+template <>
+void const* get_column_data_impl::operator()<string_view>(column_view const& col)
+{
+  return nullptr;
+}
 
 void const* get_column_data(column_view const& col)
 {

@@ -18,7 +18,7 @@
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/column_buffer.hpp>
 
-#include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/utilities/bit.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -68,7 +68,7 @@ struct page_state_s {
   // (leaf) value decoding
   int32_t nz_count;  // number of valid entries in nz_idx (write position in circular buffer)
   int32_t dict_pos;  // write position of dictionary indices
-  int32_t out_pos;   // read position of final output
+  int32_t src_pos;   // input read position of final output value
   int32_t ts_scale;  // timestamp scale: <0: divide by -ts_scale, >0: multiply by ts_scale
   uint32_t nz_idx[non_zero_buffer_size];    // circular buffer of non-null value positions
   uint32_t dict_idx[non_zero_buffer_size];  // Dictionary index, boolean, or string offset values
@@ -963,6 +963,7 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
     if (d + t < s->page.num_nesting_levels) {
       s->page.nesting[d + t].valid_count = 0;
       s->page.nesting[d + t].value_count = 0;
+      s->page.nesting[d + t].null_count  = 0;
     }
     d += blockDim.x;
   }
@@ -1029,13 +1030,13 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
         s->dtype_len = 8;  // Convert to 64-bit timestamp
       }
 
-      // first row within the page to start reading
+      // first row within the page to output
       if (page_start_row >= min_row) {
         s->first_row = 0;
       } else {
         s->first_row = (int32_t)min(min_row - page_start_row, (size_t)s->page.num_rows);
       }
-      // # of rows within the page to read
+      // # of rows within the page to output
       s->num_rows = s->page.num_rows;
       if ((page_start_row + s->first_row) + s->num_rows > min_row + num_rows) {
         s->num_rows =
@@ -1127,43 +1128,54 @@ static __device__ bool setupLocalPageInfo(page_state_s *const s,
     s->nz_count                          = 0;
     s->num_input_values                  = s->page.num_input_values;
     s->dict_pos                          = 0;
-    s->out_pos                           = 0;
+    s->src_pos                           = 0;
 
-    // handle row bounds (skip_rows, min_rows)
-    s->input_row_count = s->first_row;
+    // for flat hierarchies, we can't know how many leaf values to skip unless we do a full
+    // preprocess of the definition levels (since nulls will have no actual decodable value, there
+    // is no direct correlation between # of rows and # of decodable values).  so we will start
+    // processing at the beginning of the value stream and disregard any indices that start
+    // before the first row.
+    if (s->col.max_level[level_type::REPETITION] == 0) {
+      s->page.skipped_values      = 0;
+      s->page.skipped_leaf_values = 0;
+      s->input_value_count        = 0;
+      s->input_row_count          = 0;
 
-    // return the lower bound to compare (page-relative) thread row index against. Explanation:
-    // In the case of nested schemas, rows can span page boundaries.  That is to say,
-    // we can encounter the first value for row X on page M, but the last value for page M
-    // might not be the last value for row X. page M+1 (or further) may contain the last value.
-    //
-    // This means that the first values we encounter for a given page (M+1) may not belong to the
-    // row indicated by chunk_row, but to the row before it that spanned page boundaries. If that
-    // previous row is within the overall row bounds, include the values by allowing relative row
-    // index -1
-    int max_row = (min_row + num_rows) - 1;
-    if (min_row < page_start_row && max_row >= page_start_row - 1) {
       s->row_index_lower_bound = -1;
-    } else {
-      s->row_index_lower_bound = s->first_row;
     }
+    // for nested hierarchies, we have run a preprocess that lets us skip directly to the values
+    // we need to start decoding at
+    else {
+      // input_row_count translates to "how many rows we have processed so far", so since we are
+      // skipping directly to where we want to start decoding, set it to first_row
+      s->input_row_count = s->first_row;
 
-    // if we're in the decoding step, jump directly to the first
-    // value we care about
-    if (s->col.column_data_base != nullptr) {
-      // for flat hierarchies, we haven't computed skipped_values yet, but we can do so trivially
-      // now
-      if (s->col.max_level[level_type::REPETITION] == 0) {
-        s->page.skipped_values      = s->first_row;
-        s->page.skipped_leaf_values = s->first_row;
+      // return the lower bound to compare (page-relative) thread row index against. Explanation:
+      // In the case of nested schemas, rows can span page boundaries.  That is to say,
+      // we can encounter the first value for row X on page M, but the last value for page M
+      // might not be the last value for row X. page M+1 (or further) may contain the last value.
+      //
+      // This means that the first values we encounter for a given page (M+1) may not belong to the
+      // row indicated by chunk_row, but to the row before it that spanned page boundaries. If that
+      // previous row is within the overall row bounds, include the values by allowing relative row
+      // index -1
+      int const max_row = (min_row + num_rows) - 1;
+      if (min_row < page_start_row && max_row >= page_start_row - 1) {
+        s->row_index_lower_bound = -1;
+      } else {
+        s->row_index_lower_bound = s->first_row;
       }
 
-      s->input_value_count = s->page.skipped_values > -1 ? s->page.skipped_values : 0;
-    } else {
-      s->input_value_count        = 0;
-      s->input_leaf_count         = 0;
-      s->page.skipped_values      = -1;
-      s->page.skipped_leaf_values = -1;
+      // if we're in the decoding step, jump directly to the first
+      // value we care about
+      if (s->col.column_data_base != nullptr) {
+        s->input_value_count = s->page.skipped_values > -1 ? s->page.skipped_values : 0;
+      } else {
+        s->input_value_count        = 0;
+        s->input_leaf_count         = 0;
+        s->page.skipped_values      = -1;
+        s->page.skipped_leaf_values = -1;
+      }
     }
 
     __threadfence_block();
@@ -1279,7 +1291,7 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
                                                              int t)
 {
   // max nesting depth of the column
-  int max_depth = s->col.max_nesting_depth;
+  int const max_depth = s->col.max_nesting_depth;
   // how many (input) values we've processed in the page so far
   int input_value_count = s->input_value_count;
   // how many rows we've processed in the page so far
@@ -1304,19 +1316,19 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
 
     // track (page-relative) row index for the thread so we can compare against input bounds
     // keep track of overall # of rows we've read.
-    int is_new_row               = start_depth == 0 ? 1 : 0;
-    uint32_t warp_row_count_mask = ballot(is_new_row);
-    int32_t thread_row_index =
+    int const is_new_row               = start_depth == 0 ? 1 : 0;
+    uint32_t const warp_row_count_mask = ballot(is_new_row);
+    int32_t const thread_row_index =
       input_row_count + ((__popc(warp_row_count_mask & ((1 << t) - 1)) + is_new_row) - 1);
     input_row_count += __popc(warp_row_count_mask);
-    // is this thread within row bounds?
-    int in_row_bounds = thread_row_index >= s->row_index_lower_bound &&
-                            thread_row_index < (s->first_row + s->num_rows)
-                          ? 1
-                          : 0;
+    // is this thread within read row bounds?
+    int const in_row_bounds = thread_row_index >= s->row_index_lower_bound &&
+                                  thread_row_index < (s->first_row + s->num_rows)
+                                ? 1
+                                : 0;
 
     // compute warp and thread value counts
-    uint32_t warp_count_mask =
+    uint32_t const warp_count_mask =
       ballot((0 >= start_depth && 0 <= end_depth) && in_row_bounds ? 1 : 0);
 
     warp_value_count = __popc(warp_count_mask);
@@ -1329,36 +1341,35 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
       PageNestingInfo *pni = &s->page.nesting[s_idx];
 
       // if we are within the range of nesting levels we should be adding value indices for
-      int in_nesting_bounds =
+      int const in_nesting_bounds =
         ((s_idx >= start_depth && s_idx <= end_depth) && in_row_bounds) ? 1 : 0;
 
       // everything up to the max_def_level is a non-null value
-      uint32_t is_valid = 0;
-      if (d >= pni->max_def_level && in_nesting_bounds) { is_valid = 1; }
+      uint32_t const is_valid = d >= pni->max_def_level && in_nesting_bounds ? 1 : 0;
 
       // compute warp and thread valid counts
-      uint32_t warp_valid_mask;
-      // for flat schemas, a simple ballot_sync gives us the correct count and bit positions because
-      // every value in the input matches to a value in the output
-      if (max_depth == 0) {
-        warp_valid_mask = ballot(is_valid);
-      }
-      // for nested schemas, it's more complicated.  This warp will visit 32 incoming values,
-      // however not all of them will necessarily represent a value at this nesting level. so the
-      // validity bit for thread t might actually represent output value t-6. the correct position
-      // for thread t's bit is cur_value_count. for cuda 11 we could use __reduce_or_sync(), but
-      // until then we have to do a warp reduce.
-      else {
-        warp_valid_mask = WarpReduceOr32(is_valid << thread_value_count);
-      }
+      uint32_t const warp_valid_mask =
+        // for flat schemas, a simple ballot_sync gives us the correct count and bit positions
+        // because every value in the input matches to a value in the output
+        max_depth == 1
+          ? ballot(is_valid)
+          :
+          // for nested schemas, it's more complicated.  This warp will visit 32 incoming values,
+          // however not all of them will necessarily represent a value at this nesting level. so
+          // the validity bit for thread t might actually represent output value t-6. the correct
+          // position for thread t's bit is cur_value_count. for cuda 11 we could use
+          // __reduce_or_sync(), but until then we have to do a warp reduce.
+          WarpReduceOr32(is_valid << thread_value_count);
+
       thread_valid_count = __popc(warp_valid_mask & ((1 << thread_value_count) - 1));
       warp_valid_count   = __popc(warp_valid_mask);
 
       // if this is the value column emit an index for value decoding
       if (is_valid && s_idx == max_depth - 1) {
-        int idx                       = pni->valid_count + thread_valid_count;
-        int ofs                       = pni->value_count + thread_value_count;
-        s->nz_idx[rolling_index(idx)] = ofs;
+        int const src_pos = pni->valid_count + thread_valid_count;
+        int const dst_pos = pni->value_count + thread_value_count;
+        // nz_idx is a mapping of src buffer indices to destination buffer indices
+        s->nz_idx[rolling_index(src_pos)] = dst_pos;
       }
 
       // compute warp and thread value counts for the -next- nesting level. we need to
@@ -1366,7 +1377,7 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
       // level. more concretely : the offset for the current nesting level == current length of the
       // next nesting level
       if (s_idx < max_depth - 1) {
-        uint32_t next_warp_count_mask =
+        uint32_t const next_warp_count_mask =
           ballot((s_idx + 1 >= start_depth && s_idx + 1 <= end_depth && in_row_bounds) ? 1 : 0);
         next_warp_value_count   = __popc(next_warp_count_mask);
         next_thread_value_count = __popc(next_warp_count_mask & ((1 << t) - 1));
@@ -1375,17 +1386,36 @@ static __device__ void gpuUpdateValidityOffsetsAndRowIndices(int32_t target_inpu
         // and we have a valid data_out pointer, it implies this is a list column, so
         // emit an offset.
         if (in_nesting_bounds && pni->data_out != nullptr) {
-          int idx             = pni->value_count + thread_value_count;
-          cudf::size_type ofs = s->page.nesting[s_idx + 1].value_count + next_thread_value_count +
-                                s->page.nesting[s_idx + 1].page_start_value;
+          int const idx             = pni->value_count + thread_value_count;
+          cudf::size_type const ofs = s->page.nesting[s_idx + 1].value_count +
+                                      next_thread_value_count +
+                                      s->page.nesting[s_idx + 1].page_start_value;
           (reinterpret_cast<cudf::size_type *>(pni->data_out))[idx] = ofs;
         }
       }
 
-      // increment count of valid values, count of total values, and validity mask
+      // nested schemas always read and write to the same bounds (that is, read and write positions
+      // are already pre-bounded by first_row/num_rows). flat schemas will start reading at the
+      // first value, even if that is before first_row, because we cannot trivially jump to
+      // the correct position to start reading. since we are about to write the validity vector here
+      // we need to adjust our computed mask to take into account the write row bounds.
+      int const in_write_row_bounds =
+        max_depth == 1
+          ? thread_row_index >= s->first_row && thread_row_index < (s->first_row + s->num_rows)
+          : in_row_bounds;
+      int const first_thread_in_write_range =
+        max_depth == 1 ? __ffs(ballot(in_write_row_bounds)) - 1 : 0;
+      // # of bits to of the validity mask to write out
+      int const warp_valid_mask_bit_count =
+        first_thread_in_write_range < 0 ? 0 : warp_value_count - first_thread_in_write_range;
+
+      // increment count of valid values, count of total values, and update validity mask
       if (!t) {
-        if (pni->valid_map != nullptr && in_row_bounds) {
-          store_validity(pni, warp_valid_mask, warp_value_count);
+        if (pni->valid_map != nullptr && warp_valid_mask_bit_count > 0) {
+          uint32_t const warp_output_valid_mask = warp_valid_mask >> first_thread_in_write_range;
+          store_validity(pni, warp_output_valid_mask, warp_valid_mask_bit_count);
+
+          pni->null_count += warp_valid_mask_bit_count - __popc(warp_output_valid_mask);
         }
         pni->valid_count += warp_valid_count;
         pni->value_count += warp_value_count;
@@ -1669,16 +1699,17 @@ extern "C" __global__ void __launch_bounds__(block_size)
       ((s->col.data_type & 7) == BOOLEAN || (s->col.data_type & 7) == BYTE_ARRAY) ? 64 : 32;
   }
 
+  // skipped_leaf_values will always be 0 for flat hierarchies.
   uint32_t skipped_leaf_values = s->page.skipped_leaf_values;
-  while (!s->error && (s->input_value_count < s->num_input_values || s->out_pos < s->nz_count)) {
+  while (!s->error && (s->input_value_count < s->num_input_values || s->src_pos < s->nz_count)) {
     int target_pos;
-    int out_pos = s->out_pos;
+    int src_pos = s->src_pos;
 
     if (t < out_thread0) {
       target_pos =
-        min(out_pos + 2 * (block_size - out_thread0), s->nz_count + (block_size - out_thread0));
+        min(src_pos + 2 * (block_size - out_thread0), s->nz_count + (block_size - out_thread0));
     } else {
-      target_pos = min(s->nz_count, out_pos + block_size - out_thread0);
+      target_pos = min(s->nz_count, src_pos + block_size - out_thread0);
       if (out_thread0 > 32) { target_pos = min(target_pos, s->dict_pos); }
     }
     __syncthreads();
@@ -1689,6 +1720,7 @@ extern "C" __global__ void __launch_bounds__(block_size)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
       gpuDecodeLevels(s, target_pos, t);
     } else if (t < out_thread0) {
+      // skipped_leaf_values will always be 0 for flat hierarchies.
       uint32_t src_target_pos = target_pos + skipped_leaf_values;
 
       // WARP1: Decode dictionary indices, booleans or string positions
@@ -1703,49 +1735,72 @@ extern "C" __global__ void __launch_bounds__(block_size)
     } else {
       // WARP1..WARP3: Decode values
       int dtype = s->col.data_type & 7;
-      out_pos += t - out_thread0;
-      uint32_t src_pos = out_pos + skipped_leaf_values;
+      src_pos += t - out_thread0;
 
-      int output_value_idx = s->nz_idx[rolling_index(out_pos)];
+      // the position in the output column/buffer
+      int dst_pos = s->nz_idx[rolling_index(src_pos)];
 
-      if (out_pos < target_pos && output_value_idx >= 0 && output_value_idx < s->num_input_values) {
+      // for the flat hierarchy case we will be reading from the beginning of the value stream,
+      // regardless of the value of first_row. so adjust our destination offset accordingly.
+      // example:
+      // - user has passed skip_rows = 2, so our first_row to output is 2
+      // - the row values we get from nz_idx will be
+      //   0, 1, 2, 3, 4 ....
+      // - by shifting these values by first_row, the sequence becomes
+      //   -1, -2, 0, 1, 2 ...
+      // - so we will end up ignoring the first two input rows, and input rows 2..n will
+      //   get written to the output starting at position 0.
+      //
+      if (s->col.max_nesting_depth == 1) { dst_pos -= s->first_row; }
+
+      // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
+      // before first_row) in the flat hierarchy case.
+      if (src_pos < target_pos && dst_pos >= 0) {
+        // src_pos represents the logical row position we want to read from. But in the case of
+        // nested hierarchies, there is no 1:1 mapping of rows to values.  So our true read position
+        // has to take into account the # of values we have to skip in the page to get to the
+        // desired logical row.  For flat hierarchies, skipped_leaf_values will always be 0.
+        uint32_t val_src_pos = src_pos + skipped_leaf_values;
+
         // nesting level that is storing actual leaf values
         int leaf_level_index = s->col.max_nesting_depth - 1;
 
         uint32_t dtype_len = s->dtype_len;
-        void *dst          = s->page.nesting[leaf_level_index].data_out +
-                    static_cast<size_t>(output_value_idx) * dtype_len;
-        if (dtype == BYTE_ARRAY)
-          gpuOutputString(s, src_pos, dst);
-        else if (dtype == BOOLEAN)
-          gpuOutputBoolean(s, src_pos, static_cast<uint8_t *>(dst));
-        else if (s->col.converted_type == DECIMAL) {
+        void *dst =
+          s->page.nesting[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
+        if (dtype == BYTE_ARRAY) {
+          gpuOutputString(s, val_src_pos, dst);
+        } else if (dtype == BOOLEAN) {
+          gpuOutputBoolean(s, val_src_pos, static_cast<uint8_t *>(dst));
+        } else if (s->col.converted_type == DECIMAL) {
           switch (dtype) {
-            case INT32: gpuOutputFast(s, src_pos, static_cast<uint32_t *>(dst)); break;
-            case INT64: gpuOutputFast(s, src_pos, static_cast<uint2 *>(dst)); break;
+            case INT32: gpuOutputFast(s, val_src_pos, static_cast<uint32_t *>(dst)); break;
+            case INT64: gpuOutputFast(s, val_src_pos, static_cast<uint2 *>(dst)); break;
             default:
               // we currently do not support reading byte arrays larger than DECIMAL64
               if (s->dtype_len_in <= 8) {
-                gpuOutputFixedLenByteArrayAsInt64(s, src_pos, static_cast<int64_t *>(dst));
+                gpuOutputFixedLenByteArrayAsInt64(s, val_src_pos, static_cast<int64_t *>(dst));
               } else {
-                gpuOutputDecimalAsFloat(s, src_pos, static_cast<double *>(dst), dtype);
+                gpuOutputDecimalAsFloat(s, val_src_pos, static_cast<double *>(dst), dtype);
               }
               break;
           }
-        } else if (dtype == INT96)
-          gpuOutputInt96Timestamp(s, src_pos, static_cast<int64_t *>(dst));
-        else if (dtype_len == 8) {
-          if (s->ts_scale)
-            gpuOutputInt64Timestamp(s, src_pos, static_cast<int64_t *>(dst));
-          else
-            gpuOutputFast(s, src_pos, static_cast<uint2 *>(dst));
-        } else if (dtype_len == 4)
-          gpuOutputFast(s, src_pos, static_cast<uint32_t *>(dst));
-        else
-          gpuOutputGeneric(s, src_pos, static_cast<uint8_t *>(dst), dtype_len);
+        } else if (dtype == INT96) {
+          gpuOutputInt96Timestamp(s, val_src_pos, static_cast<int64_t *>(dst));
+        } else if (dtype_len == 8) {
+          if (s->ts_scale) {
+            gpuOutputInt64Timestamp(s, val_src_pos, static_cast<int64_t *>(dst));
+          } else {
+            gpuOutputFast(s, val_src_pos, static_cast<uint2 *>(dst));
+          }
+        } else if (dtype_len == 4) {
+          gpuOutputFast(s, val_src_pos, static_cast<uint32_t *>(dst));
+        } else {
+          gpuOutputGeneric(s, val_src_pos, static_cast<uint8_t *>(dst), dtype_len);
+        }
       }
 
-      if (t == out_thread0) { *(volatile int32_t *)&s->out_pos = target_pos; }
+      if (t == out_thread0) { *(volatile int32_t *)&s->src_pos = target_pos; }
     }
     __syncthreads();
   }

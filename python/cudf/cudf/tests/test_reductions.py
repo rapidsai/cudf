@@ -1,17 +1,21 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 from __future__ import division, print_function
 
 import random
+import re
 from itertools import product
 
 import numpy as np
+import pandas as pd
 import pytest
+from decimal import Decimal
 
 import cudf
 from cudf.core import Series
+from cudf.core.dtypes import Decimal64Dtype
 from cudf.tests import utils
-from cudf.tests.utils import NUMERIC_TYPES, gen_rand
+from cudf.tests.utils import NUMERIC_TYPES, gen_rand, assert_eq
 
 params_dtype = NUMERIC_TYPES
 
@@ -49,6 +53,20 @@ def test_sum_string():
     assert got == expected
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(6, 3), Decimal64Dtype(10, 6), Decimal64Dtype(16, 7)],
+)
+@pytest.mark.parametrize("nelem", params_sizes)
+def test_sum_decimal(dtype, nelem):
+    data = [str(x) for x in gen_rand("int64", nelem) / 100]
+
+    expected = pd.Series([Decimal(x) for x in data]).sum()
+    got = cudf.Series(data).astype(dtype).sum()
+
+    assert_eq(expected, got)
+
+
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_product(dtype, nelem):
     dtype = np.dtype(dtype).type
@@ -67,6 +85,19 @@ def test_product(dtype, nelem):
 
     significant = 4 if dtype == np.float32 else 6
     np.testing.assert_approx_equal(expect, got, significant=significant)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(6, 2), Decimal64Dtype(8, 4), Decimal64Dtype(10, 5)],
+)
+def test_product_decimal(dtype):
+    data = [str(x) for x in gen_rand("int8", 3) / 10]
+
+    expected = pd.Series([Decimal(x) for x in data]).product()
+    got = cudf.Series(data).astype(dtype).product()
+
+    assert_eq(expected, got)
 
 
 accuracy_for_dtype = {np.float64: 6, np.float32: 5}
@@ -93,6 +124,19 @@ def test_sum_of_squares(dtype, nelem):
         )
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(6, 2), Decimal64Dtype(8, 4), Decimal64Dtype(10, 5)],
+)
+def test_sum_of_squares_decimal(dtype):
+    data = [str(x) for x in gen_rand("int8", 3) / 10]
+
+    expected = pd.Series([Decimal(x) for x in data]).pow(2).sum()
+    got = cudf.Series(data).astype(dtype).sum_of_squares()
+
+    assert_eq(expected, got)
+
+
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_min(dtype, nelem):
     dtype = np.dtype(dtype).type
@@ -105,6 +149,20 @@ def test_min(dtype, nelem):
     assert expect == got
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(6, 3), Decimal64Dtype(10, 6), Decimal64Dtype(16, 7)],
+)
+@pytest.mark.parametrize("nelem", params_sizes)
+def test_min_decimal(dtype, nelem):
+    data = [str(x) for x in gen_rand("int64", nelem) / 100]
+
+    expected = pd.Series([Decimal(x) for x in data]).min()
+    got = cudf.Series(data).astype(dtype).min()
+
+    assert_eq(expected, got)
+
+
 @pytest.mark.parametrize("dtype,nelem", params)
 def test_max(dtype, nelem):
     dtype = np.dtype(dtype).type
@@ -115,6 +173,20 @@ def test_max(dtype, nelem):
     expect = dtype(data.max())
 
     assert expect == got
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [Decimal64Dtype(6, 3), Decimal64Dtype(10, 6), Decimal64Dtype(16, 7)],
+)
+@pytest.mark.parametrize("nelem", params_sizes)
+def test_max_decimal(dtype, nelem):
+    data = [str(x) for x in gen_rand("int64", nelem) / 100]
+
+    expected = pd.Series([Decimal(x) for x in data]).max()
+    got = cudf.Series(data).astype(dtype).max()
+
+    assert_eq(expected, got)
 
 
 @pytest.mark.parametrize("nelem", params_sizes)
@@ -166,15 +238,20 @@ def test_date_minmax():
 
 
 @pytest.mark.parametrize(
-    "op",
-    ["sum", "product", "std", "var", "median", "kurt", "kurtosis", "skew"],
+    "op", ["sum", "product", "var", "kurt", "kurtosis", "skew"],
 )
 def test_datetime_unsupported_reductions(op):
     gsr = cudf.Series([1, 2, 3, None], dtype="datetime64[ns]")
     psr = gsr.to_pandas()
 
     utils.assert_exceptions_equal(
-        lfunc=getattr(psr, op), rfunc=getattr(gsr, op),
+        lfunc=getattr(psr, op),
+        rfunc=getattr(gsr, op),
+        expected_error_message=re.escape(
+            "cannot perform "
+            + ("kurtosis" if op == "kurt" else op)
+            + " with type datetime64[ns]"
+        ),
     )
 
 
@@ -183,7 +260,15 @@ def test_timedelta_unsupported_reductions(op):
     gsr = cudf.Series([1, 2, 3, None], dtype="timedelta64[ns]")
     psr = gsr.to_pandas()
 
-    utils.assert_exceptions_equal(getattr(psr, op), getattr(gsr, op))
+    utils.assert_exceptions_equal(
+        lfunc=getattr(psr, op),
+        rfunc=getattr(gsr, op),
+        expected_error_message=re.escape(
+            "cannot perform "
+            + ("kurtosis" if op == "kurt" else op)
+            + " with type timedelta64[ns]"
+        ),
+    )
 
 
 @pytest.mark.parametrize("op", ["sum", "product", "std", "var"])

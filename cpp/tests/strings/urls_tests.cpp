@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,6 +96,67 @@ TEST_F(StringsConvertTest, UrlDecode)
     thrust::make_transform_iterator(h_expected.cbegin(),
                                     [](auto const str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsConvertTest, UrlDecodeNop)
+{
+  std::vector<const char*> h_strings{"www.nvidia.com/rapids/abc123",
+                                     "/_file-1234567890.txt",
+                                     "abcdefghijklmnopqrstuvwxyz",
+                                     "ABCDEFGHIJKLMNOPQRSTUVWXYZ%",
+                                     "0123456789%0",
+                                     nullptr,
+                                     ""};
+  cudf::test::strings_column_wrapper strings(
+    h_strings.cbegin(),
+    h_strings.cend(),
+    thrust::make_transform_iterator(h_strings.cbegin(),
+                                    [](auto const str) { return str != nullptr; }));
+
+  auto strings_view = cudf::strings_column_view(strings);
+  auto results      = cudf::strings::url_decode(strings_view);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
+}
+
+TEST_F(StringsConvertTest, UrlDecodeSliced)
+{
+  std::vector<const char*> h_strings{"www.nvidia.com/rapids/%3Fp%3D%C3%A9%",
+                                     "01/_file-1234567890.txt",
+                                     "a%20b%2Bc~defghijklmnopqrstuvwxyz",
+                                     "%25-accent%c3%a9d",
+                                     "ABCDEFGHIJKLMNOPQRSTUVWXYZ%0",
+                                     "01234567890",
+                                     nullptr,
+                                     ""};
+  cudf::test::strings_column_wrapper strings(
+    h_strings.cbegin(),
+    h_strings.cend(),
+    thrust::make_transform_iterator(h_strings.cbegin(),
+                                    [](auto const str) { return str != nullptr; }));
+
+  std::vector<const char*> h_expected{"www.nvidia.com/rapids/?p=é%",
+                                      "01/_file-1234567890.txt",
+                                      "a b+c~defghijklmnopqrstuvwxyz",
+                                      "%-accentéd",
+                                      "ABCDEFGHIJKLMNOPQRSTUVWXYZ%0",
+                                      "01234567890",
+                                      nullptr,
+                                      ""};
+  cudf::test::strings_column_wrapper expected(
+    h_expected.cbegin(),
+    h_expected.cend(),
+    thrust::make_transform_iterator(h_expected.cbegin(),
+                                    [](auto const str) { return str != nullptr; }));
+
+  std::vector<cudf::size_type> slice_indices{0, 3, 3, 6, 6, 8};
+  auto sliced_strings  = cudf::slice(strings, slice_indices);
+  auto sliced_expected = cudf::slice(expected, slice_indices);
+  for (size_t i = 0; i < sliced_strings.size(); ++i) {
+    auto strings_view = cudf::strings_column_view(sliced_strings[i]);
+    auto results      = cudf::strings::url_decode(strings_view);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, sliced_expected[i]);
+  }
 }
 
 TEST_F(StringsConvertTest, ZeroSizeUrlStringsColumn)

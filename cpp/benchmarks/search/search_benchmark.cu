@@ -36,9 +36,9 @@ void BM_non_null_column(benchmark::State& state)
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
   const cudf::size_type values_size = column_size;
 
-  auto col_data_it = cudf::test::make_counting_transform_iterator(
+  auto col_data_it = cudf::detail::make_counting_transform_iterator(
     0, [=](cudf::size_type row) { return static_cast<float>(row); });
-  auto val_data_it = cudf::test::make_counting_transform_iterator(
+  auto val_data_it = cudf::detail::make_counting_transform_iterator(
     0, [=](cudf::size_type row) { return static_cast<float>(values_size - row); });
 
   cudf::test::fixed_width_column_wrapper<float> column(col_data_it, col_data_it + column_size);
@@ -67,7 +67,7 @@ auto make_validity_iter()
 
   cudf::test::UniformRandomGenerator<uint8_t> rand_gen(r_min, r_max);
   uint8_t mod_base = rand_gen.generate();
-  return cudf::test::make_counting_transform_iterator(
+  return cudf::detail::make_counting_transform_iterator(
     0, [mod_base](auto row) { return (row % mod_base) > 0; });
 }
 
@@ -76,9 +76,9 @@ void BM_nullable_column(benchmark::State& state)
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
   const cudf::size_type values_size = column_size;
 
-  auto col_data_it = cudf::test::make_counting_transform_iterator(
+  auto col_data_it = cudf::detail::make_counting_transform_iterator(
     0, [=](cudf::size_type row) { return static_cast<float>(row); });
-  auto val_data_it = cudf::test::make_counting_transform_iterator(
+  auto val_data_it = cudf::detail::make_counting_transform_iterator(
     0, [=](cudf::size_type row) { return static_cast<float>(values_size - row); });
 
   cudf::test::fixed_width_column_wrapper<float> column(
@@ -114,9 +114,9 @@ void BM_table(benchmark::State& state)
 
   auto make_table = [&](cudf::size_type col_size) {
     cudf::test::UniformRandomGenerator<int> random_gen(0, 100);
-    auto data_it = cudf::test::make_counting_transform_iterator(
+    auto data_it = cudf::detail::make_counting_transform_iterator(
       0, [&](cudf::size_type row) { return random_gen.generate(); });
-    auto valid_it = cudf::test::make_counting_transform_iterator(
+    auto valid_it = cudf::detail::make_counting_transform_iterator(
       0, [&](cudf::size_type row) { return random_gen.generate() < 90; });
 
     std::vector<std::unique_ptr<cudf::column>> cols;

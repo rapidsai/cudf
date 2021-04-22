@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@
 
 #include <algorithm>
 #include <memory>
-
 namespace cudf {
 namespace {
 // Helper function to superimpose validity of parent struct
@@ -44,18 +43,19 @@ void superimpose_parent_nullmask(bitmask_type const* parent_null_mask,
     // Child should have a null mask.
     // `AND` the child's null mask with the parent's.
 
-    auto data_type{child.type()};
-    auto num_rows{child.size()};
-
     auto current_child_mask = child.mutable_view().null_mask();
 
-    cudf::detail::inplace_bitmask_and(current_child_mask,
-                                      {reinterpret_cast<bitmask_type const*>(parent_null_mask),
-                                       reinterpret_cast<bitmask_type const*>(current_child_mask)},
-                                      {0, 0},
-                                      child.size(),
-                                      stream,
-                                      mr);
+    std::vector<bitmask_type const*> masks{
+      reinterpret_cast<bitmask_type const*>(parent_null_mask),
+      reinterpret_cast<bitmask_type const*>(current_child_mask)};
+    std::vector<size_type> begin_bits{0, 0};
+    cudf::detail::inplace_bitmask_and(
+      device_span<bitmask_type>(current_child_mask, num_bitmask_words(child.size())),
+      masks,
+      begin_bits,
+      child.size(),
+      stream,
+      mr);
     child.set_null_count(UNKNOWN_NULL_COUNT);
   }
 

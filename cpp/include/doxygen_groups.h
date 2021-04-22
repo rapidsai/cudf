@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,6 +127,7 @@
  *   @defgroup strings_modify Modifying
  *   @defgroup strings_replace Replacing
  *   @defgroup strings_split Splitting
+ *   @defgroup strings_json JSON
  * @}
  * @defgroup dictionary_apis Dictionary
  * @{
@@ -143,6 +144,11 @@
  * @defgroup lists_apis Lists
  * @{
  *   @defgroup lists_extract Extracting
+ *   @defgroup lists_contains Searching
+ *   @defgroup lists_gather Gathering
+ *   @defgroup lists_elements Counting
+ *   @defgroup lists_drop_duplicates Filtering
+ *   @defgroup lists_sort Sorting
  * @}
  * @defgroup nvtext_apis NVText
  * @{
@@ -159,5 +165,9 @@
  *   @defgroup utility_dispatcher Type Dispatcher
  *   @defgroup utility_bitmask Bitmask
  *   @defgroup utility_error Exception
+ * @}
+ * @defgroup labeling_apis Labeling
+ * @{
+ *   @defgroup label_bins Bin Labeling
  * @}
  */

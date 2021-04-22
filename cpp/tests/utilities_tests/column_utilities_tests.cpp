@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,15 +15,18 @@
  */
 
 #include <cudf/copying.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/strings/strings_column_view.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
-#include <type_traits>
 
 #include <thrust/iterator/constant_iterator.h>
+
+#include <type_traits>
 
 template <typename T>
 struct ColumnUtilitiesTest : public cudf::test::BaseFixture {
@@ -55,7 +58,7 @@ TYPED_TEST_CASE(ColumnUtilitiesTestFixedPoint, cudf::test::FixedPointTypes);
 
 TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost)
 {
-  auto sequence = cudf::test::make_counting_transform_iterator(
+  auto sequence = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return cudf::test::make_type_param_scalar<TypeParam>(i); });
 
   auto size = this->size();
@@ -70,7 +73,7 @@ TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost)
 
 TYPED_TEST(ColumnUtilitiesTest, NonNullableToHostWithOffset)
 {
-  auto sequence = cudf::test::make_counting_transform_iterator(
+  auto sequence = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return cudf::test::make_type_param_scalar<TypeParam>(i); });
 
   auto const size  = this->size();
@@ -90,12 +93,12 @@ TYPED_TEST(ColumnUtilitiesTest, NonNullableToHostWithOffset)
 
 TYPED_TEST(ColumnUtilitiesTest, NullableToHostWithOffset)
 {
-  auto sequence = cudf::test::make_counting_transform_iterator(
+  auto sequence = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return cudf::test::make_type_param_scalar<TypeParam>(i); });
 
   auto split = 2;
   auto size  = this->size();
-  auto valid = cudf::test::make_counting_transform_iterator(
+  auto valid = cudf::detail::make_counting_transform_iterator(
     0, [&split](auto i) { return (i < (split + 1) or i > 10) ? false : true; });
   std::vector<TypeParam> data(sequence, sequence + size);
   std::vector<TypeParam> expected_data(sequence + split, sequence + size);
@@ -115,7 +118,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostWithOffset)
 
 TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid)
 {
-  auto sequence = cudf::test::make_counting_transform_iterator(
+  auto sequence = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return cudf::test::make_type_param_scalar<TypeParam>(i); });
 
   auto all_valid = thrust::make_constant_iterator<bool>(true);
@@ -147,7 +150,7 @@ TEST_F(ColumnUtilitiesEquivalenceTest, DoubleTest)
 
 TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest)
 {
-  auto all_valid = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
   cudf::test::fixed_width_column_wrapper<double> col1{1, 2, 3};
   cudf::test::fixed_width_column_wrapper<double> col2({1, 2, 3}, all_valid);
 
@@ -285,8 +288,8 @@ TYPED_TEST(ColumnUtilitiesTestFixedPoint, NonNullableToHost)
   auto const scale = scale_type{-2};
   auto to_fp       = [&](auto i) { return decimalXX{i, scale}; };
   auto to_rep      = [](auto i) { return i * 100; };
-  auto fps         = cudf::test::make_counting_transform_iterator(0, to_fp);
-  auto reps        = cudf::test::make_counting_transform_iterator(0, to_rep);
+  auto fps         = cudf::detail::make_counting_transform_iterator(0, to_fp);
+  auto reps        = cudf::detail::make_counting_transform_iterator(0, to_rep);
 
   auto const size      = 1000;
   auto const expected  = std::vector<decimalXX>(fps, fps + size);
@@ -305,8 +308,8 @@ TYPED_TEST(ColumnUtilitiesTestFixedPoint, NonNullableToHostWithOffset)
   auto const scale = scale_type{-2};
   auto to_fp       = [&](auto i) { return decimalXX{i, scale}; };
   auto to_rep      = [](auto i) { return i * 100; };
-  auto fps         = cudf::test::make_counting_transform_iterator(0, to_fp);
-  auto reps        = cudf::test::make_counting_transform_iterator(0, to_rep);
+  auto fps         = cudf::detail::make_counting_transform_iterator(0, to_fp);
+  auto reps        = cudf::detail::make_counting_transform_iterator(0, to_rep);
 
   auto const size  = 1000;
   auto const split = cudf::size_type{2};

@@ -22,10 +22,10 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
@@ -65,7 +65,7 @@ struct var_transform {
 template <typename ResultType, typename Iterator>
 void reduce_by_key_fn(column_device_view const& values,
                       Iterator values_iter,
-                      rmm::device_vector<size_type> const& group_labels,
+                      cudf::device_span<size_type const> group_labels,
                       ResultType const* d_means,
                       size_type const* d_group_sizes,
                       size_type ddof,
@@ -75,7 +75,7 @@ void reduce_by_key_fn(column_device_view const& values,
   auto var_iter = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0),
     var_transform<ResultType, decltype(values_iter)>{
-      values, values_iter, d_means, d_group_sizes, group_labels.data().get(), ddof});
+      values, values_iter, d_means, d_group_sizes, group_labels.data(), ddof});
 
   thrust::reduce_by_key(rmm::exec_policy(stream),
                         group_labels.begin(),
@@ -91,7 +91,7 @@ struct var_functor {
     column_view const& values,
     column_view const& group_means,
     column_view const& group_sizes,
-    rmm::device_vector<size_type> const& group_labels,
+    cudf::device_span<size_type const> group_labels,
     size_type ddof,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr)
@@ -110,7 +110,7 @@ struct var_functor {
     auto values_view = column_device_view::create(values, stream);
     auto d_values    = *values_view;
 
-    auto d_group_labels = group_labels.data().get();
+    auto d_group_labels = group_labels.data();
     auto d_means        = group_means.data<ResultType>();
     auto d_group_sizes  = group_sizes.data<size_type>();
     auto d_result       = result->mutable_view().data<ResultType>();
@@ -157,7 +157,7 @@ struct var_functor {
 std::unique_ptr<column> group_var(column_view const& values,
                                   column_view const& group_means,
                                   column_view const& group_sizes,
-                                  rmm::device_vector<size_type> const& group_labels,
+                                  cudf::device_span<size_type const> group_labels,
                                   size_type ddof,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)

@@ -34,9 +34,9 @@ void BM_compaction(benchmark::State& state, cudf::duplicate_keep_option keep)
   auto const n_rows = static_cast<cudf::size_type>(state.range(0));
 
   cudf::test::UniformRandomGenerator<long> rand_gen(0, 100);
-  auto elements = cudf::test::make_counting_transform_iterator(
+  auto elements = cudf::detail::make_counting_transform_iterator(
     0, [&rand_gen](auto row) { return rand_gen.generate(); });
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 100 == 0 ? false : true; });
   cudf::test::fixed_width_column_wrapper<Type, long> values(elements, elements + n_rows, valids);
 

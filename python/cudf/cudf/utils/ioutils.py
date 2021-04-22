@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
 import datetime
 import os
@@ -193,7 +193,10 @@ compression : {'snappy', None}, default 'snappy'
 index : bool, default None
     If ``True``, include the dataframe's index(es) in the file output. If
     ``False``, they will not be written to the file. If ``None``, the
-    engine's default behavior will be used.
+    engine's default behavior will be used. However, instead of being saved
+    as values, the ``RangeIndex`` will be stored as a range in the metadata
+    so it doesn’t require much space and is faster. Other indexes will
+    be included as columns in the file output.
 partition_cols : list, optional, default None
     Column names by which to partition the dataset
     Columns are partitioned in the order they are given
@@ -931,7 +934,12 @@ index : bool, default True
 line_terminator : char, default '\\n'
 chunksize : int or None, default None
     Rows to write at a time
-
+encoding: str, default 'utf-8'
+    A string representing the encoding to use in the output file
+    Only ‘utf-8’ is currently supported
+compression: str, None
+    A string representing the compression scheme to use in the the output file
+    Compression while writing csv is not supported currently
 Returns
 -------
 None or str

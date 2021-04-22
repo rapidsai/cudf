@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
@@ -241,9 +242,7 @@ __global__ void replace_kernel(cudf::column_device_view input,
                                cudf::column_device_view values_to_replace,
                                cudf::column_device_view replacement)
 {
-  using Type = cudf::device_storage_type_t<T>;
-
-  Type* __restrict__ output_data = output.data<Type>();
+  T* __restrict__ output_data = output.data<T>();
 
   cudf::size_type i = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -260,12 +259,12 @@ __global__ void replace_kernel(cudf::column_device_view input,
       output_is_valid = input_is_valid;
     }
     if (input_is_valid)
-      thrust::tie(output_data[i], output_is_valid) = get_new_value<Type, replacement_has_nulls>(
+      thrust::tie(output_data[i], output_is_valid) = get_new_value<T, replacement_has_nulls>(
         i,
-        input.data<Type>(),
-        values_to_replace.data<Type>(),
-        values_to_replace.data<Type>() + values_to_replace.size(),
-        replacement.data<Type>(),
+        input.data<T>(),
+        values_to_replace.data<T>(),
+        values_to_replace.data<T>() + values_to_replace.size(),
+        replacement.data<T>(),
         replacement.null_mask());
 
     /* output valid counts calculations*/
@@ -414,15 +413,13 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
     sizes_view.begin<int32_t>(), sizes_view.end<int32_t>(), stream, mr);
   auto offsets_view   = offsets->mutable_view();
   auto device_offsets = cudf::mutable_column_device_view::create(offsets_view);
-  int32_t size;
-  CUDA_TRY(cudaMemcpyAsync(
-    &size, offsets_view.end<int32_t>() - 1, sizeof(int32_t), cudaMemcpyDefault, stream.value()));
-  stream.synchronize();
+  auto const bytes =
+    cudf::detail::get_value<int32_t>(offsets_view, offsets_view.size() - 1, stream);
 
   // Allocate chars array and output null mask
-  cudf::size_type null_count                 = input_col.size() - valid_counter.value(stream);
-  std::unique_ptr<cudf::column> output_chars = cudf::strings::detail::create_chars_child_column(
-    input_col.size(), null_count, size, stream, mr);
+  cudf::size_type null_count = input_col.size() - valid_counter.value(stream);
+  std::unique_ptr<cudf::column> output_chars =
+    cudf::strings::detail::create_chars_child_column(input_col.size(), bytes, stream, mr);
 
   auto output_chars_view = output_chars->mutable_view();
   auto device_chars      = cudf::mutable_column_device_view::create(output_chars_view);
@@ -452,7 +449,8 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::diction
   auto replacements = cudf::dictionary_column_view(replacement_values);
 
   auto matched_input = [&] {
-    auto new_keys = cudf::detail::concatenate({values.keys(), replacements.keys()}, stream);
+    auto new_keys = cudf::detail::concatenate(
+      std::vector<cudf::column_view>({values.keys(), replacements.keys()}), stream);
     return cudf::dictionary::detail::add_keys(input, new_keys->view(), stream, mr);
   }();
   auto matched_view   = cudf::dictionary_column_view(matched_input->view());
@@ -461,7 +459,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::diction
     cudf::dictionary::detail::set_keys(replacements, matched_view.keys(), stream);
 
   auto indices_type = matched_view.indices().type();
-  auto new_indices  = cudf::type_dispatcher(
+  auto new_indices  = cudf::type_dispatcher<cudf::dispatch_storage_type>(
     indices_type,
     replace_kernel_forwarder{},
     matched_view.get_indices_annotated(),
@@ -498,17 +496,17 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
     "Columns type mismatch");
   CUDF_EXPECTS(values_to_replace.has_nulls() == false, "values_to_replace must not have nulls");
 
-  if (0 == input_col.size() || 0 == values_to_replace.size() || 0 == replacement_values.size()) {
-    return std::make_unique<cudf::column>(input_col);
+  if (input_col.is_empty() or values_to_replace.is_empty() or replacement_values.is_empty()) {
+    return std::make_unique<cudf::column>(input_col, stream, mr);
   }
 
-  return cudf::type_dispatcher(input_col.type(),
-                               replace_kernel_forwarder{},
-                               input_col,
-                               values_to_replace,
-                               replacement_values,
-                               stream,
-                               mr);
+  return cudf::type_dispatcher<dispatch_storage_type>(input_col.type(),
+                                                      replace_kernel_forwarder{},
+                                                      input_col,
+                                                      values_to_replace,
+                                                      replacement_values,
+                                                      stream,
+                                                      mr);
 }
 
 }  // namespace detail

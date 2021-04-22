@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -166,16 +167,16 @@ public final class ColumnVector extends ColumnView {
     }
   }
 
-
-  private static long initViewHandle(DType type, int rows, int nc, DeviceMemoryBuffer dataBuffer,
-                                     DeviceMemoryBuffer validityBuffer,
-                                     DeviceMemoryBuffer offsetBuffer, long[] childHandles) {
+  static long initViewHandle(DType type, int rows, int nc,
+                                       BaseDeviceMemoryBuffer dataBuffer,
+                                       BaseDeviceMemoryBuffer validityBuffer,
+                                       BaseDeviceMemoryBuffer offsetBuffer, long[] childHandles) {
     long cd = dataBuffer == null ? 0 : dataBuffer.address;
     long cdSize = dataBuffer == null ? 0 : dataBuffer.length;
     long od = offsetBuffer == null ? 0 : offsetBuffer.address;
     long vd = validityBuffer == null ? 0 : validityBuffer.address;
     return makeCudfColumnView(type.typeId.getNativeId(), type.getScale(), cd, cdSize,
-        od, vd, nc, rows, childHandles) ;
+        od, vd, nc, rows, childHandles);
   }
 
   static ColumnVector fromViewWithContiguousAllocation(long columnViewAddress, DeviceMemoryBuffer buffer) {
@@ -308,6 +309,50 @@ public final class ColumnVector extends ColumnView {
 
     }
     return srcBuffer;
+  }
+
+  /**
+   * Ensures the ByteBuffer passed in is a direct byte buffer.
+   * If it is not then it creates one and copies the data in
+   * the byte buffer passed in to the direct byte buffer
+   * it created and returns it.
+   */
+  private static ByteBuffer bufferAsDirect(ByteBuffer buf) {
+    ByteBuffer bufferOut = buf;
+    if (bufferOut != null && !bufferOut.isDirect()) {
+      bufferOut = ByteBuffer.allocateDirect(buf.remaining());
+      bufferOut.put(buf);
+      bufferOut.flip();
+    }
+    return bufferOut;
+  }
+
+  /**
+   * Create a ColumnVector from the Apache Arrow byte buffers passed in.
+   * Any of the buffers not used for that datatype should be set to null.
+   * The buffers are expected to be off heap buffers, but if they are not,
+   * it will handle copying them to direct byte buffers.
+   * This only supports primitive types. Strings, Decimals and nested types
+   * such as list and struct are not supported.
+   * @param type - type of the column
+   * @param numRows - Number of rows in the arrow column
+   * @param nullCount - Null count
+   * @param data - ByteBuffer of the Arrow data buffer
+   * @param validity - ByteBuffer of the Arrow validity buffer
+   * @param offsets - ByteBuffer of the Arrow offsets buffer
+   * @return - new ColumnVector
+   */
+  public static ColumnVector fromArrow(
+      DType type,
+      long numRows,
+      long nullCount,
+      ByteBuffer data,
+      ByteBuffer validity,
+      ByteBuffer offsets) {
+    long columnHandle = fromArrow(type.typeId.getNativeId(), numRows, nullCount,
+      bufferAsDirect(data), bufferAsDirect(validity), bufferAsDirect(offsets));
+    ColumnVector vec = new ColumnVector(columnHandle);
+    return vec;
   }
 
   /**
@@ -525,8 +570,7 @@ public final class ColumnVector extends ColumnView {
       assert columns[i] != null : "Column vectors passed may not be null";
       assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
       assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
-      assert !columns[i].getType().isTimestampType() : "Unsupported column type Timestamp";
-      assert !columns[i].getType().isNestedType() : "Unsupported column of nested type";
+      assert !columns[i].getType().equals(DType.LIST) : "List columns are not supported";
       columnViews[i] = columns[i].getNativeView();
     }
     return new ColumnVector(hash(columnViews, HashType.HASH_SERIAL_MURMUR3.getNativeId(), new int[0], seed));
@@ -561,8 +605,7 @@ public final class ColumnVector extends ColumnView {
       assert columns[i] != null : "Column vectors passed may not be null";
       assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
       assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
-      assert !columns[i].getType().isTimestampType() : "Unsupported column type Timestamp";
-      assert !columns[i].getType().isNestedType() : "Unsupported column of nested type";
+      assert !columns[i].getType().equals(DType.LIST) : "List columns are not supported";
       columnViews[i] = columns[i].getNativeView();
     }
     return new ColumnVector(hash(columnViews, HashType.HASH_SPARK_MURMUR3.getNativeId(), new int[0], seed));
@@ -614,6 +657,10 @@ public final class ColumnVector extends ColumnView {
   /////////////////////////////////////////////////////////////////////////////
 
   private static native long sequence(long initialValue, long step, int rows);
+
+  private static native long fromArrow(int type, long col_length,
+      long null_count, ByteBuffer data, ByteBuffer validity,
+      ByteBuffer offsets) throws CudfException;
 
   private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
 
@@ -809,7 +856,7 @@ public final class ColumnVector extends ColumnView {
     }
 
     @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       long address = 0;
 
@@ -1116,12 +1163,34 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
+   * Create a new decimal vector from boxed unscaled values (Integer array) and scale.
+   * The created vector is of type DType.DECIMAL32, whose max precision is 9.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static ColumnVector decimalFromBoxedInts(int scale, Integer... values) {
+    try (HostColumnVector host = HostColumnVector.decimalFromBoxedInts(scale, values)) {
+      return host.copyToDevice();
+    }
+  }
+
+  /**
    * Create a new decimal vector from unscaled values (long array) and scale.
    * The created vector is of type DType.DECIMAL64, whose max precision is 18.
    * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
    */
   public static ColumnVector decimalFromLongs(int scale, long... values) {
     try (HostColumnVector host = HostColumnVector.decimalFromLongs(scale, values)) {
+      return host.copyToDevice();
+    }
+  }
+
+  /**
+   * Create a new decimal vector from boxed unscaled values (Long array) and scale.
+   * The created vector is of type DType.DECIMAL64, whose max precision is 18.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static ColumnVector decimalFromBoxedLongs(int scale, Long... values) {
+    try (HostColumnVector host = HostColumnVector.decimalFromBoxedLongs(scale, values)) {
       return host.copyToDevice();
     }
   }

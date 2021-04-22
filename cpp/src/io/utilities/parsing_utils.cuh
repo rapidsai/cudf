@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,11 @@
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <io/utilities/column_type_histogram.hpp>
+
 #include <rmm/device_vector.hpp>
 
-using cudf::detail::device_span;
+using cudf::device_span;
 
 namespace cudf {
 namespace io {
@@ -82,6 +84,147 @@ struct parse_options {
   }
 };
 
+/**
+ * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
+ * for integral types. Handles hexadecimal digits, both uppercase and lowercase.
+ * If the character is not a valid numeric digit then `0` is returned and
+ * valid_flag is set to false.
+ *
+ * @param c ASCII or UTF-8 character
+ * @param valid_flag Set to false if input is not valid. Unchanged otherwise.
+ *
+ * @return uint8_t Numeric value of the character, or `0`
+ */
+template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+constexpr uint8_t decode_digit(char c, bool* valid_flag)
+{
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+
+  *valid_flag = false;
+  return 0;
+}
+
+/**
+ * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
+ * for non-integral types. Handles only decimal digits. If the character is not
+ * a valid numeric digit then `0` is returned and valid_flag is set to false.
+ *
+ * @param c ASCII or UTF-8 character
+ * @param valid_flag Set to false if input is not valid. Unchanged otherwise.
+ *
+ * @return uint8_t Numeric value of the character, or `0`
+ */
+template <typename T, typename std::enable_if_t<!std::is_integral<T>::value>* = nullptr>
+constexpr uint8_t decode_digit(char c, bool* valid_flag)
+{
+  if (c >= '0' && c <= '9') return c - '0';
+
+  *valid_flag = false;
+  return 0;
+}
+
+// Converts character to lowercase.
+constexpr char to_lower(char const c) { return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c; }
+
+/**
+ * @brief Checks if string is infinity, case insensitive with/without sign
+ * Valid infinity strings are inf, +inf, -inf, infinity, +infinity, -infinity
+ * String comparison is case insensitive.
+ *
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
+ * @return true if string is valid infinity, else false.
+ */
+constexpr bool is_infinity(char const* begin, char const* end)
+{
+  if (*begin == '-' || *begin == '+') begin++;
+  char const* cinf = "infinity";
+  auto index       = begin;
+  while (index < end) {
+    if (*cinf != to_lower(*index)) break;
+    index++;
+    cinf++;
+  }
+  return ((index == begin + 3 || index == begin + 8) && index >= end);
+}
+
+/**
+ * @brief Parses a character string and returns its numeric value.
+ *
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
+ * @param opts The global parsing behavior options
+ * @tparam base Base (radix) to use for conversion
+ *
+ * @return The parsed and converted value
+ */
+template <typename T, int base = 10>
+constexpr T parse_numeric(const char* begin,
+                          const char* end,
+                          parse_options_view const& opts,
+                          T error_result = std::numeric_limits<T>::quiet_NaN())
+{
+  T value{};
+  bool all_digits_valid = true;
+
+  // Handle negative values if necessary
+  int32_t sign = (*begin == '-') ? -1 : 1;
+
+  // Handle infinity
+  if (std::is_floating_point<T>::value && is_infinity(begin, end)) {
+    return sign * std::numeric_limits<T>::infinity();
+  }
+  if (*begin == '-' || *begin == '+') begin++;
+
+  // Skip over the "0x" prefix for hex notation
+  if (base == 16 && begin + 2 < end && *begin == '0' && *(begin + 1) == 'x') { begin += 2; }
+
+  // Handle the whole part of the number
+  // auto index = begin;
+  while (begin < end) {
+    if (*begin == opts.decimal) {
+      ++begin;
+      break;
+    } else if (base == 10 && (*begin == 'e' || *begin == 'E')) {
+      break;
+    } else if (*begin != opts.thousands && *begin != '+') {
+      value = (value * base) + decode_digit<T>(*begin, &all_digits_valid);
+    }
+    ++begin;
+  }
+
+  if (std::is_floating_point<T>::value) {
+    // Handle fractional part of the number if necessary
+    double divisor = 1;
+    while (begin < end) {
+      if (*begin == 'e' || *begin == 'E') {
+        ++begin;
+        break;
+      } else if (*begin != opts.thousands && *begin != '+') {
+        divisor /= base;
+        value += decode_digit<T>(*begin, &all_digits_valid) * divisor;
+      }
+      ++begin;
+    }
+
+    // Handle exponential part of the number if necessary
+    if (begin < end) {
+      const int32_t exponent_sign = *begin == '-' ? -1 : 1;
+      if (*begin == '-' || *begin == '+') { ++begin; }
+      int32_t exponent = 0;
+      while (begin < end) {
+        exponent = (exponent * 10) + decode_digit<T>(*(begin++), &all_digits_valid);
+      }
+      if (exponent != 0) { value *= exp10(double(exponent * exponent_sign)); }
+    }
+  }
+  if (!all_digits_valid) { return error_result; }
+
+  return value * sign;
+}
+
 namespace gpu {
 /**
  * @brief CUDA kernel iterates over the data until the end of the current field
@@ -89,10 +232,10 @@ namespace gpu {
  * Also iterates over (one or more) delimiter characters after the field.
  * Function applies to formats with field delimiters and line terminators.
  *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param[in] opts A set of parsing options
- * @param[in] escape_char A boolean value to signify whether to consider `\` as escape character or
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
+ * @param opts A set of parsing options
+ * @param escape_char A boolean value to signify whether to consider `\` as escape character or
  * just a character.
  *
  * @return Pointer to the last character in the field, including the
@@ -141,149 +284,6 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
     current++;
   }
   return current;
-}
-
-/**
- * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
- * for integral types. Handles hexadecimal digits, both uppercase and lowercase.
- * If the character is not a valid numeric digit then `0` is returned and
- * valid_flag is set to false.
- *
- * @param c ASCII or UTF-8 character
- * @param valid_flag Set to false if input is not valid. Unchanged otherwise.
- *
- * @return uint8_t Numeric value of the character, or `0`
- */
-template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
-__device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag)
-{
-  if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-
-  *valid_flag = false;
-  return 0;
-}
-
-/**
- * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
- * for non-integral types. Handles only decimal digits. If the character is not
- * a valid numeric digit then `0` is returned and valid_flag is set to false.
- *
- * @param c ASCII or UTF-8 character
- * @param valid_flag Set to false if input is not valid. Unchanged otherwise.
- *
- * @return uint8_t Numeric value of the character, or `0`
- */
-template <typename T, typename std::enable_if_t<!std::is_integral<T>::value>* = nullptr>
-__device__ __forceinline__ uint8_t decode_digit(char c, bool* valid_flag)
-{
-  if (c >= '0' && c <= '9') return c - '0';
-
-  *valid_flag = false;
-  return 0;
-}
-
-// Converts character to lowercase.
-__inline__ __device__ char to_lower(char const c)
-{
-  return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c;
-}
-
-/**
- * @brief Check if string is infinity, case insensitive with/without sign
- * Valid infinity strings are inf, +inf, -inf, infinity, +infinity, -infinity
- * String comparison is case insensitive.
- *
- * @param start The pointer to character array to start parsing from
- * @param end The pointer to character array to end parsing
- * @return true if string is valid infinity, else false.
- */
-__inline__ __device__ bool is_infinity(char const* start, char const* end)
-{
-  if (*start == '-' || *start == '+') start++;
-  char const* cinf = "infinity";
-  auto index       = start;
-  while (index <= end) {
-    if (*cinf != to_lower(*index)) break;
-    index++;
-    cinf++;
-  }
-  return ((index == start + 3 || index == start + 8) && index > end);
-}
-
-/**
- * @brief Parses a character string and returns its numeric value.
- *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param[in] opts The global parsing behavior options
- * @tparam base Base (radix) to use for conversion
- *
- * @return The parsed and converted value
- */
-template <typename T, int base = 10>
-__inline__ __device__ T parse_numeric(const char* begin,
-                                      const char* end,
-                                      parse_options_view const& opts)
-{
-  T value{};
-  bool all_digits_valid = true;
-
-  // Handle negative values if necessary
-  int32_t sign = (*begin == '-') ? -1 : 1;
-
-  // Handle infinity
-  if (std::is_floating_point<T>::value && is_infinity(begin, end)) {
-    return sign * std::numeric_limits<T>::infinity();
-  }
-  if (*begin == '-' || *begin == '+') begin++;
-
-  // Skip over the "0x" prefix for hex notation
-  if (base == 16 && begin + 2 <= end && *begin == '0' && *(begin + 1) == 'x') { begin += 2; }
-
-  // Handle the whole part of the number
-  // auto index = begin;
-  while (begin <= end) {
-    if (*begin == opts.decimal) {
-      ++begin;
-      break;
-    } else if (base == 10 && (*begin == 'e' || *begin == 'E')) {
-      break;
-    } else if (*begin != opts.thousands && *begin != '+') {
-      value = (value * base) + decode_digit<T>(*begin, &all_digits_valid);
-    }
-    ++begin;
-  }
-
-  if (std::is_floating_point<T>::value) {
-    // Handle fractional part of the number if necessary
-    double divisor = 1;
-    while (begin <= end) {
-      if (*begin == 'e' || *begin == 'E') {
-        ++begin;
-        break;
-      } else if (*begin != opts.thousands && *begin != '+') {
-        divisor /= base;
-        value += decode_digit<T>(*begin, &all_digits_valid) * divisor;
-      }
-      ++begin;
-    }
-
-    // Handle exponential part of the number if necessary
-    if (begin <= end) {
-      const int32_t exponent_sign = *begin == '-' ? -1 : 1;
-      if (*begin == '-' || *begin == '+') { ++begin; }
-      int32_t exponent = 0;
-      while (begin <= end) {
-        exponent = (exponent * 10) + decode_digit<T>(*(begin++), &all_digits_valid);
-      }
-      if (exponent != 0) { value *= exp10(double(exponent * exponent_sign)); }
-    }
-  }
-  if (!all_digits_valid) { return std::numeric_limits<T>::quiet_NaN(); }
-
-  return value * sign;
 }
 
 /**
@@ -458,6 +458,76 @@ std::string infer_compression_type(
   const compression_type& compression_arg,
   const std::string& filename,
   const std::vector<std::pair<std::string, std::string>>& ext_to_comp_map);
+
+/**
+ * @brief Checks whether the given character is a whitespace character.
+ *
+ * @param[in] ch The character to check
+ *
+ * @return True if the input is whitespace, False otherwise
+ */
+__inline__ __device__ bool is_whitespace(char ch) { return ch == '\t' || ch == ' '; }
+
+/**
+ * @brief Skips past the current character if it matches the given value.
+ */
+template <typename It>
+__inline__ __device__ It skip_character(It const& it, char ch)
+{
+  return it + (*it == ch);
+}
+
+/**
+ * @brief Adjusts the range to ignore starting/trailing whitespace and quotation characters.
+ *
+ * @param[in] begin Pointer to the first character in the parsing range
+ * @param[in] end pointer to the first character after the parsing range
+ * @param[in] quotechar The character used to denote quotes; '\0' if none
+ *
+ * @return Trimmed range
+ */
+__inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quotes(
+  char const* begin, char const* end, char quotechar = '\0')
+{
+  auto not_whitespace = [] __device__(auto c) { return !is_whitespace(c); };
+
+  auto const trim_begin = thrust::find_if(thrust::seq, begin, end, not_whitespace);
+  auto const trim_end   = thrust::find_if(thrust::seq,
+                                        thrust::make_reverse_iterator(end),
+                                        thrust::make_reverse_iterator(trim_begin),
+                                        not_whitespace);
+
+  return {skip_character(trim_begin, quotechar), skip_character(trim_end, quotechar).base()};
+}
+
+/**
+ * @brief Excludes the prefix from the input range if the string starts with the prefix.
+ *
+ * @tparam N length on the prefix, plus one
+ * @param begin[in, out] Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
+ * @param prefix String we're searching for at the start of the input range
+ */
+template <int N>
+__inline__ __device__ auto skip_if_starts_with(char const* begin,
+                                               char const* end,
+                                               const char (&prefix)[N])
+{
+  static constexpr size_t prefix_len = N - 1;
+  if (end - begin < prefix_len) return begin;
+  return thrust::equal(thrust::seq, begin, begin + prefix_len, prefix) ? begin + prefix_len : begin;
+}
+
+/**
+ * @brief Finds the first element after the leading space characters.
+ *
+ * @param begin Pointer to the first element of the string
+ * @param end Pointer to the first element after the string
+ */
+__inline__ __device__ auto skip_spaces(char const* begin, char const* end)
+{
+  return thrust::find_if(thrust::seq, begin, end, [](auto elem) { return elem != ' '; });
+}
 
 }  // namespace io
 }  // namespace cudf

@@ -63,9 +63,9 @@ void BM_parq_write_varying_inout(benchmark::State& state)
 
 void BM_parq_write_varying_options(benchmark::State& state)
 {
-  auto const compression     = static_cast<cudf::io::compression_type>(state.range(0));
-  auto const enable_stats    = static_cast<cudf::io::statistics_freq>(state.range(1));
-  auto const output_metadata = state.range(2) != 0;
+  auto const compression  = static_cast<cudf::io::compression_type>(state.range(0));
+  auto const enable_stats = static_cast<cudf::io::statistics_freq>(state.range(1));
+  auto const file_path    = state.range(2) != 0 ? "unused_path.parquet" : "";
 
   auto const data_types = get_type_or_group({int32_t(type_group_id::INTEGRAL_SIGNED),
                                              int32_t(type_group_id::FLOATING_POINT),
@@ -82,8 +82,7 @@ void BM_parq_write_varying_options(benchmark::State& state)
       cudf_io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
         .compression(compression)
         .stats_level(enable_stats)
-        .return_filemetadata(output_metadata)
-        .column_chunks_file_path("dummy_path.parquet");
+        .column_chunks_file_path(file_path);
     cudf_io::write_parquet(options);
   }
 

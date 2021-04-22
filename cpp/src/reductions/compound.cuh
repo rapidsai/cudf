@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,19 +70,11 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
         it, col.size(), compound_op, valid_count, ddof, stream, mr);
     }
   } else {
-    if (col.has_nulls()) {
-      auto it = thrust::make_transform_iterator(
-        cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType, true>(*dcol),
-        compound_op.template get_null_replacing_element_transformer<ResultType>());
-      result = detail::reduce<Op, decltype(it), ResultType>(
-        it, col.size(), compound_op, valid_count, ddof, stream, mr);
-    } else {
-      auto it = thrust::make_transform_iterator(
-        cudf::dictionary::detail::make_dictionary_iterator<ElementType>(*dcol),
-        compound_op.template get_element_transformer<ResultType>());
-      result = detail::reduce<Op, decltype(it), ResultType>(
-        it, col.size(), compound_op, valid_count, ddof, stream, mr);
-    }
+    auto it = thrust::make_transform_iterator(
+      cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType>(*dcol, col.has_nulls()),
+      compound_op.template get_null_replacing_element_transformer<ResultType>());
+    result = detail::reduce<Op, decltype(it), ResultType>(
+      it, col.size(), compound_op, valid_count, ddof, stream, mr);
   }
 
   // set scalar is valid

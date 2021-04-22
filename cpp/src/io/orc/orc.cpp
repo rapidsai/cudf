@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,14 +104,88 @@ void ProtobufReader::read(StripeFooter &s, size_t maxlen)
 
 void ProtobufReader::read(Stream &s, size_t maxlen)
 {
-  auto op = std::make_tuple(
-    make_field_reader(1, s.kind), make_field_reader(2, s.column), make_field_reader(3, s.length));
+  auto op = std::make_tuple(make_field_reader(1, s.kind),
+                            make_field_reader(2, s.column_id),
+                            make_field_reader(3, s.length));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(ColumnEncoding &s, size_t maxlen)
 {
   auto op = std::make_tuple(make_field_reader(1, s.kind), make_field_reader(2, s.dictionarySize));
+  function_builder(s, maxlen, op);
+}
+
+void ProtobufReader::read(integer_statistics &s, size_t maxlen)
+{
+  auto op = std::make_tuple(make_field_reader(1, s._minimum),
+                            make_field_reader(2, s._maximum),
+                            make_field_reader(3, s._sum));
+  function_builder(s, maxlen, op);
+}
+
+void ProtobufReader::read(double_statistics &s, size_t maxlen)
+{
+  auto op = std::make_tuple(make_field_reader(1, s._minimum),
+                            make_field_reader(2, s._maximum),
+                            make_field_reader(3, s._sum));
+  function_builder(s, maxlen, op);
+}
+
+void ProtobufReader::read(string_statistics &s, size_t maxlen)
+{
+  auto op = std::make_tuple(make_field_reader(1, s._minimum),
+                            make_field_reader(2, s._maximum),
+                            make_field_reader(3, s._sum));
+  function_builder(s, maxlen, op);
+}
+
+void ProtobufReader::read(bucket_statistics &s, size_t maxlen)
+{
+  auto op = std::make_tuple(make_packed_field_reader(1, s._count));
+  function_builder(s, maxlen, op);
+}
+
+void ProtobufReader::read(decimal_statistics &s, size_t maxlen)
+{
+  auto op = std::make_tuple(make_field_reader(1, s._minimum),
+                            make_field_reader(2, s._maximum),
+                            make_field_reader(3, s._sum));
+  function_builder(s, maxlen, op);
+}
+
+void ProtobufReader::read(date_statistics &s, size_t maxlen)
+{
+  auto op = std::make_tuple(make_field_reader(1, s._minimum), make_field_reader(2, s._maximum));
+  function_builder(s, maxlen, op);
+}
+
+void ProtobufReader::read(binary_statistics &s, size_t maxlen)
+{
+  auto op = std::make_tuple(make_field_reader(1, s._sum));
+  function_builder(s, maxlen, op);
+}
+
+void ProtobufReader::read(timestamp_statistics &s, size_t maxlen)
+{
+  auto op = std::make_tuple(make_field_reader(1, s._minimum),
+                            make_field_reader(2, s._maximum),
+                            make_field_reader(3, s._minimum_utc),
+                            make_field_reader(4, s._maximum_utc));
+  function_builder(s, maxlen, op);
+}
+
+void ProtobufReader::read(column_statistics &s, size_t maxlen)
+{
+  auto op = std::make_tuple(make_field_reader(1, s.number_of_values),
+                            make_field_reader(2, s.int_stats),
+                            make_field_reader(3, s.double_stats),
+                            make_field_reader(4, s.string_stats),
+                            make_field_reader(5, s.bucket_stats),
+                            make_field_reader(6, s.decimal_stats),
+                            make_field_reader(7, s.date_stats),
+                            make_field_reader(8, s.binary_stats),
+                            make_field_reader(9, s.timestamp_stats));
   function_builder(s, maxlen, op);
 }
 
@@ -245,7 +319,7 @@ size_t ProtobufWriter::write(const Stream &s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.kind);
-  w.field_uint(2, s.column);
+  if (s.column_id) w.field_uint(2, *s.column_id);
   w.field_uint(3, s.length);
   return w.value();
 }
@@ -465,26 +539,28 @@ std::vector<int> metadata::select_columns(std::vector<std::string> use_names,
   if (not use_names.empty()) {
     int index = 0;
     for (const auto &use_name : use_names) {
+      bool name_found = false;
       for (int i = 0; i < get_num_columns(); ++i, ++index) {
         if (index >= get_num_columns()) { index = 0; }
         if (get_column_name(index) == use_name) {
+          name_found = true;
           selection.emplace_back(index);
           if (ff.types[index].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
           index++;
           break;
         }
       }
+      CUDF_EXPECTS(name_found, "Unknown column name : " + std::string(use_name));
     }
   } else {
     // For now, only select all leaf nodes
-    for (int i = 0; i < get_num_columns(); ++i) {
+    for (int i = 1; i < get_num_columns(); ++i) {
       if (ff.types[i].subtypes.empty()) {
         selection.emplace_back(i);
         if (ff.types[i].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
       }
     }
   }
-  CUDF_EXPECTS(selection.size() > 0, "Filtered out all columns");
 
   return selection;
 }

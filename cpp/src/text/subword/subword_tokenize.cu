@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -135,7 +135,8 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
 {
   CUDF_EXPECTS(stride <= max_sequence_length,
                "stride must be less than or equal to max_sequence_length");
-  CUDF_EXPECTS(max_sequence_length * max_rows_tensor < std::numeric_limits<cudf::size_type>::max(),
+  CUDF_EXPECTS(max_sequence_length * max_rows_tensor <
+                 static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
                "max_sequence_length x max_rows_tensor is too large for cudf output column size");
   auto const strings_count = strings.size();
   if (strings_count == 0 || strings.chars_size() == 0)
@@ -255,16 +256,16 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   uint32_t max_rows_tensor,
                                   rmm::mr::device_memory_resource* mr)
 {
-  hashed_vocabulary vocab_table = load_vocabulary_file(filename_hashed_vocabulary, mr);
+  auto vocab_table = load_vocabulary_file(filename_hashed_vocabulary, mr);
   CUDF_FUNC_RANGE();
   return detail::subword_tokenize(strings,
-                                  vocab_table,
+                                  *vocab_table,
                                   max_sequence_length,
                                   stride,
                                   do_lower_case,
                                   do_truncate,
                                   max_rows_tensor,
-                                  0,
+                                  rmm::cuda_stream_default,
                                   mr);
 }
 
@@ -285,7 +286,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   do_lower_case,
                                   do_truncate,
                                   max_rows_tensor,
-                                  0,
+                                  rmm::cuda_stream_default,
                                   mr);
 }
 

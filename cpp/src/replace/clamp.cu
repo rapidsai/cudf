@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/search.hpp>
@@ -65,9 +66,10 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_cha
 
   auto d_offsets = offsets_column->view().template data<size_type>();
   // build chars column
-  size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
+  auto const bytes =
+    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column =
-    cudf::strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
+    cudf::strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
 
   return std::make_pair(std::move(offsets_column), std::move(chars_column));
 }
@@ -249,14 +251,12 @@ struct dispatch_clamp {
   {
     CUDF_EXPECTS(lo.type() == input.type(), "mismatching types of scalar and input");
 
-    using Type = device_storage_type_t<T>;
+    auto lo_itr         = make_pair_iterator<T>(lo);
+    auto hi_itr         = make_pair_iterator<T>(hi);
+    auto lo_replace_itr = make_pair_iterator<T>(lo_replace);
+    auto hi_replace_itr = make_pair_iterator<T>(hi_replace);
 
-    auto lo_itr         = make_pair_iterator<Type>(lo);
-    auto hi_itr         = make_pair_iterator<Type>(hi);
-    auto lo_replace_itr = make_pair_iterator<Type>(lo_replace);
-    auto hi_replace_itr = make_pair_iterator<Type>(hi_replace);
-
-    return clamp<Type>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, stream, mr);
+    return clamp<T>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, stream, mr);
   }
 };
 
@@ -322,15 +322,15 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
 
   // call clamp with the scalar indexes and the matched indices
   auto matched_indices = matched_view.get_indices_annotated();
-  auto new_indices     = cudf::type_dispatcher(matched_indices.type(),
-                                           dispatch_clamp{},
-                                           matched_indices,
-                                           *lo_index,
-                                           *lo_replace_index,
-                                           *hi_index,
-                                           *hi_replace_index,
-                                           stream,
-                                           mr);
+  auto new_indices     = cudf::type_dispatcher<dispatch_storage_type>(matched_indices.type(),
+                                                                  dispatch_clamp{},
+                                                                  matched_indices,
+                                                                  *lo_index,
+                                                                  *lo_replace_index,
+                                                                  *hi_index,
+                                                                  *hi_replace_index,
+                                                                  stream,
+                                                                  mr);
 
   auto const indices_type = new_indices->type();
   auto const output_size  = new_indices->size();
@@ -387,7 +387,7 @@ std::unique_ptr<column> clamp(
     CUDF_EXPECTS(hi_replace.is_valid(stream), "hi_replace can't be null if hi is not null");
   }
 
-  return cudf::type_dispatcher(
+  return cudf::type_dispatcher<dispatch_storage_type>(
     input.type(), dispatch_clamp{}, input, lo, lo_replace, hi, hi_replace, stream, mr);
 }
 

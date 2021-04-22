@@ -134,7 +134,7 @@ cudf::size_type elements_per_thread(Kernel kernel,
   int num_sms = 0;
   CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, device));
   int per_thread = total_size / (max_blocks * num_sms * block_size);
-  return std::max(1, std::min(per_thread, max_per_thread));  // switch to std::clamp with C++17
+  return std::clamp(per_thread, 1, max_per_thread);
 }
 
 /**

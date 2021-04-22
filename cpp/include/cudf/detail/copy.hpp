@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,12 +92,21 @@ std::unique_ptr<column> shift(
  * @copydoc cudf::contiguous_split
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
- */
-std::vector<contiguous_split_result> contiguous_split(
+ **/
+std::vector<packed_table> contiguous_split(
   cudf::table_view const& input,
   std::vector<size_type> const& splits,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc cudf::pack
+ *
+ * @param stream Optional CUDA stream on which to execute kernels
+ **/
+packed_columns pack(cudf::table_view const& input,
+                    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @copydoc cudf::allocate_like(column_view const&, size_type, mask_allocation_policy,
