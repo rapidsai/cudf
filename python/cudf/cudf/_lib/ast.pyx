@@ -186,9 +186,12 @@ python_cudf_ast_map = {
 cpdef ast_visit(node, list col_names, list stack, list nodes):
     # Base cases: Name
     if isinstance(node, ast.Name):
-        stack.append(ColumnReference(col_names.index(node.id) + 1))
+        idx = col_names.index(node.id) + 1
+        ref = ColumnReference(idx)
+        stack.append(ref)
     else:
-        for value in ast.iter_child_nodes(node):
+        for field in node._fields:
+            value = getattr(node, field)
             if isinstance(value, ast.UnaryOp):
                 # TODO: I think here we can optimize by just calling on
                 # value.operand, need to verify.
@@ -196,7 +199,8 @@ cpdef ast_visit(node, list col_names, list stack, list nodes):
                 op = python_cudf_ast_map[type(value.op)]
                 operand = stack.pop()
                 nodes.append(operand)
-                stack.append(Expression(op, operand))
+                expr = Expression(op, operand)
+                stack.append(expr)
             elif isinstance(value, ast.BinOp):
                 ast_visit(value, col_names, stack, nodes)
                 op = python_cudf_ast_map[type(value.op)]
@@ -206,7 +210,8 @@ cpdef ast_visit(node, list col_names, list stack, list nodes):
                 left = stack.pop()
                 nodes.append(right)
                 nodes.append(left)
-                stack.append(Expression(op, left, right))
+                expr = Expression(op, left, right)
+                stack.append(expr)
             elif isinstance(value, list):
                 for item in value:
                     if isinstance(item, ast.AST):
