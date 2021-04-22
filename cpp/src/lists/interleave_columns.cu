@@ -30,6 +30,8 @@
 
 #include <thrust/transform.h>
 
+#include <cudf_test/column_utilities.hpp>
+
 namespace cudf {
 namespace lists {
 namespace detail {
@@ -114,55 +116,56 @@ struct copy_list_entries_fn {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const noexcept
   {
-    auto const child_col   = lists_column_view(*input.begin()).child();
-    auto const num_cols    = input.num_columns();
-    auto const num_rows    = input.num_rows();
-    auto const num_lists   = num_rows * num_cols;
-    auto const output_size = cudf::detail::get_value<size_type>(list_offsets, num_lists, stream);
+    auto const child_col    = lists_column_view(*input.begin()).child();
+    auto const num_cols     = input.num_columns();
+    auto const num_rows     = input.num_rows();
+    auto const num_lists    = num_rows * num_cols;
+    auto const output_size  = cudf::detail::get_value<size_type>(list_offsets, num_lists, stream);
+    auto const table_dv_ptr = table_device_view::create(input);
 
-    std::vector<column_view> child_views, offsets_views;
-    for (auto const& col : input) {
-      auto const list_col = lists_column_view(col);
-      child_views.emplace_back(list_col.child());
-      offsets_views.emplace_back(list_col.offsets());
-    }
-    auto const child_cols_ptr   = table_device_view::create(table_view{child_views});
-    auto const offsets_cols_ptr = table_device_view::create(table_view{offsets_views});
+    printf("Line %d\n", __LINE__);
+
+    printf("Line %d\n", __LINE__);
+
+    printf("Line %d\n", __LINE__);
 
     auto output = allocate_like(child_col, output_size, mask_allocation_policy::NEVER, stream, mr);
     auto output_dv_ptr = mutable_column_device_view::create(*output);
+
+    printf("Line %d\n", __LINE__);
 
     // The array of int8_t to store element validities
     auto validities = has_null_mask ? rmm::device_uvector<int8_t>(output_size, stream)
                                     : rmm::device_uvector<int8_t>(0, stream);
 
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       num_lists,
-                       [num_cols,
-                        child_cols   = *child_cols_ptr,
-                        offsets_cols = *offsets_cols_ptr,
-                        d_validities = validities.begin(),
-                        dst_offsets  = list_offsets.begin<offset_type>(),
-                        d_output     = output_dv_ptr->begin<T>(),
-                        has_null_mask] __device__(size_type const dst_list_id) {
-                         auto const src_col_id   = dst_list_id % num_cols;
-                         auto const src_list_id  = dst_list_id / num_cols;
-                         auto const& src_col     = child_cols.column(src_col_id);
-                         auto const& src_offsets = offsets_cols.column(src_col_id);
+    thrust::for_each_n(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator<size_type>(0),
+      num_lists,
+      [num_cols,
+       table_dv     = *table_dv_ptr,
+       d_validities = validities.begin(),
+       dst_offsets  = list_offsets.begin<offset_type>(),
+       d_output     = output_dv_ptr->begin<T>(),
+       has_null_mask] __device__(size_type const dst_list_id) {
+        auto const src_col_id     = dst_list_id % num_cols;
+        auto const src_list_id    = dst_list_id / num_cols;
+        auto const& src_lists_col = table_dv.column(src_col_id);
+        auto const& src_child     = src_lists_col.child(lists_column_view::child_column_index);
+        auto const src_child_offsets =
+          src_lists_col.child(lists_column_view::offsets_column_index).data<size_type>() +
+          src_lists_col.offset();
 
-                         auto write_idx = dst_offsets[dst_list_id];
-                         for (auto read_idx = src_offsets.element<size_type>(src_list_id),
-                                   idx_end  = src_offsets.element<size_type>(src_list_id + 1);
-                              read_idx < idx_end;
-                              ++read_idx, ++write_idx) {
-                           auto const is_valid = src_col.is_valid(read_idx);
-                           if (has_null_mask) {
-                             d_validities[dst_list_id] = static_cast<int8_t>(is_valid);
-                           }
-                           d_output[write_idx] = is_valid ? src_col.element<T>(read_idx) : T{};
-                         }
-                       });
+        auto write_idx = dst_offsets[dst_list_id];
+        for (auto read_idx = src_child_offsets[src_list_id],
+                  idx_end  = src_child_offsets[src_list_id + 1];
+             read_idx < idx_end;
+             ++read_idx, ++write_idx) {
+          auto const is_valid = src_child.is_valid(read_idx);
+          if (has_null_mask) { d_validities[dst_list_id] = static_cast<int8_t>(is_valid); }
+          d_output[write_idx] = is_valid ? src_child.element<T>(read_idx) : T{};
+        }
+      });
 
     if (has_null_mask) {
       auto [null_mask, null_count] = cudf::detail::valid_if(
@@ -220,11 +223,15 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   auto [list_offsets, list_validities] =
     generate_list_offsets_and_validities(input, has_null_mask, stream, mr);
 
+  printf("Line %d\n", __LINE__);
+
   // Copy entries from the input lists columns to the output lists column - this needed to be
   // specialized for different types
   auto const output_size = input.num_rows() * input.num_columns();
   auto list_entries      = type_dispatcher<dispatch_storage_type>(
     entry_type, copy_list_entries_fn{}, input, list_offsets->view(), has_null_mask, stream, mr);
+
+  printf("Line %d\n", __LINE__);
 
   if (not has_null_mask) {
     return make_lists_column(output_size,
@@ -242,6 +249,7 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
     [] __device__(auto const valid) { return valid; },
     stream,
     mr);
+  printf("Line %d\n", __LINE__);
 
   return make_lists_column(output_size,
                            std::move(list_offsets),
