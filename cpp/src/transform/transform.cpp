@@ -16,6 +16,8 @@
 
 #include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
 #include <jit_preprocessed_files/transform/jit/binop_kernel.cu.jit.hpp>
+#include <jit_preprocessed_files/transform/jit/baked_udf_requirements.cu.jit.hpp>
+
 
 #include <jit/cache.hpp>
 #include <jit/parser.hpp>
@@ -28,6 +30,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -98,60 +101,43 @@ void binary_operation(column_view const& A,
             B.offset()
     );
 }
-/*
-void binary_operation(column_view const& A, 
-                      column_view const& B, 
-                      std::string const& binary_udf, 
-                      data_type output_type, 
-                      column_view const& outcol_view,
-                      column_view const& outmsk_view,
-                      rmm::mr::device_memory_resource* mr)
+
+void generalized_operation(table_view const& data_view,
+                           std::string const& udf,
+                           data_type output_type,
+                           column_view const& outcol_view,
+                           column_view const& outmsk_view,
+                           rmm::mr::device_memory_resource* mr)
 {
-
-  std::string kernel_name
-
-  std::string hash = "prog_transform" + std::to_string(std::hash<std::string>{}(binary_udf));
-
-  std::cout << binary_udf << std::endl;
-
-  std::string cuda_source = code::kernel_header;
-  cuda_source += cudf::jit::parse_single_function_ptx(
-                     binary_udf, "GENERIC_BINARY_OP", cudf::jit::get_type_name(output_type), {0});
-
-  cuda_source += code::null_kernel;
-
-  std::cout << cuda_source << std::endl;
-
   rmm::cuda_stream_view stream;
+  //std::string cuda_source = cudf::jit::parse_single_function_ptx(
+  //                   udf, "GENERIC_OP", cudf::jit::get_type_name(output_type), {0});
+  /*
+  size_t num_cols = data_view.num_columns();
+  std::vector<std::string> input_types(num_cols);
+  std::vector<void*> args(num_cols);
 
-  // Launch the jitify kernel
 
-  cudf::jit::launcher(hash,
-                      cuda_source,
-                      header_names,
-                      cudf::jit::compiler_flags,
-                      headers_code,
-                      stream)
-    .set_kernel_inst("masked_binary_op_kernel",
-                    {
-                      cudf::jit::get_type_name(outcol_view.type()), 
-                      cudf::jit::get_type_name(A.type()),
-                      cudf::jit::get_type_name(B.type()),
-                    }
-    )
-    .launch(outcol_view.size(),
-            cudf::jit::get_data_ptr(outcol_view),
-            cudf::jit::get_data_ptr(A),
-            cudf::jit::get_data_ptr(B),
-            cudf::jit::get_data_ptr(outmsk_view),
-            A.null_mask(),
-            A.offset(),
-            B.null_mask(),
-            B.offset()
-    );
+  column_view this_view;
+  for (size_t i = 0; i < num_cols; i++) {
+    this_view = data_view.column(i);
+    input_types[i] = cudf::jit::get_type_name(this_view.type());
+  }
+  */
+
+  std::string kernel_name =
+    jitify2::reflection::Template("genop_kernel")  //
+      .instantiate(cudf::jit::get_type_name(outcol_view.type()));
+
+  cudf::jit::get_program_cache(*transform_jit_baked_udf_requirements_cu_jit)
+    .get_kernel(
+      kernel_name, {}, {{"transform/jit/operation-udf.hpp", udf}}, {"-arch=sm_."})  //
+    ->configure_1d_max_occupancy(0, 0, 0, stream.value())                                   //
+    ->launch(outcol_view.size(),
+             static_cast<cudf::size_type>(7),                                                                 //
+             cudf::jit::get_data_ptr(outcol_view));
 
 }
-*/
 
 }  // namespace jit
 }  // namespace transformation
@@ -197,6 +183,26 @@ std::unique_ptr<column> masked_binary_op_inner(column_view const& A,
   return output;
 }
 
+std::unique_ptr<column> generalized_masked_op_inner(
+  table_view const& data_view,
+  std::string const& udf,
+  data_type output_type,
+  column_view const& outcol_view,
+  column_view const& outmsk_view,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  rmm::cuda_stream_view stream = rmm::cuda_stream_default;
+
+  transformation::jit::generalized_operation(data_view, udf, output_type, outcol_view, outmsk_view, mr);
+
+  std::unique_ptr<column> output;
+
+  return output;
+
+}
+
+
+
 }  // namespace detail
 
 std::unique_ptr<column> transform(column_view const& input,
@@ -217,8 +223,18 @@ std::unique_ptr<column> masked_binary_op(column_view const& A,
                                          column_view const& outmsk_view,
                                          rmm::mr::device_memory_resource* mr)
 {
-  std::cout << "HERE!!" << std::endl;
   return detail::masked_binary_op_inner(A, B, binary_udf, output_type, outcol_view, outmsk_view, mr);
+}
+
+std::unique_ptr<column> generalized_masked_op(
+  table_view const& data_view,
+  std::string const& udf,
+  data_type output_type,
+  column_view const& outcol_view,
+  column_view const& outmsk_view,
+  rmm::mr::device_memory_resource* mr)
+{
+  return detail::generalized_masked_op_inner(data_view, udf, output_type, outcol_view, outmsk_view, mr);
 }
 
 

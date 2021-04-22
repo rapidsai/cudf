@@ -127,6 +127,38 @@ def transform(Column input, op):
 
     return Column.from_unique_ptr(move(c_output))
 
+def generalized_masked_op(Table data, op, Column output_column, Column output_mask):
+    cdef string c_str
+    cdef type_id c_tid
+    cdef data_type c_dtype
+
+    cdef table_view data_view = data.view()
+
+    from cudf.core.udf import compile_udf, demo_kernel
+    #c_str = compile_udf(op).encode('UTF-8')
+    c_str = demo_kernel.encode('UTF-8')
+    c_tid = <type_id> (
+        <underlying_type_t_type_id> np_to_cudf_types[np.dtype('int64')]
+    )
+    c_dtype = data_type(c_tid)
+
+    cdef column_view outcol_view = output_column.view()
+    cdef column_view outmsk_view = output_mask.view()
+
+    with nogil:
+        c_output = move(libcudf_transform.generalized_masked_op(
+            data_view,
+            c_str,
+            c_dtype,
+            outcol_view,
+            outmsk_view
+        ))
+
+    output_mask_real = bools_to_mask(output_mask)
+    output_column = output_column.set_mask(output_mask_real)
+
+    return output_column
+
 def masked_binary_op(Column A, Column B, op, Column output_column, Column output_mask):
     cdef column_view A_view = A.view()
     cdef column_view B_view = B.view()
