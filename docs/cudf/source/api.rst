@@ -212,6 +212,7 @@ SubwordTokenizer
 
 .. autoclass:: SubwordTokenizer
     :members:
+    :special-members: __call__
 
 General utility functions
 -------------------------
