@@ -72,10 +72,6 @@ class TableReference(Enum):
     OUTPUT = libcudf_ast.table_reference.OUTPUT
 
 
-cdef class Node:
-    pass
-
-
 cdef class Literal(Node):
     def __cinit__(self, value):
         # TODO: Generalize this to other types of literals.
@@ -225,56 +221,3 @@ def make_and_evaluate_expression(expr, df):
     ast_visit(parsed_expr, col_list, stack, nodes)
     # At the end, all the stack contains is the expression to evaluate.
     return evaluate_expression(df, stack[-1])
-
-
-cdef ast_visit_manual_stack(node, list col_names, list expressions, list
-                            nodes):
-    """Perform a non-recursive tree traversal using a manual approach."""
-    stack = list(ast.iter_child_nodes(node))
-    while stack:
-        node = stack.pop()
-        # Base cases: Name
-        if isinstance(node, ast.Name):
-            nodes.append(ColumnReference(col_names.index(node.id) + 1))
-        else:
-            # This bit is tricky. I need to parse the operand, then come
-            # back to create the unary op once the operand has been
-            # translated. Same applies for binary ops. To handle this, I
-            # need to push back a sentinel of sorts that can be used to
-            # trigger the new behavior _after_ the operands have been
-            # parsed.
-            if isinstance(node, ast.UnaryOp):
-                stack.append(node.op)
-                stack.append(node.operand)
-            elif isinstance(node, ast.unaryop):
-                op = python_cudf_ast_map[type(node)]
-                expressions.append(Expression(op, nodes[-1]))
-            elif isinstance(node, ast.BinOp):
-                stack.append(node.op)
-                stack.append(node.left)
-                stack.append(node.right)
-            elif isinstance(node, (ast.operator, ast.cmpop, ast.boolop)):
-                op = python_cudf_ast_map[type(node)]
-                expressions.append(Expression(
-                    op, nodes[-2],
-                    nodes[-1]))
-            elif isinstance(node, list):
-                stack.extend(node)
-            elif isinstance(node, ast.AST):
-                stack.extend(ast.iter_child_nodes(node))
-
-
-def make_and_evaluate_expression_nostack(expr, df):
-    """Create a cudf evaluable expression from a string and evaluate it."""
-    # Important: both make and evaluate must be coupled to guarantee that the
-    # nodes created (the owning ColumnReferences and Literals)
-    # remain in scope.
-    expressions = []
-    nodes = []
-    ast_visit_manual_stack(ast.parse(expr), df.columns.tolist(), expressions,
-                           nodes)
-    return evaluate_expression(df, expressions[-1])
-
-
-def ast_visit_external(node, df, list stack, list nodes):
-    ast_visit(node, df.columns.tolist(), stack, nodes)
