@@ -256,23 +256,9 @@ cdef class Aggregation:
     # scan aggregations
     # TODO: update this after adding per algorithm aggregation derived types
     # https://github.com/rapidsai/cudf/issues/7106
-    @classmethod
-    def cumsum(cls):
-        cdef Aggregation agg = cls()
-        agg.c_obj = move(libcudf_aggregation.make_sum_aggregation())
-        return agg
-
-    @classmethod
-    def cummin(cls):
-        cdef Aggregation agg = cls()
-        agg.c_obj = move(libcudf_aggregation.make_min_aggregation())
-        return agg
-
-    @classmethod
-    def cummax(cls):
-        cdef Aggregation agg = cls()
-        agg.c_obj = move(libcudf_aggregation.make_max_aggregation())
-        return agg
+    cumsum = sum
+    cummin = min
+    cummax = max
 
     @classmethod
     def cumcount(cls):

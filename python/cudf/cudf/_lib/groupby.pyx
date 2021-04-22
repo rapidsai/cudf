@@ -31,7 +31,6 @@ cimport cudf._lib.cpp.groupby as libcudf_groupby
 
 # The sets below define the possible aggregations that can be performed on
 # different dtypes. These strings must be elements of the AggregationKind enum.
-_GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax"}
 _CATEGORICAL_AGGS = {"COUNT", "SIZE", "NUNIQUE", "UNIQUE"}
 _STRING_AGGS = {"COUNT", "SIZE", "MAX", "MIN", "NUNIQUE", "NTH", "COLLECT",
                 "UNIQUE"}
@@ -202,6 +201,9 @@ cdef class GroupBy:
                 )
 
         return Table(data=result_data, index=grouped_keys)
+
+
+_GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax"}
 
 
 def _is_all_scan_aggregate(aggs):
