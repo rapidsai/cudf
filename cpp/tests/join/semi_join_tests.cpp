@@ -33,7 +33,7 @@
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 using strcol_wrapper = cudf::test::strings_column_wrapper;
-using CVector        = std::vector<std::unique_ptr<cudf::column>>;
+using column_vector        = std::vector<std::unique_ptr<cudf::column>>;
 using Table          = cudf::table;
 
 struct JoinTest : public cudf::test::BaseFixture {
@@ -44,9 +44,7 @@ TEST_F(JoinTest, SemiJoinWithStructsAndNulls)
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
   strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {1, 1, 0, 1, 1});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
-  std::initializer_list<std::string> col0_names = {
-    "Samuel Vimes", "Carrot Ironfoundersson", "Detritus", "Samuel Vimes", "Angua von Überwald"};
-  auto col0_names_col = strcol_wrapper{col0_names.begin(), col0_names.end()};
+  auto col0_names_col = strcol_wrapper{ "Samuel Vimes", "Carrot Ironfoundersson", "Detritus", "Samuel Vimes", "Angua von Überwald"};
   auto col0_ages_col  = column_wrapper<int32_t>{{48, 27, 351, 31, 25}};
 
   auto col0_is_human_col = column_wrapper<bool>{{true, true, false, false, false}, {1, 1, 0, 1, 0}};
@@ -57,12 +55,11 @@ TEST_F(JoinTest, SemiJoinWithStructsAndNulls)
   column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
   strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"});
   column_wrapper<int32_t> col1_2{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
-  std::initializer_list<std::string> col1_names = {"Carrot Ironfoundersson",
-                                                   "Angua von Überwald",
-                                                   "Detritus",
-                                                   "Carrot Ironfoundersson",
-                                                   "Samuel Vimes"};
-  auto col1_names_col = strcol_wrapper{col1_names.begin(), col1_names.end()};
+  auto col1_names_col = strcol_wrapper{"Carrot Ironfoundersson",
+                                       "Angua von Überwald",
+                                       "Detritus",
+                                       "Carrot Ironfoundersson",
+                                       "Samuel Vimes"};
   auto col1_ages_col  = column_wrapper<int32_t>{{351, 25, 27, 31, 48}};
 
   auto col1_is_human_col = column_wrapper<bool>{{true, false, false, false, true}, {1, 0, 0, 1, 1}};
