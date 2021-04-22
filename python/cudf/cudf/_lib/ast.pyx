@@ -1,4 +1,3 @@
-# cython: binding=True, linetrace=True
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 from enum import Enum
@@ -106,21 +105,6 @@ cdef class Expression(Node):
             )
 
 
-cdef evaluate_expression_internal(Table values, Expression expr):
-    result_data = ColumnAccessor()
-    cdef unique_ptr[column] col = libcudf_ast.compute_column(
-        values.view(),
-        <libcudf_ast.expression &> dereference(expr.c_obj.get())
-    )
-    result_data['result'] = Column.from_unique_ptr(move(col))
-    result_table = Table(data=result_data)
-    return DataFrame._from_table(result_table)
-
-
-def evaluate_expression(df, expr):
-    return evaluate_expression_internal(df, expr)
-
-
 # This dictionary encodes the mapping from Python AST operators to their cudf
 # counterparts.
 python_cudf_ast_map = {
@@ -173,7 +157,7 @@ python_cudf_ast_map = {
 }
 
 
-cpdef ast_visit(node, list col_names, list stack, list nodes):
+cpdef ast_visit(node, tuple col_names, list stack, list nodes):
     # Base cases: Name
     if isinstance(node, ast.Name):
         stack.append(ColumnReference(col_names.index(node.id) + 1))
@@ -203,14 +187,23 @@ cpdef ast_visit(node, list col_names, list stack, list nodes):
                 ast_visit(value, col_names, stack, nodes)
 
 
+def evaluate_expression(Table df, Expression expr):
+    result_data = ColumnAccessor()
+    cdef unique_ptr[column] col = libcudf_ast.compute_column(
+        df.view(),
+        <libcudf_ast.expression &> dereference(expr.c_obj.get())
+    )
+    result_data['result'] = Column.from_unique_ptr(move(col))
+    result_table = Table(data=result_data)
+    return DataFrame._from_table(result_table)
+
+
 def make_and_evaluate_expression(expr, df):
     """Create a cudf evaluable expression from a string and evaluate it."""
     # Important: both make and evaluate must be coupled to guarantee that the
     # nodes created (the owning ColumnReferences and Literals) remain in scope.
     stack = []
     nodes = []
-    parsed_expr = ast.parse(expr)
-    col_list = list(df._column_names)
-    ast_visit(parsed_expr, col_list, stack, nodes)
+    ast_visit(ast.parse(expr), df._column_names, stack, nodes)
     # At the end, all the stack contains is the expression to evaluate.
     return evaluate_expression(df, stack[-1])
