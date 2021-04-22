@@ -5382,7 +5382,7 @@ class Series(Frame, Serializable):
 
         return lhs._column.cov(rhs._column)
 
-    def corr(self, other, method, min_periods=None):
+    def corr(self, other, method="pearson", min_periods=None):
         """Calculates the sample correlation between two Series,
         excluding missing values.
 
