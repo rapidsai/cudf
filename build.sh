@@ -17,7 +17,7 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libcudf cudf dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn --ptds -h"
+VALIDARGS="clean libcudf cudf dask_cudf benchmarks tests libcudf_examples libcudf_kafka cudf_kafka custreamz -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn --ptds -h"
 HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_examples] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [-l]
    clean                - remove all existing build artifacts and configuration (start
                           over)
@@ -192,10 +192,8 @@ fi
 
 # Configure, build libcudf examples
 if hasArg libcudf_examples; then
-    # Configure basic example
-    cmake -S $REPODIR/cpp/example/basic -B $REPODIR/cpp/example/basic/build
-    cd ${$REPODIR}/cpp/example/basic/build
-    cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG}
+    cd ${REPODIR}/cpp/examples
+    ./build.sh
 fi
 
 # Build libcudf_kafka library
