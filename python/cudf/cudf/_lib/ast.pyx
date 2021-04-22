@@ -220,9 +220,10 @@ def make_and_evaluate_expression(expr, df):
     # nodes created (the owning ColumnReferences and Literals) remain in scope.
     stack = []
     nodes = []
-    ast_visit(ast.parse(expr), df.columns.tolist(), stack, nodes)
+    parsed_expr = ast.parse(expr)
+    col_list = list(df._column_names)
+    ast_visit(parsed_expr, col_list, stack, nodes)
     # At the end, all the stack contains is the expression to evaluate.
-    expr = stack[0]
     return evaluate_expression(df, stack[-1])
 
 
