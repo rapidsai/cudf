@@ -153,12 +153,7 @@ make_strings_children_with_null_mask(
   auto validities               = rmm::device_uvector<int8_t>(strings_count, stream);
   size_and_exec_fn.d_validities = validities.begin();
 
-  // Initialize the string validities to be all-valid (which can be modified later during calling to
-  // `for_each_fn`)
-  thrust::uninitialized_fill(
-    rmm::exec_policy(stream), validities.begin(), validities.end(), int8_t{1});
-
-  // This is called twice: once for offsets and once for chars
+  // This is called twice: once for offsets and validities, and once for chars
   auto for_each_fn = [strings_count, stream](SizeAndExecuteFunction& size_and_exec_fn) {
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
@@ -166,10 +161,7 @@ make_strings_children_with_null_mask(
                        size_and_exec_fn);
   };
 
-  // Compute the string sizes, storing in `d_offsets`
-  // During execution, we need to check the `first_pass` boolean flag, not
-  // checking `!d_chars`. This is because `d_chars` can have nullptr value in the
-  // situations when the strings column has all zero-size or all-null strings.
+  // Compute the string sizes (storing in `d_offsets`) and string validities
   for_each_fn(size_and_exec_fn);
 
   // Compute the offsets from string sizes
