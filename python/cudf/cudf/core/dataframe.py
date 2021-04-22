@@ -4605,6 +4605,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             sort=sort,
         )
 
+### 
     def rolling(
         self, window, min_periods=None, center=False, axis=0, win_type=None
     ):
