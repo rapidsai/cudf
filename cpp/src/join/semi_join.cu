@@ -64,10 +64,10 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
 
   // flatten structs for the right and left and use that for the hash table
   auto right_flattened_tables = structs::detail::flatten_nested_columns(right_keys, {}, {});
-  auto left_flattened_tables = structs::detail::flatten_nested_columns(left_keys, {}, {});
+  auto left_flattened_tables  = structs::detail::flatten_nested_columns(left_keys, {}, {});
 
   auto right_flattened_keys = std::get<0>(right_flattened_tables);
-  auto left_flattened_keys = std::get<0>(left_flattened_tables);
+  auto left_flattened_keys  = std::get<0>(left_flattened_tables);
 
   // Only care about existence, so we'll use an unordered map (other joins need a multimap)
   using hash_table_type = concurrent_unordered_map<cudf::size_type, bool, row_hash, row_equality>;

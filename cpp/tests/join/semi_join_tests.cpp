@@ -33,7 +33,7 @@
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 using strcol_wrapper = cudf::test::strings_column_wrapper;
-using column_vector        = std::vector<std::unique_ptr<cudf::column>>;
+using column_vector  = std::vector<std::unique_ptr<cudf::column>>;
 using Table          = cudf::table;
 
 struct JoinTest : public cudf::test::BaseFixture {
@@ -44,8 +44,9 @@ TEST_F(JoinTest, SemiJoinWithStructsAndNulls)
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
   strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {1, 1, 0, 1, 1});
   column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 1}};
-  auto col0_names_col = strcol_wrapper{ "Samuel Vimes", "Carrot Ironfoundersson", "Detritus", "Samuel Vimes", "Angua von Überwald"};
-  auto col0_ages_col  = column_wrapper<int32_t>{{48, 27, 351, 31, 25}};
+  auto col0_names_col = strcol_wrapper{
+    "Samuel Vimes", "Carrot Ironfoundersson", "Detritus", "Samuel Vimes", "Angua von Überwald"};
+  auto col0_ages_col = column_wrapper<int32_t>{{48, 27, 351, 31, 25}};
 
   auto col0_is_human_col = column_wrapper<bool>{{true, true, false, false, false}, {1, 1, 0, 1, 0}};
 
@@ -67,7 +68,7 @@ TEST_F(JoinTest, SemiJoinWithStructsAndNulls)
   auto col1_3 =
     cudf::test::structs_column_wrapper{{col1_names_col, col1_ages_col, col1_is_human_col}};
 
-  CVector cols0, cols1;
+  column_vector cols0, cols1;
   cols0.push_back(col0_0.release());
   cols0.push_back(col0_1.release());
   cols0.push_back(col0_2.release());
@@ -95,7 +96,7 @@ TEST_F(JoinTest, SemiJoinWithStructsAndNulls)
   auto col_gold_3 = cudf::test::structs_column_wrapper{
     {col_gold_3_names_col, col_gold_3_ages_col, col_gold_3_is_human_col}};
 
-  CVector cols_gold;
+  column_vector cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
   cols_gold.push_back(col_gold_2.release());
