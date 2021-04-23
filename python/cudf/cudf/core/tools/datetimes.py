@@ -4,16 +4,16 @@ import warnings
 from typing import Sequence, Union
 
 import numpy as np
-import pandas as pd
 from pandas.core.tools.datetimes import _unit_map
 
 import cudf
+from cudf import _lib as libcudf
 from cudf._lib.strings.convert.convert_integers import (
     is_integer as cpp_is_integer,
 )
 from cudf.core import column
 from cudf.core.index import as_index
-from cudf.utils.dtypes import is_scalar
+from cudf.utils.dtypes import is_integer, is_scalar
 
 _unit_dtype_map = {
     "ns": "datetime64[ns]",
@@ -337,67 +337,31 @@ def get_units(value):
     return value
 
 
-class _DateOffsetScalars(object):
-    def __init__(self, scalars):
-        self._gpu_scalars = scalars
+class DateOffset:
 
+    _UNITS_TO_CODES = {
+        "nanoseconds": "ns",
+        "microseconds": "us",
+        "milliseconds": "ms",
+        "seconds": "s",
+        "minutes": "m",
+        "hours": "h",
+        "days": "D",
+        "weeks": "W",
+        "months": "M",
+        "years": "Y",
+    }
 
-class _UndoOffsetMeta(pd._libs.tslibs.offsets.OffsetMeta):
-    """
-    For backward compatibility reasons, `pd.DateOffset` is defined
-    with a metaclass `OffsetMeta`, which makes it such that any
-    subclass of `pd._libs.tslibs.offset.BaseOffset` is reported as
-    a subclass of `pd.DateOffset`.
+    _CODES_TO_UNITS = {v: k for k, v in _UNITS_TO_CODES.items()}
 
-    Because we subclass `pd.DateOffset`, we inherit this behaviour,
-    but don't want to. This metaclass inherits from `OffsetMeta`
-    and restores normal instance and subclass checking to any
-    classes that use it.
-    """
-
-    @classmethod
-    def __instancecheck__(cls, obj) -> bool:
-        return type.__instancecheck__(cls, obj)
-
-    @classmethod
-    def __subclasscheck__(cls, obj) -> bool:
-        return type.__subclasscheck__(cls, obj)
-
-
-class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
     def __init__(self, n=1, normalize=False, **kwds):
         """
         An object used for binary ops where calendrical arithmetic
         is desired rather than absolute time arithmetic. Used to
         add or subtract a whole number of periods, such as several
         months or years, to a series or index of datetime dtype.
-        Works similarly to pd.DateOffset, and currently supports a
-        subset of its functionality. The arguments that aren't yet
-        supported are:
-            - years
-            - weeks
-            - days
-            - hours
-            - minutes
-            - seconds
-            - microseconds
-            - milliseconds
-            - nanoseconds
-        In addition, cuDF does not yet support DateOffset arguments
-        that 'replace' units in the datetime data being operated on
-        such as
-            - year
-            - month
-            - week
-            - day
-            - hour
-            - minute
-            - second
-            - microsecond
-            - millisecond
-            - nanosecond
-        Finally, cuDF does not yet support rounding via a `normalize`
-        keyword argument.
+        Works similarly to pd.DateOffset, but stores the offset
+        on the device (GPU).
 
         Parameters
         ----------
@@ -431,17 +395,32 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
         1   1999-01-31 00:00:00.012345678
         2   1999-02-28 00:00:00.012345678
         dtype: datetime64[ns]
+
+        Notes
+        -----
+        Note that cuDF does not yet support DateOffset arguments
+        that 'replace' units in the datetime data being operated on
+        such as
+            - year
+            - month
+            - week
+            - day
+            - hour
+            - minute
+            - second
+            - microsecond
+            - millisecond
+            - nanosecond
+
+        cuDF does not yet support rounding via a `normalize`
+        keyword argument.
         """
         if normalize:
             raise NotImplementedError(
                 "normalize not yet supported for DateOffset"
             )
 
-        # TODO: Pandas supports combinations
-        if len(kwds) > 1:
-            raise NotImplementedError("Multiple time units not yet supported")
-
-        all_possible_kwargs = {
+        all_possible_units = {
             "years",
             "months",
             "weeks",
@@ -449,6 +428,7 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
             "hours",
             "minutes",
             "seconds",
+            "milliseconds",
             "microseconds",
             "nanoseconds",
             "year",
@@ -459,30 +439,120 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
             "minute",
             "second",
             "microsecond",
-            "millisecond" "nanosecond",
+            "millisecond",
+            "nanosecond",
         }
 
-        supported_kwargs = {"months"}
+        supported_units = {
+            "years",
+            "months",
+            "weeks",
+            "days",
+            "hours",
+            "minutes",
+            "seconds",
+            "milliseconds",
+            "microseconds",
+            "nanoseconds",
+        }
+
+        unsupported_units = all_possible_units - supported_units
+
+        invalid_kwds = set(kwds) - supported_units - unsupported_units
+        if invalid_kwds:
+            raise TypeError(
+                f"Keyword arguments '{','.join(list(invalid_kwds))}'"
+                " are not recognized"
+            )
+
+        unsupported_kwds = set(kwds) & unsupported_units
+        if unsupported_kwds:
+            raise NotImplementedError(
+                f"Keyword arguments '{','.join(list(unsupported_kwds))}'"
+                " are not yet supported."
+            )
+
+        if any(not is_integer(val) for val in kwds.values()):
+            raise ValueError("Non-integer periods not supported")
+
+        self._kwds = kwds
+        kwds = self._combine_months_and_years(**kwds)
+        kwds = self._combine_kwargs_to_seconds(**kwds)
 
         scalars = {}
         for k, v in kwds.items():
-            if k in all_possible_kwargs:
+            if k in all_possible_units:
                 # Months must be int16
-                dtype = "int16" if k == "months" else None
+                if k == "months":
+                    # TODO: throw for out-of-bounds int16 values
+                    dtype = "int16"
+                else:
+                    unit = self._UNITS_TO_CODES[k]
+                    dtype = np.dtype(f"timedelta64[{unit}]")
                 scalars[k] = cudf.Scalar(v, dtype=dtype)
 
-        super().__init__(n=n, normalize=normalize, **kwds)
+        self._scalars = scalars
 
-        wrong_kwargs = set(kwds.keys()).difference(supported_kwargs)
-        if len(wrong_kwargs) > 0:
-            raise ValueError(
-                f"Keyword arguments '{','.join(list(wrong_kwargs))}'"
-                " are not yet supported in cuDF DateOffsets"
+    @property
+    def kwds(self):
+        return self._kwds
+
+    def _combine_months_and_years(self, **kwargs):
+        # TODO: if months is zero, don't do a binop
+        kwargs["months"] = kwargs.pop("years", 0) * 12 + kwargs.pop(
+            "months", 0
+        )
+        return kwargs
+
+    def _combine_kwargs_to_seconds(self, **kwargs):
+        """
+        Combine days, weeks, hours and minutes to a single
+        scalar representing the total seconds
+        """
+        seconds = 0
+        seconds += kwargs.pop("weeks", 0) * 604800
+        seconds += kwargs.pop("days", 0) * 86400
+        seconds += kwargs.pop("hours", 0) * 3600
+        seconds += kwargs.pop("minutes", 0) * 60
+        seconds += kwargs.pop("seconds", 0)
+
+        if seconds > np.iinfo("int64").max:
+            raise NotImplementedError(
+                "Total days + weeks + hours + minutes + seconds can not exceed"
+                f" {np.iinfo('int64').max} seconds"
             )
-        self._scalars = _DateOffsetScalars(scalars)
 
-    def _generate_column(self, size, op):
-        months = self._scalars._gpu_scalars["months"]
+        if seconds != 0:
+            kwargs["seconds"] = seconds
+        return kwargs
+
+    def _datetime_binop(self, datetime_col, op, reflect=False):
+        if reflect and op == "sub":
+            raise TypeError(
+                f"Can not subtract a {type(datetime_col).__name__}"
+                f" from a {type(self).__name__}"
+            )
+        if op not in {"add", "sub"}:
+            raise TypeError(
+                f"{op} not supported between {type(self).__name__}"
+                f" and {type(datetime_col).__name__}"
+            )
+        if not self._is_no_op:
+            if "months" in self._scalars:
+                rhs = self._generate_months_column(len(datetime_col), op)
+                datetime_col = libcudf.datetime.add_months(datetime_col, rhs)
+
+            for unit, value in self._scalars.items():
+                if unit != "months":
+                    value = -value if op == "sub" else value
+                    datetime_col += cudf.core.column.as_column(
+                        value, length=len(datetime_col)
+                    )
+
+        return datetime_col
+
+    def _generate_months_column(self, size, op):
+        months = self._scalars["months"]
         months = -months if op == "sub" else months
         # TODO: pass a scalar instead of constructing a column
         # https://github.com/rapidsai/cudf/issues/6990
@@ -493,13 +563,45 @@ class DateOffset(pd.DateOffset, metaclass=_UndoOffsetMeta):
     def _is_no_op(self):
         # some logic could be implemented here for more complex cases
         # such as +1 year, -12 months
-        return all([i == 0 for i in self.kwds.values()])
+        return all([i == 0 for i in self._kwds.values()])
 
-    def __setattr__(self, name, value):
-        if not isinstance(value, _DateOffsetScalars):
-            raise AttributeError("DateOffset objects are immutable.")
-        else:
-            object.__setattr__(self, name, value)
+    def __neg__(self):
+        new_scalars = {k: -v for k, v in self._kwds.items()}
+        return DateOffset(**new_scalars)
+
+    def __repr__(self):
+        includes = []
+        for unit in sorted(self._UNITS_TO_CODES):
+            val = self._kwds.get(unit, None)
+            if val is not None:
+                includes.append(f"{unit}={val}")
+        unit_data = ", ".join(includes)
+        repr_str = f"<{self.__class__.__name__}: {unit_data}>"
+
+        return repr_str
+
+    @classmethod
+    def _from_freqstr(cls, freqstr):
+        """
+        Parse a string and return a DateOffset object
+        expects strings of the form 3D, 25W, 10ms, 42ns, etc.
+        """
+        numeric_part = ""
+        freq_part = ""
+
+        for x in freqstr:
+            if x.isdigit():
+                numeric_part += x
+            else:
+                freq_part += x
+
+        if (
+            freq_part not in cls._CODES_TO_UNITS
+            or not numeric_part + freq_part == freqstr
+        ):
+            raise ValueError(f"Cannot interpret frequency str: {freqstr}")
+
+        return cls(**{cls._CODES_TO_UNITS[freq_part]: int(numeric_part)})
 
 
 def _isin_datetimelike(
