@@ -50,8 +50,7 @@ TYPED_TEST(groupby_shift_fixed_width_test, ForwardShiftWithoutNull_NullScalar)
 
   fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   fixed_width_column_wrapper<V> val{3, 4, 5, 6, 7, 8, 9};
-  fixed_width_column_wrapper<V> expected({-1, -1, 3, 5, -1, -1, 4},
-                                                     {0, 0, 1, 1, 0, 0, 1});
+  fixed_width_column_wrapper<V> expected({-1, -1, 3, 5, -1, -1, 4}, {0, 0, 1, 1, 0, 0, 1});
   size_type offset = 2;
   auto slr         = cudf::make_default_constructed_scalar(column_view(val).type());
 
@@ -64,8 +63,7 @@ TYPED_TEST(groupby_shift_fixed_width_test, ForwardShiftWithNull_NullScalar)
 
   fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   fixed_width_column_wrapper<V> val({3, 4, 5, 6, 7, 8, 9}, {0, 0, 0, 1, 1, 1, 1});
-  fixed_width_column_wrapper<V> expected({-1, -1, -1, -1, -1, -1, -1},
-                                                     {0, 0, 0, 0, 0, 0, 0});
+  fixed_width_column_wrapper<V> expected({-1, -1, -1, -1, -1, -1, -1}, {0, 0, 0, 0, 0, 0, 0});
   size_type offset = 2;
   auto slr         = cudf::make_default_constructed_scalar(column_view(val).type());
 
@@ -80,8 +78,7 @@ TYPED_TEST(groupby_shift_fixed_width_test, ForwardShiftWithoutNull_ValidScalar)
   fixed_width_column_wrapper<V> val({3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5});
   fixed_width_column_wrapper<V> expected({42, 42, 42, 3, 5, 8, 9, 42, 42, 42, 4, 6, 7});
   size_type offset = 3;
-  auto slr =
-    cudf::scalar_type_t<TypeParam>(make_type_param_scalar<TypeParam>(42), true);
+  auto slr         = cudf::scalar_type_t<TypeParam>(make_type_param_scalar<TypeParam>(42), true);
 
   test_groupby_shift_fixed_width<V>(key, val, offset, slr, expected);
 }
@@ -92,12 +89,11 @@ TYPED_TEST(groupby_shift_fixed_width_test, ForwardShiftWithNull_ValidScalar)
 
   fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1, 2, 1, 2, 1, 2, 1};
   fixed_width_column_wrapper<V> val({3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5},
-                                                {1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1});
-  fixed_width_column_wrapper<V> expected(
-    {42, 42, 42, 3, 5, -1, -1, 42, 42, 42, -1, -1, 7}, {1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1});
+                                    {1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1});
+  fixed_width_column_wrapper<V> expected({42, 42, 42, 3, 5, -1, -1, 42, 42, 42, -1, -1, 7},
+                                         {1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1});
   size_type offset = 3;
-  auto slr =
-    cudf::scalar_type_t<TypeParam>(make_type_param_scalar<TypeParam>(42), true);
+  auto slr         = cudf::scalar_type_t<TypeParam>(make_type_param_scalar<TypeParam>(42), true);
 
   test_groupby_shift_fixed_width<V>(key, val, offset, slr, expected);
 }
@@ -108,8 +104,7 @@ TYPED_TEST(groupby_shift_fixed_width_test, BackwardShiftWithoutNull_NullScalar)
 
   fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   fixed_width_column_wrapper<V> val{3, 4, 5, 6, 7, 8, 9};
-  fixed_width_column_wrapper<V> expected({5, 8, 9, -1, 6, 7, -1},
-                                                     {1, 1, 1, 0, 1, 1, 0});
+  fixed_width_column_wrapper<V> expected({5, 8, 9, -1, 6, 7, -1}, {1, 1, 1, 0, 1, 1, 0});
   size_type offset = -1;
   auto slr         = cudf::make_default_constructed_scalar(column_view(val).type());
 
@@ -122,8 +117,7 @@ TYPED_TEST(groupby_shift_fixed_width_test, BackwardShiftWithNull_NullScalar)
 
   fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   fixed_width_column_wrapper<V> val({3, 4, 5, 6, 7, 8, 9}, {0, 0, 0, 1, 1, 1, 1});
-  fixed_width_column_wrapper<V> expected({-1, 8, 9, -1, 6, 7, -1},
-                                                     {0, 1, 1, 0, 1, 1, 0});
+  fixed_width_column_wrapper<V> expected({-1, 8, 9, -1, 6, 7, -1}, {0, 1, 1, 0, 1, 1, 0});
   size_type offset = -1;
   auto slr         = cudf::make_default_constructed_scalar(column_view(val).type());
 
@@ -136,11 +130,9 @@ TYPED_TEST(groupby_shift_fixed_width_test, BackwardShiftWithoutNull_ValidScalar)
 
   fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1, 2, 1, 2, 1, 2, 1};
   fixed_width_column_wrapper<V> val{3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5};
-  fixed_width_column_wrapper<V> expected(
-    {3, 5, 42, 42, 42, 42, 42, 4, 42, 42, 42, 42, 42});
+  fixed_width_column_wrapper<V> expected({3, 5, 42, 42, 42, 42, 42, 4, 42, 42, 42, 42, 42});
   size_type offset = -5;
-  auto slr =
-    cudf::scalar_type_t<TypeParam>(make_type_param_scalar<TypeParam>(42), true);
+  auto slr         = cudf::scalar_type_t<TypeParam>(make_type_param_scalar<TypeParam>(42), true);
 
   test_groupby_shift_fixed_width<V>(key, val, offset, slr, expected);
 }
@@ -151,12 +143,11 @@ TYPED_TEST(groupby_shift_fixed_width_test, BackwardShiftWithNull_ValidScalar)
 
   fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1, 2, 1, 2, 1, 2, 1};
   fixed_width_column_wrapper<V> val({3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5},
-                                                {1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1});
+                                    {1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1});
   fixed_width_column_wrapper<V> expected({5, -1, -1, -1, 3, 5, 42, -1, 7, 0, 2, -1, 42},
-                                                     {1, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1});
+                                         {1, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1});
   size_type offset = -1;
-  auto slr =
-    cudf::scalar_type_t<TypeParam>(make_type_param_scalar<TypeParam>(42), true);
+  auto slr         = cudf::scalar_type_t<TypeParam>(make_type_param_scalar<TypeParam>(42), true);
 
   test_groupby_shift_fixed_width<V>(key, val, offset, slr, expected);
 }
@@ -182,8 +173,7 @@ TYPED_TEST(groupby_shift_fixed_width_test, ZeroShiftValidScalar)
   fixed_width_column_wrapper<V> val{3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5};
   fixed_width_column_wrapper<V> expected({3, 5, 8, 9, 1, 3, 5, 4, 6, 7, 0, 2, 4});
   size_type offset = 0;
-  auto slr =
-    cudf::scalar_type_t<TypeParam>(make_type_param_scalar<TypeParam>(42), true);
+  auto slr         = cudf::scalar_type_t<TypeParam>(make_type_param_scalar<TypeParam>(42), true);
 
   test_groupby_shift_fixed_width<V>(key, val, offset, slr, expected);
 }
@@ -194,8 +184,8 @@ TYPED_TEST(groupby_shift_fixed_width_test, VeryLargeForwardOffset)
 
   fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1, 2, 1, 2, 1, 2, 1};
   fixed_width_column_wrapper<V> val{3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5};
-  fixed_width_column_wrapper<V> expected(
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
+  fixed_width_column_wrapper<V> expected({-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+                                         {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
   size_type offset = 1024;
   auto slr         = cudf::make_default_constructed_scalar(column_view(val).type());
 
@@ -208,8 +198,8 @@ TYPED_TEST(groupby_shift_fixed_width_test, VeryLargeBackwardOffset)
 
   fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1, 2, 1, 2, 1, 2, 1};
   fixed_width_column_wrapper<V> val{3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5};
-  fixed_width_column_wrapper<V> expected(
-    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
+  fixed_width_column_wrapper<V> expected({-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+                                         {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
   size_type offset = -1024;
   auto slr         = cudf::make_default_constructed_scalar(column_view(val).type());
 
@@ -234,8 +224,7 @@ TEST_F(groupby_shift_string_test, ForwardShiftWithoutNull_NullScalar)
 {
   fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   strings_column_wrapper val{"a", "bb", "cc", "d", "eee", "f", "gg"};
-  strings_column_wrapper expected({"", "a", "cc", "f", "", "bb", "d"},
-                                              {0, 1, 1, 1, 0, 1, 1});
+  strings_column_wrapper expected({"", "a", "cc", "f", "", "bb", "d"}, {0, 1, 1, 1, 0, 1, 1});
   size_type offset = 1;
   auto slr         = cudf::make_default_constructed_scalar(column_view(val).type());
 
@@ -245,10 +234,8 @@ TEST_F(groupby_shift_string_test, ForwardShiftWithoutNull_NullScalar)
 TEST_F(groupby_shift_string_test, ForwardShiftWithNull_NullScalar)
 {
   fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
-  strings_column_wrapper val({"a", "bb", "cc", "d", "eee", "f", "gg"},
-                                         {1, 0, 1, 1, 0, 0, 0});
-  strings_column_wrapper expected({"", "", "a", "cc", "", "", ""},
-                                              {0, 0, 1, 1, 0, 0, 0});
+  strings_column_wrapper val({"a", "bb", "cc", "d", "eee", "f", "gg"}, {1, 0, 1, 1, 0, 0, 0});
+  strings_column_wrapper expected({"", "", "a", "cc", "", "", ""}, {0, 0, 1, 1, 0, 0, 0});
   size_type offset = 2;
   auto slr         = cudf::make_default_constructed_scalar(column_view(val).type());
 
@@ -270,10 +257,8 @@ TEST_F(groupby_shift_string_test, ForwardShiftWithoutNull_ValidScalar)
 TEST_F(groupby_shift_string_test, ForwardShiftWithNull_ValidScalar)
 {
   fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
-  strings_column_wrapper val({"a", "bb", "cc", "d", "eee", "f", "gg"},
-                                         {1, 1, 0, 0, 1, 0, 1});
-  strings_column_wrapper expected({"42", "a", "", "", "42", "bb", ""},
-                                              {1, 1, 0, 0, 1, 1, 0});
+  strings_column_wrapper val({"a", "bb", "cc", "d", "eee", "f", "gg"}, {1, 1, 0, 0, 1, 0, 1});
+  strings_column_wrapper expected({"42", "a", "", "", "42", "bb", ""}, {1, 1, 0, 0, 1, 1, 0});
 
   size_type offset = 1;
   auto slr         = cudf::make_string_scalar("42");
@@ -285,8 +270,7 @@ TEST_F(groupby_shift_string_test, BackwardShiftWithoutNull_NullScalar)
 {
   fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
   strings_column_wrapper val{"a", "bb", "cc", "d", "eee", "f", "gg"};
-  strings_column_wrapper expected({"gg", "", "", "", "", "", ""},
-                                              {1, 0, 0, 0, 0, 0, 0});
+  strings_column_wrapper expected({"gg", "", "", "", "", "", ""}, {1, 0, 0, 0, 0, 0, 0});
 
   size_type offset = -3;
   auto slr         = cudf::make_default_constructed_scalar(column_view(val).type());
@@ -297,10 +281,8 @@ TEST_F(groupby_shift_string_test, BackwardShiftWithoutNull_NullScalar)
 TEST_F(groupby_shift_string_test, BackwardShiftWithNull_NullScalar)
 {
   fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
-  strings_column_wrapper val({"a", "bb", "cc", "d", "eee", "f", "gg"},
-                                         {1, 0, 1, 1, 0, 0, 0});
-  strings_column_wrapper expected({"cc", "", "", "", "d", "", ""},
-                                              {1, 0, 0, 0, 1, 0, 0});
+  strings_column_wrapper val({"a", "bb", "cc", "d", "eee", "f", "gg"}, {1, 0, 1, 1, 0, 0, 0});
+  strings_column_wrapper expected({"cc", "", "", "", "d", "", ""}, {1, 0, 0, 0, 1, 0, 0});
 
   size_type offset = -1;
   auto slr         = cudf::make_default_constructed_scalar(column_view(val).type());
@@ -323,10 +305,8 @@ TEST_F(groupby_shift_string_test, BackwardShiftWithoutNull_ValidScalar)
 TEST_F(groupby_shift_string_test, BackwardShiftWithNull_ValidScalar)
 {
   fixed_width_column_wrapper<K> key{1, 2, 1, 2, 2, 1, 1};
-  strings_column_wrapper val({"a", "bb", "cc", "d", "eee", "f", "gg"},
-                                         {1, 1, 0, 0, 1, 0, 1});
-  strings_column_wrapper expected({"", "gg", "42", "42", "eee", "42", "42"},
-                                              {0, 1, 1, 1, 1, 1, 1});
+  strings_column_wrapper val({"a", "bb", "cc", "d", "eee", "f", "gg"}, {1, 1, 0, 0, 1, 0, 1});
+  strings_column_wrapper expected({"", "gg", "42", "42", "eee", "42", "42"}, {0, 1, 1, 1, 1, 1, 1});
 
   size_type offset = -2;
   auto slr         = cudf::make_string_scalar("42");
