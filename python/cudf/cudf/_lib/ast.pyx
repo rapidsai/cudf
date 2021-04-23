@@ -244,6 +244,7 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
 
 
 def evaluate_expression(Table df, Expression expr):
+    """Evaluate an Expression on a Table."""
     result_data = ColumnAccessor()
     cdef unique_ptr[column] col = libcudf_ast.compute_column(
         df.view(),
