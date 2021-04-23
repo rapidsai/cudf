@@ -1100,11 +1100,13 @@ void writer::impl::write(table_view const &table)
   size_t num_compressed_blocks = 0;
   auto stream_output           = [&]() {
     size_t max_stream_size = 0;
+    bool all_device_write  = true;
 
     for (size_t stripe_id = 0; stripe_id < stripe_bounds.size(); stripe_id++) {
       for (size_t i = 0; i < num_data_streams; i++) {  // TODO range for (at least)
         gpu::StripeStream *ss = &strm_descs[stripe_id][i];
-        size_t stream_size    = ss->stream_size;
+        if (!out_sink_->is_device_write_preferred(ss->stream_size)) { all_device_write = false; }
+        size_t stream_size = ss->stream_size;
         if (compression_kind_ != NONE) {
           ss->first_block = num_compressed_blocks;
           ss->bfr_offset  = compressed_bfr_size;
@@ -1119,12 +1121,16 @@ void writer::impl::write(table_view const &table)
       }
     }
 
-    return pinned_buffer<uint8_t>{[](size_t size) {
-                                    uint8_t *ptr = nullptr;
-                                    CUDA_TRY(cudaMallocHost(&ptr, size));
-                                    return ptr;
-                                  }(max_stream_size),
-                                  cudaFreeHost};
+    if (all_device_write) {
+      return pinned_buffer<uint8_t>{nullptr, cudaFreeHost};
+    } else {
+      return pinned_buffer<uint8_t>{[](size_t size) {
+                                      uint8_t *ptr = nullptr;
+                                      CUDA_TRY(cudaMallocHost(&ptr, size));
+                                      return ptr;
+                                    }(max_stream_size),
+                                    cudaFreeHost};
+    }
   }();
 
   // Compress the data streams
