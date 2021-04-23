@@ -280,7 +280,7 @@ class DatetimeColumn(column.ColumnBase):
         reflect: bool = False,
     ) -> ColumnBase:
         if isinstance(rhs, cudf.DateOffset):
-            return binop_offset(self, rhs, op)
+            return rhs._datetime_binop(self, op, reflect=reflect)
         lhs, rhs = self, rhs
         if op in ("eq", "ne", "lt", "gt", "le", "ge", "NULL_EQUALS"):
             out_dtype = np.dtype(np.bool_)  # type: Dtype
