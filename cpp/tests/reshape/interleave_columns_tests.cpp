@@ -592,10 +592,10 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputNoNull)
 TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputWithNulls)
 {
   auto const col_original = ListsCol{{ListsCol{{null, 2, 3}, null_at(0)},
-                                      ListsCol{{2, 3}}, /*NULL*/
+                                      ListsCol{2, 3}, /*NULL*/
                                       ListsCol{{3, null, 5, 6}, null_at(1)},
-                                      ListsCol{{5, 6}}, /*NULL*/
-                                      ListsCol{},       /*NULL*/
+                                      ListsCol{5, 6}, /*NULL*/
+                                      ListsCol{},     /*NULL*/
                                       ListsCol{7},
                                       ListsCol{8, 9, 10}},
                                      null_at({1, 3, 4})}
