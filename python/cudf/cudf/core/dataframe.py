@@ -1466,7 +1466,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 result[col] = getattr(self[col], fn)(other[k])
         elif isinstance(other, DataFrame):
             if fn in cudf.utils.utils._EQUALITY_OPS:
-                if not self.index.equals(other.index):
+                if not self.columns.equals(
+                    other.columns
+                ) or not self.index.equals(other.index):
                     raise ValueError(
                         "Can only compare identically-labeled "
                         "DataFrame objects"
@@ -7945,7 +7947,7 @@ def _setitem_with_dataframe(
             "Number of Input Columns must be same replacement Dataframe"
         )
 
-    if not input_df.index.equals(replace_df.index):
+    if len(input_df) != 0 and not input_df.index.equals(replace_df.index):
         replace_df = replace_df.reindex(input_df.index)
 
     for col_1, col_2 in zip(input_cols, replace_df.columns):

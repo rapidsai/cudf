@@ -112,6 +112,7 @@ cdef class GroupBy:
         cdef Column col
         cdef Aggregation agg_obj
 
+        cdef bool scan = _is_all_scan_aggregate(aggregations)
         allow_empty = all(len(v) == 0 for v in aggregations.values())
 
         included_aggregations = defaultdict(list)
@@ -160,11 +161,18 @@ cdef class GroupBy:
 
         try:
             with nogil:
-                c_result = move(
-                    self.c_obj.get()[0].aggregate(
-                        c_agg_requests
+                if scan:
+                    c_result = move(
+                        self.c_obj.get()[0].scan(
+                            c_agg_requests
+                        )
                     )
-                )
+                else:
+                    c_result = move(
+                        self.c_obj.get()[0].aggregate(
+                            c_agg_requests
+                        )
+                    )
         except RuntimeError as e:
             # TODO: remove this try..except after
             # https://github.com/rapidsai/cudf/issues/7611
@@ -193,3 +201,38 @@ cdef class GroupBy:
                 )
 
         return Table(data=result_data, index=grouped_keys)
+
+
+_GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax"}
+
+
+def _is_all_scan_aggregate(aggs):
+    """
+    Returns true if all are scan aggregations.
+    Raises
+    ------
+    NotImplementedError
+        If both reduction aggregations and scan aggregations are present.
+    """
+
+    def get_name(agg):
+        return agg.__name__ if callable(agg) else agg
+
+    all_scan = all(
+        all(
+            get_name(agg_name) in _GROUPBY_SCANS for agg_name in aggs[col_name]
+        )
+        for col_name in aggs
+    )
+    any_scan = any(
+        any(
+            get_name(agg_name) in _GROUPBY_SCANS for agg_name in aggs[col_name]
+        )
+        for col_name in aggs
+    )
+
+    if not all_scan and any_scan:
+        raise NotImplementedError(
+            "Cannot perform both aggregation and scan in one operation"
+        )
+    return all_scan and any_scan

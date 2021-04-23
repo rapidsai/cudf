@@ -1070,6 +1070,13 @@ def test_dataframe_setitem_index_len1():
     np.testing.assert_equal(gdf.b.to_array(), [0])
 
 
+def test_empty_dataframe_setitem_df():
+    gdf1 = cudf.DataFrame()
+    gdf2 = cudf.DataFrame({"a": [1, 2, 3, 4, 5]})
+    gdf1["a"] = gdf2["a"]
+    assert_eq(gdf1, gdf2)
+
+
 def test_assign():
     gdf = cudf.DataFrame({"x": [1, 2, 3]})
     gdf2 = gdf.assign(y=gdf.x + 1)
@@ -2000,6 +2007,27 @@ def test_quantile(q, numeric_only):
             ),
             gdf.quantile(q, numeric_only=False),
         )
+
+
+@pytest.mark.parametrize("q", [0.2, 1, 0.001, [0.5], [], [0.005, 0.8, 0.03]])
+@pytest.mark.parametrize("interpolation", ["higher", "lower", "nearest"])
+def test_decimal_quantile(q, interpolation):
+    data = ["244.8", "32.24", "2.22", "98.14", "453.23", "5.45"]
+    gdf = cudf.DataFrame(
+        {"id": np.random.randint(0, 10, size=len(data)), "val": data}
+    )
+    gdf["id"] = gdf["id"].astype("float64")
+    gdf["val"] = gdf["val"].astype(cudf.Decimal64Dtype(7, 2))
+    pdf = gdf.to_pandas()
+
+    got = gdf.quantile(q, numeric_only=False, interpolation=interpolation)
+    expected = pdf.quantile(
+        q if isinstance(q, list) else [q],
+        numeric_only=False,
+        interpolation=interpolation,
+    )
+
+    assert_eq(got, expected)
 
 
 def test_empty_quantile():
@@ -7779,6 +7807,7 @@ def test_equals_dtypes():
     [
         pd.DataFrame({"a": [10, 11, 12]}, index=["a", "b", "z"]),
         pd.DataFrame({"z": ["a"]}),
+        pd.DataFrame({"a": [], "b": []}),
     ],
 )
 @pytest.mark.parametrize(
