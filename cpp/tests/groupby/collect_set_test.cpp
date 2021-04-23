@@ -34,6 +34,7 @@ namespace test {
 #define COLLECT_SET cudf::make_collect_set_aggregation()
 #define COLLECT_SET_NULL_UNEQUAL \
   cudf::make_collect_set_aggregation(null_policy::INCLUDE, null_equality::UNEQUAL)
+#define COLLECT_SET_NULL_EXCLUDE cudf::make_collect_set_aggregation(null_policy::EXCLUDE)
 
 struct CollectSetTest : public cudf::test::BaseFixture {
 };
@@ -46,17 +47,6 @@ using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBo
                                                   cudf::test::FloatingPointTypes,
                                                   cudf::test::TimestampTypes>;
 TYPED_TEST_CASE(CollectSetTypedTest, FixedWidthTypesNotBool);
-
-TYPED_TEST(CollectSetTypedTest, ExceptionTests)
-{
-  std::vector<groupby::aggregation_request> agg_requests(1);
-  agg_requests[0].values = COL_V{{1, 2, 3, 4, 5, 6}, {true, false, true, false, true, false}};
-  agg_requests[0].aggregations.push_back(cudf::make_collect_list_aggregation(null_policy::EXCLUDE));
-
-  // groupby cannot exclude nulls
-  groupby::groupby gby{table_view{{COL_K{1, 1, 2, 2, 3, 3}}}};
-  EXPECT_THROW(gby.aggregate(agg_requests), cudf::logic_error);
-}
 
 TYPED_TEST(CollectSetTypedTest, TrivialInput)
 {
@@ -174,6 +164,10 @@ TYPED_TEST(CollectSetTypedTest, CollectWithNulls)
                           {{20, null, null, null}, VALIDITY{true, false, false, false}},
                           {{30, 31}, VALIDITY{true, true}}};
     test_single_agg(keys, vals, keys_expected, vals_expected, COLLECT_SET_NULL_UNEQUAL);
+
+    // All nulls per key are excluded
+    vals_expected = LCL_V{{10}, {20}, {30, 31}};
+    test_single_agg(keys, vals, keys_expected, vals_expected, COLLECT_SET_NULL_EXCLUDE);
   }
 
   // Expect the result keys to be sorted by sort-based groupby
@@ -196,6 +190,10 @@ TYPED_TEST(CollectSetTypedTest, CollectWithNulls)
                           {{null, null, null, null}, VALIDITY{false, false, false, false}},
                           {{40}, VALIDITY{true}}};
     test_single_agg(keys, vals, keys_expected, vals_expected, COLLECT_SET_NULL_UNEQUAL);
+
+    // All nulls per key are excluded
+    vals_expected = LCL_V{{10}, {20, 21}, {}, {40}};
+    test_single_agg(keys, vals, keys_expected, vals_expected, COLLECT_SET_NULL_EXCLUDE);
   }
 }
 
