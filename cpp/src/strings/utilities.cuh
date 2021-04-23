@@ -184,11 +184,7 @@ make_strings_children_with_null_mask(
 
   // Finally compute null mask and null count from the validities array
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    validities.begin(),
-    validities.end(),
-    [] __device__(auto const valid) { return valid; },
-    stream,
-    mr);
+    validities.begin(), validities.end(), thrust::identity<int8_t>{}, stream, mr);
 
   return std::make_tuple(std::move(offsets_column),
                          std::move(chars_column),
