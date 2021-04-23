@@ -173,13 +173,13 @@ TYPED_TEST(ListConcatenateRowsTypedTest, SimpleInputWithNulls)
     auto const results =
       cudf::lists::concatenate_rows(TView{{col1->view(), col2->view(), col3->view()}});
     auto const expected =
-      ListsCol{{ListsCol{{1, null, 3, 4, 10, 11, 12, null}, null_at({1, 7})},
-                ListsCol{{null, 2, 3, 4, 13, 14, 15, 16, 17, null, 20, null}, null_at({0, 9, 11})},
-                ListsCol{{null, 2, 3, 4, null, 21, null, null}, null_at({0, 4, 6, 7})},
-                ListsCol{{null, 18}, null_at(0)},
-                ListsCol{{1, 2, null, 4, 19, 20, null, 22, 23, 24, 25}, null_at({2, 6})},
-                ListsCol{{1, 2, 3, null, null, null, null, null, null, null},
-                         null_at({3, 4, 5, 6, 7, 8, 9})}}}
+      ListsCol{ListsCol{{1, null, 3, 4, 10, 11, 12, null}, null_at({1, 7})},
+               ListsCol{{null, 2, 3, 4, 13, 14, 15, 16, 17, null, 20, null}, null_at({0, 9, 11})},
+               ListsCol{{null, 2, 3, 4, null, 21, null, null}, null_at({0, 4, 6, 7})},
+               ListsCol{{null, 18}, null_at(0)},
+               ListsCol{{1, 2, null, 4, 19, 20, null, 22, 23, 24, 25}, null_at({2, 6})},
+               ListsCol{{1, 2, 3, null, null, null, null, null, null, null},
+                        null_at({3, 4, 5, 6, 7, 8, 9})}}
         .release();
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
   }
@@ -258,10 +258,9 @@ TYPED_TEST(ListConcatenateRowsTypedTest, SlicedColumnsInputNoNull)
   auto const col3         = cudf::slice(col_original->view(), {2, 5})[0];
   auto const col4         = cudf::slice(col_original->view(), {3, 6})[0];
   auto const expected     = ListsCol{
-    {1, 2, 3, 2, 3, 3, 4, 5, 6},
+    {1, 2, 3, 2, 3, 3, 4, 5, 6, 5, 6},
     {2, 3, 3, 4, 5, 6, 5, 6},
-    {3, 4, 5, 6, 5, 6},
-    {5, 6, 7}}.release();
+    {3, 4, 5, 6, 5, 6, 7}}.release();
   auto const results = cudf::lists::concatenate_rows(TView{{col1, col2, col3, col4}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
 }
@@ -269,10 +268,10 @@ TYPED_TEST(ListConcatenateRowsTypedTest, SlicedColumnsInputNoNull)
 TYPED_TEST(ListConcatenateRowsTypedTest, SlicedColumnsInputWithNulls)
 {
   auto const col_original = ListsCol{{ListsCol{{null, 2, 3}, null_at(0)},
-                                      ListsCol{{2, 3}}, /*NULL*/
+                                      ListsCol{2, 3}, /*NULL*/
                                       ListsCol{{3, null, 5, 6}, null_at(1)},
-                                      ListsCol{{5, 6}}, /*NULL*/
-                                      ListsCol{},       /*NULL*/
+                                      ListsCol{5, 6}, /*NULL*/
+                                      ListsCol{},     /*NULL*/
                                       ListsCol{7},
                                       ListsCol{8, 9, 10}},
                                      null_at({1, 3, 4})}
