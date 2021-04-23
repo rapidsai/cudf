@@ -25,6 +25,28 @@ def assert_equal_tokenization_outputs(hf_output, cudf_output):
     )
 
 
+def test_subword_tokenize_on_disk_vocab_str_api(datadir):
+    """
+    Tests the subword-tokenizer API where
+    the vocabulary is not pre-loaded
+    and is accessed via the string accessor
+    """
+    with open(os.path.join(datadir, "test_sentences.txt")) as file:
+        input_sentence_ls = [line.strip() for line in file]
+
+    vocab_dir = os.path.join(datadir, "bert_base_cased_sampled")
+    vocab_hash_path = os.path.join(vocab_dir, "vocab-hash.txt")
+
+    ser = cudf.Series(input_sentence_ls)
+    tokens, masks, metadata = ser.str.subword_tokenize(
+        vocab_hash_path,
+        max_length=32,
+        stride=32,
+        do_lower=True,
+        max_rows_tensor=len(ser),
+    )
+
+
 @pytest.mark.parametrize("seq_len", [32, 64])
 @pytest.mark.parametrize("stride", [0, 15, 30])
 @pytest.mark.parametrize("add_special_tokens", [True, False])
