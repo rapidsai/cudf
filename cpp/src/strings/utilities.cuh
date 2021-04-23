@@ -131,6 +131,7 @@ auto make_strings_children(
  *                         is called again to fill in the chars memory. The `d_validities` array may
  *                         be modified to set the value `0` for the corresponding rows that contain
  *                         null string elements.
+ * @param exec_size Range for executing the function `size_and_exec_fn`.
  * @param strings_count Number of strings.
  * @param mr Device memory resource used to allocate the returned columns' device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -140,6 +141,7 @@ template <typename SizeAndExecuteFunction>
 std::tuple<std::unique_ptr<column>, std::unique_ptr<column>, rmm::device_buffer, size_type>
 make_strings_children_with_null_mask(
   SizeAndExecuteFunction size_and_exec_fn,
+  size_type exec_size,
   size_type strings_count,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
@@ -154,10 +156,10 @@ make_strings_children_with_null_mask(
   size_and_exec_fn.d_validities = validities.begin();
 
   // This is called twice: once for offsets and validities, and once for chars
-  auto for_each_fn = [strings_count, stream](SizeAndExecuteFunction& size_and_exec_fn) {
+  auto for_each_fn = [exec_size, stream](SizeAndExecuteFunction& size_and_exec_fn) {
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
+                       exec_size,
                        size_and_exec_fn);
   };
 

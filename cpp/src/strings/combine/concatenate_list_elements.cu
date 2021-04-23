@@ -156,7 +156,7 @@ std::unique_ptr<column> concatenate_list_elements(lists_column_view const& lists
     string_narep_dv,
   };
   auto [offsets_column, chars_column, null_mask, null_count] =
-    make_strings_children_with_null_mask(comp_fn, num_rows, stream, mr);
+    make_strings_children_with_null_mask(comp_fn, num_rows, num_rows, stream, mr);
 
   return make_strings_column(num_rows,
                              std::move(offsets_column),
@@ -227,7 +227,7 @@ std::unique_ptr<column> concatenate_list_elements(lists_column_view const& lists
     string_narep_dv,
   };
   auto [offsets_column, chars_column, null_mask, null_count] =
-    make_strings_children_with_null_mask(comp_fn, num_rows, stream, mr);
+    make_strings_children_with_null_mask(comp_fn, num_rows, num_rows, stream, mr);
 
   return make_strings_column(num_rows,
                              std::move(offsets_column),
