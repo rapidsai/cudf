@@ -334,9 +334,8 @@ struct dispatch_from_fixed_point_fn {
     // build chars column
     auto const bytes =
       cudf::detail::get_value<int32_t>(offsets_column->view(), input.size(), stream);
-    auto chars_column =
-      detail::create_chars_child_column(input.size(), input.null_count(), bytes, stream, mr);
-    auto d_chars = chars_column->mutable_view().template data<char>();
+    auto chars_column = detail::create_chars_child_column(input.size(), bytes, stream, mr);
+    auto d_chars      = chars_column->mutable_view().template data<char>();
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        input.size(),

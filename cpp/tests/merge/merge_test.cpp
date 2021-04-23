@@ -30,8 +30,6 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
-
 #include <vector>
 
 template <typename T>

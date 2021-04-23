@@ -21,8 +21,8 @@
 
 #pragma once
 
-#include <io/parquet/parquet.hpp>
-#include <io/parquet/parquet_gpu.hpp>
+#include "parquet.hpp"
+#include "parquet_gpu.hpp"
 
 #include <cudf/io/data_sink.hpp>
 #include <io/utilities/hostdevice_vector.hpp>

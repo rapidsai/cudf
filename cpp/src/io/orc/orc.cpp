@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include <io/orc/orc.h>
-#include <io/orc/orc_field_reader.hpp>
-#include <io/orc/orc_field_writer.hpp>
+#include "orc.h"
 #include <string>
+#include "orc_field_reader.hpp"
+#include "orc_field_writer.hpp"
 
 namespace cudf {
 namespace io {

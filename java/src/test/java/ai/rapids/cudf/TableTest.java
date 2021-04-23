@@ -4345,6 +4345,65 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByContiguousSplitGroups() {
+    ContiguousTable[] splits = null;
+    try (Table table = new Table.TestBuilder()
+        .column(   1,    1,    1,    1,    1,    1)
+        .column(   1,    3,    3,    5,    5,    5)
+        .column(  12,   14,   13,   17,   16,   18)
+        .column("s1", "s2", "s3", "s4", "s5", "s6")
+        .build()) {
+      // Normal case with primitive types.
+      try (Table expected1 = new Table.TestBuilder()
+              .column(   1)
+              .column(   1)
+              .column(  12)
+              .column("s1").build();
+           Table expected2 = new Table.TestBuilder()
+              .column(   1,    1)
+              .column(   3,    3)
+              .column(  14,   13)
+              .column("s2", "s3").build();
+           Table expected3 = new Table.TestBuilder()
+              .column(   1,    1,    1)
+              .column(   5,    5,    5)
+              .column(  17,   16,   18)
+              .column("s4", "s5", "s6").build()) {
+        try {
+          splits = table.groupBy(0, 1).contiguousSplitGroups();
+          assertEquals(3, splits.length);
+          for (ContiguousTable ct : splits) {
+            if (ct.getRowCount() == 1) {
+              assertTablesAreEqual(expected1, ct.getTable());
+            } else if (ct.getRowCount() == 2) {
+              assertTablesAreEqual(expected2, ct.getTable());
+            } else {
+              assertTablesAreEqual(expected3, ct.getTable());
+            }
+          }
+        } finally {
+          if (splits != null) {
+            for (ContiguousTable t : splits) { t.close(); }
+          }
+          splits = null;
+        }
+      }
+
+      // Empty key columns, the whole table is a group.
+      try {
+        splits = table.groupBy().contiguousSplitGroups();
+        assertEquals(1, splits.length);
+        assertTablesAreEqual(table, splits[0].getTable());
+      } finally {
+        if (splits != null) {
+          for (ContiguousTable t : splits) { t.close(); }
+        }
+      }
+
+    }
+  }
+
+  @Test
   void testRowBitCount() {
     try (Table t = new Table.TestBuilder()
         .column(0, 1, null, 3)                 // 33 bits per row (4 bytes + valid bit)
@@ -5110,7 +5169,7 @@ public class TableTest extends CudfTestBase {
       Table.TestBuilder expectedBuilder = new Table.TestBuilder();
       if (pos) {
         if (outer) {
-          expectedBuilder.column(0, 1, 2, 0, 1, 0, null, null);
+          expectedBuilder.column(0, 1, 2, 0, 1, 0, 0, null);
         } else {
           expectedBuilder.column(0, 1, 2, 0, 1, 0, 0);
         }
