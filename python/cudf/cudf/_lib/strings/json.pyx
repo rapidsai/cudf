@@ -16,6 +16,8 @@ from cudf._lib.cpp.strings.json cimport (
 
 def get_json_object(Column col, object py_json_path):
     """
+    Apply a JSONPath string to all rows in an input column
+    of json strings.
     """
     cdef unique_ptr[column] c_result
 

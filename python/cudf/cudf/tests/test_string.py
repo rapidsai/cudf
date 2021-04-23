@@ -2931,3 +2931,27 @@ def test_string_slice_with_mask():
     assert_eq(actual._column.null_count, expected._column.null_count)
 
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "json_path", ["$.store", "$.store.book" "$.store.book[0].category"]
+)
+def test_string_get_json_object(json_path):
+    sr = cudf.Series(
+        [
+            """{"store": {
+    "book": [
+      { "category": "reference",
+        "author": "Nigel Rees",
+        "title": "Sayings of the Century",
+        "price": 8.95
+      },
+      { "category": "fiction",
+        "author": "Evelyn Waugh",
+        "title": "Sword of Honour",
+        "price": 12.99
+      },
+    ]}}"""
+        ]
+    )
+    sr.str.extract_json(json_path)
