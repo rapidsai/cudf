@@ -71,13 +71,7 @@ struct range_window_bounds {
   const bool _is_unbounded{false};
   std::shared_ptr<scalar> _range_scalar{nullptr};
 
-  range_window_bounds(bool is_unbounded_, scalar* range_scalar_)
-    : _is_unbounded{is_unbounded_}, _range_scalar{range_scalar_}
-  {
-    assert_invariants();
-  }
-
-  void assert_invariants() const;
+  range_window_bounds(bool is_unbounded_, scalar* range_scalar_);
 };
 
 }  // namespace cudf

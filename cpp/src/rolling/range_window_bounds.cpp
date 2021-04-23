@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,8 @@ struct range_scalar_constructor {
 
 }  // namespace
 
-void range_window_bounds::assert_invariants() const
+range_window_bounds::range_window_bounds(bool is_unbounded_, scalar* range_scalar_)
+  : _is_unbounded{is_unbounded_}, _range_scalar{range_scalar_}
 {
   CUDF_EXPECTS(_range_scalar.get(), "Range window scalar cannot be null.");
   CUDF_EXPECTS(_is_unbounded || _range_scalar->is_valid(),

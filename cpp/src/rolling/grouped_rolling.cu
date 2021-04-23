@@ -832,6 +832,9 @@ struct dispatch_grouped_range_rolling_window {
   }
 };
 
+/**
+ * @brief Functor to convert from size_type (number of days) to appropriate duration type.
+ */
 struct to_duration_bounds {
   template <typename OrderBy, std::enable_if_t<cudf::is_timestamp<OrderBy>(), void>* = nullptr>
   range_window_bounds operator()(size_type num_days) const
@@ -847,11 +850,31 @@ struct to_duration_bounds {
   }
 };
 
+/**
+ * @brief Bridge function to convert from size_type (number of days) to appropriate duration type.
+ *
+ * This helps adapt the old `grouped_time_range_rolling_window()` functions that took a "number of
+ * days" to the new `range_window_bounds` interface.
+ *
+ * @param num_days Window bounds specified in number of days in `size_type`
+ * @param timestamp_type Data-type of the orderby column to which the `num_days` is to be adapted.
+ * @return range_window_bounds A `range_window_bounds` to be used with the new API.
+ */
 range_window_bounds to_range_bounds(cudf::size_type num_days, cudf::data_type timestamp_type)
 {
   return cudf::type_dispatcher(timestamp_type, to_duration_bounds{}, num_days);
 }
 
+/**
+ * @brief Bridge function to convert from `window_bounds` (in days) to appropriate duration type.
+ *
+ * This helps adapt the old `grouped_time_range_rolling_window()` functions that took a
+ * `window_bounds` to the new `range_window_bounds` interface.
+ *
+ * @param days_bounds The static window-width `window_bounds` object
+ * @param timestamp_type Data-type of the orderby column to which the `num_days` is to be adapted.
+ * @return range_window_bounds A `range_window_bounds` to be used with the new API.
+ */
 range_window_bounds to_range_bounds(cudf::window_bounds const& days_bounds,
                                     cudf::data_type timestamp_type)
 {
@@ -865,6 +888,20 @@ range_window_bounds to_range_bounds(cudf::window_bounds const& days_bounds,
 
 namespace detail {
 
+/**
+ * @copydoc  std::unique_ptr<column> grouped_range_rolling_window(
+ *               table_view const& group_keys,
+ *               column_view const& orderby_column,
+ *               cudf::order const& order,
+ *               column_view const& input,
+ *               range_window_bounds const& preceding,
+ *               range_window_bounds const& following,
+ *               size_type min_periods,
+ *               std::unique_ptr<aggregation> const& aggr,
+ *               rmm::mr::device_memory_resource* mr );
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
 std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_keys,
                                                      column_view const& order_by_column,
                                                      cudf::order const& order,
@@ -912,6 +949,18 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
 
 }  // namespace detail
 
+/**
+ * @copydoc std::unique_ptr<column> grouped_time_range_rolling_window(
+ *              table_view const& group_keys,
+ *              column_view const& timestamp_column,
+ *              cudf::order const& timestamp_order,
+ *              column_view const& input,
+ *              size_type preceding_window_in_days,
+ *              size_type following_window_in_days,
+ *              size_type min_periods,
+ *              std::unique_ptr<aggregation> const& aggr,
+ *              rmm::mr::device_memory_resource* mr);
+ */
 std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& group_keys,
                                                           column_view const& timestamp_column,
                                                           cudf::order const& timestamp_order,
@@ -936,6 +985,18 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                       mr);
 }
 
+/**
+ * @copydoc std::unique_ptr<column> grouped_time_range_rolling_window(
+ *            table_view const& group_keys,
+ *            column_view const& timestamp_column,
+ *            cudf::order const& timestamp_order,
+ *            column_view const& input,
+ *            window_bounds preceding_window_in_days,
+ *            window_bounds following_window_in_days,
+ *            size_type min_periods,
+ *            std::unique_ptr<aggregation> const& aggr,
+ *            rmm::mr::device_memory_resource* mr);
+ */
 std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& group_keys,
                                                           column_view const& timestamp_column,
                                                           cudf::order const& timestamp_order,
@@ -963,6 +1024,18 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                       mr);
 }
 
+/**
+ * @copydoc  std::unique_ptr<column> grouped_range_rolling_window(
+ *               table_view const& group_keys,
+ *               column_view const& orderby_column,
+ *               cudf::order const& order,
+ *               column_view const& input,
+ *               range_window_bounds const& preceding,
+ *               range_window_bounds const& following,
+ *               size_type min_periods,
+ *               std::unique_ptr<aggregation> const& aggr,
+ *               rmm::mr::device_memory_resource* mr );
+ */
 std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_keys,
                                                      column_view const& timestamp_column,
                                                      cudf::order const& timestamp_order,

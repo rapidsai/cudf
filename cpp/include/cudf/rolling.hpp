@@ -266,7 +266,7 @@ std::unique_ptr<column> grouped_rolling_window(
 
 /**
  * @brief  Applies a grouping-aware, timestamp-based rolling window function to the values in a
- *column.
+ *         column.
  *
  * Like `rolling_window()`, this function aggregates values in a window around each
  * element of a specified `input` column. It differs from `rolling_window()` in two respects:
@@ -359,16 +359,36 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc  std::unique_ptr<column> grouped_time_range_rolling_window(
- *             table_view const& group_keys,
- *             column_view const& timestamp_column,
- *             cudf::order const& timestamp_order,
- *             column_view const& input,
- *             size_type preceding_window_in_days,
- *             size_type following_window_in_days,
- *             size_type min_periods,
- *             std::unique_ptr<aggregation> const& aggr,
- *             rmm::mr::device_memory_resource* mr)
+ * @brief  Applies a grouping-aware, timestamp-based rolling window function to the values in a
+ *         column
+ *
+ * @copydetail  std::unique_ptr<column> grouped_time_range_rolling_window(
+ *                table_view const& group_keys,
+ *                column_view const& timestamp_column,
+ *                cudf::order const& timestamp_order,
+ *                column_view const& input,
+ *                size_type preceding_window_in_days,
+ *                size_type following_window_in_days,
+ *                size_type min_periods,
+ *                std::unique_ptr<aggregation> const& aggr,
+ *                rmm::mr::device_memory_resource* mr)
+ *
+ * The `preceding_window_in_days` and `following_window_in_days` supports "unbounded" windows,
+ * if set to `window_bounds::unbounded()`.
+ *
+ * @param[in] group_keys The (pre-sorted) grouping columns
+ * @param[in] timestamp_column The (pre-sorted) timestamps for each row
+ * @param[in] timestamp_order  The order (ASCENDING/DESCENDING) in which the timestamps are sorted
+ * @param[in] input The input column (to be aggregated)
+ * @param[in] preceding_window_in_days Possibly unbounded time-interval in the backward direction,
+ *                                     specified as a `window_bounds`
+ * @param[in] following_window_in_days Possibly unbounded time-interval in the forward direction,
+ *                                     specified as a `window_bounds`
+ * @param[in] min_periods Minimum number of observations in window required to have a value,
+ *                        otherwise element `i` is null.
+ * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
+ *
+ * @returns   A nullable output column containing the rolling window results
  */
 std::unique_ptr<column> grouped_time_range_rolling_window(
   table_view const& group_keys,
