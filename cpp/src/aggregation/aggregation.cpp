@@ -22,142 +22,214 @@
 
 namespace cudf {
 
-std::vector<aggregation::Kind> aggregation::get_simple_aggregations(data_type col_type) const
+std::vector<std::unique_ptr<aggregation>> aggregation::get_simple_aggregations(
+  data_type col_type) const
 {
-  return {this->kind};
-}
-void aggregation::finalize(cudf::detail::aggregation_finalizer& finalizer)
-{
-  finalizer.visit(*this);
+  std::vector<std::unique_ptr<aggregation>> aggs;
+  aggs.push_back(clone());
+  return aggs;
 }
 
 /// Factory to create a SUM aggregation
-std::unique_ptr<aggregation> make_sum_aggregation()
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_sum_aggregation()
 {
-  return std::make_unique<aggregation>(aggregation::SUM);
+  return std::make_unique<detail::sum_aggregation>();
 }
+template std::unique_ptr<aggregation> make_sum_aggregation<aggregation>();
+
 /// Factory to create a PRODUCT aggregation
-std::unique_ptr<aggregation> make_product_aggregation()
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_product_aggregation()
 {
-  return std::make_unique<aggregation>(aggregation::PRODUCT);
+  return std::make_unique<detail::product_aggregation>();
 }
+template std::unique_ptr<aggregation> make_product_aggregation<aggregation>();
+
 /// Factory to create a MIN aggregation
-std::unique_ptr<aggregation> make_min_aggregation()
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_min_aggregation()
 {
   return std::make_unique<detail::min_aggregation>();
 }
+template std::unique_ptr<aggregation> make_min_aggregation<aggregation>();
+
 /// Factory to create a MAX aggregation
-std::unique_ptr<aggregation> make_max_aggregation()
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_max_aggregation()
 {
   return std::make_unique<detail::max_aggregation>();
 }
+template std::unique_ptr<aggregation> make_max_aggregation<aggregation>();
+
 /// Factory to create a COUNT aggregation
-std::unique_ptr<aggregation> make_count_aggregation(null_policy null_handling)
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_count_aggregation(null_policy null_handling)
 {
   auto kind =
     (null_handling == null_policy::INCLUDE) ? aggregation::COUNT_ALL : aggregation::COUNT_VALID;
-  return std::make_unique<aggregation>(kind);
+  return std::make_unique<detail::count_aggregation>(kind);
 }
+template std::unique_ptr<aggregation> make_count_aggregation<aggregation>(
+  null_policy null_handling);
+
 /// Factory to create a ANY aggregation
-std::unique_ptr<aggregation> make_any_aggregation()
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_any_aggregation()
 {
-  return std::make_unique<aggregation>(aggregation::ANY);
+  return std::make_unique<detail::any_aggregation>();
 }
+template std::unique_ptr<aggregation> make_any_aggregation<aggregation>();
+
 /// Factory to create a ALL aggregation
-std::unique_ptr<aggregation> make_all_aggregation()
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_all_aggregation()
 {
-  return std::make_unique<aggregation>(aggregation::ALL);
+  return std::make_unique<detail::all_aggregation>();
 }
+template std::unique_ptr<aggregation> make_all_aggregation<aggregation>();
+
 /// Factory to create a SUM_OF_SQUARES aggregation
-std::unique_ptr<aggregation> make_sum_of_squares_aggregation()
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_sum_of_squares_aggregation()
 {
-  return std::make_unique<aggregation>(aggregation::SUM_OF_SQUARES);
+  return std::make_unique<detail::sum_of_squares_aggregation>();
 }
+template std::unique_ptr<aggregation> make_sum_of_squares_aggregation<aggregation>();
+
 /// Factory to create a MEAN aggregation
-std::unique_ptr<aggregation> make_mean_aggregation()
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_mean_aggregation()
 {
   return std::make_unique<detail::mean_aggregation>();
 }
+template std::unique_ptr<aggregation> make_mean_aggregation<aggregation>();
+
 /// Factory to create a VARIANCE aggregation
-std::unique_ptr<aggregation> make_variance_aggregation(size_type ddof)
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_variance_aggregation(size_type ddof)
 {
   return std::make_unique<detail::var_aggregation>(ddof);
-};
+}
+template std::unique_ptr<aggregation> make_variance_aggregation<aggregation>(size_type ddof);
+
 /// Factory to create a STD aggregation
-std::unique_ptr<aggregation> make_std_aggregation(size_type ddof)
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_std_aggregation(size_type ddof)
 {
   return std::make_unique<detail::std_aggregation>(ddof);
-};
-/// Factory to create a MEDIAN aggregation
-std::unique_ptr<aggregation> make_median_aggregation()
-{
-  // TODO I think this should just return a quantile_aggregation?
-  return std::make_unique<aggregation>(aggregation::MEDIAN);
 }
+template std::unique_ptr<aggregation> make_std_aggregation<aggregation>(size_type ddof);
+
+/// Factory to create a MEDIAN aggregation
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_median_aggregation()
+{
+  return std::make_unique<detail::median_aggregation>();
+}
+template std::unique_ptr<aggregation> make_median_aggregation<aggregation>();
+
 /// Factory to create a QUANTILE aggregation
-std::unique_ptr<aggregation> make_quantile_aggregation(std::vector<double> const& q,
-                                                       interpolation i)
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_quantile_aggregation(std::vector<double> const& q, interpolation i)
 {
   return std::make_unique<detail::quantile_aggregation>(q, i);
 }
-/// Factory to create a ARGMAX aggregation
-std::unique_ptr<aggregation> make_argmax_aggregation()
+template std::unique_ptr<aggregation> make_quantile_aggregation<aggregation>(
+  std::vector<double> const& q, interpolation i);
+
+/// Factory to create an ARGMAX aggregation
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_argmax_aggregation()
 {
-  return std::make_unique<aggregation>(aggregation::ARGMAX);
+  return std::make_unique<detail::argmax_aggregation>();
 }
-/// Factory to create a ARGMIN aggregation
-std::unique_ptr<aggregation> make_argmin_aggregation()
+template std::unique_ptr<aggregation> make_argmax_aggregation<aggregation>();
+
+/// Factory to create an ARGMIN aggregation
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_argmin_aggregation()
 {
-  return std::make_unique<aggregation>(aggregation::ARGMIN);
+  return std::make_unique<detail::argmin_aggregation>();
 }
-/// Factory to create a NUNIQUE aggregation
-std::unique_ptr<aggregation> make_nunique_aggregation(null_policy null_handling)
+template std::unique_ptr<aggregation> make_argmin_aggregation<aggregation>();
+
+/// Factory to create an NUNIQUE aggregation
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_nunique_aggregation(null_policy null_handling)
 {
   return std::make_unique<detail::nunique_aggregation>(null_handling);
 }
-/// Factory to create a NTH_ELEMENT aggregation
-std::unique_ptr<aggregation> make_nth_element_aggregation(size_type n, null_policy null_handling)
+template std::unique_ptr<aggregation> make_nunique_aggregation<aggregation>(
+  null_policy null_handling);
+
+/// Factory to create an NTH_ELEMENT aggregation
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_nth_element_aggregation(size_type n, null_policy null_handling)
 {
   return std::make_unique<detail::nth_element_aggregation>(n, null_handling);
 }
+template std::unique_ptr<aggregation> make_nth_element_aggregation<aggregation>(
+  size_type n, null_policy null_handling);
+
 /// Factory to create a ROW_NUMBER aggregation
-std::unique_ptr<aggregation> make_row_number_aggregation()
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_row_number_aggregation()
 {
-  return std::make_unique<aggregation>(aggregation::ROW_NUMBER);
+  return std::make_unique<detail::row_number_aggregation>();
 }
+template std::unique_ptr<aggregation> make_row_number_aggregation<aggregation>();
+
 /// Factory to create a COLLECT_LIST aggregation
-std::unique_ptr<aggregation> make_collect_list_aggregation(null_policy null_handling)
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_collect_list_aggregation(null_policy null_handling)
 {
   return std::make_unique<detail::collect_list_aggregation>(null_handling);
 }
+template std::unique_ptr<aggregation> make_collect_list_aggregation<aggregation>(
+  null_policy null_handling);
+
 /// Factory to create a COLLECT_SET aggregation
-std::unique_ptr<aggregation> make_collect_set_aggregation(null_policy null_handling,
-                                                          null_equality nulls_equal,
-                                                          nan_equality nans_equal)
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_collect_set_aggregation(null_policy null_handling,
+                                                   null_equality nulls_equal,
+                                                   nan_equality nans_equal)
 {
   return std::make_unique<detail::collect_set_aggregation>(null_handling, nulls_equal, nans_equal);
 }
+template std::unique_ptr<aggregation> make_collect_set_aggregation<aggregation>(
+  null_policy null_handling, null_equality nulls_equal, nan_equality nans_equal);
+
 /// Factory to create a LAG aggregation
-std::unique_ptr<aggregation> make_lag_aggregation(size_type offset)
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_lag_aggregation(size_type offset)
 {
-  return std::make_unique<cudf::detail::lead_lag_aggregation>(aggregation::LAG, offset);
+  return std::make_unique<detail::lead_lag_aggregation>(aggregation::LAG, offset);
 }
+template std::unique_ptr<aggregation> make_lag_aggregation<aggregation>(size_type offset);
+
 /// Factory to create a LEAD aggregation
-std::unique_ptr<aggregation> make_lead_aggregation(size_type offset)
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_lead_aggregation(size_type offset)
 {
-  return std::make_unique<cudf::detail::lead_lag_aggregation>(aggregation::LEAD, offset);
+  return std::make_unique<detail::lead_lag_aggregation>(aggregation::LEAD, offset);
 }
+template std::unique_ptr<aggregation> make_lead_aggregation<aggregation>(size_type offset);
+
 /// Factory to create a UDF aggregation
-std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
-                                                  std::string const& user_defined_aggregator,
-                                                  data_type output_type)
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_udf_aggregation(udf_type type,
+                                           std::string const& user_defined_aggregator,
+                                           data_type output_type)
 {
-  aggregation* a =
+  auto* a =
     new detail::udf_aggregation{type == udf_type::PTX ? aggregation::PTX : aggregation::CUDA,
                                 user_defined_aggregator,
                                 output_type};
-  return std::unique_ptr<aggregation>(a);
+  return std::unique_ptr<detail::udf_aggregation>(a);
 }
+template std::unique_ptr<aggregation> make_udf_aggregation<aggregation>(
+  udf_type type, std::string const& user_defined_aggregator, data_type output_type);
 
 namespace detail {
 namespace {
