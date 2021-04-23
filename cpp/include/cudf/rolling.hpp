@@ -362,7 +362,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  * @brief  Applies a grouping-aware, timestamp-based rolling window function to the values in a
  *         column
  *
- * @copydetail  std::unique_ptr<column> grouped_time_range_rolling_window(
+ * @copydetails  std::unique_ptr<column> grouped_time_range_rolling_window(
  *                table_view const& group_keys,
  *                column_view const& timestamp_column,
  *                cudf::order const& timestamp_order,
