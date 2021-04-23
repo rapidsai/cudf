@@ -557,6 +557,8 @@ struct segmented_valid_cnt_input {
 encoded_data writer::impl::encode_columns(const table_device_view &view,
                                           host_span<orc_column_view const> columns,
                                           std::vector<int> const &str_col_ids,
+                                          rmm::device_uvector<uint32_t> &&dict_data,
+                                          rmm::device_uvector<uint32_t> &&dict_index,
                                           host_span<stripe_rowgroups const> stripe_bounds,
                                           orc_streams const &streams)
 {
@@ -698,6 +700,8 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
   // DECIMAL: add encode here, bail on decimal type in EncodeOrcColumnData
 
   gpu::EncodeOrcColumnData(chunks, chunk_streams, stream);
+  dict_data.release();
+  dict_index.release();
   stream.synchronize();
 
   return {std::move(encoded_data), std::move(chunk_streams)};
@@ -1100,8 +1104,8 @@ void writer::impl::write(table_view const &table)
     if (orc_columns.back().is_string()) { str_col_ids.push_back(current_id); }
   }
 
-  rmm::device_uvector<uint32_t> dict_index(str_col_ids.size() * num_rows, stream);
   rmm::device_uvector<uint32_t> dict_data(str_col_ids.size() * num_rows, stream);
+  rmm::device_uvector<uint32_t> dict_index(str_col_ids.size() * num_rows, stream);
 
   // Build per-column dictionary indices
   const auto num_rowgroups   = div_by_rowgroups<size_t>(num_rows);
@@ -1140,8 +1144,13 @@ void writer::impl::write(table_view const &table)
   // total size is used on host
 
   auto streams  = create_streams(orc_columns, stripe_bounds);
-  auto enc_data = encode_columns(*device_columns, orc_columns, str_col_ids, stripe_bounds, streams);
-
+  auto enc_data = encode_columns(*device_columns,
+                                 orc_columns,
+                                 str_col_ids,
+                                 std::move(dict_data),
+                                 std::move(dict_index),
+                                 stripe_bounds,
+                                 streams);
   // Assemble individual disparate column chunks into contiguous data streams
   const auto num_index_streams = (num_columns + 1);
   const auto num_data_streams  = streams.size() - num_index_streams;

@@ -45,6 +45,28 @@ def test_init_via_list_of_tuples():
     assert_eq(pdf, gdf)
 
 
+@pytest.mark.parametrize("columns", [["a", "b"], pd.Series(["a", "b"])])
+def test_init_via_list_of_series(columns):
+    data = [pd.Series([1, 2]), pd.Series([3, 4])]
+
+    pdf = cudf.DataFrame(data, columns=columns)
+    gdf = cudf.DataFrame(data, columns=columns)
+
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize("index", [None, [0, 1, 2]])
+def test_init_with_missing_columns(index):
+    """Test initialization when columns and data keys are disjoint."""
+    data = {"a": [1, 2, 3], "b": [2, 3, 4]}
+    columns = ["c", "d"]
+
+    pdf = cudf.DataFrame(data, columns=columns, index=index)
+    gdf = cudf.DataFrame(data, columns=columns, index=index)
+
+    assert_eq(pdf, gdf)
+
+
 def _dataframe_na_data():
     return [
         pd.DataFrame(
@@ -1068,6 +1090,13 @@ def test_dataframe_setitem_index_len1():
     gdf["b"] = gdf.index._values
 
     np.testing.assert_equal(gdf.b.to_array(), [0])
+
+
+def test_empty_dataframe_setitem_df():
+    gdf1 = cudf.DataFrame()
+    gdf2 = cudf.DataFrame({"a": [1, 2, 3, 4, 5]})
+    gdf1["a"] = gdf2["a"]
+    assert_eq(gdf1, gdf2)
 
 
 def test_assign():
@@ -7800,6 +7829,7 @@ def test_equals_dtypes():
     [
         pd.DataFrame({"a": [10, 11, 12]}, index=["a", "b", "z"]),
         pd.DataFrame({"z": ["a"]}),
+        pd.DataFrame({"a": [], "b": []}),
     ],
 )
 @pytest.mark.parametrize(
