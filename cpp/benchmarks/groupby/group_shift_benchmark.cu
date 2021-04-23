@@ -16,7 +16,6 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf/debug_printers.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/groupby.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -59,7 +58,7 @@ void BM_group_shift(benchmark::State& state)
   cudf::groupby::groupby gb_obj(cudf::table_view({keys}));
 
   cudf::size_type offset =
-    static_cast<cudf::size_type>(column_size / 100.0 * 0.5);  // forward shift half way
+    static_cast<cudf::size_type>(column_size / float(num_groups) * 0.5);  // forward shift half way
   // null fill value
   auto fill_value = cudf::make_default_constructed_scalar(cudf::data_type(cudf::type_id::INT64));
   // non null fill value
