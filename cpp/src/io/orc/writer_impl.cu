@@ -23,6 +23,7 @@
 
 #include <io/utilities/column_utils.cuh>
 
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/span.hpp>
@@ -73,7 +74,7 @@ orc::CompressionKind to_orc_compression(compression_type compression)
 /**
  * @brief Function that translates GDF dtype to ORC datatype
  */
-constexpr orc::TypeKind to_orc_type(cudf::type_id id)
+orc::TypeKind to_orc_type(cudf::type_id id)
 {
   switch (id) {
     case cudf::type_id::INT8: return TypeKind::BYTE;
@@ -89,6 +90,8 @@ constexpr orc::TypeKind to_orc_type(cudf::type_id id)
     case cudf::type_id::TIMESTAMP_MILLISECONDS:
     case cudf::type_id::TIMESTAMP_NANOSECONDS: return TypeKind::TIMESTAMP;
     case cudf::type_id::STRING: return TypeKind::STRING;
+    case cudf::type_id::DECIMAL32:
+    case cudf::type_id::DECIMAL64: return TypeKind::DECIMAL;
     default: return TypeKind::INVALID_TYPE_KIND;
   }
 }
@@ -216,6 +219,11 @@ class orc_column_view {
   gpu::StripeDictionary const *stripe_dict = nullptr;
   gpu::DictionaryChunk *d_dict             = nullptr;
   gpu::StripeDictionary *d_stripe_dict     = nullptr;
+};
+
+struct encoder_decimal_info {
+  std::vector<rmm::device_uvector<uint32_t>> elem_sizes;
+  std::vector<std::vector<uint32_t>> rg_sizes;
 };
 
 std::vector<stripe_rowgroups> writer::impl::gather_stripe_info(
@@ -1027,6 +1035,42 @@ rmm::device_uvector<size_type> get_string_column_ids(const table_device_view &vi
   return string_column_ids;
 }
 
+// returns host vector of per-rowgroup sizes
+// TODO: return a col_idx -> vector map?
+encoder_decimal_info decimal_chunk_sizes(const table_view &table,
+                                         host_span<orc_column_view> orc_columns,
+                                         host_span<stripe_rowgroups const> stripes,
+                                         rmm::cuda_stream_view stream)
+{
+  std::vector<rmm::device_uvector<uint32_t>> elem_sizes;
+  // for each column, if decimal, alloc and calc sizes async; attach to column (is move okay?)
+  for (size_t col_idx = 0; col_idx < orc_columns.size(); ++col_idx) {
+    if (orc_columns[col_idx].orc_kind() == DECIMAL) {
+      elem_sizes.emplace_back(orc_columns[col_idx].data_count(), stream);
+      thrust::transform(rmm::exec_policy(stream),
+                        table.column(col_idx).begin<int64_t>(),
+                        table.column(col_idx).end<int64_t>(),
+                        elem_sizes.back().begin(),
+                        [] __device__(auto v) {
+                          uint32_t len = 1;
+                          while (v > 127) {
+                            v >>= 7u;
+                            ++len;
+                          }
+                          return len;
+                        });
+      auto const vec = cudf::detail::make_std_vector_sync(elem_sizes.back(), stream);
+      for (auto &num : vec) std::cout << num << ' ';
+      std::cout << std::endl;
+      // col.atach_decimal_sizes(elem_sizes.back().data());
+    }
+  }
+  // for each res, scan_by_key async
+  std::vector<std::vector<uint32_t>> rg_sizes;
+  // copy every 10k elem; copy to host
+  return {};
+}
+
 void writer::impl::write(table_view const &table)
 {
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
@@ -1084,8 +1128,8 @@ void writer::impl::write(table_view const &table)
       orc_columns.data(), str_col_ids, stripe_bounds, dict, dict_index.data(), stripe_dict);
   }
 
-  // DECIMAL: will probably need a special step for decimal columns to attach element size arrays
-  //  consider combining individual sizes + rg sizes + total size in a single class
+  // DECIMAL: need a step for decimal columns to attach element size arrays
+  auto const decimal_sizes = decimal_chunk_sizes(table, orc_columns, stripe_bounds, stream);
 
   // DECIMAL: to get the required info:
   //  1. compute elem sizes on device;
