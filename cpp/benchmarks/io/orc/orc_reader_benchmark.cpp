@@ -84,7 +84,7 @@ void BM_orc_read_varying_options(benchmark::State& state)
   auto const flags         = state.range(state_idx++);
   auto const use_index     = (flags & 1) != 0;
   auto const use_np_dtypes = (flags & 2) != 0;
-  auto const dec_as_float  = (flags & 4) != 0;
+
   auto const ts_type       = cudf::data_type{static_cast<cudf::type_id>(state.range(state_idx++))};
 
   auto const data_types =
@@ -107,8 +107,7 @@ void BM_orc_read_varying_options(benchmark::State& state)
       .columns(cols_to_read)
       .use_index(use_index)
       .use_np_dtypes(use_np_dtypes)
-      .timestamp_type(ts_type)
-      .decimals_as_float64(dec_as_float);
+      .timestamp_type(ts_type);
 
   auto const num_stripes              = data_size / (64 << 20);
   cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;

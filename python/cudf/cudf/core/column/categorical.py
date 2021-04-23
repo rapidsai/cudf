@@ -33,6 +33,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     min_signed_type,
     min_unsigned_type,
+    is_interval_dtype,
 )
 
 if TYPE_CHECKING:
@@ -1093,7 +1094,10 @@ class CategoricalColumn(column.ColumnBase):
 
         signed_dtype = min_signed_type(len(col.categories))
         codes = col.cat().codes.astype(signed_dtype).fillna(-1).to_array()
-        categories = col.categories.dropna(drop_nan=True).to_pandas()
+        if is_interval_dtype(col.categories.dtype):
+            categories = col.categories.to_pandas()
+        else:
+            categories = col.categories.dropna(drop_nan=True).to_pandas()
         data = pd.Categorical.from_codes(
             codes, categories=categories, ordered=col.ordered
         )

@@ -36,10 +36,6 @@ class IntervalColumn(StructColumn):
     def closed(self):
         return self._closed
 
-    @property
-    def _values(self):
-        return self
-
     @classmethod
     def from_arrow(self, data):
         new_col = super().from_arrow(data.storage)

@@ -2063,6 +2063,7 @@ class GenericIndex(Index):
         # TODO: Change below usages accordingly to
         # utilize `Index.to_string` once it is implemented
         # related issue : https://github.com/pandas-dev/pandas/issues/35389
+
         if isinstance(preprocess, CategoricalIndex):
             if preprocess.categories.dtype.kind == "f":
                 output = (
@@ -2123,12 +2124,8 @@ class GenericIndex(Index):
         return "\n".join(lines)
 
     def __getitem__(self, index):
-        if type(self) == IntervalIndex:
-            interval_arr = self.to_arrow().__array__()
-            final_arr = [interval_range(interval_arr[i]['left'], interval_arr[i]['right'], periods=1) for i in range(len(interval_arr))]
-            res = final_arr[index]
-        else:
-            res = self._values[index]
+        # if type(self) == IntervalIndex:   
+        res = self._values[index]
         if not isinstance(index, int):
             res = as_index(res)
             res.name = self.name
@@ -2750,7 +2747,6 @@ class CategoricalIndex(GenericIndex):
             data.cat().as_ordered(inplace=True)
         elif ordered is False and data.ordered is True:
             data.cat().as_unordered(inplace=True)
-
         out._initialize(data, **kwargs)
 
         return out
@@ -3103,6 +3099,8 @@ def as_index(arbitrary, **kwargs) -> Index:
         return TimedeltaIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, **kwargs)
+    elif isinstance(arbitrary, IntervalColumn):
+        return IntervalIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, cudf.Series):
         return as_index(arbitrary._column, **kwargs)
     elif isinstance(arbitrary, pd.RangeIndex):

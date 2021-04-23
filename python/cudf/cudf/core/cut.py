@@ -41,7 +41,7 @@ def cut( x,
     if right and include_lowest:
         bins[0] = adjust(bins[0])
     #get labels for categories
-    interval_labels = IntervalIndex.from_breaks(bins.get())
+    interval_labels = IntervalIndex.from_breaks(bins.get()) #handle this in break
     #get the left and right edges of the bins as columns 
     left_edges = as_column(bins[:-1:])
     right_edges = as_column(bins[+1::])
@@ -54,3 +54,21 @@ def cut( x,
         left_inclusive = True
     labels = label_bins(input_arr,left_edges, left_inclusive,right_edges,right_inclusive)
     col = build_categorical_column(categories=interval_labels,codes =labels,ordered=True)
+
+    categorical_index = cudf.core.index.as_index(col)
+    return categorical_index
+
+#work on changing IntervalIndex to pandas 
+
+# In [16]: pd.cut(np.array([1, 7, 5, 4, 6, 3]), 3)
+# Out[16]: 
+# [(0.994, 3.0], (5.0, 7.0], (3.0, 5.0], (3.0, 5.0], (5.0, 7.0], (0.994, 3.0]]
+# Categories (3, interval[float64]): [(0.994, 3.0] < (3.0, 5.0] < (5.0, 7.0]]
+
+# In [17]: m = pd.cut(np.array([1, 7, 5, 4, 6, 3]), 3)
+
+# In [18]: pd.CategoricalIndex(m)
+# Out[18]: 
+# CategoricalIndex([(0.994, 3.0], (5.0, 7.0], (3.0, 5.0], (3.0, 5.0], (5.0, 7.0],
+#                   (0.994, 3.0]],
+#                  categories=[(0.994, 3.0], (3.0, 5.0], (5.0, 7.0]], ordered=True, dtype='category')
