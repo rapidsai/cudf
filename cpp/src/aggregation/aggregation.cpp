@@ -37,6 +37,7 @@ std::unique_ptr<Base> make_sum_aggregation()
   return std::make_unique<detail::sum_aggregation>();
 }
 template std::unique_ptr<aggregation> make_sum_aggregation<aggregation>();
+template std::unique_ptr<rolling_aggregation> make_sum_aggregation<rolling_aggregation>();
 
 /// Factory to create a PRODUCT aggregation
 template <typename Base = aggregation>
@@ -53,6 +54,7 @@ std::unique_ptr<Base> make_min_aggregation()
   return std::make_unique<detail::min_aggregation>();
 }
 template std::unique_ptr<aggregation> make_min_aggregation<aggregation>();
+template std::unique_ptr<rolling_aggregation> make_min_aggregation<rolling_aggregation>();
 
 /// Factory to create a MAX aggregation
 template <typename Base = aggregation>
@@ -61,6 +63,7 @@ std::unique_ptr<Base> make_max_aggregation()
   return std::make_unique<detail::max_aggregation>();
 }
 template std::unique_ptr<aggregation> make_max_aggregation<aggregation>();
+template std::unique_ptr<rolling_aggregation> make_max_aggregation<rolling_aggregation>();
 
 /// Factory to create a COUNT aggregation
 template <typename Base = aggregation>
@@ -71,6 +74,8 @@ std::unique_ptr<Base> make_count_aggregation(null_policy null_handling)
   return std::make_unique<detail::count_aggregation>(kind);
 }
 template std::unique_ptr<aggregation> make_count_aggregation<aggregation>(
+  null_policy null_handling);
+template std::unique_ptr<rolling_aggregation> make_count_aggregation<rolling_aggregation>(
   null_policy null_handling);
 
 /// Factory to create a ANY aggregation
@@ -104,6 +109,7 @@ std::unique_ptr<Base> make_mean_aggregation()
   return std::make_unique<detail::mean_aggregation>();
 }
 template std::unique_ptr<aggregation> make_mean_aggregation<aggregation>();
+template std::unique_ptr<rolling_aggregation> make_mean_aggregation<rolling_aggregation>();
 
 /// Factory to create a VARIANCE aggregation
 template <typename Base = aggregation>
@@ -145,6 +151,7 @@ std::unique_ptr<Base> make_argmax_aggregation()
   return std::make_unique<detail::argmax_aggregation>();
 }
 template std::unique_ptr<aggregation> make_argmax_aggregation<aggregation>();
+template std::unique_ptr<rolling_aggregation> make_argmax_aggregation<rolling_aggregation>();
 
 /// Factory to create an ARGMIN aggregation
 template <typename Base = aggregation>
@@ -153,6 +160,7 @@ std::unique_ptr<Base> make_argmin_aggregation()
   return std::make_unique<detail::argmin_aggregation>();
 }
 template std::unique_ptr<aggregation> make_argmin_aggregation<aggregation>();
+template std::unique_ptr<rolling_aggregation> make_argmin_aggregation<rolling_aggregation>();
 
 /// Factory to create an NUNIQUE aggregation
 template <typename Base = aggregation>
@@ -179,6 +187,7 @@ std::unique_ptr<Base> make_row_number_aggregation()
   return std::make_unique<detail::row_number_aggregation>();
 }
 template std::unique_ptr<aggregation> make_row_number_aggregation<aggregation>();
+template std::unique_ptr<rolling_aggregation> make_row_number_aggregation<rolling_aggregation>();
 
 /// Factory to create a COLLECT_LIST aggregation
 template <typename Base = aggregation>
@@ -187,6 +196,8 @@ std::unique_ptr<Base> make_collect_list_aggregation(null_policy null_handling)
   return std::make_unique<detail::collect_list_aggregation>(null_handling);
 }
 template std::unique_ptr<aggregation> make_collect_list_aggregation<aggregation>(
+  null_policy null_handling);
+template std::unique_ptr<rolling_aggregation> make_collect_list_aggregation<rolling_aggregation>(
   null_policy null_handling);
 
 /// Factory to create a COLLECT_SET aggregation
@@ -207,6 +218,8 @@ std::unique_ptr<Base> make_lag_aggregation(size_type offset)
   return std::make_unique<detail::lead_lag_aggregation>(aggregation::LAG, offset);
 }
 template std::unique_ptr<aggregation> make_lag_aggregation<aggregation>(size_type offset);
+template std::unique_ptr<rolling_aggregation> make_lag_aggregation<rolling_aggregation>(
+  size_type offset);
 
 /// Factory to create a LEAD aggregation
 template <typename Base = aggregation>
@@ -215,6 +228,8 @@ std::unique_ptr<Base> make_lead_aggregation(size_type offset)
   return std::make_unique<detail::lead_lag_aggregation>(aggregation::LEAD, offset);
 }
 template std::unique_ptr<aggregation> make_lead_aggregation<aggregation>(size_type offset);
+template std::unique_ptr<rolling_aggregation> make_lead_aggregation<rolling_aggregation>(
+  size_type offset);
 
 /// Factory to create a UDF aggregation
 template <typename Base = aggregation>
@@ -229,6 +244,8 @@ std::unique_ptr<Base> make_udf_aggregation(udf_type type,
   return std::unique_ptr<detail::udf_aggregation>(a);
 }
 template std::unique_ptr<aggregation> make_udf_aggregation<aggregation>(
+  udf_type type, std::string const& user_defined_aggregator, data_type output_type);
+template std::unique_ptr<rolling_aggregation> make_udf_aggregation<rolling_aggregation>(
   udf_type type, std::string const& user_defined_aggregator, data_type output_type);
 
 namespace detail {

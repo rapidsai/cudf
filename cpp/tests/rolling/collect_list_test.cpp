@@ -64,7 +64,11 @@ TYPED_TEST(TypedCollectListTest, BasicRollingWindow)
             static_cast<column_view>(foll_column).size());
 
   auto const result_column_based_window =
-    rolling_window(input_column, prev_column, foll_column, 1, make_collect_list_aggregation());
+    rolling_window(input_column,
+                   prev_column,
+                   foll_column,
+                   1,
+                   make_collect_list_aggregation<rolling_aggregation>());
 
   auto const expected_result =
     lists_column_wrapper<T, int32_t>{
@@ -79,11 +83,15 @@ TYPED_TEST(TypedCollectListTest, BasicRollingWindow)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_column_based_window->view());
 
   auto const result_fixed_window =
-    rolling_window(input_column, 2, 1, 1, make_collect_list_aggregation());
+    rolling_window(input_column, 2, 1, 1, make_collect_list_aggregation<rolling_aggregation>());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_fixed_window->view());
 
   auto const result_with_nulls_excluded =
-    rolling_window(input_column, 2, 1, 1, make_collect_list_aggregation(null_policy::EXCLUDE));
+    rolling_window(input_column,
+                   2,
+                   1,
+                   1,
+                   make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_with_nulls_excluded->view());
 }
@@ -104,7 +112,11 @@ TYPED_TEST(TypedCollectListTest, RollingWindowWithEmptyOutputLists)
             static_cast<column_view>(foll_column).size());
 
   auto const result_column_based_window =
-    rolling_window(input_column, prev_column, foll_column, 0, make_collect_list_aggregation());
+    rolling_window(input_column,
+                   prev_column,
+                   foll_column,
+                   0,
+                   make_collect_list_aggregation<rolling_aggregation>());
 
   auto const expected_result =
     lists_column_wrapper<T, int32_t>{
@@ -119,8 +131,12 @@ TYPED_TEST(TypedCollectListTest, RollingWindowWithEmptyOutputLists)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_column_based_window->view());
 
-  auto const result_with_nulls_excluded = rolling_window(
-    input_column, prev_column, foll_column, 0, make_collect_list_aggregation(null_policy::EXCLUDE));
+  auto const result_with_nulls_excluded =
+    rolling_window(input_column,
+                   prev_column,
+                   foll_column,
+                   0,
+                   make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_with_nulls_excluded->view());
 }
@@ -137,16 +153,23 @@ TYPED_TEST(TypedCollectListTest, RollingWindowWithEmptyOutputListsAtEnds)
   auto const prev_column = fixed_width_column_wrapper<size_type>{0, 2, 2, 2, 2, 0};
   auto foll_column       = fixed_width_column_wrapper<size_type>{0, 1, 1, 1, 1, 0};
 
-  auto const result =
-    rolling_window(input_column, prev_column, foll_column, 0, make_collect_list_aggregation());
+  auto const result = rolling_window(input_column,
+                                     prev_column,
+                                     foll_column,
+                                     0,
+                                     make_collect_list_aggregation<rolling_aggregation>());
 
   auto const expected_result =
     lists_column_wrapper<T, int32_t>{{}, {0, 1, 2}, {1, 2, 3}, {2, 3, 4}, {3, 4, 5}, {}}.release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
-  auto const result_with_nulls_excluded = rolling_window(
-    input_column, prev_column, foll_column, 0, make_collect_list_aggregation(null_policy::EXCLUDE));
+  auto const result_with_nulls_excluded =
+    rolling_window(input_column,
+                   prev_column,
+                   foll_column,
+                   0,
+                   make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_with_nulls_excluded->view());
 }
@@ -167,8 +190,11 @@ TYPED_TEST(TypedCollectListTest, RollingWindowHonoursMinPeriods)
   auto preceding    = 2;
   auto following    = 1;
   auto min_periods  = 3;
-  auto const result = rolling_window(
-    input_column, preceding, following, min_periods, make_collect_list_aggregation());
+  auto const result = rolling_window(input_column,
+                                     preceding,
+                                     following,
+                                     min_periods,
+                                     make_collect_list_aggregation<rolling_aggregation>());
 
   auto const expected_result = lists_column_wrapper<T, int32_t>{
     {{}, {0, 1, 2}, {1, 2, 3}, {2, 3, 4}, {3, 4, 5}, {}},
@@ -183,7 +209,7 @@ TYPED_TEST(TypedCollectListTest, RollingWindowHonoursMinPeriods)
                    preceding,
                    following,
                    min_periods,
-                   make_collect_list_aggregation(null_policy::EXCLUDE));
+                   make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_with_nulls_excluded->view());
 
@@ -191,8 +217,11 @@ TYPED_TEST(TypedCollectListTest, RollingWindowHonoursMinPeriods)
   following   = 2;
   min_periods = 4;
 
-  auto result_2 = rolling_window(
-    input_column, preceding, following, min_periods, make_collect_list_aggregation());
+  auto result_2          = rolling_window(input_column,
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 make_collect_list_aggregation<rolling_aggregation>());
   auto expected_result_2 = lists_column_wrapper<T, int32_t>{
     {{}, {0, 1, 2, 3}, {1, 2, 3, 4}, {2, 3, 4, 5}, {}, {}},
     cudf::detail::make_counting_transform_iterator(0, [num_elements](auto i) {
@@ -206,7 +235,7 @@ TYPED_TEST(TypedCollectListTest, RollingWindowHonoursMinPeriods)
                    preceding,
                    following,
                    min_periods,
-                   make_collect_list_aggregation(null_policy::EXCLUDE));
+                   make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result_2->view(),
                                       result_2_with_nulls_excluded->view());
@@ -231,8 +260,11 @@ TYPED_TEST(TypedCollectListTest, RollingWindowWithNullInputsHonoursMinPeriods)
     auto preceding    = 2;
     auto following    = 1;
     auto min_periods  = 3;
-    auto const result = rolling_window(
-      input_column, preceding, following, min_periods, make_collect_list_aggregation());
+    auto const result = rolling_window(input_column,
+                                       preceding,
+                                       following,
+                                       min_periods,
+                                       make_collect_list_aggregation<rolling_aggregation>());
 
     auto expected_result_child_values   = std::vector<int32_t>{0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 5};
     auto expected_result_child_validity = std::vector<bool>{1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1};
@@ -258,14 +290,15 @@ TYPED_TEST(TypedCollectListTest, RollingWindowWithNullInputsHonoursMinPeriods)
   {
     // One result row at each end should be null.
     // Exclude nulls: No nulls elements for any output list rows.
-    auto preceding    = 2;
-    auto following    = 1;
-    auto min_periods  = 3;
-    auto const result = rolling_window(input_column,
-                                       preceding,
-                                       following,
-                                       min_periods,
-                                       make_collect_list_aggregation(null_policy::EXCLUDE));
+    auto preceding   = 2;
+    auto following   = 1;
+    auto min_periods = 3;
+    auto const result =
+      rolling_window(input_column,
+                     preceding,
+                     following,
+                     min_periods,
+                     make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
     auto expected_result_child_values = std::vector<int32_t>{0, 2, 2, 3, 2, 3, 3, 5};
     auto expected_result_child        = fixed_width_column_wrapper<T, int32_t>(
@@ -290,8 +323,11 @@ TYPED_TEST(TypedCollectListTest, RollingWindowWithNullInputsHonoursMinPeriods)
     auto preceding    = 2;
     auto following    = 2;
     auto min_periods  = 4;
-    auto const result = rolling_window(
-      input_column, preceding, following, min_periods, make_collect_list_aggregation());
+    auto const result = rolling_window(input_column,
+                                       preceding,
+                                       following,
+                                       min_periods,
+                                       make_collect_list_aggregation<rolling_aggregation>());
 
     auto expected_result_child_values   = std::vector<int32_t>{0, 1, 2, 3, 1, 2, 3, 4, 2, 3, 4, 5};
     auto expected_result_child_validity = std::vector<bool>{1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1};
@@ -318,14 +354,15 @@ TYPED_TEST(TypedCollectListTest, RollingWindowWithNullInputsHonoursMinPeriods)
   {
     // First result row, and the last two result rows should be null.
     // Exclude nulls: No nulls elements for any output list rows.
-    auto preceding    = 2;
-    auto following    = 2;
-    auto min_periods  = 4;
-    auto const result = rolling_window(input_column,
-                                       preceding,
-                                       following,
-                                       min_periods,
-                                       make_collect_list_aggregation(null_policy::EXCLUDE));
+    auto preceding   = 2;
+    auto following   = 2;
+    auto min_periods = 4;
+    auto const result =
+      rolling_window(input_column,
+                     preceding,
+                     following,
+                     min_periods,
+                     make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
     auto expected_result_child_values = std::vector<int32_t>{0, 2, 3, 2, 3, 2, 3, 5};
     auto expected_result_child        = fixed_width_column_wrapper<T, int32_t>(
@@ -361,8 +398,11 @@ TEST_F(CollectListTest, RollingWindowHonoursMinPeriodsOnStrings)
   auto preceding    = 2;
   auto following    = 1;
   auto min_periods  = 3;
-  auto const result = rolling_window(
-    input_column, preceding, following, min_periods, make_collect_list_aggregation());
+  auto const result = rolling_window(input_column,
+                                     preceding,
+                                     following,
+                                     min_periods,
+                                     make_collect_list_aggregation<rolling_aggregation>());
 
   auto const expected_result = lists_column_wrapper<string_view>{
     {{}, {"0", "1", "2"}, {"1", "2", "3"}, {"2", "3", "4"}, {"3", "4", "5"}, {}},
@@ -377,7 +417,7 @@ TEST_F(CollectListTest, RollingWindowHonoursMinPeriodsOnStrings)
                    preceding,
                    following,
                    min_periods,
-                   make_collect_list_aggregation(null_policy::EXCLUDE));
+                   make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_with_nulls_excluded->view());
 
@@ -385,8 +425,11 @@ TEST_F(CollectListTest, RollingWindowHonoursMinPeriodsOnStrings)
   following   = 2;
   min_periods = 4;
 
-  auto result_2 = rolling_window(
-    input_column, preceding, following, min_periods, make_collect_list_aggregation());
+  auto result_2          = rolling_window(input_column,
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 make_collect_list_aggregation<rolling_aggregation>());
   auto expected_result_2 = lists_column_wrapper<string_view>{
     {{}, {"0", "1", "2", "3"}, {"1", "2", "3", "4"}, {"2", "3", "4", "5"}, {}, {}},
     cudf::detail::make_counting_transform_iterator(0, [num_elements](auto i) {
@@ -400,7 +443,7 @@ TEST_F(CollectListTest, RollingWindowHonoursMinPeriodsOnStrings)
                    preceding,
                    following,
                    min_periods,
-                   make_collect_list_aggregation(null_policy::EXCLUDE));
+                   make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result_2->view(),
                                       result_2_with_nulls_excluded->view());
@@ -424,8 +467,11 @@ TEST_F(CollectListTest, RollingWindowHonoursMinPeriodsWithDecimal)
     auto preceding    = 2;
     auto following    = 1;
     auto min_periods  = 3;
-    auto const result = rolling_window(
-      input_column, preceding, following, min_periods, make_collect_list_aggregation());
+    auto const result = rolling_window(input_column,
+                                       preceding,
+                                       following,
+                                       min_periods,
+                                       make_collect_list_aggregation<rolling_aggregation>());
 
     auto expected_result_child_values = std::vector<int32_t>{0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 5};
     auto expected_result_child =
@@ -451,7 +497,7 @@ TEST_F(CollectListTest, RollingWindowHonoursMinPeriodsWithDecimal)
                      preceding,
                      following,
                      min_periods,
-                     make_collect_list_aggregation(null_policy::EXCLUDE));
+                     make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(),
                                         result_with_nulls_excluded->view());
@@ -462,8 +508,11 @@ TEST_F(CollectListTest, RollingWindowHonoursMinPeriodsWithDecimal)
     auto preceding    = 2;
     auto following    = 2;
     auto min_periods  = 4;
-    auto const result = rolling_window(
-      input_column, preceding, following, min_periods, make_collect_list_aggregation());
+    auto const result = rolling_window(input_column,
+                                       preceding,
+                                       following,
+                                       min_periods,
+                                       make_collect_list_aggregation<rolling_aggregation>());
 
     auto expected_result_child_values = std::vector<int32_t>{0, 1, 2, 3, 1, 2, 3, 4, 2, 3, 4, 5};
     auto expected_result_child =
@@ -489,7 +538,7 @@ TEST_F(CollectListTest, RollingWindowHonoursMinPeriodsWithDecimal)
                      preceding,
                      following,
                      min_periods,
-                     make_collect_list_aggregation(null_policy::EXCLUDE));
+                     make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(),
                                         result_with_nulls_excluded->view());
@@ -515,7 +564,7 @@ TYPED_TEST(TypedCollectListTest, BasicGroupedRollingWindow)
                                              preceding,
                                              following,
                                              min_periods,
-                                             make_collect_list_aggregation());
+                                             make_collect_list_aggregation<rolling_aggregation>());
 
   auto const expected_result = lists_column_wrapper<T, int32_t>{
     {10, 11},
@@ -530,13 +579,13 @@ TYPED_TEST(TypedCollectListTest, BasicGroupedRollingWindow)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
-  auto const result_with_nulls_excluded =
-    grouped_rolling_window(table_view{std::vector<column_view>{group_column}},
-                           input_column,
-                           preceding,
-                           following,
-                           min_periods,
-                           make_collect_list_aggregation(null_policy::EXCLUDE));
+  auto const result_with_nulls_excluded = grouped_rolling_window(
+    table_view{std::vector<column_view>{group_column}},
+    input_column,
+    preceding,
+    following,
+    min_periods,
+    make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_with_nulls_excluded->view());
 }
@@ -558,12 +607,13 @@ TYPED_TEST(TypedCollectListTest, BasicGroupedRollingWindowWithNulls)
 
   {
     // Nulls included.
-    auto const result = grouped_rolling_window(table_view{std::vector<column_view>{group_column}},
-                                               input_column,
-                                               preceding,
-                                               following,
-                                               min_periods,
-                                               make_collect_list_aggregation());
+    auto const result =
+      grouped_rolling_window(table_view{std::vector<column_view>{group_column}},
+                             input_column,
+                             preceding,
+                             following,
+                             min_periods,
+                             make_collect_list_aggregation<rolling_aggregation>());
 
     auto expected_child = fixed_width_column_wrapper<T, int32_t>{
       {10, 11, 10, 11, 12, 11, 12, 13, 12, 13, 14, 13, 14, 20, 21, 20, 21, 22, 21, 22, 23, 22, 23},
@@ -582,12 +632,13 @@ TYPED_TEST(TypedCollectListTest, BasicGroupedRollingWindowWithNulls)
 
   {
     // Nulls excluded.
-    auto const result = grouped_rolling_window(table_view{std::vector<column_view>{group_column}},
-                                               input_column,
-                                               preceding,
-                                               following,
-                                               min_periods,
-                                               make_collect_list_aggregation(null_policy::EXCLUDE));
+    auto const result = grouped_rolling_window(
+      table_view{std::vector<column_view>{group_column}},
+      input_column,
+      preceding,
+      following,
+      min_periods,
+      make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
     auto expected_child = fixed_width_column_wrapper<T, int32_t>{
       10, 10, 12, 12, 13, 12, 13, 14, 13, 14, 20, 20, 22, 22, 23, 22, 23};
@@ -627,7 +678,7 @@ TYPED_TEST(TypedCollectListTest, BasicGroupedTimeRangeRollingWindow)
                                       preceding,
                                       following,
                                       min_periods,
-                                      make_collect_list_aggregation());
+                                      make_collect_list_aggregation<rolling_aggregation>());
 
   auto const expected_result = lists_column_wrapper<T, int32_t>{
     {10, 11, 12, 13},
@@ -642,15 +693,15 @@ TYPED_TEST(TypedCollectListTest, BasicGroupedTimeRangeRollingWindow)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
-  auto const result_with_nulls_excluded =
-    grouped_time_range_rolling_window(table_view{std::vector<column_view>{group_column}},
-                                      time_column,
-                                      cudf::order::ASCENDING,
-                                      input_column,
-                                      preceding,
-                                      following,
-                                      min_periods,
-                                      make_collect_list_aggregation(null_policy::EXCLUDE));
+  auto const result_with_nulls_excluded = grouped_time_range_rolling_window(
+    table_view{std::vector<column_view>{group_column}},
+    time_column,
+    cudf::order::ASCENDING,
+    input_column,
+    preceding,
+    following,
+    min_periods,
+    make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_with_nulls_excluded->view());
 }
@@ -678,7 +729,7 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowWithNulls)
                                       preceding,
                                       following,
                                       min_periods,
-                                      make_collect_list_aggregation());
+                                      make_collect_list_aggregation<rolling_aggregation>());
 
   auto null_at_0 = iterator_with_null_at(0);
   auto null_at_1 = iterator_with_null_at(1);
@@ -697,15 +748,15 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowWithNulls)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
-  auto const result_with_nulls_excluded =
-    grouped_time_range_rolling_window(table_view{std::vector<column_view>{group_column}},
-                                      time_column,
-                                      cudf::order::ASCENDING,
-                                      input_column,
-                                      preceding,
-                                      following,
-                                      min_periods,
-                                      make_collect_list_aggregation(null_policy::EXCLUDE));
+  auto const result_with_nulls_excluded = grouped_time_range_rolling_window(
+    table_view{std::vector<column_view>{group_column}},
+    time_column,
+    cudf::order::ASCENDING,
+    input_column,
+    preceding,
+    following,
+    min_periods,
+    make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
   // After null exclusion, `11`, `21`, and `null` should not appear.
   auto const expected_result_with_nulls_excluded = lists_column_wrapper<T, int32_t>{
@@ -744,7 +795,7 @@ TEST_F(CollectListTest, BasicGroupedTimeRangeRollingWindowOnStrings)
                                       preceding,
                                       following,
                                       min_periods,
-                                      make_collect_list_aggregation());
+                                      make_collect_list_aggregation<rolling_aggregation>());
 
   auto const expected_result = lists_column_wrapper<cudf::string_view>{
     {"10", "11", "12", "13"},
@@ -759,15 +810,15 @@ TEST_F(CollectListTest, BasicGroupedTimeRangeRollingWindowOnStrings)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
-  auto const result_with_nulls_excluded =
-    grouped_time_range_rolling_window(table_view{std::vector<column_view>{group_column}},
-                                      time_column,
-                                      cudf::order::ASCENDING,
-                                      input_column,
-                                      preceding,
-                                      following,
-                                      min_periods,
-                                      make_collect_list_aggregation(null_policy::EXCLUDE));
+  auto const result_with_nulls_excluded = grouped_time_range_rolling_window(
+    table_view{std::vector<column_view>{group_column}},
+    time_column,
+    cudf::order::ASCENDING,
+    input_column,
+    preceding,
+    following,
+    min_periods,
+    make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_with_nulls_excluded->view());
 }
@@ -793,7 +844,7 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithNulls)
                                       preceding,
                                       following,
                                       min_periods,
-                                      make_collect_list_aggregation());
+                                      make_collect_list_aggregation<rolling_aggregation>());
 
   auto null_at_0 = iterator_with_null_at(0);
   auto null_at_1 = iterator_with_null_at(1);
@@ -813,15 +864,15 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithNulls)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
-  auto const result_with_nulls_excluded =
-    grouped_time_range_rolling_window(table_view{std::vector<column_view>{group_column}},
-                                      time_column,
-                                      cudf::order::ASCENDING,
-                                      input_column,
-                                      preceding,
-                                      following,
-                                      min_periods,
-                                      make_collect_list_aggregation(null_policy::EXCLUDE));
+  auto const result_with_nulls_excluded = grouped_time_range_rolling_window(
+    table_view{std::vector<column_view>{group_column}},
+    time_column,
+    cudf::order::ASCENDING,
+    input_column,
+    preceding,
+    following,
+    min_periods,
+    make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
   // After null exclusion, `11`, `21`, and `null` should not appear.
   auto const expected_result_with_nulls_excluded = lists_column_wrapper<cudf::string_view>{
@@ -868,7 +919,7 @@ TYPED_TEST(TypedCollectListTest, BasicGroupedTimeRangeRollingWindowOnStructs)
                                       preceding,
                                       following,
                                       min_periods,
-                                      make_collect_list_aggregation());
+                                      make_collect_list_aggregation<rolling_aggregation>());
 
   auto expected_numeric_column = fixed_width_column_wrapper<T, int32_t>{
     10, 11, 12, 13, 10, 11, 12, 13, 10, 11, 12, 13, 14, 10, 11, 12,
@@ -890,15 +941,15 @@ TYPED_TEST(TypedCollectListTest, BasicGroupedTimeRangeRollingWindowOnStructs)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
-  auto const result_with_nulls_excluded =
-    grouped_time_range_rolling_window(table_view{std::vector<column_view>{group_column}},
-                                      time_column,
-                                      cudf::order::ASCENDING,
-                                      struct_column->view(),
-                                      preceding,
-                                      following,
-                                      min_periods,
-                                      make_collect_list_aggregation(null_policy::EXCLUDE));
+  auto const result_with_nulls_excluded = grouped_time_range_rolling_window(
+    table_view{std::vector<column_view>{group_column}},
+    time_column,
+    cudf::order::ASCENDING,
+    struct_column->view(),
+    preceding,
+    following,
+    min_periods,
+    make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_with_nulls_excluded->view());
 }
@@ -928,7 +979,7 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowWithMinPeriods)
                                       preceding,
                                       following,
                                       min_periods,
-                                      make_collect_list_aggregation());
+                                      make_collect_list_aggregation<rolling_aggregation>());
 
   auto const expected_result = lists_column_wrapper<T, int32_t>{
     {{10, 11, 12, 13},
@@ -946,15 +997,15 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowWithMinPeriods)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
-  auto const result_with_nulls_excluded =
-    grouped_time_range_rolling_window(table_view{std::vector<column_view>{group_column}},
-                                      time_column,
-                                      cudf::order::ASCENDING,
-                                      input_column,
-                                      preceding,
-                                      following,
-                                      min_periods,
-                                      make_collect_list_aggregation(null_policy::EXCLUDE));
+  auto const result_with_nulls_excluded = grouped_time_range_rolling_window(
+    table_view{std::vector<column_view>{group_column}},
+    time_column,
+    cudf::order::ASCENDING,
+    input_column,
+    preceding,
+    following,
+    min_periods,
+    make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_with_nulls_excluded->view());
 }
@@ -984,7 +1035,7 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowWithNullsAndMinPer
                                       preceding,
                                       following,
                                       min_periods,
-                                      make_collect_list_aggregation());
+                                      make_collect_list_aggregation<rolling_aggregation>());
 
   auto null_at_1 = iterator_with_null_at(1);
 
@@ -1005,15 +1056,15 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowWithNullsAndMinPer
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
-  auto const result_with_nulls_excluded =
-    grouped_time_range_rolling_window(table_view{std::vector<column_view>{group_column}},
-                                      time_column,
-                                      cudf::order::ASCENDING,
-                                      input_column,
-                                      preceding,
-                                      following,
-                                      min_periods,
-                                      make_collect_list_aggregation(null_policy::EXCLUDE));
+  auto const result_with_nulls_excluded = grouped_time_range_rolling_window(
+    table_view{std::vector<column_view>{group_column}},
+    time_column,
+    cudf::order::ASCENDING,
+    input_column,
+    preceding,
+    following,
+    min_periods,
+    make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
   // After null exclusion, `11`, `21`, and `null` should not appear.
   auto const expected_result_with_nulls_excluded = lists_column_wrapper<T, int32_t>{
@@ -1056,7 +1107,7 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithMinPeriods)
                                       preceding,
                                       following,
                                       min_periods,
-                                      make_collect_list_aggregation());
+                                      make_collect_list_aggregation<rolling_aggregation>());
 
   auto const expected_result = lists_column_wrapper<cudf::string_view>{
     {{"10", "11", "12", "13"},
@@ -1074,15 +1125,15 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithMinPeriods)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
-  auto const result_with_nulls_excluded =
-    grouped_time_range_rolling_window(table_view{std::vector<column_view>{group_column}},
-                                      time_column,
-                                      cudf::order::ASCENDING,
-                                      input_column,
-                                      preceding,
-                                      following,
-                                      min_periods,
-                                      make_collect_list_aggregation(null_policy::EXCLUDE));
+  auto const result_with_nulls_excluded = grouped_time_range_rolling_window(
+    table_view{std::vector<column_view>{group_column}},
+    time_column,
+    cudf::order::ASCENDING,
+    input_column,
+    preceding,
+    following,
+    min_periods,
+    make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_with_nulls_excluded->view());
 }
@@ -1110,7 +1161,7 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithNullsAndMinPer
                                       preceding,
                                       following,
                                       min_periods,
-                                      make_collect_list_aggregation());
+                                      make_collect_list_aggregation<rolling_aggregation>());
 
   auto null_at_1 = iterator_with_null_at(1);
 
@@ -1131,15 +1182,15 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithNullsAndMinPer
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
-  auto const result_with_nulls_excluded =
-    grouped_time_range_rolling_window(table_view{std::vector<column_view>{group_column}},
-                                      time_column,
-                                      cudf::order::ASCENDING,
-                                      input_column,
-                                      preceding,
-                                      following,
-                                      min_periods,
-                                      make_collect_list_aggregation(null_policy::EXCLUDE));
+  auto const result_with_nulls_excluded = grouped_time_range_rolling_window(
+    table_view{std::vector<column_view>{group_column}},
+    time_column,
+    cudf::order::ASCENDING,
+    input_column,
+    preceding,
+    following,
+    min_periods,
+    make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
   // After null exclusion, `11`, `21`, and `null` should not appear.
   auto const expected_result_with_nulls_excluded = lists_column_wrapper<cudf::string_view>{
@@ -1190,7 +1241,7 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowOnStructsWithMinPe
                                       preceding,
                                       following,
                                       min_periods,
-                                      make_collect_list_aggregation());
+                                      make_collect_list_aggregation<rolling_aggregation>());
 
   auto expected_numeric_column = fixed_width_column_wrapper<T, int32_t>{
     10, 11, 12, 13, 10, 11, 12, 13, 10, 11, 12, 13, 14, 10, 11, 12, 13, 14, 10, 11, 12, 13, 14};
@@ -1218,15 +1269,15 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowOnStructsWithMinPe
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
 
-  auto const result_with_nulls_excluded =
-    grouped_time_range_rolling_window(table_view{std::vector<column_view>{group_column}},
-                                      time_column,
-                                      cudf::order::ASCENDING,
-                                      struct_column->view(),
-                                      preceding,
-                                      following,
-                                      min_periods,
-                                      make_collect_list_aggregation(null_policy::EXCLUDE));
+  auto const result_with_nulls_excluded = grouped_time_range_rolling_window(
+    table_view{std::vector<column_view>{group_column}},
+    time_column,
+    cudf::order::ASCENDING,
+    struct_column->view(),
+    preceding,
+    following,
+    min_periods,
+    make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_with_nulls_excluded->view());
 }

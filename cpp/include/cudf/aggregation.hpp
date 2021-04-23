@@ -47,7 +47,7 @@ class aggregation_finalizer;
  * `aggregation_request`.
  *
  * All aggregations must derive from this class to implement the pure virtual
- * functions and potentially encapsulate additional information needed to 
+ * functions and potentially encapsulate additional information needed to
  * compute the aggregation.
  */
 class aggregation {

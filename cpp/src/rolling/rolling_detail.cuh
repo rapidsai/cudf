@@ -504,7 +504,7 @@ struct rolling_window_launcher {
                             PrecedingWindowIterator preceding_window_begin,
                             FollowingWindowIterator following_window_begin,
                             size_type min_periods,
-                            std::unique_ptr<aggregation> const& agg,
+                            std::unique_ptr<rolling_aggregation> const& agg,
                             rmm::cuda_stream_view stream)
   {
     using Type    = device_storage_type_t<T>;
@@ -558,7 +558,7 @@ struct rolling_window_launcher {
                             PrecedingWindowIterator preceding_window_begin,
                             FollowingWindowIterator following_window_begin,
                             size_type min_periods,
-                            std::unique_ptr<aggregation> const& agg,
+                            std::unique_ptr<rolling_aggregation> const& agg,
                             agg_op const& device_agg_op,
                             rmm::cuda_stream_view stream)
   {
@@ -621,7 +621,7 @@ struct rolling_window_launcher {
          PrecedingWindowIterator preceding_window_begin,
          FollowingWindowIterator following_window_begin,
          size_type min_periods,
-         std::unique_ptr<aggregation> const& agg,
+         std::unique_ptr<rolling_aggregation> const& agg,
          rmm::cuda_stream_view stream,
          rmm::mr::device_memory_resource* mr)
   {
@@ -659,7 +659,7 @@ struct rolling_window_launcher {
          PrecedingWindowIterator preceding_window_begin,
          FollowingWindowIterator following_window_begin,
          size_type min_periods,
-         std::unique_ptr<aggregation> const& agg,
+         std::unique_ptr<rolling_aggregation> const& agg,
          rmm::cuda_stream_view stream,
          rmm::mr::device_memory_resource* mr)
   {
@@ -728,7 +728,7 @@ struct rolling_window_launcher {
          PrecedingWindowIterator preceding_window_begin,
          FollowingWindowIterator following_window_begin,
          size_type min_periods,
-         std::unique_ptr<aggregation> const& agg,
+         std::unique_ptr<rolling_aggregation> const& agg,
          rmm::cuda_stream_view stream,
          rmm::mr::device_memory_resource* mr)
   {
@@ -748,7 +748,7 @@ struct rolling_window_launcher {
          PrecedingWindowIterator preceding_window_begin,
          FollowingWindowIterator following_window_begin,
          size_type min_periods,
-         std::unique_ptr<aggregation> const& agg,
+         std::unique_ptr<rolling_aggregation> const& agg,
          agg_op const& device_agg_op,
          rmm::cuda_stream_view stream,
          rmm::mr::device_memory_resource* mr)
@@ -797,7 +797,7 @@ struct rolling_window_launcher {
          PrecedingWindowIterator preceding_window_begin,
          FollowingWindowIterator following_window_begin,
          size_type min_periods,
-         std::unique_ptr<aggregation> const& agg,
+         std::unique_ptr<rolling_aggregation> const& agg,
          agg_op device_agg_op,
          rmm::cuda_stream_view stream,
          rmm::mr::device_memory_resource* mr)
@@ -818,7 +818,7 @@ struct rolling_window_launcher {
              PrecedingWindowIterator preceding_window_begin,
              FollowingWindowIterator following_window_begin,
              size_type min_periods,
-             std::unique_ptr<aggregation> const& agg,
+             std::unique_ptr<rolling_aggregation> const& agg,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr)
   {
@@ -849,7 +849,7 @@ struct rolling_window_launcher {
     PrecedingWindowIterator preceding_window_begin,
     FollowingWindowIterator following_window_begin,
     size_type min_periods,
-    std::unique_ptr<aggregation> const& agg,
+    std::unique_ptr<rolling_aggregation> const& agg,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr)
   {
@@ -873,7 +873,7 @@ struct rolling_window_launcher {
              PrecedingWindowIterator preceding_window_begin,
              FollowingWindowIterator following_window_begin,
              size_type min_periods,
-             std::unique_ptr<aggregation> const& agg,
+             std::unique_ptr<rolling_aggregation> const& agg,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr)
   {
@@ -1142,7 +1142,7 @@ struct rolling_window_launcher {
     PrecedingIter preceding_begin_raw,
     FollowingIter following_begin_raw,
     size_type min_periods,
-    std::unique_ptr<aggregation> const& agg,
+    std::unique_ptr<rolling_aggregation> const& agg,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr)
   {
@@ -1221,7 +1221,7 @@ struct dispatch_rolling {
                                      PrecedingWindowIterator preceding_window_begin,
                                      FollowingWindowIterator following_window_begin,
                                      size_type min_periods,
-                                     std::unique_ptr<aggregation> const& agg,
+                                     std::unique_ptr<rolling_aggregation> const& agg,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -1248,7 +1248,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
                                            FollowingWindowIterator following_window,
                                            std::string const& following_window_str,
                                            size_type min_periods,
-                                           std::unique_ptr<aggregation> const& agg,
+                                           std::unique_ptr<rolling_aggregation> const& agg,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
@@ -1321,7 +1321,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
  *                               PrecedingWindowIterator preceding_window_begin,
  *                               FollowingWindowIterator following_window_begin,
  *                               size_type min_periods,
- *                               std::unique_ptr<aggregation> const& agg,
+ *                               std::unique_ptr<rolling_aggregation> const& agg,
  *                               rmm::mr::device_memory_resource* mr)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -1332,7 +1332,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        PrecedingWindowIterator preceding_window_begin,
                                        FollowingWindowIterator following_window_begin,
                                        size_type min_periods,
-                                       std::unique_ptr<aggregation> const& agg,
+                                       std::unique_ptr<rolling_aggregation> const& agg,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {

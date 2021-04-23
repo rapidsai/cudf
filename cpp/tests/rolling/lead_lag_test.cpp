@@ -72,12 +72,13 @@ TYPED_TEST(TypedLeadLagWindowTest, LeadLagBasics)
   auto const following   = 3;
   auto const min_periods = 1;
 
-  auto lead_3_output_col = cudf::grouped_rolling_window(grouping_keys,
-                                                        input_col->view(),
-                                                        preceding,
-                                                        following,
-                                                        min_periods,
-                                                        cudf::make_lead_aggregation(3));
+  auto lead_3_output_col =
+    cudf::grouped_rolling_window(grouping_keys,
+                                 input_col->view(),
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
 
   expect_columns_equivalent(
     *lead_3_output_col,
@@ -86,12 +87,13 @@ TYPED_TEST(TypedLeadLagWindowTest, LeadLagBasics)
       .release()
       ->view());
 
-  auto lag_2_output_col = cudf::grouped_rolling_window(grouping_keys,
-                                                       input_col->view(),
-                                                       preceding,
-                                                       following,
-                                                       min_periods,
-                                                       cudf::make_lag_aggregation(2));
+  auto lag_2_output_col =
+    cudf::grouped_rolling_window(grouping_keys,
+                                 input_col->view(),
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
 
   expect_columns_equivalent(
     *lag_2_output_col,
@@ -116,12 +118,13 @@ TYPED_TEST(TypedLeadLagWindowTest, LeadLagWithNulls)
   auto const following   = 3;
   auto const min_periods = 1;
 
-  auto lead_3_output_col = cudf::grouped_rolling_window(grouping_keys,
-                                                        input_col->view(),
-                                                        preceding,
-                                                        following,
-                                                        min_periods,
-                                                        cudf::make_lead_aggregation(3));
+  auto lead_3_output_col =
+    cudf::grouped_rolling_window(grouping_keys,
+                                 input_col->view(),
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
 
   expect_columns_equivalent(
     *lead_3_output_col,
@@ -130,12 +133,13 @@ TYPED_TEST(TypedLeadLagWindowTest, LeadLagWithNulls)
       .release()
       ->view());
 
-  auto const lag_2_output_col = cudf::grouped_rolling_window(grouping_keys,
-                                                             input_col->view(),
-                                                             preceding,
-                                                             following,
-                                                             min_periods,
-                                                             cudf::make_lag_aggregation(2));
+  auto const lag_2_output_col =
+    cudf::grouped_rolling_window(grouping_keys,
+                                 input_col->view(),
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
 
   expect_columns_equivalent(
     *lag_2_output_col,
@@ -164,13 +168,14 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithDefaults)
     cudf::make_fixed_width_scalar(detail::fixed_width_type_converter<int32_t, T>{}(99));
   auto const default_outputs = cudf::make_column_from_scalar(*default_value, input_col->size());
 
-  auto lead_3_output_col = cudf::grouped_rolling_window(grouping_keys,
-                                                        input_col->view(),
-                                                        *default_outputs,
-                                                        preceding,
-                                                        following,
-                                                        min_periods,
-                                                        cudf::make_lead_aggregation(3));
+  auto lead_3_output_col =
+    cudf::grouped_rolling_window(grouping_keys,
+                                 input_col->view(),
+                                 *default_outputs,
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
   expect_columns_equivalent(
     *lead_3_output_col,
     fixed_width_column_wrapper<T>{{3, 4, 5, 99, 99, 99, 30, 40, 50, 99, 99, 99},
@@ -178,13 +183,14 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithDefaults)
       .release()
       ->view());
 
-  auto const lag_2_output_col = cudf::grouped_rolling_window(grouping_keys,
-                                                             input_col->view(),
-                                                             *default_outputs,
-                                                             preceding,
-                                                             following,
-                                                             min_periods,
-                                                             cudf::make_lag_aggregation(2));
+  auto const lag_2_output_col =
+    cudf::grouped_rolling_window(grouping_keys,
+                                 input_col->view(),
+                                 *default_outputs,
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
 
   expect_columns_equivalent(
     *lag_2_output_col,
@@ -214,13 +220,14 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithDefaultsContainingNulls)
   auto const following   = 3;
   auto const min_periods = 1;
 
-  auto lead_3_output_col = cudf::grouped_rolling_window(grouping_keys,
-                                                        input_col->view(),
-                                                        *default_outputs,
-                                                        preceding,
-                                                        following,
-                                                        min_periods,
-                                                        cudf::make_lead_aggregation(3));
+  auto lead_3_output_col =
+    cudf::grouped_rolling_window(grouping_keys,
+                                 input_col->view(),
+                                 *default_outputs,
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
   expect_columns_equivalent(
     *lead_3_output_col,
     fixed_width_column_wrapper<T>{{3, 4, 5, 99, 99, -1, 30, 40, 50, 99, 99, -1},
@@ -228,13 +235,14 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithDefaultsContainingNulls)
       .release()
       ->view());
 
-  auto const lag_2_output_col = cudf::grouped_rolling_window(grouping_keys,
-                                                             input_col->view(),
-                                                             *default_outputs,
-                                                             preceding,
-                                                             following,
-                                                             min_periods,
-                                                             cudf::make_lag_aggregation(2));
+  auto const lag_2_output_col =
+    cudf::grouped_rolling_window(grouping_keys,
+                                 input_col->view(),
+                                 *default_outputs,
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
 
   expect_columns_equivalent(
     *lag_2_output_col,
@@ -263,12 +271,13 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithOutOfRangeOffsets)
   auto const following   = 3;
   auto const min_periods = 1;
 
-  auto lead_30_output_col = cudf::grouped_rolling_window(grouping_keys,
-                                                         input_col->view(),
-                                                         preceding,
-                                                         following,
-                                                         min_periods,
-                                                         cudf::make_lead_aggregation(30));
+  auto lead_30_output_col =
+    cudf::grouped_rolling_window(grouping_keys,
+                                 input_col->view(),
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(30));
 
   expect_columns_equivalent(
     *lead_30_output_col,
@@ -277,13 +286,14 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithOutOfRangeOffsets)
       .release()
       ->view());
 
-  auto const lag_20_output_col = cudf::grouped_rolling_window(grouping_keys,
-                                                              input_col->view(),
-                                                              *default_outputs,
-                                                              preceding,
-                                                              following,
-                                                              min_periods,
-                                                              cudf::make_lag_aggregation(20));
+  auto const lag_20_output_col =
+    cudf::grouped_rolling_window(grouping_keys,
+                                 input_col->view(),
+                                 *default_outputs,
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 cudf::make_lag_aggregation<cudf::rolling_aggregation>(20));
 
   expect_columns_equivalent(
     *lag_20_output_col,
@@ -308,21 +318,23 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithZeroOffsets)
   auto const following   = 3;
   auto const min_periods = 1;
 
-  auto lead_0_output_col = cudf::grouped_rolling_window(grouping_keys,
-                                                        input_col->view(),
-                                                        preceding,
-                                                        following,
-                                                        min_periods,
-                                                        cudf::make_lead_aggregation(0));
+  auto lead_0_output_col =
+    cudf::grouped_rolling_window(grouping_keys,
+                                 input_col->view(),
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(0));
 
   expect_columns_equivalent(*lead_0_output_col, *input_col);
 
-  auto const lag_0_output_col = cudf::grouped_rolling_window(grouping_keys,
-                                                             input_col->view(),
-                                                             preceding,
-                                                             following,
-                                                             min_periods,
-                                                             cudf::make_lag_aggregation(0));
+  auto const lag_0_output_col =
+    cudf::grouped_rolling_window(grouping_keys,
+                                 input_col->view(),
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 cudf::make_lag_aggregation<cudf::rolling_aggregation>(0));
   ;
 
   expect_columns_equivalent(*lag_0_output_col, *input_col);
@@ -347,13 +359,14 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithNegativeOffsets)
   auto const following   = 3;
   auto const min_periods = 1;
 
-  auto lag_minus_3_output_col = cudf::grouped_rolling_window(grouping_keys,
-                                                             input_col->view(),
-                                                             *default_outputs,
-                                                             preceding,
-                                                             following,
-                                                             min_periods,
-                                                             cudf::make_lag_aggregation(-3));
+  auto lag_minus_3_output_col =
+    cudf::grouped_rolling_window(grouping_keys,
+                                 input_col->view(),
+                                 *default_outputs,
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 cudf::make_lag_aggregation<cudf::rolling_aggregation>(-3));
   ;
 
   expect_columns_equivalent(
@@ -370,7 +383,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithNegativeOffsets)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lead_aggregation(-2));
+                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(-2));
 
   expect_columns_equivalent(
     *lead_minus_2_output_col,
@@ -397,26 +410,28 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithNoGrouping)
   auto const following   = 3;
   auto const min_periods = 1;
 
-  auto lead_3_output_col = cudf::grouped_rolling_window(grouping_keys,
-                                                        input_col->view(),
-                                                        *default_outputs,
-                                                        preceding,
-                                                        following,
-                                                        min_periods,
-                                                        cudf::make_lead_aggregation(3));
+  auto lead_3_output_col =
+    cudf::grouped_rolling_window(grouping_keys,
+                                 input_col->view(),
+                                 *default_outputs,
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
   ;
 
   expect_columns_equivalent(
     *lead_3_output_col,
     fixed_width_column_wrapper<T>{{3, 4, 5, 99, 99, 99}, {1, 1, 1, 1, 1, 1}}.release()->view());
 
-  auto const lag_2_output_col = cudf::grouped_rolling_window(grouping_keys,
-                                                             input_col->view(),
-                                                             *default_outputs,
-                                                             preceding,
-                                                             following,
-                                                             min_periods,
-                                                             cudf::make_lag_aggregation(2));
+  auto const lag_2_output_col =
+    cudf::grouped_rolling_window(grouping_keys,
+                                 input_col->view(),
+                                 *default_outputs,
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
 
   expect_columns_equivalent(
     *lag_2_output_col,
@@ -444,13 +459,14 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithAllNullInput)
   auto const following   = 3;
   auto const min_periods = 1;
 
-  auto lead_3_output_col = cudf::grouped_rolling_window(grouping_keys,
-                                                        input_col->view(),
-                                                        *default_outputs,
-                                                        preceding,
-                                                        following,
-                                                        min_periods,
-                                                        cudf::make_lead_aggregation(3));
+  auto lead_3_output_col =
+    cudf::grouped_rolling_window(grouping_keys,
+                                 input_col->view(),
+                                 *default_outputs,
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
   expect_columns_equivalent(
     *lead_3_output_col,
     fixed_width_column_wrapper<T>{{-1, -1, -1, 99, 99, 99, -1, -1, -1, 99, 99, 99},
@@ -458,13 +474,14 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithAllNullInput)
       .release()
       ->view());
 
-  auto const lag_2_output_col = cudf::grouped_rolling_window(grouping_keys,
-                                                             input_col->view(),
-                                                             *default_outputs,
-                                                             preceding,
-                                                             following,
-                                                             min_periods,
-                                                             cudf::make_lag_aggregation(2));
+  auto const lag_2_output_col =
+    cudf::grouped_rolling_window(grouping_keys,
+                                 input_col->view(),
+                                 *default_outputs,
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
 
   expect_columns_equivalent(
     *lag_2_output_col,
@@ -498,17 +515,19 @@ TYPED_TEST(TypedLeadLagWindowTest, DefaultValuesWithoutLeadLag)
   auto const min_periods = 1;
 
   auto const assert_aggregation_fails = [&](auto&& aggr) {
-    EXPECT_THROW(cudf::grouped_rolling_window(grouping_keys,
-                                              input_col->view(),
-                                              default_outputs->view(),
-                                              preceding,
-                                              following,
-                                              min_periods,
-                                              cudf::make_count_aggregation()),
-                 cudf::logic_error);
+    EXPECT_THROW(
+      cudf::grouped_rolling_window(grouping_keys,
+                                   input_col->view(),
+                                   default_outputs->view(),
+                                   preceding,
+                                   following,
+                                   min_periods,
+                                   cudf::make_count_aggregation<cudf::rolling_aggregation>()),
+      cudf::logic_error);
   };
 
-  auto aggs = {cudf::make_count_aggregation(), cudf::make_min_aggregation()};
+  auto aggs = {cudf::make_count_aggregation<cudf::rolling_aggregation>(),
+               cudf::make_min_aggregation<cudf::rolling_aggregation>()};
   std::for_each(
     aggs.begin(), aggs.end(), [&](auto& agg) { assert_aggregation_fails(std::move(agg)); });
 }
@@ -532,12 +551,13 @@ TEST_F(LeadLagWindowTest, LeadLagWithoutFixedWidthInput)
   auto const following   = 3;
   auto const min_periods = 1;
 
-  EXPECT_THROW(cudf::grouped_rolling_window(grouping_keys,
-                                            input_col->view(),
-                                            default_outputs->view(),
-                                            preceding,
-                                            following,
-                                            min_periods,
-                                            cudf::make_lead_aggregation(4)),
-               cudf::logic_error);
+  EXPECT_THROW(
+    cudf::grouped_rolling_window(grouping_keys,
+                                 input_col->view(),
+                                 default_outputs->view(),
+                                 preceding,
+                                 following,
+                                 min_periods,
+                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(4)),
+    cudf::logic_error);
 }
