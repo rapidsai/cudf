@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,7 +63,7 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
-  if (lists_column.is_empty()) return empty_like(lists_column.parent());
+  if (lists_column.is_empty()) return empty_like(lists_column.child());
   auto const offsets_column = lists_column.offsets();
 
   // create a column_view with attributes of the parent and data from the offsets

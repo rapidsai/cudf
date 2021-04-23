@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -79,11 +79,6 @@ struct DictionaryEntry {
   uint32_t pos;  // Position in data stream
   uint32_t len;  // Length in data stream
 };
-
-/**
- * @brief Mask to indicate conversion from decimals to float64
- */
-constexpr int orc_decimal2float64_scale = 0x80;
 
 /**
  * @brief Struct to describe per stripe's column information

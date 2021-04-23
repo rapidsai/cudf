@@ -318,7 +318,7 @@ flag. Below is a list of the available arguments and their purpose:
 | `NUMPY_VERSION` | newest | >=1.14.3 | set numpy version |
 | `PANDAS_VERSION` | newest | >=0.23.4 | set pandas version |
 | `PYARROW_VERSION` | 1.0.1 | Not supported | set pyarrow version |
-| `CMAKE_VERSION` | newest | >=3.14 | set cmake version |
+| `CMAKE_VERSION` | newest | >=3.18 | set cmake version |
 | `CYTHON_VERSION` | 0.29 | Not supported | set Cython version |
 | `PYTHON_VERSION` | 3.7 | 3.8 | set python version |
 

@@ -1968,7 +1968,7 @@ def as_column(
         data = as_column(
             utils.scalar_broadcast_to(arbitrary, length, dtype=dtype)
         )
-        if not nan_as_null:
+        if not nan_as_null and not is_decimal_dtype(data.dtype):
             if np.issubdtype(data.dtype, np.floating):
                 data = data.fillna(np.nan)
             elif np.issubdtype(data.dtype, np.datetime64):
