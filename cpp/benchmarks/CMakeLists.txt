@@ -119,6 +119,11 @@ ConfigureBench(REDUCTION_BENCH
   reduction/minmax_benchmark.cpp)
 
 ###################################################################################################
+# - reduction benchmark ---------------------------------------------------------------------------
+ConfigureBench(REPLACE_BENCH
+  replace/clamp_benchmark.cpp)
+
+###################################################################################################
 # - groupby benchmark -----------------------------------------------------------------------------
 ConfigureBench(GROUPBY_BENCH
   groupby/group_sum_benchmark.cu
