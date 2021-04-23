@@ -1303,6 +1303,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     }
   }
 
+  /**
+   * Compute the cumulative sum/prefix sum of the values in this column.
+   * This is similar to a rolling window SUM with unbounded preceding and none following.
+   * Input values 1, 2, 3
+   * Output values 1, 3, 6
+   * This currently only works for long values that are not nullable.
+   */
+  public final ColumnVector prefixSum() {
+    return new ColumnVector(prefixSum(getNativeView()));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // LOGICAL
   /////////////////////////////////////////////////////////////////////////////
@@ -2909,6 +2920,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       int following,
       long preceding_col,
       long following_col);
+
+  private static native long prefixSum(long viewHandle) throws CudfException;
 
   private static native long nansToNulls(long viewHandle) throws CudfException;
 

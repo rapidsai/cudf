@@ -1995,6 +1995,34 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testPrefixSum() {
+    try (ColumnVector v1 = ColumnVector.fromLongs(1, 2, 3, 5, 8, 10);
+         ColumnVector summed = v1.prefixSum();
+         ColumnVector expected = ColumnVector.fromLongs(1, 3, 6, 11, 19, 29)) {
+      assertColumnsAreEqual(expected, summed);
+    }
+  }
+
+  @Test
+  void testPrefixSumErrors() {
+    try (ColumnVector v1 = ColumnVector.fromBoxedLongs(1L, 2L, 3L, 5L, 8L, null)) {
+      assertThrows(CudfException.class, () -> {
+        try(ColumnVector ignored = v1.prefixSum()) {
+          // empty
+        }
+      });
+    }
+
+    try (ColumnVector v1 = ColumnVector.fromInts(1, 2, 3, 5, 8, 10)) {
+      assertThrows(CudfException.class, () -> {
+        try(ColumnVector ignored = v1.prefixSum()) {
+          // empty
+        }
+      });
+    }
+  }
+
+  @Test
   void testWindowStatic() {
     WindowOptions options = WindowOptions.builder().window(2, 1)
         .minPeriods(2).build();
