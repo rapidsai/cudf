@@ -118,7 +118,9 @@ template <typename SizeAndExecuteFunction>
 std::tuple<std::unique_ptr<column>, std::unique_ptr<column>, rmm::device_buffer, size_type>
 make_strings_children_with_null_mask(
   SizeAndExecuteFunction size_and_exec_fn,
+  size_type lists_count,
   size_type strings_count,
+
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -132,19 +134,33 @@ make_strings_children_with_null_mask(
   size_and_exec_fn.d_validities = validities.begin();
 
   // This is called twice: once for offsets and validities, and once for chars
-  auto for_each_fn = [strings_count, stream](SizeAndExecuteFunction& size_and_exec_fn) {
+  auto for_each_fn = [lists_count, stream](SizeAndExecuteFunction& size_and_exec_fn) {
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
+                       lists_count,
                        size_and_exec_fn);
   };
 
   // Compute the string sizes (storing in `d_offsets`) and string validities
   for_each_fn(size_and_exec_fn);
 
+  printf("Line %d\n", __LINE__);
+  std::vector<int8_t> v(validities.size());
+  CUDA_TRY(cudaMemcpyAsync(
+    v.data(), validities.data(), validities.size(), cudaMemcpyDefault, stream.value()));
+  stream.synchronize();
+  for (auto x : v) { printf("%d, ", (int)x); }
+  printf("\n\n");
+
+  printf("Line %d\n", __LINE__);
+  cudf::test::print(offsets_view);
+
   // Compute the offsets from string sizes
   thrust::exclusive_scan(
     rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+
+  printf("Line %d\n", __LINE__);
+  cudf::test::print(offsets_view);
 
   // Now build the chars column
   auto const bytes = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
@@ -190,6 +206,8 @@ struct compute_size_and_copy_fn {
   // Store offsets of the lists in the output lists column
   offset_type const* const dst_list_offsets;
 
+  bool const has_null_mask;
+
   // Store offsets of the strings in the chars column
   offset_type* d_offsets{nullptr};
 
@@ -200,15 +218,17 @@ struct compute_size_and_copy_fn {
   // We need to set `1` or `0` for the validities of the strings in the child column.
   int8_t* d_validities{nullptr};
 
-  bool has_null_mask;
-
   __device__ void operator()(size_type const dst_list_id)
   {
-    auto const num_cols       = table_dv.num_columns();
-    auto const src_col_id     = dst_list_id % num_cols;
-    auto const src_list_id    = dst_list_id / num_cols;
+    auto const num_cols    = table_dv.num_columns();
+    auto const src_col_id  = dst_list_id % num_cols;
+    auto const src_list_id = dst_list_id / num_cols;
+
     auto const& src_lists_col = table_dv.column(src_col_id);
-    if (has_null_mask and src_lists_col.is_null(src_list_id)) { return; }
+    if (has_null_mask and src_lists_col.is_null(src_list_id)) {
+      printf("return c null\n");
+      return;
+    }
 
     auto const src_list_offsets =
       src_lists_col.child(lists_column_view::offsets_column_index).data<size_type>() +
@@ -226,12 +246,11 @@ struct compute_size_and_copy_fn {
            ++read_idx, ++write_idx) {
         auto const is_valid = src_child.is_valid(read_idx);
         if (has_null_mask) { d_validities[write_idx] = static_cast<int8_t>(is_valid); }
-        d_offsets[write_idx] =
-          is_valid ? src_child_offsets[read_idx + 1] - src_child_offsets[read_idx] : 0;
+        d_offsets[write_idx] = src_child_offsets[read_idx + 1] - src_child_offsets[read_idx];
       }
     } else {  // just copy the entire list of strings
       auto const start_idx = src_child_offsets[src_list_offsets[src_list_id]];
-      auto const end_idx   = src_child_offsets[src_list_offsets[src_list_id + 1] - 1];
+      auto const end_idx   = src_child_offsets[src_list_offsets[src_list_id + 1]];
       if (start_idx < end_idx) {
         auto const input_ptr =
           src_child.child(strings_column_view::chars_column_index).data<char>() +
@@ -251,40 +270,56 @@ struct copy_list_entries_fn {
   std::enable_if_t<std::is_same_v<T, cudf::string_view>, std::unique_ptr<column>> operator()(
     table_view const& input,
     column_view const& list_offsets,
-    size_type num_strings,
+    size_type num_output_lists,
+    size_type num_output_entries,
     bool has_null_mask,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const noexcept
   {
     auto const table_dv_ptr = table_device_view::create(input);
-    auto const comp_fn = compute_size_and_copy_fn{*table_dv_ptr, list_offsets.begin<offset_type>()};
-    if (not has_null_mask) {
-      auto [offsets_column, chars_column] =
-        cudf::strings::detail::make_strings_children(comp_fn, num_strings, 0, stream, mr);
-      return make_strings_column(num_strings,
+    auto const comp_fn =
+      compute_size_and_copy_fn{*table_dv_ptr, list_offsets.begin<offset_type>(), has_null_mask};
+    //    if (not has_null_mask) {
+    //      auto [offsets_column, chars_column] =
+    //        cudf::strings::detail::make_strings_children(comp_fn, num_output_lists, 0, stream,
+    //        mr);
+    //      return make_strings_column(num_output_entries,
+    //                                 std::move(offsets_column),
+    //                                 std::move(chars_column),
+    //                                 0,
+    //                                 rmm::device_buffer{},
+    //                                 stream,
+    //                                 mr);
+    //    }
+
+    printf("numlist: %d, entri: %d\n", num_output_lists, num_output_entries);
+
+    auto [offsets_column, chars_column, null_mask, null_count] =
+      make_strings_children_with_null_mask(
+        comp_fn, num_output_lists, num_output_entries, stream, mr);
+    if (not has_null_mask)
+      return make_strings_column(num_output_entries,
                                  std::move(offsets_column),
                                  std::move(chars_column),
                                  0,
                                  rmm::device_buffer{},
                                  stream,
                                  mr);
-    }
-
-    auto [offsets_column, chars_column, null_mask, null_count] =
-      make_strings_children_with_null_mask(comp_fn, num_strings, stream, mr);
-    return make_strings_column(num_strings,
-                               std::move(offsets_column),
-                               std::move(chars_column),
-                               null_count,
-                               std::move(null_mask),
-                               stream,
-                               mr);
+    else
+      return make_strings_column(num_output_entries,
+                                 std::move(offsets_column),
+                                 std::move(chars_column),
+                                 null_count,
+                                 std::move(null_mask),
+                                 stream,
+                                 mr);
   }
 
   template <class T>
   std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<column>> operator()(
     table_view const& input,
     column_view const& list_offsets,
+    size_type num_output_lists,
     size_type num_output_entries,
     bool has_null_mask,
     rmm::cuda_stream_view stream,
@@ -293,7 +328,6 @@ struct copy_list_entries_fn {
     auto const child_col    = lists_column_view(*input.begin()).child();
     auto const num_cols     = input.num_columns();
     auto const num_rows     = input.num_rows();
-    auto const num_lists    = num_rows * num_cols;
     auto const table_dv_ptr = table_device_view::create(input);
 
     auto output =
@@ -307,7 +341,7 @@ struct copy_list_entries_fn {
     thrust::for_each_n(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<size_type>(0),
-      num_lists,
+      num_output_lists,
       [num_cols,
        table_dv         = *table_dv_ptr,
        out_validities   = validities.begin(),
@@ -350,6 +384,7 @@ struct copy_list_entries_fn {
                    std::unique_ptr<column>>
   operator()(table_view const&,
              column_view const&,
+             size_type,
              size_type,
              bool,
              rmm::cuda_stream_view,
@@ -398,6 +433,7 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
                                                              copy_list_entries_fn{},
                                                              input,
                                                              list_offsets->view(),
+                                                             num_output_lists,
                                                              num_output_entries,
                                                              has_null_mask,
                                                              stream,
