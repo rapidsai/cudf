@@ -107,7 +107,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         if arg == "size":
             return self.size()
 
-        _supported = {"count", "mean", "std", "var", "sum", "min", "max"}
+        _supported = {"count", "mean", "std", "var", "sum", "min", "max", list}
         if (
             isinstance(self.obj, DaskDataFrame)
             and isinstance(self.index, (str, list))
