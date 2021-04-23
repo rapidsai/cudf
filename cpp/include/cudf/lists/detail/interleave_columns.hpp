@@ -35,7 +35,7 @@ namespace detail {
  * @endcode
  *
  * @throws cudf::logic_error if any column of the input table is not a lists columns.
- * @throws cudf::logic_error if any lists column contains nested type.
+ * @throws cudf::logic_error if any lists column contains nested typed entry.
  * @throws cudf::logic_error if all lists columns do not have the same entry type.
  *
  * @param input Table containing lists columns to interleave.
