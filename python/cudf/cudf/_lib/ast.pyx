@@ -210,7 +210,12 @@ cdef ast_traverse(root, tuple col_names, list stack, list nodes):
                 op = python_cudf_ast_map[type(value.op)]
                 nodes.append(stack.pop())
                 stack.append(Expression(op, nodes[-1]))
-            elif isinstance(value, ast.BinOp):
+            # TODO: The expected behavior of the below is questionable. pandas
+            # converts bitwise operators in query to logical operators, which I
+            # don't think we want. This might have to be a preprocessing of the
+            # expression string in df.query that replaces `|` with `or` and `&`
+            # with `and`.
+            elif isinstance(value, (ast.BinOp, ast.BoolOp)):
                 ast_traverse(value, col_names, stack, nodes)
                 op = python_cudf_ast_map[type(value.op)]
                 # TODO: This assumes that left is parsed before right, should
