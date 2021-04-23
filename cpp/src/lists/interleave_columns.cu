@@ -27,6 +27,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/copy.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -149,7 +150,7 @@ struct compute_string_sizes_and_interleave_lists_fn {
           src_child.child(strings_column_view::chars_column_index).data<char>() +
           src_child.offset() + start_idx;
         auto const output_ptr = d_chars + d_offsets[write_idx];
-        std::memcpy(output_ptr, input_ptr, end_idx - start_idx);
+        thrust::copy(thrust::seq, input_ptr, input_ptr + end_idx - start_idx, output_ptr);
       }
     }
   }
@@ -256,18 +257,15 @@ struct interleave_list_entries_fn {
         }
 
         // Do a memcpy for the entire list entries.
-        auto const input_ptr  = src_child.data<T>() + start_idx;
-        auto const output_ptr = &d_output[dst_list_offsets[dst_list_id]];
-        std::memcpy(output_ptr, input_ptr, sizeof(T) * (end_idx - start_idx));
+        auto const input_ptr  = reinterpret_cast<char const*>(src_child.data<T>() + start_idx);
+        auto const output_ptr = reinterpret_cast<char*>(&d_output[dst_list_offsets[dst_list_id]]);
+        thrust::copy(
+          thrust::seq, input_ptr, input_ptr + sizeof(T) * (end_idx - start_idx), output_ptr);
       });
 
     if (has_null_mask) {
       auto [null_mask, null_count] = cudf::detail::valid_if(
-        validities.begin(),
-        validities.end(),
-        [] __device__(auto const valid) { return valid; },
-        stream,
-        mr);
+        validities.begin(), validities.end(), thrust::identity<int8_t>{}, stream, mr);
       if (null_count > 0) { output->set_null_mask(null_mask, null_count); }
     }
 
@@ -346,11 +344,7 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   }
 
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    list_validities.begin(),
-    list_validities.end(),
-    [] __device__(auto const valid) { return valid; },
-    stream,
-    mr);
+    list_validities.begin(), list_validities.end(), thrust::identity<int8_t>{}, stream, mr);
   return make_lists_column(num_output_lists,
                            std::move(list_offsets),
                            std::move(list_entries),
