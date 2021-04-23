@@ -2,7 +2,7 @@
 
 from libcpp.memory cimport unique_ptr
 
-from libc.stdint cimport int32_t
+from libc.stdint cimport int32_t, int64_t
 from cudf._lib.cpp.scalar.scalar cimport numeric_scalar
 from cudf._lib.cpp.ast cimport literal, column_reference, expression, node
 
@@ -17,7 +17,7 @@ cdef class Node:
 
 
 cdef class Literal(Node):
-    cdef unique_ptr[numeric_scalar[float]] c_scalar
+    cdef unique_ptr[numeric_scalar[int64_t]] c_scalar
 
 
 cdef class ColumnReference(Node):

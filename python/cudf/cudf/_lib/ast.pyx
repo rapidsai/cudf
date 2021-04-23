@@ -8,6 +8,7 @@ from cudf.core.dataframe import DataFrame
 
 from cython.operator cimport dereference
 from cudf._lib.cpp.types cimport size_type
+from libc.stdint cimport int64_t
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 from cudf._lib.ast cimport underlying_type_ast_operator
@@ -74,11 +75,11 @@ class TableReference(Enum):
 cdef class Literal(Node):
     def __cinit__(self, value):
         # TODO: Generalize this to other types of literals.
-        cdef float val = value
-        self.c_scalar = make_unique[numeric_scalar[float]](val, True)
+        cdef int val = value
+        self.c_scalar = make_unique[numeric_scalar[int64_t]](val, True)
         self.c_obj = <unique_ptr[libcudf_ast.node]> make_unique[
             libcudf_ast.literal](
-                <numeric_scalar[float] &>dereference(self.c_scalar))
+                <numeric_scalar[int64_t] &>dereference(self.c_scalar))
 
 
 cdef class ColumnReference(Node):
@@ -157,10 +158,16 @@ python_cudf_ast_map = {
 }
 
 
-cpdef ast_visit(node, tuple col_names, list stack, list nodes):
+cdef ast_visit(node, tuple col_names, list stack, list nodes):
     # Base cases: Name
     if isinstance(node, ast.Name):
         stack.append(ColumnReference(col_names.index(node.id) + 1))
+    # elif isinstance(node, (ast.Constant, ast.Num)):
+    elif isinstance(node, ast.Num):
+        # TODO: When we drop support for Python 3.7, we can just use
+        # ast.Constant as a catch-all above.
+        # stack.append(Literal(node.value))
+        stack.append(Literal(node.n))
     else:
         for field in node._fields:
             value = getattr(node, field)
