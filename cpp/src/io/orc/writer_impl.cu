@@ -23,6 +23,7 @@
 
 #include <io/utilities/column_utils.cuh>
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -185,7 +186,7 @@ class orc_column_view {
   // Id in the ORC file
   auto id() const noexcept { return _index + 1; }
   size_t type_width() const noexcept { return _type_width; }
-  size_t data_count() const noexcept { return _data_count; }
+  auto data_count() const noexcept { return _data_count; }
   size_t null_count() const noexcept { return _null_count; }
   bool nullable() const noexcept { return (_nulls != nullptr); }
   uint32_t const *nulls() const noexcept { return _nulls; }
@@ -203,7 +204,7 @@ class orc_column_view {
   bool _is_string_type = false;
 
   size_t _type_width     = 0;
-  size_t _data_count     = 0;
+  size_type _data_count  = 0;
   size_t _null_count     = 0;
   uint32_t const *_nulls = nullptr;
   uint8_t _clockscale    = 0;
@@ -1039,15 +1040,45 @@ rmm::device_uvector<size_type> get_string_column_ids(const table_device_view &vi
   return string_column_ids;
 }
 
+constexpr int test_rg_size = 5;
+
+struct rowgroup_iterator {
+  using difference_type   = long;
+  using value_type        = int;
+  using pointer           = int *;
+  using reference         = int &;
+  using iterator_category = thrust::output_device_iterator_tag;
+  int idx;
+
+  CUDA_HOST_DEVICE_CALLABLE rowgroup_iterator(int offset) : idx{offset} {}
+  CUDA_HOST_DEVICE_CALLABLE value_type operator*() const { return idx / test_rg_size; }
+  CUDA_HOST_DEVICE_CALLABLE auto operator+(int i) const { return rowgroup_iterator{idx + i}; }
+  CUDA_HOST_DEVICE_CALLABLE rowgroup_iterator &operator++()
+  {
+    ++idx;
+    return *this;
+  }
+  CUDA_HOST_DEVICE_CALLABLE value_type operator[](int offset)
+  {
+    return (idx + offset) / test_rg_size;
+  }
+  CUDA_HOST_DEVICE_CALLABLE bool operator!=(rowgroup_iterator const &other)
+  {
+    return idx != other.idx;
+  }
+};
+
 // returns host vector of per-rowgroup sizes
 // TODO: return a col_idx -> vector map?
-encoder_decimal_info decimal_chunk_sizes(const table_view &table,
+encoder_decimal_info decimal_chunk_sizes(table_view const &table,
                                          host_span<orc_column_view> orc_columns,
                                          host_span<stripe_rowgroups const> stripes,
                                          rmm::cuda_stream_view stream)
 {
   std::vector<rmm::device_uvector<uint32_t>> elem_sizes;
-  // for each column, if decimal, alloc and calc sizes async; attach to column (is move okay?)
+  auto const num_rowgroups  = 2;
+  auto d_tmp_rowgroup_sizes = rmm::device_uvector<uint32_t>(num_rowgroups, stream);
+
   for (size_t col_idx = 0; col_idx < orc_columns.size(); ++col_idx) {
     if (orc_columns[col_idx].orc_kind() == DECIMAL) {
       elem_sizes.emplace_back(orc_columns[col_idx].data_count(), stream);
@@ -1063,9 +1094,26 @@ encoder_decimal_info decimal_chunk_sizes(const table_view &table,
                           }
                           return len;
                         });
-      auto const vec = cudf::detail::make_std_vector_sync(elem_sizes.back(), stream);
-      for (auto &num : vec) std::cout << num << ' ';
-      std::cout << std::endl;
+
+      thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+                                    rowgroup_iterator{0},
+                                    rowgroup_iterator{orc_columns[col_idx].data_count()},
+                                    elem_sizes.back().begin(),
+                                    elem_sizes.back().begin());
+
+      thrust::transform(rmm::exec_policy(stream),
+                        thrust::make_counting_iterator<size_type>(0),
+                        thrust::make_counting_iterator<size_type>(num_rowgroups),
+                        d_tmp_rowgroup_sizes.begin(),
+                        [src = elem_sizes.back().data(),
+                         num_rows = orc_columns[col_idx].data_count()] __device__(auto idx) {
+                           return src[min(num_rows, test_rg_size * (idx + 1)) - 1]; 
+                        });
+
+
+      // auto const vec = cudf::detail::make_std_vector_sync(d_tmp_rowgroup_sizes, stream);
+      // for (auto &num : vec) std::cout << num << ' ';
+      // std::cout << std::endl;
       // col.atach_decimal_sizes(elem_sizes.back().data());
     }
   }
