@@ -9,7 +9,7 @@ from nvtx import annotate
 import cudf
 from cudf._lib import groupby as libgroupby
 from cudf.core.abc import Serializable
-from cudf.utils.utils import cached_property
+from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
 # Note that all valid aggregation methods (e.g. GroupBy.min) are bound to the
@@ -96,6 +96,20 @@ class GroupBy(Serializable):
             )
             .groupby(self.grouping, sort=self._sort)
             .agg("size")
+        )
+
+    def cumcount(self):
+        """
+        Return the cumulative count of keys in each group.
+        """
+        return (
+            cudf.Series(
+                cudf.core.column.column_empty(
+                    len(self.obj), "int8", masked=False
+                )
+            )
+            .groupby(self.grouping, sort=self._sort)
+            .agg("cumcount")
         )
 
     @cached_property
@@ -587,6 +601,10 @@ class GroupBy(Serializable):
         """Compute the column-wise sum of the values in each group."""
         return self.agg("sum")
 
+    def prod(self):
+        """Compute the column-wise product of the values in each group."""
+        return self.agg("prod")
+
     def idxmin(self):
         """Get the column-wise index of the minimum value in each group."""
         return self.agg("idxmin")
@@ -670,8 +688,23 @@ class GroupBy(Serializable):
         """Get a list of the unique values for each column in each group."""
         return self.agg("unique")
 
+    def cumsum(self):
+        """Compute the column-wise cumulative sum of the values in
+        each group."""
+        return self.agg("cumsum")
 
-class DataFrameGroupBy(GroupBy):
+    def cummin(self):
+        """Get the column-wise cumulative minimum value in each group."""
+        return self.agg("cummin")
+
+    def cummax(self):
+        """Get the column-wise cumulative maximum value in each group."""
+        return self.agg("cummax")
+
+
+class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
+    _PROTECTED_KEYS = frozenset(("obj",))
+
     def __init__(
         self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
     ):
@@ -765,17 +798,6 @@ class DataFrameGroupBy(GroupBy):
             as_index=as_index,
             dropna=dropna,
         )
-
-    def __getattr__(self, key):
-        # Without this check, copying can trigger a RecursionError. See
-        # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html  # noqa: E501
-        # for an explanation.
-        if key == "obj":
-            raise AttributeError
-        try:
-            return self[key]
-        except KeyError:
-            raise AttributeError
 
     def __getitem__(self, key):
         return self.obj[key].groupby(

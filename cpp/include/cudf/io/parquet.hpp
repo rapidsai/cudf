@@ -389,10 +389,9 @@ class column_in_metadata {
   bool _use_int96_timestamp = false;
   // bool _output_as_binary = false;
   thrust::optional<uint8_t> _decimal_precision;
-
- public:
   std::vector<column_in_metadata> children;
 
+ public:
   /**
    * @brief Set the name of this column
    *

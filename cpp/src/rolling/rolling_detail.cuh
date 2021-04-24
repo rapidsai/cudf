@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <rolling/rolling_detail.hpp>
+#include "rolling_detail.hpp"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -48,7 +48,6 @@
 
 #include <jit_preprocessed_files/rolling/jit/kernel.cu.jit.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 

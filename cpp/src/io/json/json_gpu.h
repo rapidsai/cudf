@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <io/json/json_common.h>
 #include <io/utilities/parsing_utils.cuh>
+#include "json_common.h"
 
 #include <hash/concurrent_unordered_map.cuh>
 

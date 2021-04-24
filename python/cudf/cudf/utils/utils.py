@@ -1,7 +1,9 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import functools
+import decimal
 from collections.abc import Sequence
+from typing import FrozenSet, Set, Union
 
 import cupy as cp
 import numpy as np
@@ -55,6 +57,15 @@ def scalar_broadcast_to(scalar, size, dtype=None):
             return scalar_broadcast_to(scalar.categories[0], size).astype(
                 dtype
             )
+
+    if isinstance(scalar, decimal.Decimal):
+        if dtype is None:
+            dtype = cudf.Decimal64Dtype._from_decimal(scalar)
+
+        out_col = column.column_empty(size, dtype=dtype)
+        if out_col.size != 0:
+            out_col[:] = scalar
+        return out_col
 
     scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
     dtype = scalar.dtype
@@ -156,6 +167,44 @@ class cached_property:
             value = self.func(instance)
             setattr(instance, self.func.__name__, value)
             return value
+
+
+class GetAttrGetItemMixin:
+    """This mixin changes `__getattr__` to attempt a `__getitem__` call.
+
+    Classes that include this mixin gain enhanced functionality for the
+    behavior of attribute access like `obj.foo`: if `foo` is not an attribute
+    of `obj`, obj['foo'] will be attempted, and the result returned.  To make
+    this behavior safe, classes that include this mixin must define a class
+    attribute `_PROTECTED_KEYS` that defines the attributes that are accessed
+    within `__getitem__`. For example, if `__getitem__` is defined as
+    `return self._data[key]`, we must define `_PROTECTED_KEYS={'_data'}`.
+    """
+
+    # Tracking of protected keys by each subclass is necessary to make the
+    # `__getattr__`->`__getitem__` call safe. See
+    # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html  # noqa: E501
+    # for an explanation. In brief, defining the `_PROTECTED_KEYS` allows this
+    # class to avoid calling `__getitem__` inside `__getattr__` when
+    # `__getitem__` will internally again call `__getattr__`, resulting in an
+    # infinite recursion.
+    # This problem only arises when the copy protocol is invoked (e.g. by
+    # `copy.copy` or `pickle.dumps`), and could also be avoided by redefining
+    # methods involved with the copy protocol such as `__reduce__` or
+    # `__setstate__`, but this class may be used in complex multiple
+    # inheritance hierarchies that might also override serialization.  The
+    # solution here is a minimally invasive change that avoids such conflicts.
+    _PROTECTED_KEYS: Union[FrozenSet[str], Set[str]] = frozenset()
+
+    def __getattr__(self, key):
+        if key in self._PROTECTED_KEYS:
+            raise AttributeError
+        try:
+            return self[key]
+        except KeyError:
+            raise AttributeError(
+                f"{type(self).__name__} object has no attribute {key}"
+            )
 
 
 def raise_iteration_error(obj):
@@ -323,7 +372,7 @@ def get_appropriate_dispatched_func(
 def _cast_to_appropriate_cudf_type(val, index=None):
     # Handle scalar
     if val.ndim == 0:
-        return cudf.Scalar(val).value
+        return to_cudf_compatible_scalar(val)
     # 1D array
     elif (val.ndim == 1) or (val.ndim == 2 and val.shape[1] == 1):
         # if index is not None and is of a different length
