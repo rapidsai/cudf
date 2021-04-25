@@ -765,3 +765,24 @@ def test_empty_string_columns(data):
 
     assert_eq(expected, got_df)
     assert_eq(expected_pdf, got_df)
+
+
+@pytest.mark.parametrize(
+    "src", ["filepath", "pathobj", "bytes_io", "bytes", "url"]
+)
+def test_orc_reader_multiple_files(datadir, src):
+
+    path = datadir / "TestOrcFile.test1.orc"
+    try:
+        orcfile_0 = pa.orc.ORCFile(path)
+        orcfile_1 = pa.orc.ORCFile(path)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
+
+    pdf_0 = orcfile_0.read().to_pandas()
+    pdf_1 = orcfile_1.read().to_pandas()
+    expect = pd.concat([pdf_0, pdf_1])
+
+    got = cudf.read_orc([path, path], engine="cudf").to_pandas()
+
+    assert_eq(expect, got)

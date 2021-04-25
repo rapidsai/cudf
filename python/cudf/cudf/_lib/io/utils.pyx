@@ -58,6 +58,14 @@ cdef source_info make_source_info(list src) except*:
         files = [<string> str(elem).encode() for elem in src]
         c_files = files
         return source_info(c_files)
+    # elif isinstance(src[0], (list)):
+    #     print(src)
+    #     for file in src:
+    #         print(file)
+    #         print(type(file))
+    #         if not(os.path.isfile(file)):
+    #             print("NOT A FILE!!!!!")
+    #     print("something")
     else:
         raise TypeError("Unrecognized input type: {}".format(type(src[0])))
 

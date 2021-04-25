@@ -4,11 +4,14 @@ import datetime
 import warnings
 
 import pyarrow as pa
+from fsspec.core import get_fs_token_paths
+from fsspec.utils import stringify_path
 from pyarrow import orc as orc
 
 import cudf
 from cudf._lib import orc as liborc
 from cudf.utils import ioutils
+from cudf.utils.dtypes import is_list_like
 from cudf.utils.metadata import (  # type: ignore
     orc_column_statistics_pb2 as cs_pb2,
 )
@@ -213,6 +216,14 @@ def _filter_stripes(
     return selected_stripes
 
 
+def _ensure_filesystem(passed_filesystem, path):
+    if passed_filesystem is None:
+        return get_fs_token_paths(path[0] if isinstance(path, list) else path)[
+            0
+        ]
+    return passed_filesystem
+
+
 @ioutils.doc_read_orc()
 def read_orc(
     filepath_or_buffer,
@@ -230,35 +241,45 @@ def read_orc(
 
     from cudf import DataFrame
 
-    is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
-        path_or_data=filepath_or_buffer, **kwargs,
-    )
-    if not is_single_filepath_or_buffer:
-        raise NotImplementedError(
-            "`read_orc` does not yet support reading multiple files"
-        )
+    # Multiple sources are passed as a list. If a single source is passed,
+    # wrap it in a list for unified processing downstream.
+    if not is_list_like(filepath_or_buffer):
+        filepath_or_buffer = [filepath_or_buffer]
 
-    filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
-        path_or_data=filepath_or_buffer, compression=None, **kwargs
-    )
-    if compression is not None:
-        ValueError("URL content-encoding decompression is not supported")
+    filepaths_or_buffers = []
+    for source in filepath_or_buffer:
+        if ioutils.is_directory(source, **kwargs):
+            fs = _ensure_filesystem(passed_filesystem=None, path=source)
+            source = stringify_path(source)
+            source = fs.sep.join([source, "*.parquet"])
+
+        tmp_source, compression = ioutils.get_filepath_or_buffer(
+            path_or_data=source, compression=None, **kwargs,
+        )
+        if compression is not None:
+            raise ValueError(
+                "URL content-encoding decompression is not supported"
+            )
+        if isinstance(tmp_source, list):
+            filepath_or_buffer.extend(tmp_source)
+        else:
+            filepaths_or_buffers.append(tmp_source)
 
     if filters is not None:
         selected_stripes = _filter_stripes(
-            filters, filepath_or_buffer, stripes, skiprows, num_rows
+            filters, filepaths_or_buffers, stripes, skiprows, num_rows
         )
 
         # Return empty if everything was filtered
         if len(selected_stripes) == 0:
-            return _make_empty_df(filepath_or_buffer, columns)
+            return _make_empty_df(filepaths_or_buffers, columns)
         else:
             stripes = selected_stripes
 
     if engine == "cudf":
         df = DataFrame._from_table(
             liborc.read_orc(
-                filepath_or_buffer,
+                filepaths_or_buffers,
                 columns,
                 stripes,
                 skiprows,
