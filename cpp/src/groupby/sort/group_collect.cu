@@ -53,7 +53,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
   std::unique_ptr<column> &null_purged_values = null_purged_entries[0];
 
   // Recalculate offsets after null entries are purged.
-  auto null_purged_sizes = make_fixed_width_column(
+  auto null_purged_sizes = make_numeric_column(
     data_type{type_to_id<size_type>()}, num_groups, mask_state::UNALLOCATED, stream, mr);
 
   thrust::transform(
