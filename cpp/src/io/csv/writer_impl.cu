@@ -371,24 +371,13 @@ void writer::impl::write(table_view const& table,
     if (num_rows <= n_rows_per_chunk) {
       vector_views.push_back(table);
     } else {
-      std::vector<size_type> splits;
-      auto n_chunks = num_rows / n_rows_per_chunk;
-      splits.resize(n_chunks);
-
-      rmm::device_vector<size_type> d_splits(n_chunks, n_rows_per_chunk);
-      thrust::inclusive_scan(
-        rmm::exec_policy(stream), d_splits.begin(), d_splits.end(), d_splits.begin());
-
-      CUDA_TRY(cudaMemcpyAsync(splits.data(),
-                               d_splits.data().get(),
-                               n_chunks * sizeof(size_type),
-                               cudaMemcpyDeviceToHost,
-                               stream.value()));
-
-      stream.synchronize();
+      auto const n_chunks = num_rows / n_rows_per_chunk;
+      std::vector<size_type> splits(n_chunks);
+      thrust::tabulate(splits.begin(), splits.end(), [n_rows_per_chunk](auto idx) {
+        return (idx + 1) * n_rows_per_chunk;
+      });
 
       // split table_view into chunks:
-      //
       vector_views = cudf::split(table, splits);
     }
 

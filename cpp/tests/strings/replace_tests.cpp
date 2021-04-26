@@ -337,30 +337,6 @@ TEST_F(StringsReplaceTest, ReplaceMulti)
   }
 }
 
-TEST_F(StringsReplaceTest, ReplaceNulls)
-{
-  std::vector<const char*> h_strings{"Héllo", "thesé", nullptr, "ARE THE", "tést strings", ""};
-
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  auto strings_view = cudf::strings_column_view(strings);
-
-  {
-    auto results = cudf::strings::replace_nulls(strings_view, cudf::string_scalar("___"));
-    std::vector<const char*> h_expected{"Héllo", "thesé", "___", "ARE THE", "tést strings", ""};
-    cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  }
-  {
-    auto results = cudf::strings::replace_nulls(strings_view);
-    std::vector<const char*> h_expected{"Héllo", "thesé", "", "ARE THE", "tést strings", ""};
-    cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  }
-}
-
 TEST_F(StringsReplaceTest, EmptyStringsColumn)
 {
   cudf::column_view zero_size_strings_column(

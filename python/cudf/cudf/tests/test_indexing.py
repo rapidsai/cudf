@@ -102,13 +102,16 @@ def pdf_gdf_multi():
 def test_series_indexing(i1, i2, i3):
     a1 = np.arange(20)
     series = cudf.Series(a1)
+
     # Indexing
     sr1 = series.iloc[i1]
     assert sr1.null_count == 0
     np.testing.assert_equal(sr1.to_array(), a1[:12])
+
     sr2 = sr1.iloc[i2]
     assert sr2.null_count == 0
     np.testing.assert_equal(sr2.to_array(), a1[3:12])
+
     # Index with stride
     sr3 = sr2.iloc[i3]
     assert sr3.null_count == 0
@@ -121,6 +124,44 @@ def test_series_indexing(i1, i2, i3):
     if isinstance(i1, np.ndarray) and i1.dtype in index_dtypes:
         for i in i1:  # numpy integers
             assert series[i] == a1[i]
+
+
+@pytest.mark.parametrize(
+    "arg",
+    [
+        1,
+        -1,
+        "b",
+        np.int32(1),
+        np.uint32(1),
+        np.int8(1),
+        np.uint8(1),
+        np.int16(1),
+        np.uint16(1),
+        np.int64(1),
+        np.uint64(1),
+    ],
+)
+def test_series_get_item_iloc_defer(arg):
+    # Indexing for non-numeric dtype Index
+    ps = pd.Series([1, 2, 3], index=pd.Index(["a", "b", "c"]))
+    gs = cudf.from_pandas(ps)
+
+    expect = ps[arg]
+    got = gs[arg]
+
+    assert_eq(expect, got)
+
+
+def test_series_iloc_defer_cudf_scalar():
+    ps = pd.Series([1, 2, 3], index=pd.Index(["a", "b", "c"]))
+    gs = cudf.from_pandas(ps)
+
+    for t in index_dtypes:
+        arg = cudf.Scalar(1, dtype=t)
+        got = gs[arg]
+        expect = 2
+        assert_eq(expect, got)
 
 
 def test_series_indexing_large_size():
@@ -1095,8 +1136,17 @@ def test_dataframe_setitem_iloc(key, value, pdf_gdf):
         (("one", "a"), 5),
         ((slice(None), "a"), 5),
         ((slice(None), "a"), range(3)),
+        ((slice(None), "a"), [3, 2, 1]),
         ((slice(None, "two"), "a"), range(2)),
+        ((slice(None, "two"), "a"), [4, 5]),
         ((["one", "two"], "a"), 5),
+        (("one", "c"), 5),
+        ((["one", "two"], "c"), 5),
+        ((slice(None), "c"), 5),
+        ((slice(None), "c"), range(3)),
+        ((slice(None), "c"), [3, 2, 1]),
+        ((slice(None, "two"), "c"), range(2)),
+        ((slice(None, "two"), "c"), [4, 5]),
     ],
 )
 def test_dataframe_setitem_loc(key, value, pdf_gdf):
@@ -1104,6 +1154,21 @@ def test_dataframe_setitem_loc(key, value, pdf_gdf):
     pdf.loc[key] = value
     gdf.loc[key] = value
     assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "key, value",
+    [
+        (("one", "a"), 5),
+        ((slice(None), "a"), range(3)),
+        ((slice(None), "a"), [3, 2, 1]),
+    ],
+)
+def test_dataframe_setitem_loc_empty_df(key, value):
+    pdf, gdf = pd.DataFrame(), cudf.DataFrame()
+    pdf.loc[key] = value
+    gdf.loc[key] = value
+    assert_eq(pdf, gdf, check_dtype=False)
 
 
 @pytest.mark.parametrize(

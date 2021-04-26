@@ -22,6 +22,7 @@
 #include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/detail/utilities/trie.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.cuh>
 #include <cudf/null_mask.hpp>
@@ -536,8 +537,8 @@ __global__ void __launch_bounds__(csvparse_block_dim)
                       device_span<column_parse::flags const> column_flags,
                       device_span<uint64_t const> row_offsets,
                       device_span<cudf::data_type const> dtypes,
-                      device_span<void *> columns,
-                      device_span<cudf::bitmask_type *> valids)
+                      device_span<void *const> columns,
+                      device_span<cudf::bitmask_type *const> valids)
 {
   auto const raw_csv = data.data();
   // thread IDs range per block, so also need the block id.
@@ -970,8 +971,8 @@ __global__ void __launch_bounds__(rowofs_block_dim)
 }
 
 size_t __host__ count_blank_rows(const cudf::io::parse_options_view &opts,
-                                 device_span<char const> const data,
-                                 device_span<uint64_t const> const row_offsets,
+                                 device_span<char const> data,
+                                 device_span<uint64_t const> row_offsets,
                                  rmm::cuda_stream_view stream)
 {
   const auto newline  = opts.skipblanklines ? opts.terminator : opts.comment;
@@ -987,10 +988,10 @@ size_t __host__ count_blank_rows(const cudf::io::parse_options_view &opts,
     });
 }
 
-void __host__ remove_blank_rows(cudf::io::parse_options_view const &options,
-                                device_span<char const> const data,
-                                rmm::device_vector<uint64_t> &row_offsets,
-                                rmm::cuda_stream_view stream)
+device_span<uint64_t> __host__ remove_blank_rows(cudf::io::parse_options_view const &options,
+                                                 device_span<char const> data,
+                                                 device_span<uint64_t> row_offsets,
+                                                 rmm::cuda_stream_view stream)
 {
   size_t d_size       = data.size();
   const auto newline  = options.skipblanklines ? options.terminator : options.comment;
@@ -1004,10 +1005,10 @@ void __host__ remove_blank_rows(cudf::io::parse_options_view const &options,
       return ((pos != d_size) &&
               (data[pos] == newline || data[pos] == comment || data[pos] == carriage));
     });
-  row_offsets.resize(new_end - row_offsets.begin());
+  return row_offsets.subspan(0, new_end - row_offsets.begin());
 }
 
-thrust::host_vector<column_type_histogram> detect_column_types(
+std::vector<column_type_histogram> detect_column_types(
   cudf::io::parse_options_view const &options,
   device_span<char const> const data,
   device_span<column_parse::flags const> const column_flags,
@@ -1019,21 +1020,22 @@ thrust::host_vector<column_type_histogram> detect_column_types(
   const int block_size = csvparse_block_dim;
   const int grid_size  = (row_starts.size() + block_size - 1) / block_size;
 
-  auto d_stats = rmm::device_vector<column_type_histogram>(num_active_columns);
+  auto d_stats =
+    detail::make_zeroed_device_uvector_async<column_type_histogram>(num_active_columns, stream);
 
   data_type_detection<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_flags, row_starts, d_stats);
 
-  return thrust::host_vector<column_type_histogram>(d_stats);
+  return detail::make_std_vector_sync(d_stats, stream);
 }
 
 void __host__ decode_row_column_data(cudf::io::parse_options_view const &options,
-                                     device_span<char const> const data,
-                                     device_span<column_parse::flags const> const column_flags,
-                                     device_span<uint64_t const> const row_offsets,
-                                     device_span<cudf::data_type const> const dtypes,
-                                     device_span<void *> const columns,
-                                     device_span<cudf::bitmask_type *> const valids,
+                                     device_span<char const> data,
+                                     device_span<column_parse::flags const> column_flags,
+                                     device_span<uint64_t const> row_offsets,
+                                     device_span<cudf::data_type const> dtypes,
+                                     device_span<void *const> columns,
+                                     device_span<cudf::bitmask_type *const> valids,
                                      rmm::cuda_stream_view stream)
 {
   // Calculate actual block count to use based on records count

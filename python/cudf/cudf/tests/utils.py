@@ -299,3 +299,7 @@ def gen_rand_series(dtype, size, **kwargs):
 @contextmanager
 def does_not_raise():
     yield
+
+
+def xfail_param(param, **kwargs):
+    return pytest.param(param, marks=pytest.mark.xfail(**kwargs))
