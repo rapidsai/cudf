@@ -2329,7 +2329,7 @@ public final class Table implements AutoCloseable {
      *                             ROWS BETWEEN 1 PRECEDING and 1 FOLLOWING)
      *  FROM my_sales_table WHERE ...
      * 
-     * Each window-aggregation is represented by a different {@link WindowAggregate} argument,
+     * Each window-aggregation is represented by a different {@link AggregationOverWindow} argument,
      * indicating:
      *  1. the {@link Aggregation.Kind},
      *  2. the number of rows preceding and following the current row, within a window,
@@ -2449,7 +2449,7 @@ public final class Table implements AutoCloseable {
      *                             RANGE BETWEEN INTERVAL 1 DAY PRECEDING and CURRENT ROW)
      *  FROM my_sales_table WHERE ...
      * 
-     * Each window-aggregation is represented by a different {@link WindowAggregate} argument,
+     * Each window-aggregation is represented by a different {@link AggregationOverWindow} argument,
      * indicating:
      *  1. the {@link Aggregation.Kind},
      *  2. the index for the timestamp column to base the window definitions on

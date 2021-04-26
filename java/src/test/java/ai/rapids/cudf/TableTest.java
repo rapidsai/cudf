@@ -3214,7 +3214,7 @@ public class TableTest extends CudfTestBase {
                                             .build();
 
         try (Table windowAggResults = sorted.groupBy(0, 1)
-                                            .aggregateWindows(WindowAggregate.mean(3, window));
+                                            .aggregateWindows(Aggregation.mean().onColumn(3).overWindow(window));
              ColumnVector expect = ColumnVector.fromBoxedDoubles(6.0d, 5.0d, 5.0d, 5.0d, 8.0d, 8.0d, 7.0d, 6.0d, 4.0d, 4.0d, 4.0d, 6.0d)) {
           assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
         }
@@ -3254,10 +3254,10 @@ public class TableTest extends CudfTestBase {
 
         try (Table windowAggResults = sorted.groupBy(0, 1)
                                             .aggregateWindows(
-                                                WindowAggregate.sum(3, window_1),
-                                                WindowAggregate.max(3, window_1),
-                                                WindowAggregate.sum(3, window_2),
-                                                WindowAggregate.min(2, window_3)
+                                                Aggregation.sum().onColumn(3).overWindow(window_1),
+                                                Aggregation.max().onColumn(3).overWindow(window_1),
+                                                Aggregation.sum().onColumn(3).overWindow(window_2),
+                                                Aggregation.min().onColumn(2).overWindow(window_3)
                                             );
              ColumnVector expect_0 = ColumnVector.fromBoxedLongs(12L, 13L, 15L, 10L, 16L, 24L, 19L, 10L, 8L, 14L, 12L, 12L);
              ColumnVector expect_1 = ColumnVector.fromBoxedInts(7, 7, 9, 9, 9, 9, 9, 8, 8, 8, 6, 6);
@@ -3288,7 +3288,8 @@ public class TableTest extends CudfTestBase {
                                             .window(2, 1)
                                             .build();
 
-        try (Table windowAggResults = sorted.groupBy().aggregateWindows(WindowAggregate.sum(1, window));
+        try (Table windowAggResults = sorted.groupBy().aggregateWindows(
+            Aggregation.sum().onColumn(1).overWindow(window));
              ColumnVector expectAggResult = ColumnVector.fromBoxedLongs(12L, 13L, 15L, 17L, 25L, 24L, 19L, 18L, 10L, 14L, 12L, 12L);
         ) {
           assertColumnsAreEqual(expectAggResult, windowAggResults.getColumn(0));
@@ -3315,8 +3316,8 @@ public class TableTest extends CudfTestBase {
             .timestampColumnIndex(2)
             .build();
 
-        try (Table windowAggResults = sorted.groupBy(0, 1)
-                  .aggregateWindowsOverTimeRanges(WindowAggregate.count(3, window));
+        try (Table windowAggResults = sorted.groupBy(0, 1).aggregateWindowsOverTimeRanges(
+            Aggregation.count().onColumn(3).overWindow(window));
              ColumnVector expect = ColumnVector.fromBoxedInts(3, 3, 4, 2, 4, 4, 4, 4, 4, 4, 5, 5, 3)) {
           assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
         }
@@ -3372,8 +3373,8 @@ public class TableTest extends CudfTestBase {
             .timestampColumnIndex(2)
             .build();
 
-        try (Table windowAggResults = sorted.groupBy(0, 1)
-                  .aggregateWindowsOverTimeRanges(WindowAggregate.max(3, window));
+        try (Table windowAggResults = sorted.groupBy(0, 1).aggregateWindowsOverTimeRanges(
+            Aggregation.max().onColumn(3).overWindow(window));
              ColumnVector expect = ColumnVector.fromBoxedInts(        7, 7, 9, 9, 9, 9, 9, 9, 8, 8, 8, 8, 8)) {
           assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
         }
@@ -3384,7 +3385,7 @@ public class TableTest extends CudfTestBase {
             .build();
 
         try (Table windowAggResults = sorted.groupBy(0, 1)
-                  .aggregateWindows(WindowAggregate.max(3, window));
+                  .aggregateWindows(Aggregation.max().onColumn(3).overWindow(window));
              ColumnVector expect = ColumnVector.fromBoxedInts(        7, 7, 9, 9, 9, 9, 9, 8, 8, 8, 6, 8, 8)) {
           assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
         }
@@ -3411,7 +3412,7 @@ public class TableTest extends CudfTestBase {
             .build();
 
         try (Table windowAggResults = sorted.groupBy(0, 1)
-                  .aggregateWindowsOverTimeRanges(WindowAggregate.row_number(3, window));
+                  .aggregateWindowsOverTimeRanges(Aggregation.rowNumber().onColumn(3).overWindow(window));
              ColumnVector expect = ColumnVector.fromBoxedInts(1, 2, 3, 4,  1, 2, 3, 4,  1, 2, 3, 4, 5)) {
           assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
         }
@@ -3446,9 +3447,9 @@ public class TableTest extends CudfTestBase {
             .build();
 
         try (Table windowAggResults = sorted.groupBy(0, 1)
-                  .aggregateWindowsOverTimeRanges(
-                    WindowAggregate.count(3, window_0),
-                    WindowAggregate.sum  (3, window_1));
+            .aggregateWindowsOverTimeRanges(
+                Aggregation.count().onColumn(3).overWindow(window_0),
+                Aggregation.sum().onColumn(3).overWindow(window_1));
              ColumnVector expect_0 = ColumnVector.fromBoxedInts(3,  4,  4,  4,  3, 4, 4, 4,  3, 3, 5, 5, 5);
              ColumnVector expect_1 = ColumnVector.fromBoxedLongs(7L, 13L, 13L, 22L,  7L, 24L, 24L, 26L,  8L, 8L, 14L, 28L, 28L)) {
           assertColumnsAreEqual(expect_0, windowAggResults.getColumn(0));
@@ -3475,7 +3476,7 @@ public class TableTest extends CudfTestBase {
             .build();
 
         try (Table windowAggResults = sorted.groupBy()
-                  .aggregateWindowsOverTimeRanges(WindowAggregate.count(1, window));
+                  .aggregateWindowsOverTimeRanges(Aggregation.count().onColumn(1).overWindow(window));
              ColumnVector expect = ColumnVector.fromBoxedInts(3, 3, 6, 6, 6, 6, 7, 7, 6, 6, 5, 5, 3)) {
           assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
         }
@@ -3492,10 +3493,14 @@ public class TableTest extends CudfTestBase {
                                                 .build()) {
 
         WindowOptions rowBasedWindow = WindowOptions.builder().minPeriods(1).window(1,1).build();
-        assertThrows(IllegalArgumentException.class, () -> table.groupBy(0, 1).aggregateWindowsOverTimeRanges(WindowAggregate.max(3, rowBasedWindow)));
+        assertThrows(IllegalArgumentException.class, () ->
+          table.groupBy(0, 1)
+              .aggregateWindowsOverTimeRanges(Aggregation.max().onColumn(3).overWindow(rowBasedWindow)));
 
         WindowOptions rangeBasedWindow = WindowOptions.builder().minPeriods(1).window(1,1).timestampColumnIndex(2).build();
-        assertThrows(IllegalArgumentException.class, () -> table.groupBy(0, 1).aggregateWindows(WindowAggregate.max(3, rangeBasedWindow)));
+        assertThrows(IllegalArgumentException.class, () ->
+            table.groupBy(0, 1)
+                .aggregateWindows(Aggregation.max().onColumn(3).overWindow(rangeBasedWindow)));
 
       }
   }
@@ -3520,7 +3525,7 @@ public class TableTest extends CudfTestBase {
             .build();
 
         try (Table windowAggResults = sorted.groupBy(0, 1)
-                  .aggregateWindowsOverTimeRanges(WindowAggregate.count(3, window));
+                  .aggregateWindowsOverTimeRanges(Aggregation.count().onColumn(3).overWindow(window));
              ColumnVector expect = ColumnVector.fromBoxedInts(3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5)) {
           assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
         }
