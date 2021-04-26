@@ -40,7 +40,7 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
   int strm_id                  = blockIdx.x * 4 + (threadIdx.x / 32);
   int lane_id                  = threadIdx.x % 32;
 
-  if (lane_id == 0) { s->info = strm_info[strm_id]; }
+  if (strm_id < num_streams && lane_id == 0) { s->info = strm_info[strm_id]; }
 
   __syncthreads();
   if (strm_id < num_streams) {

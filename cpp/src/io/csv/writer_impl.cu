@@ -37,6 +37,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
@@ -211,10 +212,11 @@ struct column_to_strings_fn {
                (cudf::is_timestamp<column_type>()) || (cudf::is_duration<column_type>()));
   }
 
-  explicit column_to_strings_fn(csv_writer_options const& options,
-                                rmm::mr::device_memory_resource* mr = nullptr,
-                                rmm::cuda_stream_view stream        = nullptr)
-    : options_(options), mr_(mr), stream_(stream)
+  explicit column_to_strings_fn(
+    csv_writer_options const& options,
+    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+    : options_(options), stream_(stream), mr_(mr)
   {
   }
 
@@ -345,8 +347,8 @@ struct column_to_strings_fn {
 
  private:
   csv_writer_options const& options_;
-  rmm::mr::device_memory_resource* mr_;
   rmm::cuda_stream_view stream_;
+  rmm::mr::device_memory_resource* mr_;
 };
 }  // unnamed namespace
 
@@ -472,30 +474,19 @@ void writer::impl::write(table_view const& table,
     if (num_rows <= n_rows_per_chunk) {
       vector_views.push_back(table);
     } else {
-      std::vector<size_type> splits;
-      auto n_chunks = num_rows / n_rows_per_chunk;
-      splits.resize(n_chunks);
-
-      rmm::device_vector<size_type> d_splits(n_chunks, n_rows_per_chunk);
-      thrust::inclusive_scan(
-        rmm::exec_policy(stream), d_splits.begin(), d_splits.end(), d_splits.begin());
-
-      CUDA_TRY(cudaMemcpyAsync(splits.data(),
-                               d_splits.data().get(),
-                               n_chunks * sizeof(size_type),
-                               cudaMemcpyDeviceToHost,
-                               stream.value()));
-
-      stream.synchronize();
+      auto const n_chunks = num_rows / n_rows_per_chunk;
+      std::vector<size_type> splits(n_chunks);
+      thrust::tabulate(splits.begin(), splits.end(), [n_rows_per_chunk](auto idx) {
+        return (idx + 1) * n_rows_per_chunk;
+      });
 
       // split table_view into chunks:
-      //
       vector_views = cudf::split(table, splits);
     }
 
     // convert each chunk to CSV:
     //
-    column_to_strings_fn converter{options_, mr_};
+    column_to_strings_fn converter{options_, stream, mr_};
     for (auto&& sub_view : vector_views) {
       // Skip if the table has no rows
       if (sub_view.num_rows() == 0) continue;

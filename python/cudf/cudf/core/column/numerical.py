@@ -7,6 +7,7 @@ from typing import Any, Callable, Sequence, Tuple, Union, cast
 
 import numpy as np
 import pandas as pd
+from numba import cuda, njit
 from nvtx import annotate
 from pandas.api.types import is_integer_dtype
 
@@ -20,6 +21,7 @@ from cudf.core.column import (
     as_column,
     build_column,
     column,
+    column_empty,
     string,
 )
 from cudf.core.dtypes import Decimal64Dtype
@@ -422,8 +424,22 @@ class NumericalColumn(ColumnBase):
         """
         if out_dtype is None:
             out_dtype = self.dtype
-        out = column.column_applymap(udf=udf, column=self, out_dtype=out_dtype)
-        return out
+
+        core = njit(udf)
+
+        # For non-masked columns
+        @cuda.jit
+        def kernel_applymap(values, results):
+            i = cuda.grid(1)
+            # in range?
+            if i < values.size:
+                # call udf
+                results[i] = core(values[i])
+
+        results = column_empty(self.size, dtype=out_dtype)
+        values = self.data_array_view
+        kernel_applymap.forall(self.size)(values, results)
+        return as_column(results)
 
     def default_na_value(self) -> ScalarLike:
         """Returns the default NA value for this column

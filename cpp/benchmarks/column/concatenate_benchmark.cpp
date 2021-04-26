@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ static void BM_concatenate(benchmark::State& state)
   CHECK_CUDA(0);
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, 0);
+    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
     auto result = cudf::concatenate(column_views);
   }
 
@@ -124,7 +124,7 @@ static void BM_concatenate_tables(benchmark::State& state)
   CHECK_CUDA(0);
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, 0);
+    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
     auto result = cudf::concatenate(table_views);
   }
 
@@ -184,7 +184,7 @@ static void BM_concatenate_strings(benchmark::State& state)
   CHECK_CUDA(0);
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, 0);
+    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
     auto result = cudf::concatenate(column_views);
   }
 

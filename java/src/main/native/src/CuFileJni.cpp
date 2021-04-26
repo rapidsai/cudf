@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include "cudf_jni_apis.hpp"
 #include "jni_utils.hpp"
 
 namespace {
@@ -281,6 +282,7 @@ extern "C" {
  */
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFile_createDriver(JNIEnv *env, jclass) {
   try {
+    cudf::jni::auto_set_device(env);
     return reinterpret_cast<jlong>(new cufile_driver());
   }
   CATCH_STD(env, 0);
@@ -295,6 +297,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFile_createDriver(JNIEnv *env, jcl
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_destroyDriver(JNIEnv *env, jclass,
                                                                 jlong pointer) {
   try {
+    cudf::jni::auto_set_device(env);
     if (pointer != 0) {
       auto *driver = reinterpret_cast<cufile_driver *>(pointer);
       delete driver;
@@ -316,6 +319,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_writeToFile(JNIEnv *env, jclas
                                                               jlong file_offset,
                                                               jlong device_pointer, jlong size) {
   try {
+    cudf::jni::auto_set_device(env);
     cufile_buffer buffer{reinterpret_cast<void *>(device_pointer), static_cast<std::size_t>(size)};
     auto writer = cufile_file::make_writer(env->GetStringUTFChars(path, nullptr));
     writer->write(buffer, file_offset);
@@ -334,6 +338,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_writeToFile(JNIEnv *env, jclas
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_CuFile_appendToFile(JNIEnv *env, jclass, jstring path,
                                                                 jlong device_pointer, jlong size) {
   try {
+    cudf::jni::auto_set_device(env);
     cufile_buffer buffer{reinterpret_cast<void *>(device_pointer), static_cast<std::size_t>(size)};
     auto writer = cufile_file::make_writer(env->GetStringUTFChars(path, nullptr));
     return writer->append(buffer);
@@ -354,6 +359,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_CuFile_readFromFile(JNIEnv *env, jcla
                                                                jlong device_pointer, jlong size,
                                                                jstring path, jlong file_offset) {
   try {
+    cudf::jni::auto_set_device(env);
     cufile_buffer buffer{reinterpret_cast<void *>(device_pointer), static_cast<std::size_t>(size)};
     auto const reader = cufile_file::make_reader(env->GetStringUTFChars(path, nullptr));
     reader->read(buffer, file_offset);
