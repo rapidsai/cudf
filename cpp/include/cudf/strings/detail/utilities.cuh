@@ -130,8 +130,8 @@ __device__ inline char* copy_string(char* buffer, const string_view& d_string)
  * @param size_and_exec_fn This is called twice. Once for the output size of each string.
  *        After that, the d_offsets and d_chars are set and this is called again to fill in the
  *        chars memory.
- * @param strings_count Number of strings.
  * @param exec_size Number of rows for executing the `size_and_exec_fn` function.
+ * @param strings_count Number of strings.
  * @param mr Device memory resource used to allocate the returned columns' device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return offsets child column and chars child column for a strings column
@@ -139,8 +139,8 @@ __device__ inline char* copy_string(char* buffer, const string_view& d_string)
 template <typename SizeAndExecuteFunction>
 auto make_strings_children(
   SizeAndExecuteFunction size_and_exec_fn,
-  size_type strings_count,
   size_type exec_size,
+  size_type strings_count,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
