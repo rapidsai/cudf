@@ -125,6 +125,19 @@ JNIEXPORT jbyteArray JNICALL Java_ai_rapids_cudf_Scalar_getUTF8(JNIEnv *env, jcl
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_getListAsColumnView(JNIEnv *env, jclass,
+                                                                jlong scalar_handle) {
+  JNI_NULL_CHECK(env, scalar_handle, "scalar handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto s = reinterpret_cast<cudf::list_scalar *>(scalar_handle);
+    // Creates a column view in heap with the stack one, to let JVM take care of its
+    // life cycle.
+    return reinterpret_cast<jlong>(new cudf::column_view(s->view()));
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeBool8Scalar(JNIEnv *env, jclass,
                                                                    jboolean value,
                                                                    jboolean is_valid) {
@@ -441,6 +454,25 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_binaryOpSV(JNIEnv *env, jclas
     std::unique_ptr<cudf::column> result = cudf::binary_operation(
         *lhs, *rhs, op, n_data_type);
     return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeListScalar(JNIEnv *env, jclass,
+                                                                  jlong view_handle,
+                                                                  jboolean is_valid) {
+  if (is_valid) {
+    JNI_NULL_CHECK(env, view_handle,
+                  "list scalar is set to `valid` but column view is null", 0);
+  }
+  try {
+    cudf::jni::auto_set_device(env);
+    auto col_view = reinterpret_cast<cudf::column_view *>(view_handle);
+
+    cudf::scalar* s = is_valid ? new cudf::list_scalar(*col_view)
+                               : new cudf::list_scalar();
+    s->set_valid(is_valid);
+    return reinterpret_cast<jlong>(s);
   }
   CATCH_STD(env, 0);
 }

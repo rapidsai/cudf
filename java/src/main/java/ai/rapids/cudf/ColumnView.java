@@ -41,7 +41,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Constructs a Column View given a native view address
    * @param address the view handle
    */
-  protected ColumnView(long address) {
+  ColumnView(long address) {
     this.viewHandle = address;
     this.type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
     this.rows = ColumnView.getNativeRowCount(viewHandle);
@@ -209,6 +209,40 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public void close() {
     ColumnView.deleteColumnView(viewHandle);
     viewHandle = 0;
+  }
+
+  @Override
+  public String toString() {
+    return "ColumnView{" +
+           "rows=" + rows +
+           ", type=" + type +
+           ", nullCount=" + nullCount +
+           '}';
+  }
+
+  @Override
+  public int hashCode() {
+    return type.hashCode() +
+           Long.hashCode(rows) +
+           Long.hashCode(nullCount) +
+           Long.hashCode(viewHandle);
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (o instanceof ColumnView) {
+      ColumnView other = (ColumnView) o;
+      if (this == other) {
+        return true;
+      } else if (!type.equals(other.type) || rows != other.rows || nullCount != other.nullCount) {
+        return false;
+      } else {
+        throw new IllegalStateException("Cannot compare the column views by `equals`. " +
+                "Need to iterate its rows and compare one by one.");
+      }
+    } else {
+      return false;
+    }
   }
 
   /**

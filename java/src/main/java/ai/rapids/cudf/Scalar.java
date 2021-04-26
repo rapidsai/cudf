@@ -86,6 +86,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       return new Scalar(type, makeDecimal32Scalar(0, type.getScale(), false));
     case DECIMAL64:
       return new Scalar(type, makeDecimal64Scalar(0L, type.getScale(), false));
+    case LIST:
+      return new Scalar(type, makeListScalar(0L, false));
     default:
       throw new IllegalArgumentException("Unexpected type: " + type);
     }
@@ -333,6 +335,17 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return new Scalar(DType.STRING, makeStringScalar(value.getBytes(StandardCharsets.UTF_8), true));
   }
 
+  /**
+   * Creates a scalar of list from a column view.
+   * All the rows in the column view become the elements of the list inside the scalar.
+   */
+  public static Scalar listFromColumnView(ColumnView list) {
+    if (list == null) {
+      return Scalar.fromNull(DType.LIST);
+    }
+    return new Scalar(DType.LIST, makeListScalar(list.getNativeView(), true));
+  }
+
   private static native void closeScalar(long scalarHandle);
   private static native boolean isScalarValid(long scalarHandle);
   private static native byte getByte(long scalarHandle);
@@ -342,6 +355,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native float getFloat(long scalarHandle);
   private static native double getDouble(long scalarHandle);
   private static native byte[] getUTF8(long scalarHandle);
+  private static native long getListAsColumnView(long scalarHandle);
   private static native long makeBool8Scalar(boolean isValid, boolean value);
   private static native long makeInt8Scalar(byte value, boolean isValid);
   private static native long makeUint8Scalar(byte value, boolean isValid);
@@ -360,6 +374,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native long makeTimestampTimeScalar(int dtypeNativeId, long value, boolean isValid);
   private static native long makeDecimal32Scalar(int value, int scale, boolean isValid);
   private static native long makeDecimal64Scalar(long value, int scale, boolean isValid);
+  private static native long makeListScalar(long viewHandle, boolean isValid);
 
 
   Scalar(DType type, long scalarHandle) {
@@ -484,6 +499,15 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return getUTF8(getScalarHandle());
   }
 
+  /**
+   * Returns the scalar value as a column view.
+   * Callers should close the column view to avoid memory leak.
+   */
+  public ColumnView getListAsColumnView() {
+    assert DType.LIST.equals(type) : "Cannot get list for the vector of type " + type;
+    return new ColumnView(getListAsColumnView(getScalarHandle()));
+  }
+
   @Override
   public ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType) {
     if (rhs instanceof ColumnView) {
@@ -541,6 +565,11 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       return getLong() == other.getLong();
     case STRING:
       return Arrays.equals(getUTF8(), other.getUTF8());
+    case LIST:
+      try (ColumnView viewMe = getListAsColumnView();
+           ColumnView viewO = other.getListAsColumnView()) {
+        return viewMe.equals(viewO);
+      }
     default:
       throw new IllegalStateException("Unexpected type: " + type);
     }
@@ -588,6 +617,11 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         break;
       case STRING:
         valueHash = Arrays.hashCode(getUTF8());
+        break;
+      case LIST:
+        try (ColumnView v = getListAsColumnView()) {
+          valueHash = v.hashCode();
+        }
         break;
       default:
         throw new IllegalStateException("Unknown scalar type: " + type);
@@ -650,6 +684,12 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         // FALL THROUGH
       case DECIMAL64:
         sb.append(getBigDecimal());
+        break;
+      case LIST:
+        try (ColumnView v = getListAsColumnView()) {
+          // It's not easy to pull out the elements so just a simple string of some metadata.
+          sb.append(v.toString());
+        }
         break;
       default:
         throw new IllegalArgumentException("Unknown scalar type: " + type);

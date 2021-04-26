@@ -168,6 +168,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, j
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env, jclass,
                                                                     jlong j_scalar,
                                                                     jint row_count) {
+  using ScalarType = cudf::scalar_type_t<cudf::size_type>;
   JNI_NULL_CHECK(env, j_scalar, "scalar is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -176,7 +177,36 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
     cudf::mask_state mask_state =
         scalar_val->is_valid() ? cudf::mask_state::UNALLOCATED : cudf::mask_state::ALL_NULL;
     std::unique_ptr<cudf::column> col;
-    if (row_count == 0) {
+    if (dtype.id() == cudf::type_id::LIST) {
+      // Neither 'cudf::make_empty_column' nor 'cudf::make_column_from_scalar' supports
+      // LIST type for now (04/27/2021), so the list precedes the others and takes care
+      // of the empty column itself.
+      auto s_list = reinterpret_cast<cudf::list_scalar const *>(scalar_val);
+      cudf::column_view s_val = s_list->view();
+
+      // Offsets: [0, list_size, list_size*2, ..., list_szie*row_count]
+      auto zero = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
+      auto step = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
+      zero->set_valid(true);
+      step->set_valid(true);
+      static_cast<ScalarType *>(zero.get())->set_value(0);
+      static_cast<ScalarType *>(step.get())->set_value(s_val.size());
+      std::unique_ptr<cudf::column> offsets = cudf::sequence(row_count + 1, *zero, *step);
+
+      // Data:
+      // 'cudf::fill' does not support LIST type for now(04/27/2021), so builds the data
+      // column by leveraging `cudf::concatenate` to repeat the 's_val' 'row_count' times.
+      // (Assumes the `row_count` is not big, otherwise there would be a performance issue.
+      //  Eventually we should have the 'cudf::fill' supported LIST type and updates to use
+      //  it here.)
+      // Checks the `row_count` because cudf::interleave_columns does not support no columns.
+      auto data_col = row_count > 0
+          ? cudf::concatenate(std::vector<cudf::column_view>(row_count, s_val))
+          : cudf::make_empty_column(s_val.type());
+      col = cudf::make_lists_column(row_count, std::move(offsets), std::move(data_col),
+                                    cudf::state_null_count(mask_state, row_count),
+                                    cudf::create_null_mask(row_count, mask_state));
+    } else if (row_count == 0) {
       col = cudf::make_empty_column(dtype);
     } else if (cudf::is_fixed_width(dtype)) {
       col = cudf::make_fixed_width_column(dtype, row_count, mask_state);
