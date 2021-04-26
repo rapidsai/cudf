@@ -31,20 +31,8 @@
 
 //! `fixed_point` and supporting types
 namespace numeric {
-/** \cond HIDDEN_SYMBOLS */
-// This is a wrapper struct that enforces "strong typing"
-// at the construction site of the type. No implicit
-// conversions will be allowed and you will need to use the
-// name of the type alias (i.e. scale_type{0})
-template <typename T>
-struct strong_typedef {
-  T _t;
-  CUDA_HOST_DEVICE_CALLABLE explicit constexpr strong_typedef(T t) : _t(t) {}
-  CUDA_HOST_DEVICE_CALLABLE operator T() const { return _t; }
-};
-/** \endcond */
 
-using scale_type = strong_typedef<int32_t>;
+enum scale_type : int32_t {};
 
 /**
  * @brief Scoped enumerator to use when constructing `fixed_point`
@@ -76,8 +64,7 @@ namespace detail {
  *
  * https://simple.wikipedia.org/wiki/Exponentiation_by_squaring <br>
  * Note: this is the iterative equivalent of the recursive definition (faster) <br>
- * Quick-bench: http://quick-bench.com/Wg7o7HYQC9FW5M0CO0wQAjSwP_Y <br>
- * `exponent` comes from `using scale_type = strong_typedef<int32_t>` <br>
+ * Quick-bench: http://quick-bench.com/Wg7o7HYQC9FW5M0CO0wQAjSwP_Y
  *
  * @tparam Rep Representation type for return type
  * @tparam Base The base to be exponentiated
@@ -87,7 +74,7 @@ namespace detail {
 template <typename Rep,
           Radix Base,
           typename T,
-          typename cuda::std::enable_if_t<(cuda::std::is_same<int32_t, T>::value &&
+          typename cuda::std::enable_if_t<((cuda::std::is_same<int32_t, T>::value) &&
                                            is_supported_representation_type<Rep>())>* = nullptr>
 CUDA_HOST_DEVICE_CALLABLE Rep ipow(T exponent)
 {
@@ -128,7 +115,7 @@ auto negate(scale_type const& scale) { return scale_type{-scale}; }
 template <typename Rep, Radix Rad, typename T>
 CUDA_HOST_DEVICE_CALLABLE constexpr T right_shift(T const& val, scale_type const& scale)
 {
-  return val / ipow<Rep, Rad>(scale._t);
+  return val / ipow<Rep, Rad>(static_cast<int32_t>(scale));
 }
 
 /** @brief Function that performs a `left shift` scale "times" on the `val`
@@ -145,7 +132,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr T right_shift(T const& val, scale_type const
 template <typename Rep, Radix Rad, typename T>
 CUDA_HOST_DEVICE_CALLABLE constexpr T left_shift(T const& val, scale_type const& scale)
 {
-  return val * ipow<Rep, Rad>(-scale._t);
+  return val * ipow<Rep, Rad>(static_cast<int32_t>(-scale));
 }
 
 /** @brief Function that performs a `right` or `left shift`
