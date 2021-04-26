@@ -289,7 +289,7 @@ def _redirect_aggs(arg):
             if isinstance(arg[col], list):
                 new_arg[col] = [redirects.get(agg, agg) for agg in arg[col]]
             else:
-                new_arg[col] = redirects(arg[col], arg[col])
+                new_arg[col] = redirects.get(arg[col], arg[col])
         return new_arg
     if isinstance(arg, list):
         return [redirects.get(agg, agg) for agg in arg]
