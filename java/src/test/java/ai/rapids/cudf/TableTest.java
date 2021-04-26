@@ -18,7 +18,6 @@
 
 package ai.rapids.cudf;
 
-import ai.rapids.cudf.Aggregation.NullPolicy;
 import ai.rapids.cudf.HostColumnVector.BasicType;
 import ai.rapids.cudf.HostColumnVector.Builder;
 import ai.rapids.cudf.HostColumnVector.DataType;
@@ -2941,7 +2940,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testWindowingCollect() {
-    Aggregation aggCollectWithNulls = Aggregation.collect(Aggregation.NullPolicy.INCLUDE);
+    Aggregation aggCollectWithNulls = Aggregation.collect(NullPolicy.INCLUDE);
     Aggregation aggCollect = Aggregation.collect();
     WindowOptions winOpts = WindowOptions.builder()
                                          .minPeriods(1)

@@ -2044,11 +2044,11 @@ public class ColumnVectorTest extends CudfTestBase {
             .minPeriods(2).build();
     try (ColumnVector v1 = ColumnVector.fromBoxedInts(5, 4, null, 6, 8)) {
       try (ColumnVector expected = ColumnVector.fromInts(2, 2, 2, 2, 2);
-           ColumnVector result = v1.rollingWindow(Aggregation.count(false), options)) {
+           ColumnVector result = v1.rollingWindow(Aggregation.count(NullPolicy.EXCLUDE), options)) {
         assertColumnsAreEqual(expected, result);
       }
       try (ColumnVector expected = ColumnVector.fromInts(2, 3, 3, 3, 2);
-           ColumnVector result = v1.rollingWindow(Aggregation.count(true), options)) {
+           ColumnVector result = v1.rollingWindow(Aggregation.count(NullPolicy.INCLUDE), options)) {
         assertColumnsAreEqual(expected, result);
       }
     }
@@ -2076,19 +2076,6 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector expected = ColumnVector.fromBoxedInts(null, 5, 4, 7, 6);
          ColumnVector result = v1.rollingWindow(Aggregation.max(), window)) {
       assertColumnsAreEqual(expected, result);
-    }
-  }
-
-  @Test
-  void testWindowProductFail() {
-    WindowOptions window = WindowOptions.builder().minPeriods(1)
-        .window(2, -1).build();
-    try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8)) {
-      assertThrows(IllegalArgumentException.class, () -> {
-        try (ColumnVector ignored = v1.rollingWindow(Aggregation.product(), window)) {
-          // Empty
-        }
-      });
     }
   }
 

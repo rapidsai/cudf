@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ public class WindowAggregate extends AggregationOverWindow {
    */
   @Deprecated
   public static WindowAggregate count(int columnIndex, WindowOptions windowOptions) {
-    return new WindowAggregate(Aggregation.count(true)
+    return new WindowAggregate(Aggregation.count(NullPolicy.INCLUDE)
             .onColumn(columnIndex)
             .overWindow(windowOptions));
   }
