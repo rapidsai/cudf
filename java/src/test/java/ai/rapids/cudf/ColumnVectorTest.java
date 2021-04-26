@@ -2080,6 +2080,19 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testWindowProductFail() {
+    WindowOptions window = WindowOptions.builder().minPeriods(1)
+        .window(2, -1).build();
+    try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8)) {
+      assertThrows(IllegalArgumentException.class, () -> {
+        try (ColumnVector ignored = v1.rollingWindow(Aggregation.product(), window)) {
+          // Empty
+        }
+      });
+    }
+  }
+
+  @Test
   void testWindowDynamic() {
     try (ColumnVector precedingCol = ColumnVector.fromInts(1, 2, 3, 1, 2);
          ColumnVector followingCol = ColumnVector.fromInts(2, 2, 2, 2, 2)) {

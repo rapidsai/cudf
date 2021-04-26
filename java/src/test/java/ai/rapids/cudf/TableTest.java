@@ -18,6 +18,7 @@
 
 package ai.rapids.cudf;
 
+import ai.rapids.cudf.Aggregation.NullPolicy;
 import ai.rapids.cudf.HostColumnVector.BasicType;
 import ai.rapids.cudf.HostColumnVector.Builder;
 import ai.rapids.cudf.HostColumnVector.DataType;
@@ -47,14 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static ai.rapids.cudf.Aggregate.max;
-import static ai.rapids.cudf.Aggregate.first;
-import static ai.rapids.cudf.Aggregate.last;
 import static ai.rapids.cudf.Table.TestBuilder;
-import static ai.rapids.cudf.Table.count;
-import static ai.rapids.cudf.Table.mean;
-import static ai.rapids.cudf.Table.min;
-import static ai.rapids.cudf.Table.sum;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -2693,7 +2687,7 @@ public class TableTest extends CudfTestBase {
             .build()) {
       try (Table t3 = t1
               .groupBy(0, 1)
-              .aggregate(Aggregation.nunique(true).onColumn(0));
+              .aggregate(Aggregation.nunique(NullPolicy.INCLUDE).onColumn(0));
            Table sorted = t3.orderBy(OrderByArg.asc(0), OrderByArg.asc(1), OrderByArg.asc(2));
            Table expected = new Table.TestBuilder()
                    .column( "1",  "1",  "1",  "1")
@@ -2711,7 +2705,8 @@ public class TableTest extends CudfTestBase {
                                            .column(   1,    3,    3,    5,    5,    0)
                                            .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0)
                                            .build()) {
-      try (Table t3 = t1.groupBy(0, 1).aggregate(count(0));
+      try (Table t3 = t1.groupBy(0, 1)
+          .aggregate(Aggregation.count().onColumn(0));
            HostColumnVector aggOut1 = t3.getColumn(2).copyToHost()) {
         // verify t3
         assertEquals(4, t3.getRowCount());
@@ -3838,7 +3833,10 @@ public class TableTest extends CudfTestBase {
                                            .column(   1,    1, null, null,    1,    1)
                                            .column(   1,    1,    1, null,    1,    1)
                                            .build()) {
-      try (Table tmp = t1.groupBy(0).aggregate(count(1), count(2), count(3));
+      try (Table tmp = t1.groupBy(0).aggregate(
+          Aggregation.count().onColumn(1),
+          Aggregation.count().onColumn(2),
+          Aggregation.count().onColumn(3));
            Table t3 = tmp.orderBy(OrderByArg.asc(0, true));
            HostColumnVector groupCol = t3.getColumn(0).copyToHost();
            HostColumnVector countCol = t3.getColumn(1).copyToHost();
@@ -3875,7 +3873,11 @@ public class TableTest extends CudfTestBase {
             .column(   1,    1, null, null,    1,    1)
             .column(   1,    1,    1, null,    1,    1)
             .build()) {
-      try (Table tmp = t1.groupBy(0).aggregate(count(1, true), count(2, true), count(3, true), count(3));
+      try (Table tmp = t1.groupBy(0).aggregate(
+          Aggregation.count(NullPolicy.INCLUDE).onColumn(1),
+          Aggregation.count(NullPolicy.INCLUDE).onColumn(2),
+          Aggregation.count(NullPolicy.INCLUDE).onColumn(3),
+          Aggregation.count().onColumn(3));
            Table t3 = tmp.orderBy(OrderByArg.asc(0, true));
            HostColumnVector groupCol = t3.getColumn(0).copyToHost();
            HostColumnVector countCol = t3.getColumn(1).copyToHost();
@@ -3922,7 +3924,10 @@ public class TableTest extends CudfTestBase {
           .withIgnoreNullKeys(true)
           .build();
 
-      try (Table tmp = t1.groupBy(options, 0).aggregate(count(1), count(2), count(3));
+      try (Table tmp = t1.groupBy(options, 0).aggregate(
+          Aggregation.count().onColumn(1),
+          Aggregation.count().onColumn(2),
+          Aggregation.count().onColumn(3));
            Table t3 = tmp.orderBy(OrderByArg.asc(0, true));
            HostColumnVector groupCol = t3.getColumn(0).copyToHost();
            HostColumnVector countCol = t3.getColumn(1).copyToHost();
@@ -3953,8 +3958,7 @@ public class TableTest extends CudfTestBase {
                                            .column(   1,    3,    3,    5,    5,    0)
                                            .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0)
                                            .build()) {
-      try (Table t3 = t1.groupBy(0, 1)
-              .aggregate(max(2));
+      try (Table t3 = t1.groupBy(0, 1).aggregate(Aggregation.max().onColumn(2));
            HostColumnVector aggOut1 = t3.getColumn(2).copyToHost()) {
         // verify t3
         assertEquals(4, t3.getRowCount());
@@ -4029,7 +4033,7 @@ public class TableTest extends CudfTestBase {
     try (Table t1 = new Table.TestBuilder()
         .column(true, null, false, true, null, null)
         .column(   1,    1,     2,    2,    3,    3).build();
-         Table other = t1.groupBy(1).aggregate(min(0));
+         Table other = t1.groupBy(1).aggregate(Aggregation.min().onColumn(0));
          Table ordered = other.orderBy(OrderByArg.asc(0));
          Table expected = new Table.TestBuilder()
              .column(1, 2, 3)
@@ -4044,7 +4048,7 @@ public class TableTest extends CudfTestBase {
     try (Table t1 = new Table.TestBuilder()
         .column(false, null, false, true, null, null)
         .column(   1,    1,     2,    2,    3,    3).build();
-         Table other = t1.groupBy(1).aggregate(max(0));
+         Table other = t1.groupBy(1).aggregate(Aggregation.max().onColumn(0));
          Table ordered = other.orderBy(OrderByArg.asc(0));
          Table expected = new Table.TestBuilder()
              .column(1, 2, 3)
@@ -4070,7 +4074,13 @@ public class TableTest extends CudfTestBase {
              .column(12.0, 13.0, 15.0, 18.0)
              .column(   1,    2,    2,    1).build()) {
       try (Table t3 = t1.groupBy(0, 1)
-          .aggregate(max(2), min(2), min(2), max(2), min(2), count(1));
+          .aggregate(
+              Aggregation.max().onColumn(2),
+              Aggregation.min().onColumn(2),
+              Aggregation.min().onColumn(2),
+              Aggregation.max().onColumn(2),
+              Aggregation.min().onColumn(2),
+              Aggregation.count().onColumn(1));
           Table t4 = t3.orderBy(OrderByArg.asc(2))) {
         // verify t4
         assertEquals(4, t4.getRowCount());
@@ -4093,7 +4103,7 @@ public class TableTest extends CudfTestBase {
                                            .column(   1,    3,    3,    5,    5,    0)
                                            .column(  12,   14,   13,   17,   17,   17)
                                            .build()) {
-      try (Table t3 = t1.groupBy(0, 1).aggregate(min(2));
+      try (Table t3 = t1.groupBy(0, 1).aggregate(Aggregation.min().onColumn(2));
            HostColumnVector aggOut0 = t3.getColumn(2).copyToHost()) {
         // verify t3
         assertEquals(4, t3.getRowCount());
@@ -4128,7 +4138,7 @@ public class TableTest extends CudfTestBase {
                                            .column(   1,    3,    3,    5,    5,    0)
                                            .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0)
                                            .build()) {
-      try (Table t3 = t1.groupBy(0, 1).aggregate(sum(2));
+      try (Table t3 = t1.groupBy(0, 1).aggregate(Aggregation.sum().onColumn(2));
            HostColumnVector aggOut1 = t3.getColumn(2).copyToHost()) {
         // verify t3
         assertEquals(4, t3.getRowCount());
@@ -4165,7 +4175,8 @@ public class TableTest extends CudfTestBase {
                  .column(1, 2)
                  .column(13, 14)
                  .build();
-         Table found = input.groupBy(0).aggregate(first(1, false))) {
+         Table found = input.groupBy(0).aggregate(
+             Aggregation.nth(0, NullPolicy.EXCLUDE).onColumn(1))) {
       assertTablesAreEqual(expected, found);
     }
   }
@@ -4180,7 +4191,8 @@ public class TableTest extends CudfTestBase {
                  .column(1, 2)
                  .column(12, 15)
                  .build();
-         Table found = input.groupBy(0).aggregate(last(1, false))) {
+         Table found = input.groupBy(0).aggregate(
+             Aggregation.nth(-1, NullPolicy.EXCLUDE).onColumn(1))) {
       assertTablesAreEqual(expected, found);
     }
   }
@@ -4195,7 +4207,8 @@ public class TableTest extends CudfTestBase {
                  .column(1, 2)
                  .column(null, 14)
                  .build();
-         Table found = input.groupBy(0).aggregate(first(1, true))) {
+         Table found = input.groupBy(0).aggregate(
+             Aggregation.nth(0, NullPolicy.INCLUDE).onColumn(1))) {
       assertTablesAreEqual(expected, found);
     }
   }
@@ -4210,7 +4223,8 @@ public class TableTest extends CudfTestBase {
                  .column(1, 2)
                  .column(12, null)
                  .build();
-         Table found = input.groupBy(0).aggregate(last(1, true))) {
+         Table found = input.groupBy(0).aggregate(
+             Aggregation.nth(-1, NullPolicy.INCLUDE).onColumn(1))) {
       assertTablesAreEqual(expected, found);
     }
   }
@@ -4221,7 +4235,7 @@ public class TableTest extends CudfTestBase {
                                            .column( 1,  3,  3,  5,  5,  0)
                                            .column(12, 14, 13,  1, 17, 17)
                                            .build()) {
-      try (Table t3 = t1.groupBy(0, 1).aggregate(mean(2));
+      try (Table t3 = t1.groupBy(0, 1).aggregate(Aggregation.mean().onColumn(2));
            HostColumnVector aggOut1 = t3.getColumn(2).copyToHost()) {
         // verify t3
         assertEquals(4, t3.getRowCount());
@@ -4255,7 +4269,12 @@ public class TableTest extends CudfTestBase {
                                            .column(5.0, 2.3, 3.4, 2.3, 1.3, 12.2)
                                            .column(  3,   1,   7,  -1,   9,    0)
                                            .build()) {
-      try (Table t2 = t1.groupBy(0, 1).aggregate(count(0), max(3), min(2), mean(2), sum(2));
+      try (Table t2 = t1.groupBy(0, 1).aggregate(
+          Aggregation.count().onColumn(0),
+          Aggregation.max().onColumn(3),
+          Aggregation.min().onColumn(2),
+          Aggregation.mean().onColumn(2),
+          Aggregation.sum().onColumn(2));
            HostColumnVector countOut = t2.getColumn(2).copyToHost();
            HostColumnVector maxOut = t2.getColumn(3).copyToHost();
            HostColumnVector minOut = t2.getColumn(4).copyToHost();
@@ -4320,7 +4339,8 @@ public class TableTest extends CudfTestBase {
         .column("1-URGENT", "3-MEDIUM", "1-URGENT", "3-MEDIUM")
         .column(5289L, 5203L, 5303L, 5206L)
         .build();
-         Table result = t.groupBy(0).aggregate(Table.sum(1));
+         Table result = t.groupBy(0).aggregate(
+             Aggregation.sum().onColumn(1));
          Table expected = new Table.TestBuilder()
              .column("1-URGENT", "3-MEDIUM")
              .column(5289L + 5303L, 5203L + 5206L)
