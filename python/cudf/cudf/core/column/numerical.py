@@ -5,6 +5,7 @@ from __future__ import annotations
 from numbers import Number
 from typing import Any, Callable, Sequence, Tuple, Union, cast
 
+import cupy
 import numpy as np
 import pandas as pd
 from numba import cuda, njit
@@ -27,6 +28,8 @@ from cudf.core.column import (
 from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
+    NUMERIC_TYPES,
+    cudf_dtypes_to_pandas_dtypes,
     min_column_type,
     min_signed_type,
     numeric_normalize_types,
@@ -710,6 +713,23 @@ class NumericalColumn(ColumnBase):
                 return False
 
         return False
+
+    def to_pandas(
+        self, index: ColumnLike = None, nullable: bool = False, **kwargs
+    ) -> "pd.Series":
+        if nullable and self.dtype in cudf_dtypes_to_pandas_dtypes:
+            pandas_nullable_dtype = cudf_dtypes_to_pandas_dtypes[self.dtype]
+            arrow_array = self.to_arrow()
+            pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)
+            pd_series = pd.Series(pandas_array, copy=False)
+        elif str(self.dtype) in NUMERIC_TYPES and self.null_count == 0:
+            pd_series = pd.Series(cupy.asnumpy(self.values), copy=False)
+        else:
+            pd_series = self.to_arrow().to_pandas(**kwargs)
+
+        if index is not None:
+            pd_series.index = index
+        return pd_series
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")

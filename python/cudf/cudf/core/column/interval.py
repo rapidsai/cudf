@@ -1,6 +1,9 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
+import pandas as pd
 import pyarrow as pa
+
 import cudf
+from cudf._typing import ColumnLike
 from cudf.core.column import StructColumn
 from cudf.core.dtypes import IntervalDtype
 from cudf.utils.dtypes import is_interval_dtype
@@ -110,3 +113,10 @@ class IntervalColumn(StructColumn):
             )
         else:
             raise ValueError("dtype must be IntervalDtype")
+
+    def to_pandas(
+        self, index: ColumnLike = None, nullable: bool = False, **kwargs
+    ) -> "pd.Series":
+        return pd.Series(
+            pd.IntervalDtype().__from_arrow__(self.to_arrow()), index=index
+        )

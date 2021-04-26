@@ -44,9 +44,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
-    NUMERIC_TYPES,
     check_cast_unsupported_dtype,
-    cudf_dtypes_to_pandas_dtypes,
     get_time_unit,
     is_categorical_dtype,
     is_decimal_dtype,
@@ -119,19 +117,11 @@ class ColumnBase(Column, Serializable):
     def to_pandas(
         self, index: ColumnLike = None, nullable: bool = False, **kwargs
     ) -> "pd.Series":
-        if nullable and self.dtype in cudf_dtypes_to_pandas_dtypes:
-            pandas_nullable_dtype = cudf_dtypes_to_pandas_dtypes[self.dtype]
-            arrow_array = self.to_arrow()
-            pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)
-            pd_series = pd.Series(pandas_array, copy=False)
-        elif str(self.dtype) in NUMERIC_TYPES and self.null_count == 0:
-            pd_series = pd.Series(cupy.asnumpy(self.values), copy=False)
-        elif is_interval_dtype(self.dtype):
-            pd_series = pd.Series(
-                pd.IntervalDtype().__from_arrow__(self.to_arrow())
-            )
-        else:
-            pd_series = self.to_arrow().to_pandas(**kwargs)
+        """Convert object to pandas type.
+
+        The default implementation falls back to PyArrow for the conversion.
+        """
+        pd_series = self.to_arrow().to_pandas(**kwargs)
 
         if index is not None:
             pd_series.index = index
