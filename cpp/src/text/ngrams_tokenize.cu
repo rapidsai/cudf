@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 
+#include <text/utilities/tokenize_ops.cuh>
+
 #include <nvtext/detail/tokenize.hpp>
 #include <nvtext/ngrams_tokenize.hpp>
-
-#include <strings/utilities.cuh>
-
-#include <text/utilities/tokenize_ops.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>

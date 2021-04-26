@@ -21,8 +21,6 @@
 
 #include "writer_impl.hpp"
 
-#include <strings/utilities.cuh>
-
 #include <cudf/copying.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -32,6 +30,7 @@
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/strings/detail/modify_strings.cuh>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/replace.hpp>
 #include <cudf/utilities/traits.hpp>
 

@@ -17,6 +17,8 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/get_value.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -85,6 +87,87 @@ std::unique_ptr<cudf::column> child_offsets_from_string_iterator(
   auto transformer = [] __device__(string_view v) { return v.size_bytes(); };
   auto begin       = thrust::make_transform_iterator(strings_begin, transformer);
   return make_offsets_child_column(begin, begin + num_strings, stream, mr);
+}
+
+/**
+ * @brief Copies input string data into a buffer and increments the pointer by the number of bytes
+ * copied.
+ *
+ * @param buffer Device buffer to copy to.
+ * @param input Data to copy from.
+ * @param bytes Number of bytes to copy.
+ * @return Pointer to the end of the output buffer after the copy.
+ */
+__device__ inline char* copy_and_increment(char* buffer, const char* input, size_type bytes)
+{
+  memcpy(buffer, input, bytes);
+  return buffer + bytes;
+}
+
+/**
+ * @brief Copies input string data into a buffer and increments the pointer by the number of bytes
+ * copied.
+ *
+ * @param buffer Device buffer to copy to.
+ * @param d_string String to copy.
+ * @return Pointer to the end of the output buffer after the copy.
+ */
+__device__ inline char* copy_string(char* buffer, const string_view& d_string)
+{
+  return copy_and_increment(buffer, d_string.data(), d_string.size_bytes());
+}
+
+/**
+ * @brief Creates child offsets and chars columns by applying the template function that
+ * can be used for computing the output size of each string as well as create the output.
+ *
+ * @tparam SizeAndExecuteFunction Function must accept an index and return a size.
+ *         It must also have members d_offsets and d_chars which are set to
+ *         memory containing the offsets and chars columns during write.
+ *
+ * @param size_and_exec_fn This is called twice. Once for the output size of each string.
+ *        After that, the d_offsets and d_chars are set and this is called again to fill in the
+ *        chars memory.
+ * @param strings_count Number of strings.
+ * @param mr Device memory resource used to allocate the returned columns' device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return offsets child column and chars child column for a strings column
+ */
+template <typename SizeAndExecuteFunction>
+auto make_strings_children(
+  SizeAndExecuteFunction size_and_exec_fn,
+  size_type strings_count,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  auto offsets_column = make_numeric_column(
+    data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
+  auto offsets_view          = offsets_column->mutable_view();
+  auto d_offsets             = offsets_view.template data<int32_t>();
+  size_and_exec_fn.d_offsets = d_offsets;
+
+  // This is called twice -- once for offsets and once for chars.
+  // Reducing the number of places size_and_exec_fn is inlined speeds up compile time.
+  auto for_each_fn = [strings_count, stream](SizeAndExecuteFunction& size_and_exec_fn) {
+    thrust::for_each_n(rmm::exec_policy(stream),
+                       thrust::make_counting_iterator<size_type>(0),
+                       strings_count,
+                       size_and_exec_fn);
+  };
+
+  // Compute the offsets values
+  for_each_fn(size_and_exec_fn);
+  thrust::exclusive_scan(
+    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+
+  // Now build the chars column
+  auto const bytes = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
+  std::unique_ptr<column> chars_column =
+    create_chars_child_column(strings_count, bytes, stream, mr);
+  size_and_exec_fn.d_chars = chars_column->mutable_view().template data<char>();
+  for_each_fn(size_and_exec_fn);
+
+  return std::make_pair(std::move(offsets_column), std::move(chars_column));
 }
 
 // This template is a thin wrapper around per-context singleton objects.
