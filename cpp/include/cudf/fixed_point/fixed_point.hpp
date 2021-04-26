@@ -99,7 +99,7 @@ CUDA_HOST_DEVICE_CALLABLE Rep ipow(T exponent)
  * @return The negated scale
  */
 CUDA_HOST_DEVICE_CALLABLE
-auto negate(scale_type const& scale) { return scale_type{-scale}; }
+auto negate(scale_type const& scale) { return scale_type{-static_cast<int32_t>(scale)}; }
 
 /** @brief Function that performs a `right shift` scale "times" on the `val`
  *
@@ -184,7 +184,7 @@ template <typename Rep,
 struct scaled_integer {
   Rep value;
   scale_type scale;
-  CUDA_HOST_DEVICE_CALLABLE explicit scaled_integer(Rep v, scale_type s) : value(v), scale(s) {}
+  CUDA_HOST_DEVICE_CALLABLE explicit scaled_integer(Rep v, scale_type s) : value{v}, scale{s} {}
 };
 
 /**
