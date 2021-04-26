@@ -270,7 +270,7 @@ class Decimal64Dtype(_BaseDtype):
 
     @property
     def str(self):
-        return np.dtype("int64").str
+        return f"decimal64({self.precision}, {self.scale})"
 
     @property
     def precision(self):
