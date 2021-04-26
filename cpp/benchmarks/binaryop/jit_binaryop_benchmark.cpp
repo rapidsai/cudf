@@ -15,23 +15,13 @@
  */
 
 #include <cudf/binaryop.hpp>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
-#include <benchmark/benchmark.h>
 #include <fixture/benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
-
-#include <algorithm>
-#include <numeric>
-#include <vector>
 
 template <typename TypeLhs, typename TypeRhs, typename TypeOut>
 class JIT_BINARYOP : public cudf::benchmark {
@@ -77,21 +67,23 @@ void BM_binaryop(benchmark::State& state, cudf::binary_operator binop)
 
 using namespace cudf;
 
+// Types from tests.
+// BINARYOP_BENCHMARK_DEFINE(timestamp_D,  duration_s,   ADD,                  timestamp_us);
+// BINARYOP_BENCHMARK_DEFINE(timestamp_D,  timestamp_s,  SUB,                  duration_s);
+// BINARYOP_BENCHMARK_DEFINE(duration_s,   int32_t,      MUL,                  duration_ns);
+// BINARYOP_BENCHMARK_DEFINE(duration_D,   duration_s,   DIV,                  int64_t);
+// BINARYOP_BENCHMARK_DEFINE(float,        float,        FLOOR_DIV,            int64_t);
+// BINARYOP_BENCHMARK_DEFINE(duration_D,   int64_t,      MOD,                  duration_us);
+// BINARYOP_BENCHMARK_DEFINE(duration_s,   duration_ms,  MOD,                  duration_us);
+
 // clang-format off
 BINARYOP_BENCHMARK_DEFINE(float,        int64_t,      ADD,                  int32_t);
-//BINARYOP_BENCHMARK_DEFINE(timestamp_D,  duration_s,   ADD,                  timestamp_us);
-//BINARYOP_BENCHMARK_DEFINE(timestamp_D,  timestamp_s,  SUB,                  duration_s);
 BINARYOP_BENCHMARK_DEFINE(duration_s,   duration_D,   SUB,                  duration_ms);
 BINARYOP_BENCHMARK_DEFINE(float,        float,        MUL,                  int64_t);
-//BINARYOP_BENCHMARK_DEFINE(duration_s,   int32_t,      MUL,                  duration_ns);
 BINARYOP_BENCHMARK_DEFINE(int64_t,      int64_t,      DIV,                  int64_t);
-//BINARYOP_BENCHMARK_DEFINE(duration_D,   duration_s,   DIV,                  int64_t);
 BINARYOP_BENCHMARK_DEFINE(int64_t,      int64_t,      TRUE_DIV,             int64_t);
 BINARYOP_BENCHMARK_DEFINE(int64_t,      int64_t,      FLOOR_DIV,            int64_t);
-//BINARYOP_BENCHMARK_DEFINE(float,        float,        FLOOR_DIV,            int64_t);
 BINARYOP_BENCHMARK_DEFINE(double,       double,       MOD,                  double);
-//BINARYOP_BENCHMARK_DEFINE(duration_D,   int64_t,      MOD,                  duration_us);
-//BINARYOP_BENCHMARK_DEFINE(duration_s,   duration_ms,  MOD,                  duration_us);
 BINARYOP_BENCHMARK_DEFINE(int64_t,      int64_t,      POW,                  double);
 BINARYOP_BENCHMARK_DEFINE(int64_t,      int32_t,      BITWISE_AND,          int16_t);
 BINARYOP_BENCHMARK_DEFINE(int16_t,      int32_t,      BITWISE_OR,           int64_t);
