@@ -128,6 +128,8 @@ class ColumnBase(Column, Serializable):
         return pd_series
 
     def __iter__(self):
+        # TODO: Why don't we just implement this method in terms of one of the
+        # proposed alternatives (to_arrow, to_pandas, or values_host)?
         cudf.utils.utils.raise_iteration_error(obj=self)
 
     @property
@@ -828,7 +830,7 @@ class ColumnBase(Column, Serializable):
         return indices[-1]
 
     def append(self, other: ColumnBase) -> ColumnBase:
-        return ColumnBase._concat([self, as_column(other)])
+        return self.__class__._concat([self, as_column(other)])
 
     def quantile(
         self,

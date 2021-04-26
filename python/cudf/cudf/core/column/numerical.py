@@ -410,7 +410,7 @@ class NumericalColumn(ColumnBase):
     def applymap(
         self, udf: Callable[[ScalarLike], ScalarLike], out_dtype: Dtype = None
     ) -> ColumnBase:
-        """Apply an element-wise function to transform the values in the Column.
+        """Apply an elementwise function to transform the values in the Column.
 
         Parameters
         ----------
