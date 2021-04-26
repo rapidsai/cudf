@@ -237,8 +237,8 @@ struct dispatch_clamp {
   {
     CUDF_EXPECTS(lo.type() == input.type(), "mismatching types of scalar and input");
 
-    auto lo_itr = make_optional_iterator<T>(lo, contains_nulls::DYNAMIC{}, !lo.is_valid(stream));
-    auto hi_itr = make_optional_iterator<T>(hi, contains_nulls::DYNAMIC{}, !hi.is_valid(stream));
+    auto lo_itr = make_optional_iterator<T>(lo, contains_nulls::YES{});
+    auto hi_itr = make_optional_iterator<T>(hi, contains_nulls::YES{});
     auto lo_replace_itr = make_optional_iterator<T>(lo_replace, contains_nulls::NO{});
     auto hi_replace_itr = make_optional_iterator<T>(hi_replace, contains_nulls::NO{});
 
