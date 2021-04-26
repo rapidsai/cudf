@@ -1329,7 +1329,7 @@ class Series(SingleColumnFrame, Serializable):
         return "\n".join(lines)
 
     @annotate("BINARY_OP", color="orange", domain="cudf_python")
-    def _apply_op(
+    def _binaryop(
         self, other, fn, fill_value=None, reflect=False, can_reindex=False
     ):
         """
@@ -1369,7 +1369,7 @@ class Series(SingleColumnFrame, Serializable):
                     mask = (lmask | rmask).data
                     lhs = lhs.fillna(fill_value)
                     rhs = rhs.fillna(fill_value)
-                    result = lhs._apply_op(rhs, fn=fn, reflect=reflect)
+                    result = lhs._binaryop(rhs, fn=fn, reflect=reflect)
                     data = column.build_column(
                         data=result.data, dtype=result.dtype, mask=mask
                     )
@@ -1445,10 +1445,10 @@ class Series(SingleColumnFrame, Serializable):
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(other, "add", fill_value)
+        return self._binaryop(other, "add", fill_value)
 
     def __add__(self, other):
-        return self._apply_op(other, "add")
+        return self._binaryop(other, "add")
 
     def radd(self, other, fill_value=None, axis=0):
         """Addition of series and other, element-wise
@@ -1493,12 +1493,12 @@ class Series(SingleColumnFrame, Serializable):
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(
+        return self._binaryop(
             other, "add", fill_value=fill_value, reflect=True
         )
 
     def __radd__(self, other):
-        return self._apply_op(other, "add", reflect=True)
+        return self._binaryop(other, "add", reflect=True)
 
     def subtract(self, other, fill_value=None, axis=0):
         """Subtraction of series and other, element-wise
@@ -1544,12 +1544,12 @@ class Series(SingleColumnFrame, Serializable):
         """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(other, "sub", fill_value)
+        return self._binaryop(other, "sub", fill_value)
 
     sub = subtract
 
     def __sub__(self, other):
-        return self._apply_op(other, "sub")
+        return self._binaryop(other, "sub")
 
     def rsub(self, other, fill_value=None, axis=0):
         """Subtraction of series and other, element-wise
@@ -1594,10 +1594,10 @@ class Series(SingleColumnFrame, Serializable):
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(other, "sub", fill_value, reflect=True)
+        return self._binaryop(other, "sub", fill_value, reflect=True)
 
     def __rsub__(self, other):
-        return self._apply_op(other, "sub", reflect=True)
+        return self._binaryop(other, "sub", reflect=True)
 
     def multiply(self, other, fill_value=None, axis=0):
         """Multiplication of series and other, element-wise
@@ -1642,12 +1642,12 @@ class Series(SingleColumnFrame, Serializable):
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(other, "mul", fill_value=fill_value)
+        return self._binaryop(other, "mul", fill_value=fill_value)
 
     mul = multiply
 
     def __mul__(self, other):
-        return self._apply_op(other, "mul")
+        return self._binaryop(other, "mul")
 
     def rmul(self, other, fill_value=None, axis=0):
         """Multiplication of series and other, element-wise
@@ -1695,10 +1695,10 @@ class Series(SingleColumnFrame, Serializable):
         """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(other, "mul", fill_value, True)
+        return self._binaryop(other, "mul", fill_value, True)
 
     def __rmul__(self, other):
-        return self._apply_op(other, "mul", reflect=True)
+        return self._binaryop(other, "mul", reflect=True)
 
     def mod(self, other, fill_value=None, axis=0):
         """Modulo of series and other, element-wise
@@ -1733,10 +1733,10 @@ class Series(SingleColumnFrame, Serializable):
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(other, "mod", fill_value)
+        return self._binaryop(other, "mod", fill_value)
 
     def __mod__(self, other):
-        return self._apply_op(other, "mod")
+        return self._binaryop(other, "mod")
 
     def rmod(self, other, fill_value=None, axis=0):
         """Modulo of series and other, element-wise
@@ -1784,10 +1784,10 @@ class Series(SingleColumnFrame, Serializable):
         """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(other, "mod", fill_value, True)
+        return self._binaryop(other, "mod", fill_value, True)
 
     def __rmod__(self, other):
-        return self._apply_op(other, "mod", reflect=True)
+        return self._binaryop(other, "mod", reflect=True)
 
     def pow(self, other, fill_value=None, axis=0):
         """Exponential power of series and other, element-wise
@@ -1832,10 +1832,10 @@ class Series(SingleColumnFrame, Serializable):
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(other, "pow", fill_value)
+        return self._binaryop(other, "pow", fill_value)
 
     def __pow__(self, other):
-        return self._apply_op(other, "pow")
+        return self._binaryop(other, "pow")
 
     def rpow(self, other, fill_value=None, axis=0):
         """Exponential power of series and other, element-wise
@@ -1880,10 +1880,10 @@ class Series(SingleColumnFrame, Serializable):
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(other, "pow", fill_value, True)
+        return self._binaryop(other, "pow", fill_value, True)
 
     def __rpow__(self, other):
-        return self._apply_op(other, "pow", reflect=True)
+        return self._binaryop(other, "pow", reflect=True)
 
     def floordiv(self, other, fill_value=None, axis=0):
         """Integer division of series and other, element-wise
@@ -1928,10 +1928,10 @@ class Series(SingleColumnFrame, Serializable):
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(other, "floordiv", fill_value)
+        return self._binaryop(other, "floordiv", fill_value)
 
     def __floordiv__(self, other):
-        return self._apply_op(other, "floordiv")
+        return self._binaryop(other, "floordiv")
 
     def rfloordiv(self, other, fill_value=None, axis=0):
         """Integer division of series and other, element-wise
@@ -1984,10 +1984,10 @@ class Series(SingleColumnFrame, Serializable):
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(other, "floordiv", fill_value, True)
+        return self._binaryop(other, "floordiv", fill_value, True)
 
     def __rfloordiv__(self, other):
-        return self._apply_op(other, "floordiv", reflect=True)
+        return self._binaryop(other, "floordiv", reflect=True)
 
     def truediv(self, other, fill_value=None, axis=0):
         """Floating division of series and other, element-wise
@@ -2032,10 +2032,10 @@ class Series(SingleColumnFrame, Serializable):
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(other, "truediv", fill_value)
+        return self._binaryop(other, "truediv", fill_value)
 
     def __truediv__(self, other):
-        return self._apply_op(other, "truediv")
+        return self._binaryop(other, "truediv")
 
     def rtruediv(self, other, fill_value=None, axis=0):
         """Floating division of series and other, element-wise
@@ -2080,10 +2080,10 @@ class Series(SingleColumnFrame, Serializable):
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(other, "truediv", fill_value, True)
+        return self._binaryop(other, "truediv", fill_value, True)
 
     def __rtruediv__(self, other):
-        return self._apply_op(other, "truediv", reflect=True)
+        return self._binaryop(other, "truediv", reflect=True)
 
     __div__ = __truediv__
 
@@ -2097,7 +2097,7 @@ class Series(SingleColumnFrame, Serializable):
         ):
             # TODO: This doesn't work on Series (op) DataFrame
             # because dataframe doesn't have dtype
-            ser = self._apply_op(other, op)
+            ser = self._binaryop(other, op)
             if np.issubdtype(self.dtype, np.bool_) or np.issubdtype(
                 other.dtype, np.bool_
             ):
@@ -2128,15 +2128,15 @@ class Series(SingleColumnFrame, Serializable):
         return self._bitwise_binop(other, "xor")
 
     def logical_and(self, other):
-        ser = self._apply_op(other, "l_and")
+        ser = self._binaryop(other, "l_and")
         return ser.astype(np.bool_)
 
     def remainder(self, other):
-        ser = self._apply_op(other, "mod")
+        ser = self._binaryop(other, "mod")
         return ser
 
     def logical_or(self, other):
-        ser = self._apply_op(other, "l_or")
+        ser = self._binaryop(other, "l_or")
         return ser.astype(np.bool_)
 
     def logical_not(self):
@@ -2205,12 +2205,12 @@ class Series(SingleColumnFrame, Serializable):
         """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(
+        return self._binaryop(
             other=other, fn="eq", fill_value=fill_value, can_reindex=True
         )
 
     def __eq__(self, other):
-        return self._apply_op(other, "eq")
+        return self._binaryop(other, "eq")
 
     def ne(self, other, fill_value=None, axis=0):
         """Not equal to of series and other, element-wise
@@ -2260,12 +2260,12 @@ class Series(SingleColumnFrame, Serializable):
         """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(
+        return self._binaryop(
             other=other, fn="ne", fill_value=fill_value, can_reindex=True
         )
 
     def __ne__(self, other):
-        return self._apply_op(other, "ne")
+        return self._binaryop(other, "ne")
 
     def lt(self, other, fill_value=None, axis=0):
         """Less than of series and other, element-wise
@@ -2315,12 +2315,12 @@ class Series(SingleColumnFrame, Serializable):
         """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(
+        return self._binaryop(
             other=other, fn="lt", fill_value=fill_value, can_reindex=True
         )
 
     def __lt__(self, other):
-        return self._apply_op(other, "lt")
+        return self._binaryop(other, "lt")
 
     def le(self, other, fill_value=None, axis=0):
         """Less than or equal to of series and other, element-wise
@@ -2370,12 +2370,12 @@ class Series(SingleColumnFrame, Serializable):
         """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(
+        return self._binaryop(
             other=other, fn="le", fill_value=fill_value, can_reindex=True
         )
 
     def __le__(self, other):
-        return self._apply_op(other, "le")
+        return self._binaryop(other, "le")
 
     def gt(self, other, fill_value=None, axis=0):
         """Greater than of series and other, element-wise
@@ -2425,12 +2425,12 @@ class Series(SingleColumnFrame, Serializable):
         """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(
+        return self._binaryop(
             other=other, fn="gt", fill_value=fill_value, can_reindex=True
         )
 
     def __gt__(self, other):
-        return self._apply_op(other, "gt")
+        return self._binaryop(other, "gt")
 
     def ge(self, other, fill_value=None, axis=0):
         """Greater than or equal to of series and other, element-wise
@@ -2480,12 +2480,12 @@ class Series(SingleColumnFrame, Serializable):
         """  # noqa: E501
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._apply_op(
+        return self._binaryop(
             other=other, fn="ge", fill_value=fill_value, can_reindex=True
         )
 
     def __ge__(self, other):
-        return self._apply_op(other, "ge")
+        return self._binaryop(other, "ge")
 
     def __invert__(self):
         """Bitwise invert (~) for each element.
