@@ -1515,19 +1515,19 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     result[col] = fallback(rhs[col], _reverse_op(fn))
         elif isinstance(other, Series):
             other_cols = other.to_pandas().to_dict()
-            result_cols = list(self._column_names)
-            df_cols = list(result_cols)
+            df_cols = self._column_names
+            result_cols = df_cols + tuple(
+                col for col in other_cols if col not in df_cols
+            )
 
-            for new_col in other_cols:
-                if new_col not in result_cols:
-                    result_cols.append(new_col)
             for col in result_cols:
                 l_opr = (
                     self[col]
                     if col in df_cols
                     else Series(as_column(np.nan, length=len(self)))
                 )
-                result[col] = op(l_opr, other_cols.get(col))
+                r_opr = other_cols.get(col)
+                result[col] = op(l_opr, r_opr)
 
         elif isinstance(other, (numbers.Number, cudf.Scalar)) or (
             isinstance(other, np.ndarray) and other.ndim == 0
