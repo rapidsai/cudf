@@ -159,7 +159,7 @@ struct column_to_strings_fn {
     string_scalar delimiter{std::string{options_.get_inter_column_delimiter()}, true, stream_};
 
     auto d_column = column_device_view::create(column_v, stream_);
-    escape_strings_fn fn{*d_column, delimiter.value()};
+    escape_strings_fn fn{*d_column, delimiter.value(stream_)};
     auto children = cudf::strings::detail::make_strings_children(fn, column_v.size(), stream_, mr_);
 
     return make_strings_column(column_v.size(),
