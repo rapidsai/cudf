@@ -607,7 +607,7 @@ class list_scalar : public scalar {
   list_scalar& operator=(list_scalar&& other) = delete;
 
   /**
-   * @brief Construct a new list scalar object from existing device data
+   * @brief Construct a new list scalar object copying from existing device data
    *
    * @param elements The elements of the list
    * @param is_valid Whether the value held by the scalar is valid
@@ -618,7 +618,23 @@ class list_scalar : public scalar {
               bool is_valid                       = true,
               rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : scalar(data_type(type_id::LIST), is_valid), _data(elements, stream, mr)
+    : scalar(data_type(type_id::LIST), is_valid, stream, mr), _data(elements, stream, mr)
+  {
+  }
+
+  /**
+   * @brief Move existing device data into a new list scalar object
+   *
+   * @param elements The elements of the list
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  list_scalar(cudf::column const&& elements,
+              bool is_valid                       = true,
+              rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+    : scalar(data_type(type_id::LIST), is_valid, stream, mr), _data(elements)
   {
   }
 

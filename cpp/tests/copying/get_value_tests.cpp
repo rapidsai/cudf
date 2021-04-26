@@ -25,6 +25,8 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
+#include "build/cuda-11.2/fea-shift/release/_deps/gtest-src/googletest/include/gtest/gtest.h"
+#include "cudf/detail/iterator.cuh"
 
 namespace cudf {
 namespace test {
@@ -163,6 +165,284 @@ TYPED_TEST(DictionaryGetValueTest, GetNull)
 
   auto s = get_element(*col, 2);
 
+  EXPECT_FALSE(s->is_valid());
+}
+
+/*
+ * Lists test grid:
+ * Dim1 nestedness:          {Nested, Non-nested}
+ * Dim2 validity, emptiness: {Null element, Non-null non-empty list, Non-null empty list}
+ * Dim3 leaf data type:      {Fixed-width, string}
+ */
+
+template <typename T>
+struct ListGetFixedWidthValueTest : public BaseFixture {
+};
+
+TYPED_TEST_CASE(ListGetFixedWidthValueTest, FixedWidthTypes);
+
+TYPED_TEST(ListGetFixedWidthValueTest, NonNestedGetNonNullNonEmpty)
+{
+  using LCW = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+
+  LCW col{LCW{1, 2, 34}, LCW{}, LCW{1}, LCW{}};
+  fixed_width_column_wrapper<TypeParam> expected_data{1, 2, 34};
+  size_type index = 0;
+
+  auto s       = get_element(col, index);
+  auto typed_s = static_cast<list_scalar const*>(s.get());
+
+  EXPECT_TRUE(s->is_valid());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
+}
+
+TYPED_TEST(ListGetFixedWidthValueTest, NonNestedGetNonNullEmpty)
+{
+  using LCW = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+
+  LCW col{LCW{1, 2, 34}, LCW{}, LCW{1}, LCW{}};
+  fixed_width_column_wrapper<TypeParam> expected_data{};
+  size_type index = 1;
+
+  auto s       = get_element(col, index);
+  auto typed_s = static_cast<list_scalar const*>(s.get());
+
+  EXPECT_TRUE(s->is_valid());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
+}
+
+TYPED_TEST(ListGetFixedWidthValueTest, NonNestedGetNull)
+{
+  using LCW = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+  std::vector<valid_type> valid{0, 1, 0, 1};
+  LCW col({LCW{1, 2, 34}, LCW{}, LCW{1}, LCW{}}, valid.begin());
+  size_type index = 2;
+
+  auto s = get_element(col, index);
+
+  EXPECT_FALSE(s->is_valid());
+}
+
+TYPED_TEST(ListGetFixedWidthValueTest, NestedGetNonNullNonEmpty)
+{
+  using LCW = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+
+  // clang-format off
+  LCW col{
+    LCW{LCW{1, 2}, LCW{34}},
+    LCW{},
+    LCW{LCW{1}},
+    LCW{LCW{42}, LCW{10}}
+  };
+  // clang-format on
+  LCW expected_data{LCW{42}, LCW{10}};
+
+  size_type index = 3;
+
+  auto s       = get_element(col, index);
+  auto typed_s = static_cast<list_scalar const*>(s.get());
+
+  EXPECT_TRUE(s->is_valid());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
+}
+
+TYPED_TEST(ListGetFixedWidthValueTest, NestedGetNonNullNonEmptyPreserveNull)
+{
+  using LCW = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+
+  std::vector<valid_type> valid{0, 1};
+  // clang-format off
+  LCW col{
+    LCW{LCW{1, 2}, LCW{34}},
+    LCW{},
+    LCW{LCW{1}},
+    LCW({LCW{42}, LCW{10}}, valid.begin())
+  };
+  // clang-format on
+  LCW expected_data({LCW{42}, LCW{10}}, valid.begin());
+  size_type index = 3;
+
+  auto s       = get_element(col, index);
+  auto typed_s = static_cast<list_scalar const*>(s.get());
+
+  EXPECT_TRUE(s->is_valid());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
+}
+
+TYPED_TEST(ListGetFixedWidthValueTest, NestedGetNonNullEmpty)
+{
+  using LCW = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+
+  // clang-format off
+  LCW col{
+    LCW{LCW{1, 2}, LCW{34}},
+    LCW{},
+    LCW{LCW{1}},
+    LCW{LCW{42}, LCW{10}}
+  };
+  // clang-format on
+  LCW expected_data{};
+  size_type index = 1;
+
+  auto s       = get_element(col, index);
+  auto typed_s = static_cast<list_scalar const*>(s.get());
+
+  EXPECT_TRUE(s->is_valid());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
+}
+
+TYPED_TEST(ListGetFixedWidthValueTest, NestedGetNull)
+{
+  using LCW = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+
+  std::vector<valid_type> valid{1, 0, 1, 0};
+  // clang-format off
+  LCW col(
+    {
+      LCW{LCW{1, 2}, LCW{34}},
+      LCW{},
+      LCW{LCW{1}},
+      LCW{LCW{42}, LCW{10}}
+    }, valid.begin());
+  // clang-format on
+  size_type index = 1;
+
+  auto s = get_element(col, index);
+
+  EXPECT_FALSE(s->is_valid());
+}
+
+struct ListGetStringValueTest : public BaseFixture {
+};
+
+TEST_F(ListGetStringValueTest, NonNestedGetNonNullNonEmpty)
+{
+  using LCW = cudf::test::lists_column_wrapper<string_view>;
+
+  LCW col{LCW{"aaa", "Héllo"}, LCW{}, LCW{""}, LCW{"42"}};
+  strings_column_wrapper expected_data{"aaa", "Héllo"};
+  size_type index = 0;
+
+  auto s       = get_element(col, index);
+  auto typed_s = static_cast<list_scalar const*>(s.get());
+
+  EXPECT_TRUE(s->is_valid());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
+}
+
+TEST_F(ListGetStringValueTest, NonNestedGetNonNullEmpty)
+{
+  using LCW = cudf::test::lists_column_wrapper<string_view>;
+
+  LCW col{LCW{"aaa", "Héllo"}, LCW{}, LCW{""}, LCW{"42"}};
+  strings_column_wrapper expected_data{};
+  size_type index = 1;
+
+  auto s       = get_element(col, index);
+  auto typed_s = static_cast<list_scalar const*>(s.get());
+
+  EXPECT_TRUE(s->is_valid());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
+}
+
+TEST_F(ListGetStringValueTest, NonNestedGetNull)
+{
+  using LCW = cudf::test::lists_column_wrapper<string_view>;
+
+  std::vector<valid_type> valid{1, 0, 0, 1};
+  LCW col({LCW{"aaa", "Héllo"}, LCW{}, LCW{""}, LCW{"42"}}, valid.begin());
+  size_type index = 2;
+
+  auto s = get_element(col, index);
+
+  EXPECT_FALSE(s->is_valid());
+}
+
+TEST_F(ListGetStringValueTest, NestedGetNonNullNonEmpty)
+{
+  using LCW = cudf::test::lists_column_wrapper<string_view>;
+
+  // clang-format off
+  LCW col{
+    LCW{LCW{"aaa", "Héllo"}},
+    {LCW{}},
+    LCW{LCW{""}},
+    LCW{LCW{"42"}, LCW{"21"}}
+  };
+  // clang-format on
+  LCW expected_data{LCW{""}};
+  size_type index = 2;
+
+  auto s       = get_element(col, index);
+  auto typed_s = static_cast<list_scalar const*>(s.get());
+
+  EXPECT_TRUE(s->is_valid());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
+}
+
+TEST_F(ListGetStringValueTest, NestedGetNonNullNonEmptyPreserveNull)
+{
+  using LCW = cudf::test::lists_column_wrapper<string_view>;
+
+  std::vector<valid_type> valid{0, 1};
+  // clang-format off
+  LCW col{
+    LCW{LCW{"aaa", "Héllo"}},
+    {LCW{}},
+    LCW({LCW{""}, LCW{"cc"}}, valid.begin()),
+    LCW{LCW{"42"}, LCW{"21"}}
+  };
+  // clang-format on
+  LCW expected_data({LCW{""}, LCW{"cc"}}, valid.begin());
+  size_type index = 2;
+
+  auto s       = get_element(col, index);
+  auto typed_s = static_cast<list_scalar const*>(s.get());
+
+  EXPECT_TRUE(s->is_valid());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
+}
+
+TEST_F(ListGetStringValueTest, NestedGetNonNullEmpty)
+{
+  using LCW = cudf::test::lists_column_wrapper<string_view>;
+
+  // clang-format off
+  LCW col{
+    LCW{LCW{"aaa", "Héllo"}},
+    LCW{LCW{""}},
+    LCW{LCW{"42"}, LCW{"21"}},
+    {LCW{}}
+  };
+  // clang-format on
+  LCW expected_data{LCW{}};  // a list column with 1 row of an empty string list
+  size_type index = 3;
+
+  auto s       = get_element(col, index);
+  auto typed_s = static_cast<list_scalar const*>(s.get());
+
+  EXPECT_TRUE(s->is_valid());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
+}
+
+TEST_F(ListGetStringValueTest, NestedGetNull)
+{
+  using LCW = cudf::test::lists_column_wrapper<string_view>;
+
+  std::vector<valid_type> valid{0, 0, 1, 1};
+  // clang-format off
+  LCW col(
+    {
+      LCW{LCW{"aaa", "Héllo"}},
+      LCW{LCW{""}},
+      LCW{LCW{"42"}, LCW{"21"}}, 
+      {LCW{}}
+    }, valid.begin());
+  // clang-format on
+  LCW expected_data{};
+  size_type index = 0;
+
+  auto s = get_element(col, index);
   EXPECT_FALSE(s->is_valid());
 }
 

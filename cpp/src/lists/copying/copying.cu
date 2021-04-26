@@ -35,7 +35,7 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  if (lists.is_empty()) { return cudf::empty_like(lists.parent()); }
+  if (lists.is_empty() or start == end) { return cudf::empty_like(lists.parent()); }
   if (end < 0 || end > lists.size()) end = lists.size();
   CUDF_EXPECTS(((start >= 0) && (start < end)), "Invalid slice range.");
   auto lists_count   = end - start;

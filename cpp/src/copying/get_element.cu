@@ -19,6 +19,8 @@
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/lists/detail/copying.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 
@@ -122,7 +124,24 @@ struct get_element_functor {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
-    CUDF_FAIL("get_element_functor not supported for list_view");
+    rmm::device_scalar<bool> d_valid;
+    auto d_input = column_device_view::create(input);
+    device_single_thread([d_input = *d_input, index, valid = d_valid.data()] __device__() {
+      *valid = d_input.is_valid(index);
+    });
+    bool valid = d_valid.value(stream);
+
+    if (valid) {
+      lists_column_view lcv(input);
+      // Make a copy of the row
+      auto row_slice_contents =
+        lists::detail::copy_slice(lcv, index, index + 1, stream, mr)->release();
+      // Construct scalar with row data
+      return std::make_unique<list_scalar>(
+        std::move(*row_slice_contents.children[1]), valid, stream, mr);
+    } else {
+      return make_default_constructed_scalar(data_type(type_id::LIST));
+    }
   }
 
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()> *p = nullptr>
