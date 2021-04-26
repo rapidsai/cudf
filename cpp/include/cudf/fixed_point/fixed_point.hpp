@@ -74,7 +74,7 @@ namespace detail {
 template <typename Rep,
           Radix Base,
           typename T,
-          typename cuda::std::enable_if_t<((cuda::std::is_same<int32_t, T>::value) &&
+          typename cuda::std::enable_if_t<(cuda::std::is_same<int32_t, T>::value &&
                                            is_supported_representation_type<Rep>())>* = nullptr>
 CUDA_HOST_DEVICE_CALLABLE Rep ipow(T exponent)
 {
