@@ -82,11 +82,11 @@ std::unique_ptr<column> modify_strings(strings_column_view const& strings,
                                             // one (`d_chars = ...`) doesn't
 
   // build the chars column -- convert characters based on case_flag parameter
-  size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
-  auto chars_column =
-    strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
-  auto chars_view = chars_column->mutable_view();
-  auto d_chars    = chars_view.data<char>();
+  auto const bytes =
+    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
+  auto chars_column = strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_view   = chars_column->mutable_view();
+  auto d_chars      = chars_view.data<char>();
 
   device_execute_functor d_execute_fctr{
     d_column, d_new_offsets, d_chars, std::forward<Types>(args)...};
