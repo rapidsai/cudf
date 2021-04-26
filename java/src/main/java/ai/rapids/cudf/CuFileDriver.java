@@ -20,15 +20,16 @@ package ai.rapids.cudf;
  * Represents a cuFile driver.
  */
 public final class CuFileDriver implements AutoCloseable {
-  private final long pointer;
+  private final CuFileResourceCleaner cleaner;
 
   public CuFileDriver() {
-    pointer = create();
+    cleaner = new CuFileResourceCleaner(create(), CuFileDriver::destroy);
+    MemoryCleaner.register(this, cleaner);
   }
 
   @Override
   public void close() {
-    destroy(pointer);
+    cleaner.close(this);
   }
 
   private static native long create();

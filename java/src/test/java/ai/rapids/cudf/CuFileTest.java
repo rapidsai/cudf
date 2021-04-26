@@ -107,8 +107,9 @@ public class CuFileTest extends CudfTestBase {
   public void testRegisteringUnalignedBufferThrowsException() {
     assumeTrue(CuFile.libraryLoaded());
     assertThrows(IllegalArgumentException.class, () -> {
-      try (DeviceMemoryBuffer buffer = DeviceMemoryBuffer.allocate(4095)) {
-        new CuFileBuffer(buffer, true);
+      //noinspection EmptyTryBlock
+      try (DeviceMemoryBuffer buffer = DeviceMemoryBuffer.allocate(4095);
+           CuFileBuffer ignored = new CuFileBuffer(buffer, true)) {
       }
     });
   }
@@ -131,7 +132,7 @@ public class CuFileTest extends CudfTestBase {
     try (HostMemoryBuffer orig = HostMemoryBuffer.allocate(length);
          DeviceMemoryBuffer from = DeviceMemoryBuffer.allocate(length);
          CuFileBuffer writeBuffer = new CuFileBuffer(from, registerBuffer);
-         CuFileWriter writer = new CuFileWriter(tempFile.getAbsolutePath())) {
+         CuFileWriteHandle writer = new CuFileWriteHandle(tempFile.getAbsolutePath())) {
       orig.setLong(0, 123456789);
       from.copyFromHostBuffer(orig);
       writer.write(writeBuffer, length, 0);
@@ -142,7 +143,7 @@ public class CuFileTest extends CudfTestBase {
     }
     try (DeviceMemoryBuffer to = DeviceMemoryBuffer.allocate(length);
          CuFileBuffer readBuffer = new CuFileBuffer(to, registerBuffer);
-         CuFileReader reader = new CuFileReader(tempFile.getAbsolutePath());
+         CuFileReadHandle reader = new CuFileReadHandle(tempFile.getAbsolutePath());
          HostMemoryBuffer dest = HostMemoryBuffer.allocate(length)) {
       reader.read(readBuffer, 0);
       dest.copyFromDeviceBuffer(to);

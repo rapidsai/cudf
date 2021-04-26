@@ -17,24 +17,8 @@
 package ai.rapids.cudf;
 
 /**
- * Represents a cuFile file handle.
+ * Destroys a cuFile native resource.
  */
-abstract class CuFileHandle implements AutoCloseable {
-  private final CuFileResourceCleaner cleaner;
-
-  protected CuFileHandle(long pointer) {
-    cleaner = new CuFileResourceCleaner(pointer, CuFileHandle::destroy);
-    MemoryCleaner.register(this, cleaner);
-  }
-
-  @Override
-  public void close() {
-    cleaner.close(this);
-  }
-
-  protected long getPointer() {
-    return cleaner.getPointer();
-  }
-
-  private static native void destroy(long pointer);
+interface CuFileResourceDestroyer {
+  void destroy(long pointer);
 }

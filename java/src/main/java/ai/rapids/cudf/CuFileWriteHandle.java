@@ -19,14 +19,14 @@ package ai.rapids.cudf;
 /**
  * Represents a cuFile file handle for reading.
  */
-public final class CuFileWriter extends CuFileHandle {
+public final class CuFileWriteHandle extends CuFileHandle {
 
   /**
    * Construct a writer using the specified file path.
    *
    * @param path The file path for writing.
    */
-  public CuFileWriter(String path) {
+  public CuFileWriteHandle(String path) {
     super(create(path));
   }
 
