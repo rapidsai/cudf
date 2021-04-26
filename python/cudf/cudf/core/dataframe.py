@@ -1476,7 +1476,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if other is None:
             for col in self._data:
                 result[col] = getattr(self[col], fn)()
-            return result
         elif isinstance(other, Sequence):
             # This adds the ith element of other to the ith column of self.
             for k, col in enumerate(self._data):
@@ -1528,8 +1527,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     if col in df_cols
                     else Series(as_column(np.nan, length=len(self)))
                 )
-                r_opr = other_cols[col] if col in other_cols else None
-                result[col] = op(l_opr, r_opr)
+                result[col] = op(l_opr, other_cols.get(col))
 
         elif isinstance(other, (numbers.Number, cudf.Scalar)) or (
             isinstance(other, np.ndarray) and other.ndim == 0
