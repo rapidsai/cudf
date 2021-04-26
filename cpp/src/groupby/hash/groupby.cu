@@ -153,10 +153,9 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   }
 
   // Enables conversion of ARGMIN/ARGMAX into MIN/MAX
-  auto gather_argminmax(aggregation::Kind const& agg_kind)
+  auto gather_argminmax(aggregation const& agg)
   {
-    auto transformed_agg = std::make_unique<aggregation>(agg_kind);
-    auto arg_result      = to_dense_agg_result(*transformed_agg);
+    auto arg_result = to_dense_agg_result(agg);
     // We make a view of ARG(MIN/MAX) result without a null mask and gather
     // using this map. The values in data buffer of ARG(MIN/MAX) result
     // corresponding to null values was initialized to ARG(MIN/MAX)_SENTINEL
@@ -187,20 +186,24 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   void visit(cudf::detail::min_aggregation const& agg) override
   {
     if (dense_results->has_result(col_idx, agg)) return;
-    if (result_type.id() == type_id::STRING)
-      dense_results->add_result(col_idx, agg, gather_argminmax(aggregation::ARGMIN));
-    else
+    if (result_type.id() == type_id::STRING) {
+      auto transformed_agg = make_argmin_aggregation();
+      dense_results->add_result(col_idx, agg, gather_argminmax(*transformed_agg));
+    } else {
       dense_results->add_result(col_idx, agg, to_dense_agg_result(agg));
+    }
   }
 
   void visit(cudf::detail::max_aggregation const& agg) override
   {
     if (dense_results->has_result(col_idx, agg)) return;
 
-    if (result_type.id() == type_id::STRING)
-      dense_results->add_result(col_idx, agg, gather_argminmax(aggregation::ARGMAX));
-    else
+    if (result_type.id() == type_id::STRING) {
+      auto transformed_agg = make_argmax_aggregation();
+      dense_results->add_result(col_idx, agg, gather_argminmax(*transformed_agg));
+    } else {
       dense_results->add_result(col_idx, agg, to_dense_agg_result(agg));
+    }
   }
 
   void visit(cudf::detail::mean_aggregation const& agg) override
@@ -259,19 +262,22 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   {
     if (dense_results->has_result(col_idx, agg)) return;
     auto var_agg = make_variance_aggregation(agg._ddof);
-    this->visit(*static_cast<cudf::detail::var_aggregation*>(var_agg.get()));
+    this->visit(*dynamic_cast<cudf::detail::var_aggregation*>(var_agg.get()));
     column_view variance = dense_results->get_result(col_idx, *var_agg);
 
     auto result = cudf::detail::unary_operation(variance, unary_operator::SQRT, stream, mr);
     dense_results->add_result(col_idx, agg, std::move(result));
   }
 };
-
 // flatten aggs to filter in single pass aggs
-std::tuple<table_view, std::vector<aggregation::Kind>, std::vector<size_t>>
+std::tuple<table_view,
+           std::vector<aggregation::Kind>,
+           std::vector<std::unique_ptr<aggregation>>,
+           std::vector<size_t>>
 flatten_single_pass_aggs(host_span<aggregation_request const> requests)
 {
   std::vector<column_view> columns;
+  std::vector<std::unique_ptr<aggregation>> aggs;
   std::vector<aggregation::Kind> agg_kinds;
   std::vector<size_t> col_ids;
 
@@ -280,24 +286,28 @@ flatten_single_pass_aggs(host_span<aggregation_request const> requests)
     auto const& agg_v   = request.aggregations;
 
     std::unordered_set<aggregation::Kind> agg_kinds_set;
-    auto insert_agg = [&](size_t i, column_view const& request_values, aggregation::Kind k) {
-      if (agg_kinds_set.insert(k).second) {
-        agg_kinds.push_back(k);
-        columns.push_back(request_values);
-        col_ids.push_back(i);
-      }
-    };
+    auto insert_agg =
+      [&](size_t i, column_view const& request_values, std::unique_ptr<aggregation>&& agg) {
+        if (agg_kinds_set.insert(agg->kind).second) {
+          agg_kinds.push_back(agg->kind);
+          aggs.push_back(std::move(agg));
+          columns.push_back(request_values);
+          col_ids.push_back(i);
+        }
+      };
 
     auto values_type = cudf::is_dictionary(request.values.type())
                          ? cudf::dictionary_column_view(request.values).keys().type()
                          : request.values.type();
     for (auto&& agg : agg_v) {
-      for (auto const& agg_s : agg->get_simple_aggregations(values_type))
-        insert_agg(i, request.values, agg_s);
+      for (auto& agg_s : agg->get_simple_aggregations(values_type)) {
+        insert_agg(i, request.values, std::move(agg_s));
+      }
     }
   }
 
-  return std::make_tuple(table_view(columns), std::move(agg_kinds), std::move(col_ids));
+  return std::make_tuple(
+    table_view(columns), std::move(agg_kinds), std::move(aggs), std::move(col_ids));
 }
 
 /**
@@ -426,16 +436,17 @@ void compute_single_pass_aggs(table_view const& keys,
 {
   // flatten the aggs to a table that can be operated on by aggregate_row
   table_view flattened_values;
-  std::vector<aggregation::Kind> aggs;
+  std::vector<std::unique_ptr<aggregation>> aggs;
+  std::vector<aggregation::Kind> agg_kinds;
   std::vector<size_t> col_ids;
-  std::tie(flattened_values, aggs, col_ids) = flatten_single_pass_aggs(requests);
+  std::tie(flattened_values, agg_kinds, aggs, col_ids) = flatten_single_pass_aggs(requests);
 
   // make table that will hold sparse results
-  table sparse_table = create_sparse_results_table(flattened_values, aggs, stream);
+  table sparse_table = create_sparse_results_table(flattened_values, agg_kinds, stream);
   // prepare to launch kernel to do the actual aggregation
   auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
   auto d_values       = table_device_view::create(flattened_values, stream);
-  rmm::device_vector<aggregation::Kind> d_aggs(aggs);
+  rmm::device_vector<aggregation::Kind> d_aggs(agg_kinds);
 
   bool skip_key_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
@@ -455,9 +466,7 @@ void compute_single_pass_aggs(table_view const& keys,
   // Add results back to sparse_results cache
   auto sparse_result_cols = sparse_table.release();
   for (size_t i = 0; i < aggs.size(); i++) {
-    // Note that the cache will make a copy of this temporary aggregation
-    auto agg = std::make_unique<aggregation>(aggs[i]);
-    sparse_results->add_result(col_ids[i], *agg, std::move(sparse_result_cols[i]));
+    sparse_results->add_result(col_ids[i], *aggs[i], std::move(sparse_result_cols[i]));
   }
 }
 
