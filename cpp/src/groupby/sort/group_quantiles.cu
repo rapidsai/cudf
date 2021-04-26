@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include <quantiles/quantiles_util.hpp>
+#include "group_reductions.hpp"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
@@ -22,13 +25,10 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <groupby/sort/group_reductions.hpp>
-#include <quantiles/quantiles_util.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_vector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <thrust/for_each.h>
 
 namespace cudf {

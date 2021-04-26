@@ -871,13 +871,5 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
   return detail::replace(strings, targets, repls, rmm::cuda_stream_default, mr);
 }
 
-std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
-                                      string_scalar const& repl,
-                                      rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::replace_nulls(strings, repl, rmm::cuda_stream_default, mr);
-}
-
 }  // namespace strings
 }  // namespace cudf

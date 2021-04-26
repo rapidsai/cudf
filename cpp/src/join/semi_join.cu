@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <hash/concurrent_unordered_map.cuh>
 #include <join/join_common_utils.hpp>
+#include <structs/utilities.hpp>
 
 #include <thrust/distance.h>
 
@@ -31,7 +32,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/device_vector.hpp>
 #include <rmm/exec_policy.hpp>
 
 namespace cudf {
@@ -61,17 +61,24 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   auto const left_num_rows  = left_keys.num_rows();
   auto const right_num_rows = right_keys.num_rows();
 
+  // flatten structs for the right and left and use that for the hash table
+  auto right_flattened_tables = structs::detail::flatten_nested_columns(right_keys, {}, {});
+  auto left_flattened_tables  = structs::detail::flatten_nested_columns(left_keys, {}, {});
+
+  auto right_flattened_keys = std::get<0>(right_flattened_tables);
+  auto left_flattened_keys  = std::get<0>(left_flattened_tables);
+
   // Only care about existence, so we'll use an unordered map (other joins need a multimap)
   using hash_table_type = concurrent_unordered_map<cudf::size_type, bool, row_hash, row_equality>;
 
   // Create hash table containing all keys found in right table
-  auto right_rows_d            = table_device_view::create(right_keys, stream);
+  auto right_rows_d            = table_device_view::create(right_flattened_keys, stream);
   size_t const hash_table_size = compute_hash_table_size(right_num_rows);
   row_hash hash_build{*right_rows_d};
   row_equality equality_build{*right_rows_d, *right_rows_d, compare_nulls == null_equality::EQUAL};
 
   // Going to join it with left table
-  auto left_rows_d = table_device_view::create(left_keys, stream);
+  auto left_rows_d = table_device_view::create(left_flattened_keys, stream);
   row_hash hash_probe{*left_rows_d};
   row_equality equality_probe{*left_rows_d, *right_rows_d, compare_nulls == null_equality::EQUAL};
 
