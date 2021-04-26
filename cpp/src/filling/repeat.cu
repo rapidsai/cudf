@@ -79,19 +79,19 @@ struct count_checker {
   std::enable_if_t<std::is_integral<T>::value, void> operator()(rmm::cuda_stream_view stream)
   {
     // static_cast is necessary due to bool
-    if (static_cast<int64_t>(std::numeric_limits<cudf::size_type>::max()) >
+    if (static_cast<int64_t>(std::numeric_limits<T>::max()) >
         std::numeric_limits<cudf::size_type>::max()) {
       auto max = thrust::reduce(
         rmm::exec_policy(stream), count.begin<T>(), count.end<T>(), 0, thrust::maximum<T>());
       CUDF_EXPECTS(max <= std::numeric_limits<cudf::size_type>::max(),
-                   "count should not have values larger than size_type's limit.");
+                   "count should not have values larger than size_type maximum.");
     }
   }
 
   template <typename T>
   std::enable_if_t<not std::is_integral<T>::value, void> operator()(rmm::cuda_stream_view stream)
   {
-    CUDF_FAIL("count value should be a integral type.");
+    CUDF_FAIL("count value type should be integral.");
   }
 };
 
@@ -120,8 +120,7 @@ std::unique_ptr<table> repeat(table_view const& input_table,
 
   if (check_count) {
     CUDF_EXPECTS(thrust::is_sorted(rmm::exec_policy(stream), offsets.begin(), offsets.end()),
-                 "count has negative values or the resulting table has more \
-                    rows than size_type's limit.");
+                 "count has negative values or the resulting table has too many rows.");
   }
 
   size_type output_size{offsets.back_element(stream)};
