@@ -22,18 +22,18 @@ package ai.rapids.cudf;
  * An Aggregation instance that also holds a column number so the aggregation can be done on
  * a specific column of data in a table.
  */
-public class AggregationOnColumn extends Aggregation {
-    protected final Aggregation wrapped;
+public class AggregationOnColumn<T extends Aggregation> extends Aggregation {
+    protected final T wrapped;
     protected final int columnIndex;
 
-    AggregationOnColumn(Aggregation wrapped, int columnIndex) {
+    AggregationOnColumn(T wrapped, int columnIndex) {
         super(wrapped.kind);
         this.wrapped = wrapped;
         this.columnIndex = columnIndex;
     }
 
     @Override
-    public AggregationOnColumn onColumn(int columnIndex) {
+    public AggregationOnColumn<T> onColumn(int columnIndex) {
         if (columnIndex == getColumnIndex()) {
             return this; // NOOP
         } else {
@@ -44,7 +44,7 @@ public class AggregationOnColumn extends Aggregation {
     /**
      * Do the aggregation over a given Window.
      */
-    public AggregationOverWindow overWindow(WindowOptions windowOptions) {
+    public <R extends Aggregation & RollingAggregation<R>> AggregationOverWindow<R> overWindow(WindowOptions windowOptions) {
         return new AggregationOverWindow(wrapped, columnIndex, windowOptions);
     }
 

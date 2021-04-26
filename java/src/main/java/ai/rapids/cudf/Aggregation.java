@@ -268,11 +268,11 @@ public abstract class Aggregation {
         }
     }
 
-    private static final class CollectListAggregation extends Aggregation
+    public static final class CollectListAggregation extends Aggregation
         implements RollingAggregation<CollectListAggregation> {
         private final NullPolicy nullPolicy;
 
-        public CollectListAggregation(NullPolicy nullPolicy) {
+        private CollectListAggregation(NullPolicy nullPolicy) {
             super(Kind.COLLECT);
             this.nullPolicy = nullPolicy;
         }
@@ -309,8 +309,8 @@ public abstract class Aggregation {
      * Add a column to the Aggregation so it can be used on a specific column of data.
      * @param columnIndex the index of the column to operate on.
      */
-    public AggregationOnColumn onColumn(int columnIndex) {
-        return new AggregationOnColumn(this, columnIndex);
+    public <T extends Aggregation> AggregationOnColumn<T> onColumn(int columnIndex) {
+        return new AggregationOnColumn((T)this, columnIndex);
     }
 
     /**
