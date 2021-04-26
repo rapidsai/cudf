@@ -151,28 +151,6 @@ std::unique_ptr<column> replace(
   strings_column_view const& repls,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-/**
- * @brief Replaces any null string entries with the given string.
- *
- * This returns a strings column with no null entries.
- *
- * @code{.pseudo}
- * Example:
- * s = ["hello", nullptr, "goodbye"]
- * r = replace_nulls(s,"**")
- * r is now ["hello", "**", "goodbye"]
- * @endcode
- *
- * @param strings Strings column for this operation.
- * @param repl Replacement string for null entries. Default is empty string.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column.
- */
-std::unique_ptr<column> replace_nulls(
-  strings_column_view const& strings,
-  string_scalar const& repl           = string_scalar(""),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
 /** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf
