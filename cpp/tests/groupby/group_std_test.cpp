@@ -144,9 +144,7 @@ TYPED_TEST(groupby_std_test, ddof_non_default)
 }
 // clang-format on
 
-// This test will not work until the following ptxas bug is fixed in 10.2
-// https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
-TYPED_TEST(groupby_std_test, DISABLED_dictionary)
+TYPED_TEST(groupby_std_test, dictionary)
 {
   using K = int32_t;
   using V = TypeParam;

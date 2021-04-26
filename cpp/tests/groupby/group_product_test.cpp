@@ -114,9 +114,8 @@ TYPED_TEST(groupby_product_test, null_keys_and_values)
   test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_product_aggregation());
 }
 
-// This test will not work until the following ptxas bug is fixed in 10.2
-// https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
-TYPED_TEST(groupby_product_test, DISABLED_dictionary)
+// TODO needs an aggregation.cuh cleanup for dictionary support.
+TYPED_TEST(groupby_product_test, dictionary)
 {
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, aggregation::PRODUCT>;
