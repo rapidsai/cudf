@@ -131,6 +131,7 @@ __device__ inline char* copy_string(char* buffer, const string_view& d_string)
  *        After that, the d_offsets and d_chars are set and this is called again to fill in the
  *        chars memory.
  * @param strings_count Number of strings.
+ * @param exec_size Number of rows for executing the `size_and_exec_fn` function.
  * @param mr Device memory resource used to allocate the returned columns' device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return offsets child column and chars child column for a strings column
@@ -139,6 +140,7 @@ template <typename SizeAndExecuteFunction>
 auto make_strings_children(
   SizeAndExecuteFunction size_and_exec_fn,
   size_type strings_count,
+  size_type exec_size,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -150,10 +152,10 @@ auto make_strings_children(
 
   // This is called twice -- once for offsets and once for chars.
   // Reducing the number of places size_and_exec_fn is inlined speeds up compile time.
-  auto for_each_fn = [strings_count, stream](SizeAndExecuteFunction& size_and_exec_fn) {
+  auto for_each_fn = [exec_size, stream](SizeAndExecuteFunction& size_and_exec_fn) {
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
-                       strings_count,
+                       exec_size,
                        size_and_exec_fn);
   };
 
@@ -176,6 +178,32 @@ auto make_strings_children(
   }
 
   return std::make_pair(std::move(offsets_column), std::move(chars_column));
+}
+
+/**
+ * @brief Creates child offsets and chars columns by applying the template function that
+ * can be used for computing the output size of each string as well as create the output.
+ *
+ * @tparam SizeAndExecuteFunction Function must accept an index and return a size.
+ *         It must also have members d_offsets and d_chars which are set to
+ *         memory containing the offsets and chars columns during write.
+ *
+ * @param size_and_exec_fn This is called twice. Once for the output size of each string.
+ *        After that, the d_offsets and d_chars are set and this is called again to fill in the
+ *        chars memory.
+ * @param strings_count Number of strings.
+ * @param mr Device memory resource used to allocate the returned columns' device memory.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @return offsets child column and chars child column for a strings column
+ */
+template <typename SizeAndExecuteFunction>
+auto make_strings_children(
+  SizeAndExecuteFunction size_and_exec_fn,
+  size_type strings_count,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  return make_strings_children(size_and_exec_fn, strings_count, strings_count, stream, mr);
 }
 
 /**
