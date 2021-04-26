@@ -102,6 +102,7 @@ ConfigureBench(SEARCH_BENCH search/search_benchmark.cu)
 ###################################################################################################
 # - sort benchmark --------------------------------------------------------------------------------
 ConfigureBench(SORT_BENCH
+  sort/rank_benchmark.cpp
   sort/sort_benchmark.cpp
   sort/sort_strings_benchmark.cpp)
 
