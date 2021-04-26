@@ -28,8 +28,6 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
-#include <vector>
-
 struct StringsCombineTest : public cudf::test::BaseFixture {
 };
 
@@ -107,64 +105,6 @@ TEST_F(StringsCombineTest, ConcatZeroSizeStringsColumns)
   cudf::table_view table(strings_columns);
   auto results = cudf::strings::concatenate(table);
   cudf::test::expect_strings_empty(results->view());
-}
-
-TEST_F(StringsCombineTest, Join)
-{
-  std::vector<const char*> h_strings{"eee", "bb", nullptr, "zzzz", "", "aaa", "ééé"};
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(),
-    h_strings.end(),
-    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  auto view1 = cudf::strings_column_view(strings);
-
-  {
-    auto results = cudf::strings::join_strings(view1);
-
-    cudf::test::strings_column_wrapper expected{"eeebbzzzzaaaééé"};
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  }
-  {
-    auto results = cudf::strings::join_strings(view1, cudf::string_scalar("+"));
-
-    cudf::test::strings_column_wrapper expected{"eee+bb+zzzz++aaa+ééé"};
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  }
-  {
-    auto results =
-      cudf::strings::join_strings(view1, cudf::string_scalar("+"), cudf::string_scalar("___"));
-
-    cudf::test::strings_column_wrapper expected{"eee+bb+___+zzzz++aaa+ééé"};
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  }
-}
-
-TEST_F(StringsCombineTest, JoinZeroSizeStringsColumn)
-{
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  auto strings_view = cudf::strings_column_view(zero_size_strings_column);
-  auto results      = cudf::strings::join_strings(strings_view);
-  cudf::test::expect_strings_empty(results->view());
-}
-
-TEST_F(StringsCombineTest, JoinAllNullStringsColumn)
-{
-  cudf::test::strings_column_wrapper strings({"", "", ""}, {0, 0, 0});
-
-  auto results = cudf::strings::join_strings(cudf::strings_column_view(strings));
-  cudf::test::strings_column_wrapper expected1({""}, {0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected1);
-
-  results = cudf::strings::join_strings(
-    cudf::strings_column_view(strings), cudf::string_scalar(""), cudf::string_scalar("3"));
-  cudf::test::strings_column_wrapper expected2({"333"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected2);
-
-  results = cudf::strings::join_strings(
-    cudf::strings_column_view(strings), cudf::string_scalar("-"), cudf::string_scalar("*"));
-  cudf::test::strings_column_wrapper expected3({"*-*-*"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected3);
 }
 
 struct StringsConcatenateWithColSeparatorTest : public cudf::test::BaseFixture {
