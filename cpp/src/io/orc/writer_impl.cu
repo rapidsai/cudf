@@ -698,7 +698,7 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
       d_stripe_dict, chunks, str_col_ids.size(), stripe_bounds.size(), chunk_streams, stream);
   }
 
-  // DECIMAL: add encode here, bail on decimal type in EncodeOrcColumnData
+  // DECIMAL: add encode here (?)
 
   gpu::EncodeOrcColumnData(chunks, chunk_streams, stream);
   dict_data.release();
@@ -1040,7 +1040,7 @@ rmm::device_uvector<size_type> get_string_column_ids(const table_device_view &vi
   return string_column_ids;
 }
 
-constexpr int test_rg_size = 5;
+constexpr size_t test_rg_size = 5;
 
 struct rowgroup_iterator {
   using difference_type   = long;
@@ -1076,12 +1076,11 @@ encoder_decimal_info decimal_chunk_sizes(table_view const &table,
                                          rmm::cuda_stream_view stream)
 {
   std::vector<rmm::device_uvector<uint32_t>> elem_sizes;
-  auto const num_rowgroups  = 2;
-  auto d_tmp_rowgroup_sizes = rmm::device_uvector<uint32_t>(num_rowgroups, stream);
 
   for (size_t col_idx = 0; col_idx < orc_columns.size(); ++col_idx) {
     if (orc_columns[col_idx].orc_kind() == DECIMAL) {
       elem_sizes.emplace_back(orc_columns[col_idx].data_count(), stream);
+      // TODO: null support
       thrust::transform(rmm::exec_policy(stream),
                         table.column(col_idx).begin<int64_t>(),
                         table.column(col_idx).end<int64_t>(),
@@ -1101,26 +1100,33 @@ encoder_decimal_info decimal_chunk_sizes(table_view const &table,
                                     elem_sizes.back().begin(),
                                     elem_sizes.back().begin());
 
-      thrust::transform(rmm::exec_policy(stream),
-                        thrust::make_counting_iterator<size_type>(0),
-                        thrust::make_counting_iterator<size_type>(num_rowgroups),
-                        d_tmp_rowgroup_sizes.begin(),
-                        [src = elem_sizes.back().data(),
-                         num_rows = orc_columns[col_idx].data_count()] __device__(auto idx) {
-                           return src[min(num_rows, test_rg_size * (idx + 1)) - 1]; 
-                        });
-
-
-      // auto const vec = cudf::detail::make_std_vector_sync(d_tmp_rowgroup_sizes, stream);
-      // for (auto &num : vec) std::cout << num << ' ';
-      // std::cout << std::endl;
       // col.atach_decimal_sizes(elem_sizes.back().data());
     }
   }
-  // for each res, scan_by_key async
+  if (elem_sizes.empty()) return {};
+
+  auto const num_rowgroups  = 2;  // HACK TO ENABLE TESTING!!
+  auto d_tmp_rowgroup_sizes = rmm::device_uvector<uint32_t>(num_rowgroups, stream);
   std::vector<std::vector<uint32_t>> rg_sizes;
-  // copy every 10k elem; copy to host
-  return {};
+  for (auto const &esizes : elem_sizes) {
+    // Copy last elem in each row group - equal to row group size
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(num_rowgroups),
+                      d_tmp_rowgroup_sizes.begin(),
+                      [src = esizes.data(), num_rows = esizes.size()] __device__(auto idx) {
+                        return src[min(num_rows, test_rg_size * (idx + 1)) - 1];
+                      });
+
+    rg_sizes.emplace_back(cudf::detail::make_std_vector_async(d_tmp_rowgroup_sizes, stream));
+  }
+
+  for (auto &rgs : rg_sizes) {
+    for (auto &num : rgs) std::cout << num << ' ';
+    std::cout << std::endl;
+  }
+
+  return {std::move(elem_sizes), std::move(rg_sizes)};
 }
 
 void writer::impl::write(table_view const &table)
