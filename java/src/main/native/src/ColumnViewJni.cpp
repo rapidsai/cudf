@@ -278,26 +278,29 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_rollingWindow(
         reinterpret_cast<cudf::column_view *>(default_output_col);
     cudf::column_view *n_preceding_col = reinterpret_cast<cudf::column_view *>(preceding_col);
     cudf::column_view *n_following_col = reinterpret_cast<cudf::column_view *>(following_col);
-    cudf::aggregation * agg = reinterpret_cast<cudf::aggregation *>(agg_ptr);
+    std::unique_ptr<cudf::aggregation> raw_agg = reinterpret_cast<cudf::aggregation *>(agg_ptr)->clone();
+    // This leaks if the dynamic_cast fails, but that is okay because the java API should prevent this
+    std::unique_ptr<cudf::rolling_aggregation> agg(dynamic_cast<cudf::rolling_aggregation *>(raw_agg.release()));
+    JNI_ARG_CHECK(env, agg.get() != nullptr, "aggregation is not an instance of rolling_aggregation", 0);
 
     std::unique_ptr<cudf::column> ret;
     if (n_default_output_col != nullptr) {
       if (n_preceding_col != nullptr && n_following_col != nullptr) {
         CUDF_FAIL("A default output column is not currently supported with variable length preceding and following");
         //ret = cudf::rolling_window(*n_input_col, *n_default_output_col, 
-        //        *n_preceding_col, *n_following_col, min_periods, agg->clone());
+        //        *n_preceding_col, *n_following_col, min_periods, agg);
       } else {
         ret = cudf::rolling_window(*n_input_col, *n_default_output_col,
-                preceding, following, min_periods, agg->clone());
+                preceding, following, min_periods, agg);
       }
 
     } else {
       if (n_preceding_col != nullptr && n_following_col != nullptr) {
         ret = cudf::rolling_window(*n_input_col, *n_preceding_col, *n_following_col,
-                min_periods, agg->clone());
+                min_periods, agg);
       } else {
         ret = cudf::rolling_window(*n_input_col, preceding, following, min_periods,
-                agg->clone());
+                agg);
       }
     }
     return reinterpret_cast<jlong>(ret.release());

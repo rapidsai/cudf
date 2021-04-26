@@ -2275,15 +2275,20 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
 
     std::vector<std::unique_ptr<cudf::column>> result_columns;
     for (int i(0); i < values.size(); ++i) {
+      std::unique_ptr<cudf::aggregation> raw_agg = agg_instances[i]->clone();
+      // This leaks if the dynamic_cast fails, but that is okay because the java API should prevent this
+      std::unique_ptr<cudf::rolling_aggregation> agg(dynamic_cast<cudf::rolling_aggregation *>(raw_agg.release()));
+      JNI_ARG_CHECK(env, agg.get() != nullptr, "aggregation is not an instance of rolling_aggregation", nullptr);
+
       int agg_column_index = values[i];
       if (default_output[i] != nullptr) {
         result_columns.emplace_back(std::move(cudf::grouped_rolling_window(
             groupby_keys, input_table->column(agg_column_index), *default_output[i], preceding[i],
-            following[i], min_periods[i], agg_instances[i]->clone())));
+            following[i], min_periods[i], agg)));
       } else {
         result_columns.emplace_back(std::move(cudf::grouped_rolling_window(
             groupby_keys, input_table->column(agg_column_index), preceding[i], following[i],
-            min_periods[i], agg_instances[i]->clone())));
+            min_periods[i], agg)));
       }
     }
 
@@ -2339,6 +2344,12 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAgg
     std::vector<std::unique_ptr<cudf::column>> result_columns;
     for (int i(0); i < values.size(); ++i) {
       int agg_column_index = values[i];
+
+      std::unique_ptr<cudf::aggregation> raw_agg = agg_instances[i]->clone();
+      // This leaks if the dynamic_cast fails, but that is okay because the java API should prevent this
+      std::unique_ptr<cudf::rolling_aggregation> agg(dynamic_cast<cudf::rolling_aggregation *>(raw_agg.release()));
+      JNI_ARG_CHECK(env, agg.get() != nullptr, "aggregation is not an instance of rolling_aggregation", nullptr);
+
       result_columns.emplace_back(
         std::move(
           cudf::grouped_time_range_rolling_window(
@@ -2349,7 +2360,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAgg
             unbounded_preceding[i] ? cudf::window_bounds::unbounded() : cudf::window_bounds::get(preceding[i]), 
             unbounded_following[i] ? cudf::window_bounds::unbounded() : cudf::window_bounds::get(following[i]), 
             min_periods[i],
-            agg_instances[i]->clone()
+            agg
           )
         )
       );
