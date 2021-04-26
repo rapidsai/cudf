@@ -343,7 +343,7 @@ struct update_target_element<Source,
  * `target[target_index] = d_dictionary.keys[d_dictionary.indices[source_index]]^2`
  */
 struct update_target_from_dictionary_squares {
-  template <typename KeyType, std::enable_if_t<is_SOS_supported<KeyType>()>* = nullptr>
+  template <typename KeyType, std::enable_if_t<is_product_supported<KeyType>()>* = nullptr>
   __device__ void operator()(mutable_column_device_view& target,
                              size_type target_index,
                              column_device_view& d_dictionary,
@@ -355,7 +355,7 @@ struct update_target_from_dictionary_squares {
     using Target = target_type_t<KeyType, aggregation::SUM_OF_SQUARES>;
     atomicAdd(&target.element<Target>(target_index), static_cast<Target>(value * value));
   }
-  template <typename KeyType, std::enable_if_t<!is_SOS_supported<KeyType>()>* = nullptr>
+  template <typename KeyType, std::enable_if_t<!is_product_supported<KeyType>()>* = nullptr>
   __device__ void operator()(mutable_column_device_view& target,
                              size_type target_index,
                              column_device_view& d_dictionary,
