@@ -22,6 +22,7 @@ package ai.rapids.cudf;
 public final class CuFileBuffer extends BaseDeviceMemoryBuffer {
   private static final int ALIGNMENT = 4096;
 
+  private final DeviceMemoryBuffer deviceMemoryBuffer;
   private final CuFileResourceCleaner cleaner;
 
   /**
@@ -30,15 +31,30 @@ public final class CuFileBuffer extends BaseDeviceMemoryBuffer {
    * @param buffer         The device memory buffer used for the cuFile buffer.
    * @param registerBuffer If true, register the cuFile buffer.
    */
-  public CuFileBuffer(DeviceMemoryBuffer buffer, boolean registerBuffer) {
+  private CuFileBuffer(DeviceMemoryBuffer buffer, boolean registerBuffer) {
     super(buffer.address, buffer.length, (MemoryBufferCleaner) null);
     if (registerBuffer && !isAligned(buffer)) {
+      buffer.close();
       throw new IllegalArgumentException(
           "To register a cuFile buffer, its length must be a multiple of " + ALIGNMENT);
     }
+    deviceMemoryBuffer = buffer;
     cleaner = new CuFileResourceCleaner(create(buffer.address, buffer.length, registerBuffer), CuFileBuffer::destroy);
     MemoryCleaner.register(this, cleaner);
   }
+
+  /**
+   * Allocate memory for use with cuFile on the GPU. You must close it when done.
+   *
+   * @param bytes          size in bytes to allocate
+   * @param registerBuffer If true, register the cuFile buffer.
+   * @return the buffer
+   */
+  public static CuFileBuffer allocate(long bytes, boolean registerBuffer) {
+    DeviceMemoryBuffer buffer = DeviceMemoryBuffer.allocate(bytes);
+    return new CuFileBuffer(buffer, registerBuffer);
+  }
+
 
   @Override
   public MemoryBuffer slice(long offset, long len) {
@@ -48,6 +64,7 @@ public final class CuFileBuffer extends BaseDeviceMemoryBuffer {
   @Override
   public void close() {
     cleaner.close(this);
+    deviceMemoryBuffer.close();
   }
 
   long getPointer() {

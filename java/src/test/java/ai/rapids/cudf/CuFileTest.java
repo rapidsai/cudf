@@ -108,8 +108,7 @@ public class CuFileTest extends CudfTestBase {
     assumeTrue(CuFile.libraryLoaded());
     assertThrows(IllegalArgumentException.class, () -> {
       //noinspection EmptyTryBlock
-      try (DeviceMemoryBuffer buffer = DeviceMemoryBuffer.allocate(4095);
-           CuFileBuffer ignored = new CuFileBuffer(buffer, true)) {
+      try (CuFileBuffer ignored = CuFileBuffer.allocate(4095, true)) {
       }
     });
   }
@@ -130,26 +129,24 @@ public class CuFileTest extends CudfTestBase {
 
   private void verifyReadWrite(File tempFile, int length, boolean registerBuffer) {
     try (HostMemoryBuffer orig = HostMemoryBuffer.allocate(length);
-         DeviceMemoryBuffer from = DeviceMemoryBuffer.allocate(length);
-         CuFileBuffer writeBuffer = new CuFileBuffer(from, registerBuffer);
+         CuFileBuffer from = CuFileBuffer.allocate(length, registerBuffer);
          CuFileWriteHandle writer = new CuFileWriteHandle(tempFile.getAbsolutePath())) {
       orig.setLong(0, 123456789);
       from.copyFromHostBuffer(orig);
-      writer.write(writeBuffer, length, 0);
+      writer.write(from, length, 0);
 
       orig.setLong(0, 987654321);
       from.copyFromHostBuffer(orig);
-      assertEquals(length, writer.append(writeBuffer, length));
+      assertEquals(length, writer.append(from, length));
     }
-    try (DeviceMemoryBuffer to = DeviceMemoryBuffer.allocate(length);
-         CuFileBuffer readBuffer = new CuFileBuffer(to, registerBuffer);
+    try (CuFileBuffer to = CuFileBuffer.allocate(length, registerBuffer);
          CuFileReadHandle reader = new CuFileReadHandle(tempFile.getAbsolutePath());
          HostMemoryBuffer dest = HostMemoryBuffer.allocate(length)) {
-      reader.read(readBuffer, 0);
+      reader.read(to, 0);
       dest.copyFromDeviceBuffer(to);
       assertEquals(123456789, dest.getLong(0));
 
-      reader.read(readBuffer, length);
+      reader.read(to, length);
       dest.copyFromDeviceBuffer(to);
       assertEquals(987654321, dest.getLong(0));
     }
