@@ -34,8 +34,8 @@ void __device__ busy_wait(size_t cycles)
   clock_t start = clock();
   for (;;) {
     clock_t const now    = clock();
-    clock_t const passed = now > start ? now - start : now + (0xffffffff - start);
-    if (passed >= cycles) return;
+    clock_t const elapsed = now > start ? now - start : now + (0xffffffff - start);
+    if (elapsed >= cycles) return;
   }
 }
 
