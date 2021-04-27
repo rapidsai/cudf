@@ -21,8 +21,8 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/replace.hpp>
 #include <cudf/reduction.hpp>
+#include <cudf/replace.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 
@@ -35,9 +35,7 @@ static void BM_reduction_scan(benchmark::State& state, bool include_nulls)
   cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
   auto const dtype = cudf::type_to_id<type>();
   auto const table = create_random_table({dtype}, 1, row_count{n_rows});
-  if (!include_nulls) {
-   table->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
-  }
+  if (!include_nulls) { table->get_column(0).set_null_mask(rmm::device_buffer{}, 0); }
   cudf::column_view input(table->view().column(0));
 
   auto [low_scalar, high_scalar] = cudf::minmax(input);
@@ -45,10 +43,10 @@ static void BM_reduction_scan(benchmark::State& state, bool include_nulls)
   // set the clamps 2 in from the min and max
   {
     using ScalarType = cudf::scalar_type_t<type>;
-    auto lvalue = static_cast<ScalarType*>(low_scalar.get());
-    auto hvalue = static_cast<ScalarType*>(high_scalar.get());
+    auto lvalue      = static_cast<ScalarType*>(low_scalar.get());
+    auto hvalue      = static_cast<ScalarType*>(high_scalar.get());
 
-    //super heavy clamp
+    // super heavy clamp
     auto mid = lvalue->value() + (hvalue->value() - lvalue->value()) / 2;
     lvalue->set_value(mid - 10);
     hvalue->set_value(mid + 10);
@@ -60,10 +58,10 @@ static void BM_reduction_scan(benchmark::State& state, bool include_nulls)
   }
 }
 
-#define CLAMP_BENCHMARK_DEFINE(name, type, nulls)                          \
-  BENCHMARK_DEFINE_F(ReplaceClamp, name)                                 \
+#define CLAMP_BENCHMARK_DEFINE(name, type, nulls)                         \
+  BENCHMARK_DEFINE_F(ReplaceClamp, name)                                  \
   (::benchmark::State & state) { BM_reduction_scan<type>(state, nulls); } \
-  BENCHMARK_REGISTER_F(ReplaceClamp, name)                               \
+  BENCHMARK_REGISTER_F(ReplaceClamp, name)                                \
     ->UseManualTime()                                                     \
     ->Arg(10000)      /* 10k */                                           \
     ->Arg(100000)     /* 100k */                                          \
