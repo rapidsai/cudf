@@ -290,6 +290,9 @@ class ListMethods(ColumnMethodsMixin):
                 self._column.elements, retain_index=False
             )
 
+    def contenate():
+        pass
+    
     def len(self):
         """
         Computes the length of each element in the Series/Index.
