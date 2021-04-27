@@ -85,11 +85,13 @@ std::unique_ptr<column> group_collect(column_view const &values,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource *mr)
 {
-  rmm::device_buffer offsets_data(
-    group_offsets.data(), group_offsets.size() * sizeof(cudf::size_type), stream, mr);
+  auto offsets_column = make_numeric_column(
+    data_type(type_to_id<size_type>()), num_groups + 1, mask_state::UNALLOCATED, stream, mr);
 
-  auto offsets_column = std::make_unique<cudf::column>(
-    cudf::data_type(cudf::type_to_id<cudf::size_type>()), num_groups + 1, std::move(offsets_data));
+  thrust::copy(rmm::exec_policy(stream),
+               group_offsets.begin(),
+               group_offsets.end(),
+               offsets_column->mutable_view().template begin<size_type>());
 
   std::unique_ptr<cudf::column> child_column;
 

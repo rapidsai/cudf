@@ -33,6 +33,17 @@ namespace test {
 #define VALIDITY std::initializer_list<bool>
 
 struct CollectSetTest : public cudf::test::BaseFixture {
+  static auto collect_set() { return cudf::make_collect_set_aggregation(); }
+
+  static auto collect_set_null_unequal()
+  {
+    return cudf::make_collect_set_aggregation(null_policy::INCLUDE, null_equality::UNEQUAL);
+  }
+
+  static auto collect_set_null_exclude()
+  {
+    return cudf::make_collect_set_aggregation(null_policy::EXCLUDE);
+  }
 };
 
 template <typename V>
@@ -56,8 +67,7 @@ TYPED_TEST(CollectSetTypedTest, TrivialInput)
     COL_V vals{10};
     COL_K keys_expected{1};
     LCL_V vals_expected{LCL_V{10}};
-    auto agg = cudf::make_collect_set_aggregation();
-    test_single_agg(keys, vals, keys_expected, vals_expected, std::move(agg));
+    test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
   }
 
   // Non-repeated keys
@@ -66,8 +76,7 @@ TYPED_TEST(CollectSetTypedTest, TrivialInput)
     COL_V vals{20, 10};
     COL_K keys_expected{1, 2};
     LCL_V vals_expected{LCL_V{10}, LCL_V{20}};
-    auto agg = cudf::make_collect_set_aggregation();
-    test_single_agg(keys, vals, keys_expected, vals_expected, std::move(agg));
+    test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
   }
 }
 
@@ -79,8 +88,7 @@ TYPED_TEST(CollectSetTypedTest, TypicalInput)
     COL_V vals{10, 11, 10, 10, 20, 21, 21, 20, 30, 33, 32, 31};
     COL_K keys_expected{1, 2, 3};
     LCL_V vals_expected{{10, 11}, {20, 21}, {30, 31, 32, 33}};
-    auto agg = cudf::make_collect_set_aggregation();
-    test_single_agg(keys, vals, keys_expected, vals_expected, std::move(agg));
+    test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
   }
 
   // Expect the result keys to be sorted by sort-based groupby
@@ -89,8 +97,7 @@ TYPED_TEST(CollectSetTypedTest, TypicalInput)
     COL_V vals{40, 10, 20, 40, 30, 30, 20, 11};
     COL_K keys_expected{1, 2, 3, 4};
     LCL_V vals_expected{{10, 11}, {20}, {30}, {40}};
-    auto agg = cudf::make_collect_set_aggregation();
-    test_single_agg(keys, vals, keys_expected, vals_expected, std::move(agg));
+    test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
   }
 }
 
@@ -104,16 +111,14 @@ TYPED_TEST(CollectSetTypedTest, SlicedColumnsInput)
     auto const vals          = cudf::slice(vals_original, {0, 4})[0];  // { 10, 11, 10, 10 }
     auto const keys_expected = COL_K{1};
     auto const vals_expected = LCL_V{{10, 11}};
-    auto agg                 = cudf::make_collect_set_aggregation();
-    test_single_agg(keys, vals, keys_expected, vals_expected, std::move(agg));
+    test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
   }
   {
     auto const keys = cudf::slice(keys_original, {2, 10})[0];  // { 1, 1, 2, 2, 2, 2, 3, 3 }
     auto const vals = cudf::slice(vals_original, {2, 10})[0];  // { 10, 10, 20, 21, 21, 20, 30, 33 }
     auto const keys_expected = COL_K{1, 2, 3};
     auto const vals_expected = LCL_V{{10}, {20, 21}, {30, 33}};
-    auto agg                 = cudf::make_collect_set_aggregation();
-    test_single_agg(keys, vals, keys_expected, vals_expected, std::move(agg));
+    test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
   }
 }
 
@@ -139,8 +144,7 @@ TEST_F(CollectSetTest, StringInput)
   LCL_S vals_expected{{"String 1, first", "String 1, second"},
                       {"String 2, first", "String 2, second"},
                       {"String 3, first", "String 3, second"}};
-  auto agg = cudf::make_collect_set_aggregation();
-  test_single_agg(keys, vals, keys_expected, vals_expected, std::move(agg));
+  test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
 }
 
 TYPED_TEST(CollectSetTypedTest, CollectWithNulls)
@@ -160,20 +164,19 @@ TYPED_TEST(CollectSetTypedTest, CollectWithNulls)
     LCL_V vals_expected{{{10, null}, VALIDITY{true, false}},
                         {{20, null}, VALIDITY{true, false}},
                         {{30, 31}, VALIDITY{true, true}}};
-    auto agg = cudf::make_collect_set_aggregation();
-    test_single_agg(keys, vals, keys_expected, vals_expected, std::move(agg));
+    test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
 
     // All nulls per key are kept (nulls are put at the end of each list)
     vals_expected = LCL_V{{{10, null, null}, VALIDITY{true, false, false}},
                           {{20, null, null, null}, VALIDITY{true, false, false, false}},
                           {{30, 31}, VALIDITY{true, true}}};
-    agg = cudf::make_collect_set_aggregation(null_policy::INCLUDE, null_equality::UNEQUAL);
-    test_single_agg(keys, vals, keys_expected, vals_expected, std::move(agg));
+    test_single_agg(
+      keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set_null_unequal());
 
     // All nulls per key are excluded
     vals_expected = LCL_V{{10}, {20}, {30, 31}};
-    agg           = cudf::make_collect_set_aggregation(null_policy::EXCLUDE);
-    test_single_agg(keys, vals, keys_expected, vals_expected, std::move(agg));
+    test_single_agg(
+      keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set_null_exclude());
   }
 
   // Expect the result keys to be sorted by sort-based groupby
@@ -188,21 +191,20 @@ TYPED_TEST(CollectSetTypedTest, CollectWithNulls)
                         {{20, 21}, VALIDITY{true, true}},
                         {{null}, VALIDITY{false}},
                         {{40}, VALIDITY{true}}};
-    auto agg = cudf::make_collect_set_aggregation();
-    test_single_agg(keys, vals, keys_expected, vals_expected, std::move(agg));
+    test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
 
     // All nulls per key are kept (nulls are put at the end of each list)
     vals_expected = LCL_V{{{10, null}, VALIDITY{true, false}},
                           {{20, 21}, VALIDITY{true, true}},
                           {{null, null, null, null}, VALIDITY{false, false, false, false}},
                           {{40}, VALIDITY{true}}};
-    agg = cudf::make_collect_set_aggregation(null_policy::INCLUDE, null_equality::UNEQUAL);
-    test_single_agg(keys, vals, keys_expected, vals_expected, std::move(agg));
+    test_single_agg(
+      keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set_null_unequal());
 
     // All nulls per key are excluded
     vals_expected = LCL_V{{10}, {20, 21}, {}, {40}};
-    agg           = cudf::make_collect_set_aggregation(null_policy::EXCLUDE);
-    test_single_agg(keys, vals, keys_expected, vals_expected, std::move(agg));
+    test_single_agg(
+      keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set_null_exclude());
   }
 }
 
