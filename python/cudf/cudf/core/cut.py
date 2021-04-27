@@ -44,19 +44,11 @@ def cut(
         bins[0] = bins[0] - 10 ** (-precision)
 
     # get labels for categories and checking for the correct inclusivity values
-    if right and include_lowest:
-        closed = "both"
-        left_inclusive = True
-    elif right and not include_lowest:
+    if right:
         closed = "right"
-    elif not right and include_lowest:
+    elif not right:
         closed = "left"
-        right_inclusive = False
         left_inclusive = True
-    elif not right and not include_lowest:
-        closed = "neither"
-        right_inclusive = False
-
     interval_labels = IntervalIndex.from_breaks(bins, closed=closed)
 
     # get the left and right edges of the bins as columns
@@ -68,6 +60,9 @@ def cut(
     labels = label_bins(
         input_arr, left_edges, left_inclusive, right_edges, right_inclusive
     )
+    if labels.base_mask:
+        labels._base_mask = None
+
     col = build_categorical_column(
         categories=interval_labels, codes=labels, ordered=True
     )

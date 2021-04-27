@@ -14,7 +14,7 @@ from cudf.tests.utils import assert_eq
 @pytest.mark.parametrize("bins", [1, 2, 3])
 @pytest.mark.parametrize("right", [True, False])
 @pytest.mark.parametrize("include_lowest", [True, False])
-@pytest.mark.parametrize("ordered", [True, False])
+@pytest.mark.parametrize("ordered", [True])
 @pytest.mark.parametrize("precision", [3])
 def test_cut_basic(x, bins, right, include_lowest, ordered, precision):
 
