@@ -241,6 +241,7 @@ add_library(cudf
     src/io/parquet/compact_protocol_writer.cpp
     src/io/parquet/page_data.cu
     src/io/parquet/page_dict.cu
+    src/io/parquet/page_dict2.cu
     src/io/parquet/page_enc.cu
     src/io/parquet/page_hdr.cu
     src/io/parquet/parquet.cpp

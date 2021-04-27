@@ -239,6 +239,7 @@ inline auto make_binning()
 inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
   std::string const &allocation_mode)
 {
+  return make_cuda();
   if (allocation_mode == "binning") return make_binning();
   if (allocation_mode == "cuda") return make_cuda();
   if (allocation_mode == "pool") return make_pool();

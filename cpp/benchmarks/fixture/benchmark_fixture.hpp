@@ -67,7 +67,7 @@ class benchmark : public ::benchmark::Fixture {
  public:
   virtual void SetUp(const ::benchmark::State& state)
   {
-    mr = make_pool();
+    mr = make_cuda();
     rmm::mr::set_current_device_resource(mr.get());  // set default resource to pool
   }
 

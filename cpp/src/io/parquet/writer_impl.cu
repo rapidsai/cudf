@@ -761,6 +761,33 @@ void writer::impl::build_chunk_dictionaries(
   chunks.device_to_host(stream, true);
 }
 
+void writer::impl::build_chunk_dictionaries2(
+  hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
+  device_span<gpu::parquet_column_device_view const> col_desc,
+  uint32_t num_rows)
+{
+  // At this point, we know all chunks and their sizes. We want to allocate dictionaries for each
+  // chunk that can have dictionary
+
+  // Allocate slots for each chunk
+  // max dict size is 1 << 16. Using 1 << 17 gives the map a 0.5 load factor
+  constexpr size_t dict_hash_map_size = 1 << 17;
+  std::vector<rmm::device_uvector<gpu::slot_type>> hash_maps_storage;
+  for (auto &chunk : chunks.host_view().flat_view()) {
+    // TODO: Currently allocating for every chunk. Should skip allocating for non-dict types
+    auto &inserted_map   = hash_maps_storage.emplace_back(dict_hash_map_size, stream);
+    chunk.dict_map_slots = inserted_map.data();
+    chunk.dict_map_size  = inserted_map.size();
+  }
+
+  chunks.host_to_device(stream);
+
+  gpu::InitializeChunkHashMaps(chunks.device_view().flat_view(), stream);
+  stream.synchronize();
+  gpu::BuildChunkDictionaries2(chunks, num_rows, stream);
+  stream.synchronize();
+}
+
 void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
                                       device_span<gpu::parquet_column_device_view const> col_desc,
                                       device_span<gpu::EncPage> pages,
@@ -1075,10 +1102,14 @@ void writer::impl::write(table_view const &table)
         parquet_columns[i].get_path_in_schema();
       md.row_groups[global_r].columns[i].meta_data.codec      = UNCOMPRESSED;
       md.row_groups[global_r].columns[i].meta_data.num_values = ck->num_values;
+      // std::cout << "rg " << r << " col ptr " << ck->col_desc << std::endl;
     }
     f += fragments_in_chunk;
     start_row += (uint32_t)md.row_groups[global_r].num_rows;
   }
+
+  // Yahan banayenge nayi dictionary ka ghar
+  build_chunk_dictionaries2(chunks, col_desc, num_rows);
 
   // Free unused dictionaries
   for (auto &col : parquet_columns) { col.check_dictionary_used(stream); }

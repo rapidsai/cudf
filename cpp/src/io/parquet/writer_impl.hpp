@@ -161,6 +161,10 @@ class writer::impl {
                                 device_span<gpu::parquet_column_device_view const> col_desc,
                                 uint32_t num_columns,
                                 uint32_t num_dictionaries);
+
+  void build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
+                                 device_span<gpu::parquet_column_device_view const> col_desc,
+                                 uint32_t num_rows);
   /**
    * @brief Initialize encoder pages
    *

@@ -28,6 +28,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <cuco/static_map.cuh>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
@@ -55,6 +57,11 @@ struct input_column_info {
 };
 
 namespace gpu {
+
+auto constexpr KEY_SENTINEL   = size_type{-1};
+auto constexpr VALUE_SENTINEL = size_type{-1};
+using map_type                = cuco::static_map<size_type, size_type>;
+using slot_type               = map_type::pair_atomic_type;
 
 /**
  * @brief Enums for the flags in the page header
@@ -224,6 +231,7 @@ struct ColumnChunkDesc {
 struct parquet_column_device_view : stats_column_desc {
   uint32_t *dict_index;    //!< Dictionary index [row]
   uint32_t *dict_data;     //!< Dictionary data (unique row indices)
+  bool supports_dict_enc;  //!< Whether this column supports dictionary encoding
   uint8_t physical_type;   //!< physical data type
   uint8_t converted_type;  //!< logical data type
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
@@ -307,8 +315,12 @@ struct EncColumnChunk {
   uint8_t has_dictionary;   //!< Nonzero if the chunk uses dictionary encoding
   uint16_t num_dict_fragments;  //!< Number of fragments using dictionary
   uint32_t dictionary_size;     //!< Size of dictionary
+  // TODO: remove
   uint32_t total_dict_entries;  //!< Total number of entries in dictionary
   uint32_t ck_stat_size;        //!< Size of chunk-level statistics (included in 1st page header)
+  slot_type *dict_map_slots;
+  size_t dict_map_size;
+  size_type num_dict_entries;
 };
 
 /**
@@ -556,6 +568,10 @@ void BuildChunkDictionaries(device_span<EncColumnChunk> chunks,
                             uint32_t *dev_scratch,
                             rmm::cuda_stream_view stream);
 
+void InitializeChunkHashMaps(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
+void BuildChunkDictionaries2(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                             size_type num_rows,
+                             rmm::cuda_stream_view stream);
 }  // namespace gpu
 }  // namespace parquet
 }  // namespace io

@@ -26,7 +26,7 @@
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
 constexpr size_t data_size         = 512 << 20;
-constexpr cudf::size_type num_cols = 64;
+constexpr cudf::size_type num_cols = 4;
 
 namespace cudf_io = cudf::io;
 
@@ -89,28 +89,28 @@ void BM_parq_write_varying_options(benchmark::State& state)
   state.SetBytesProcessed(data_size * state.iterations());
 }
 
-#define PARQ_WR_BM_INOUTS_DEFINE(name, type_or_group, sink_type)                              \
-  BENCHMARK_DEFINE_F(ParquetWrite, name)                                                      \
-  (::benchmark::State & state) { BM_parq_write_varying_inout(state); }                        \
-  BENCHMARK_REGISTER_F(ParquetWrite, name)                                                    \
-    ->ArgsProduct({{int32_t(type_or_group)}, {0, 1000}, {1, 32}, {true, false}, {sink_type}}) \
-    ->Unit(benchmark::kMillisecond)                                                           \
+#define PARQ_WR_BM_INOUTS_DEFINE(name, type_or_group, sink_type)                \
+  BENCHMARK_DEFINE_F(ParquetWrite, name)                                        \
+  (::benchmark::State & state) { BM_parq_write_varying_inout(state); }          \
+  BENCHMARK_REGISTER_F(ParquetWrite, name)                                      \
+    ->ArgsProduct({{int32_t(type_or_group)}, {100}, {1}, {false}, {sink_type}}) \
+    ->Unit(benchmark::kMillisecond)                                             \
     ->UseManualTime();
 
 WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, integral, type_group_id::INTEGRAL);
-WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
-WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
+// WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
+// WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
 WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, string, cudf::type_id::STRING);
-WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, list, cudf::type_id::LIST);
+// WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, list, cudf::type_id::LIST);
 
-BENCHMARK_DEFINE_F(ParquetWrite, writer_options)
-(::benchmark::State& state) { BM_parq_write_varying_options(state); }
-BENCHMARK_REGISTER_F(ParquetWrite, writer_options)
-  ->ArgsProduct({{int32_t(cudf::io::compression_type::NONE),
-                  int32_t(cudf::io::compression_type::SNAPPY)},
-                 {int32_t(cudf::io::statistics_freq::STATISTICS_NONE),
-                  int32_t(cudf::io::statistics_freq::STATISTICS_ROWGROUP),
-                  int32_t(cudf::io::statistics_freq::STATISTICS_PAGE)},
-                 {false, true}})
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
+// BENCHMARK_DEFINE_F(ParquetWrite, writer_options)
+// (::benchmark::State& state) { BM_parq_write_varying_options(state); }
+// BENCHMARK_REGISTER_F(ParquetWrite, writer_options)
+//   ->ArgsProduct({{int32_t(cudf::io::compression_type::NONE),
+//                   int32_t(cudf::io::compression_type::SNAPPY)},
+//                  {int32_t(cudf::io::statistics_freq::STATISTICS_NONE),
+//                   int32_t(cudf::io::statistics_freq::STATISTICS_ROWGROUP),
+//                   int32_t(cudf::io::statistics_freq::STATISTICS_PAGE)},
+//                  {false, true}})
+//   ->Unit(benchmark::kMillisecond)
+//   ->UseManualTime();
