@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import builtins
 from numbers import Number
-from typing import Any, Callable, Sequence, Tuple, Union, cast
+from types import SimpleNamespace
+from typing import Any, Callable, Mapping, Sequence, Tuple, Union, cast
 
 import cupy
 import numpy as np
@@ -88,6 +90,33 @@ class NumericalColumn(ColumnBase):
         return libcudf.search.contains(
             self, column.as_column([item], dtype=self.dtype)
         ).any()
+
+    @property
+    def __cuda_array_interface__(self) -> Mapping[builtins.str, Any]:
+        output = {
+            "shape": (len(self),),
+            "strides": (self.dtype.itemsize,),
+            "typestr": self.dtype.str,
+            "data": (self.data_ptr, False),
+            "version": 1,
+        }
+
+        if self.nullable and self.has_nulls:
+
+            # Create a simple Python object that exposes the
+            # `__cuda_array_interface__` attribute here since we need to modify
+            # some of the attributes from the numba device array
+            mask = SimpleNamespace(
+                __cuda_array_interface__={
+                    "shape": (len(self),),
+                    "typestr": "<t1",
+                    "data": (self.mask_ptr, True),
+                    "version": 1,
+                }
+            )
+            output["mask"] = mask
+
+        return output
 
     def unary_operator(self, unaryop: str) -> ColumnBase:
         return _numeric_column_unaryop(self, op=unaryop)

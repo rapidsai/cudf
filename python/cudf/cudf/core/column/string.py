@@ -4829,15 +4829,6 @@ class StringColumn(column.ColumnBase):
     def str(self, parent: ParentType = None) -> StringMethods:
         return StringMethods(self, parent=parent)
 
-    def unary_operator(self, unaryop: builtins.str):
-        raise TypeError(
-            f"Series of dtype `str` cannot perform the operation: "
-            f"{unaryop}"
-        )
-
-    def __len__(self) -> int:
-        return self.size
-
     @property
     def _nbytes(self) -> int:
         if self.size == 0:
@@ -4959,21 +4950,6 @@ class StringColumn(column.ColumnBase):
             warnings.warn("fillna parameter not supported for string arrays")
 
         return self.to_arrow().to_pandas().values
-
-    def __array__(self, dtype=None):
-        raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not "
-            "allowed, Conversion to GPU array in strings is not yet "
-            "supported.\nTo explicitly construct a host array, "
-            "consider using .to_array()"
-        )
-
-    def __arrow_array__(self, type=None):
-        raise TypeError(
-            "Implicit conversion to a host PyArrow Array via __arrow_array__ "
-            "is not allowed, To explicitly construct a PyArrow Array, "
-            "consider using .to_arrow()"
-        )
 
     def to_pandas(
         self, index: ColumnLike = None, nullable: bool = False, **kwargs
@@ -5160,12 +5136,6 @@ class StringColumn(column.ColumnBase):
     @property
     def is_unique(self) -> bool:
         return len(self.unique()) == len(self)
-
-    @property
-    def __cuda_array_interface__(self):
-        raise NotImplementedError(
-            "Strings are not yet supported via `__cuda_array_interface__`"
-        )
 
     @copy_docstring(column.ColumnBase.view)
     def view(self, dtype) -> "cudf.core.column.ColumnBase":
