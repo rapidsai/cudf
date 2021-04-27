@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
+#include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -811,5 +812,293 @@ TYPED_TEST(TypedNestedLeadLagWindowTest, Structs)
         .release();
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lag_1_output_col->view(), expected_structs_col->view());
+  }
+}
+
+struct LeadLagNonFixedWidthTest : cudf::test::BaseFixture {
+};
+
+TEST_F(LeadLagNonFixedWidthTest, StringsNoDefaults)
+{
+  using namespace cudf;
+  using namespace cudf::test;
+
+  auto input_col = strings_column_wrapper{{"",
+                                           "A_1",
+                                           "A_22",
+                                           "A_333",
+                                           "A_4444",
+                                           "A_55555",
+                                           "B_0",
+                                           "",
+                                           "B_22",
+                                           "B_333",
+                                           "B_4444",
+                                           "B_55555"},
+                                          iterator_with_null_at(std::vector{0, 7})}
+                     .release();
+
+  auto const grouping_key = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
+
+  auto const preceding   = 4;
+  auto const following   = 3;
+  auto const min_periods = 1;
+
+  auto lead_2 = grouped_rolling_window(grouping_keys,
+                                       input_col->view(),
+                                       preceding,
+                                       following,
+                                       min_periods,
+                                       cudf::make_lead_aggregation(2));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    lead_2->view(),
+    strings_column_wrapper{
+      {"A_22", "A_333", "A_4444", "A_55555", "", "", "B_22", "B_333", "B_4444", "B_55555", "", ""},
+      iterator_with_null_at(std::vector{4, 5, 10, 11})});
+
+  auto lag_1 = grouped_rolling_window(grouping_keys,
+                                      input_col->view(),
+                                      preceding,
+                                      following,
+                                      min_periods,
+                                      cudf::make_lag_aggregation(1));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    lag_1->view(),
+    strings_column_wrapper{
+      {"", "", "A_1", "A_22", "A_333", "A_4444", "", "B_0", "", "B_22", "B_333", "B_4444"},
+      iterator_with_null_at(std::vector{0, 1, 6, 8})});
+}
+
+TEST_F(LeadLagNonFixedWidthTest, StringsWithDefaults)
+{
+  using namespace cudf;
+  using namespace cudf::test;
+
+  auto input_col = strings_column_wrapper{{"",
+                                           "A_1",
+                                           "A_22",
+                                           "A_333",
+                                           "A_4444",
+                                           "A_55555",
+                                           "B_0",
+                                           "",
+                                           "B_22",
+                                           "B_333",
+                                           "B_4444",
+                                           "B_55555"},
+                                          iterator_with_null_at(std::vector{0, 7})}
+                     .release();
+
+  auto defaults_col = strings_column_wrapper{"9999",
+                                             "9999",
+                                             "9999",
+                                             "9999",
+                                             "9999",
+                                             "9999",
+                                             "9999",
+                                             "9999",
+                                             "9999",
+                                             "9999",
+                                             "9999",
+                                             "9999"}
+                        .release();
+
+  auto const grouping_key = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
+
+  auto const preceding   = 4;
+  auto const following   = 3;
+  auto const min_periods = 1;
+
+  auto lead_2 = grouped_rolling_window(grouping_keys,
+                                       input_col->view(),
+                                       defaults_col->view(),
+                                       preceding,
+                                       following,
+                                       min_periods,
+                                       cudf::make_lead_aggregation(2));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lead_2->view(),
+                                      strings_column_wrapper{"A_22",
+                                                             "A_333",
+                                                             "A_4444",
+                                                             "A_55555",
+                                                             "9999",
+                                                             "9999",
+                                                             "B_22",
+                                                             "B_333",
+                                                             "B_4444",
+                                                             "B_55555",
+                                                             "9999",
+                                                             "9999"});
+
+  auto lag_1 = grouped_rolling_window(grouping_keys,
+                                      input_col->view(),
+                                      defaults_col->view(),
+                                      preceding,
+                                      following,
+                                      min_periods,
+                                      cudf::make_lag_aggregation(1));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    lag_1->view(),
+    strings_column_wrapper{
+      {"9999", "", "A_1", "A_22", "A_333", "A_4444", "9999", "B_0", "", "B_22", "B_333", "B_4444"},
+      iterator_with_null_at(std::vector{1, 8})});
+}
+
+TEST_F(LeadLagNonFixedWidthTest, StringsWithDefaultsNoGroups)
+{
+  using namespace cudf;
+  using namespace cudf::test;
+
+  auto input_col = strings_column_wrapper{{"",
+                                           "A_1",
+                                           "A_22",
+                                           "A_333",
+                                           "A_4444",
+                                           "A_55555",
+                                           "B_0",
+                                           "",
+                                           "B_22",
+                                           "B_333",
+                                           "B_4444",
+                                           "B_55555"},
+                                          iterator_with_null_at(std::vector{0, 7})}
+                     .release();
+
+  auto defaults_col = strings_column_wrapper{"9999",
+                                             "9999",
+                                             "9999",
+                                             "9999",
+                                             "9999",
+                                             "9999",
+                                             "9999",
+                                             "9999",
+                                             "9999",
+                                             "9999",
+                                             "9999",
+                                             "9999"}
+                        .release();
+
+  auto const grouping_key = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
+
+  auto const preceding   = 4;
+  auto const following   = 3;
+  auto const min_periods = 1;
+
+  auto lead_2 = grouped_rolling_window(grouping_keys,
+                                       input_col->view(),
+                                       defaults_col->view(),
+                                       preceding,
+                                       following,
+                                       min_periods,
+                                       cudf::make_lead_aggregation(2));
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lead_2->view(),
+                                      strings_column_wrapper{{"A_22",
+                                                              "A_333",
+                                                              "A_4444",
+                                                              "A_55555",
+                                                              "B_0",
+                                                              "",
+                                                              "B_22",
+                                                              "B_333",
+                                                              "B_4444",
+                                                              "B_55555",
+                                                              "9999",
+                                                              "9999"},
+                                                             iterator_with_null_at(5)});
+
+  auto lag_1 = grouped_rolling_window(grouping_keys,
+                                      input_col->view(),
+                                      defaults_col->view(),
+                                      preceding,
+                                      following,
+                                      min_periods,
+                                      cudf::make_lag_aggregation(1));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    lag_1->view(),
+    strings_column_wrapper{{"9999",
+                            "",
+                            "A_1",
+                            "A_22",
+                            "A_333",
+                            "A_4444",
+                            "A_55555",
+                            "B_0",
+                            "",
+                            "B_22",
+                            "B_333",
+                            "B_4444"},
+                           iterator_with_null_at(std::vector{1, 8})});
+}
+
+TEST_F(LeadLagNonFixedWidthTest, Dictionary)
+{
+  using namespace cudf;
+  using namespace cudf::test;
+
+  using dictionary = cudf::test::dictionary_column_wrapper<std::string>;
+
+  auto input_strings = std::initializer_list<std::string>{"",
+                                                          "A_1",
+                                                          "A_22",
+                                                          "A_333",
+                                                          "A_4444",
+                                                          "A_55555",
+                                                          "B_0",
+                                                          "",
+                                                          "B_22",
+                                                          "B_333",
+                                                          "B_4444",
+                                                          "B_55555"};
+  auto input_col     = dictionary{input_strings}.release();
+
+  auto const grouping_key = fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1};
+  auto const grouping_keys = cudf::table_view{std::vector<cudf::column_view>{grouping_key}};
+
+  auto const preceding   = 4;
+  auto const following   = 3;
+  auto const min_periods = 1;
+
+  {
+    auto lead_2 = grouped_rolling_window(grouping_keys,
+                                         input_col->view(),
+                                         preceding,
+                                         following,
+                                         min_periods,
+                                         cudf::make_lead_aggregation(2));
+
+    auto expected_keys = strings_column_wrapper{input_strings}.release();
+    auto expected_values =
+      fixed_width_column_wrapper<uint32_t>{{2, 3, 4, 5, 0, 0, 7, 8, 9, 10, 0, 0},
+                                           iterator_with_null_at(std::vector{4, 5, 10, 11})}
+        .release();
+    auto expected_output =
+      make_dictionary_column(expected_keys->view(), expected_values->view()).release();
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lead_2->view(), expected_output->view());
+  }
+
+  {
+    auto lag_1 = grouped_rolling_window(grouping_keys,
+                                        input_col->view(),
+                                        preceding,
+                                        following,
+                                        min_periods,
+                                        cudf::make_lag_aggregation(1));
+
+    auto expected_keys = strings_column_wrapper{input_strings}.release();
+    auto expected_values =
+      fixed_width_column_wrapper<uint32_t>{{0, 0, 1, 2, 3, 4, 0, 6, 0, 7, 8, 9},
+                                           iterator_with_null_at(std::vector{0, 6})}
+        .release();
+    auto expected_output =
+      make_dictionary_column(expected_keys->view(), expected_values->view()).release();
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(lag_1->view(), expected_output->view());
   }
 }
