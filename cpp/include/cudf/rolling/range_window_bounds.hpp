@@ -68,7 +68,7 @@ struct range_window_bounds {
   range_window_bounds() = default;  // Required for use as return types from dispatch functors.
 
  private:
-  const bool _is_unbounded{false};
+  const bool _is_unbounded{true};
   std::shared_ptr<scalar> _range_scalar{nullptr};
 
   range_window_bounds(bool is_unbounded_, scalar* range_scalar_);

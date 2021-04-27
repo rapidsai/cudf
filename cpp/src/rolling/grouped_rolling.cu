@@ -207,8 +207,15 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 
 namespace {
 
+/// For order-by columns of signed types, bounds calculation might cause accidental
+/// overflow/underflows. This needs to be detected and handled appropriately
+/// for signed and unsigned types.
+
+/**
+ * @brief Add `delta` to value, and cap at numeric_limits::max(), for signed types.
+ */
 template <typename T, std::enable_if_t<std::numeric_limits<T>::is_signed>* = nullptr>
-__device__ T add_and_check_overflow(T const& value, T const& delta)
+__device__ T add_safe(T const& value, T const& delta)
 {
   // delta >= 0.
   return (value < 0 || (std::numeric_limits<T>::max() - value) >= delta)
@@ -216,16 +223,22 @@ __device__ T add_and_check_overflow(T const& value, T const& delta)
            : std::numeric_limits<T>::max();
 }
 
+/**
+ * @brief Add `delta` to value, and cap at numeric_limits::max(), for unsigned types.
+ */
 template <typename T, std::enable_if_t<!std::numeric_limits<T>::is_signed>* = nullptr>
-__device__ T add_and_check_overflow(T const& value, T const& delta)
+__device__ T add_safe(T const& value, T const& delta)
 {
   // delta >= 0.
   return ((std::numeric_limits<T>::max() - value) >= delta) ? (value + delta)
                                                             : std::numeric_limits<T>::max();
 }
 
+/**
+ * @brief Subtract `delta` from value, and cap at numeric_limits::min(), for signed types.
+ */
 template <typename T, std::enable_if_t<std::numeric_limits<T>::is_signed>* = nullptr>
-__device__ T subtract_and_check_underflow(T const& value, T const& delta)
+__device__ T subtract_safe(T const& value, T const& delta)
 {
   // delta >= 0;
   return (value >= 0 || (value - std::numeric_limits<T>::min()) >= delta)
@@ -233,8 +246,11 @@ __device__ T subtract_and_check_underflow(T const& value, T const& delta)
            : std::numeric_limits<T>::min();
 }
 
+/**
+ * @brief Subtract `delta` from value, and cap at numeric_limits::min(), for unsigned types.
+ */
 template <typename T, std::enable_if_t<!std::numeric_limits<T>::is_signed>* = nullptr>
-__device__ T subtract_and_check_underflow(T const& value, T const& delta)
+__device__ T subtract_safe(T const& value, T const& delta)
 {
   // delta >= 0;
   return ((value - std::numeric_limits<T>::min()) >= delta) ? (value - delta)
@@ -322,7 +338,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
     //  2. NO NULLS: Binary search starts at 0 (also nulls_end_idx).
     // Otherwise, NULLS LAST ordering. Start at 0.
     auto group_start      = nulls_begin_idx == 0 ? nulls_end_idx : 0;
-    auto lowest_in_window = subtract_and_check_underflow(d_orderby[idx], preceding_window);
+    auto lowest_in_window = subtract_safe(d_orderby[idx], preceding_window);
 
     return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
                                                     d_orderby + group_start,
@@ -354,7 +370,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
     // Otherwise, NULLS LAST ordering. End at nulls_begin_idx.
 
     auto group_end         = nulls_begin_idx == 0 ? num_rows : nulls_begin_idx;
-    auto highest_in_window = add_and_check_overflow(d_orderby[idx], following_window);
+    auto highest_in_window = add_safe(d_orderby[idx], following_window);
 
     return (thrust::upper_bound(
               thrust::seq, d_orderby + idx, d_orderby + group_end, highest_in_window) -
@@ -486,7 +502,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
     // Otherwise, NULLS LAST ordering. Search must start at nulls group_start.
     auto search_start = nulls_begin == group_start ? nulls_end : group_start;
 
-    auto lowest_in_window = subtract_and_check_underflow(d_orderby[idx], preceding_window);
+    auto lowest_in_window = subtract_safe(d_orderby[idx], preceding_window);
 
     return ((d_orderby + idx) - thrust::lower_bound(thrust::seq,
                                                     d_orderby + search_start,
@@ -529,7 +545,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
     // Otherwise, NULLS LAST ordering. Search ends at nulls_begin.
     auto search_end = nulls_begin == group_start ? group_end : nulls_begin;
 
-    auto highest_in_window = add_and_check_overflow(d_orderby[idx], following_window);
+    auto highest_in_window = add_safe(d_orderby[idx], following_window);
 
     return (thrust::upper_bound(
               thrust::seq, d_orderby + idx, d_orderby + search_end, highest_in_window) -
@@ -585,7 +601,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
     //  2. NO NULLS: Binary search starts at 0 (also nulls_end_idx).
     // Otherwise, NULLS LAST ordering. Start at 0.
     auto group_start       = nulls_begin_idx == 0 ? nulls_end_idx : 0;
-    auto highest_in_window = add_and_check_overflow(d_orderby[idx], preceding_window);
+    auto highest_in_window = add_safe(d_orderby[idx], preceding_window);
 
     return ((d_orderby + idx) -
             thrust::lower_bound(thrust::seq,
@@ -619,7 +635,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
     // Otherwise, NULLS LAST ordering: End at nulls_begin_idx.
 
     auto group_end        = nulls_begin_idx == 0 ? num_rows : nulls_begin_idx;
-    auto lowest_in_window = subtract_and_check_underflow(d_orderby[idx], following_window);
+    auto lowest_in_window = subtract_safe(d_orderby[idx], following_window);
 
     return (thrust::upper_bound(thrust::seq,
                                 d_orderby + idx,
@@ -684,7 +700,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
     // Otherwise, NULLS LAST ordering. Search must start at nulls group_start.
     auto search_start = nulls_begin == group_start ? nulls_end : group_start;
 
-    auto highest_in_window = add_and_check_overflow(d_orderby[idx], preceding_window);
+    auto highest_in_window = add_safe(d_orderby[idx], preceding_window);
 
     return ((d_orderby + idx) -
             thrust::lower_bound(thrust::seq,
@@ -727,7 +743,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
     // Otherwise, NULLS LAST ordering. Search ends at nulls_begin.
     auto search_end = nulls_begin == group_start ? group_end : nulls_begin;
 
-    auto lowest_in_window = subtract_and_check_underflow(d_orderby[idx], following_window);
+    auto lowest_in_window = subtract_safe(d_orderby[idx], following_window);
 
     return (thrust::upper_bound(thrust::seq,
                                 d_orderby + idx,

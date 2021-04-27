@@ -49,15 +49,15 @@ using time_col = fwcw<T, R>;
 using lists_col = lists_column_wrapper<int32_t>;
 
 template <typename ScalarT>
-struct window_exec_impl {
+struct window_exec {
  public:
-  window_exec_impl(cudf::column_view gby,
-                   cudf::column_view oby,
-                   cudf::order ordering,
-                   cudf::column_view agg,
-                   ScalarT preceding_scalar,
-                   ScalarT following_scalar,
-                   cudf::size_type min_periods = 1)
+  window_exec(cudf::column_view gby,
+              cudf::column_view oby,
+              cudf::order ordering,
+              cudf::column_view agg,
+              ScalarT preceding_scalar,
+              ScalarT following_scalar,
+              cudf::size_type min_periods = 1)
     : gby_column(gby),
       oby_column(oby),
       order(ordering),
@@ -92,21 +92,7 @@ struct window_exec_impl {
   ScalarT preceding;             // Preceding window scalar.
   ScalarT following;             // Following window scalar.
   cudf::size_type min_periods = 1;
-};  // struct window_exec_impl;
-
-// Type deducing helper.
-template <typename ScalarT>
-window_exec_impl<ScalarT> window_exec(cudf::column_view gby,
-                                      cudf::column_view oby,
-                                      cudf::order ordering,
-                                      cudf::column_view agg,
-                                      ScalarT preceding_scalar,
-                                      ScalarT following_scalar,
-                                      cudf::size_type min_periods = 1)
-{
-  return window_exec_impl<ScalarT>(
-    gby, oby, ordering, agg, preceding_scalar, following_scalar, min_periods);
-}
+};  // struct window_exec;
 
 struct RangeRollingTest : public BaseFixture {
 };
