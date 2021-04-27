@@ -171,6 +171,12 @@ class ListColumn(ColumnBase):
             size=header["size"],
         )
 
+    @property
+    def __cuda_array_interface__(self):
+        raise NotImplementedError(
+            "Lists are not yet supported via `__cuda_array_interface__`"
+        )
+
 
 class ListMethods(ColumnMethodsMixin):
     """
