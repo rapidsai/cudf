@@ -13,6 +13,7 @@ from cudf.tests.utils import (
     FLOAT_TYPES,
     INTEGER_TYPES,
     NUMERIC_TYPES,
+    _decimal_series,
     assert_eq,
 )
 
@@ -202,12 +203,6 @@ def test_typecast_from_decimal(data, from_dtype, to_dtype):
 
     assert_eq(got, expected)
     assert_eq(got.dtype, expected.dtype)
-
-
-def _decimal_series(input, dtype):
-    return cudf.Series(
-        [x if x is None else Decimal(x) for x in input], dtype=dtype,
-    )
 
 
 @pytest.mark.parametrize(

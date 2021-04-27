@@ -76,7 +76,8 @@ ConfigureTest(GROUPBY_TEST
     groupby/group_sum_scan_test.cpp
     groupby/group_min_scan_test.cpp
     groupby/group_max_scan_test.cpp
-    groupby/group_count_scan_test.cpp)
+    groupby/group_count_scan_test.cpp
+    groupby/group_shift_test.cpp)
 
 ###################################################################################################
 # - join tests ------------------------------------------------------------------------------------

@@ -19,6 +19,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
@@ -210,6 +211,25 @@ detail::sort::sort_groupby_helper& groupby::helper()
     _keys, _include_null_keys, _keys_are_sorted);
   return *_helper;
 };
+
+std::pair<std::unique_ptr<table>, std::unique_ptr<column>> groupby::shift(
+  column_view const& values,
+  size_type offset,
+  scalar const& fill_value,
+  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(values.type() == fill_value.type(),
+               "values and fill_value should have the same type.");
+
+  auto stream         = rmm::cuda_stream_default;
+  auto grouped_values = helper().grouped_values(values, stream);
+
+  return std::make_pair(
+    helper().sorted_keys(stream, mr),
+    std::move(cudf::detail::segmented_shift(
+      grouped_values->view(), helper().group_offsets(stream), offset, fill_value, stream, mr)));
+}
 
 }  // namespace groupby
 }  // namespace cudf

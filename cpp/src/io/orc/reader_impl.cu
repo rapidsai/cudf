@@ -504,10 +504,16 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           len += stream_info[stream_count].length;
           stream_count++;
         }
-        const auto buffer = _source->host_read(offset, len);
-        CUDA_TRY(
-          cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyHostToDevice, stream.value()));
-        stream.synchronize();
+        if (_source->is_device_read_preferred(len)) {
+          CUDF_EXPECTS(_source->device_read(offset, len, d_dst, stream) == len,
+                       "Unexpected discrepancy in bytes read.");
+        } else {
+          const auto buffer = _source->host_read(offset, len);
+          CUDF_EXPECTS(buffer->size() == len, "Unexpected discrepancy in bytes read.");
+          CUDA_TRY(
+            cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyHostToDevice, stream.value()));
+          stream.synchronize();
+        }
       }
 
       // Update chunks to reference streams pointers
