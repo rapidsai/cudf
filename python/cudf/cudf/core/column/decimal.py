@@ -241,6 +241,12 @@ class DecimalColumn(ColumnBase):
         header["dtype"] = dtype
         return super().deserialize(header, frames)
 
+    @property
+    def __cuda_array_interface__(self):
+        raise NotImplementedError(
+            "Decimals are not yet supported via `__cuda_array_interface__`"
+        )
+
 
 def _binop_scale(l_dtype, r_dtype, op):
     # This should at some point be hooked up to libcudf's

@@ -8562,3 +8562,26 @@ def test_dataframe_argsort(df, ascending, expected):
     actual = df.argsort(ascending=ascending)
 
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "data,columns,index",
+    [
+        (pd.Series([1, 2, 3]), None, None),
+        (pd.Series(["a", "b", None, "c"], name="abc"), None, None),
+        (
+            pd.Series(["a", "b", None, "c"], name="abc"),
+            ["abc", "b"],
+            [1, 2, 3],
+        ),
+    ],
+)
+def test_dataframe_init_from_series(data, columns, index):
+    expected = pd.DataFrame(data, columns=columns, index=index)
+    actual = cudf.DataFrame(data, columns=columns, index=index)
+
+    assert_eq(
+        expected,
+        actual,
+        check_index_type=False if len(expected) == 0 else True,
+    )
