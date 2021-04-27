@@ -93,7 +93,7 @@ public abstract class Aggregation {
     /*
      * This is analogous to the native 'nan_equality'.
      */
-    public enum NanEquality {
+    public enum NaNEquality {
         UNEQUAL(false),
         ALL_EQUAL(true);
 
