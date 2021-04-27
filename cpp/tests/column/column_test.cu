@@ -494,13 +494,28 @@ TYPED_TEST(ListsColumnTest, ListsSlicedNestedEmpty)
   cudf::test::expect_columns_equal(*expect, result->view());
 }
 
-TYPED_TEST(ListsColumnTest, ListsSlicedZeroSliceLength)
+TYPED_TEST(ListsColumnTest, ListsSlicedZeroSliceLengthNested)
 {
   using LCW     = cudf::test::lists_column_wrapper<TypeParam>;
   using FWCW_SZ = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
   // Column of List<List<int>>, with incomplete hierarchy
   LCW list{{LCW{1}, LCW{2}}, {}, {LCW{3}, LCW{4, 5}}};
+
+  auto expect = cudf::empty_like(list);
+
+  auto sliced = cudf::slice(list, {0, 0}).front();
+  auto result = std::make_unique<cudf::column>(sliced);
+
+  cudf::test::expect_columns_equal(*expect, result->view());
+}
+
+TYPED_TEST(ListsColumnTest, ListsSlicedZeroSliceLengthNonNested)
+{
+  using LCW     = cudf::test::lists_column_wrapper<TypeParam>;
+  using FWCW_SZ = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+
+  LCW list{{1, 2}, {}, {3, 4}, {8, 9}};
 
   auto expect = cudf::empty_like(list);
 
