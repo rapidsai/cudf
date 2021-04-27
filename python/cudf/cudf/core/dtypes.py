@@ -76,6 +76,7 @@ class CategoricalDtype(_BaseDtype):
             dtype = "object"  # type: Any
         else:
             dtype = None
+
         column = cudf.core.column.as_column(categories, dtype=dtype)
 
         if isinstance(column, cudf.core.column.CategoricalColumn):
