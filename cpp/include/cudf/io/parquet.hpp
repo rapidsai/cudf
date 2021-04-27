@@ -392,15 +392,11 @@ class column_in_metadata {
   std::vector<column_in_metadata> children;
 
  public:
-
   /**
    * @brief Get the children of this column metadata
-   * 
+   *
    */
-  std::vector<column_in_metadata>& get_children() 
-  {
-    return children;
-  }
+  std::vector<column_in_metadata>& get_children() { return children; }
 
   /**
    * @brief Set the name of this column
