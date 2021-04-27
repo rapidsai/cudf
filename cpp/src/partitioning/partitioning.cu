@@ -675,7 +675,7 @@ struct dispatch_map_type {
     thrust::exclusive_scan(
       rmm::exec_policy(stream), histogram.begin(), histogram.end(), histogram.begin());
 
-    // Copy offsets to host
+    // Copy offsets to host before the transform below modifies the histogram
     auto const partition_offsets = cudf::detail::make_std_vector_sync(histogram, stream);
 
     // Unfortunately need to materialize the scatter map because
@@ -696,10 +696,7 @@ struct dispatch_map_type {
     auto scattered =
       cudf::detail::scatter(t, scatter_map.begin(), scatter_map.end(), t, false, stream, mr);
 
-    // Copy offsets to host and return
-    return std::make_pair(
-      std::move(scattered),
-      std::move(partition_offsets));  // cudf::detail::make_std_vector_sync(histogram, stream));
+    return std::make_pair(std::move(scattered), std::move(partition_offsets));
   }
 
   template <typename MapType>
