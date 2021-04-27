@@ -76,7 +76,8 @@ ConfigureTest(GROUPBY_TEST
     groupby/group_sum_scan_test.cpp
     groupby/group_min_scan_test.cpp
     groupby/group_max_scan_test.cpp
-    groupby/group_count_scan_test.cpp)
+    groupby/group_count_scan_test.cpp
+    groupby/group_shift_test.cpp)
 
 ###################################################################################################
 # - join tests ------------------------------------------------------------------------------------
@@ -312,18 +313,20 @@ ConfigureTest(DISPATCHER_TEST types/type_dispatcher_test.cu)
 ###################################################################################################
 # - strings test ----------------------------------------------------------------------------------
 ConfigureTest(STRINGS_TEST
-    strings/factories_test.cu
     strings/array_tests.cu
     strings/attrs_tests.cpp
     strings/booleans_tests.cpp
     strings/case_tests.cpp
     strings/chars_types_tests.cpp
-    strings/combine_tests.cpp
+    strings/combine/concatenate_list_elements_tests.cpp
+    strings/combine/concatenate_tests.cpp
+    strings/combine/join_strings_tests
     strings/concatenate_tests.cpp
     strings/contains_tests.cpp
     strings/datetime_tests.cpp
     strings/durations_tests.cpp
     strings/extract_tests.cpp
+    strings/factories_test.cu
     strings/fill_tests.cpp
     strings/findall_tests.cpp
     strings/find_tests.cpp
