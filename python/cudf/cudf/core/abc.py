@@ -31,6 +31,7 @@ class Serializable(abc.ABC):
     into a representative collection of metadata and data buffers, while the
     latter converts back from that representation into an equivalent object.
     """
+
     @abstractmethod
     def serialize(self):
         """Generate an equivalent serializable representation of an object.
@@ -73,8 +74,9 @@ class Serializable(abc.ABC):
         Returns
         -------
         Serializable
-            A new instance of `cls` (a subclass of `Serializable`) equivalent to
-            the instance that was serialized to produce the header and frames.
+            A new instance of `cls` (a subclass of `Serializable`) equivalent
+            to the instance that was serialized to produce the header and
+            frames.
 
         :meta private:
         """
@@ -120,8 +122,9 @@ class Serializable(abc.ABC):
         Returns
         -------
         Serializable
-            A new instance of `cls` (a subclass of `Serializable`) equivalent to
-            the instance that was serialized to produce the header and frames.
+            A new instance of `cls` (a subclass of `Serializable`) equivalent
+            to the instance that was serialized to produce the header and
+            frames.
 
         :meta private:
         """
@@ -174,8 +177,9 @@ class Serializable(abc.ABC):
         Returns
         -------
         Serializable
-            A new instance of `cls` (a subclass of `Serializable`) equivalent to
-            the instance that was serialized to produce the header and frames.
+            A new instance of `cls` (a subclass of `Serializable`) equivalent
+            to the instance that was serialized to produce the header and
+            frames.
 
         :meta private:
         """
