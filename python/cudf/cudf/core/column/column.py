@@ -851,9 +851,6 @@ class ColumnBase(Column, Serializable):
         result: Column
             Column of booleans indicating if each element is in values.
         """
-        lhs = self
-        rhs = None
-
         try:
             lhs, rhs = self._process_values_for_isin(values)
             res = lhs._isin_earlystop(rhs)
