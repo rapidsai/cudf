@@ -28,7 +28,8 @@ public final class CuFileBuffer extends BaseDeviceMemoryBuffer {
   /**
    * Construct a new cuFile buffer.
    *
-   * @param buffer         The device memory buffer used for the cuFile buffer.
+   * @param buffer         The device memory buffer used for the cuFile buffer. This buffer is owned
+   *                       by the cuFile buffer, and will be closed when the cuFile buffer is closed.
    * @param registerBuffer If true, register the cuFile buffer.
    */
   private CuFileBuffer(DeviceMemoryBuffer buffer, boolean registerBuffer) {
@@ -54,7 +55,6 @@ public final class CuFileBuffer extends BaseDeviceMemoryBuffer {
     DeviceMemoryBuffer buffer = DeviceMemoryBuffer.allocate(bytes);
     return new CuFileBuffer(buffer, registerBuffer);
   }
-
 
   @Override
   public MemoryBuffer slice(long offset, long len) {
