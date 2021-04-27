@@ -19,32 +19,39 @@ package ai.rapids.cudf;
 /**
  * Represents a cuFile buffer.
  */
-public final class CuFileBuffer implements AutoCloseable {
+public final class CuFileBuffer extends BaseDeviceMemoryBuffer {
   private static final int ALIGNMENT = 4096;
 
-  private final long pointer;
+  private final CuFileResourceCleaner cleaner;
 
   /**
    * Construct a new cuFile buffer.
    *
-   * @param buffer The device memory buffer used for the cuFile buffer.
+   * @param buffer         The device memory buffer used for the cuFile buffer.
    * @param registerBuffer If true, register the cuFile buffer.
    */
-  public CuFileBuffer(BaseDeviceMemoryBuffer buffer, boolean registerBuffer) {
+  public CuFileBuffer(DeviceMemoryBuffer buffer, boolean registerBuffer) {
+    super(buffer.address, buffer.length, (MemoryBufferCleaner) null);
     if (registerBuffer && !isAligned(buffer)) {
       throw new IllegalArgumentException(
           "To register a cuFile buffer, its length must be a multiple of " + ALIGNMENT);
     }
-    pointer = create(buffer.address, buffer.length, registerBuffer);
+    cleaner = new CuFileResourceCleaner(create(buffer.address, buffer.length, registerBuffer), CuFileBuffer::destroy);
+    MemoryCleaner.register(this, cleaner);
+  }
+
+  @Override
+  public MemoryBuffer slice(long offset, long len) {
+    throw new UnsupportedOperationException("Slice on cuFile buffer is not supported");
   }
 
   @Override
   public void close() {
-    destroy(pointer);
+    cleaner.close(this);
   }
 
   long getPointer() {
-    return pointer;
+    return cleaner.getPointer();
   }
 
   private boolean isAligned(BaseDeviceMemoryBuffer buffer) {
