@@ -35,7 +35,7 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  if (lists.is_empty()) { return cudf::empty_like(lists.parent()); }
+  if (lists.is_empty() or start == end) { return cudf::empty_like(lists.parent()); }
   if (end < 0 || end > lists.size()) end = lists.size();
   CUDF_EXPECTS(((start >= 0) && (start < end)), "Invalid slice range.");
   auto lists_count   = end - start;
@@ -45,10 +45,14 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
   start += lists.offset();
   end += lists.offset();
 
+  std::cout << start << " " << end << std::endl;
+
   // Offsets at the beginning and end of the slice:
   auto offsets_data = lists.offsets().data<cudf::size_type>();
   auto start_offset = cudf::detail::get_value<size_type>(lists.offsets(), start, stream);
   auto end_offset   = cudf::detail::get_value<size_type>(lists.offsets(), end, stream);
+
+  std::cout << start_offset << " " << end_offset << std::endl;
 
   rmm::device_uvector<cudf::size_type> out_offsets(offsets_count, stream);
 
