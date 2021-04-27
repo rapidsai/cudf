@@ -78,6 +78,8 @@ from cudf._lib.strings.char_types import (
 from cudf._lib.strings.combine import (
     concatenate as cpp_concatenate,
     join as cpp_join,
+    join_lists_with_column as cpp_join_lists_with_column,
+    join_lists_with_scalar as cpp_join_lists_with_scalar,
 )
 from cudf._lib.strings.contains import (
     contains_re as cpp_contains_re,
@@ -464,7 +466,9 @@ class StringMethods(ColumnMethodsMixin):
                 out = out[0]
         return out
 
-    def join(self, sep) -> ParentType:
+    def join(
+        self, sep=None, string_na_rep=None, sep_na_rep=None
+    ) -> ParentType:
         """
         Join lists contained as elements in the Series/Index with passed
         delimiter.
@@ -472,9 +476,81 @@ class StringMethods(ColumnMethodsMixin):
         Raises : NotImplementedError
             Columns of arrays / lists are not yet supported.
         """
-        raise NotImplementedError(
-            "Columns of arrays / lists are not yet " "supported"
+        if sep is None:
+            sep = ""
+
+        if string_na_rep is None:
+            string_na_rep = ""
+
+        if is_scalar(sep) and sep_na_rep:
+            raise ValueError(
+                "sep_na_rep cannot be defined when `sep` is scalar."
+            )
+
+        if sep_na_rep is None:
+            sep_na_rep = ""
+
+        if not is_scalar(string_na_rep):
+            raise TypeError(
+                f"string_na_rep should be a string scalar, got {string_na_rep}"
+                f" of type : {type(string_na_rep)}"
+            )
+
+        if isinstance(self._column, cudf.core.column.ListColumn):
+            strings_column = self._column
+        else:
+            # If self._column is not a ListColumn, we will have to
+            # split each row by character and create a ListColumn out of it.
+            strings_column = self._split_by_character()
+
+        if is_scalar(sep):
+            data = cpp_join_lists_with_scalar(
+                strings_column, cudf.Scalar(sep), cudf.Scalar(string_na_rep)
+            )
+        elif can_convert_to_column(sep):
+            sep_column = column.as_column(sep)
+            if len(sep_column) != len(strings_column):
+                raise ValueError(
+                    f"sep should be of similar size to the series, "
+                    f"got: {len(sep_column)}, expected: {len(strings_column)}"
+                )
+            if not is_scalar(sep_na_rep):
+                raise TypeError(
+                    f"sep_na_rep should be a string scalar, got {sep_na_rep} "
+                    f"of type: {type(sep_na_rep)}"
+                )
+
+            data = cpp_join_lists_with_column(
+                strings_column,
+                sep_column,
+                cudf.Scalar(string_na_rep),
+                cudf.Scalar(sep_na_rep),
+            )
+        else:
+            raise TypeError(
+                f"sep should be an str, array-like or Series object, "
+                f"found {type(sep)}"
+            )
+
+        return self._return_or_inplace(data)
+
+    def _split_by_character(self):
+        result_col = cpp_character_tokenize(self._column)
+
+        bytes_count = cpp_count_bytes(self._column)
+        offset_col = cudf.core.column.as_column([0], dtype="int32")
+        offset_col = offset_col.append(bytes_count)
+        offset_col = offset_col._apply_scan_op("sum")
+
+        res = cudf.core.column.ListColumn(
+            size=len(self._column),
+            dtype=cudf.ListDtype(self._column.dtype),
+            mask=self._column.mask,
+            offset=0,
+            null_count=self._column.null_count,
+            children=(offset_col, result_col),
         )
+        return res
 
     def extract(
         self, pat: str, flags: int = 0, expand: bool = True
