@@ -34,58 +34,47 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Aggregation_close(JNIEnv *env,
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv *env,
                                                                          jclass class_object,
                                                                          jint kind) {
+
   try {
     cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::aggregation> ret;
-    // These numbers come from Aggregation.java and must stay in sync
-    switch (kind) {
-      case 0: // SUM
+    switch (static_cast<cudf::aggregation::Kind>(kind)) {
+      case cudf::aggregation::SUM:
         ret = cudf::make_sum_aggregation();
         break;
-      case 1: // PRODUCT
+      case cudf::aggregation::PRODUCT:
         ret = cudf::make_product_aggregation();
         break;
-      case 2: // MIN
+      case cudf::aggregation::MIN:
         ret = cudf::make_min_aggregation();
         break;
-      case 3: // MAX
+      case cudf::aggregation::MAX:
         ret = cudf::make_max_aggregation();
         break;
-      //case 4 COUNT
-      case 5: // ANY
+      case cudf::aggregation::ANY:
         ret = cudf::make_any_aggregation();
         break;
-      case 6: // ALL
+      case cudf::aggregation::ALL:
         ret = cudf::make_all_aggregation();
         break;
-      case 7: // SUM_OF_SQUARES
+      case cudf::aggregation::SUM_OF_SQUARES:
         ret = cudf::make_sum_of_squares_aggregation();
         break;
-      case 8: // MEAN
+      case cudf::aggregation::MEAN:
         ret = cudf::make_mean_aggregation();
         break;
-      // case 9: VARIANCE
-      // case 10: STD
-      case 11: // MEDIAN
+      case cudf::aggregation::MEDIAN:
         ret = cudf::make_median_aggregation();
         break;
-      // case 12: QUANTILE
-      case 13: // ARGMAX
+      case cudf::aggregation::ARGMAX:
         ret = cudf::make_argmax_aggregation();
         break;
-      case 14: // ARGMIN
+      case cudf::aggregation::ARGMIN:
         ret = cudf::make_argmin_aggregation();
         break;
-      // case 15: NUNIQUE
-      // case 16: NTH_ELEMENT
-      case 17: // ROW_NUMBER
+      case cudf::aggregation::ROW_NUMBER:
         ret = cudf::make_row_number_aggregation();
         break;
-      // case 18: COLLECT
-      // case 19: LEAD
-      // case 20: LAG
-      // case 21: PTX
-      // case 22: CUDA
       default: throw std::logic_error("Unsupported No Parameter Aggregation Operation");
     }
 
@@ -117,12 +106,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createDdofAgg(JNIEnv *en
     cudf::jni::auto_set_device(env);
 
     std::unique_ptr<cudf::aggregation> ret;
-    // These numbers come from Aggregation.java and must stay in sync
-    switch (kind) {
-      case 9: // VARIANCE
+    switch (static_cast<cudf::aggregation::Kind>(kind)) {
+      case cudf::aggregation::VARIANCE:
         ret = cudf::make_variance_aggregation(ddof);
         break;
-      case 10: // STD
+      case cudf::aggregation::STD:
         ret = cudf::make_std_aggregation(ddof);
         break;
       default: throw std::logic_error("Unsupported DDOF Aggregation Operation");
@@ -139,16 +127,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createCountLikeAgg(JNIEn
   try {
     cudf::jni::auto_set_device(env);
 
-    cudf::null_policy policy =
-        include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE;
     std::unique_ptr<cudf::aggregation> ret;
-    // These numbers come from Aggregation.java and must stay in sync
-    switch (kind) {
-      case 4: // COUNT
-        ret = cudf::make_count_aggregation(policy);
+    switch (static_cast<cudf::aggregation::Kind>(kind)) {
+      case cudf::aggregation::COUNT_VALID:
+        ret = cudf::make_count_aggregation(cudf::null_policy::EXCLUDE);
         break;
-      case 15: // NUNIQUE
-        ret = cudf::make_nunique_aggregation(policy);
+      case cudf::aggregation::COUNT_ALL:
+        ret = cudf::make_count_aggregation(cudf::null_policy::INCLUDE);
+        break;
+      case cudf::aggregation::NUNIQUE:
+        ret = cudf::make_nunique_aggregation(include_nulls ? cudf::null_policy::INCLUDE : cudf::null_policy::EXCLUDE);
         break;
       default: throw std::logic_error("Unsupported Count Like Aggregation Operation");
     }
@@ -184,12 +172,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createLeadLagAgg(JNIEnv 
     cudf::jni::auto_set_device(env);
 
     std::unique_ptr<cudf::aggregation> ret;
-    // These numbers come from Aggregation.java and must stay in sync
-    switch (kind) {
-      case 20: // LEAD
+    switch (static_cast<cudf::aggregation::Kind>(kind)) {
+      case cudf::aggregation::LEAD:
         ret = cudf::make_lead_aggregation(offset);
         break;
-      case 21: // LAG
+      case cudf::aggregation::LAG:
         ret = cudf::make_lag_aggregation(offset);
         break;
       default: throw std::logic_error("Unsupported Lead/Lag Aggregation Operation");

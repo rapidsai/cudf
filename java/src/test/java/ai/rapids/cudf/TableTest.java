@@ -4427,7 +4427,7 @@ public class TableTest extends CudfTestBase {
   void testGroupByCollectSetIncludeNulls() {
     // test with null unequal and nan unequal
     Aggregation collectSet = Aggregation.collectSet(Aggregation.NullPolicy.INCLUDE,
-        Aggregation.NullEquality.UNEQUAL, Aggregation.NanEquality.UNEQUAL);
+        Aggregation.NullEquality.UNEQUAL, Aggregation.NaNEquality.UNEQUAL);
     try (Table input = new Table.TestBuilder()
         .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4)
         .column(null, 13, null, 13, 14, null, 15, null, 4, 1, 1, 4, 0, 0, 0, 0)
@@ -4443,7 +4443,7 @@ public class TableTest extends CudfTestBase {
     }
     // test with null equal and nan unequal
     collectSet = Aggregation.collectSet(Aggregation.NullPolicy.INCLUDE,
-        Aggregation.NullEquality.EQUAL, Aggregation.NanEquality.UNEQUAL);
+        Aggregation.NullEquality.EQUAL, Aggregation.NaNEquality.UNEQUAL);
     try (Table input = new Table.TestBuilder()
         .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4)
         .column(null, 13.0, null, 13.0,
@@ -4464,7 +4464,7 @@ public class TableTest extends CudfTestBase {
     }
     // test with null equal and nan equal
     collectSet = Aggregation.collectSet(Aggregation.NullPolicy.INCLUDE,
-        Aggregation.NullEquality.EQUAL, Aggregation.NanEquality.ALL_EQUAL);
+        Aggregation.NullEquality.EQUAL, Aggregation.NaNEquality.ALL_EQUAL);
     try (Table input = new Table.TestBuilder()
         .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4)
         .column(null, 13.0, null, 13.0,
