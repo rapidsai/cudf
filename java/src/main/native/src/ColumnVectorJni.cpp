@@ -50,10 +50,10 @@ namespace jni {
 
     cudf::type_id tid = view.type().id();
     if (tid == cudf::type_id::LIST) {
-      // Uses the first child type only.
       if (view.num_children() != 2) {
-        throw cudf::jni::jni_exception("List type requires two children(offset, data).");
+        throw jni_exception("List type requires two children(offset, data).");
       }
+      // Only needs the second child.
       auto data_view = view.child(1);
       auto zero = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
       zero->set_valid(true);
@@ -64,7 +64,7 @@ namespace jni {
       return cudf::make_lists_column(0, std::move(offsets), std::move(data_col),
                                      0, rmm::device_buffer());
     } else if (tid == cudf::type_id::STRUCT) {
-      throw cudf::jni::jni_exception("`jni::make_empty_column` does not support struct type.");
+      throw jni_exception("`jni::make_empty_column` does not support struct type.");
     } else {
       return cudf::make_empty_column(view.type());
     }
@@ -239,8 +239,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
       // 'cudf::fill' does not support LIST type for now(04/27/2021), so builds the data
       // column by leveraging `cudf::concatenate` to repeat the 's_val' 'row_count' times.
       // (Assumes the `row_count` is not big, otherwise there would be a performance issue.
-      //  Eventually we should have the 'cudf::fill' supported LIST type and updates to use
-      //  it here.)
+      //  Eventually we should have the 'cudf::fill' support LIST type and use it here.)
       // Checks the `row_count` because `cudf::concatenate` does not support no columns.
       auto data_col = row_count > 0
           ? cudf::concatenate(std::vector<cudf::column_view>(row_count, s_val))
