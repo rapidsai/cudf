@@ -45,6 +45,28 @@ def test_init_via_list_of_tuples():
     assert_eq(pdf, gdf)
 
 
+@pytest.mark.parametrize("columns", [["a", "b"], pd.Series(["a", "b"])])
+def test_init_via_list_of_series(columns):
+    data = [pd.Series([1, 2]), pd.Series([3, 4])]
+
+    pdf = cudf.DataFrame(data, columns=columns)
+    gdf = cudf.DataFrame(data, columns=columns)
+
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize("index", [None, [0, 1, 2]])
+def test_init_with_missing_columns(index):
+    """Test initialization when columns and data keys are disjoint."""
+    data = {"a": [1, 2, 3], "b": [2, 3, 4]}
+    columns = ["c", "d"]
+
+    pdf = cudf.DataFrame(data, columns=columns, index=index)
+    gdf = cudf.DataFrame(data, columns=columns, index=index)
+
+    assert_eq(pdf, gdf)
+
+
 def _dataframe_na_data():
     return [
         pd.DataFrame(
@@ -8540,3 +8562,26 @@ def test_dataframe_argsort(df, ascending, expected):
     actual = df.argsort(ascending=ascending)
 
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "data,columns,index",
+    [
+        (pd.Series([1, 2, 3]), None, None),
+        (pd.Series(["a", "b", None, "c"], name="abc"), None, None),
+        (
+            pd.Series(["a", "b", None, "c"], name="abc"),
+            ["abc", "b"],
+            [1, 2, 3],
+        ),
+    ],
+)
+def test_dataframe_init_from_series(data, columns, index):
+    expected = pd.DataFrame(data, columns=columns, index=index)
+    actual = cudf.DataFrame(data, columns=columns, index=index)
+
+    assert_eq(
+        expected,
+        actual,
+        check_index_type=False if len(expected) == 0 else True,
+    )

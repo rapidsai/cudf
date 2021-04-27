@@ -1290,7 +1290,9 @@ class ColumnBase(Column, Serializable):
         mask = None
         if "mask" in header:
             mask = Buffer.deserialize(header["mask"], [frames[1]])
-        return build_column(data=data, dtype=dtype, mask=mask)
+        return build_column(
+            data=data, dtype=dtype, mask=mask, size=header.get("size", None)
+        )
 
     def binary_operator(
         self, op: builtins.str, other: BinaryOperand, reflect: bool = False

@@ -223,6 +223,42 @@ class groupby {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
+   * @brief Performs grouped shifts for specified values.
+   *
+   * For each group, `i`th element is determined by the `i - offset`th element
+   * of the group. If `i - offset < 0 or >= group_size`, the value is determined by
+   * @p fill_value.
+   *
+   * Example:
+   * @code{.pseudo}
+   * keys:   {1 1 1 1 2 2 2}
+   * values: {3 1 4 7 9 2 5}
+   * offset: 2
+   * fill_value: @
+   * result: {@ @ 3 1 @ @ 9}
+   * -------------------------------------------------
+   * keys:   {1 1 1 1 2 2 2}
+   * values: {3 1 4 7 9 2 5}
+   * offset: -2
+   * fill_value: -1
+   * result: {4 7 -1 -1 5 -1 -1}
+   * @endcode
+   *
+   * @param values Column to be shifted
+   * @param offset The off set by which to shift the input
+   * @param fill_value Fill value for indeterminable outputs
+   * @param mr Device memory resource used to allocate the returned table and columns' device memory
+   * @return Pair containing the table with each group's key and the column shifted
+   *
+   * @throws cudf::logic_error if @p fill_value dtype does not match @p input dtype
+   */
+  std::pair<std::unique_ptr<table>, std::unique_ptr<column>> shift(
+    column_view const& values,
+    size_type offset,
+    scalar const& fill_value,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  /**
    * @brief The grouped data corresponding to a groupby operation on a set of values.
    *
    * A `groups` object holds two tables of identical number of rows:

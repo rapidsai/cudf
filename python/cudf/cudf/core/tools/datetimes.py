@@ -104,6 +104,13 @@ def to_datetime(
     >>> cudf.to_datetime(1490195805433502912, unit='ns')
     numpy.datetime64('1780-11-20T01:02:30.494253056')
     """
+    if errors not in {"ignore", "raise", "coerce", "warn"}:
+        raise ValueError(
+            f"errors parameter has to be either one of: "
+            f"{['ignore', 'raise', 'coerce', 'warn']}, found: "
+            f"{errors}"
+        )
+
     if arg is None:
         return None
 

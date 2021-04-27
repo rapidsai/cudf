@@ -2,7 +2,7 @@
 
 import decimal
 import pickle
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -269,6 +269,10 @@ class Decimal64Dtype(_BaseDtype):
         self._typ = pa.decimal128(precision, scale)
 
     @property
+    def str(self):
+        return f"decimal64({self.precision}, {self.scale})"
+
+    @property
     def precision(self):
         return self._typ.precision
 
@@ -324,6 +328,13 @@ class Decimal64Dtype(_BaseDtype):
         metadata = decimal.as_tuple()
         precision = max(len(metadata.digits), -metadata.exponent)
         return cls(precision, -metadata.exponent)
+
+    def serialize(self) -> Tuple[dict, list]:
+        return {"precision": self.precision, "scale": self.scale}, []
+
+    @classmethod
+    def deserialize(cls, header: dict, frames: list):
+        return cls(header["precision"], header["scale"])
 
 
 class IntervalDtype(StructDtype):
