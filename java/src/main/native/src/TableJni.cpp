@@ -1120,18 +1120,17 @@ int set_column_metadata(cudf::io::column_in_metadata &column_metadata,
                          cudf::jni::native_jintArray &children, int read_index) {
   int write_index = 0;
   int num_children = children[read_index++];
-  column_metadata.get_children().resize(num_children);
-  for (int i = 0 ; i < num_children; i++, write_index++) {
-    column_metadata.child(write_index)
-        .set_name(col_names[read_index])
+  for (int i = 0; i < num_children; i++, write_index++) {
+    cudf::io::column_in_metadata child;
+    child.set_name(col_names[read_index])
         .set_decimal_precision(precisions[read_index])
         .set_int96_timestamps(isInt96[read_index])
         .set_nullability(nullability[read_index]);
+    column_metadata.add_child(child);
     if (children[read_index] > 0) {
       read_index = set_column_metadata(column_metadata.child(write_index), col_names, nullability,
-                          isInt96, precisions, children, read_index);
-    }
-    else {
+                                       isInt96, precisions, children, read_index);
+    } else {
       read_index++;
     }
   }

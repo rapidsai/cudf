@@ -395,8 +395,13 @@ class column_in_metadata {
   /**
    * @brief Get the children of this column metadata
    *
+   * @return this for chaining
    */
-  std::vector<column_in_metadata>& get_children() { return children; }
+  column_in_metadata& add_child(column_in_metadata const& child)
+  {
+    children.push_back(child);
+    return *this;
+  }
 
   /**
    * @brief Set the name of this column
