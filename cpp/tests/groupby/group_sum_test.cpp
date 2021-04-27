@@ -189,9 +189,7 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySortSumDecimalAsValue)
   }
 }
 
-// This test will not work until the following ptxas bug is fixed in 10.2
-// https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
-TYPED_TEST(FixedPointTestBothReps, DISABLED_GroupByHashSumDecimalAsValue)
+TYPED_TEST(FixedPointTestBothReps, GroupByHashSumDecimalAsValue)
 {
   using namespace numeric;
   using decimalXX    = TypeParam;
