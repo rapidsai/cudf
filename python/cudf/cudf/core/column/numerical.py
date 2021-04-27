@@ -744,14 +744,14 @@ class NumericalColumn(ColumnBase):
         return False
 
     def to_pandas(
-        self, index: ColumnLike = None, nullable: bool = False, **kwargs
+        self, index: pd.Index = None, nullable: bool = False, **kwargs
     ) -> "pd.Series":
         if nullable and self.dtype in cudf_dtypes_to_pandas_dtypes:
             pandas_nullable_dtype = cudf_dtypes_to_pandas_dtypes[self.dtype]
             arrow_array = self.to_arrow()
             pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)
             pd_series = pd.Series(pandas_array, copy=False)
-        elif str(self.dtype) in NUMERIC_TYPES and self.null_count == 0:
+        elif str(self.dtype) in NUMERIC_TYPES and not self.has_nulls:
             pd_series = pd.Series(cupy.asnumpy(self.values), copy=False)
         else:
             pd_series = self.to_arrow().to_pandas(**kwargs)

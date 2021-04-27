@@ -1076,10 +1076,7 @@ class CategoricalColumn(column.ColumnBase):
             " if you need this functionality."
         )
 
-    def to_pandas(
-        self, index: ColumnLike = None, nullable: bool = False, **kwargs
-    ) -> pd.Series:
-
+    def to_pandas(self, index: pd.Index = None, **kwargs) -> pd.Series:
         if self.categories.dtype.kind == "f":
             new_mask = bools_to_mask(self.notnull())
             col = column.build_categorical_column(

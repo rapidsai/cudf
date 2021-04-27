@@ -135,7 +135,7 @@ class DatetimeColumn(column.ColumnBase):
         return self.get_dt_field("weekday")
 
     def to_pandas(
-        self, index: "cudf.Index" = None, nullable: bool = False, **kwargs
+        self, index: pd.Index = None, nullable: bool = False, **kwargs
     ) -> "cudf.Series":
         # Workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772

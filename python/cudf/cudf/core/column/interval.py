@@ -3,7 +3,6 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf._typing import ColumnLike
 from cudf.core.column import StructColumn
 from cudf.core.dtypes import IntervalDtype
 from cudf.utils.dtypes import is_interval_dtype
@@ -114,9 +113,12 @@ class IntervalColumn(StructColumn):
         else:
             raise ValueError("dtype must be IntervalDtype")
 
-    def to_pandas(
-        self, index: ColumnLike = None, nullable: bool = False, **kwargs
-    ) -> "pd.Series":
+    def to_pandas(self, index: pd.Index = None, **kwargs) -> "pd.Series":
+        # Note: This does not handle null values in the interval column.
+        # However, this exact sequence (calling __from_arrow__ on the output of
+        # self.to_arrow) is currently the best known way to convert interval
+        # types into pandas (trying to convert the underlying numerical columns
+        # directly is problematic), so we're stuck with this for now.
         return pd.Series(
             pd.IntervalDtype().__from_arrow__(self.to_arrow()), index=index
         )

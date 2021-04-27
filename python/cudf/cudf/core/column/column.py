@@ -112,13 +112,15 @@ class ColumnBase(Column, Serializable):
             f"dtype: {self.dtype}"
         )
 
-    def to_pandas(
-        self, index: ColumnLike = None, nullable: bool = False, **kwargs
-    ) -> "pd.Series":
+    def to_pandas(self, index: pd.Index = None, **kwargs) -> "pd.Series":
         """Convert object to pandas type.
 
         The default implementation falls back to PyArrow for the conversion.
         """
+        # This default implementation does not handle nulls in any meaningful
+        # way, but must consume the parameter to avoid passing it to PyArrow
+        # (which does not recognize it).
+        kwargs.pop("nullable", None)
         pd_series = self.to_arrow().to_pandas(**kwargs)
 
         if index is not None:
@@ -126,8 +128,6 @@ class ColumnBase(Column, Serializable):
         return pd_series
 
     def __iter__(self):
-        # TODO: Why don't we just implement this method in terms of one of the
-        # proposed alternatives (to_arrow, to_pandas, or values_host)?
         cudf.utils.utils.raise_iteration_error(obj=self)
 
     @property
