@@ -114,7 +114,6 @@ TYPED_TEST(groupby_product_test, null_keys_and_values)
   test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_product_aggregation());
 }
 
-// TODO needs an aggregation.cuh cleanup for dictionary support.
 TYPED_TEST(groupby_product_test, dictionary)
 {
   using V = TypeParam;

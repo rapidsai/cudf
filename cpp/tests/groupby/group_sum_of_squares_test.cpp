@@ -28,10 +28,7 @@ template <typename V>
 struct groupby_sum_of_squares_test : public cudf::test::BaseFixture {
 };
 
-// These tests will not work for all types until the following ptxas bug is fixed in 10.2
-// https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
-// using supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
-using supported_types = cudf::test::Types<float, double>;
+using supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
 TYPED_TEST_CASE(groupby_sum_of_squares_test, supported_types);
 

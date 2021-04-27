@@ -140,8 +140,6 @@ struct update_target_element<Source,
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-#if (__CUDACC_VER_MAJOR__ != 10) or (__CUDACC_VER_MINOR__ != 2)
-
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target       = target_type_t<Source, aggregation::MIN>;
@@ -152,8 +150,6 @@ struct update_target_element<Source,
               static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
-
-#endif
   }
 };
 
@@ -190,8 +186,6 @@ struct update_target_element<Source,
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-#if (__CUDACC_VER_MAJOR__ != 10) or (__CUDACC_VER_MINOR__ != 2)
-
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target       = target_type_t<Source, aggregation::MAX>;
@@ -202,8 +196,6 @@ struct update_target_element<Source,
               static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
-
-#endif
   }
 };
 
@@ -240,8 +232,6 @@ struct update_target_element<Source,
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-#if (__CUDACC_VER_MAJOR__ != 10) or (__CUDACC_VER_MINOR__ != 2)
-
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target       = target_type_t<Source, aggregation::SUM>;
@@ -252,7 +242,6 @@ struct update_target_element<Source,
               static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
-#endif
   }
 };
 
