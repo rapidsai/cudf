@@ -178,6 +178,12 @@ else()
   message(STATUS "ARROW: ARROW_LIBRARY set to ${ARROW_LIBRARY}")
 endif(NOT ARROW_LIBRARY)
 
+
+find_library(CUDF_TEST_UTIL libcudftestutil.a
+  HINTS "$ENV{ARROW_ROOT}/lib"
+        "$ENV{CONDA_PREFIX}/lib"
+        "${CUDF_CPP_BUILD_DIR}")
+
 ###################################################################################################
 # - find JNI -------------------------------------------------------------------------------------
 find_package(JNI REQUIRED)
@@ -291,4 +297,4 @@ target_compile_definitions(cudfjni PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni ${CUDF_LIB} ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} cuda)
+target_link_libraries(cudfjni ${CUDF_LIB} ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} ${CUDF_TEST_UTIL} cuda)

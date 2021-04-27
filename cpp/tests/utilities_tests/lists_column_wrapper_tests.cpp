@@ -246,8 +246,11 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfLists)
   {
     test::lists_column_wrapper<T, int32_t> list{{{2, 3}, {4, 5}}};
 
+//    std::cout << "test 0b " << std::endl;
     lists_column_view lcv(list);
     EXPECT_EQ(lcv.size(), 1);
+
+test::print(list);
 
     auto offsets = lcv.offsets();
     EXPECT_EQ(offsets.size(), 2);
@@ -255,6 +258,7 @@ TYPED_TEST(ListColumnWrapperTestTyped, ListOfLists)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(e_offsets, offsets);
 
     auto child = lcv.child();
+test::print(child);
     lists_column_view childv(child);
     EXPECT_EQ(childv.size(), 2);
 

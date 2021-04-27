@@ -1467,10 +1467,12 @@ class lists_column_wrapper : public detail::column_wrapper {
       elements.end(),
       std::pair<column_view, int32_t>{{}, -1},
       [](auto acc, lists_column_wrapper const& lcw) {
+        printf("in here: root:%d, curDepth:%d accDepth:%d\n", lcw.root, lcw.depth, acc.second);
         return lcw.depth > acc.second ? std::make_pair(lcw.get_view(), lcw.depth) : acc;
       });
     column_view expected_hierarchy = hierarchy_and_depth.first;
     int32_t const expected_depth   = hierarchy_and_depth.second;
+    printf("build_from_nested expected_depth %d:\n", expected_depth);
 
     // preprocess columns so that every column_view in 'cols' is an equivalent hierarchy
     std::vector<std::unique_ptr<column>> stubs;

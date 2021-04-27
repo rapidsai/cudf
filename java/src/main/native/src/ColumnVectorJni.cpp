@@ -27,6 +27,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/structs/structs_column_view.hpp>
+#include <cudf_test/column_utilities.hpp>
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
@@ -128,6 +129,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, j
                                                                   jlong j_type,
                                                                   jint scale,
                                                                   jlong row_count) {
+  // array(array(0, 1), array(3, 4))
+  // TODO, how to generate offset like (0, 3, 5)...
+//  int first_array = 2;
+//  int second_array = 4;
   using ScalarType = cudf::scalar_type_t<cudf::size_type>;
   JNI_NULL_CHECK(env, handles, "native view handles are null", 0)
   try {
@@ -141,7 +146,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, j
     auto zero = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
     zero->set_valid(true);
     static_cast<ScalarType *>(zero.get())->set_value(0);
-
     if (children.size() == 0) {
       // special case because cudf::interleave_columns does not support no columns
       auto offsets = cudf::make_column_from_scalar(*zero, row_count + 1);
@@ -152,14 +156,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, j
     } else {
       auto count = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
       count->set_valid(true);
-      static_cast<ScalarType *>(count.get())->set_value(children.size());
+      static_cast<ScalarType *>(count.get())->set_value(children.size()/2);
 
-      std::unique_ptr<cudf::column> offsets = cudf::sequence(row_count + 1, *zero, *count);
+      std::unique_ptr<cudf::column> outer_offsets = cudf::sequence(row_count + 1, *zero, *count);
+      static_cast<ScalarType *>(count.get())->set_value(children.size()/2);
+      std::unique_ptr<cudf::column> inner_offsets = cudf::sequence(row_count*2 + 1, *zero, *count);
+
       auto data_col = cudf::interleave_columns(cudf::table_view(children_vector));
-      ret = cudf::make_lists_column(row_count, std::move(offsets), std::move(data_col),
+      auto inner = cudf::make_lists_column(row_count*2, std::move(inner_offsets), std::move(data_col),
               0, rmm::device_buffer());
-    }
 
+      ret = cudf::make_lists_column(row_count, std::move(outer_offsets), std::move(inner), 0,
+          rmm::device_buffer());
+
+      cudf::test::print(ret->view());
+    }
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
