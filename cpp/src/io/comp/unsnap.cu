@@ -29,6 +29,16 @@ constexpr int32_t batch_count   = (1 << 2);
 constexpr int32_t prefetch_size = (1 << 9);  // 512B, in 32B chunks
 constexpr bool log_cyclecount   = false;
 
+void __device__ busy_wait(size_t cycles)
+{
+  clock_t start = clock();
+  for (;;) {
+    clock_t const now    = clock();
+    clock_t const passed = now > start ? now - start : now + (0xffffffff - start);
+    if (passed >= cycles) return;
+  }
+}
+
 /**
  * @brief Describes a single LZ77 symbol (single entry in batch)
  */
@@ -99,6 +109,7 @@ __device__ void snappy_prefetch_bytestream(unsnap_state_s *s, int t)
           blen = 0;
           break;
         }
+        busy_wait(100);
       }
     }
     blen = shuffle(blen);
@@ -280,7 +291,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
     if (t == 0) {
       s->q.prefetch_rdpos = cur;
 #pragma unroll(1)  // We don't want unrolling here
-      while (s->q.prefetch_wrpos < min(cur + 5 * batch_size, end)) {}
+      while (s->q.prefetch_wrpos < min(cur + 5 * batch_size, end)) { busy_wait(50); }
       b = &s->q.batch[batch * batch_size];
     }
     // Process small symbols in parallel: for data that does not get good compression,
@@ -440,7 +451,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
           // Wait for prefetcher
           s->q.prefetch_rdpos = cur;
 #pragma unroll(1)  // We don't want unrolling here
-          while (s->q.prefetch_wrpos < min(cur + 5 * batch_size, end)) {}
+          while (s->q.prefetch_wrpos < min(cur + 5 * batch_size, end)) { busy_wait(50); }
           dst_pos += blen;
           if (bytes_left < blen) break;
           bytes_left -= blen;
@@ -456,7 +467,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s *s, uint32_t t)
     }
     batch_len = shuffle(batch_len);
     if (t == 0) {
-      while (s->q.batch_len[batch] != 0) {}
+      while (s->q.batch_len[batch] != 0) { busy_wait(100); }
     }
     if (batch_len != batch_size) { break; }
   }
@@ -489,7 +500,7 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t, Storage &temp_s
     int32_t batch_len, blen_t, dist_t;
 
     if (t == 0) {
-      while ((batch_len = s->q.batch_len[batch]) == 0) {}
+      while ((batch_len = s->q.batch_len[batch]) == 0) { busy_wait(100); }
     } else {
       batch_len = 0;
     }
