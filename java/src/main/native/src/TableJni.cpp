@@ -1120,7 +1120,7 @@ int set_column_metadata(cudf::io::column_in_metadata &column_metadata,
                          cudf::jni::native_jintArray &children, int read_index) {
   int write_index = 0;
   int num_children = children[read_index++];
-  column_metadata.children.resize(num_children);
+  column_metadata.get_children().resize(num_children);
   for (int i = 0 ; i < num_children; i++, write_index++) {
     column_metadata.child(write_index)
         .set_name(col_names[read_index])
