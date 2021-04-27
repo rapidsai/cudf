@@ -100,6 +100,69 @@ bool constexpr is_hash_aggregation(aggregation::Kind t)
   return array_contains(hash_aggregations, t);
 }
 
+class groupby_simple_aggregations_collector final
+  : public cudf::detail::simple_aggregations_collector {
+ public:
+  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type, aggregation const& agg)
+  {
+    std::vector<std::unique_ptr<aggregation>> aggs;
+    aggs.push_back(agg.clone());
+    return aggs;
+  }
+
+  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                  cudf::detail::min_aggregation const& agg)
+  {
+    std::vector<std::unique_ptr<aggregation>> aggs;
+    aggs.push_back(col_type.id() == type_id::STRING ? make_argmin_aggregation()
+                                                    : make_min_aggregation());
+    return aggs;
+  }
+
+  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                  cudf::detail::max_aggregation const& agg)
+  {
+    std::vector<std::unique_ptr<aggregation>> aggs;
+    aggs.push_back(col_type.id() == type_id::STRING ? make_argmax_aggregation()
+                                                    : make_max_aggregation());
+    return aggs;
+  }
+
+  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                  cudf::detail::mean_aggregation const& agg)
+  {
+    CUDF_EXPECTS(is_fixed_width(col_type), "MEAN aggregation expects fixed width type");
+    std::vector<std::unique_ptr<aggregation>> aggs;
+    aggs.push_back(make_sum_aggregation());
+    // COUNT_VALID
+    aggs.push_back(make_count_aggregation());
+
+    return aggs;
+  }
+
+  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                  cudf::detail::var_aggregation const& agg)
+  {
+    std::vector<std::unique_ptr<aggregation>> aggs;
+    aggs.push_back(make_sum_aggregation());
+    // COUNT_VALID
+    aggs.push_back(make_count_aggregation());
+
+    return aggs;
+  }
+
+  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                  cudf::detail::std_aggregation const& agg)
+  {
+    std::vector<std::unique_ptr<aggregation>> aggs;
+    aggs.push_back(make_sum_aggregation());
+    // COUNT_VALID
+    aggs.push_back(make_count_aggregation());
+
+    return aggs;
+  }
+};
+
 template <typename Map>
 class hash_compound_agg_finalizer final : public cudf::detail::aggregation_finalizer {
   size_t col_idx;
@@ -300,7 +363,9 @@ flatten_single_pass_aggs(host_span<aggregation_request const> requests)
                          ? cudf::dictionary_column_view(request.values).keys().type()
                          : request.values.type();
     for (auto&& agg : agg_v) {
-      for (auto& agg_s : agg->get_simple_aggregations(values_type)) {
+      groupby_simple_aggregations_collector collector;
+
+      for (auto& agg_s : agg->get_simple_aggregations(values_type, collector)) {
         insert_agg(i, request.values, std::move(agg_s));
       }
     }

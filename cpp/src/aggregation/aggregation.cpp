@@ -23,11 +23,9 @@
 namespace cudf {
 
 std::vector<std::unique_ptr<aggregation>> aggregation::get_simple_aggregations(
-  data_type col_type) const
+  data_type col_type, cudf::detail::simple_aggregations_collector& collector) const
 {
-  std::vector<std::unique_ptr<aggregation>> aggs;
-  aggs.push_back(clone());
-  return aggs;
+  return collector.visit(col_type, *this);
 }
 
 /// Factory to create a SUM aggregation
