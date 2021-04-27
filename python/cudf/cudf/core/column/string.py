@@ -1999,7 +1999,7 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(cpp_string_get(self._column, i))
 
-    def extract_json(self, json_path):
+    def get_json_object(self, json_path):
         """
         Applies a JSONPath string to an input strings column
         where each row in the column is a valid json string
@@ -2014,10 +2014,8 @@ class StringMethods(ColumnMethodsMixin):
         -------
         Column: New strings column containing the retrieved json object strings
 
-        Examples
-        --------
-
         """
+        
         return self._return_or_inplace(
             cpp_get_json_object(self._column, cudf.Scalar(json_path, "str"))
         )

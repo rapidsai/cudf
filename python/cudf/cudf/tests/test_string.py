@@ -2936,27 +2936,82 @@ def test_string_slice_with_mask():
 @pytest.mark.parametrize(
     "data",
     [
-        """{"store": {
-    "book": [
-      { "category": "reference",
-        "author": "Nigel Rees",
-        "title": "Sayings of the Century",
-        "price": 8.95
-      },
-      { "category": "fiction",
-        "author": "Evelyn Waugh",
-        "title": "Sword of Honour",
-        "price": 12.99
-      },
-    ]}}"""
+        [
+            """{"store": {
+        "book": [
+        { "category": "reference",
+            "author": "Nigel Rees",
+            "title": "Sayings of the Century",
+            "price": 8.95
+        },
+        { "category": "fiction",
+            "author": "Evelyn Waugh",
+            "title": "Sword of Honour",
+            "price": 12.99
+        },
+        ]}}"""
+        ],
+        [
+            """{"store0": {
+        "book": [
+        { "category": "reference",
+            "author": "Nigel Rees",
+            "title": "Sayings of the Century",
+            "price": 8.95
+        }]}}""",
+        """{"store1": {
+        "book": [
+        { "category": "fiction",
+            "author": "Evelyn Waugh",
+            "title": "Sword of Honour",
+            "price": 12.99
+        },
+        ]}}"""
+        ],
     ],
 )
 @pytest.mark.parametrize(
     "json_path", ["$.store", "$.store.book" "$.store.book[0].category"]
 )
 def test_string_get_json_object(data, json_path):
-    # gs = cudf.Series(data)
-    # ps = pd.Series(data)
+    gs = cudf.Series(data)
+    ps = pd.to_pandas(gs)
 
-    # sr.str.extract_json(json_path)
+    got = gs.str.get_json_object(json_path)
+    expect = 
+    
+    assert_eq(got, expect)
+    pass
+
+
+def test_string_get_json_object_empty_strings(json_path):
+    gs = cudf.Series([
+            """{"": {
+        "": [
+        { "": "",
+          "": "",
+          "": "",
+        },
+        { "": "fiction",
+          "": "",
+          "title": "",
+        },
+        ]}}"""
+        ])
+            
+    ps = pd.to_pandas(gs)
+
+    got = gs.str.get_json_object(json_path)
+    expect = 
+    
+    pass
+
+
+def test_string_get_json_object_invalid_JSONPath(data):
+    gs = cudf.Series(data) 
+    ps = pd.to_pandas(gs)
+
+    got = gs.str.get_json_object(json_path)
+    expect = 
+    
     pass
