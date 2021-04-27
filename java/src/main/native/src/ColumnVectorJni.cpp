@@ -199,7 +199,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
       // (Assumes the `row_count` is not big, otherwise there would be a performance issue.
       //  Eventually we should have the 'cudf::fill' supported LIST type and updates to use
       //  it here.)
-      // Checks the `row_count` because cudf::interleave_columns does not support no columns.
+      // Checks the `row_count` because `cudf::concatenate` does not support no columns.
       auto data_col = row_count > 0
           ? cudf::concatenate(std::vector<cudf::column_view>(row_count, s_val))
           : cudf::make_empty_column(s_val.type());
