@@ -4788,13 +4788,7 @@ class StringColumn(column.ColumnBase):
                 pa.null(), len(self), [pa.py_buffer((b""))]
             )
         else:
-            return libcudf.interop.to_arrow(
-                libcudf.table.Table(
-                    cudf.core.column_accessor.ColumnAccessor({"None": self})
-                ),
-                [["None"]],
-                keep_index=False,
-            )["None"].chunk(0)
+            return super().to_arrow()
 
     def sum(
         self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
