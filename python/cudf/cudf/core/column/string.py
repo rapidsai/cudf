@@ -4945,6 +4945,19 @@ class StringColumn(column.ColumnBase):
             "consider using .to_arrow()"
         )
 
+    def to_pandas(
+        self, index: ColumnLike = None, nullable: bool = False, **kwargs
+    ) -> "pd.Series":
+        if nullable:
+            pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
+            pd_series = pd.Series(pandas_array, copy=False)
+        else:
+            pd_series = self.to_arrow().to_pandas(**kwargs)
+
+        if index is not None:
+            pd_series.index = index
+        return pd_series
+
     def serialize(self) -> Tuple[dict, list]:
         header = {"null_count": self.null_count}  # type: Dict[Any, Any]
         header["type-serialized"] = pickle.dumps(type(self))
