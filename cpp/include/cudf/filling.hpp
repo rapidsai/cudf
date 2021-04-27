@@ -203,5 +203,10 @@ std::unique_ptr<column> sequence(
   scalar const& init,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+std::unique_ptr<column> inclusive_scan(
+    std::size_t size,
+    std::vector<int> &step,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of group
 }  // namespace cudf

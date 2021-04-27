@@ -159,24 +159,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, j
     } else {
 
       std::size_t input_size = (std::size_t)(row_count*2+1);
-      printf("----- 1 \n");
-      rmm::device_uvector<int> inner_offset_vec{input_size, rmm::cuda_stream_default, rmm::mr::get_current_device_resource()};
-      printf("------2 \n");
-      thrust::inclusive_scan(
-          rmm::exec_policy(rmm::cuda_stream_default),
-          thrust::make_counting_iterator<int>(0),
-          thrust::make_counting_iterator<int>(input_size),
-          inner_offset_vec.data(),
-          [] __device__ (auto lhs, auto rhs) {return lhs + (rhs % 2 == 1 ? 3 : 2);});
-      printf("------ 3 \n");
-      auto data_type = cudf::data_type(cudf::type_id::INT32);
-      auto inner_offsets = std::make_unique<cudf::column>(data_type,
-          input_size,
-          inner_offset_vec.release());
+      std::vector<int> step{3, 2};
+      auto inner_offsets = cudf::inclusive_scan(input_size, step);
 
       cudf::test::print(inner_offsets->view());
 
-      auto count = cudf::make_numeric_scalar(data_type);
+      auto count = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
       count->set_valid(true);
       std::unique_ptr<cudf::column> outer_offsets = cudf::sequence(row_count + 1, *zero, *count);
 //      int cols_size[2] = [3, 2];

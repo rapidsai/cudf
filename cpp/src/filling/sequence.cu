@@ -176,4 +176,31 @@ std::unique_ptr<column> sequence(size_type size,
   return detail::sequence(size, init, rmm::cuda_stream_default, mr);
 }
 
+std::unique_ptr<column> inclusive_scan(
+  std::size_t input_size,
+  std::vector<int> &step,
+  rmm::mr::device_memory_resource* mr)
+{
+  int* steps = &step[0];
+  int len = step.size();
+  printf("----- 1 \n");
+  rmm::device_uvector<int> inner_offset_vec{input_size, rmm::cuda_stream_default, rmm::mr::get_current_device_resource()};
+  printf("------2 \n");
+  thrust::inclusive_scan(
+      rmm::exec_policy(rmm::cuda_stream_default),
+      thrust::make_counting_iterator<int>(0),
+      thrust::make_counting_iterator<int>(input_size),
+      inner_offset_vec.data(),
+      [&steps, &len] __device__ (auto lhs, auto rhs) {return lhs + steps[rhs % len];});
+  printf("------ 3 \n");
+  auto data_type = cudf::data_type(cudf::type_id::INT32);
+  return std::make_unique<cudf::column>(
+      data_type,
+      input_size,
+      inner_offset_vec.release());
+
+}
+
+
+
 }  // namespace cudf
