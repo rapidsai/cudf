@@ -3,8 +3,6 @@ from cudf.core.column import as_column
 from cudf.core.column import build_categorical_column
 from cudf.core.index import IntervalIndex, interval_range
 import cupy
-import pandas as pd
-import numpy as np
 import cudf
 
 def cut( x,
@@ -40,35 +38,31 @@ def cut( x,
         bins[-1] += adj
     if right and include_lowest:
         bins[0] = adjust(bins[0])
-    #get labels for categories
-    interval_labels = IntervalIndex.from_breaks(bins.get()) #handle this in break
+
+    #get labels for categories and checking for the correct inclusivity values
+    if right and include_lowest:
+        closed ='both'
+        left_inclusive = True
+    elif right and not include_lowest:
+        closed ='right'
+    elif not right and include_lowest:
+        closed ='left'
+        right_inclusive = False
+        left_inclusive = True
+    elif not right and not include_lowest:
+        closed ='neither'
+        right_inclusive = False
+
+    interval_labels = IntervalIndex.from_breaks(bins,closed=closed)
+
     #get the left and right edges of the bins as columns 
-    left_edges = as_column(bins[:-1:])
+    left_edges = as_column(bins[:-1:])  
     right_edges = as_column(bins[+1::])
     #the input arr must be changed to the same type as the edges
     input_arr = input_arr.astype(left_edges._dtype)
-    #checking for the correct inclusivity values
-    if not right:
-        right_inclusive = False
-    if include_lowest:
-        left_inclusive = True
+    #get the indexes for the appropriate number
     labels = label_bins(input_arr,left_edges, left_inclusive,right_edges,right_inclusive)
     col = build_categorical_column(categories=interval_labels,codes =labels,ordered=True)
-
+    #we return a categorical index instead of a categorical col
     categorical_index = cudf.core.index.as_index(col)
     return categorical_index
-
-#work on changing IntervalIndex to pandas 
-
-# In [16]: pd.cut(np.array([1, 7, 5, 4, 6, 3]), 3)
-# Out[16]: 
-# [(0.994, 3.0], (5.0, 7.0], (3.0, 5.0], (3.0, 5.0], (5.0, 7.0], (0.994, 3.0]]
-# Categories (3, interval[float64]): [(0.994, 3.0] < (3.0, 5.0] < (5.0, 7.0]]
-
-# In [17]: m = pd.cut(np.array([1, 7, 5, 4, 6, 3]), 3)
-
-# In [18]: pd.CategoricalIndex(m)
-# Out[18]: 
-# CategoricalIndex([(0.994, 3.0], (5.0, 7.0], (3.0, 5.0], (3.0, 5.0], (5.0, 7.0],
-#                   (0.994, 3.0]],
-#                  categories=[(0.994, 3.0], (3.0, 5.0], (5.0, 7.0]], ordered=True, dtype='category')
