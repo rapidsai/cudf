@@ -29,6 +29,9 @@
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf_test/column_utilities.hpp>
 
+#include <rmm/exec_policy.hpp>
+#include <rmm/cuda_stream_view.hpp>
+
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
 
@@ -154,13 +157,29 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, j
       ret = cudf::make_lists_column(row_count, std::move(offsets), std::move(empty_col),
               0, rmm::device_buffer());
     } else {
-      auto count = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-      count->set_valid(true);
-      static_cast<ScalarType *>(count.get())->set_value(children.size()/2);
 
+      std::size_t input_size = (std::size_t)(row_count*2+1);
+      printf("----- 1 \n");
+      rmm::device_uvector<int> inner_offset_vec{input_size, rmm::cuda_stream_default, rmm::mr::get_current_device_resource()};
+      printf("------2 \n");
+      thrust::inclusive_scan(
+          rmm::exec_policy(rmm::cuda_stream_default),
+          thrust::make_counting_iterator<int>(0),
+          thrust::make_counting_iterator<int>(input_size),
+          inner_offset_vec.data(),
+          [] __device__ (auto lhs, auto rhs) {return lhs + (rhs % 2 == 1 ? 3 : 2);});
+      printf("------ 3 \n");
+      auto data_type = cudf::data_type(cudf::type_id::INT32);
+      auto inner_offsets = std::make_unique<cudf::column>(data_type,
+          input_size,
+          inner_offset_vec.release());
+
+      cudf::test::print(inner_offsets->view());
+
+      auto count = cudf::make_numeric_scalar(data_type);
+      count->set_valid(true);
       std::unique_ptr<cudf::column> outer_offsets = cudf::sequence(row_count + 1, *zero, *count);
-      static_cast<ScalarType *>(count.get())->set_value(children.size()/2);
-      std::unique_ptr<cudf::column> inner_offsets = cudf::sequence(row_count*2 + 1, *zero, *count);
+//      int cols_size[2] = [3, 2];
 
       auto data_col = cudf::interleave_columns(cudf::table_view(children_vector));
       auto inner = cudf::make_lists_column(row_count*2, std::move(inner_offsets), std::move(data_col),

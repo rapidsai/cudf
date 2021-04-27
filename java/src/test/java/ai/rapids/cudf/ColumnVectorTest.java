@@ -4278,9 +4278,10 @@ public class ColumnVectorTest extends CudfTestBase {
                  Arrays.asList(2, 4, 6));
          ColumnVector child1 = ColumnVector.fromInts(1, 2, 3, 4);
          ColumnVector child2 = ColumnVector.fromInts(4, 5, 6, 7);
+         ColumnVector child21 = ColumnVector.fromInts(10, 11, 12, 13);
          ColumnVector child3 = ColumnVector.fromInts(20, 21, 22, 23);
          ColumnVector child4 = ColumnVector.fromInts(30, 31, 32, 33);
-         ColumnVector created = ColumnVector.makeList(child1, child2, child3, child4)) {
+         ColumnVector created = ColumnVector.makeList(child1, child2, child21, child3, child4)) {
 
       HostColumnVector hc = created.copyToHost();
       List a = hc.getList(0);
