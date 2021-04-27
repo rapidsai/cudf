@@ -165,6 +165,8 @@ class orc_column_view {
   }
   auto device_dict_chunk() const { return d_dict; }
 
+  void attach_decimal_sizes(uint32_t *sizes_ptr) { d_decimal_sizes = sizes_ptr; }
+
   /**
    * @brief Function that associates an existing stripe dictionary allocation
    */
@@ -220,11 +222,13 @@ class orc_column_view {
   gpu::StripeDictionary const *stripe_dict = nullptr;
   gpu::DictionaryChunk *d_dict             = nullptr;
   gpu::StripeDictionary *d_stripe_dict     = nullptr;
+
+  uint32_t *d_decimal_sizes = nullptr;
 };
 
 struct encoder_decimal_info {
-  std::vector<rmm::device_uvector<uint32_t>> elem_sizes;
-  std::vector<std::vector<uint32_t>> rg_sizes;
+  std::map<uint32_t, rmm::device_uvector<uint32_t>> elem_sizes;
+  std::map<uint32_t, std::vector<uint32_t>> rg_sizes;
 };
 
 std::vector<stripe_rowgroups> writer::impl::gather_stripe_info(
@@ -1078,23 +1082,25 @@ struct rowgroup_iterator {
 };
 
 // returns host vector of per-rowgroup sizes
-// TODO: return a col_idx -> vector map?
 encoder_decimal_info decimal_chunk_sizes(table_view const &table,
                                          host_span<orc_column_view> orc_columns,
                                          size_type rowgroup_size,
                                          host_span<stripe_rowgroups const> stripes,
                                          rmm::cuda_stream_view stream)
 {
-  std::vector<rmm::device_uvector<uint32_t>> elem_sizes;
+  std::map<uint32_t, rmm::device_uvector<uint32_t>> elem_sizes;
 
   for (size_t col_idx = 0; col_idx < orc_columns.size(); ++col_idx) {
-    if (orc_columns[col_idx].orc_kind() == DECIMAL) {
-      elem_sizes.emplace_back(orc_columns[col_idx].data_count(), stream);
+    auto &col = orc_columns[col_idx];
+    if (col.orc_kind() == DECIMAL) {
+      auto &curr_sizes =
+        elem_sizes.insert({col_idx, rmm::device_uvector<uint32_t>(col.data_count(), stream)})
+          .first->second;
       // TODO: null support
       thrust::transform(rmm::exec_policy(stream),
                         table.column(col_idx).begin<int64_t>(),
                         table.column(col_idx).end<int64_t>(),
-                        elem_sizes.back().begin(),
+                        curr_sizes.begin(),
                         [] __device__(auto v) {
                           uint32_t len = 1;
                           while (v > 127) {
@@ -1104,22 +1110,21 @@ encoder_decimal_info decimal_chunk_sizes(table_view const &table,
                           return len;
                         });
 
-      thrust::inclusive_scan_by_key(
-        rmm::exec_policy(stream),
-        rowgroup_iterator{0, rowgroup_size},
-        rowgroup_iterator{orc_columns[col_idx].data_count(), rowgroup_size},
-        elem_sizes.back().begin(),
-        elem_sizes.back().begin());
+      thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+                                    rowgroup_iterator{0, rowgroup_size},
+                                    rowgroup_iterator{col.data_count(), rowgroup_size},
+                                    curr_sizes.begin(),
+                                    curr_sizes.begin());
 
-      // col.atach_decimal_sizes(elem_sizes.back().data());
+      col.attach_decimal_sizes(curr_sizes.data());
     }
   }
   if (elem_sizes.empty()) return {};
 
   auto const num_rowgroups  = stripes_size(stripes);
   auto d_tmp_rowgroup_sizes = rmm::device_uvector<uint32_t>(num_rowgroups, stream);
-  std::vector<std::vector<uint32_t>> rg_sizes;
-  for (auto const &esizes : elem_sizes) {
+  std::map<uint32_t, std::vector<uint32_t>> rg_sizes;
+  for (auto const &[col_idx, esizes] : elem_sizes) {
     // Copy last elem in each row group - equal to row group size
     thrust::transform(
       rmm::exec_policy(stream),
@@ -1129,7 +1134,7 @@ encoder_decimal_info decimal_chunk_sizes(table_view const &table,
       [src = esizes.data(), num_rows = esizes.size(), rg_size = rowgroup_size] __device__(
         auto idx) { return src[thrust::min<size_type>(num_rows, rg_size * (idx + 1)) - 1]; });
 
-    rg_sizes.emplace_back(cudf::detail::make_std_vector_async(d_tmp_rowgroup_sizes, stream));
+    rg_sizes[col_idx] = cudf::detail::make_std_vector_async(d_tmp_rowgroup_sizes, stream);
   }
 
   return {std::move(elem_sizes), std::move(rg_sizes)};
@@ -1192,8 +1197,7 @@ void writer::impl::write(table_view const &table)
       orc_columns.data(), str_col_ids, stripe_bounds, dict, dict_index.data(), stripe_dict);
   }
 
-  // DECIMAL: need a step for decimal columns to attach element size arrays
-  auto const decimal_sizes =
+  auto const decimal_chunks_sizes =
     decimal_chunk_sizes(table, orc_columns, row_index_stride_, stripe_bounds, stream);
 
   // DECIMAL: to get the required info:
