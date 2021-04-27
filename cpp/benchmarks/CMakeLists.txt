@@ -102,6 +102,7 @@ ConfigureBench(SEARCH_BENCH search/search_benchmark.cu)
 ###################################################################################################
 # - sort benchmark --------------------------------------------------------------------------------
 ConfigureBench(SORT_BENCH
+  sort/rank_benchmark.cpp
   sort/sort_benchmark.cpp
   sort/sort_strings_benchmark.cpp)
 
@@ -122,7 +123,8 @@ ConfigureBench(REDUCTION_BENCH
 # - groupby benchmark -----------------------------------------------------------------------------
 ConfigureBench(GROUPBY_BENCH
   groupby/group_sum_benchmark.cu
-  groupby/group_nth_benchmark.cu)
+  groupby/group_nth_benchmark.cu
+  groupby/group_shift_benchmark.cu)
 
 ###################################################################################################
 # - hashing benchmark -----------------------------------------------------------------------------
