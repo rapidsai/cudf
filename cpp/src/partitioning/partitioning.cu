@@ -590,6 +590,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
         input, gather_map.begin(), output_cols, detail::gather_bitmask_op::DONT_CHECK, stream, mr);
     }
 
+    stream.synchronize();  // Async D2H copy must finish before returning host vec
     return std::make_pair(std::make_unique<table>(std::move(output_cols)),
                           std::move(partition_offsets));
   } else {
@@ -607,6 +608,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
     auto output = detail::scatter(
       input, row_partition_numbers.begin(), row_partition_numbers.end(), input, false, stream, mr);
 
+    stream.synchronize();  // Async D2H copy must finish before returning host vec
     return std::make_pair(std::move(output), std::move(partition_offsets));
   }
 }
