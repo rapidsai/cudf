@@ -9,7 +9,6 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.extensions import ExtensionDtype
 from pandas.core.arrays._arrow_utils import ArrowIntervalType
-from cudf.utils.dtypes import  is_interval_dtype
 
 import cudf
 from cudf._typing import Dtype

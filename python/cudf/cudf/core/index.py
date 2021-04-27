@@ -2124,7 +2124,10 @@ class GenericIndex(Index):
         return "\n".join(lines)
 
     def __getitem__(self, index):
-        # if type(self) == IntervalIndex:   
+        if type(self) == IntervalIndex:
+            raise NotImplementedError(
+                "Getting a scalar from an IntervalIndex is not yet supported"
+            )
         res = self._values[index]
         if not isinstance(index, int):
             res = as_index(res)
