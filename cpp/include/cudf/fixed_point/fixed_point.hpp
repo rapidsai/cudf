@@ -93,14 +93,6 @@ CUDA_HOST_DEVICE_CALLABLE Rep ipow(T exponent)
   return square * extra;
 }
 
-/** @brief Helper function to negate strongly typed scale_type
- *
- * @param scale The scale to be negated
- * @return The negated scale
- */
-CUDA_HOST_DEVICE_CALLABLE
-auto negate(scale_type const& scale) { return scale_type{-static_cast<int32_t>(scale)}; }
-
 /** @brief Function that performs a `right shift` scale "times" on the `val`
  *
  * Note: perform this operation when constructing with positive scale
@@ -274,7 +266,7 @@ class fixed_point {
             typename cuda::std::enable_if_t<cuda::std::is_floating_point<U>::value>* = nullptr>
   explicit constexpr operator U() const
   {
-    return detail::shift<Rep, Rad>(static_cast<U>(_value), detail::negate(_scale));
+    return detail::shift<Rep, Rad>(static_cast<U>(_value), scale_type{-_scale});
   }
 
   /**
@@ -289,7 +281,7 @@ class fixed_point {
   {
     // Don't cast to U until converting to Rep because in certain cases casting to U before shifting
     // will result in integer overflow (i.e. if U = int32_t, Rep = int64_t and _value > 2 billion)
-    return static_cast<U>(detail::shift<Rep, Rad>(_value, detail::negate(_scale)));
+    return static_cast<U>(detail::shift<Rep, Rad>(_value, scale_type{-_scale}));
   }
 
   CUDA_HOST_DEVICE_CALLABLE operator scaled_integer<Rep>() const
