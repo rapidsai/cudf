@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional, Sequence, Tuple, Union, cast, overload
 import cupy
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from numba import cuda
 from nvtx import annotate
 
@@ -4765,6 +4766,35 @@ class StringColumn(column.ColumnBase):
     @property
     def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
         raise ValueError("Cannot get an array view of a StringColumn")
+
+    def to_arrow(self) -> pa.Array:
+        """Convert to PyArrow Array
+
+        Examples
+        --------
+        >>> import cudf
+        >>> col = cudf.core.column.as_column([1, 2, 3, 4])
+        >>> col.to_arrow()
+        <pyarrow.lib.Int64Array object at 0x7f886547f830>
+        [
+          1,
+          2,
+          3,
+          4
+        ]
+        """
+        if self.null_count == len(self):
+            return pa.NullArray.from_buffers(
+                pa.null(), len(self), [pa.py_buffer((b""))]
+            )
+        else:
+            return libcudf.interop.to_arrow(
+                libcudf.table.Table(
+                    cudf.core.column_accessor.ColumnAccessor({"None": self})
+                ),
+                [["None"]],
+                keep_index=False,
+            )["None"].chunk(0)
 
     def sum(
         self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0

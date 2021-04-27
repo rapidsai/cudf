@@ -54,7 +54,6 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
     is_struct_dtype,
-    min_signed_type,
     min_unsigned_type,
     np_to_pa_dtype,
 )
@@ -325,30 +324,6 @@ class ColumnBase(Column, Serializable):
           4
         ]
         """
-        if isinstance(self, cudf.core.column.CategoricalColumn):
-            # arrow doesn't support unsigned codes
-            signed_type = (
-                min_signed_type(self.codes.max())
-                if self.codes.size > 0
-                else np.int8
-            )
-            codes = self.codes.astype(signed_type)
-            categories = self.categories
-
-            out_indices = codes.to_arrow()
-            out_dictionary = categories.to_arrow()
-
-            return pa.DictionaryArray.from_arrays(
-                out_indices, out_dictionary, ordered=self.ordered,
-            )
-
-        if isinstance(self, cudf.core.column.StringColumn) and (
-            self.null_count == len(self)
-        ):
-            return pa.NullArray.from_buffers(
-                pa.null(), len(self), [pa.py_buffer((b""))]
-            )
-
         result = libcudf.interop.to_arrow(
             libcudf.table.Table(
                 cudf.core.column_accessor.ColumnAccessor({"None": self})
@@ -357,12 +332,6 @@ class ColumnBase(Column, Serializable):
             keep_index=False,
         )["None"].chunk(0)
 
-        if isinstance(self.dtype, cudf.Decimal64Dtype):
-            result = result.view(
-                pa.decimal128(
-                    scale=result.type.scale, precision=self.dtype.precision
-                )
-            )
         return result
 
     @classmethod

@@ -17,6 +17,7 @@ from typing import (
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from numba import cuda
 
 import cudf
@@ -1098,6 +1099,24 @@ class CategoricalColumn(column.ColumnBase):
             codes, categories=categories, ordered=col.ordered
         )
         return pd.Series(data, index=index)
+
+    def to_arrow(self) -> pa.Array:
+        """Convert to PyArrow Array."""
+        # arrow doesn't support unsigned codes
+        signed_type = (
+            min_signed_type(self.codes.max())
+            if self.codes.size > 0
+            else np.int8
+        )
+        codes = self.codes.astype(signed_type)
+        categories = self.categories
+
+        out_indices = codes.to_arrow()
+        out_dictionary = categories.to_arrow()
+
+        return pa.DictionaryArray.from_arrays(
+            out_indices, out_dictionary, ordered=self.ordered,
+        )
 
     @property
     def values_host(self) -> np.ndarray:
