@@ -191,7 +191,7 @@ std::unique_ptr<column> inclusive_scan(
       thrust::make_counting_iterator<int>(0),
       thrust::make_counting_iterator<int>(input_size),
       inner_offset_vec.data(),
-      [&steps, &len] __device__ (auto lhs, auto rhs) {return lhs + steps[rhs % len];});
+      [steps, len] __device__ (auto lhs, auto rhs) {return lhs + steps[rhs % len];});
   printf("------ 3 \n");
   auto data_type = cudf::data_type(cudf::type_id::INT32);
   return std::make_unique<cudf::column>(

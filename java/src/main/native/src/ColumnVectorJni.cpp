@@ -161,21 +161,19 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, j
       std::size_t input_size = (std::size_t)(row_count*2+1);
       std::vector<int> step{3, 2};
       auto inner_offsets = cudf::inclusive_scan(input_size, step);
+      auto data_col = cudf::interleave_columns(cudf::table_view(children_vector));
+      auto inner = cudf::make_lists_column(row_count*2, std::move(inner_offsets), std::move(data_col),
+          0, rmm::device_buffer());
 
       cudf::test::print(inner_offsets->view());
 
       auto count = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
       count->set_valid(true);
+      static_cast<ScalarType *>(count.get())->set_value(children.size()/2);
+
       std::unique_ptr<cudf::column> outer_offsets = cudf::sequence(row_count + 1, *zero, *count);
-//      int cols_size[2] = [3, 2];
-
-      auto data_col = cudf::interleave_columns(cudf::table_view(children_vector));
-      auto inner = cudf::make_lists_column(row_count*2, std::move(inner_offsets), std::move(data_col),
-              0, rmm::device_buffer());
-
       ret = cudf::make_lists_column(row_count, std::move(outer_offsets), std::move(inner), 0,
           rmm::device_buffer());
-
       cudf::test::print(ret->view());
     }
     return reinterpret_cast<jlong>(ret.release());
