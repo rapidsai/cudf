@@ -27,7 +27,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                size_type preceding_window,
                                                size_type following_window,
                                                size_type min_periods,
-                                               std::unique_ptr<rolling_aggregation> const& aggr,
+                                               rolling_aggregation const& aggr,
                                                rmm::mr::device_memory_resource* mr)
 {
   return grouped_rolling_window(group_keys,
@@ -44,7 +44,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                window_bounds preceding_window,
                                                window_bounds following_window,
                                                size_type min_periods,
-                                               std::unique_ptr<rolling_aggregation> const& aggr,
+                                               rolling_aggregation const& aggr,
                                                rmm::mr::device_memory_resource* mr)
 {
   return grouped_rolling_window(group_keys,
@@ -63,7 +63,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                size_type preceding_window,
                                                size_type following_window,
                                                size_type min_periods,
-                                               std::unique_ptr<rolling_aggregation> const& aggr,
+                                               rolling_aggregation const& aggr,
                                                rmm::mr::device_memory_resource* mr)
 {
   return grouped_rolling_window(group_keys,
@@ -84,7 +84,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                window_bounds preceding_window_bounds,
                                                window_bounds following_window_bounds,
                                                size_type min_periods,
-                                               std::unique_ptr<rolling_aggregation> const& aggr,
+                                               rolling_aggregation const& aggr,
                                                rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
 {
@@ -152,7 +152,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
     return thrust::minimum<size_type>{}(following_window, (group_end - 1) - idx);
   };
 
-  if (aggr->kind == aggregation::CUDA || aggr->kind == aggregation::PTX) {
+  if (aggr.kind == aggregation::CUDA || aggr.kind == aggregation::PTX) {
     cudf::detail::preceding_window_wrapper grouped_preceding_window{
       group_offsets.data(), group_labels.data(), preceding_window};
 
@@ -189,7 +189,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                window_bounds preceding_window_bounds,
                                                window_bounds following_window_bounds,
                                                size_type min_periods,
-                                               std::unique_ptr<rolling_aggregation> const& aggr,
+                                               rolling_aggregation const& aggr,
                                                rmm::mr::device_memory_resource* mr)
 {
   return detail::grouped_rolling_window(group_keys,
@@ -284,7 +284,7 @@ std::unique_ptr<column> time_range_window_ASC(column_view const& input,
                                               TimeT following_window,
                                               bool following_window_is_unbounded,
                                               size_type min_periods,
-                                              std::unique_ptr<rolling_aggregation> const& aggr,
+                                              rolling_aggregation const& aggr,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
@@ -443,7 +443,7 @@ std::unique_ptr<column> time_range_window_ASC(
   TimeT following_window,
   bool following_window_is_unbounded,
   size_type min_periods,
-  std::unique_ptr<rolling_aggregation> const& aggr,
+  rolling_aggregation const& aggr,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -550,7 +550,7 @@ std::unique_ptr<column> time_range_window_DESC(column_view const& input,
                                                TimeT following_window,
                                                bool following_window_is_unbounded,
                                                size_type min_periods,
-                                               std::unique_ptr<rolling_aggregation> const& aggr,
+                                               rolling_aggregation const& aggr,
                                                rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
 {
@@ -642,7 +642,7 @@ std::unique_ptr<column> time_range_window_DESC(
   TimeT following_window,
   bool following_window_is_unbounded,
   size_type min_periods,
-  std::unique_ptr<rolling_aggregation> const& aggr,
+  rolling_aggregation const& aggr,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -735,7 +735,7 @@ std::unique_ptr<column> time_range_window_DESC(
 
   auto following_column = expand_to_column(following_calculator, input.size(), stream, mr);
 
-  if (aggr->kind == aggregation::CUDA || aggr->kind == aggregation::PTX) {
+  if (aggr.kind == aggregation::CUDA || aggr.kind == aggregation::PTX) {
     CUDF_FAIL("Time ranged rolling window does NOT (yet) support UDF.");
   } else {
     return cudf::rolling_window(
@@ -753,7 +753,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window_impl(
                                            // days for now.
   window_bounds following_window_in_days,
   size_type min_periods,
-  std::unique_ptr<rolling_aggregation> const& aggr,
+  rolling_aggregation const& aggr,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -814,17 +814,16 @@ std::unique_ptr<column> grouped_time_range_rolling_window_impl(
 
 namespace detail {
 
-std::unique_ptr<column> grouped_time_range_rolling_window(
-  table_view const& group_keys,
-  column_view const& timestamp_column,
-  cudf::order const& timestamp_order,
-  column_view const& input,
-  window_bounds preceding_window_in_days,
-  window_bounds following_window_in_days,
-  size_type min_periods,
-  std::unique_ptr<rolling_aggregation> const& aggr,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& group_keys,
+                                                          column_view const& timestamp_column,
+                                                          cudf::order const& timestamp_order,
+                                                          column_view const& input,
+                                                          window_bounds preceding_window_in_days,
+                                                          window_bounds following_window_in_days,
+                                                          size_type min_periods,
+                                                          rolling_aggregation const& aggr,
+                                                          rmm::cuda_stream_view stream,
+                                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -869,16 +868,15 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
 
 }  // namespace detail
 
-std::unique_ptr<column> grouped_time_range_rolling_window(
-  table_view const& group_keys,
-  column_view const& timestamp_column,
-  cudf::order const& timestamp_order,
-  column_view const& input,
-  size_type preceding_window_in_days,
-  size_type following_window_in_days,
-  size_type min_periods,
-  std::unique_ptr<rolling_aggregation> const& aggr,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& group_keys,
+                                                          column_view const& timestamp_column,
+                                                          cudf::order const& timestamp_order,
+                                                          column_view const& input,
+                                                          size_type preceding_window_in_days,
+                                                          size_type following_window_in_days,
+                                                          size_type min_periods,
+                                                          rolling_aggregation const& aggr,
+                                                          rmm::mr::device_memory_resource* mr)
 {
   return grouped_time_range_rolling_window(group_keys,
                                            timestamp_column,
@@ -892,16 +890,15 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
                                            mr);
 }
 
-std::unique_ptr<column> grouped_time_range_rolling_window(
-  table_view const& group_keys,
-  column_view const& timestamp_column,
-  cudf::order const& timestamp_order,
-  column_view const& input,
-  window_bounds preceding_window_in_days,
-  window_bounds following_window_in_days,
-  size_type min_periods,
-  std::unique_ptr<rolling_aggregation> const& aggr,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& group_keys,
+                                                          column_view const& timestamp_column,
+                                                          cudf::order const& timestamp_order,
+                                                          column_view const& input,
+                                                          window_bounds preceding_window_in_days,
+                                                          window_bounds following_window_in_days,
+                                                          size_type min_periods,
+                                                          rolling_aggregation const& aggr,
+                                                          rmm::mr::device_memory_resource* mr)
 {
   return detail::grouped_time_range_rolling_window(group_keys,
                                                    timestamp_column,

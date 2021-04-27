@@ -78,7 +78,7 @@ TYPED_TEST(TypedLeadLagWindowTest, LeadLagBasics)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
+                                 *cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
 
   expect_columns_equivalent(
     *lead_3_output_col,
@@ -93,7 +93,7 @@ TYPED_TEST(TypedLeadLagWindowTest, LeadLagBasics)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
+                                 *cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
 
   expect_columns_equivalent(
     *lag_2_output_col,
@@ -124,7 +124,7 @@ TYPED_TEST(TypedLeadLagWindowTest, LeadLagWithNulls)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
+                                 *cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
 
   expect_columns_equivalent(
     *lead_3_output_col,
@@ -139,7 +139,7 @@ TYPED_TEST(TypedLeadLagWindowTest, LeadLagWithNulls)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
+                                 *cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
 
   expect_columns_equivalent(
     *lag_2_output_col,
@@ -175,7 +175,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithDefaults)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
+                                 *cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
   expect_columns_equivalent(
     *lead_3_output_col,
     fixed_width_column_wrapper<T>{{3, 4, 5, 99, 99, 99, 30, 40, 50, 99, 99, 99},
@@ -190,7 +190,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithDefaults)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
+                                 *cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
 
   expect_columns_equivalent(
     *lag_2_output_col,
@@ -227,7 +227,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithDefaultsContainingNulls)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
+                                 *cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
   expect_columns_equivalent(
     *lead_3_output_col,
     fixed_width_column_wrapper<T>{{3, 4, 5, 99, 99, -1, 30, 40, 50, 99, 99, -1},
@@ -242,7 +242,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithDefaultsContainingNulls)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
+                                 *cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
 
   expect_columns_equivalent(
     *lag_2_output_col,
@@ -277,7 +277,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithOutOfRangeOffsets)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(30));
+                                 *cudf::make_lead_aggregation<cudf::rolling_aggregation>(30));
 
   expect_columns_equivalent(
     *lead_30_output_col,
@@ -293,7 +293,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithOutOfRangeOffsets)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lag_aggregation<cudf::rolling_aggregation>(20));
+                                 *cudf::make_lag_aggregation<cudf::rolling_aggregation>(20));
 
   expect_columns_equivalent(
     *lag_20_output_col,
@@ -324,7 +324,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithZeroOffsets)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(0));
+                                 *cudf::make_lead_aggregation<cudf::rolling_aggregation>(0));
 
   expect_columns_equivalent(*lead_0_output_col, *input_col);
 
@@ -334,7 +334,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithZeroOffsets)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lag_aggregation<cudf::rolling_aggregation>(0));
+                                 *cudf::make_lag_aggregation<cudf::rolling_aggregation>(0));
   ;
 
   expect_columns_equivalent(*lag_0_output_col, *input_col);
@@ -366,7 +366,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithNegativeOffsets)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lag_aggregation<cudf::rolling_aggregation>(-3));
+                                 *cudf::make_lag_aggregation<cudf::rolling_aggregation>(-3));
   ;
 
   expect_columns_equivalent(
@@ -383,7 +383,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithNegativeOffsets)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(-2));
+                                 *cudf::make_lead_aggregation<cudf::rolling_aggregation>(-2));
 
   expect_columns_equivalent(
     *lead_minus_2_output_col,
@@ -417,7 +417,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithNoGrouping)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
+                                 *cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
   ;
 
   expect_columns_equivalent(
@@ -431,7 +431,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithNoGrouping)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
+                                 *cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
 
   expect_columns_equivalent(
     *lag_2_output_col,
@@ -466,7 +466,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithAllNullInput)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
+                                 *cudf::make_lead_aggregation<cudf::rolling_aggregation>(3));
   expect_columns_equivalent(
     *lead_3_output_col,
     fixed_width_column_wrapper<T>{{-1, -1, -1, 99, 99, 99, -1, -1, -1, 99, 99, 99},
@@ -481,7 +481,7 @@ TYPED_TEST(TypedLeadLagWindowTest, TestLeadLagWithAllNullInput)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
+                                 *cudf::make_lag_aggregation<cudf::rolling_aggregation>(2));
 
   expect_columns_equivalent(
     *lag_2_output_col,
@@ -522,7 +522,7 @@ TYPED_TEST(TypedLeadLagWindowTest, DefaultValuesWithoutLeadLag)
                                    preceding,
                                    following,
                                    min_periods,
-                                   cudf::make_count_aggregation<cudf::rolling_aggregation>()),
+                                   *cudf::make_count_aggregation<cudf::rolling_aggregation>()),
       cudf::logic_error);
   };
 
@@ -558,6 +558,6 @@ TEST_F(LeadLagWindowTest, LeadLagWithoutFixedWidthInput)
                                  preceding,
                                  following,
                                  min_periods,
-                                 cudf::make_lead_aggregation<cudf::rolling_aggregation>(4)),
+                                 *cudf::make_lead_aggregation<cudf::rolling_aggregation>(4)),
     cudf::logic_error);
 }
