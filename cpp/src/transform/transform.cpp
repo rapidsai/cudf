@@ -75,31 +75,36 @@ void binary_operation(column_view const& A,
                       column_view const& outmsk_view,
                       rmm::mr::device_memory_resource* mr)
 {
-  std::string kernel_name =
-  jitify2::reflection::Template("cudf::transformation::jit::binop_kernel")  //
-    .instantiate(cudf::jit::get_type_name(outcol_view.type()),  // list of template arguments
-                 cudf::jit::get_type_name(A.type()),
-                 cudf::jit::get_type_name(B.type()));
 
-  std::string cuda_source = cudf::jit::parse_single_function_ptx(
-                     binary_udf, "GENERIC_BINARY_OP", cudf::jit::get_type_name(output_type), {0});
 
-  rmm::cuda_stream_view stream;
+ std::string generic_kernel_name = 
+ jitify2::reflection::Template("cudf::transformation::jit::generic_udf_kernel")
+    .instantiate(cudf::jit::get_type_name(outcol_view.type()),
+                 "int64_t*",
+                 "uint32_t*",
+                 "int64_t",
+                 "int64_t*",
+                 "uint32_t*",
+                 "int64_t");
 
+  std::string generic_cuda_source = cudf::jit::parse_single_function_ptx(
+                     binary_udf, "GENERIC_OP", cudf::jit::get_type_name(output_type), {0});
+                     
+  rmm::cuda_stream_view generic_stream;
   cudf::jit::get_program_cache(*transform_jit_binop_kernel_cu_jit)
     .get_kernel(
-      kernel_name, {}, {{"transform/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."})  //
-    ->configure_1d_max_occupancy(0, 0, 0, stream.value())                                   //
+      generic_kernel_name, {}, {{"transform/jit/operation-udf.hpp", generic_cuda_source}}, {"-arch=sm_."})  //
+    ->configure_1d_max_occupancy(0, 0, 0, generic_stream.value())                                   //
     ->launch(outcol_view.size(),
-            cudf::jit::get_data_ptr(outcol_view),
-            cudf::jit::get_data_ptr(A),
-            cudf::jit::get_data_ptr(B),
-            cudf::jit::get_data_ptr(outmsk_view),
-            A.null_mask(),
-            A.offset(),
-            B.null_mask(),
-            B.offset()
-    );
+             cudf::jit::get_data_ptr(outcol_view),
+             cudf::jit::get_data_ptr(outmsk_view), 
+             cudf::jit::get_data_ptr(A),
+             A.null_mask(), // cudf::bitmask_type * 
+             A.offset(),
+             cudf::jit::get_data_ptr(B),
+             B.null_mask(),
+             B.offset());
+
 }
 
 void generalized_operation(table_view const& data_view,

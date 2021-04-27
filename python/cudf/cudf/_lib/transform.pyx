@@ -172,7 +172,7 @@ def masked_binary_op(Column A, Column B, op, Column output_column, Column output
     
  
     from cudf.core.udf import compile_udf
-    c_str = compile_udf(op).encode('UTF-8')
+    c_str = compile_udf(op)[1].encode('UTF-8')
 
     c_tid = <type_id> (
         <underlying_type_t_type_id> np_to_cudf_types[np.dtype('int64')]
