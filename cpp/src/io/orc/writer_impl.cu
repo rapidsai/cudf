@@ -1044,19 +1044,24 @@ rmm::device_uvector<size_type> get_string_column_ids(const table_device_view &vi
   return string_column_ids;
 }
 
-constexpr size_t test_rg_size = 5;
-
 struct rowgroup_iterator {
   using difference_type   = long;
   using value_type        = int;
   using pointer           = int *;
   using reference         = int &;
   using iterator_category = thrust::output_device_iterator_tag;
-  int idx;
+  size_type idx;
+  size_type rowgroup_size;
 
-  CUDA_HOST_DEVICE_CALLABLE rowgroup_iterator(int offset) : idx{offset} {}
-  CUDA_HOST_DEVICE_CALLABLE value_type operator*() const { return idx / test_rg_size; }
-  CUDA_HOST_DEVICE_CALLABLE auto operator+(int i) const { return rowgroup_iterator{idx + i}; }
+  CUDA_HOST_DEVICE_CALLABLE rowgroup_iterator(int offset, size_type rg_size)
+    : idx{offset}, rowgroup_size{rg_size}
+  {
+  }
+  CUDA_HOST_DEVICE_CALLABLE value_type operator*() const { return idx / rowgroup_size; }
+  CUDA_HOST_DEVICE_CALLABLE auto operator+(int i) const
+  {
+    return rowgroup_iterator{idx + i, rowgroup_size};
+  }
   CUDA_HOST_DEVICE_CALLABLE rowgroup_iterator &operator++()
   {
     ++idx;
@@ -1064,7 +1069,7 @@ struct rowgroup_iterator {
   }
   CUDA_HOST_DEVICE_CALLABLE value_type operator[](int offset)
   {
-    return (idx + offset) / test_rg_size;
+    return (idx + offset) / rowgroup_size;
   }
   CUDA_HOST_DEVICE_CALLABLE bool operator!=(rowgroup_iterator const &other)
   {
@@ -1076,6 +1081,7 @@ struct rowgroup_iterator {
 // TODO: return a col_idx -> vector map?
 encoder_decimal_info decimal_chunk_sizes(table_view const &table,
                                          host_span<orc_column_view> orc_columns,
+                                         size_type rowgroup_size,
                                          host_span<stripe_rowgroups const> stripes,
                                          rmm::cuda_stream_view stream)
 {
@@ -1098,36 +1104,32 @@ encoder_decimal_info decimal_chunk_sizes(table_view const &table,
                           return len;
                         });
 
-      thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
-                                    rowgroup_iterator{0},
-                                    rowgroup_iterator{orc_columns[col_idx].data_count()},
-                                    elem_sizes.back().begin(),
-                                    elem_sizes.back().begin());
+      thrust::inclusive_scan_by_key(
+        rmm::exec_policy(stream),
+        rowgroup_iterator{0, rowgroup_size},
+        rowgroup_iterator{orc_columns[col_idx].data_count(), rowgroup_size},
+        elem_sizes.back().begin(),
+        elem_sizes.back().begin());
 
       // col.atach_decimal_sizes(elem_sizes.back().data());
     }
   }
   if (elem_sizes.empty()) return {};
 
-  auto const num_rowgroups  = 2;  // HACK TO ENABLE TESTING!!
+  auto const num_rowgroups  = stripes_size(stripes);
   auto d_tmp_rowgroup_sizes = rmm::device_uvector<uint32_t>(num_rowgroups, stream);
   std::vector<std::vector<uint32_t>> rg_sizes;
   for (auto const &esizes : elem_sizes) {
     // Copy last elem in each row group - equal to row group size
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(num_rowgroups),
-                      d_tmp_rowgroup_sizes.begin(),
-                      [src = esizes.data(), num_rows = esizes.size()] __device__(auto idx) {
-                        return src[min(num_rows, test_rg_size * (idx + 1)) - 1];
-                      });
+    thrust::transform(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator<size_type>(0),
+      thrust::make_counting_iterator<size_type>(num_rowgroups),
+      d_tmp_rowgroup_sizes.begin(),
+      [src = esizes.data(), num_rows = esizes.size(), rg_size = rowgroup_size] __device__(
+        auto idx) { return src[thrust::min<size_type>(num_rows, rg_size * (idx + 1)) - 1]; });
 
     rg_sizes.emplace_back(cudf::detail::make_std_vector_async(d_tmp_rowgroup_sizes, stream));
-  }
-
-  for (auto &rgs : rg_sizes) {
-    for (auto &num : rgs) std::cout << num << ' ';
-    std::cout << std::endl;
   }
 
   return {std::move(elem_sizes), std::move(rg_sizes)};
@@ -1191,7 +1193,8 @@ void writer::impl::write(table_view const &table)
   }
 
   // DECIMAL: need a step for decimal columns to attach element size arrays
-  auto const decimal_sizes = decimal_chunk_sizes(table, orc_columns, stripe_bounds, stream);
+  auto const decimal_sizes =
+    decimal_chunk_sizes(table, orc_columns, row_index_stride_, stripe_bounds, stream);
 
   // DECIMAL: to get the required info:
   //  1. compute elem sizes on device;
