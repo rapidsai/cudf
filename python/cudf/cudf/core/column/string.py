@@ -473,9 +473,107 @@ class StringMethods(ColumnMethodsMixin):
         Join lists contained as elements in the Series/Index with passed
         delimiter.
 
-        Raises : NotImplementedError
-            Columns of arrays / lists are not yet supported.
-        """
+        If the elements of a Series are lists themselves, join the content of
+        these lists using the delimiter passed to the function.
+        This function is an equivalent to :meth:`str.join`.
+
+        Parameters
+        ----------
+        sep : str or array-like
+            If str, the delimiter is used between list entries.
+            If array-like, the string at a position is used as a
+            delimiter for corresponding row of the list entries.
+        string_na_rep : str, default None
+            This character will take the place of any null strings
+            (not empty strings) in the Series.
+            If ``string_na_rep`` is ``None``, it defaults to empty
+            space "".
+        sep_na_rep : str, default None
+            This character will take the place of any null strings
+            (not empty strings) in `sep`. This parameter can be used
+            only if `sep` is array-like. If ``sep_na_rep`` is ``None``,
+            it defaults to empty space "".
+
+        Returns
+        -------
+        Series/Index: object
+            The list entries concatenated by intervening occurrences of
+            the delimiter.
+
+        Raises
+        ------
+        ValueError
+            - If ``sep_na_rep`` is supplied when ``sep`` is str.
+            - If ``sep`` is array-like and not of equal length with Series/Index.
+        TypeError
+            - If ``string_na_rep`` or ``sep_na_rep`` are not scalar values.
+            - If ``sep`` is not of following types: str or array-like.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([['a', 'b', 'c'], ['d', 'e'], ['f'], ['g', ' ', 'h']])
+        >>> ser
+        0    [a, b, c]
+        1       [d, e]
+        2          [f]
+        3    [g,  , h]
+        dtype: list
+        >>> ser.str.join(sep='-')
+        0    a-b-c
+        1      d-e
+        2        f
+        3    g- -h
+        dtype: object
+
+        ``sep`` can an array-like input:
+
+        >>> ser.str.join(sep=['-', '+', '.', '='])
+        0    a-b-c
+        1      d+e
+        2        f
+        3    g= =h
+        dtype: object
+
+        If the actual series doesn't have lists, each character is joined
+        by `sep`:
+
+        >>> ser = cudf.Series(['abc', 'def', 'ghi'])
+        >>> ser
+        0    abc
+        1    def
+        2    ghi
+        dtype: object
+        >>> ser.str.join(sep='_')
+        0    a_b_c
+        1    d_e_f
+        2    g_h_i
+        dtype: object
+
+        We can replace `<NA>`/`None` values present in lists using
+        ``string_na_rep``:
+
+        >>> ser = cudf.Series([['a', 'b', None], None, ['c', 'd']])
+        >>> ser
+        0    [a, b, None]
+        1            None
+        2          [c, d]
+        dtype: list
+        >>> ser.str.join(sep='_', string_na_rep='k')
+        0    a_b_k
+        1     <NA>
+        2      c_d
+        dtype: object
+
+        We can replace `<NA>`/`None` values present in lists of ``sep``
+        using ``sep_na_rep``:
+
+        >>> ser.str.join(sep=[None, '.', '-'], sep_na_rep='+')
+        0    a+b+
+        1    <NA>
+        2     c-d
+        dtype: object
+        """  # noqa E501
         if sep is None:
             sep = ""
 
@@ -586,7 +684,7 @@ class StringMethods(ColumnMethodsMixin):
         --------
         >>> import cudf
         >>> s = cudf.Series(['a1', 'b2', 'c3'])
-        >>> s.str.extract(r'([ab])(\d)')                                # noqa W605
+        >>> s.str.extract(r'([ab])(\d)')
               0     1
         0     a     1
         1     b     2
@@ -595,7 +693,7 @@ class StringMethods(ColumnMethodsMixin):
         A pattern with one group will return a DataFrame with one
         column if expand=True.
 
-        >>> s.str.extract(r'[ab](\d)', expand=True)                     # noqa W605
+        >>> s.str.extract(r'[ab](\d)', expand=True)
               0
         0     1
         1     2
@@ -603,12 +701,12 @@ class StringMethods(ColumnMethodsMixin):
 
         A pattern with one group will return a Series if expand=False.
 
-        >>> s.str.extract(r'[ab](\d)', expand=False)                    # noqa W605
+        >>> s.str.extract(r'[ab](\d)', expand=False)
         0       1
         1       2
         2    <NA>
         dtype: object
-        """
+        """  # noqa W605
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
@@ -696,7 +794,7 @@ class StringMethods(ColumnMethodsMixin):
 
         Returning any digit using regular expression.
 
-        >>> s1.str.contains('\d', regex=True)                               # noqa W605
+        >>> s1.str.contains('\d', regex=True)
         0    False
         1    False
         2    False
@@ -729,7 +827,7 @@ class StringMethods(ColumnMethodsMixin):
         3     True
         4     <NA>
         dtype: bool
-        """
+        """  # noqa W605
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
         elif flags != 0:
@@ -3150,7 +3248,7 @@ class StringMethods(ColumnMethodsMixin):
         Escape ``'$'`` to find the literal dollar sign.
 
         >>> s = cudf.Series(['$', 'B', 'Aab$', '$$ca', 'C$B$', 'cat'])
-        >>> s.str.count('\$')                                       # noqa W605
+        >>> s.str.count('\$')
         0    1
         1    0
         2    1
@@ -3164,7 +3262,7 @@ class StringMethods(ColumnMethodsMixin):
         >>> index = cudf.core.index.StringIndex(['A', 'A', 'Aaba', 'cat'])
         >>> index.str.count('a')
         Int64Index([0, 0, 2, 1], dtype='int64')
-        """
+        """  # noqa W605
         if flags != 0:
             raise NotImplementedError("`flags` parameter is not yet supported")
 
