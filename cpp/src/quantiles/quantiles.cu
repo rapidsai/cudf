@@ -14,20 +14,21 @@
  * limitations under the License.
  */
 
+#include <quantiles/quantiles_util.hpp>
+
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <quantiles/quantiles_util.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
 #include <vector>
-#include "cudf/detail/utilities/vector_factories.hpp"
 
 namespace cudf {
 namespace detail {
