@@ -14,14 +14,17 @@ from cudf._lib.lists import (
     extract_element,
     sort_lists,
 )
+from cudf._typing import ColumnLike, ScalarLike
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
-from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.column.methods import ColumnMethodsMixin, ParentType
 from cudf.core.dtypes import ListDtype
 from cudf.utils.dtypes import is_list_dtype, is_numerical_dtype
 
 
 class ListColumn(ColumnBase):
+    dtype: ListDtype
+
     def __init__(
         self, size, dtype, mask=None, offset=0, null_count=None, children=(),
     ):
@@ -178,14 +181,16 @@ class ListMethods(ColumnMethodsMixin):
     List methods for Series
     """
 
-    def __init__(self, column, parent=None):
+    _column: ListColumn
+
+    def __init__(self, column: ListColumn, parent: ParentType = None):
         if not is_list_dtype(column.dtype):
             raise AttributeError(
                 "Can only use .list accessor with a 'list' dtype"
             )
         super().__init__(column=column, parent=parent)
 
-    def get(self, index):
+    def get(self, index: int) -> ParentType:
         """
         Extract element at the given index from each component
 
@@ -217,10 +222,10 @@ class ListMethods(ColumnMethodsMixin):
         else:
             raise IndexError("list index out of range")
 
-    def contains(self, search_key):
+    def contains(self, search_key: ScalarLike) -> ParentType:
         """
-        Creates a column of bool values indicating whether the specified scalar
-        is an element of each row of a list column.
+        Returns boolean values indicating whether the specified scalar
+        is an element of each row.
 
         Parameters
         ----------
@@ -229,7 +234,7 @@ class ListMethods(ColumnMethodsMixin):
 
         Returns
         -------
-        Column
+        Series or Index
 
         Examples
         --------
@@ -257,14 +262,14 @@ class ListMethods(ColumnMethodsMixin):
             return res
 
     @property
-    def leaves(self):
+    def leaves(self) -> ParentType:
         """
         From a Series of (possibly nested) lists, obtain the elements from
         the innermost lists as a flat Series (one value per row).
 
         Returns
         -------
-        Series
+        Series or Index
 
         Examples
         --------
@@ -285,7 +290,7 @@ class ListMethods(ColumnMethodsMixin):
                 self._column.elements, retain_index=False
             )
 
-    def len(self):
+    def len(self) -> ParentType:
         """
         Computes the length of each element in the Series/Index.
 
@@ -309,18 +314,18 @@ class ListMethods(ColumnMethodsMixin):
         """
         return self._return_or_inplace(count_elements(self._column))
 
-    def take(self, lists_indices):
+    def take(self, lists_indices: ColumnLike) -> ParentType:
         """
         Collect list elements based on given indices.
 
         Parameters
         ----------
-        lists_indices: List type arrays
+        lists_indices: Series-like of lists
             Specifies what to collect from each row
 
         Returns
         -------
-        ListColumn
+        Series or Index
 
         Examples
         --------
@@ -364,14 +369,14 @@ class ListMethods(ColumnMethodsMixin):
         else:
             return res
 
-    def unique(self):
+    def unique(self) -> ParentType:
         """
-        Returns unique element for each list in the column, order for each
-        unique element is not guaranteed.
+        Returns the unique elements in each list.
+        The ordering of elements is not guaranteed.
 
         Returns
         -------
-        ListColumn
+        Series or Index
 
         Examples
         --------
@@ -401,12 +406,12 @@ class ListMethods(ColumnMethodsMixin):
 
     def sort_values(
         self,
-        ascending=True,
-        inplace=False,
-        kind="quicksort",
-        na_position="last",
-        ignore_index=False,
-    ):
+        ascending: bool = True,
+        inplace: bool = False,
+        kind: str = "quicksort",
+        na_position: str = "last",
+        ignore_index: bool = False,
+    ) -> ParentType:
         """
         Sort each list by the values.
 
@@ -423,7 +428,7 @@ class ListMethods(ColumnMethodsMixin):
 
         Returns
         -------
-        ListColumn with each list sorted
+        Series or Index with each list sorted
 
         Notes
         -----
@@ -453,17 +458,47 @@ class ListMethods(ColumnMethodsMixin):
             retain_index=not ignore_index,
         )
 
-    def ravel(self):
+    def ravel(self) -> ParentType:
+        """
+        Removes one level of nesting from each row of the list Series.
+
+        Returns
+        -------
+        Series or Index with one level of nesting removed from each row.
+
+        Examples
+        --------
+        >>> s1
+        0      [[1.0, 2.0], [3.0, 4.0, 5.0]]
+        1    [[6.0, nan], [7.0], [8.0, 9.0]]
+        dtype: list
+        >>> s1.list.ravel()
+        0    [1.0, 2.0, 3.0, 4.0, 5.0]
+        1    [6.0, nan, 7.0, 8.0, 9.0]
+        dtype: list
+
+        Null values at the top-level in each row are dropped:
+
+        >>> s2
+        0    [[1.0, 2.0], None, [3.0, 4.0, 5.0]]
+        1        [[6.0, nan], [7.0], [8.0, 9.0]]
+        dtype: list
+        >>> s2.list.ravel()
+        0    [1.0, 2.0, 3.0, 4.0, 5.0]
+        1    [6.0, nan, 7.0, 8.0, 9.0]
+        dtype: list
+        """
         result_dtype = self._column.dtype.element_type
         if not isinstance(result_dtype, ListDtype):
-            raise ValueError(
-                "Cannot ravel a list column with just 1 level of nesting"
-            )
+            return self._return_or_inplace(self._column)
 
         self_offsets = self._column.children[0]
         child_offsets = self._column.children[1].children[0]
         result_offsets = child_offsets[self_offsets]
-        result_children = (result_offsets, self._column.list().leaves)
+        result_children = (
+            result_offsets,
+            self._column.children[1].children[1],
+        )
 
         return self._return_or_inplace(
             ListColumn(

@@ -11,6 +11,8 @@ import cudf
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase
 
+ParentType = Union["cudf.Series", "cudf.Index"]
+
 
 class ColumnMethodsMixin:
     _column: ColumnBase

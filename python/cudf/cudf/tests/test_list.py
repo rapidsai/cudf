@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 import functools
+import itertools
 
 import numpy as np
 import pandas as pd
@@ -315,3 +316,31 @@ def test_contains_null_search_key(data, expect):
     expect = cudf.Series(expect, dtype="bool")
     got = sr.list.contains(cudf.Scalar(cudf.NA, sr.dtype.element_type))
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        [[]],
+        [[1]],
+        [[1, 2]],
+        [[1, 2], [3, 4, 5]],
+        [[1, 2, None], [3, 4, 5]],
+        [[[1, 2], [3, 4]], [[5, 6, 7], [8, 9]]],
+        [[["a", "c", "de", None], None, ["fg"]], [["abc", "de"], None]],
+    ],
+)
+def test_ravel(row):
+    def ravel(row):
+        return list(
+            itertools.chain.from_iterable([x for x in row if x is not None])
+        )
+
+    expect = pd.Series([ravel(row)])
+    got = cudf.Series([row]).list.ravel()
+    assert_eq(expect, got)
+
+
+def test_ravel_no_nesting():
+    s = cudf.Series([[1, 2], [3, 4, 5]])
+    assert_eq(s, s.list.ravel())
