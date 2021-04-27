@@ -5133,10 +5133,6 @@ class StringColumn(column.ColumnBase):
             f"{op} operator not supported between {type(self)} and {type(rhs)}"
         )
 
-    @property
-    def is_unique(self) -> bool:
-        return len(self.unique()) == len(self)
-
     @copy_docstring(column.ColumnBase.view)
     def view(self, dtype) -> "cudf.core.column.ColumnBase":
         if self.null_count > 0:
