@@ -220,6 +220,7 @@ struct hash_join::hash_join_impl {
 
  private:
   cudf::table_view _build;
+  std::vector<std::unique_ptr<cudf::column>> _created_null_columns;
   std::unique_ptr<cudf::detail::multimap_type, std::function<void(cudf::detail::multimap_type*)>>
     _hash_table;
 
