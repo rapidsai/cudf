@@ -395,7 +395,8 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
 /// If there are no nulls for any given group, (nulls_begin, nulls_end) == (0,0).
 std::tuple<rmm::device_vector<size_type>, rmm::device_vector<size_type>>
 get_null_bounds_for_orderby_column(column_view const& orderby_column,
-                                   rmm::device_uvector<size_type> const& group_offsets)
+                                   rmm::device_uvector<size_type> const& group_offsets,
+                                   rmm::cuda_stream_view stream)
 {
   // For each group, the null values are themselves clustered
   // at the beginning or the end of the group.
@@ -412,7 +413,7 @@ get_null_bounds_for_orderby_column(column_view const& orderby_column,
 
     // Null timestamps exist. Find null bounds, per group.
     thrust::for_each(
-      thrust::device,
+      rmm::exec_policy(stream),
       thrust::make_counting_iterator(static_cast<size_type>(0)),
       thrust::make_counting_iterator(static_cast<size_type>(num_groups)),
       [d_orderby       = *p_orderby_device_view,
@@ -471,7 +472,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
 {
   rmm::device_vector<size_type> null_start, null_end;
   std::tie(null_start, null_end) =
-    get_null_bounds_for_orderby_column(orderby_column, group_offsets);
+    get_null_bounds_for_orderby_column(orderby_column, group_offsets, stream);
 
   auto preceding_calculator =
     [d_group_offsets = group_offsets.data(),
@@ -669,7 +670,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
 {
   rmm::device_vector<size_type> null_start, null_end;
   std::tie(null_start, null_end) =
-    get_null_bounds_for_orderby_column(orderby_column, group_offsets);
+    get_null_bounds_for_orderby_column(orderby_column, group_offsets, stream);
 
   auto preceding_calculator =
     [d_group_offsets = group_offsets.data(),
