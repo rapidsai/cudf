@@ -1443,6 +1443,11 @@ public class ColumnVectorTest extends CudfTestBase {
                    Arrays.asList(Arrays.asList(1, 2, 3),Arrays.asList(4, 5, 6)))) {
         assertColumnsAreEqual(expected, ret);
       }
+      // empty row
+      try (ColumnVector ret = ColumnVector.fromScalar(s, 0)) {
+        assertEquals(ret.getRowCount(), 0);
+        assertEquals(ret.getNullCount(), 0);
+      }
     }
   }
 
