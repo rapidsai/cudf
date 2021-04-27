@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,16 @@
  * limitations under the License.
  */
 
+#include <quantiles/quantiles_util.hpp>
+
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sorting.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <quantiles/quantiles_util.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -43,7 +45,7 @@ std::unique_ptr<table> quantiles(table_view const& input,
     return detail::select_quantile<size_type>(selector, size, q, interp);
   };
 
-  rmm::device_vector<double> q_device{q};
+  auto const q_device = cudf::detail::make_device_uvector_async(q, stream);
 
   auto quantile_idx_iter = thrust::make_transform_iterator(q_device.begin(), quantile_idx_lookup);
 
