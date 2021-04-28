@@ -176,22 +176,36 @@ std::unique_ptr<column> sequence(size_type size,
   return detail::sequence(size, init, rmm::cuda_stream_default, mr);
 }
 
+
+struct offset_array_of_array {
+  thrust::device_ptr<int> ptr;
+  int len;
+
+  offset_array_of_array(thrust::device_ptr<int> _ptr, int _len) {
+    ptr = _ptr;
+    len = _len;
+  }
+
+  __device__ int operator()(const int &lhs, const int &rhs) const {
+    return lhs + (ptr[(rhs-1) % len]);
+  }
+};
+
 std::unique_ptr<column> inclusive_scan(
   std::size_t input_size,
   std::vector<int> &step,
   rmm::mr::device_memory_resource* mr)
 {
-  int* steps = &step[0];
-  int len = step.size();
   printf("----- 1 \n");
   rmm::device_uvector<int> inner_offset_vec{input_size, rmm::cuda_stream_default, rmm::mr::get_current_device_resource()};
   printf("------2 \n");
+  thrust::device_vector<int> steps{step};
   thrust::inclusive_scan(
       rmm::exec_policy(rmm::cuda_stream_default),
       thrust::make_counting_iterator<int>(0),
       thrust::make_counting_iterator<int>(input_size),
       inner_offset_vec.data(),
-      [steps, len] __device__ (auto lhs, auto rhs) {return lhs + steps[rhs % len];});
+      offset_array_of_array(steps.data(), step.size()));
   printf("------ 3 \n");
   auto data_type = cudf::data_type(cudf::type_id::INT32);
   return std::make_unique<cudf::column>(
@@ -200,7 +214,5 @@ std::unique_ptr<column> inclusive_scan(
       inner_offset_vec.release());
 
 }
-
-
 
 }  // namespace cudf
