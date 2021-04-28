@@ -71,7 +71,7 @@ struct range_window_bounds {
   const bool _is_unbounded{true};
   std::shared_ptr<scalar> _range_scalar{nullptr};  // To enable copy construction/assignment.
 
-  range_window_bounds(bool is_unbounded_, std::shared_ptr<scalar> range_scalar_);
+  range_window_bounds(bool is_unbounded_, std::unique_ptr<scalar> range_scalar_);
 };
 
 }  // namespace cudf

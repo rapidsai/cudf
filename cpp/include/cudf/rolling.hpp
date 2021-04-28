@@ -432,10 +432,10 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  * Currently, only the following combinations of `orderby` column type and range types
  * are supported:
  *   1. If `orderby` column is a TIMESTAMP, the `preceding`/`following` windows are specified
- *      in terms of lower resolution `DURATION` scalars.
- *      E.g. For `orderby` column of type `TIMESTAMP_SECONDS`, the intervals may be
- *      `DURATION_SECONDS` or `DURATION_DAYS`. Higher resolution durations (e.g.
- *      `DURATION_NANOSECONDS`) cannot be used with lower resolution timestamps.
+ *      in terms of `DURATION` scalars of the same resolution.
+ *      E.g. For `orderby` column of type `TIMESTAMP_SECONDS`, the intervals may only be
+ *      `DURATION_SECONDS`. Durations of higher resolution (e.g. `DURATION_NANOSECONDS`)
+ *      or lower (e.g. `DURATION_DAYS`) cannot be used.
  *   2. If the `orderby` column is an integral type (e.g. `INT32`), the `preceding`/`following`
  *      should be the exact same type (`INT32`).
  *
@@ -455,14 +455,14 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  *
  *  [ // driver_name,  num_overtakes,  lap_number
  *    {   "bottas",        1,            1        },
- *    {   "lewis",         2,            1        },
+ *    {   "hamilton",      2,            1        },
  *    {   "bottas",        2,            2        },
  *    {   "bottas",        1,            3        },
- *    {   "lewis",         3,            1        },
- *    {   "lewis",         8,            2        },
+ *    {   "hamilton",      3,            1        },
+ *    {   "hamilton",      8,            2        },
  *    {   "bottas",        5,            7        },
  *    {   "bottas",        6,            8        },
- *    {   "lewis",         4,            4        }
+ *    {   "hamilton",      4,            4        }
  *  ]
  *
  * Partitioning (grouping) by `driver_name`, and ordering by `lap_number` yields the following
@@ -470,7 +470,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  *
  * lap_number:      [ 1,  2,  3,  7,  8,   1,  1,   2,  4 ]
  * num_overtakes:   [ 1,  2,  1,  5,  6,   2,  3,   8,  4 ]
- *                    <-----bottas------>|<----lewis------>
+ *                    <-----bottas------>|<----hamilton--->
  *
  * The SUM aggregation is applied, with 1 preceding, and 1 following, with a minimum of 1
  * period. The aggregation window is thus 3 (laps) wide, yielding the following output column:

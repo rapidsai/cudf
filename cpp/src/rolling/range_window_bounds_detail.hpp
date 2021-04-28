@@ -77,16 +77,12 @@ using range_rep_type = typename range_type_impl<ColumnType>::rep_type;
 
 namespace {
 
-template <typename T, std::enable_if_t<std::numeric_limits<T>::is_signed, void>* = nullptr>
+template <typename T>
 void assert_non_negative(T const& value)
 {
-  CUDF_EXPECTS(value >= T{0}, "Range scalar must be >= 0.");
-}
-
-template <typename T, std::enable_if_t<!std::numeric_limits<T>::is_signed, void>* = nullptr>
-void assert_non_negative(T const& value)
-{
-  // Unsigned values are non-negative.
+  if constexpr (std::numeric_limits<T>::is_signed) {
+    CUDF_EXPECTS(value >= T{0}, "Range scalar must be >= 0.");
+  }
 }
 
 template <
