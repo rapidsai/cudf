@@ -23,9 +23,16 @@
 namespace cudf {
 namespace {
 
+/**
+ * @brief Factory to (copy) construct scalars.
+ *
+ * Derived types of scalars are cloned, to be adopted as shared_ptr<>
+ * by `range_window_bounds`. This makes it possible to
+ * copy construct and copy assign `range_window_bounds` objects.
+ */
 struct range_scalar_constructor {
   template <typename T, std::enable_if_t<!detail::is_supported_range_type<T>(), void>* = nullptr>
-  scalar* operator()(scalar const& range_scalar_) const
+  std::shared_ptr<scalar> operator()(scalar const& range_scalar_) const
   {
     CUDF_FAIL(
       "Unsupported range type. "
@@ -33,22 +40,24 @@ struct range_scalar_constructor {
   }
 
   template <typename T, std::enable_if_t<cudf::is_duration<T>(), void>* = nullptr>
-  scalar* operator()(scalar const& range_scalar_) const
+  std::shared_ptr<scalar> operator()(scalar const& range_scalar_) const
   {
-    return new duration_scalar<T>{static_cast<duration_scalar<T> const&>(range_scalar_)};
+    return std::shared_ptr<scalar>{
+      new duration_scalar<T>{static_cast<duration_scalar<T> const&>(range_scalar_)}};
   }
 
   template <typename T,
             std::enable_if_t<std::is_integral<T>::value && !cudf::is_boolean<T>(), void>* = nullptr>
-  scalar* operator()(scalar const& range_scalar_) const
+  std::shared_ptr<scalar> operator()(scalar const& range_scalar_) const
   {
-    return new numeric_scalar<T>{static_cast<numeric_scalar<T> const&>(range_scalar_)};
+    return std::shared_ptr<scalar>{
+      new numeric_scalar<T>{static_cast<numeric_scalar<T> const&>(range_scalar_)}};
   }
 };
 
 }  // namespace
 
-range_window_bounds::range_window_bounds(bool is_unbounded_, scalar* range_scalar_)
+range_window_bounds::range_window_bounds(bool is_unbounded_, std::shared_ptr<scalar> range_scalar_)
   : _is_unbounded{is_unbounded_}, _range_scalar{range_scalar_}
 {
   CUDF_EXPECTS(_range_scalar.get(), "Range window scalar cannot be null.");
@@ -58,7 +67,8 @@ range_window_bounds::range_window_bounds(bool is_unbounded_, scalar* range_scala
 
 range_window_bounds range_window_bounds::unbounded(data_type type)
 {
-  return range_window_bounds(true, make_default_constructed_scalar(type).release());
+  return range_window_bounds(
+    true, std::shared_ptr<scalar>{make_default_constructed_scalar(type).release()});
 }
 
 range_window_bounds range_window_bounds::get(scalar const& scalar_)
