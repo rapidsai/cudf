@@ -62,8 +62,10 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   auto const right_num_rows = right_keys.num_rows();
 
   // flatten structs for the right and left and use that for the hash table
-  auto right_flattened_tables = structs::detail::flatten_nested_columns(right_keys, {}, {});
-  auto left_flattened_tables  = structs::detail::flatten_nested_columns(left_keys, {}, {});
+  auto right_flattened_tables = structs::detail::flatten_nested_columns(
+    right_keys, {}, {}, structs::detail::column_nullability::FORCE);
+  auto left_flattened_tables = structs::detail::flatten_nested_columns(
+    left_keys, {}, {}, structs::detail::column_nullability::FORCE);
 
   auto right_flattened_keys = std::get<0>(right_flattened_tables);
   auto left_flattened_keys  = std::get<0>(left_flattened_tables);
