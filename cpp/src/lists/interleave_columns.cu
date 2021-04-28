@@ -74,7 +74,7 @@ generate_list_offsets_and_validities(table_view const& input,
       auto const& lists_col = table_dv.column(col_id);
       if (has_null_mask) { d_validities[idx] = static_cast<int8_t>(lists_col.is_valid(list_id)); }
       auto const list_offsets =
-        lists_col.child(lists_column_view::offsets_column_index).data<offset_type>() +
+        lists_col.child(lists_column_view::offsets_column_index).template data<offset_type>() +
         lists_col.offset();
       return list_offsets[list_id + 1] - list_offsets[list_id];
     });
@@ -122,11 +122,11 @@ struct compute_string_sizes_and_interleave_lists_fn {
     if (has_null_mask and lists_col.is_null(list_id)) { return; }
 
     auto const list_offsets =
-      lists_col.child(lists_column_view::offsets_column_index).data<offset_type>() +
+      lists_col.child(lists_column_view::offsets_column_index).template data<offset_type>() +
       lists_col.offset();
     auto const& str_col = lists_col.child(lists_column_view::child_column_index);
     auto const str_offsets =
-      str_col.child(strings_column_view::offsets_column_index).data<offset_type>();
+      str_col.child(strings_column_view::offsets_column_index).template data<offset_type>();
 
     // read_idx and write_idx are indices of string elements.
     size_type write_idx = dst_list_offsets[idx];
@@ -145,7 +145,7 @@ struct compute_string_sizes_and_interleave_lists_fn {
       auto const end_idx   = str_offsets[list_offsets[list_id + 1]];
       if (start_idx < end_idx) {
         auto const input_ptr =
-          str_col.child(strings_column_view::chars_column_index).data<char>() + start_idx;
+          str_col.child(strings_column_view::chars_column_index).template data<char>() + start_idx;
         auto const output_ptr = d_chars + d_offsets[write_idx];
         thrust::copy(thrust::seq, input_ptr, input_ptr + end_idx - start_idx, output_ptr);
       }
@@ -228,14 +228,14 @@ struct interleave_list_entries_fn {
       [num_cols,
        table_dv     = *table_dv_ptr,
        d_validities = validities.begin(),
-       d_offsets    = output_list_offsets.begin<offset_type>(),
-       d_output     = output_dv_ptr->begin<T>(),
+       d_offsets    = output_list_offsets.template begin<offset_type>(),
+       d_output     = output_dv_ptr->template begin<T>(),
        has_null_mask] __device__(size_type const idx) {
         auto const col_id     = idx % num_cols;
         auto const list_id    = idx / num_cols;
         auto const& lists_col = table_dv.column(col_id);
         auto const list_offsets =
-          lists_col.child(lists_column_view::offsets_column_index).data<offset_type>() +
+          lists_col.child(lists_column_view::offsets_column_index).template data<offset_type>() +
           lists_col.offset();
         auto const& data_col = lists_col.child(lists_column_view::child_column_index);
 
@@ -253,7 +253,8 @@ struct interleave_list_entries_fn {
         }
 
         // Do a copy for the entire list entries.
-        auto const input_ptr  = reinterpret_cast<char const*>(data_col.data<T>() + start_idx);
+        auto const input_ptr =
+          reinterpret_cast<char const*>(data_col.template data<T>() + start_idx);
         auto const output_ptr = reinterpret_cast<char*>(&d_output[write_start]);
         thrust::copy(
           thrust::seq, input_ptr, input_ptr + sizeof(T) * (end_idx - start_idx), output_ptr);
