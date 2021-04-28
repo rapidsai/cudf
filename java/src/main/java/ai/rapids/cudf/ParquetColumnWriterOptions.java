@@ -88,7 +88,7 @@ public class ParquetColumnWriterOptions {
 
     protected NestedBuilder() {}
 
-    protected ParquetColumnWriterOptions withColumn(String name, boolean isNullable) {
+    protected ParquetColumnWriterOptions withColumns(String name, boolean isNullable) {
       return new ParquetColumnWriterOptions(name, isNullable);
     }
 
@@ -139,16 +139,16 @@ public class ParquetColumnWriterOptions {
     /**
      * Set column name
      */
-    public T withNonNullableColumn(String... name) {
-      withColumn(false, name);
+    public T withNonNullableColumns(String... name) {
+      withColumns(false, name);
       return (T) this;
     }
 
     /**
      * Set nullable column meta data
      */
-    public T withNullableColumn(String... name) {
-      withColumn(true, name);
+    public T withNullableColumns(String... name) {
+      withColumns(true, name);
       return (T) this;
     }
 
@@ -156,9 +156,9 @@ public class ParquetColumnWriterOptions {
      * Set a simple child meta data
      * @return this for chaining.
      */
-    public T withColumn(boolean nullable, String... name) {
+    public T withColumns(boolean nullable, String... name) {
       for (String n : name) {
-        children.add(withColumn(n, nullable));
+        children.add(withColumns(n, nullable));
       }
       return (T) this;
     }
@@ -239,68 +239,96 @@ public class ParquetColumnWriterOptions {
     this(columnName, true);
   }
 
+  @FunctionalInterface
+  protected interface ByteArrayProducer {
+    boolean[] apply(ParquetColumnWriterOptions opt);
+  }
+
+  @FunctionalInterface
+  protected interface IntArrayProducer {
+    int[] apply(ParquetColumnWriterOptions opt);
+  }
+
   boolean[] getFlatIsTimeTypeInt96() {
     boolean[] ret = {isTimestampTypeInt96};
+    return getFlatBooleans(ret, (opt) -> opt.getFlatIsTimeTypeInt96());
+  }
 
-    for (ParquetColumnWriterOptions opt: childColumnOptions) {
-      boolean[] b = opt.getFlatIsTimeTypeInt96();
-      boolean[] tmp = new boolean[ret.length + b.length];
-      System.arraycopy(ret, 0, tmp, 0, ret.length);
-      System.arraycopy(b, 0, tmp, ret.length, b.length);
-      ret = tmp;
+  protected boolean[] getFlatBooleans(boolean[] ret, ByteArrayProducer producer) {
+    boolean[][] childResults = new boolean[childColumnOptions.length][];
+    int totalChildrenFlatLength = 0;
+    for (int i = 0 ; i < childColumnOptions.length ; i++) {
+      ParquetColumnWriterOptions opt = childColumnOptions[i];
+      childResults[i] = producer.apply(opt);
+      totalChildrenFlatLength += childResults[i].length;
     }
-    return ret;
+
+    boolean[] result = new boolean[ret.length + totalChildrenFlatLength];
+    System.arraycopy(ret, 0, result, 0, ret.length);
+    int copiedSoFar = ret.length;
+    for (int i = 0 ; i < childColumnOptions.length ; i++) {
+      System.arraycopy(childResults[i], 0, result, copiedSoFar, childResults[i].length);
+      copiedSoFar += childResults[i].length;
+    }
+    return result;
   }
 
   int[] getFlatPrecision() {
     int[] ret = {precision};
-
-    for (ParquetColumnWriterOptions opt: childColumnOptions) {
-      int[] b = opt.getFlatPrecision();
-      int[] tmp = new int[ret.length + b.length];
-      System.arraycopy(ret, 0, tmp, 0, ret.length);
-      System.arraycopy(b, 0, tmp, ret.length, b.length);
-      ret = tmp;
-    }
-    return ret;
+    return getFlatInts(ret, (opt) -> opt.getFlatPrecision());
   }
 
   boolean[] getFlatIsNullable() {
     boolean[] ret = {isNullable};
-
-    for (ParquetColumnWriterOptions opt: childColumnOptions) {
-      boolean[] b = opt.getFlatIsNullable();
-      boolean[] tmp = new boolean[ret.length + b.length];
-      System.arraycopy(ret, 0, tmp, 0, ret.length);
-      System.arraycopy(b, 0, tmp, ret.length, b.length);
-      ret = tmp;
-    }
-    return ret;
+    return getFlatBooleans(ret, (opt) -> opt.getFlatIsNullable());
   }
 
   int[] getFlatNumChildren() {
     int[] ret = {childColumnOptions.length};
+    return getFlatInts(ret, (opt) -> opt.getFlatNumChildren());
+  }
 
-    for (ParquetColumnWriterOptions opt: childColumnOptions) {
-      int[] b = opt.getFlatNumChildren();
-      int[] tmp = new int[ret.length + b.length];
-      System.arraycopy(ret, 0, tmp, 0, ret.length);
-      System.arraycopy(b, 0, tmp, ret.length, b.length);
-      ret = tmp;
+  protected int[] getFlatInts(int[] ret, IntArrayProducer producer) {
+    int[][] childResults = new int[childColumnOptions.length][];
+    int totalChildrenFlatLength = 0;
+    for (int i = 0 ; i < childColumnOptions.length ; i++) {
+      ParquetColumnWriterOptions opt = childColumnOptions[i];
+      childResults[i] = producer.apply(opt);
+      totalChildrenFlatLength += childResults[i].length;
     }
-    return ret;
+
+    int[] result = new int[ret.length + totalChildrenFlatLength];
+    System.arraycopy(ret, 0, result, 0, ret.length);
+    int copiedSoFar = ret.length;
+    for (int i = 0 ; i < childColumnOptions.length ; i++) {
+      System.arraycopy(childResults[i], 0, result, copiedSoFar, childResults[i].length);
+      copiedSoFar += childResults[i].length;
+    }
+    return result;
   }
 
   String[] getFlatColumnNames() {
     String[] ret = {columName};
-    for (ParquetColumnWriterOptions opt: childColumnOptions) {
-      String[] b = opt.getFlatColumnNames();
-      String[] tmp = new String[ret.length + b.length];
-      System.arraycopy(ret, 0, tmp, 0, ret.length);
-      System.arraycopy(b, 0, tmp, ret.length, b.length);
-      ret = tmp;
+    return getFlatColumnNames(ret);
+  }
+
+  protected String[] getFlatColumnNames(String[] ret) {
+    String[][] childResults = new String[childColumnOptions.length][];
+    int totalChildrenFlatLength = 0;
+    for (int i = 0 ; i < childColumnOptions.length ; i++) {
+      ParquetColumnWriterOptions opt = childColumnOptions[i];
+      childResults[i] = opt.getFlatColumnNames();
+      totalChildrenFlatLength += childResults[i].length;
     }
-    return ret;
+
+    String[] result = new String[ret.length + totalChildrenFlatLength];
+    System.arraycopy(ret, 0, result, 0, ret.length);
+    int copiedSoFar = ret.length;
+    for (int i = 0 ; i < childColumnOptions.length ; i++) {
+      System.arraycopy(childResults[i], 0, result, copiedSoFar, childResults[i].length);
+      copiedSoFar += childResults[i].length;
+    }
+    return result;
   }
 
   /**

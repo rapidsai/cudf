@@ -244,6 +244,7 @@ public final class Table implements AutoCloseable {
   /**
    * Setup everything to write parquet formatted data to a file.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
    * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
@@ -257,6 +258,7 @@ public final class Table implements AutoCloseable {
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetFileBegin(String[] columnNames,
+                                                   int numChildren,
                                                    int[] flatNumChildren,
                                                    boolean[] nullable,
                                                    String[] metadataKeys,
@@ -270,6 +272,7 @@ public final class Table implements AutoCloseable {
   /**
    * Setup everything to write parquet formatted data to a buffer.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
    * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
@@ -283,6 +286,7 @@ public final class Table implements AutoCloseable {
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetBufferBegin(String[] columnNames,
+                                                     int numChildren,
                                                      int[] flatNumChildren,
                                                      boolean[] nullable,
                                                      String[] metadataKeys,
@@ -840,6 +844,7 @@ public final class Table implements AutoCloseable {
 
       this.consumer = null;
       this.handle = writeParquetFileBegin(columnNames,
+          options.getTopLevelChildren(),
           flatNumChildren,
           columnNullabilities,
           options.getMetadataKeys(),
@@ -860,6 +865,7 @@ public final class Table implements AutoCloseable {
 
       this.consumer = consumer;
       this.handle = writeParquetBufferBegin(columnNames,
+          options.getTopLevelChildren(),
           flatNumChildren,
           columnNullabilities,
           options.getMetadataKeys(),

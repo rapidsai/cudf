@@ -37,6 +37,31 @@ public final class ParquetWriterOptions extends ParquetColumnWriterOptions.Parqu
     this.metadata = builder.metadata;
   }
 
+  @Override
+  boolean[] getFlatIsTimeTypeInt96() {
+    return super.getFlatBooleans(new boolean[]{}, (opt) -> opt.getFlatIsTimeTypeInt96());
+  }
+
+  @Override
+  int[] getFlatPrecision() {
+    return super.getFlatInts(new int[]{}, (opt) -> opt.getFlatPrecision());
+  }
+
+  @Override
+  int[] getFlatNumChildren() {
+    return super.getFlatInts(new int[]{}, (opt) -> opt.getFlatNumChildren());
+  }
+
+  @Override
+  boolean[] getFlatIsNullable() {
+    return super.getFlatBooleans(new boolean[]{}, (opt) -> opt.getFlatIsNullable());
+  }
+
+  @Override
+  String[] getFlatColumnNames() {
+    return super.getFlatColumnNames(new String[]{});
+  }
+
   String[] getMetadataKeys() {
     return metadata.keySet().toArray(new String[metadata.size()]);
   }
@@ -76,6 +101,10 @@ public final class ParquetWriterOptions extends ParquetColumnWriterOptions.Parqu
 
   public Map<String, String> getMetadata() {
     return metadata;
+  }
+
+  public int getTopLevelChildren() {
+    return childColumnOptions.length;
   }
 
   public static class Builder extends ParquetColumnWriterOptions.AbstractStructBuilder<Builder,
