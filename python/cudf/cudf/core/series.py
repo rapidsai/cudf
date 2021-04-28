@@ -1360,24 +1360,21 @@ class Series(SingleColumnFrame, Serializable):
                 lhs = lhs.astype(truediv_type)
 
         if fill_value is not None:
-            if is_scalar(rhs):
+            if lhs.nullable:
                 lhs = lhs.fillna(fill_value)
-            else:
-                if lhs.nullable:
-                    lhs = lhs.fillna(fill_value)
-                if rhs.nullable:
-                    rhs = rhs.fillna(fill_value)
+            if not is_scalar(rhs) and rhs.nullable:
+                rhs = rhs.fillna(fill_value)
 
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
 
         # Get the appropriate name for output operations involving two objects
-        # that are a mix of pandas and cudf Series and Index. If the two inputs
-        # are identically named, the output shares this name.
-        if isinstance(other, (cudf.Series, cudf.Index, pd.Series, pd.Index)):
-            if self.name == other.name:
-                result_name = self.name
-            else:
-                result_name = None
+        # that are Series-like objects. The output shares the lhs's name unless
+        # the rhs is a _differently_ named Series-like object.
+        if (
+            isinstance(other, (cudf.Series, cudf.Index, pd.Series, pd.Index))
+            and self.name != other.name
+        ):
+            result_name = None
         else:
             result_name = self.name
 
