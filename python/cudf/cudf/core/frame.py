@@ -3331,6 +3331,9 @@ class FrameOneD(Frame):
     def __iter__(self):
         cudf.utils.utils.raise_iteration_error(obj=self)
 
+    def __len__(self):
+        return len(self._column)
+
     @property
     def _column(self):
         return self._data[self.name]

@@ -1963,9 +1963,6 @@ class GenericIndex(Index):
     def __sizeof__(self):
         return self._column.__sizeof__()
 
-    def __len__(self):
-        return len(self._column)
-
     def __repr__(self):
         max_seq_items = get_option("max_seq_items") or len(self)
         mr = 0

@@ -958,11 +958,6 @@ class Series(FrameOneD, Serializable):
             n += self._index.memory_usage(deep=deep)
         return n
 
-    def __len__(self):
-        """Returns the size of the ``Series`` including null values.
-        """
-        return len(self._column)
-
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         if method == "__call__":
             return get_appropriate_dispatched_func(
