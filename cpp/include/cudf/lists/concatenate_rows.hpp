@@ -21,7 +21,7 @@
 namespace cudf {
 namespace lists {
 /**
- * @addtogroup lists_concatenate
+ * @addtogroup lists_concatenate_rows
  * @{
  * @file
  */
