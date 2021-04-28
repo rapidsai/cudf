@@ -36,6 +36,59 @@ using cudf::bitmask_type;
 using cudf::size_type;
 using cudf::test::fixed_width_column_wrapper;
 
+// return true the aggregation is valid for the specified ColumnType
+// valid aggregations may still be further specialized (eg, is_string_specialized)
+template <typename ColumnType, class AggOp, cudf::aggregation::Kind op>
+static constexpr bool is_rolling_supported()
+{
+  using namespace cudf;
+
+  if (!cudf::detail::is_valid_aggregation<ColumnType, op>()) {
+    return false;
+  } else if (cudf::is_numeric<ColumnType>() or cudf::is_duration<ColumnType>()) {
+    constexpr bool is_comparable_countable_op = std::is_same<AggOp, DeviceMin>::value or
+                                                std::is_same<AggOp, DeviceMax>::value or
+                                                std::is_same<AggOp, DeviceCount>::value;
+
+    constexpr bool is_operation_supported =
+      (op == aggregation::SUM) or (op == aggregation::MIN) or (op == aggregation::MAX) or
+      (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
+      (op == aggregation::MEAN) or (op == aggregation::ROW_NUMBER) or (op == aggregation::LEAD) or
+      (op == aggregation::LAG) or (op == aggregation::COLLECT_LIST);
+
+    constexpr bool is_valid_numeric_agg =
+      (cudf::is_numeric<ColumnType>() or cudf::is_duration<ColumnType>() or
+       is_comparable_countable_op) and
+      is_operation_supported;
+
+    return is_valid_numeric_agg;
+
+  } else if (cudf::is_timestamp<ColumnType>()) {
+    return (op == aggregation::MIN) or (op == aggregation::MAX) or
+           (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
+           (op == aggregation::ROW_NUMBER) or (op == aggregation::LEAD) or
+           (op == aggregation::LAG) or (op == aggregation::COLLECT_LIST);
+  } else if (cudf::is_fixed_point<ColumnType>()) {
+    return (op == aggregation::SUM) or (op == aggregation::MIN) or (op == aggregation::MAX) or
+           (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
+           (op == aggregation::ROW_NUMBER) or (op == aggregation::LEAD) or
+           (op == aggregation::LAG) or (op == aggregation::COLLECT_LIST);
+  } else if (std::is_same<ColumnType, cudf::string_view>()) {
+    return (op == aggregation::MIN) or (op == aggregation::MAX) or
+           (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
+           (op == aggregation::ROW_NUMBER) or (op == aggregation::COLLECT_LIST);
+
+  } else if (std::is_same<ColumnType, cudf::list_view>()) {
+    return (op == aggregation::COUNT_VALID) or (op == aggregation::COUNT_ALL) or
+           (op == aggregation::ROW_NUMBER) or (op == aggregation::COLLECT_LIST);
+  } else if (std::is_same<ColumnType, cudf::struct_view>()) {
+    // TODO: Add support for COUNT_VALID, COUNT_ALL, ROW_NUMBER.
+    return op == aggregation::COLLECT_LIST;
+  } else {
+    return false;
+  }
+}
+
 class RollingStringTest : public cudf::test::BaseFixture {
 };
 
@@ -298,7 +351,7 @@ class RollingTest : public cudf::test::BaseFixture {
             cudf::aggregation::Kind k,
             typename OutputType,
             bool is_mean,
-            std::enable_if_t<cudf::detail::is_rolling_supported<T, agg_op, k>()>* = nullptr>
+            std::enable_if_t<is_rolling_supported<T, agg_op, k>()>* = nullptr>
   std::unique_ptr<cudf::column> create_reference_output(
     cudf::column_view const& input,
     std::vector<size_type> const& preceding_window_col,
@@ -353,7 +406,7 @@ class RollingTest : public cudf::test::BaseFixture {
             cudf::aggregation::Kind k,
             typename OutputType,
             bool is_mean,
-            std::enable_if_t<!cudf::detail::is_rolling_supported<T, agg_op, k>()>* = nullptr>
+            std::enable_if_t<!is_rolling_supported<T, agg_op, k>()>* = nullptr>
   std::unique_ptr<cudf::column> create_reference_output(
     cudf::column_view const& input,
     std::vector<size_type> const& preceding_window_col,
