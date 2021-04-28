@@ -131,6 +131,7 @@ struct compute_string_sizes_and_interleave_lists_fn {
       src_child.child(strings_column_view::offsets_column_index).data<size_type>() +
       src_child.offset();
 
+    // read_idx and write_idx are indices of string elements.
     size_type write_idx = dst_list_offsets[dst_list_id];
     if (not d_chars) {  // just compute sizes of strings within a list
       for (auto read_idx = src_list_offsets[src_list_id],
@@ -143,6 +144,7 @@ struct compute_string_sizes_and_interleave_lists_fn {
         d_offsets[write_idx] = src_child_offsets[read_idx + 1] - src_child_offsets[read_idx];
       }
     } else {  // just copy the entire memory region containing all strings in the list
+      // start_idx and end_idx are indices of character elements.
       auto const start_idx = src_child_offsets[src_list_offsets[src_list_id]];
       auto const end_idx   = src_child_offsets[src_list_offsets[src_list_id + 1]];
       if (start_idx < end_idx) {
@@ -181,7 +183,7 @@ struct interleave_list_entries_fn {
       cudf::strings::detail::make_strings_children_with_null_mask(
         comp_fn, num_output_lists, num_output_entries, stream, mr);
 
-    if (has_null_mask) {
+    if (has_null_mask and null_count > 0) {
       return make_strings_column(num_output_entries,
                                  std::move(offsets_column),
                                  std::move(chars_column),
@@ -241,24 +243,21 @@ struct interleave_list_entries_fn {
         auto const& src_child = src_lists_col.child(lists_column_view::child_column_index);
 
         // The indices of the entries in the list to gather from.
-        auto const start_idx = src_list_offsets[src_list_id];
-        auto const end_idx   = src_list_offsets[src_list_id + 1];
+        auto const start_idx   = src_list_offsets[src_list_id];
+        auto const end_idx     = src_list_offsets[src_list_id + 1];
+        auto const write_start = dst_list_offsets[dst_list_id];
 
         // Fill the validities array if necessary.
         if (has_null_mask) {
-          for (auto read_idx  = src_list_offsets[src_list_id],
-                    end_idx   = src_list_offsets[src_list_id + 1],
-                    write_idx = dst_list_offsets[dst_list_id];
-               read_idx < end_idx;
+          for (auto read_idx = start_idx, write_idx = write_start; read_idx < end_idx;
                ++read_idx, ++write_idx) {
-            auto const is_valid     = src_child.is_valid(read_idx);
-            d_validities[write_idx] = static_cast<int8_t>(is_valid);
+            d_validities[write_idx] = static_cast<int8_t>(src_child.is_valid(read_idx));
           }
         }
 
-        // Do a memcpy for the entire list entries.
+        // Do a copy for the entire list entries.
         auto const input_ptr  = reinterpret_cast<char const*>(src_child.data<T>() + start_idx);
-        auto const output_ptr = reinterpret_cast<char*>(&d_output[dst_list_offsets[dst_list_id]]);
+        auto const output_ptr = reinterpret_cast<char*>(&d_output[write_start]);
         thrust::copy(
           thrust::seq, input_ptr, input_ptr + sizeof(T) * (end_idx - start_idx), output_ptr);
       });
@@ -313,13 +312,13 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   if (input.num_rows() == 0) { return cudf::empty_like(input.column(0)); }
   if (input.num_columns() == 1) { return std::make_unique<column>(*(input.begin()), stream, mr); }
 
-  // Generate offsets of the output lists column
+  // Generate offsets of the output lists column.
   auto [list_offsets, list_validities] =
     generate_list_offsets_and_validities(input, has_null_mask, stream, mr);
   auto const offsets_view = list_offsets->view();
 
   // Copy entries from the input lists columns to the output lists column - this needed to be
-  // specialized for different types
+  // specialized for different types.
   auto const num_output_lists = input.num_rows() * input.num_columns();
   auto const num_output_entries =
     cudf::detail::get_value<size_type>(offsets_view, num_output_lists, stream);
