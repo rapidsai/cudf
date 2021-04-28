@@ -145,10 +145,6 @@ class Index(FrameOneD, Serializable):
         """
         pass
 
-    @property
-    def _column(self):
-        return self._data[self.name]
-
     def __getitem__(self, key):
         raise NotImplementedError()
 

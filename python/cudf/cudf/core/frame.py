@@ -3325,6 +3325,14 @@ class FrameOneD(Frame):
     def __iter__(self):
         cudf.utils.utils.raise_iteration_error(obj=self)
 
+    @property
+    def _column(self):
+        return self._data[self.name]
+
+    @_column.setter
+    def _column(self, value):
+        self._data[self.name] = value
+
 
 def _get_replacement_values_for_columns(
     to_replace: Any, value: Any, columns_dtype_map: Dict[Any, Any]

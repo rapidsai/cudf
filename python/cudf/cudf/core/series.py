@@ -285,14 +285,6 @@ class Series(FrameOneD, Serializable):
             out.name = name
         return out
 
-    @property
-    def _column(self):
-        return self._data[self.name]
-
-    @_column.setter
-    def _column(self, value):
-        self._data[self.name] = value
-
     def __contains__(self, item):
         return item in self._index
 
