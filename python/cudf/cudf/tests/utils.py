@@ -3,6 +3,7 @@
 import re
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
+from decimal import Decimal
 
 import cupy
 import numpy as np
@@ -294,6 +295,12 @@ def gen_rand_series(dtype, size, **kwargs):
         return cudf.Series.from_masked_array(values, random_bitmask(size))
 
     return cudf.Series(values)
+
+
+def _decimal_series(input, dtype):
+    return cudf.Series(
+        [x if x is None else Decimal(x) for x in input], dtype=dtype,
+    )
 
 
 @contextmanager

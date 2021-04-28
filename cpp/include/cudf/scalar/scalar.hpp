@@ -618,7 +618,7 @@ class list_scalar : public scalar {
               bool is_valid                       = true,
               rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-    : scalar(data_type(type_id::LIST), is_valid), _data(elements, stream, mr)
+    : scalar(data_type(type_id::LIST), is_valid, stream, mr), _data(elements, stream, mr)
   {
   }
 
