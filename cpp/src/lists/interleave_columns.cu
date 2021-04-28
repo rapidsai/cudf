@@ -76,7 +76,7 @@ generate_list_offsets_and_validities(table_view const& input,
         d_validities[dst_list_id] = static_cast<int8_t>(src_lists_col.is_valid(src_list_id));
       }
       auto const src_list_offsets =
-        src_lists_col.child(lists_column_view::offsets_column_index).data<size_type>() +
+        src_lists_col.child(lists_column_view::offsets_column_index).data<offset_type>() +
         src_lists_col.offset();
       return src_list_offsets[src_list_id + 1] - src_list_offsets[src_list_id];
     });
@@ -124,11 +124,11 @@ struct compute_string_sizes_and_interleave_lists_fn {
     if (has_null_mask and src_lists_col.is_null(src_list_id)) { return; }
 
     auto const src_list_offsets =
-      src_lists_col.child(lists_column_view::offsets_column_index).data<size_type>() +
+      src_lists_col.child(lists_column_view::offsets_column_index).data<offset_type>() +
       src_lists_col.offset();
     auto const& src_child = src_lists_col.child(lists_column_view::child_column_index);
     auto const src_child_offsets =
-      src_child.child(strings_column_view::offsets_column_index).data<size_type>() +
+      src_child.child(strings_column_view::offsets_column_index).data<offset_type>() +
       src_child.offset();
 
     // read_idx and write_idx are indices of string elements.
@@ -238,7 +238,7 @@ struct interleave_list_entries_fn {
         auto const src_list_id    = dst_list_id / num_cols;
         auto const& src_lists_col = table_dv.column(src_col_id);
         auto const src_list_offsets =
-          src_lists_col.child(lists_column_view::offsets_column_index).data<size_type>() +
+          src_lists_col.child(lists_column_view::offsets_column_index).data<offset_type>() +
           src_lists_col.offset();
         auto const& src_child = src_lists_col.child(lists_column_view::child_column_index);
 
@@ -321,7 +321,7 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   // specialized for different types.
   auto const num_output_lists = input.num_rows() * input.num_columns();
   auto const num_output_entries =
-    cudf::detail::get_value<size_type>(offsets_view, num_output_lists, stream);
+    cudf::detail::get_value<offset_type>(offsets_view, num_output_lists, stream);
   auto list_entries = type_dispatcher<dispatch_storage_type>(entry_type,
                                                              interleave_list_entries_fn{},
                                                              input,
