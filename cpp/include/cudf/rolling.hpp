@@ -58,7 +58,7 @@ std::unique_ptr<column> rolling_window(
   size_type preceding_window,
   size_type following_window,
   size_type min_periods,
-  std::unique_ptr<rolling_aggregation> const& agg,
+  rolling_aggregation const& agg,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -67,7 +67,7 @@ std::unique_ptr<column> rolling_window(
  *            size_type preceding_window,
  *            size_type following_window,
  *            size_type min_periods,
- *            std::unique_ptr<rolling_aggregation> const& agg,
+ *            rolling_aggregation const& agg,
  *            rmm::mr::device_memory_resource* mr)
  *
  * @param default_outputs A column of per-row default values to be returned instead
@@ -80,7 +80,7 @@ std::unique_ptr<column> rolling_window(
   size_type preceding_window,
   size_type following_window,
   size_type min_periods,
-  std::unique_ptr<rolling_aggregation> const& agg,
+  rolling_aggregation const& agg,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -195,7 +195,7 @@ std::unique_ptr<column> grouped_rolling_window(
   size_type preceding_window,
   size_type following_window,
   size_type min_periods,
-  std::unique_ptr<rolling_aggregation> const& aggr,
+  rolling_aggregation const& aggr,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -205,7 +205,7 @@ std::unique_ptr<column> grouped_rolling_window(
  *            size_type preceding_window,
  *            size_type following_window,
  *            size_type min_periods,
- *            std::unique_ptr<rolling_aggregation> const& aggr,
+ *            rolling_aggregation const& aggr,
  *            rmm::mr::device_memory_resource* mr)
  */
 std::unique_ptr<column> grouped_rolling_window(
@@ -214,7 +214,7 @@ std::unique_ptr<column> grouped_rolling_window(
   window_bounds preceding_window,
   window_bounds following_window,
   size_type min_periods,
-  std::unique_ptr<rolling_aggregation> const& aggr,
+  rolling_aggregation const& aggr,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -224,7 +224,7 @@ std::unique_ptr<column> grouped_rolling_window(
  *            size_type preceding_window,
  *            size_type following_window,
  *            size_type min_periods,
- *            std::unique_ptr<rolling_aggregation> const& aggr,
+ *            rolling_aggregation const& aggr,
  *            rmm::mr::device_memory_resource* mr)
  *
  * @param default_outputs A column of per-row default values to be returned instead
@@ -238,7 +238,7 @@ std::unique_ptr<column> grouped_rolling_window(
   size_type preceding_window,
   size_type following_window,
   size_type min_periods,
-  std::unique_ptr<rolling_aggregation> const& aggr,
+  rolling_aggregation const& aggr,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -249,7 +249,7 @@ std::unique_ptr<column> grouped_rolling_window(
  *            size_type preceding_window,
  *            size_type following_window,
  *            size_type min_periods,
- *            std::unique_ptr<rolling_aggregation> const& aggr,
+ *            rolling_aggregation const& aggr,
  *            rmm::mr::device_memory_resource* mr)
  */
 std::unique_ptr<column> grouped_rolling_window(
@@ -259,7 +259,7 @@ std::unique_ptr<column> grouped_rolling_window(
   window_bounds preceding_window,
   window_bounds following_window,
   size_type min_periods,
-  std::unique_ptr<rolling_aggregation> const& aggr,
+  rolling_aggregation const& aggr,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -353,7 +353,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
   size_type preceding_window_in_days,
   size_type following_window_in_days,
   size_type min_periods,
-  std::unique_ptr<rolling_aggregation> const& aggr,
+  rolling_aggregation const& aggr,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -365,7 +365,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  *             size_type preceding_window_in_days,
  *             size_type following_window_in_days,
  *             size_type min_periods,
- *             std::unique_ptr<rolling_aggregation> const& aggr,
+ *             rolling_aggregation const& aggr,
  *             rmm::mr::device_memory_resource* mr)
  */
 std::unique_ptr<column> grouped_time_range_rolling_window(
@@ -376,7 +376,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
   window_bounds preceding_window_in_days,
   window_bounds following_window_in_days,
   size_type min_periods,
-  std::unique_ptr<rolling_aggregation> const& aggr,
+  rolling_aggregation const& aggr,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -418,7 +418,7 @@ std::unique_ptr<column> rolling_window(
   column_view const& preceding_window,
   column_view const& following_window,
   size_type min_periods,
-  std::unique_ptr<rolling_aggregation> const& agg,
+  rolling_aggregation const& agg,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

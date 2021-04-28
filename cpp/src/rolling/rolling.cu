@@ -23,7 +23,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type preceding_window,
                                        size_type following_window,
                                        size_type min_periods,
-                                       std::unique_ptr<rolling_aggregation> const& agg,
+                                       rolling_aggregation const& agg,
                                        rmm::mr::device_memory_resource* mr)
 {
   auto defaults =
@@ -40,7 +40,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type preceding_window,
                                        size_type following_window,
                                        size_type min_periods,
-                                       std::unique_ptr<rolling_aggregation> const& agg,
+                                       rolling_aggregation const& agg,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
@@ -52,7 +52,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   CUDF_EXPECTS((default_outputs.is_empty() || default_outputs.size() == input.size()),
                "Defaults column must be either empty or have as many rows as the input column.");
 
-  if (agg->kind == aggregation::CUDA || agg->kind == aggregation::PTX) {
+  if (agg.kind == aggregation::CUDA || agg.kind == aggregation::PTX) {
     return cudf::detail::rolling_window_udf(input,
                                             preceding_window,
                                             "cudf::size_type",
@@ -82,7 +82,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        column_view const& preceding_window,
                                        column_view const& following_window,
                                        size_type min_periods,
-                                       std::unique_ptr<rolling_aggregation> const& agg,
+                                       rolling_aggregation const& agg,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
@@ -98,7 +98,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   CUDF_EXPECTS(preceding_window.size() == input.size() && following_window.size() == input.size(),
                "preceding_window/following_window size must match input size");
 
-  if (agg->kind == aggregation::CUDA || agg->kind == aggregation::PTX) {
+  if (agg.kind == aggregation::CUDA || agg.kind == aggregation::PTX) {
     return cudf::detail::rolling_window_udf(input,
                                             preceding_window.begin<size_type>(),
                                             "cudf::size_type*",
@@ -130,7 +130,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type preceding_window,
                                        size_type following_window,
                                        size_type min_periods,
-                                       std::unique_ptr<rolling_aggregation> const& agg,
+                                       rolling_aggregation const& agg,
                                        rmm::mr::device_memory_resource* mr)
 {
   return detail::rolling_window(input,
@@ -148,7 +148,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        column_view const& preceding_window,
                                        column_view const& following_window,
                                        size_type min_periods,
-                                       std::unique_ptr<rolling_aggregation> const& agg,
+                                       rolling_aggregation const& agg,
                                        rmm::mr::device_memory_resource* mr)
 {
   return detail::rolling_window(

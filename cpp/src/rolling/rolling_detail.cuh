@@ -503,7 +503,7 @@ struct rolling_window_launcher {
                             PrecedingWindowIterator preceding_window_begin,
                             FollowingWindowIterator following_window_begin,
                             size_type min_periods,
-                            std::unique_ptr<rolling_aggregation> const& agg,
+                            rolling_aggregation const& agg,
                             rmm::cuda_stream_view stream)
   {
     using Type    = device_storage_type_t<T>;
@@ -557,7 +557,7 @@ struct rolling_window_launcher {
                             PrecedingWindowIterator preceding_window_begin,
                             FollowingWindowIterator following_window_begin,
                             size_type min_periods,
-                            std::unique_ptr<rolling_aggregation> const& agg,
+                            rolling_aggregation const& agg,
                             agg_op const& device_agg_op,
                             rmm::cuda_stream_view stream)
   {
@@ -620,7 +620,7 @@ struct rolling_window_launcher {
          PrecedingWindowIterator preceding_window_begin,
          FollowingWindowIterator following_window_begin,
          size_type min_periods,
-         std::unique_ptr<rolling_aggregation> const& agg,
+         rolling_aggregation const& agg,
          rmm::cuda_stream_view stream,
          rmm::mr::device_memory_resource* mr)
   {
@@ -658,7 +658,7 @@ struct rolling_window_launcher {
          PrecedingWindowIterator preceding_window_begin,
          FollowingWindowIterator following_window_begin,
          size_type min_periods,
-         std::unique_ptr<rolling_aggregation> const& agg,
+         rolling_aggregation const& agg,
          rmm::cuda_stream_view stream,
          rmm::mr::device_memory_resource* mr)
   {
@@ -727,7 +727,7 @@ struct rolling_window_launcher {
          PrecedingWindowIterator preceding_window_begin,
          FollowingWindowIterator following_window_begin,
          size_type min_periods,
-         std::unique_ptr<rolling_aggregation> const& agg,
+         rolling_aggregation const& agg,
          rmm::cuda_stream_view stream,
          rmm::mr::device_memory_resource* mr)
   {
@@ -747,7 +747,7 @@ struct rolling_window_launcher {
          PrecedingWindowIterator preceding_window_begin,
          FollowingWindowIterator following_window_begin,
          size_type min_periods,
-         std::unique_ptr<rolling_aggregation> const& agg,
+         rolling_aggregation const& agg,
          agg_op const& device_agg_op,
          rmm::cuda_stream_view stream,
          rmm::mr::device_memory_resource* mr)
@@ -757,7 +757,7 @@ struct rolling_window_launcher {
 
     // For LEAD(0)/LAG(0), no computation need be performed.
     // Return copy of input.
-    if (0 == dynamic_cast<cudf::detail::lead_lag_aggregation*>(agg.get())->row_offset) {
+    if (0 == dynamic_cast<cudf::detail::lead_lag_aggregation const&>(agg).row_offset) {
       return std::make_unique<column>(input, stream, mr);
     }
 
@@ -796,7 +796,7 @@ struct rolling_window_launcher {
          PrecedingWindowIterator preceding_window_begin,
          FollowingWindowIterator following_window_begin,
          size_type min_periods,
-         std::unique_ptr<rolling_aggregation> const& agg,
+         rolling_aggregation const& agg,
          agg_op device_agg_op,
          rmm::cuda_stream_view stream,
          rmm::mr::device_memory_resource* mr)
@@ -817,7 +817,7 @@ struct rolling_window_launcher {
              PrecedingWindowIterator preceding_window_begin,
              FollowingWindowIterator following_window_begin,
              size_type min_periods,
-             std::unique_ptr<rolling_aggregation> const& agg,
+             rolling_aggregation const& agg,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr)
   {
@@ -848,7 +848,7 @@ struct rolling_window_launcher {
     PrecedingWindowIterator preceding_window_begin,
     FollowingWindowIterator following_window_begin,
     size_type min_periods,
-    std::unique_ptr<rolling_aggregation> const& agg,
+    rolling_aggregation const& agg,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr)
   {
@@ -872,7 +872,7 @@ struct rolling_window_launcher {
              PrecedingWindowIterator preceding_window_begin,
              FollowingWindowIterator following_window_begin,
              size_type min_periods,
-             std::unique_ptr<rolling_aggregation> const& agg,
+             rolling_aggregation const& agg,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr)
   {
@@ -887,7 +887,7 @@ struct rolling_window_launcher {
       following_window_begin,
       min_periods,
       agg,
-      cudf::DeviceLeadLag{dynamic_cast<cudf::detail::lead_lag_aggregation*>(agg.get())->row_offset},
+      cudf::DeviceLeadLag{dynamic_cast<cudf::detail::lead_lag_aggregation const&>(agg).row_offset},
       stream,
       mr);
   }
@@ -1141,7 +1141,7 @@ struct rolling_window_launcher {
     PrecedingIter preceding_begin_raw,
     FollowingIter following_begin_raw,
     size_type min_periods,
-    std::unique_ptr<rolling_aggregation> const& agg,
+    rolling_aggregation const& agg,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr)
   {
@@ -1179,7 +1179,7 @@ struct rolling_window_launcher {
 
     // If gather_map collects null elements, and null_policy == EXCLUDE,
     // those elements must be filtered out, and offsets recomputed.
-    auto null_handling = dynamic_cast<collect_list_aggregation*>(agg.get())->_null_handling;
+    auto null_handling = dynamic_cast<collect_list_aggregation const&>(agg)._null_handling;
     if (null_handling == null_policy::EXCLUDE && input.has_nulls()) {
       auto num_child_nulls = count_child_nulls(input, gather_map, stream);
       if (num_child_nulls != 0) {
@@ -1220,11 +1220,11 @@ struct dispatch_rolling {
                                      PrecedingWindowIterator preceding_window_begin,
                                      FollowingWindowIterator following_window_begin,
                                      size_type min_periods,
-                                     std::unique_ptr<rolling_aggregation> const& agg,
+                                     rolling_aggregation const& agg,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return aggregation_dispatcher(agg->kind,
+    return aggregation_dispatcher(agg.kind,
                                   rolling_window_launcher<T>{},
                                   input,
                                   default_outputs,
@@ -1247,7 +1247,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
                                            FollowingWindowIterator following_window,
                                            std::string const& following_window_str,
                                            size_type min_periods,
-                                           std::unique_ptr<rolling_aggregation> const& agg,
+                                           rolling_aggregation const& agg,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
@@ -1259,28 +1259,27 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
 
   min_periods = std::max(min_periods, 0);
 
-  auto udf_agg = dynamic_cast<udf_aggregation*>(agg.get());
+  auto udf_agg = dynamic_cast<udf_aggregation const&>(agg);
 
-  std::string hash = "prog_rolling." + std::to_string(std::hash<std::string>{}(udf_agg->_source));
+  std::string hash = "prog_rolling." + std::to_string(std::hash<std::string>{}(udf_agg._source));
 
   std::string cuda_source;
-  switch (udf_agg->kind) {
+  switch (udf_agg.kind) {
     case aggregation::Kind::PTX:
       cuda_source +=
-        cudf::jit::parse_single_function_ptx(udf_agg->_source,
-                                             udf_agg->_function_name,
-                                             cudf::jit::get_type_name(udf_agg->_output_type),
+        cudf::jit::parse_single_function_ptx(udf_agg._source,
+                                             udf_agg._function_name,
+                                             cudf::jit::get_type_name(udf_agg._output_type),
                                              {0, 5});  // args 0 and 5 are pointers.
       break;
     case aggregation::Kind::CUDA:
-      cuda_source +=
-        cudf::jit::parse_single_function_cuda(udf_agg->_source, udf_agg->_function_name);
+      cuda_source += cudf::jit::parse_single_function_cuda(udf_agg._source, udf_agg._function_name);
       break;
     default: CUDF_FAIL("Unsupported UDF type.");
   }
 
   std::unique_ptr<column> output = make_numeric_column(
-    udf_agg->_output_type, input.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
+    udf_agg._output_type, input.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
 
   auto output_view = output->mutable_view();
   rmm::device_scalar<size_type> device_valid_count{0, stream};
@@ -1289,7 +1288,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
     jitify2::reflection::Template("cudf::rolling::jit::gpu_rolling_new")  //
       .instantiate(cudf::jit::get_type_name(input.type()),  // list of template arguments
                    cudf::jit::get_type_name(output->type()),
-                   udf_agg->_operator_name,
+                   udf_agg._operator_name,
                    preceding_window_str.c_str(),
                    following_window_str.c_str());
 
@@ -1320,7 +1319,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
  *                               PrecedingWindowIterator preceding_window_begin,
  *                               FollowingWindowIterator following_window_begin,
  *                               size_type min_periods,
- *                               std::unique_ptr<rolling_aggregation> const& agg,
+ *                               rolling_aggregation const& agg,
  *                               rmm::mr::device_memory_resource* mr)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -1331,7 +1330,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        PrecedingWindowIterator preceding_window_begin,
                                        FollowingWindowIterator following_window_begin,
                                        size_type min_periods,
-                                       std::unique_ptr<rolling_aggregation> const& agg,
+                                       rolling_aggregation const& agg,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
@@ -1341,10 +1340,10 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   if (input.is_empty()) return empty_like(input);
 
   if (cudf::is_dictionary(input.type()))
-    CUDF_EXPECTS(agg->kind == aggregation::COUNT_ALL || agg->kind == aggregation::COUNT_VALID ||
-                   agg->kind == aggregation::ROW_NUMBER || agg->kind == aggregation::MIN ||
-                   agg->kind == aggregation::MAX || agg->kind == aggregation::LEAD ||
-                   agg->kind == aggregation::LAG,
+    CUDF_EXPECTS(agg.kind == aggregation::COUNT_ALL || agg.kind == aggregation::COUNT_VALID ||
+                   agg.kind == aggregation::ROW_NUMBER || agg.kind == aggregation::MIN ||
+                   agg.kind == aggregation::MAX || agg.kind == aggregation::LEAD ||
+                   agg.kind == aggregation::LAG,
                  "Invalid aggregation for dictionary column");
 
   min_periods = std::max(min_periods, 0);
@@ -1366,8 +1365,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   if (!cudf::is_dictionary(input.type())) return output;
 
   // dictionary column post processing
-  if (agg->kind == aggregation::COUNT_ALL || agg->kind == aggregation::COUNT_VALID ||
-      agg->kind == aggregation::ROW_NUMBER)
+  if (agg.kind == aggregation::COUNT_ALL || agg.kind == aggregation::COUNT_VALID ||
+      agg.kind == aggregation::ROW_NUMBER)
     return output;
 
   // output is new dictionary indices (including nulls)

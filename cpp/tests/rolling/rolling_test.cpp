@@ -54,17 +54,17 @@ TEST_F(RollingStringTest, NoNullStringMinMaxCount)
                                                        {1, 1, 1, 1, 1, 1, 1, 1, 1});
 
   auto got_min = cudf::rolling_window(
-    input, window[0], window[0], 1, cudf::make_min_aggregation<cudf::rolling_aggregation>());
+    input, window[0], window[0], 1, *cudf::make_min_aggregation<cudf::rolling_aggregation>());
   auto got_max = cudf::rolling_window(
-    input, window[0], window[0], 1, cudf::make_max_aggregation<cudf::rolling_aggregation>());
+    input, window[0], window[0], 1, *cudf::make_max_aggregation<cudf::rolling_aggregation>());
   auto got_count_valid = cudf::rolling_window(
-    input, window[0], window[0], 1, cudf::make_count_aggregation<cudf::rolling_aggregation>());
+    input, window[0], window[0], 1, *cudf::make_count_aggregation<cudf::rolling_aggregation>());
   auto got_count_all = cudf::rolling_window(
     input,
     window[0],
     window[0],
     1,
-    cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::INCLUDE));
+    *cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::INCLUDE));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_min, got_min->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_max, got_max->view());
@@ -90,17 +90,17 @@ TEST_F(RollingStringTest, NullStringMinMaxCount)
                                                            {1, 1, 1, 1, 1, 1, 1, 1, 1});
 
   auto got_min = cudf::rolling_window(
-    input, window[0], window[0], 1, cudf::make_min_aggregation<cudf::rolling_aggregation>());
+    input, window[0], window[0], 1, *cudf::make_min_aggregation<cudf::rolling_aggregation>());
   auto got_max = cudf::rolling_window(
-    input, window[0], window[0], 1, cudf::make_max_aggregation<cudf::rolling_aggregation>());
+    input, window[0], window[0], 1, *cudf::make_max_aggregation<cudf::rolling_aggregation>());
   auto got_count_valid = cudf::rolling_window(
-    input, window[0], window[0], 1, cudf::make_count_aggregation<cudf::rolling_aggregation>());
+    input, window[0], window[0], 1, *cudf::make_count_aggregation<cudf::rolling_aggregation>());
   auto got_count_all = cudf::rolling_window(
     input,
     window[0],
     window[0],
     1,
-    cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::INCLUDE));
+    *cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::INCLUDE));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_min, got_min->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_max, got_max->view());
@@ -126,17 +126,17 @@ TEST_F(RollingStringTest, MinPeriods)
                                                            {0, 1, 1, 1, 1, 1, 1, 0, 0});
 
   auto got_min = cudf::rolling_window(
-    input, window[0], window[0], 3, cudf::make_min_aggregation<cudf::rolling_aggregation>());
+    input, window[0], window[0], 3, *cudf::make_min_aggregation<cudf::rolling_aggregation>());
   auto got_max = cudf::rolling_window(
-    input, window[0], window[0], 3, cudf::make_max_aggregation<cudf::rolling_aggregation>());
+    input, window[0], window[0], 3, *cudf::make_max_aggregation<cudf::rolling_aggregation>());
   auto got_count_valid = cudf::rolling_window(
-    input, window[0], window[0], 3, cudf::make_count_aggregation<cudf::rolling_aggregation>());
+    input, window[0], window[0], 3, *cudf::make_count_aggregation<cudf::rolling_aggregation>());
   auto got_count_all = cudf::rolling_window(
     input,
     window[0],
     window[0],
     4,
-    cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::INCLUDE));
+    *cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::INCLUDE));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_min, got_min->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_max, got_max->view());
@@ -152,8 +152,8 @@ TEST_F(RollingStringTest, ZeroWindowSize)
   fixed_width_column_wrapper<size_type> expected_count({0, 0, 0, 0, 0, 0, 0, 0, 0},
                                                        {1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
 
-  auto got_count =
-    cudf::rolling_window(input, 0, 0, 0, cudf::make_count_aggregation<cudf::rolling_aggregation>());
+  auto got_count = cudf::rolling_window(
+    input, 0, 0, 0, *cudf::make_count_aggregation<cudf::rolling_aggregation>());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count, got_count->view());
 }
@@ -166,7 +166,7 @@ class RollingTest : public cudf::test::BaseFixture {
                     const std::vector<size_type>& preceding_window,
                     const std::vector<size_type>& following_window,
                     size_type min_periods,
-                    std::unique_ptr<cudf::rolling_aggregation> const& op)
+                    cudf::rolling_aggregation const& op)
   {
     std::unique_ptr<cudf::column> output;
 
@@ -215,35 +215,35 @@ class RollingTest : public cudf::test::BaseFixture {
                  preceding_window,
                  following_window,
                  min_periods,
-                 cudf::make_min_aggregation<cudf::rolling_aggregation>());
+                 *cudf::make_min_aggregation<cudf::rolling_aggregation>());
     run_test_col(input,
                  preceding_window,
                  following_window,
                  min_periods,
-                 cudf::make_count_aggregation<cudf::rolling_aggregation>());
+                 *cudf::make_count_aggregation<cudf::rolling_aggregation>());
     run_test_col(
       input,
       preceding_window,
       following_window,
       min_periods,
-      cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::INCLUDE));
+      *cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::INCLUDE));
     run_test_col(input,
                  preceding_window,
                  following_window,
                  min_periods,
-                 cudf::make_max_aggregation<cudf::rolling_aggregation>());
+                 *cudf::make_max_aggregation<cudf::rolling_aggregation>());
 
     if (not cudf::is_timestamp(input.type())) {
       run_test_col(input,
                    preceding_window,
                    following_window,
                    min_periods,
-                   cudf::make_sum_aggregation<cudf::rolling_aggregation>());
+                   *cudf::make_sum_aggregation<cudf::rolling_aggregation>());
       run_test_col(input,
                    preceding_window,
                    following_window,
                    min_periods,
-                   cudf::make_mean_aggregation<cudf::rolling_aggregation>());
+                   *cudf::make_mean_aggregation<cudf::rolling_aggregation>());
     }
   }
 
@@ -364,14 +364,14 @@ class RollingTest : public cudf::test::BaseFixture {
   }
 
   std::unique_ptr<cudf::column> create_reference_output(
-    std::unique_ptr<cudf::rolling_aggregation> const& op,
+    cudf::rolling_aggregation const& op,
     cudf::column_view const& input,
     std::vector<size_type> const& preceding_window,
     std::vector<size_type> const& following_window,
     size_type min_periods)
   {
     // unroll aggregation types
-    switch (op->kind) {
+    switch (op.kind) {
       case cudf::aggregation::SUM:
         return create_reference_output<cudf::DeviceSum,
                                        cudf::aggregation::SUM,
@@ -420,7 +420,7 @@ TEST_F(RollingErrorTest, NegativeMinPeriods)
   fixed_width_column_wrapper<size_type> input(col_data.begin(), col_data.end(), col_valid.begin());
 
   EXPECT_THROW(
-    cudf::rolling_window(input, 2, 2, -2, cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
+    cudf::rolling_window(input, 2, 2, -2, *cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
     cudf::logic_error);
 }
 
@@ -441,14 +441,14 @@ TEST_F(RollingErrorTest, WindowArraySizeMismatch)
                                        five_elements,
                                        five_elements,
                                        1,
-                                       cudf::make_sum_aggregation<cudf::rolling_aggregation>()));
+                                       *cudf::make_sum_aggregation<cudf::rolling_aggregation>()));
 
   // mismatch for the window array
   EXPECT_THROW(cudf::rolling_window(input,
                                     four_elements,
                                     five_elements,
                                     1,
-                                    cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
+                                    *cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
                cudf::logic_error);
 
   // mismatch for the forward window array
@@ -456,7 +456,7 @@ TEST_F(RollingErrorTest, WindowArraySizeMismatch)
                                     five_elements,
                                     four_elements,
                                     1,
-                                    cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
+                                    *cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
                cudf::logic_error);
 }
 
@@ -465,7 +465,7 @@ TEST_F(RollingErrorTest, EmptyInput)
   cudf::test::fixed_width_column_wrapper<int32_t> empty_col{};
   std::unique_ptr<cudf::column> output;
   EXPECT_NO_THROW(output = cudf::rolling_window(
-                    empty_col, 2, 0, 2, cudf::make_sum_aggregation<cudf::rolling_aggregation>()));
+                    empty_col, 2, 0, 2, *cudf::make_sum_aggregation<cudf::rolling_aggregation>()));
   EXPECT_EQ(output->size(), 0);
 
   fixed_width_column_wrapper<int32_t> preceding_window{};
@@ -475,7 +475,7 @@ TEST_F(RollingErrorTest, EmptyInput)
                                          preceding_window,
                                          following_window,
                                          2,
-                                         cudf::make_sum_aggregation<cudf::rolling_aggregation>()));
+                                         *cudf::make_sum_aggregation<cudf::rolling_aggregation>()));
   EXPECT_EQ(output->size(), 0);
 
   fixed_width_column_wrapper<int32_t> nonempty_col{{1, 2, 3}};
@@ -484,7 +484,7 @@ TEST_F(RollingErrorTest, EmptyInput)
                                          preceding_window,
                                          following_window,
                                          2,
-                                         cudf::make_sum_aggregation<cudf::rolling_aggregation>()));
+                                         *cudf::make_sum_aggregation<cudf::rolling_aggregation>()));
   EXPECT_EQ(output->size(), 0);
 }
 
@@ -501,7 +501,7 @@ TEST_F(RollingErrorTest, SizeMismatch)
                                     preceding_window,
                                     following_window,
                                     2,
-                                    cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
+                                    *cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
       cudf::logic_error);
   }
   {
@@ -512,7 +512,7 @@ TEST_F(RollingErrorTest, SizeMismatch)
                                     preceding_window,
                                     following_window,
                                     2,
-                                    cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
+                                    *cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
       cudf::logic_error);
   }
 }
@@ -529,7 +529,7 @@ TEST_F(RollingErrorTest, WindowWrongDtype)
                                   preceding_window,
                                   following_window,
                                   2,
-                                  cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
+                                  *cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
     cudf::logic_error);
 }
 
@@ -548,20 +548,20 @@ TEST_F(RollingErrorTest, SumTimestampNotSupported)
   fixed_width_column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> input_ns(
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
 
-  EXPECT_THROW(
-    cudf::rolling_window(input_D, 2, 2, 0, cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
-    cudf::logic_error);
-  EXPECT_THROW(
-    cudf::rolling_window(input_s, 2, 2, 0, cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
-    cudf::logic_error);
   EXPECT_THROW(cudf::rolling_window(
-                 input_ms, 2, 2, 0, cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
+                 input_D, 2, 2, 0, *cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
                cudf::logic_error);
   EXPECT_THROW(cudf::rolling_window(
-                 input_us, 2, 2, 0, cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
+                 input_s, 2, 2, 0, *cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
                cudf::logic_error);
   EXPECT_THROW(cudf::rolling_window(
-                 input_ns, 2, 2, 0, cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
+                 input_ms, 2, 2, 0, *cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::rolling_window(
+                 input_us, 2, 2, 0, *cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::rolling_window(
+                 input_ns, 2, 2, 0, *cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
                cudf::logic_error);
 }
 
@@ -581,19 +581,19 @@ TEST_F(RollingErrorTest, MeanTimestampNotSupported)
     thrust::make_counting_iterator(0), thrust::make_counting_iterator(size));
 
   EXPECT_THROW(cudf::rolling_window(
-                 input_D, 2, 2, 0, cudf::make_mean_aggregation<cudf::rolling_aggregation>()),
+                 input_D, 2, 2, 0, *cudf::make_mean_aggregation<cudf::rolling_aggregation>()),
                cudf::logic_error);
   EXPECT_THROW(cudf::rolling_window(
-                 input_s, 2, 2, 0, cudf::make_mean_aggregation<cudf::rolling_aggregation>()),
+                 input_s, 2, 2, 0, *cudf::make_mean_aggregation<cudf::rolling_aggregation>()),
                cudf::logic_error);
   EXPECT_THROW(cudf::rolling_window(
-                 input_ms, 2, 2, 0, cudf::make_mean_aggregation<cudf::rolling_aggregation>()),
+                 input_ms, 2, 2, 0, *cudf::make_mean_aggregation<cudf::rolling_aggregation>()),
                cudf::logic_error);
   EXPECT_THROW(cudf::rolling_window(
-                 input_us, 2, 2, 0, cudf::make_mean_aggregation<cudf::rolling_aggregation>()),
+                 input_us, 2, 2, 0, *cudf::make_mean_aggregation<cudf::rolling_aggregation>()),
                cudf::logic_error);
   EXPECT_THROW(cudf::rolling_window(
-                 input_ns, 2, 2, 0, cudf::make_mean_aggregation<cudf::rolling_aggregation>()),
+                 input_ns, 2, 2, 0, *cudf::make_mean_aggregation<cudf::rolling_aggregation>()),
                cudf::logic_error);
 }
 
@@ -828,23 +828,23 @@ TEST_F(RollingTestStrings, StringsUnsupportedOperators)
   std::vector<size_type> window{1};
 
   EXPECT_THROW(
-    cudf::rolling_window(input, 2, 2, 0, cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
+    cudf::rolling_window(input, 2, 2, 0, *cudf::make_sum_aggregation<cudf::rolling_aggregation>()),
     cudf::logic_error);
   EXPECT_THROW(
-    cudf::rolling_window(input, 2, 2, 0, cudf::make_mean_aggregation<cudf::rolling_aggregation>()),
+    cudf::rolling_window(input, 2, 2, 0, *cudf::make_mean_aggregation<cudf::rolling_aggregation>()),
     cudf::logic_error);
   EXPECT_THROW(cudf::rolling_window(input,
                                     2,
                                     2,
                                     0,
-                                    cudf::make_udf_aggregation<cudf::rolling_aggregation>(
+                                    *cudf::make_udf_aggregation<cudf::rolling_aggregation>(
                                       cudf::udf_type::PTX, std::string{}, cudf::data_type{})),
                cudf::logic_error);
   EXPECT_THROW(cudf::rolling_window(input,
                                     2,
                                     2,
                                     0,
-                                    cudf::make_udf_aggregation<cudf::rolling_aggregation>(
+                                    *cudf::make_udf_aggregation<cudf::rolling_aggregation>(
                                       cudf::udf_type::CUDA, std::string{}, cudf::data_type{})),
                cudf::logic_error);
 }
@@ -968,7 +968,7 @@ TEST_F(RollingTestUdf, StaticWindow)
   auto cuda_udf_agg = cudf::make_udf_aggregation<cudf::rolling_aggregation>(
     cudf::udf_type::CUDA, this->cuda_func, cudf::data_type{cudf::type_id::INT64});
 
-  output = cudf::rolling_window(input, 2, 2, 4, cuda_udf_agg);
+  output = cudf::rolling_window(input, 2, 2, 4, *cuda_udf_agg);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, expected);
 
@@ -976,7 +976,7 @@ TEST_F(RollingTestUdf, StaticWindow)
   auto ptx_udf_agg = cudf::make_udf_aggregation<cudf::rolling_aggregation>(
     cudf::udf_type::PTX, this->ptx_func, cudf::data_type{cudf::type_id::INT64});
 
-  output = cudf::rolling_window(input, 2, 2, 4, ptx_udf_agg);
+  output = cudf::rolling_window(input, 2, 2, 4, *ptx_udf_agg);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, expected);
 }
@@ -1014,7 +1014,7 @@ TEST_F(RollingTestUdf, DynamicWindow)
   auto cuda_udf_agg = cudf::make_udf_aggregation<cudf::rolling_aggregation>(
     cudf::udf_type::CUDA, this->cuda_func, cudf::data_type{cudf::type_id::INT64});
 
-  output = cudf::rolling_window(input, preceding, following, 2, cuda_udf_agg);
+  output = cudf::rolling_window(input, preceding, following, 2, *cuda_udf_agg);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, expected);
 
@@ -1022,7 +1022,7 @@ TEST_F(RollingTestUdf, DynamicWindow)
   auto ptx_udf_agg = cudf::make_udf_aggregation<cudf::rolling_aggregation>(
     cudf::udf_type::PTX, this->ptx_func, cudf::data_type{cudf::type_id::INT64});
 
-  output = cudf::rolling_window(input, preceding, following, 2, ptx_udf_agg);
+  output = cudf::rolling_window(input, preceding, following, 2, *ptx_udf_agg);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, expected);
 }
@@ -1054,19 +1054,19 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLead)
   auto const expected_rowno1    = fw_wrapper{{1, 1, 1, 1, 1, 1}, {1, 1, 1, 1, 1, 1}};
 
   auto const min =
-    rolling_window(input, 2, 1, 1, make_min_aggregation<cudf::rolling_aggregation>());
+    rolling_window(input, 2, 1, 1, *make_min_aggregation<cudf::rolling_aggregation>());
   auto const max =
-    rolling_window(input, 2, 1, 1, make_max_aggregation<cudf::rolling_aggregation>());
+    rolling_window(input, 2, 1, 1, *make_max_aggregation<cudf::rolling_aggregation>());
   auto const lag =
-    rolling_window(input, 2, 1, 1, make_lag_aggregation<cudf::rolling_aggregation>(1));
+    rolling_window(input, 2, 1, 1, *make_lag_aggregation<cudf::rolling_aggregation>(1));
   auto const lead =
-    rolling_window(input, 2, 1, 1, make_lead_aggregation<cudf::rolling_aggregation>(1));
+    rolling_window(input, 2, 1, 1, *make_lead_aggregation<cudf::rolling_aggregation>(1));
   auto const valid =
-    rolling_window(input, 2, 1, 1, make_count_aggregation<cudf::rolling_aggregation>());
+    rolling_window(input, 2, 1, 1, *make_count_aggregation<cudf::rolling_aggregation>());
   auto const all = rolling_window(
-    input, 2, 1, 1, make_count_aggregation<cudf::rolling_aggregation>(null_policy::INCLUDE));
+    input, 2, 1, 1, *make_count_aggregation<cudf::rolling_aggregation>(null_policy::INCLUDE));
   auto const rowno =
-    rolling_window(input, 2, 1, 1, make_row_number_aggregation<cudf::rolling_aggregation>());
+    rolling_window(input, 2, 1, 1, *make_row_number_aggregation<cudf::rolling_aggregation>());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_min, min->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_max, max->view());
@@ -1079,7 +1079,7 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLead)
   // ROW_NUMBER will always return row 1 if the preceding window is set to a constant 1
   for (int following = 1; following < 5; ++following) {
     auto const rowno1 = rolling_window(
-      input, 1, following, 1, make_row_number_aggregation<cudf::rolling_aggregation>());
+      input, 1, following, 1, *make_row_number_aggregation<cudf::rolling_aggregation>());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_rowno1, rowno1->view());
   }
 }
@@ -1106,21 +1106,21 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLeadNulls)
   auto const expected_rowno     = fw_wrapper{{1, 2, 2, 2, 2, 2}, {1, 1, 1, 1, 1, 1}};
 
   auto const sum =
-    rolling_window(input, 2, 1, 1, make_sum_aggregation<cudf::rolling_aggregation>());
+    rolling_window(input, 2, 1, 1, *make_sum_aggregation<cudf::rolling_aggregation>());
   auto const min =
-    rolling_window(input, 2, 1, 1, make_min_aggregation<cudf::rolling_aggregation>());
+    rolling_window(input, 2, 1, 1, *make_min_aggregation<cudf::rolling_aggregation>());
   auto const max =
-    rolling_window(input, 2, 1, 1, make_max_aggregation<cudf::rolling_aggregation>());
+    rolling_window(input, 2, 1, 1, *make_max_aggregation<cudf::rolling_aggregation>());
   auto const lag =
-    rolling_window(input, 2, 1, 1, make_lag_aggregation<cudf::rolling_aggregation>(1));
+    rolling_window(input, 2, 1, 1, *make_lag_aggregation<cudf::rolling_aggregation>(1));
   auto const lead =
-    rolling_window(input, 2, 1, 1, make_lead_aggregation<cudf::rolling_aggregation>(1));
+    rolling_window(input, 2, 1, 1, *make_lead_aggregation<cudf::rolling_aggregation>(1));
   auto const valid =
-    rolling_window(input, 2, 1, 1, make_count_aggregation<cudf::rolling_aggregation>());
+    rolling_window(input, 2, 1, 1, *make_count_aggregation<cudf::rolling_aggregation>());
   auto const all = rolling_window(
-    input, 2, 1, 1, make_count_aggregation<cudf::rolling_aggregation>(null_policy::INCLUDE));
+    input, 2, 1, 1, *make_count_aggregation<cudf::rolling_aggregation>(null_policy::INCLUDE));
   auto const rowno =
-    rolling_window(input, 2, 1, 1, make_row_number_aggregation<cudf::rolling_aggregation>());
+    rolling_window(input, 2, 1, 1, *make_row_number_aggregation<cudf::rolling_aggregation>());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sum, sum->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_min, min->view());
@@ -1147,16 +1147,16 @@ TEST_F(RollingDictionaryTest, Count)
   fixed_width_column_wrapper<size_type> expected_row_number({1, 2, 2, 2, 2, 2, 2, 2, 2},
                                                             {1, 1, 1, 1, 1, 1, 1, 1, 1});
 
-  auto got_count_valid =
-    cudf::rolling_window(input, 2, 2, 1, cudf::make_count_aggregation<cudf::rolling_aggregation>());
+  auto got_count_valid = cudf::rolling_window(
+    input, 2, 2, 1, *cudf::make_count_aggregation<cudf::rolling_aggregation>());
   auto got_count_all = cudf::rolling_window(
     input,
     2,
     2,
     1,
-    cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::INCLUDE));
+    *cudf::make_count_aggregation<cudf::rolling_aggregation>(cudf::null_policy::INCLUDE));
   auto got_row_number = cudf::rolling_window(
-    input, 2, 2, 1, cudf::make_row_number_aggregation<cudf::rolling_aggregation>());
+    input, 2, 2, 1, *cudf::make_row_number_aggregation<cudf::rolling_aggregation>());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_val, got_count_valid->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_all, got_count_all->view());
@@ -1176,11 +1176,11 @@ TEST_F(RollingDictionaryTest, MinMax)
     {1, 1, 1, 1, 1, 1, 1, 1, 1});
 
   auto got_min_dict =
-    cudf::rolling_window(input, 2, 2, 1, cudf::make_min_aggregation<cudf::rolling_aggregation>());
+    cudf::rolling_window(input, 2, 2, 1, *cudf::make_min_aggregation<cudf::rolling_aggregation>());
   auto got_min = cudf::dictionary::decode(cudf::dictionary_column_view(got_min_dict->view()));
 
   auto got_max_dict =
-    cudf::rolling_window(input, 2, 2, 1, cudf::make_max_aggregation<cudf::rolling_aggregation>());
+    cudf::rolling_window(input, 2, 2, 1, *cudf::make_max_aggregation<cudf::rolling_aggregation>());
   auto got_max = cudf::dictionary::decode(cudf::dictionary_column_view(got_max_dict->view()));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_min, got_min->view());
@@ -1197,12 +1197,12 @@ TEST_F(RollingDictionaryTest, LeadLag)
   cudf::test::strings_column_wrapper expected_lag(
     {"", "This", "", "", "test", "", "operated", "on", "string"}, {0, 1, 0, 0, 1, 0, 1, 1, 1});
 
-  auto got_lead_dict =
-    cudf::rolling_window(input, 2, 1, 1, cudf::make_lead_aggregation<cudf::rolling_aggregation>(1));
+  auto got_lead_dict = cudf::rolling_window(
+    input, 2, 1, 1, *cudf::make_lead_aggregation<cudf::rolling_aggregation>(1));
   auto got_lead = cudf::dictionary::decode(cudf::dictionary_column_view(got_lead_dict->view()));
 
   auto got_lag_dict =
-    cudf::rolling_window(input, 2, 2, 1, cudf::make_lag_aggregation<cudf::rolling_aggregation>(1));
+    cudf::rolling_window(input, 2, 2, 1, *cudf::make_lag_aggregation<cudf::rolling_aggregation>(1));
   auto got_lag = cudf::dictionary::decode(cudf::dictionary_column_view(got_lag_dict->view()));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lead, got_lead->view());

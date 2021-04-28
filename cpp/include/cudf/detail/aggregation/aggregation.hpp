@@ -37,6 +37,25 @@ class min_aggregation;
 class max_aggregation;
 
 // Visitor pattern
+
+class simple_aggregations_collector {  // Declares the interface for the simple aggregations
+                                       // collector
+ public:
+  // Declare overloads for each kind of a agg to dispatch
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          aggregation const& agg)      = 0;
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          min_aggregation const& agg)  = 0;
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          max_aggregation const& agg)  = 0;
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          mean_aggregation const& agg) = 0;
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          var_aggregation const& agg)  = 0;
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          std_aggregation const& agg)  = 0;
+};
+
 class aggregation_finalizer {  // Declares the interface for the finalizer
  public:
   // Declare overloads for each kind of a agg to dispatch
@@ -59,6 +78,11 @@ class sum_aggregation final : public rolling_aggregation {
   {
     return std::make_unique<sum_aggregation>(*this);
   }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
 
@@ -73,6 +97,11 @@ class product_aggregation final : public aggregation {
   {
     return std::make_unique<product_aggregation>(*this);
   }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
 
@@ -83,17 +112,14 @@ class min_aggregation final : public rolling_aggregation {
  public:
   min_aggregation() : aggregation(MIN) {}
 
-  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
-    data_type col_type) const override
-  {
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(col_type.id() == type_id::STRING ? make_argmin_aggregation()
-                                                    : make_min_aggregation());
-    return aggs;
-  }
   std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<min_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
@@ -105,17 +131,14 @@ class max_aggregation final : public rolling_aggregation {
  public:
   max_aggregation() : aggregation(MAX) {}
 
-  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
-    data_type col_type) const override
-  {
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(col_type.id() == type_id::STRING ? make_argmax_aggregation()
-                                                    : make_max_aggregation());
-    return aggs;
-  }
   std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<max_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
@@ -131,6 +154,11 @@ class count_aggregation final : public rolling_aggregation {
   {
     return std::make_unique<count_aggregation>(*this);
   }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
 
@@ -144,6 +172,11 @@ class any_aggregation final : public aggregation {
   std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<any_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
@@ -159,6 +192,11 @@ class all_aggregation final : public aggregation {
   {
     return std::make_unique<all_aggregation>(*this);
   }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
 
@@ -173,6 +211,11 @@ class sum_of_squares_aggregation final : public aggregation {
   {
     return std::make_unique<sum_of_squares_aggregation>(*this);
   }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
 
@@ -183,20 +226,14 @@ class mean_aggregation final : public rolling_aggregation {
  public:
   mean_aggregation() : aggregation(MEAN) {}
 
-  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
-    data_type col_type) const override
-  {
-    CUDF_EXPECTS(is_fixed_width(col_type), "MEAN aggregation expects fixed width type");
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(make_sum_aggregation());
-    // COUNT_VALID
-    aggs.push_back(make_count_aggregation());
-
-    return aggs;
-  }
   std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<mean_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
@@ -207,17 +244,6 @@ class mean_aggregation final : public rolling_aggregation {
 class std_var_aggregation : public aggregation {
  public:
   size_type _ddof;  ///< Delta degrees of freedom
-
-  virtual std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
-    data_type col_type) const override
-  {
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(make_sum_aggregation());
-    // COUNT_VALID
-    aggs.push_back(make_count_aggregation());
-
-    return aggs;
-  }
 
   bool is_equal(aggregation const& _other) const override
   {
@@ -249,6 +275,11 @@ class var_aggregation final : public std_var_aggregation {
   {
     return std::make_unique<var_aggregation>(*this);
   }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
 
@@ -263,6 +294,11 @@ class std_aggregation final : public std_var_aggregation {
   {
     return std::make_unique<std_aggregation>(*this);
   }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
 
@@ -276,6 +312,11 @@ class median_aggregation final : public aggregation {
   std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<median_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
@@ -308,6 +349,11 @@ class quantile_aggregation final : public aggregation {
   {
     return std::make_unique<quantile_aggregation>(*this);
   }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 
  private:
@@ -332,6 +378,11 @@ class argmax_aggregation final : public rolling_aggregation {
   {
     return std::make_unique<argmax_aggregation>(*this);
   }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
 
@@ -345,6 +396,11 @@ class argmin_aggregation final : public rolling_aggregation {
   std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<argmin_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
@@ -373,6 +429,11 @@ class nunique_aggregation final : public aggregation {
   std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<nunique_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 
@@ -406,6 +467,11 @@ class nth_element_aggregation final : public aggregation {
   {
     return std::make_unique<nth_element_aggregation>(*this);
   }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 
  private:
@@ -425,6 +491,11 @@ class row_number_aggregation final : public rolling_aggregation {
   std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<row_number_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 };
@@ -453,6 +524,11 @@ class collect_list_aggregation final : public rolling_aggregation {
   std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<collect_list_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 
@@ -494,6 +570,11 @@ class collect_set_aggregation final : public aggregation {
   {
     return std::make_unique<collect_set_aggregation>(*this);
   }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 
  protected:
@@ -526,6 +607,11 @@ class lead_lag_aggregation final : public rolling_aggregation {
   std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<lead_lag_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 
@@ -567,6 +653,11 @@ class udf_aggregation final : public rolling_aggregation {
   std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<udf_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
 
