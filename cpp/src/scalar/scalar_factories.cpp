@@ -125,7 +125,7 @@ template <>
 std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<list_view>(
   rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
-  return std::make_unique<list_scalar>();
+  return std::make_unique<list_scalar>(column(), false, stream, mr);
 }
 
 template <>
