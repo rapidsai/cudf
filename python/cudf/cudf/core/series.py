@@ -1154,22 +1154,6 @@ class Series(FrameOneD, Serializable):
             data = self._column.take(col_inds, keep_index=False)
             return self._copy_construct(data=data, index=None)
 
-    def __bool__(self):
-        """Always raise TypeError when converting a Series
-        into a boolean.
-        """
-        raise TypeError(f"can't compute boolean for {type(self)}")
-
-    def tolist(self):
-
-        raise TypeError(
-            "cuDF does not support conversion to host memory "
-            "via `tolist()` method. Consider using "
-            "`.to_arrow().to_pylist()` to construct a Python list."
-        )
-
-    to_list = tolist
-
     def head(self, n=5):
         """
         Return the first `n` rows.
@@ -3051,40 +3035,6 @@ class Series(FrameOneD, Serializable):
             result_series = self
 
         return result_series._column.any()
-
-    def to_gpu_array(self, fillna=None):
-        """Get a dense numba device array for the data.
-
-        Parameters
-        ----------
-        fillna : str or None
-            See *fillna* in ``.to_array``.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-
-        Returns
-        -------
-        numba DeviceNDArray
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([10, 20, 30, 40, 50])
-        >>> s
-        0    10
-        1    20
-        2    30
-        3    40
-        4    50
-        dtype: int64
-        >>> s.to_gpu_array()
-        <numba.cuda.cudadrv.devicearray.DeviceNDArray object at 0x7f1840858890>
-        """
-        return self._column.to_gpu_array(fillna=fillna)
 
     def to_pandas(self, index=True, nullable=False, **kwargs):
         """

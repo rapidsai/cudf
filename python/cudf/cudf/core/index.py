@@ -612,16 +612,6 @@ class Index(FrameOneD, Serializable):
         """
         return pd.Index(self._column.to_pandas(), name=self.name)
 
-    def tolist(self):
-
-        raise TypeError(
-            "cuDF does not support conversion to host memory "
-            "via `tolist()` method. Consider using "
-            "`.to_arrow().to_pylist()` to construct a Python list."
-        )
-
-    to_list = tolist
-
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
         """{docstring}"""
@@ -1783,21 +1773,6 @@ class RangeIndex(Index):
     @copy_docstring(_to_frame)  # type: ignore
     def to_frame(self, index=True, name=None):
         return _to_frame(self, index, name)
-
-    def to_gpu_array(self, fillna=None):
-        """Get a dense numba device array for the data.
-
-        Parameters
-        ----------
-        fillna : str or None
-            Replacement value to fill in place of nulls.
-
-        Notes
-        -----
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-        """
-        return self._column.to_gpu_array(fillna=fillna)
 
     def to_pandas(self):
         return pd.RangeIndex(
