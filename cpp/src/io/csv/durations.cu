@@ -18,13 +18,13 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <strings/convert/utilities.cuh>
-#include <strings/utilities.cuh>
 
 namespace cudf {
 namespace io {

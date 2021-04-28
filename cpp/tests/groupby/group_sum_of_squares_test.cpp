@@ -124,9 +124,7 @@ TYPED_TEST(groupby_sum_of_squares_test, null_keys_and_values)
 }
 // clang-format on
 
-// This test will not work until the following ptxas bug is fixed in 10.2
-// https://nvbugswb.nvidia.com/NvBugs5/SWBug.aspx?bugid=3186317&cp=
-TYPED_TEST(groupby_sum_of_squares_test, DISABLED_dictionary)
+TYPED_TEST(groupby_sum_of_squares_test, dictionary)
 {
   using K = int32_t;
   using V = TypeParam;

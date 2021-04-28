@@ -25,6 +25,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/execution_policy.h>
@@ -55,7 +56,7 @@ static void BM_factory(benchmark::State& state)
   auto const table =
     create_random_table({cudf::type_id::STRING}, 1, row_count{n_rows}, table_profile);
   auto d_column = cudf::column_device_view::create(table->view().column(0));
-  rmm::device_vector<string_pair> pairs(d_column->size());
+  rmm::device_uvector<string_pair> pairs(d_column->size(), rmm::cuda_stream_default);
   thrust::transform(thrust::device,
                     d_column->pair_begin<cudf::string_view, true>(),
                     d_column->pair_end<cudf::string_view, true>(),
