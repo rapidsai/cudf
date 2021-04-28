@@ -247,13 +247,13 @@ def test_index_rename_inplace():
     # inplace=False should yield a deep copy
     gds_renamed_deep = gds.rename("new_name", inplace=False)
 
-    assert gds_renamed_deep._values.data_ptr != gds._values.data_ptr
+    assert gds_renamed_deep._column.data_ptr != gds._column.data_ptr
 
     # inplace=True returns none
-    expected_ptr = gds._values.data_ptr
+    expected_ptr = gds._column.data_ptr
     gds.rename("new_name", inplace=True)
 
-    assert expected_ptr == gds._values.data_ptr
+    assert expected_ptr == gds._column.data_ptr
 
 
 def test_index_rename_preserves_arg():
@@ -282,7 +282,7 @@ def test_set_index_as_property():
     # Check set_index(Series)
     cdf.index = cdf["b"]
 
-    assert_eq(cdf.index._values.to_array(), col2)
+    assert_eq(cdf.index._column.to_array(), col2)
 
     with pytest.raises(ValueError):
         cdf.index = [list(range(10))]
@@ -403,14 +403,14 @@ def test_index_copy_deep(idx, deep):
     same_ref = not deep
     if isinstance(idx, cudf.CategoricalIndex):
         assert (
-            idx._values.codes.base_data.ptr
-            == idx_copy._values.codes.base_data.ptr
+            idx._column.codes.base_data.ptr
+            == idx_copy._column.codes.base_data.ptr
         ) == same_ref
         if isinstance(
-            idx._values.categories, cudf.core.column.string.StringColumn
+            idx._column.categories, cudf.core.column.string.StringColumn
         ):
-            children = idx._values.categories._base_children
-            copy_children = idx_copy._values.categories._base_children
+            children = idx._column.categories._base_children
+            copy_children = idx_copy._column.categories._base_children
             assert all(
                 [
                     (
@@ -422,15 +422,15 @@ def test_index_copy_deep(idx, deep):
                 ]
             )
         elif isinstance(
-            idx._values.categories, cudf.core.column.numerical.NumericalColumn
+            idx._column.categories, cudf.core.column.numerical.NumericalColumn
         ):
             assert (
-                idx._values.categories.base_data.ptr
-                == idx_copy._values.categories.base_data.ptr
+                idx._column.categories.base_data.ptr
+                == idx_copy._column.categories.base_data.ptr
             ) == same_ref
     elif isinstance(idx, cudf.core.index.StringIndex):
-        children = idx._values._base_children
-        copy_children = idx_copy._values._base_children
+        children = idx._column._base_children
+        copy_children = idx_copy._column._base_children
         assert all(
             [
                 (
@@ -445,7 +445,7 @@ def test_index_copy_deep(idx, deep):
         )
     else:
         assert (
-            idx._values.base_data.ptr == idx_copy._values.base_data.ptr
+            idx._column.base_data.ptr == idx_copy._column.base_data.ptr
         ) == same_ref
 
 

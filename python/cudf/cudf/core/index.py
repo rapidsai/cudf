@@ -69,7 +69,7 @@ def _to_frame(this_index, index=True, name=None):
         col_name = this_index.name
 
     return cudf.DataFrame(
-        {col_name: this_index._values}, index=this_index if index else None
+        {col_name: this_index._column}, index=this_index if index else None
     )
 
 
@@ -145,9 +145,9 @@ class Index(FrameOneD, Serializable):
         """
         pass
 
-    @cached_property
-    def _values(self) -> ColumnBase:
-        raise NotImplementedError
+    @property
+    def _column(self):
+        return self._data[self.name]
 
     def __getitem__(self, key):
         raise NotImplementedError()
@@ -185,7 +185,7 @@ class Index(FrameOneD, Serializable):
         header["index_column"] = {}
         # store metadata values of index separately
         # Indexes: Numerical/DateTime/String are often GPU backed
-        header["index_column"], frames = self._values.serialize()
+        header["index_column"], frames = self._column.serialize()
 
         header["name"] = pickle.dumps(self.name)
         header["dtype"] = pickle.dumps(self.dtype)
@@ -194,7 +194,7 @@ class Index(FrameOneD, Serializable):
         return header, frames
 
     def __contains__(self, item):
-        return item in self._values
+        return item in self._column
 
     @annotate("INDEX_EQUALS", color="green", domain="cudf_python")
     def equals(self, other, **kwargs):
@@ -341,7 +341,7 @@ class Index(FrameOneD, Serializable):
         >>> type(index.values_host)
         <class 'numpy.ndarray'>
         """
-        return self._values.values_host
+        return self._column.values_host
 
     @classmethod
     def deserialize(cls, header, frames):
@@ -428,9 +428,9 @@ class Index(FrameOneD, Serializable):
         methods using this method to replace or handle representation
         of the actual types correctly.
         """
-        if self._values.has_nulls:
+        if self._column.has_nulls:
             return cudf.Index(
-                self._values.astype("str").fillna(cudf._NA_REP), name=self.name
+                self._column.astype("str").fillna(cudf._NA_REP), name=self.name
             )
         else:
             return self
@@ -611,7 +611,7 @@ class Index(FrameOneD, Serializable):
         >>> index.argsort(ascending=False)
         array([3, 2, 1, 0, 4], dtype=int32)
         """
-        indices = self._values.argsort(ascending=ascending, **kwargs)
+        indices = self._column.argsort(ascending=ascending, **kwargs)
         return cupy.asarray(indices)
 
     @property
@@ -632,13 +632,13 @@ class Index(FrameOneD, Serializable):
         >>> type(index.values)
         <class 'cupy.core.core.ndarray'>
         """
-        return self._values.values
+        return self._column.values
 
     def any(self):
         """
         Return whether any elements is True in Index.
         """
-        return self._values.any()
+        return self._column.any()
 
     def to_pandas(self):
         """
@@ -657,7 +657,7 @@ class Index(FrameOneD, Serializable):
         >>> type(idx)
         <class 'cudf.core.index.GenericIndex'>
         """
-        return pd.Index(self._values.to_pandas(), name=self.name)
+        return pd.Index(self._column.to_pandas(), name=self.name)
 
     def tolist(self):
 
@@ -680,7 +680,7 @@ class Index(FrameOneD, Serializable):
         """
         View the data as a numba device array object
         """
-        return self._values.data_array_view
+        return self._column.data_array_view
 
     def min(self):
         """
@@ -705,7 +705,7 @@ class Index(FrameOneD, Serializable):
         >>> idx.min()
         1
         """
-        return self._values.min()
+        return self._column.min()
 
     def max(self):
         """
@@ -730,7 +730,7 @@ class Index(FrameOneD, Serializable):
         >>> idx.max()
         3
         """
-        return self._values.max()
+        return self._column.max()
 
     def sum(self):
         """
@@ -748,11 +748,11 @@ class Index(FrameOneD, Serializable):
         >>> idx.sum()
         6
         """
-        return self._values.sum()
+        return self._column.sum()
 
     @classmethod
     def _concat(cls, objs):
-        data = ColumnBase._concat([o._values for o in objs])
+        data = ColumnBase._concat([o._column for o in objs])
         names = {obj.name for obj in objs}
         if len(names) == 1:
             [name] = names
@@ -820,7 +820,7 @@ class Index(FrameOneD, Serializable):
                         f"either one of them to same dtypes."
                     )
 
-                if isinstance(self._values, cudf.core.column.NumericalColumn):
+                if isinstance(self._column, cudf.core.column.NumericalColumn):
                     if self.dtype != other.dtype:
                         this, other = numeric_normalize_types(self, other)
                 to_concat = [this, other]
@@ -974,7 +974,7 @@ class Index(FrameOneD, Serializable):
         if key is not None:
             raise NotImplementedError("key parameter is not yet implemented.")
 
-        indices = self._values.argsort(ascending=ascending)
+        indices = self._column.argsort(ascending=ascending)
         index_sorted = as_index(self.take(indices), name=self.name)
 
         if return_indexer:
@@ -990,7 +990,7 @@ class Index(FrameOneD, Serializable):
         -------
         Index without duplicates
         """
-        return as_index(self._values.unique(), name=self.name)
+        return as_index(self._column.unique(), name=self.name)
 
     def __add__(self, other):
         return self._apply_op("__add__", other)
@@ -1219,7 +1219,7 @@ class Index(FrameOneD, Serializable):
             return self.copy(deep=copy)
 
         return as_index(
-            self.copy(deep=copy)._values.astype(dtype), name=self.name
+            self.copy(deep=copy)._column.astype(dtype), name=self.name
         )
 
     def to_array(self, fillna=None):
@@ -1238,7 +1238,7 @@ class Index(FrameOneD, Serializable):
         if ``fillna`` is ``None``, null values are skipped.  Therefore, the
         output size could be smaller.
         """
-        return self._values.to_array(fillna=fillna)
+        return self._column.to_array(fillna=fillna)
 
     def to_series(self, index=None, name=None):
         """
@@ -1260,7 +1260,7 @@ class Index(FrameOneD, Serializable):
         """
 
         return cudf.Series(
-            self._values,
+            self._column,
             index=self.copy(deep=False) if index is None else index,
             name=self.name if name is None else name,
         )
@@ -1285,7 +1285,7 @@ class Index(FrameOneD, Serializable):
         Return if the index is monotonic increasing
         (only equal or increasing) values.
         """
-        return self._values.is_monotonic_increasing
+        return self._column.is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
@@ -1293,7 +1293,7 @@ class Index(FrameOneD, Serializable):
         Return if the index is monotonic decreasing
         (only equal or decreasing) values.
         """
-        return self._values.is_monotonic_decreasing
+        return self._column.is_monotonic_decreasing
 
     @property
     def empty(self):
@@ -1452,7 +1452,7 @@ class Index(FrameOneD, Serializable):
         -------
             bytes used
         """
-        return self._values._memory_usage(deep=deep)
+        return self._column._memory_usage(deep=deep)
 
     @classmethod
     def from_pandas(cls, index, nan_as_null=None):
@@ -1636,7 +1636,7 @@ class RangeIndex(Index):
         return len(self)
 
     @cached_property
-    def _values(self):
+    def _column(self):
         if len(self) > 0:
             return column.arange(
                 self._start, self._stop, self._step, dtype=self.dtype
@@ -1647,7 +1647,7 @@ class RangeIndex(Index):
     @property
     def _data(self):
         return cudf.core.column_accessor.ColumnAccessor(
-            {self.name: self._values}
+            {self.name: self._column}
         )
 
     def __contains__(self, item):
@@ -1729,7 +1729,7 @@ class RangeIndex(Index):
                 index = np.min_scalar_type(index).type(index)
             index = column.as_column(index)
 
-        return as_index(self._values[index], name=self.name)
+        return as_index(self._column[index], name=self.name)
 
     def __eq__(self, other):
         return super(type(self), self).__eq__(other)
@@ -1846,7 +1846,7 @@ class RangeIndex(Index):
         if ``fillna`` is ``None``, null values are skipped.  Therefore, the
         output size could be smaller.
         """
-        return self._values.to_gpu_array(fillna=fillna)
+        return self._column.to_gpu_array(fillna=fillna)
 
     def to_pandas(self):
         return pd.RangeIndex(
@@ -1916,7 +1916,7 @@ class RangeIndex(Index):
 
     @property
     def __cuda_array_interface__(self):
-        return self._values.__cuda_array_interface__
+        return self._column.__cuda_array_interface__
 
     def memory_usage(self, **kwargs):
         return 0
@@ -1936,7 +1936,7 @@ class GenericIndex(Index):
 
     Attributes
     ----------
-    _values: A Column object
+    _column: A Column object
     name: A string
     """
 
@@ -1977,10 +1977,6 @@ class GenericIndex(Index):
         name = kwargs.get("name")
         super(Index, self).__init__({name: values})
 
-    @property
-    def _values(self):
-        return next(iter(self._data.columns))
-
     def copy(self, name=None, deep=False, dtype=None, names=None):
         """
         Make a copy of this object.
@@ -2006,18 +2002,18 @@ class GenericIndex(Index):
         name = self.name if name is None else name
 
         if isinstance(self, (StringIndex, CategoricalIndex)):
-            result = as_index(self._values.astype(dtype), name=name, copy=deep)
+            result = as_index(self._column.astype(dtype), name=name, copy=deep)
         else:
             result = as_index(
-                self._values.copy(deep=deep).astype(dtype), name=name
+                self._column.copy(deep=deep).astype(dtype), name=name
             )
         return result
 
     def __sizeof__(self):
-        return self._values.__sizeof__()
+        return self._column.__sizeof__()
 
     def __len__(self):
-        return len(self._values)
+        return len(self._column)
 
     def __repr__(self):
         max_seq_items = get_option("max_seq_items") or len(self)
@@ -2059,7 +2055,7 @@ class GenericIndex(Index):
                 output = preprocess.to_pandas().__repr__()
 
             output = output.replace("nan", cudf._NA_REP)
-        elif preprocess._values.nullable:
+        elif preprocess._column.nullable:
             output = self._clean_nulls_from_index().to_pandas().__repr__()
 
             if not isinstance(self, StringIndex):
@@ -2100,7 +2096,7 @@ class GenericIndex(Index):
             raise NotImplementedError(
                 "Getting a scalar from an IntervalIndex is not yet supported"
             )
-        res = self._values[index]
+        res = self._column[index]
         if not isinstance(index, int):
             res = as_index(res)
             res.name = self.name
@@ -2117,7 +2113,7 @@ class GenericIndex(Index):
         """
         `dtype` of the underlying values in GenericIndex.
         """
-        return self._values.dtype
+        return self._column.dtype
 
     def find_label_range(self, first, last):
         """Find range that starts with *first* and ends with *last*,
@@ -2129,7 +2125,7 @@ class GenericIndex(Index):
             The starting index and the ending index.
             The *last* value occurs at ``end - 1`` position.
         """
-        col = self._values
+        col = self._column
         begin, end = None, None
         if first is not None:
             begin = col.find_first_value(first, closest=True)
@@ -2143,14 +2139,14 @@ class GenericIndex(Index):
         """
         Return if the index has unique values.
         """
-        return self._values.is_unique
+        return self._column.is_unique
 
     def get_slice_bound(self, label, side, kind):
-        return self._values.get_slice_bound(label, side, kind)
+        return self._column.get_slice_bound(label, side, kind)
 
     @property
     def __cuda_array_interface__(self):
-        return self._values.__cuda_array_interface__
+        return self._column.__cuda_array_interface__
 
 
 class NumericIndex(GenericIndex):
@@ -2482,11 +2478,11 @@ class DatetimeIndex(GenericIndex):
         return self._get_dt_field("weekday")
 
     def to_pandas(self):
-        nanos = self._values.astype("datetime64[ns]")
+        nanos = self._column.astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
 
     def _get_dt_field(self, field):
-        out_column = self._values.get_dt_field(field)
+        out_column = self._column.get_dt_field(field)
         # column.column_empty_like always returns a Column object
         # but we need a NumericalColumn for GenericIndex..
         # how should this be handled?
@@ -2576,9 +2572,9 @@ class TimedeltaIndex(GenericIndex):
 
     def to_pandas(self):
         return pd.TimedeltaIndex(
-            self._values.to_pandas(),
+            self._column.to_pandas(),
             name=self.name,
-            unit=self._values.time_unit,
+            unit=self._column.time_unit,
         )
 
     @property
@@ -2586,21 +2582,21 @@ class TimedeltaIndex(GenericIndex):
         """
         Number of days for each element.
         """
-        return as_index(arbitrary=self._values.days, name=self.name)
+        return as_index(arbitrary=self._column.days, name=self.name)
 
     @property
     def seconds(self):
         """
         Number of seconds (>= 0 and less than 1 day) for each element.
         """
-        return as_index(arbitrary=self._values.seconds, name=self.name)
+        return as_index(arbitrary=self._column.seconds, name=self.name)
 
     @property
     def microseconds(self):
         """
         Number of microseconds (>= 0 and less than 1 second) for each element.
         """
-        return as_index(arbitrary=self._values.microseconds, name=self.name)
+        return as_index(arbitrary=self._column.microseconds, name=self.name)
 
     @property
     def nanoseconds(self):
@@ -2608,7 +2604,7 @@ class TimedeltaIndex(GenericIndex):
         Number of nanoseconds (>= 0 and less than 1 microsecond) for each
         element.
         """
-        return as_index(arbitrary=self._values.nanoseconds, name=self.name)
+        return as_index(arbitrary=self._column.nanoseconds, name=self.name)
 
     @property
     def components(self):
@@ -2616,7 +2612,7 @@ class TimedeltaIndex(GenericIndex):
         Return a dataframe of the components (days, hours, minutes,
         seconds, milliseconds, microseconds, nanoseconds) of the Timedeltas.
         """
-        return self._values.components()
+        return self._column.components()
 
     @property
     def inferred_freq(self):
@@ -2732,14 +2728,14 @@ class CategoricalIndex(GenericIndex):
         """
         The category codes of this categorical.
         """
-        return self._values.cat().codes
+        return self._column.cat().codes
 
     @property
     def categories(self):
         """
         The categories of this categorical.
         """
-        return self._values.cat().categories
+        return self._column.cat().categories
 
 
 def interval_range(
@@ -2977,7 +2973,7 @@ class StringIndex(GenericIndex):
 
     Attributes
     ----------
-    _values: A StringColumn object or NDArray of strings
+    _column: A StringColumn object or NDArray of strings
     name: A string
     """
 
@@ -2987,7 +2983,7 @@ class StringIndex(GenericIndex):
         if isinstance(values, StringColumn):
             values = values.copy(deep=copy)
         elif isinstance(values, StringIndex):
-            values = values._values.copy(deep=copy)
+            values = values._column.copy(deep=copy)
         else:
             values = column.as_column(values, dtype="str")
             if not pd.api.types.is_string_dtype(values.dtype):
@@ -3002,11 +2998,11 @@ class StringIndex(GenericIndex):
         return pd.Index(self.to_array(), name=self.name, dtype="object")
 
     def take(self, indices):
-        return self._values[indices]
+        return self._column[indices]
 
     def __repr__(self):
         return (
-            f"{self.__class__.__name__}({self._values.to_array()},"
+            f"{self.__class__.__name__}({self._column.to_array()},"
             f" dtype='object'"
             + (
                 f", name={pd.io.formats.printing.default_pprint(self.name)}"
@@ -3019,14 +3015,14 @@ class StringIndex(GenericIndex):
     @copy_docstring(StringMethods.__init__)  # type: ignore
     @property
     def str(self):
-        return StringMethods(column=self._values, parent=self)
+        return StringMethods(column=self._column, parent=self)
 
     def _clean_nulls_from_index(self):
         """
         Convert all na values(if any) in Index object
         to `<NA>` as a preprocessing step to `__repr__` methods.
         """
-        if self._values.has_nulls:
+        if self._column.has_nulls:
             return self.fillna(cudf._NA_REP)
         else:
             return self

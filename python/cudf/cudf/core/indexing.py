@@ -30,7 +30,7 @@ def indices_from_labels(obj, labels):
 
         if is_categorical_dtype(obj.index):
             labels = labels.astype("category")
-            codes = labels.codes.astype(obj.index._values.codes.dtype)
+            codes = labels.codes.astype(obj.index._column.codes.dtype)
             labels = column.build_categorical_column(
                 categories=labels.dtype.categories,
                 codes=codes,
@@ -154,7 +154,7 @@ class _SeriesLocIndexer(object):
                 and not isinstance(self._sr.index, cudf.MultiIndex)
                 and is_scalar(value)
             ):
-                _append_new_row_inplace(self._sr.index._values, key)
+                _append_new_row_inplace(self._sr.index._column, key)
                 _append_new_row_inplace(self._sr._column, value)
                 return
             else:
@@ -177,7 +177,7 @@ class _SeriesLocIndexer(object):
                     found_index = arg
                     return found_index
             try:
-                found_index = self._sr.index._values.find_first_value(
+                found_index = self._sr.index._column.find_first_value(
                     arg, closest=False
                 )
                 return found_index

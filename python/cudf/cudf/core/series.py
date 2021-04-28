@@ -217,7 +217,7 @@ class Series(FrameOneD, Serializable):
             data = data.values
         elif isinstance(data, Index):
             name = data.name
-            data = data._values
+            data = data._column
             if dtype is not None:
                 data = data.astype(dtype)
         elif isinstance(data, ColumnAccessor):
@@ -4045,7 +4045,7 @@ class Series(FrameOneD, Serializable):
         """
         rinds = column.arange((self._column.size - 1), -1, -1, dtype=np.int32)
         col = self._column[rinds]
-        index = self.index._values[rinds]
+        index = self.index._column[rinds]
         return self._copy_construct(data=col, index=index)
 
     def one_hot_encoding(self, cats, dtype="float64"):
