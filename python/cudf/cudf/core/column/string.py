@@ -2014,11 +2014,47 @@ class StringMethods(ColumnMethodsMixin):
         -------
         Column: New strings column containing the retrieved json object strings
 
-        """
-        
-        return self._return_or_inplace(
-            cpp_get_json_object(self._column, cudf.Scalar(json_path, "str"))
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(
+         [
+              \"\"\"{"store": {
+                           "book": [
+         { "category": "reference",
+             "author": "Nigel Rees",
+             "title": "Sayings of the Century",
+                          "price": 8.95
+        },
+         { "category": "fiction",
+             "author": "Evelyn Waugh",
+            "title": "Sword of Honour",
+             "price": 12.99
+         },
+         ]}}\"\"\"
+         ]
         )
+        >>> s
+            0    {"store": {\n        "book": [\n        { "cat...
+            dtype: object
+        >>> s.str.get_json_object("$.store.book")
+            0    [\n        { "category": "reference",\n       ...
+            dtype: object
+        """
+
+        try:
+            res = self._return_or_inplace(cpp_get_json_object
+            (self._column, cudf.Scalar(json_path, "str")))   
+        except RuntimeError as e:
+            if (
+                "Unrecognized JSONPath operator"
+            ):
+                raise ValueError(
+                    "JSONPath value not found"
+                ) from e
+            raise
+        else:
+            return res
 
     def split(
         self, pat: str = None, n: int = -1, expand: bool = None
