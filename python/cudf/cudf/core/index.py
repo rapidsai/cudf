@@ -271,9 +271,6 @@ class Index(FrameOneD, Serializable):
         else:
             raise KeyError(f"Requested level with name {level} " "not found")
 
-    def __iter__(self):
-        cudf.utils.utils.raise_iteration_error(obj=self)
-
     @classmethod
     def from_arrow(cls, array):
         """Convert PyArrow Array/ChunkedArray to Index

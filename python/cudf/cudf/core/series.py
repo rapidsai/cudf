@@ -1159,12 +1159,9 @@ class Series(FrameOneD, Serializable):
         else:
             return self.loc[arg]
 
-    def __iter__(self):
-        cudf.utils.utils.raise_iteration_error(obj=self)
+    iteritems = FrameOneD.__iter__
 
-    iteritems = __iter__
-
-    items = __iter__
+    items = FrameOneD.__iter__
 
     def to_dict(self, into=dict):
         raise TypeError(
