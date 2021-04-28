@@ -21,175 +21,85 @@
 
 #include "writer_impl.hpp"
 
-#include <strings/utilities.cuh>
-
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/combine.hpp>
-#include <cudf/strings/convert/convert_booleans.hpp>
-#include <cudf/strings/convert/convert_datetime.hpp>
-#include <cudf/strings/convert/convert_floats.hpp>
-#include <cudf/strings/convert/convert_integers.hpp>
-#include <cudf/strings/detail/modify_strings.cuh>
-#include <cudf/strings/replace.hpp>
-#include <cudf/utilities/traits.hpp>
+#include <cudf/strings/detail/combine.hpp>
+#include <cudf/strings/detail/converters.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
-#include <thrust/count.h>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
+#include <thrust/logical.h>
 #include <thrust/scan.h>
-#include <thrust/transform.h>
 
 #include <algorithm>
-#include <cstring>
-#include <iterator>
 #include <sstream>
-#include <type_traits>
-#include <utility>
 
 namespace cudf {
 namespace io {
 namespace detail {
 namespace csv {
 
-namespace {  // anonym.
-// helpers:
+namespace {
 
-using namespace cudf::strings;
+/**
+ * @brief Functor to modify a string column for CSV format.
+ *
+ * If a row contains specific characters, the entire row must be
+ * output in double-quotes. Also, if a double-quote appears it
+ * must be escaped using a 2nd double-quote.
+ */
+struct escape_strings_fn {
+  column_device_view const d_column;
+  string_view const d_delimiter;  // check for column delimiter
+  offset_type* d_offsets{};
+  char* d_chars{};
 
-// predicate to determine if a given string_view contains special characters:
-//{"\"", "\n", <delimiter>}
-//
-struct predicate_special_chars {
-  explicit predicate_special_chars(string_view const& delimiter) : delimiter_(delimiter) {}
-
-  __device__ bool operator()(string_view const& str_view) const
+  __device__ void write_char(char_utf8 chr, char*& d_buffer, offset_type& bytes)
   {
-    // if (any_of{"\"", "\n", <delimiter>} )
-    //
-    constexpr char const* quote_str   = "\"";
-    constexpr char const* newline_str = "\n";
-    constexpr size_type len1byte{1};
-
-    if ((str_view.find(quote_str, len1byte) >= 0) || (str_view.find(newline_str, len1byte) >= 0) ||
-        (str_view.find(delimiter_) >= 0)) {
-      return true;
-    } else {
-      return false;
-    }
+    if (d_buffer)
+      d_buffer += cudf::strings::detail::from_char_utf8(chr, d_buffer);
+    else
+      bytes += cudf::strings::detail::bytes_in_char_utf8(chr);
   }
 
- private:
-  string_view const delimiter_;
-};
-
-struct probe_special_chars {
-  probe_special_chars(column_device_view const d_column, predicate_special_chars const& predicate)
-    : d_column_(d_column), predicate_(predicate)
+  __device__ void operator()(size_type idx)
   {
-  }
-
-  __device__ int32_t operator()(size_type idx) const
-  {
-    if (d_column_.is_null(idx)) {
-      return 0;  // null string, so no-op
+    if (d_column.is_null(idx)) {
+      if (!d_chars) d_offsets[idx] = 0;
+      return;
     }
 
-    string_view d_str = d_column_.template element<string_view>(idx);
+    constexpr char_utf8 const quote    = '\"';  // check for quote
+    constexpr char_utf8 const new_line = '\n';  // and for new-line
 
-    if (predicate_(d_str)) {
-      constexpr char const quote_char = '\"';
+    auto const d_str = d_column.element<string_view>(idx);
 
-      // count number of quotes "\""
-      size_type num_quotes = thrust::count_if(
-        thrust::seq, d_str.begin(), d_str.end(), [](char_utf8 chr) { return chr == quote_char; });
-      return d_str.size_bytes() + num_quotes + 2;
-    } else {
-      return d_str.size_bytes();
+    // if quote, new-line or a column delimiter appear in the string
+    // the entire string must be double-quoted.
+    bool const quote_row = thrust::any_of(
+      thrust::seq, d_str.begin(), d_str.end(), [d_delimiter = d_delimiter](auto chr) {
+        return chr == quote || chr == new_line || chr == d_delimiter[0];
+      });
+
+    char* d_buffer    = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    offset_type bytes = 0;
+
+    if (quote_row) write_char(quote, d_buffer, bytes);
+    for (auto chr : d_str) {
+      if (chr == quote) write_char(quote, d_buffer, bytes);
+      write_char(chr, d_buffer, bytes);
     }
+    if (quote_row) write_char(quote, d_buffer, bytes);
+
+    if (!d_chars) d_offsets[idx] = bytes;
   }
-
- private:
-  column_device_view const d_column_;
-  predicate_special_chars const predicate_;
-};
-
-struct modify_special_chars {
-  modify_special_chars(column_device_view const d_column,
-                       int32_t const* d_offsets,
-                       char* d_chars,
-                       predicate_special_chars const& predicate)
-    : d_column_(d_column), d_offsets_(d_offsets), d_chars_(d_chars), predicate_(predicate)
-  {
-  }
-
-  __device__ int32_t operator()(size_type idx)
-  {
-    using namespace cudf::strings::detail;
-
-    if (d_column_.is_null(idx)) {
-      return 0;  // null string, so no-op
-    }
-
-    string_view d_str        = d_column_.template element<string_view>(idx);
-    size_type str_size_bytes = d_str.size_bytes();
-
-    char* d_buffer = get_output_ptr(idx);
-    // assert( d_buffer != nullptr );
-
-    if (predicate_(d_str)) {
-      constexpr char const quote_char   = '\"';
-      constexpr char const* quote_str   = "\"";
-      constexpr char const* str_2quotes = "\"\"";
-
-      size_type len1quote{1};
-      size_type len2quotes{2};
-
-      // modify d_str by duplicating all 2bl quotes
-      // and surrounding whole string by 2bl quotes:
-      //
-      // pre-condition: `d_str` is _not_ modified by `d_buffer` manipulation
-      // because it's a copy of `idx` entry in `d_column_`
-      //(since `d_column` is const)
-      //
-      d_buffer = copy_and_increment(d_buffer, quote_str, len1quote);  // add the quote prefix
-
-      for (auto itr = d_str.begin(); itr != d_str.end(); ++itr) {
-        char_utf8 the_chr = *itr;
-
-        if (the_chr == quote_char) {
-          d_buffer = copy_and_increment(d_buffer, str_2quotes, len2quotes);  // double the quote;
-        } else {
-          d_buffer += from_char_utf8(the_chr, d_buffer);
-        }
-      }
-
-      d_buffer = copy_and_increment(d_buffer, quote_str, len1quote);  // add the quote suffix;
-    } else {
-      // copy the source string unmodified:
-      //(pass-through)
-      //
-      memcpy(d_buffer, d_str.data(), str_size_bytes);
-    }
-    return 0;
-  }
-
-  __device__ char* get_output_ptr(size_type idx)
-  {
-    return d_chars_ && d_offsets_ ? d_chars_ + d_offsets_[idx] : nullptr;
-  }
-
- private:
-  column_device_view const d_column_;
-  int32_t const* d_offsets_;
-  char* d_chars_;
-  predicate_special_chars const predicate_;
 };
 
 struct column_to_strings_fn {
@@ -234,10 +144,8 @@ struct column_to_strings_fn {
   std::enable_if_t<std::is_same<column_type, bool>::value, std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
-    auto conv_col_ptr = cudf::strings::from_booleans(
-      column, options_.get_true_value(), options_.get_false_value(), mr_);
-
-    return conv_col_ptr;
+    return cudf::strings::detail::from_booleans(
+      column, options_.get_true_value(), options_.get_false_value(), stream_, mr_);
   }
 
   // strings:
@@ -246,27 +154,20 @@ struct column_to_strings_fn {
   std::enable_if_t<std::is_same<column_type, cudf::string_view>::value, std::unique_ptr<column>>
   operator()(column_view const& column_v) const
   {
-    using namespace cudf::strings::detail;
-
     // handle special characters: {delimiter, '\n', "} in row:
-    //
-    // algorithm outline:
-    //
-    // target = "\"";
-    // repl = ""\"\";
-    //
-    // str_column_ref = {};
-    // for each str_row: column_v {
-    //    if ((not null str_row) &&
-    //        (str_row.find("\n") || str_row.find("\"") || str_row.find(delimiter) ))
-    //        str_column_modified = modify(str_row);
-    // where modify() = duplicate the double quotes, if any; add 2bl quotes prefix/suffix;
-    //}
-    //
     string_scalar delimiter{std::string{options_.get_inter_column_delimiter()}, true, stream_};
-    predicate_special_chars pred{delimiter.value(stream_)};
 
-    return modify_strings<probe_special_chars, modify_special_chars>(column_v, stream_, mr_, pred);
+    auto d_column = column_device_view::create(column_v, stream_);
+    escape_strings_fn fn{*d_column, delimiter.value(stream_)};
+    auto children = cudf::strings::detail::make_strings_children(fn, column_v.size(), stream_, mr_);
+
+    return make_strings_column(column_v.size(),
+                               std::move(children.first),
+                               std::move(children.second),
+                               column_v.null_count(),
+                               cudf::detail::copy_bitmask(column_v, stream_, mr_),
+                               stream_,
+                               mr_);
   }
 
   // ints:
@@ -276,9 +177,7 @@ struct column_to_strings_fn {
                    std::unique_ptr<column>>
   operator()(column_view const& column) const
   {
-    auto conv_col_ptr = cudf::strings::from_integers(column, mr_);
-
-    return conv_col_ptr;
+    return cudf::strings::detail::from_integers(column, stream_, mr_);
   }
 
   // floats:
@@ -287,9 +186,7 @@ struct column_to_strings_fn {
   std::enable_if_t<std::is_floating_point<column_type>::value, std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
-    auto conv_col_ptr = cudf::strings::from_floats(column, mr_);
-
-    return conv_col_ptr;
+    return cudf::strings::detail::from_floats(column, stream_, mr_);
   }
 
   // timestamps:
@@ -324,16 +221,14 @@ struct column_to_strings_fn {
       format = "\"" + format + "\"";
     }
 
-    auto conv_col_ptr = cudf::strings::from_timestamps(column, format, mr_);
-
-    return conv_col_ptr;
+    return cudf::strings::detail::from_timestamps(column, format, stream_, mr_);
   }
 
   template <typename column_type>
   std::enable_if_t<cudf::is_duration<column_type>(), std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
-    return cudf::io::detail::csv::pandas_format_durations(column, stream_);
+    return cudf::io::detail::csv::pandas_format_durations(column, stream_, mr_);
   }
 
   // unsupported type of column:
@@ -412,7 +307,8 @@ void writer::impl::write_chunked(strings_column_view const& str_column_view,
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
   cudf::string_scalar newline{options_.get_line_terminator()};
-  auto p_str_col_w_nl = cudf::strings::join_strings(str_column_view, newline);
+  auto p_str_col_w_nl =
+    cudf::strings::detail::join_strings(str_column_view, newline, string_scalar("", false), stream);
   strings_column_view strings_column{p_str_col_w_nl->view()};
 
   auto total_num_bytes      = strings_column.chars_size();
@@ -474,30 +370,19 @@ void writer::impl::write(table_view const& table,
     if (num_rows <= n_rows_per_chunk) {
       vector_views.push_back(table);
     } else {
-      std::vector<size_type> splits;
-      auto n_chunks = num_rows / n_rows_per_chunk;
-      splits.resize(n_chunks);
-
-      rmm::device_vector<size_type> d_splits(n_chunks, n_rows_per_chunk);
-      thrust::inclusive_scan(
-        rmm::exec_policy(stream), d_splits.begin(), d_splits.end(), d_splits.begin());
-
-      CUDA_TRY(cudaMemcpyAsync(splits.data(),
-                               d_splits.data().get(),
-                               n_chunks * sizeof(size_type),
-                               cudaMemcpyDeviceToHost,
-                               stream.value()));
-
-      stream.synchronize();
+      auto const n_chunks = num_rows / n_rows_per_chunk;
+      std::vector<size_type> splits(n_chunks);
+      thrust::tabulate(splits.begin(), splits.end(), [n_rows_per_chunk](auto idx) {
+        return (idx + 1) * n_rows_per_chunk;
+      });
 
       // split table_view into chunks:
-      //
       vector_views = cudf::split(table, splits);
     }
 
     // convert each chunk to CSV:
     //
-    column_to_strings_fn converter{options_, stream, mr_};
+    column_to_strings_fn converter{options_, stream, rmm::mr::get_current_device_resource()};
     for (auto&& sub_view : vector_views) {
       // Skip if the table has no rows
       if (sub_view.num_rows() == 0) continue;
@@ -521,8 +406,8 @@ void writer::impl::write(table_view const& table,
       //(using null representation and delimiter):
       //
       std::string delimiter_str{options_.get_inter_column_delimiter()};
-      auto str_concat_col =
-        cudf::strings::concatenate(str_table_view, delimiter_str, options_.get_na_rep(), mr_);
+      auto str_concat_col = cudf::strings::detail::concatenate(
+        str_table_view, delimiter_str, options_.get_na_rep(), stream);
 
       write_chunked(str_concat_col->view(), metadata, stream);
     }

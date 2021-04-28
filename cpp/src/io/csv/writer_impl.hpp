@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "csv.h"
+#include "csv_common.h"
 #include "csv_gpu.h"
 
 #include <cudf/strings/strings_column_view.hpp>

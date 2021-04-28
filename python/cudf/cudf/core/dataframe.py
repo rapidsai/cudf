@@ -52,6 +52,7 @@ from cudf.utils.dtypes import (
     is_struct_dtype,
     numeric_normalize_types,
 )
+from cudf.utils.utils import GetAttrGetItemMixin
 
 T = TypeVar("T", bound="DataFrame")
 
@@ -109,9 +110,9 @@ _cupy_nan_methods_map = {
 }
 
 
-class DataFrame(Frame, Serializable):
+class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
-    _internal_names = {"_data", "_index"}
+    _PROTECTED_KEYS = frozenset(("_data", "_index"))
 
     @annotate("DATAFRAME_INIT", color="blue", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):
@@ -232,7 +233,14 @@ class DataFrame(Frame, Serializable):
             else:
                 self._data = data._data
                 self.columns = data.columns
+        elif isinstance(data, (cudf.Series, pd.Series)):
+            if isinstance(data, pd.Series):
+                data = cudf.Series.from_pandas(data)
 
+            name = data.name or 0
+            self._init_from_dict_like(
+                {name: data}, index=index, columns=columns
+            )
         elif data is None:
             if index is None:
                 self._index = RangeIndex(0)
@@ -393,7 +401,7 @@ class DataFrame(Frame, Serializable):
         # If `columns` is passed, the result dataframe
         # contain a dataframe with only the
         # specified `columns` in the same order.
-        if columns:
+        if columns is not None:
             for col_name in columns:
                 if col_name not in self._data:
                     self._data[col_name] = column.column_empty(
@@ -427,38 +435,46 @@ class DataFrame(Frame, Serializable):
 
             for col_name, col in enumerate(data):
                 self._data[col_name] = column.as_column(col)
-        if columns:
+
+        if columns is not None:
+            if len(columns) != len(data):
+                raise ValueError(
+                    f"Shape of passed values is ({len(index)}, {len(data)}), "
+                    f"indices imply ({len(index)}, {len(columns)})."
+                )
+
             self.columns = columns
 
     def _init_from_dict_like(self, data, index=None, columns=None):
-        data = data.copy()
-        num_rows = 0
-
         if columns is not None:
             # remove all entries in `data` that are
             # not in `columns`
             keys = [key for key in data.keys() if key in columns]
-            data = {key: data[key] for key in keys}
-            extra_cols = [col for col in columns if col not in data.keys()]
+            extra_cols = [col for col in columns if col not in keys]
             if keys:
                 # if keys is non-empty,
                 # add null columns for all values
                 # in `columns` that don't exist in `keys`:
+                data = {key: data[key] for key in keys}
                 data.update({key: None for key in extra_cols})
             else:
-                # if keys is empty,
-                # it means that none of the actual keys in `data`
-                # matches with `columns`.
-                # Hence only assign `data` with `columns` as keys
-                # and their values as empty columns.
+                # If keys is empty, none of the data keys match the columns, so
+                # we need to create an empty DataFrame. To match pandas, the
+                # size of the dataframe must match the provided index, so we
+                # need to return a masked array of nulls if an index is given.
+                row_count = 0 if index is None else len(index)
+                masked = index is not None
                 data = {
-                    key: cudf.core.column.column_empty(row_count=0, dtype=None)
+                    key: cudf.core.column.column_empty(
+                        row_count=row_count, dtype=None, masked=masked,
+                    )
                     for key in extra_cols
                 }
 
         data, index = self._align_input_series_indices(data, index=index)
 
         if index is None:
+            num_rows = 0
             if data:
                 col_name = next(iter(data))
                 if is_scalar(data[col_name]):
@@ -638,34 +654,26 @@ class DataFrame(Frame, Serializable):
         return list(o)
 
     def __setattr__(self, key, col):
-
-        # if an attribute already exists, set it.
         try:
+            # Preexisting attributes may be set. We cannot rely on checking the
+            # `_PROTECTED_KEYS` because we must also allow for settable
+            # properties, and we must call object.__getattribute__ to bypass
+            # the `__getitem__` behavior inherited from `GetAttrGetItemMixin`.
             object.__getattribute__(self, key)
-            object.__setattr__(self, key, col)
-            return
+            super().__setattr__(key, col)
         except AttributeError:
-            pass
+            if key not in self._PROTECTED_KEYS:
+                try:
+                    # Check key existence.
+                    self[key]
+                    # If a column already exists, set it.
+                    self[key] = col
+                    return
+                except KeyError:
+                    pass
 
-        # if a column already exists, set it.
-        if key not in self._internal_names:
-            try:
-                self[key]  # __getitem__ to verify key exists
-                self[key] = col
-                return
-            except KeyError:
-                pass
-
-        object.__setattr__(self, key, col)
-
-    def __getattr__(self, key):
-        if key in self._internal_names:
-            return object.__getattribute__(self, key)
-        else:
-            if key in self:
-                return self[key]
-
-        raise AttributeError("'DataFrame' object has no attribute %r" % key)
+            # Set a new attribute that is not already a column.
+            super().__setattr__(key, col)
 
     @annotate("DATAFRAME_GETITEM", color="blue", domain="cudf_python")
     def __getitem__(self, arg):
@@ -1473,7 +1481,9 @@ class DataFrame(Frame, Serializable):
                 result[col] = getattr(self[col], fn)(other[k])
         elif isinstance(other, DataFrame):
             if fn in cudf.utils.utils._EQUALITY_OPS:
-                if not self.index.equals(other.index):
+                if not self.columns.equals(
+                    other.columns
+                ) or not self.index.equals(other.index):
                     raise ValueError(
                         "Can only compare identically-labeled "
                         "DataFrame objects"
@@ -7930,7 +7940,12 @@ def _align_indices(lhs, rhs):
     return lhs_out, rhs_out
 
 
-def _setitem_with_dataframe(input_df, replace_df, input_cols=None, mask=None):
+def _setitem_with_dataframe(
+    input_df: DataFrame,
+    replace_df: DataFrame,
+    input_cols: Any = None,
+    mask: Optional[cudf.core.column.ColumnBase] = None,
+):
     """
         This function sets item dataframes relevant columns with replacement df
         :param input_df: Dataframe to be modified inplace
@@ -7946,6 +7961,9 @@ def _setitem_with_dataframe(input_df, replace_df, input_cols=None, mask=None):
         raise ValueError(
             "Number of Input Columns must be same replacement Dataframe"
         )
+
+    if len(input_df) != 0 and not input_df.index.equals(replace_df.index):
+        replace_df = replace_df.reindex(input_df.index)
 
     for col_1, col_2 in zip(input_cols, replace_df.columns):
         if col_1 in input_df.columns:

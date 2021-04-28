@@ -543,6 +543,8 @@ struct segmented_valid_cnt_input {
 encoded_data writer::impl::encode_columns(const table_device_view &view,
                                           host_span<orc_column_view const> columns,
                                           std::vector<int> const &str_col_ids,
+                                          rmm::device_uvector<uint32_t> &&dict_data,
+                                          rmm::device_uvector<uint32_t> &&dict_index,
                                           host_span<stripe_rowgroups const> stripe_bounds,
                                           orc_streams const &streams)
 {
@@ -681,6 +683,8 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
   }
 
   gpu::EncodeOrcColumnData(chunks, chunk_streams, stream);
+  dict_data.release();
+  dict_index.release();
   stream.synchronize();
 
   return {std::move(encoded_data), std::move(chunk_streams)};
@@ -925,10 +929,14 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
 {
   const auto length                                        = strm_desc.stream_size;
   (*streams)[enc_stream.ids[strm_desc.stream_type]].length = length;
-  if (length != 0) {
-    const auto *stream_in = (compression_kind_ == NONE)
-                              ? enc_stream.data_ptrs[strm_desc.stream_type]
-                              : (compressed_data + strm_desc.bfr_offset);
+  if (length == 0) { return; }
+
+  const auto *stream_in = (compression_kind_ == NONE) ? enc_stream.data_ptrs[strm_desc.stream_type]
+                                                      : (compressed_data + strm_desc.bfr_offset);
+
+  if (out_sink_->is_device_write_preferred(length)) {
+    out_sink_->device_write(stream_in, length, stream);
+  } else {
     CUDA_TRY(
       cudaMemcpyAsync(stream_out, stream_in, length, cudaMemcpyDeviceToHost, stream.value()));
     stream.synchronize();
@@ -1047,8 +1055,8 @@ void writer::impl::write(table_view const &table)
     if (orc_columns.back().is_string()) { str_col_ids.push_back(current_id); }
   }
 
-  rmm::device_uvector<uint32_t> dict_index(str_col_ids.size() * num_rows, stream);
   rmm::device_uvector<uint32_t> dict_data(str_col_ids.size() * num_rows, stream);
+  rmm::device_uvector<uint32_t> dict_index(str_col_ids.size() * num_rows, stream);
 
   // Build per-column dictionary indices
   const auto num_rowgroups   = div_by_rowgroups<size_t>(num_rows);
@@ -1076,8 +1084,13 @@ void writer::impl::write(table_view const &table)
   }
 
   auto streams  = create_streams(orc_columns, stripe_bounds);
-  auto enc_data = encode_columns(*device_columns, orc_columns, str_col_ids, stripe_bounds, streams);
-
+  auto enc_data = encode_columns(*device_columns,
+                                 orc_columns,
+                                 str_col_ids,
+                                 std::move(dict_data),
+                                 std::move(dict_index),
+                                 stripe_bounds,
+                                 streams);
   // Assemble individual disparate column chunks into contiguous data streams
   const auto num_index_streams = (num_columns + 1);
   const auto num_data_streams  = streams.size() - num_index_streams;
@@ -1096,11 +1109,13 @@ void writer::impl::write(table_view const &table)
   size_t num_compressed_blocks = 0;
   auto stream_output           = [&]() {
     size_t max_stream_size = 0;
+    bool all_device_write  = true;
 
     for (size_t stripe_id = 0; stripe_id < stripe_bounds.size(); stripe_id++) {
       for (size_t i = 0; i < num_data_streams; i++) {  // TODO range for (at least)
         gpu::StripeStream *ss = &strm_descs[stripe_id][i];
-        size_t stream_size    = ss->stream_size;
+        if (!out_sink_->is_device_write_preferred(ss->stream_size)) { all_device_write = false; }
+        size_t stream_size = ss->stream_size;
         if (compression_kind_ != NONE) {
           ss->first_block = num_compressed_blocks;
           ss->bfr_offset  = compressed_bfr_size;
@@ -1115,12 +1130,16 @@ void writer::impl::write(table_view const &table)
       }
     }
 
-    return pinned_buffer<uint8_t>{[](size_t size) {
-                                    uint8_t *ptr = nullptr;
-                                    CUDA_TRY(cudaMallocHost(&ptr, size));
-                                    return ptr;
-                                  }(max_stream_size),
-                                  cudaFreeHost};
+    if (all_device_write) {
+      return pinned_buffer<uint8_t>{nullptr, cudaFreeHost};
+    } else {
+      return pinned_buffer<uint8_t>{[](size_t size) {
+                                      uint8_t *ptr = nullptr;
+                                      CUDA_TRY(cudaMallocHost(&ptr, size));
+                                      return ptr;
+                                    }(max_stream_size),
+                                    cudaFreeHost};
+    }
   }();
 
   // Compress the data streams
