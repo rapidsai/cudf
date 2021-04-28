@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -363,7 +363,7 @@ TEST_F(ListGetStringValueTest, NestedGetNonNullNonEmpty)
   // clang-format off
   LCW col{
     LCW{LCW{"aaa", "Héllo"}},
-    {LCW{}},
+    LCW{},
     LCW{LCW{""}},
     LCW{LCW{"42"}, LCW{"21"}}
   };
@@ -386,7 +386,7 @@ TEST_F(ListGetStringValueTest, NestedGetNonNullNonEmptyPreserveNull)
   // clang-format off
   LCW col{
     LCW{LCW{"aaa", "Héllo"}},
-    {LCW{}},
+    LCW{},
     LCW({LCW{""}, LCW{"cc"}}, valid.begin()),
     LCW{LCW{"42"}, LCW{"21"}}
   };
@@ -410,17 +410,19 @@ TEST_F(ListGetStringValueTest, NestedGetNonNullEmpty)
     LCW{LCW{"aaa", "Héllo"}},
     LCW{LCW{""}},
     LCW{LCW{"42"}, LCW{"21"}},
-    {LCW{}}
+    LCW{}
   };
   // clang-format on
-  LCW expected_data{LCW{}};  // a list column with 1 row of an empty string list
+  LCW expected_data{};
   size_type index = 3;
 
   auto s       = get_element(col, index);
   auto typed_s = static_cast<list_scalar const*>(s.get());
 
   EXPECT_TRUE(s->is_valid());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_data, typed_s->view());
+  // Relax to equivalent. `expected_data` leaf string column does not
+  // allocate offset and byte array, but `typed_s` does.
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_data, typed_s->view());
 }
 
 TEST_F(ListGetStringValueTest, NestedGetNull)
@@ -433,8 +435,8 @@ TEST_F(ListGetStringValueTest, NestedGetNull)
     {
       LCW{LCW{"aaa", "Héllo"}},
       LCW{LCW{""}},
-      LCW{LCW{"42"}, LCW{"21"}}, 
-      {LCW{}}
+      LCW{LCW{"42"}, LCW{"21"}},
+      LCW{}
     }, valid.begin());
   // clang-format on
   LCW expected_data{};
