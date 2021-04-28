@@ -390,16 +390,9 @@ class Series(SingleColumnFrame, Serializable):
 
         return Series(column, index=index, name=name)
 
+    @property
     def _copy_construct_defaults(self):
-        return dict(data=self._column, index=self._index, name=self.name)
-
-    def _copy_construct(self, **kwargs):
-        """Shallow copy this object by replacing certain ctor args.
-        """
-        params = self._copy_construct_defaults()
-        cls = type(self)
-        params.update(kwargs)
-        return cls(**params)
+        return {"data": self._column, "index": self._index, "name": self.name}
 
     def _get_columns_by_label(self, labels, downcast=False):
         """Return the column specified by `labels`

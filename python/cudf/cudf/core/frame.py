@@ -74,6 +74,16 @@ class Frame(libcudf.table.Table):
             return result
 
     @property
+    def _copy_construct_defaults(self):
+        """A default dictionary of kwargs to be used for copy construction."""
+        raise NotImplementedError
+
+    def _copy_construct(self, **kwargs):
+        """Shallow copy this object by replacing certain ctor args.
+        """
+        return self.__class__(**{**self._copy_construct_defaults, **kwargs})
+
+    @property
     def size(self):
         """
         Return the number of elements in the underlying data.
