@@ -204,9 +204,10 @@ std::unique_ptr<column> sequence(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> inclusive_scan(
-    std::size_t size,
-    std::vector<int> &step,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  size_type size,
+  std::vector<int> &step,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

@@ -177,42 +177,41 @@ std::unique_ptr<column> sequence(size_type size,
 }
 
 
-struct offset_array_of_array {
-  thrust::device_ptr<int> ptr;
-  int len;
-
-  offset_array_of_array(thrust::device_ptr<int> _ptr, int _len) {
-    ptr = _ptr;
-    len = _len;
-  }
-
-  __device__ int operator()(const int &lhs, const int &rhs) const {
-    return lhs + (ptr[(rhs-1) % len]);
-  }
-};
+//struct offset_functor {
+//  thrust::device_ptr<int> ptr;
+//  int len;
+//
+//  offset_functor(thrust::device_ptr<int> _ptr, int _len) {
+//    ptr = _ptr;
+//    len = _len;
+//  }
+//
+//  __device__ int operator()(const int &lhs, const int &rhs) const {
+//    return lhs + (ptr[(rhs-1) % len]);
+//  }
+//};
 
 std::unique_ptr<column> inclusive_scan(
-  std::size_t input_size,
-  std::vector<int> &step,
+  size_type row_count,
+  std::vector<int> &h_step,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  printf("----- 1 \n");
-  rmm::device_uvector<int> inner_offset_vec{input_size, rmm::cuda_stream_default, rmm::mr::get_current_device_resource()};
-  printf("------2 \n");
-  thrust::device_vector<int> steps{step};
-  thrust::inclusive_scan(
-      rmm::exec_policy(rmm::cuda_stream_default),
-      thrust::make_counting_iterator<int>(0),
-      thrust::make_counting_iterator<int>(input_size),
-      inner_offset_vec.data(),
-      offset_array_of_array(steps.data(), step.size()));
-  printf("------ 3 \n");
-  auto data_type = cudf::data_type(cudf::type_id::INT32);
-  return std::make_unique<cudf::column>(
-      data_type,
-      input_size,
-      inner_offset_vec.release());
+  auto offset_col = make_numeric_column(data_type{type_id::INT32}, row_count);
+  auto offset_col_view = offset_col->mutable_view();
+  rmm::device_vector<size_type> d_steps{h_step};
+  auto const d_ptr = d_steps.data();
+  auto const len = h_step.size();
+  printf("01------\n");
 
+  thrust::inclusive_scan(
+    rmm::exec_policy(stream),
+    thrust::counting_iterator<size_type>(0),
+    thrust::counting_iterator<size_type>(row_count),
+    offset_col_view.begin<size_t>(),
+    [d_ptr, len] __device__ (auto lhs, auto rhs) {return lhs + (d_ptr[(rhs-1) % len]);});
+  printf("1------\n");
+  return offset_col;
 }
 
 }  // namespace cudf

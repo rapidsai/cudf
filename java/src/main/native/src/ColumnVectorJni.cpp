@@ -158,7 +158,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, j
               0, rmm::device_buffer());
     } else {
 
-      std::size_t input_size = (std::size_t)(row_count*2+1);
+      size_type input_size = reinterpret_cast<size_type>(row_count*2+1);
       std::vector<int> step{3, 2};
       auto inner_offsets = cudf::inclusive_scan(input_size, step);
       printf("-x-x-x-x-x \n");
