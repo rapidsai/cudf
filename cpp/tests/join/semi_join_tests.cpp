@@ -50,8 +50,8 @@ TEST_F(JoinTest, SemiJoinWithStructsAndNulls)
 
   auto col0_is_human_col = column_wrapper<bool>{{true, true, false, false, false}, {1, 1, 0, 1, 0}};
 
-  auto col0_3 =
-    cudf::test::structs_column_wrapper{{col0_names_col, col0_ages_col, col0_is_human_col}};
+  auto col0_3 = cudf::test::structs_column_wrapper{
+    {col0_names_col, col0_ages_col, col0_is_human_col}, {1, 1, 1, 1, 1}};
 
   column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
   strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"});

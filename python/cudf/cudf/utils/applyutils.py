@@ -11,12 +11,7 @@ from cudf.core.column import column
 from cudf.utils import utils
 from cudf.utils.docutils import docfmt_partial
 
-try:
-    # Numba >= 0.49
-    from numba.core.utils import pysignature
-except ImportError:
-    # Numba <= 0.49
-    from numba.utils import pysignature
+from numba.core.utils import pysignature
 
 
 _doc_applyparams = """
