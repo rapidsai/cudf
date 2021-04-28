@@ -9,6 +9,7 @@ import pytest
 import cudf as gd
 from cudf.tests.utils import assert_eq, assert_exceptions_equal
 from cudf.utils.dtypes import is_categorical_dtype
+from cudf.core.dtypes import Decimal64Dtype
 
 
 def make_frames(index=None, nulls="none"):
@@ -1222,3 +1223,21 @@ def test_concat_single_object(ignore_index, typ):
     """Ensure that concat on a single object does not change it."""
     obj = typ([1, 2, 3])
     assert_eq(gd.concat([obj], ignore_index=ignore_index, axis=0), obj)
+
+
+@pytest.mark.parametrize("ltype", [Decimal64Dtype(3, 1), Decimal64Dtype(7, 2)])
+@pytest.mark.parametrize("rtype", [Decimal64Dtype(3, 2), Decimal64Dtype(8, 4)])
+def test_concat_decimal(ltype, rtype):
+    gdf1 = gd.DataFrame({"val": ["22.3", "59.5", "81.1"]})
+    gdf2 = gd.DataFrame({"val": ["2.35", "5.59", "8.14"]})
+
+    gdf1["val"] = gdf1["val"].astype(ltype)
+    gdf2["val"] = gdf2["val"].astype(rtype)
+
+    pdf1 = gdf1.to_pandas()
+    pdf2 = gdf2.to_pandas()
+
+    got = gd.concat([gdf1, gdf2])
+    expected = pd.concat([pdf1, pdf2])
+
+    assert_eq(expected, got)
