@@ -107,6 +107,11 @@ ConfigureBench(SORT_BENCH
   sort/sort_strings_benchmark.cpp)
 
 ###################################################################################################
+# - quantiles benchmark --------------------------------------------------------------------------------
+ConfigureBench(QUANTILES_BENCH
+  quantiles/quantiles_benchmark.cpp)
+
+###################################################################################################
 # - type_dispatcher benchmark ---------------------------------------------------------------------
 ConfigureBench(TYPE_DISPATCHER_BENCH type_dispatcher/type_dispatcher_benchmark.cu)
 

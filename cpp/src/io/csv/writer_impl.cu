@@ -21,8 +21,6 @@
 
 #include "writer_impl.hpp"
 
-#include <strings/utilities.cuh>
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
 #include <cudf/detail/null_mask.hpp>
@@ -30,6 +28,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/converters.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
