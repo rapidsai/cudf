@@ -1122,6 +1122,13 @@ class ColumnBase(Column, Serializable):
         )
         return sorted_indices
 
+    def __arrow_array__(self, type=None):
+        raise TypeError(
+            "Implicit conversion to a host PyArrow Array via __arrow_array__ "
+            "is not allowed, To explicitly construct a PyArrow Array, "
+            "consider using .to_arrow()"
+        )
+
     def __array__(self, dtype=None):
         raise TypeError(
             "Implicit conversion to a host NumPy array via __array__ is not "
