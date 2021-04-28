@@ -2959,16 +2959,16 @@ def test_string_slice_with_mask():
             "title": "Sayings of the Century",
             "price": 8.95
         }]}}""",
-        """{"store": {
+            """{"store": {
         "book": [
         { "category": "fiction",
             "author": "Evelyn Waugh",
             "title": "Sword of Honour",
             "price": 12.99
         },
-        ]}}"""
-        ]
-    ]
+        ]}}""",
+        ],
+    ],
 )
 @pytest.mark.parametrize(
     "json_path", ["$.store", "$.store.book", "$.store.book[*].category", " "],
@@ -2979,9 +2979,11 @@ def test_string_get_json_object_n(data, json_path):
 
 
 @pytest.mark.parametrize(
-    "json_path", ["$.store", "$.store.book", "$.store.book[*].category", " "])
+    "json_path", ["$.store", "$.store.book", "$.store.book[*].category", " "]
+)
 def test_string_get_json_object_empty_json_strings(json_path):
-    gs = cudf.Series([
+    gs = cudf.Series(
+        [
             """{"": {
         "": [
         { "": "",
@@ -2993,14 +2995,16 @@ def test_string_get_json_object_empty_json_strings(json_path):
           "title": "",
         },
         ]}}"""
-        ])
-            
+        ]
+    )
+
     gs.str.get_json_object(json_path)
 
 
 @pytest.mark.parametrize("json_path", ["a", ".", "/.store"])
 def test_string_get_json_object_invalid_JSONPath(json_path):
-    gs = cudf.Series([
+    gs = cudf.Series(
+        [
             """{"store": {
         "book": [
         { "category": "reference",
@@ -3014,7 +3018,8 @@ def test_string_get_json_object_invalid_JSONPath(json_path):
             "price": 12.99
         },
         ]}}"""
-        ])
+        ]
+    )
 
     with pytest.raises(ValueError):
         gs.str.get_json_object(json_path)
