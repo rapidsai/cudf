@@ -38,7 +38,6 @@ constexpr bool is_supported_order_by_column_type()
 {
   return cudf::is_timestamp<ColumnType>() ||
          (std::is_integral<ColumnType>::value && !cudf::is_boolean<ColumnType>());
-  ;
 }
 
 /// Range-comparable representation type for an orderby column type.
