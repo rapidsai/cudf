@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-#include <cuda_runtime.h>
 #include <strings/char_types/is_flags.h>
+#include <strings/utf8.cuh>
+
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
-#include <strings/utilities.cuh>
 
 #include <memory.h>
 #include <thrust/execution_policy.h>
