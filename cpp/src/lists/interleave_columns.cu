@@ -54,7 +54,7 @@ generate_list_offsets_and_validities(table_view const& input,
   static_assert(sizeof(size_type) == sizeof(int32_t));
   auto list_offsets = make_numeric_column(
     data_type{type_id::INT32}, num_output_lists + 1, mask_state::UNALLOCATED, stream, mr);
-  auto const d_offsets = list_offsets->mutable_view().begin<offset_type>();
+  auto const d_offsets = list_offsets->mutable_view().template begin<offset_type>();
 
   // The array of int8_t to store validities for list elements.
   auto validities = rmm::device_uvector<int8_t>(has_null_mask ? num_output_lists : 0, stream);
@@ -170,7 +170,7 @@ struct interleave_list_entries_fn {
   {
     auto const table_dv_ptr = table_device_view::create(input);
     auto const comp_fn      = compute_string_sizes_and_interleave_lists_fn{
-      *table_dv_ptr, output_list_offsets.begin<offset_type>(), has_null_mask};
+      *table_dv_ptr, output_list_offsets.template begin<offset_type>(), has_null_mask};
 
     if (has_null_mask) {
       auto [offsets_column, chars_column, null_mask, null_count] =
