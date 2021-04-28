@@ -31,20 +31,8 @@
 
 //! `fixed_point` and supporting types
 namespace numeric {
-/** \cond HIDDEN_SYMBOLS */
-// This is a wrapper struct that enforces "strong typing"
-// at the construction site of the type. No implicit
-// conversions will be allowed and you will need to use the
-// name of the type alias (i.e. scale_type{0})
-template <typename T>
-struct strong_typedef {
-  T _t;
-  CUDA_HOST_DEVICE_CALLABLE explicit constexpr strong_typedef(T t) : _t(t) {}
-  CUDA_HOST_DEVICE_CALLABLE operator T() const { return _t; }
-};
-/** \endcond */
 
-using scale_type = strong_typedef<int32_t>;
+enum scale_type : int32_t {};
 
 /**
  * @brief Scoped enumerator to use when constructing `fixed_point`
@@ -76,8 +64,7 @@ namespace detail {
  *
  * https://simple.wikipedia.org/wiki/Exponentiation_by_squaring <br>
  * Note: this is the iterative equivalent of the recursive definition (faster) <br>
- * Quick-bench: http://quick-bench.com/Wg7o7HYQC9FW5M0CO0wQAjSwP_Y <br>
- * `exponent` comes from `using scale_type = strong_typedef<int32_t>` <br>
+ * Quick-bench: http://quick-bench.com/Wg7o7HYQC9FW5M0CO0wQAjSwP_Y
  *
  * @tparam Rep Representation type for return type
  * @tparam Base The base to be exponentiated
@@ -106,14 +93,6 @@ CUDA_HOST_DEVICE_CALLABLE Rep ipow(T exponent)
   return square * extra;
 }
 
-/** @brief Helper function to negate strongly typed scale_type
- *
- * @param scale The scale to be negated
- * @return The negated scale
- */
-CUDA_HOST_DEVICE_CALLABLE
-auto negate(scale_type const& scale) { return scale_type{-scale}; }
-
 /** @brief Function that performs a `right shift` scale "times" on the `val`
  *
  * Note: perform this operation when constructing with positive scale
@@ -128,7 +107,7 @@ auto negate(scale_type const& scale) { return scale_type{-scale}; }
 template <typename Rep, Radix Rad, typename T>
 CUDA_HOST_DEVICE_CALLABLE constexpr T right_shift(T const& val, scale_type const& scale)
 {
-  return val / ipow<Rep, Rad>(scale._t);
+  return val / ipow<Rep, Rad>(static_cast<int32_t>(scale));
 }
 
 /** @brief Function that performs a `left shift` scale "times" on the `val`
@@ -145,7 +124,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr T right_shift(T const& val, scale_type const
 template <typename Rep, Radix Rad, typename T>
 CUDA_HOST_DEVICE_CALLABLE constexpr T left_shift(T const& val, scale_type const& scale)
 {
-  return val * ipow<Rep, Rad>(-scale._t);
+  return val * ipow<Rep, Rad>(static_cast<int32_t>(-scale));
 }
 
 /** @brief Function that performs a `right` or `left shift`
@@ -197,7 +176,7 @@ template <typename Rep,
 struct scaled_integer {
   Rep value;
   scale_type scale;
-  CUDA_HOST_DEVICE_CALLABLE explicit scaled_integer(Rep v, scale_type s) : value(v), scale(s) {}
+  CUDA_HOST_DEVICE_CALLABLE explicit scaled_integer(Rep v, scale_type s) : value{v}, scale{s} {}
 };
 
 /**
@@ -287,7 +266,7 @@ class fixed_point {
             typename cuda::std::enable_if_t<cuda::std::is_floating_point<U>::value>* = nullptr>
   explicit constexpr operator U() const
   {
-    return detail::shift<Rep, Rad>(static_cast<U>(_value), detail::negate(_scale));
+    return detail::shift<Rep, Rad>(static_cast<U>(_value), scale_type{-_scale});
   }
 
   /**
@@ -302,7 +281,7 @@ class fixed_point {
   {
     // Don't cast to U until converting to Rep because in certain cases casting to U before shifting
     // will result in integer overflow (i.e. if U = int32_t, Rep = int64_t and _value > 2 billion)
-    return static_cast<U>(detail::shift<Rep, Rad>(_value, detail::negate(_scale)));
+    return static_cast<U>(detail::shift<Rep, Rad>(_value, scale_type{-_scale}));
   }
 
   CUDA_HOST_DEVICE_CALLABLE operator scaled_integer<Rep>() const
