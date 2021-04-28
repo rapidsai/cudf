@@ -2043,15 +2043,14 @@ class StringMethods(ColumnMethodsMixin):
         """
 
         try:
-            res = self._return_or_inplace(cpp_get_json_object
-            (self._column, cudf.Scalar(json_path, "str")))   
+            res = self._return_or_inplace(
+                cpp_get_json_object(
+                    self._column, cudf.Scalar(json_path, "str")
+                )
+            )
         except RuntimeError as e:
-            if (
-                "Unrecognized JSONPath operator"
-            ):
-                raise ValueError(
-                    "JSONPath value not found"
-                ) from e
+            if "Unrecognized JSONPath operator":
+                raise ValueError("JSONPath value not found") from e
             raise
         else:
             return res
