@@ -794,6 +794,9 @@ class Index(SingleColumnFrame, Serializable):
         else:
             return as_index(op())
 
+    def _binaryop(self, fn, other):
+        return self._apply_op(fn, other)
+
     def sort_values(self, return_indexer=False, ascending=True, key=None):
         """
         Return a sorted copy of the index, and optionally return the indices
@@ -890,40 +893,40 @@ class Index(SingleColumnFrame, Serializable):
         return as_index(self._values.unique(), name=self.name)
 
     def __add__(self, other):
-        return self._apply_op("__add__", other)
+        return self._binaryop("__add__", other)
 
     def __radd__(self, other):
         return self._apply_op("__radd__", other)
 
     def __sub__(self, other):
-        return self._apply_op("__sub__", other)
+        return self._binaryop("__sub__", other)
 
     def __rsub__(self, other):
         return self._apply_op("__rsub__", other)
 
     def __mul__(self, other):
-        return self._apply_op("__mul__", other)
+        return self._binaryop("__mul__", other)
 
     def __rmul__(self, other):
         return self._apply_op("__rmul__", other)
 
     def __mod__(self, other):
-        return self._apply_op("__mod__", other)
+        return self._binaryop("__mod__", other)
 
     def __rmod__(self, other):
         return self._apply_op("__rmod__", other)
 
     def __pow__(self, other):
-        return self._apply_op("__pow__", other)
+        return self._binaryop("__pow__", other)
 
     def __floordiv__(self, other):
-        return self._apply_op("__floordiv__", other)
+        return self._binaryop("__floordiv__", other)
 
     def __rfloordiv__(self, other):
         return self._apply_op("__rfloordiv__", other)
 
     def __truediv__(self, other):
-        return self._apply_op("__truediv__", other)
+        return self._binaryop("__truediv__", other)
 
     def __rtruediv__(self, other):
         return self._apply_op("__rtruediv__", other)
@@ -940,22 +943,22 @@ class Index(SingleColumnFrame, Serializable):
         return self._apply_op("__xor__", other)
 
     def __eq__(self, other):
-        return self._apply_op("__eq__", other)
+        return self._binaryop("__eq__", other)
 
     def __ne__(self, other):
-        return self._apply_op("__ne__", other)
+        return self._binaryop("__ne__", other)
 
     def __lt__(self, other):
-        return self._apply_op("__lt__", other)
+        return self._binaryop("__lt__", other)
 
     def __le__(self, other):
-        return self._apply_op("__le__", other)
+        return self._binaryop("__le__", other)
 
     def __gt__(self, other):
-        return self._apply_op("__gt__", other)
+        return self._binaryop("__gt__", other)
 
     def __ge__(self, other):
-        return self._apply_op("__ge__", other)
+        return self._binaryop("__ge__", other)
 
     def join(
         self, other, how="left", level=None, return_indexers=False, sort=False
@@ -1425,6 +1428,10 @@ class Index(SingleColumnFrame, Serializable):
         else:
             return as_index(table)
 
+    @property
+    def _copy_construct_defaults(self):
+        return {"data": self._column, "name": self.name}
+
     @classmethod
     def _from_data(cls, data, index=None):
         return cls._from_table(SingleColumnFrame(data=data))
@@ -1625,9 +1632,6 @@ class RangeIndex(Index):
             index = column.as_column(index)
 
         return as_index(self._values[index], name=self.name)
-
-    def __eq__(self, other):
-        return super(type(self), self).__eq__(other)
 
     def equals(self, other):
         if isinstance(other, RangeIndex):
