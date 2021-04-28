@@ -233,7 +233,14 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             else:
                 self._data = data._data
                 self.columns = data.columns
+        elif isinstance(data, (cudf.Series, pd.Series)):
+            if isinstance(data, pd.Series):
+                data = cudf.Series.from_pandas(data)
 
+            name = data.name or 0
+            self._init_from_dict_like(
+                {name: data}, index=index, columns=columns
+            )
         elif data is None:
             if index is None:
                 self._index = RangeIndex(0)
