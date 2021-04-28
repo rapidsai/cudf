@@ -248,9 +248,9 @@ struct update_target_element<Source,
 /**
  * @brief Function object to update a single element in a target column using
  * the dictionary key addressed by the specific index.
- * Note: non-recursive for dictionary type.
  *
- * `target[target_index] = d_dictionary.keys[d_dictionary.indices[source_index]]`
+ * SFINAE is used to prevent recursion for dictionary type. Dictionary keys cannot be a dictionary.
+ *
  */
 template <bool target_has_nulls = true, bool source_has_nulls = true>
 struct update_target_from_dictionary {
@@ -279,6 +279,14 @@ struct update_target_from_dictionary {
 /**
  * @brief Specialization function for dictionary type and aggregations.
  *
+ * The `source` column is a dictionary type. This functor de-references the
+ * dictionary's keys child column and maps the input source index through
+ * the dictionary's indices child column to pass to the `update_target_element`
+ * in the above `update_target_from_dictionary` using the type-dispatcher to
+ * resolve the keys column type. 
+ * 
+ * `update_target_element( target, target_index, source.keys(), source.indices()[source_index] )`
+ *
  * @tparam target_has_nulls Indicates presence of null elements in `target`
  * @tparam source_has_nulls Indicates presence of null elements in `source`.
  */
@@ -300,7 +308,7 @@ struct update_target_element<
     dispatch_type_and_aggregation(
       source.child(cudf::dictionary_column_view::keys_column_index).type(),
       k,
-      update_target_from_dictionary<target_has_nulls, source_has_nulls>{},
+      update_target_from_dictionary<target_has_nulls, false>{},
       target,
       target_index,
       source.child(cudf::dictionary_column_view::keys_column_index),
