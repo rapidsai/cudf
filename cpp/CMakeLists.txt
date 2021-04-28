@@ -171,6 +171,7 @@ add_library(cudf
     src/copying/shift.cu
     src/copying/slice.cpp
     src/copying/split.cpp
+    src/copying/segmented_shift.cu
     src/datetime/datetime_ops.cu
     src/dictionary/add_keys.cu
     src/dictionary/decode.cu
@@ -197,6 +198,7 @@ add_library(cudf
     src/groupby/sort/group_min.cu
     src/groupby/sort/group_nth_element.cu
     src/groupby/sort/group_nunique.cu
+    src/groupby/sort/group_product.cu
     src/groupby/sort/group_quantiles.cu
     src/groupby/sort/group_std.cu
     src/groupby/sort/group_sum.cu
@@ -320,6 +322,7 @@ add_library(cudf
     src/strings/char_types/char_cases.cu
     src/strings/char_types/char_types.cu
     src/strings/combine/concatenate.cu
+    src/strings/combine/concatenate_list_elements.cu
     src/strings/combine/join.cu
     src/strings/contains.cu
     src/strings/convert/convert_booleans.cu

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -215,6 +215,7 @@ TEST_F(ListsExtractTest, ExtractElementEmpty)
 
   LCW empty{};
   auto result = cudf::lists::extract_list_element(cudf::lists_column_view(empty), 1);
+  EXPECT_EQ(cudf::data_type{cudf::type_id::STRING}, result->type());
   EXPECT_EQ(0, result->size());
 
   LCW empty_strings({LCW{"", "", ""}});

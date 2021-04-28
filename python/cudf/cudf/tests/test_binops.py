@@ -1519,12 +1519,32 @@ def test_scalar_power_invalid(dtype_l, dtype_r):
     ],
 )
 @pytest.mark.parametrize("n_periods", [0, 1, -1, 12, -12])
-@pytest.mark.parametrize("frequency", ["months"])
+@pytest.mark.parametrize(
+    "frequency",
+    [
+        "months",
+        "years",
+        "days",
+        "hours",
+        "minutes",
+        "seconds",
+        "microseconds",
+        pytest.param(
+            "nanoseconds",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/36589"
+            ),
+        ),
+    ],
+)
 @pytest.mark.parametrize(
     "dtype",
     ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
 )
-def test_datetime_dateoffset_binaryop(date_col, n_periods, frequency, dtype):
+@pytest.mark.parametrize("op", [operator.add, operator.sub])
+def test_datetime_dateoffset_binaryop(
+    date_col, n_periods, frequency, dtype, op
+):
     gsr = cudf.Series(date_col, dtype=dtype)
     psr = gsr.to_pandas()  # converts to nanos
 
@@ -1533,15 +1553,122 @@ def test_datetime_dateoffset_binaryop(date_col, n_periods, frequency, dtype):
     goffset = cudf.DateOffset(**kwargs)
     poffset = pd.DateOffset(**kwargs)
 
-    expect = psr + poffset
-    got = gsr + goffset
+    expect = op(psr, poffset)
+    got = op(gsr, goffset)
 
     utils.assert_eq(expect, got)
 
-    expect = psr - poffset
-    got = gsr - goffset
+    expect = op(psr, -poffset)
+    got = op(gsr, -goffset)
 
     utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "date_col",
+    [
+        [
+            "2000-01-01 00:00:00.012345678",
+            "2000-01-31 00:00:00.012345678",
+            "2000-02-29 00:00:00.012345678",
+        ]
+    ],
+)
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"months": 2, "years": 5},
+        {"microseconds": 1, "seconds": 1},
+        {"months": 2, "years": 5, "seconds": 923, "microseconds": 481},
+        pytest.param(
+            {"milliseconds": 4},
+            marks=pytest.mark.xfail(
+                reason="Pandas gets the wrong answer for milliseconds"
+            ),
+        ),
+        pytest.param(
+            {"milliseconds": 4, "years": 2},
+            marks=pytest.mark.xfail(
+                reason="Pandas construction fails with these keywords"
+            ),
+        ),
+        pytest.param(
+            {"nanoseconds": 12},
+            marks=pytest.mark.xfail(
+                reason="Pandas gets the wrong answer for nanoseconds"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("op", [operator.add, operator.sub])
+def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
+
+    gsr = cudf.Series(date_col, dtype="datetime64[ns]")
+    psr = gsr.to_pandas()
+
+    poffset = pd.DateOffset(**kwargs)
+    goffset = cudf.DateOffset(**kwargs)
+
+    expect = op(psr, poffset)
+    got = op(gsr, goffset)
+
+    utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "date_col",
+    [
+        [
+            "2000-01-01 00:00:00.012345678",
+            "2000-01-31 00:00:00.012345678",
+            "2000-02-29 00:00:00.012345678",
+        ]
+    ],
+)
+@pytest.mark.parametrize("n_periods", [0, 1, -1, 12, -12])
+@pytest.mark.parametrize(
+    "frequency",
+    [
+        "months",
+        "years",
+        "days",
+        "hours",
+        "minutes",
+        "seconds",
+        "microseconds",
+        pytest.param(
+            "nanoseconds",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/36589"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "dtype",
+    ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
+)
+def test_datetime_dateoffset_binaryop_reflected(
+    date_col, n_periods, frequency, dtype
+):
+    gsr = cudf.Series(date_col, dtype=dtype)
+    psr = gsr.to_pandas()  # converts to nanos
+
+    kwargs = {frequency: n_periods}
+
+    goffset = cudf.DateOffset(**kwargs)
+    poffset = pd.DateOffset(**kwargs)
+
+    expect = poffset + psr
+    got = goffset + gsr
+
+    utils.assert_eq(expect, got)
+
+    with pytest.raises(TypeError):
+        poffset - psr
+
+    with pytest.raises(TypeError):
+        goffset - gsr
 
 
 @pytest.mark.parametrize("frame", [cudf.Series, cudf.Index, cudf.DataFrame])
