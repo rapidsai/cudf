@@ -158,9 +158,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, j
               0, rmm::device_buffer());
     } else {
 
-      size_type input_size = reinterpret_cast<size_type>(row_count*2+1);
+//      cudf::size_type input_size = static_cast<cudf::size_type>(row_count*2+1);
       std::vector<int> step{3, 2};
-      auto inner_offsets = cudf::inclusive_scan(input_size, step);
+      auto inner_offsets = cudf::inclusive_scan(row_count*2+1, step);
       printf("-x-x-x-x-x \n");
       auto data_col = cudf::interleave_columns(cudf::table_view(children_vector));
       auto inner = cudf::make_lists_column(row_count*2, std::move(inner_offsets), std::move(data_col),

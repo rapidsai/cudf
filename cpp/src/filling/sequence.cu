@@ -208,7 +208,7 @@ std::unique_ptr<column> inclusive_scan(
     rmm::exec_policy(stream),
     thrust::counting_iterator<size_type>(0),
     thrust::counting_iterator<size_type>(row_count),
-    offset_col_view.begin<size_t>(),
+    offset_col_view.begin<size_type>(),
     [d_ptr, len] __device__ (auto lhs, auto rhs) {return lhs + (d_ptr[(rhs-1) % len]);});
   printf("1------\n");
   return offset_col;
