@@ -426,8 +426,9 @@ struct ListsColumnsInterleaveTypedTest : public cudf::test::BaseFixture {
 };
 #define ListsCol cudf::test::lists_column_wrapper<TypeParam>
 
-using TypesForTest =
-  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
+using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
+                                        cudf::test::FloatingPointTypes,
+                                        cudf::test::FixedPointTypes>;
 TYPED_TEST_CASE(ListsColumnsInterleaveTypedTest, TypesForTest);
 
 TYPED_TEST(ListsColumnsInterleaveTypedTest, InterleaveEmptyColumns)
@@ -511,7 +512,6 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SimpleInputWithNulls)
                               ListsCol{{null, null, null, null, null}, all_nulls()}},
                              null_at(0)}
                       .release();
-
   auto const expected = ListsCol{{ListsCol{{1, null, 3, 4}, null_at(1)},
                                   ListsCol{{10, 11, 12, null}, null_at(3)},
                                   ListsCol{} /*NULL*/,
@@ -567,12 +567,12 @@ TEST_F(ListsColumnsInterleaveTest, SimpleInputStringsColumnsWithNulls)
 
 TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputNoNull)
 {
-  auto const col_original = ListsCol{{1, 2, 3}, {2, 3}, {3, 4, 5, 6}, {5, 6}, {}, {7}}.release();
-  auto const col1         = cudf::slice(col_original->view(), {0, 3})[0];
-  auto const col2         = cudf::slice(col_original->view(), {1, 4})[0];
-  auto const col3         = cudf::slice(col_original->view(), {2, 5})[0];
-  auto const col4         = cudf::slice(col_original->view(), {3, 6})[0];
-  auto const expected     = ListsCol{
+  auto const col      = ListsCol{{1, 2, 3}, {2, 3}, {3, 4, 5, 6}, {5, 6}, {}, {7}}.release();
+  auto const col1     = cudf::slice(col->view(), {0, 3})[0];
+  auto const col2     = cudf::slice(col->view(), {1, 4})[0];
+  auto const col3     = cudf::slice(col->view(), {2, 5})[0];
+  auto const col4     = cudf::slice(col->view(), {3, 6})[0];
+  auto const expected = ListsCol{
     ListsCol{1, 2, 3},
     ListsCol{2, 3},
     ListsCol{3, 4, 5, 6},
@@ -591,21 +591,20 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputNoNull)
 
 TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputWithNulls)
 {
-  auto const col_original = ListsCol{{ListsCol{{null, 2, 3}, null_at(0)},
-                                      ListsCol{2, 3}, /*NULL*/
-                                      ListsCol{{3, null, 5, 6}, null_at(1)},
-                                      ListsCol{5, 6}, /*NULL*/
-                                      ListsCol{},     /*NULL*/
-                                      ListsCol{7},
-                                      ListsCol{8, 9, 10}},
-                                     null_at({1, 3, 4})}
-                              .release();
-
-  auto const col1     = cudf::slice(col_original->view(), {0, 3})[0];
-  auto const col2     = cudf::slice(col_original->view(), {1, 4})[0];
-  auto const col3     = cudf::slice(col_original->view(), {2, 5})[0];
-  auto const col4     = cudf::slice(col_original->view(), {3, 6})[0];
-  auto const col5     = cudf::slice(col_original->view(), {4, 7})[0];
+  auto const col = ListsCol{{ListsCol{{null, 2, 3}, null_at(0)},
+                             ListsCol{2, 3}, /*NULL*/
+                             ListsCol{{3, null, 5, 6}, null_at(1)},
+                             ListsCol{5, 6}, /*NULL*/
+                             ListsCol{},     /*NULL*/
+                             ListsCol{7},
+                             ListsCol{8, 9, 10}},
+                            null_at({1, 3, 4})}
+                     .release();
+  auto const col1     = cudf::slice(col->view(), {0, 3})[0];
+  auto const col2     = cudf::slice(col->view(), {1, 4})[0];
+  auto const col3     = cudf::slice(col->view(), {2, 5})[0];
+  auto const col4     = cudf::slice(col->view(), {3, 6})[0];
+  auto const col5     = cudf::slice(col->view(), {4, 7})[0];
   auto const expected = ListsCol{{ListsCol{{null, 2, 3}, null_at(0)},
                                   ListsCol{}, /*NULL*/
                                   ListsCol{{3, null, 5, 6}, null_at(1)},
@@ -624,6 +623,42 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputWithNulls)
                                  null_at({1, 3, 4, 5, 7, 8, 11, 12})}
                           .release();
   auto const results = cudf::interleave_columns(TView{{col1, col2, col3, col4, col5}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
+}
+
+TEST_F(ListsColumnsInterleaveTest, SlicedStringsColumnsInputWithNulls)
+{
+  auto const col =
+    StrListsCol{
+      {StrListsCol{{"Tomato", "Bear" /*NULL*/, "Apple"}, null_at(1)},
+       StrListsCol{{"Banana", "Pig" /*NULL*/, "Kiwi", "Cherry", "Whale" /*NULL*/}, null_at({1, 4})},
+       StrListsCol{"Coconut"},
+       StrListsCol{{"Orange", "Dog" /*NULL*/, "Fox" /*NULL*/, "Duck" /*NULL*/}, null_at({1, 2, 3})},
+       StrListsCol{"Lemon", "Peach"},
+       StrListsCol{{"Deer" /*NULL*/, "Snake" /*NULL*/, "Horse" /*NULL*/}, all_nulls()}}, /*NULL*/
+      null_at(5)}
+      .release();
+  auto const col1 = cudf::slice(col->view(), {0, 3})[0];
+  auto const col2 = cudf::slice(col->view(), {1, 4})[0];
+  auto const col3 = cudf::slice(col->view(), {2, 5})[0];
+  auto const col4 = cudf::slice(col->view(), {3, 6})[0];
+  auto const expected =
+    StrListsCol{
+      {StrListsCol{{"Tomato", "" /*NULL*/, "Apple"}, null_at(1)},
+       StrListsCol{{"Banana", "" /*NULL*/, "Kiwi", "Cherry", "" /*NULL*/}, null_at({1, 4})},
+       StrListsCol{"Coconut"},
+       StrListsCol{{"Orange", "" /*NULL*/, "" /*NULL*/, "" /*NULL*/}, null_at({1, 2, 3})},
+       StrListsCol{{"Banana", "" /*NULL*/, "Kiwi", "Cherry", "" /*NULL*/}, null_at({1, 4})},
+       StrListsCol{"Coconut"},
+       StrListsCol{{"Orange", "" /*NULL*/, "" /*NULL*/, "" /*NULL*/}, null_at({1, 2, 3})},
+       StrListsCol{"Lemon", "Peach"},
+       StrListsCol{"Coconut"},
+       StrListsCol{{"Orange", "" /*NULL*/, "" /*NULL*/, "" /*NULL*/}, null_at({1, 2, 3})},
+       StrListsCol{"Lemon", "Peach"},
+       StrListsCol{}}, /*NULL*/
+      null_at(11)}
+      .release();
+  auto const results = cudf::interleave_columns(TView{{col1, col2, col3, col4}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
 }
 
