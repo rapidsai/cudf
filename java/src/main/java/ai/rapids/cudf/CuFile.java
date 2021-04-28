@@ -35,7 +35,7 @@ import java.io.File;
 public class CuFile {
   private static final Logger log = LoggerFactory.getLogger(CuFile.class);
   private static boolean initialized = false;
-  private static long driverPointer = 0;
+  private static CuFileDriver driver;
 
   static {
     initialize();
@@ -49,9 +49,9 @@ public class CuFile {
     if (!initialized) {
       try {
         NativeDepsLoader.loadNativeDeps(new String[]{"cufilejni"});
-        driverPointer = createDriver();
+        driver = new CuFileDriver();
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-          destroyDriver(driverPointer);
+          driver.close();
         }));
         initialized = true;
       } catch (Throwable t) {
@@ -59,10 +59,6 @@ public class CuFile {
       }
     }
   }
-
-  private static native long createDriver();
-
-  private static native void destroyDriver(long pointer);
 
   /**
    * Check if the libcufilejni library is loaded.
