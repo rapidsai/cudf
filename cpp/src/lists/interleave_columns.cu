@@ -128,26 +128,29 @@ struct compute_string_sizes_and_interleave_lists_fn {
     auto const str_offsets =
       str_col.child(strings_column_view::offsets_column_index).template data<offset_type>();
 
+    // The indices of the strings within the source list.
+    auto const start_str_idx = list_offsets[list_id];
+    auto const end_str_idx   = list_offsets[list_id + 1];
+
     // read_idx and write_idx are indices of string elements.
     size_type write_idx = dst_list_offsets[idx];
-    if (not d_chars) {  // just compute sizes of strings within a list
-      for (auto read_idx = list_offsets[list_id], end_idx = list_offsets[list_id + 1];
-           read_idx < end_idx;
-           ++read_idx, ++write_idx) {
+
+    if (not d_chars) {  // just compute sizes and validities of strings within a list
+      for (auto read_idx = start_str_idx; read_idx < end_str_idx; ++read_idx, ++write_idx) {
         if (has_null_mask) {
           d_validities[write_idx] = static_cast<int8_t>(str_col.is_valid(read_idx));
         }
         d_offsets[write_idx] = str_offsets[read_idx + 1] - str_offsets[read_idx];
       }
     } else {  // just copy the entire memory region containing all strings in the list
-      // start_idx and end_idx are indices of character elements.
-      auto const start_idx = str_offsets[list_offsets[list_id]];
-      auto const end_idx   = str_offsets[list_offsets[list_id + 1]];
-      if (start_idx < end_idx) {
+      // start_byte and end_byte are indices of character of the string elements.
+      auto const start_byte = str_offsets[start_str_idx];
+      auto const end_byte   = str_offsets[end_str_idx];
+      if (start_byte < end_byte) {
         auto const input_ptr =
-          str_col.child(strings_column_view::chars_column_index).template data<char>() + start_idx;
+          str_col.child(strings_column_view::chars_column_index).template data<char>() + start_byte;
         auto const output_ptr = d_chars + d_offsets[write_idx];
-        thrust::copy(thrust::seq, input_ptr, input_ptr + end_idx - start_idx, output_ptr);
+        thrust::copy(thrust::seq, input_ptr, input_ptr + end_byte - start_byte, output_ptr);
       }
     }
   }
