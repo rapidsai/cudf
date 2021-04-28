@@ -211,11 +211,17 @@ public class ScalarTest extends CudfTestBase {
   @Test
   public void testList() {
     // list of int
-    try (ColumnVector listInt = ColumnVector.fromInts(1, 2, 3, 4);
-         Scalar s = Scalar.listFromColumnView(listInt)) {
+    // Verifies the Scalar copies the rows from the input ColumnView. So it can live out of
+    // the input ColumnView.
+    Scalar tmpS;
+    try (ColumnVector listInt = ColumnVector.fromInts(1, 2, 3, 4)) {
+      tmpS = Scalar.listFromColumnView(listInt);
+    }
+    try (Scalar s = tmpS) {
       assertEquals(DType.LIST, s.getType());
       assertTrue(s.isValid());
-      try (ColumnView v = s.getListAsColumnView()) {
+      try (ColumnView v = s.getListAsColumnView();
+           ColumnVector listInt = ColumnVector.fromInts(1, 2, 3, 4)) {
         assertColumnsAreEqual(listInt, v);
       }
     }

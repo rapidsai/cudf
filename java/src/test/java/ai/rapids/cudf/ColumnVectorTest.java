@@ -1452,6 +1452,32 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testFromScalarListOfStruct() {
+    HostColumnVector.DataType childType = new HostColumnVector.StructType(true,
+            new HostColumnVector.BasicType(true, DType.INT32),
+            new HostColumnVector.BasicType(true, DType.STRING));
+    HostColumnVector.DataType resultType = new HostColumnVector.ListType(true, childType);
+    try (ColumnVector list = ColumnVector.fromStructs(childType,
+            new HostColumnVector.StructData(1, "s1"),
+            new HostColumnVector.StructData(2, "s2"));
+         Scalar s = Scalar.listFromColumnView(list)) {
+      try (ColumnVector ret = ColumnVector.fromScalar(s, 2);
+           ColumnVector expected = ColumnVector.fromLists(resultType,
+                   Arrays.asList(new HostColumnVector.StructData(1, "s1"),
+                                 new HostColumnVector.StructData(2, "s2")),
+                   Arrays.asList(new HostColumnVector.StructData(1, "s1"),
+                                 new HostColumnVector.StructData(2, "s2")))) {
+        assertColumnsAreEqual(expected, ret);
+      }
+      // empty row
+      try (ColumnVector ret = ColumnVector.fromScalar(s, 0)) {
+        assertEquals(ret.getRowCount(), 0);
+        assertEquals(ret.getNullCount(), 0);
+      }
+    }
+  }
+
+  @Test
   void testReplaceNullsScalarEmptyColumn() {
     try (ColumnVector input = ColumnVector.fromBoxedBooleans();
          ColumnVector expected = ColumnVector.fromBoxedBooleans();

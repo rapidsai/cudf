@@ -220,31 +220,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
            '}';
   }
 
-  @Override
-  public int hashCode() {
-    return type.hashCode() +
-           Long.hashCode(rows) +
-           Long.hashCode(nullCount) +
-           Long.hashCode(viewHandle);
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (o instanceof ColumnView) {
-      ColumnView other = (ColumnView) o;
-      if (this == other) {
-        return true;
-      } else if (!type.equals(other.type) || rows != other.rows || nullCount != other.nullCount) {
-        return false;
-      } else {
-        throw new IllegalStateException("Cannot compare the column views by `equals`. " +
-                "Need to iterate its rows and compare one by one.");
-      }
-    } else {
-      return false;
-    }
-  }
-
   /**
    * Used for string strip function.
    * Indicates characters to be stripped from the beginning, end, or both of each string.

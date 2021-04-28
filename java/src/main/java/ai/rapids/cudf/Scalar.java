@@ -336,8 +336,10 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Creates a scalar of list from a column view.
-   * All the rows in the column view become the elements of the list inside the scalar.
+   * Creates a scalar of list from a ColumnView.
+   *
+   * All the rows in the ColumnView will be copied into the Scalar. So the ColumnView
+   * can be closed after this call completes.
    */
   public static Scalar listFromColumnView(ColumnView list) {
     if (list == null) {
@@ -500,8 +502,12 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Returns the scalar value as a column view.
-   * Callers should close the column view to avoid memory leak.
+   * Returns the scalar value as a ColumnView. Callers should close the returned ColumnView to
+   * avoid memory leak.
+   *
+   * The returned ColumnView is only valid as long as the Scalar remains valid. If the Scalar
+   * is closed before this ColumnView is closed, using this ColumnView will result in undefined
+   * behavior.
    */
   public ColumnView getListAsColumnView() {
     assert DType.LIST.equals(type) : "Cannot get list for the vector of type " + type;

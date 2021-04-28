@@ -34,7 +34,7 @@
 namespace cudf {
 namespace jni {
   /**
-   * @brief Creates an empty column according to the type tree speicified
+   * @brief Creates an empty column according to the type tree specified
    * in @p view
    *
    * An empty column contains zero elements and no validity mask.
@@ -45,27 +45,33 @@ namespace jni {
    * @param[in] view The input column view
    * @return An empty column for the input column view
    */
-  std::unique_ptr<cudf::column> make_empty_column(cudf::column_view& view) {
-    using ScalarType = cudf::scalar_type_t<cudf::size_type>;
-
-    cudf::type_id tid = view.type().id();
+  std::unique_ptr<cudf::column> make_empty_column(cudf::column_view const& view) {
+    auto tid = view.type().id();
     if (tid == cudf::type_id::LIST) {
+      // List
       if (view.num_children() != 2) {
         throw jni_exception("List type requires two children(offset, data).");
       }
       // Only needs the second child.
       auto data_view = view.child(1);
-      auto zero = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-      zero->set_valid(true);
-      static_cast<ScalarType *>(zero.get())->set_value(0);
       // offsets: [0]
-      auto offsets = cudf::make_column_from_scalar(*zero, 1);
+      cudf::size_type zero = 0;
+      auto offsets = std::make_unique<column>(cudf::data_type{cudf::type_id::INT32}, 1,
+                                              rmm::device_buffer(&zero, sizeof(zero)),
+                                              rmm::device_buffer(), 0);
       auto data_col = make_empty_column(data_view);
       return cudf::make_lists_column(0, std::move(offsets), std::move(data_col),
                                      0, rmm::device_buffer());
     } else if (tid == cudf::type_id::STRUCT) {
-      throw jni_exception("`jni::make_empty_column` does not support struct type.");
+      // Struct
+      std::vector<std::unique_ptr<column>> children(view.num_children());
+      std::transform(view.child_begin(), view.child_end(), children.begin(),
+          [](auto const& child_v) {
+            return make_empty_column(child_v);
+          });
+      return cudf::make_structs_column(0, std::move(children), 0, rmm::device_buffer());
     } else {
+      // Non nested types
       return cudf::make_empty_column(view.type());
     }
   }
@@ -221,8 +227,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
     std::unique_ptr<cudf::column> col;
     if (dtype.id() == cudf::type_id::LIST) {
       // Neither 'cudf::make_empty_column' nor 'cudf::make_column_from_scalar' supports
-      // LIST type for now (04/27/2021), so the list precedes the others and takes care
-      // of the empty column itself.
+      // LIST type for now (https://github.com/rapidsai/cudf/issues/8088), so the list
+      // precedes the others and takes care of the empty column itself.
       auto s_list = reinterpret_cast<cudf::list_scalar const *>(scalar_val);
       cudf::column_view s_val = s_list->view();
 
@@ -234,12 +240,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
       static_cast<ScalarType *>(zero.get())->set_value(0);
       static_cast<ScalarType *>(step.get())->set_value(s_val.size());
       std::unique_ptr<cudf::column> offsets = cudf::sequence(row_count + 1, *zero, *step);
-
       // Data:
-      // 'cudf::fill' does not support LIST type for now(04/27/2021), so builds the data
-      // column by leveraging `cudf::concatenate` to repeat the 's_val' 'row_count' times.
-      // (Assumes the `row_count` is not big, otherwise there would be a performance issue.
-      //  Eventually we should have the 'cudf::fill' support LIST type and use it here.)
+      // Builds the data column by leveraging `cudf::concatenate` to repeat the 's_val'
+      // 'row_count' times, because 'cudf::make_column_from_scalar' does not support list
+      // type.
+      // (Assumes the `row_count` is not big, otherwise there would be a performance issue.)
       // Checks the `row_count` because `cudf::concatenate` does not support no columns.
       auto data_col = row_count > 0
           ? cudf::concatenate(std::vector<cudf::column_view>(row_count, s_val))

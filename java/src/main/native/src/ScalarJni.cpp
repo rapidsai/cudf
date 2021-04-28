@@ -126,7 +126,7 @@ JNIEXPORT jbyteArray JNICALL Java_ai_rapids_cudf_Scalar_getUTF8(JNIEnv *env, jcl
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_getListAsColumnView(JNIEnv *env, jclass,
-                                                                jlong scalar_handle) {
+                                                                       jlong scalar_handle) {
   JNI_NULL_CHECK(env, scalar_handle, "scalar handle is null", 0);
   try {
     cudf::jni::auto_set_device(env);
