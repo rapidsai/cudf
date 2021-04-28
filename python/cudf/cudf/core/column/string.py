@@ -636,8 +636,11 @@ class StringMethods(ColumnMethodsMixin):
         result_col = cpp_character_tokenize(self._column)
 
         bytes_count = cpp_count_bytes(self._column)
-        offset_col = cudf.core.column.as_column([0], dtype="int32")
-        offset_col = offset_col.append(bytes_count)
+        offset_col = cudf.core.column.column_empty(
+            row_count=len(bytes_count) + 1, dtype="int32"
+        )
+        offset_col[0] = 0
+        offset_col[1:] = bytes_count
         offset_col = offset_col._apply_scan_op("sum")
 
         res = cudf.core.column.ListColumn(
