@@ -4,7 +4,7 @@ from __future__ import annotations, division, print_function
 
 import pickle
 from numbers import Number
-from typing import Any, Dict, Set, Type
+from typing import Any, Dict, Type
 
 import cupy
 import numpy as np
@@ -609,26 +609,6 @@ class Index(FrameOneD, Serializable):
         """
         indices = self._column.argsort(ascending=ascending, **kwargs)
         return cupy.asarray(indices)
-
-    @property
-    def values(self):
-        """
-        Return an array representing the data in the Index.
-
-        Returns
-        -------
-        array : A cupy array of data in the Index.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> index = cudf.Index([1, -10, 100, 20])
-        >>> index.values
-        array([  1, -10, 100,  20])
-        >>> type(index.values)
-        <class 'cupy.core.core.ndarray'>
-        """
-        return self._column.values
 
     def any(self):
         """
@@ -1527,8 +1507,6 @@ class Index(FrameOneD, Serializable):
     @classmethod
     def _from_data(cls, data, index=None):
         return cls._from_table(FrameOneD(data=data))
-
-    _accessors = set()  # type: Set[Any]
 
     @property
     def _constructor_expanddim(self):

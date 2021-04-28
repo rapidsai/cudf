@@ -7,7 +7,7 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
-from typing import Any, Optional, Set
+from typing import Any, Optional
 from uuid import uuid4
 
 import cupy
@@ -328,29 +328,6 @@ class Series(FrameOneD, Serializable):
         dtype: float64
         """
         return cls(s, nan_as_null=nan_as_null)
-
-    @property
-    def values(self):
-        """
-        Return a CuPy representation of the Series.
-
-        Only the values in the Series will be returned.
-
-        Returns
-        -------
-        out : cupy.ndarray
-            The values of the Series.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, -10, 100, 20])
-        >>> ser.values
-        array([  1, -10, 100,  20])
-        >>> type(ser.values)
-        <class 'cupy.core.core.ndarray'>
-        """
-        return self._column.values
 
     @property
     def values_host(self):
@@ -6488,8 +6465,6 @@ class Series(FrameOneD, Serializable):
             return self.__class__._from_data(data, index=idx)
 
         return super()._explode(self._column_names[0], ignore_index)
-
-    _accessors = set()  # type: Set[Any]
 
 
 truediv_int_dtype_corrections = {

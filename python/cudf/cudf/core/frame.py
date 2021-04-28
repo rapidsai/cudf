@@ -49,6 +49,12 @@ class Frame(libcudf.table.Table):
     _data: "ColumnAccessor"
 
     @classmethod
+    def __init_subclass__(cls):
+        # All subclasses contain a set _accessors that is used to hold custom
+        # accessors defined by user APIs (see cudf/api/extensions/accessor.py).
+        cls._accessors = set()
+
+    @classmethod
     def _from_table(cls, table: Frame):
         return cls(table._data, index=table._index)
 
@@ -3332,6 +3338,32 @@ class FrameOneD(Frame):
     @_column.setter
     def _column(self, value):
         self._data[self.name] = value
+
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the data.
+
+        Returns
+        -------
+        out : cupy.ndarray
+            A representation of the underlying data.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([1, -10, 100, 20])
+        >>> ser.values
+        array([  1, -10, 100,  20])
+        >>> type(ser.values)
+        <class 'cupy.core.core.ndarray'>
+        >>> index = cudf.Index([1, -10, 100, 20])
+        >>> index.values
+        array([  1, -10, 100,  20])
+        >>> type(index.values)
+        <class 'cupy.core.core.ndarray'>
+        """
+        return self._column.values
 
 
 def _get_replacement_values_for_columns(

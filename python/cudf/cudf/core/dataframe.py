@@ -10,7 +10,7 @@ import sys
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from typing import Any, Optional, Set, TypeVar
+from typing import Any, Optional, TypeVar
 
 import cupy
 import numpy as np
@@ -7764,8 +7764,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             return self.__class__._from_data(data, index=idx)
 
         return super()._explode(column, ignore_index)
-
-    _accessors = set()  # type: Set[Any]
 
 
 def from_pandas(obj, nan_as_null=None):
