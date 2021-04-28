@@ -211,13 +211,12 @@ inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to
   // build std::string vector from chars and offsets
   std::vector<std::string> host_data;
   host_data.reserve(c.size());
-
-  // When C++17, replace this loop with std::adjacent_difference()
-  for (size_type idx = 0; idx < c.size(); ++idx) {
-    auto offset = h_offsets[idx];
-    auto length = h_offsets[idx + 1] - offset;
-    host_data.push_back(std::string(h_chars.data() + offset, length));
-  }
+  std::transform(
+    std::begin(h_offsets),
+    std::end(h_offsets) - 1,
+    std::begin(h_offsets) + 1,
+    std::back_inserter(host_data),
+    [&](auto start, auto end) { return std::string(h_chars.data() + start, end - start); });
 
   return {host_data, bitmask_to_host(c)};
 }

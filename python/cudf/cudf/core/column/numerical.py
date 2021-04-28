@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import builtins
 from numbers import Number
-from typing import Any, Callable, Sequence, Tuple, Union, cast
+from types import SimpleNamespace
+from typing import Any, Callable, Mapping, Sequence, Tuple, Union, cast
 
+import cupy
 import numpy as np
 import pandas as pd
 from numba import cuda, njit
@@ -27,6 +30,8 @@ from cudf.core.column import (
 from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
+    NUMERIC_TYPES,
+    cudf_dtypes_to_pandas_dtypes,
     min_column_type,
     min_signed_type,
     numeric_normalize_types,
@@ -85,6 +90,33 @@ class NumericalColumn(ColumnBase):
         return libcudf.search.contains(
             self, column.as_column([item], dtype=self.dtype)
         ).any()
+
+    @property
+    def __cuda_array_interface__(self) -> Mapping[builtins.str, Any]:
+        output = {
+            "shape": (len(self),),
+            "strides": (self.dtype.itemsize,),
+            "typestr": self.dtype.str,
+            "data": (self.data_ptr, False),
+            "version": 1,
+        }
+
+        if self.nullable and self.has_nulls:
+
+            # Create a simple Python object that exposes the
+            # `__cuda_array_interface__` attribute here since we need to modify
+            # some of the attributes from the numba device array
+            mask = SimpleNamespace(
+                __cuda_array_interface__={
+                    "shape": (len(self),),
+                    "typestr": "<t1",
+                    "data": (self.mask_ptr, True),
+                    "version": 1,
+                }
+            )
+            output["mask"] = mask
+
+        return output
 
     def unary_operator(self, unaryop: str) -> ColumnBase:
         return _numeric_column_unaryop(self, op=unaryop)
@@ -407,7 +439,7 @@ class NumericalColumn(ColumnBase):
     def applymap(
         self, udf: Callable[[ScalarLike], ScalarLike], out_dtype: Dtype = None
     ) -> ColumnBase:
-        """Apply an element-wise function to transform the values in the Column.
+        """Apply an elementwise function to transform the values in the Column.
 
         Parameters
         ----------
@@ -710,6 +742,23 @@ class NumericalColumn(ColumnBase):
                 return False
 
         return False
+
+    def to_pandas(
+        self, index: pd.Index = None, nullable: bool = False, **kwargs
+    ) -> "pd.Series":
+        if nullable and self.dtype in cudf_dtypes_to_pandas_dtypes:
+            pandas_nullable_dtype = cudf_dtypes_to_pandas_dtypes[self.dtype]
+            arrow_array = self.to_arrow()
+            pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)
+            pd_series = pd.Series(pandas_array, copy=False)
+        elif str(self.dtype) in NUMERIC_TYPES and not self.has_nulls:
+            pd_series = pd.Series(cupy.asnumpy(self.values), copy=False)
+        else:
+            pd_series = self.to_arrow().to_pandas(**kwargs)
+
+        if index is not None:
+            pd_series.index = index
+        return pd_series
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
