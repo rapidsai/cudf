@@ -364,7 +364,8 @@ ConfigureTest(TEXT_TEST
 ConfigureTest(BITMASK_TEST
     bitmask/valid_if_tests.cu
     bitmask/set_nullmask_tests.cu
-    bitmask/bitmask_tests.cu)
+    bitmask/bitmask_tests.cu
+    bitmask/get_valid_tests.cpp)
 
 
 ###################################################################################################

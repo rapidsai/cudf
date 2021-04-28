@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
+#include <cudf/detail/get_valid.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -124,12 +125,7 @@ struct get_element_functor {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
-    rmm::device_scalar<bool> d_valid;
-    auto d_input = column_device_view::create(input);
-    device_single_thread([d_input = *d_input, index, valid = d_valid.data()] __device__() {
-      *valid = d_input.is_valid(index);
-    });
-    bool valid = d_valid.value(stream);
+    bool valid = get_valid(input, index, stream);
 
     if (valid) {
       lists_column_view lcv(input);
