@@ -3295,6 +3295,23 @@ class Frame(libcudf.table.Table):
         return self._mimic_inplace(result, inplace=inplace)
 
 
+class FrameOneD(Frame):
+    """A one-dimensional frame.
+
+    Frames with only a single dimension share certain logic that is encoded in
+    this class.
+    """
+
+    @property
+    def name(self):
+        """The name of this object."""
+        return next(iter(self._data.names))
+
+    @name.setter
+    def name(self, value):
+        self._data[value] = self._data.pop(self.name)
+
+
 def _get_replacement_values_for_columns(
     to_replace: Any, value: Any, columns_dtype_map: Dict[Any, Any]
 ) -> Tuple[Dict[Any, bool], Dict[Any, Any], Dict[Any, Any]]:

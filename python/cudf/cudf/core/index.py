@@ -29,7 +29,7 @@ from cudf.core.column import (
 )
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
-from cudf.core.frame import Frame
+from cudf.core.frame import FrameOneD
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -73,7 +73,7 @@ def _to_frame(this_index, index=True, name=None):
     )
 
 
-class Index(Frame, Serializable):
+class Index(FrameOneD, Serializable):
 
     dtype: DtypeObj
 
@@ -387,18 +387,6 @@ class Index(Frame, Serializable):
             )
 
         self.name = values[0]
-
-    @property
-    def name(self):
-        """
-        Returns the name of the Index.
-        """
-        return next(iter(self._data.names))
-
-    @name.setter
-    def name(self, value):
-        col = self._data.pop(self.name)
-        self._data[value] = col
 
     def dropna(self, how="any"):
         """
@@ -1557,7 +1545,7 @@ class Index(Frame, Serializable):
 
     @classmethod
     def _from_data(cls, data, index=None):
-        return cls._from_table(Frame(data=data))
+        return cls._from_table(FrameOneD(data=data))
 
     _accessors = set()  # type: Set[Any]
 
@@ -1606,7 +1594,7 @@ class RangeIndex(Index):
         if step == 0:
             raise ValueError("Step must not be zero.")
 
-        out = Frame.__new__(cls)
+        out = FrameOneD.__new__(cls)
         if isinstance(start, range):
             therange = start
             start = therange.start
@@ -1978,7 +1966,7 @@ class GenericIndex(Index):
             Column's name. Otherwise if this name is different from the value
             Column's, the values Column will be cloned to adopt this name.
         """
-        out = Frame.__new__(cls)
+        out = FrameOneD.__new__(cls)
         out._initialize(values, **kwargs)
 
         return out
@@ -2201,7 +2189,7 @@ class NumericIndex(GenericIndex):
 
     def __new__(cls, data=None, dtype=None, copy=False, name=None):
 
-        out = Frame.__new__(cls)
+        out = FrameOneD.__new__(cls)
         dtype = _index_to_dtype[cls]
         if copy:
             data = column.as_column(data, dtype=dtype).copy()
@@ -2323,7 +2311,7 @@ class DatetimeIndex(GenericIndex):
         # pandas dtindex creation first which.  For now
         # just make sure we handle np.datetime64 arrays
         # and then just dispatch upstream
-        out = Frame.__new__(cls)
+        out = FrameOneD.__new__(cls)
 
         if freq is not None:
             raise NotImplementedError("Freq is not yet supported")
@@ -2578,7 +2566,7 @@ class TimedeltaIndex(GenericIndex):
         name=None,
     ) -> "TimedeltaIndex":
 
-        out = Frame.__new__(cls)
+        out = FrameOneD.__new__(cls)
 
         if freq is not None:
             raise NotImplementedError("freq is not yet supported")
@@ -2710,7 +2698,7 @@ class CategoricalIndex(GenericIndex):
                 )
         if copy:
             data = column.as_column(data, dtype=dtype).copy(deep=True)
-        out = Frame.__new__(cls)
+        out = FrameOneD.__new__(cls)
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, CategoricalColumn):
             data = data
@@ -2936,7 +2924,7 @@ class IntervalIndex(GenericIndex):
     ) -> "IntervalIndex":
         if copy:
             data = column.as_column(data, dtype=dtype).copy()
-        out = Frame.__new__(cls)
+        out = FrameOneD.__new__(cls)
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, IntervalColumn):
             data = data
@@ -3009,7 +2997,7 @@ class StringIndex(GenericIndex):
     """
 
     def __new__(cls, values, copy=False, **kwargs):
-        out = Frame.__new__(cls)
+        out = FrameOneD.__new__(cls)
         kwargs = _setdefault_name(values, **kwargs)
         if isinstance(values, StringColumn):
             values = values.copy(deep=copy)

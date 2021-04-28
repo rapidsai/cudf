@@ -38,7 +38,7 @@ from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame, _drop_rows_by_labels
+from cudf.core.frame import FrameOneD, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
@@ -61,7 +61,7 @@ from cudf.utils.utils import (
 )
 
 
-class Series(Frame, Serializable):
+class Series(FrameOneD, Serializable):
     @property
     def _constructor(self):
         return Series
@@ -440,17 +440,6 @@ class Series(Frame, Serializable):
         """Dimension of the data. Series ndim is always 1.
         """
         return 1
-
-    @property
-    def name(self):
-        """Returns name of the Series.
-        """
-        return self._data.names[0]
-
-    @name.setter
-    def name(self, value):
-        col = self._data.pop(self.name)
-        self._data[value] = col
 
     @classmethod
     def deserialize(cls, header, frames):
