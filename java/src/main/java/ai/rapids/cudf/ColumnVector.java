@@ -27,9 +27,11 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 /**
  * This class represents the immutable vector of data.  This class holds
@@ -407,7 +409,20 @@ public final class ColumnVector extends ColumnView {
     if (columns.length <= 0) {
       throw new IllegalArgumentException("At least one column is needed to get the row count");
     }
-    return makeList(columns[0].getRowCount(), columns[0].getType(), columns);
+    int dim[] = {1};
+    return makeList(dim, columns);
+  }
+  public static ColumnVector makeList(int[] dim, ColumnView... columns) {
+    if (columns.length <= 0) {
+      throw new IllegalArgumentException("At least one column is needed to get the row count");
+    }
+    return makeList(columns[0].getRowCount(), dim, columns[0].getType(), columns);
+  }
+
+  public static ColumnVector makeList(ArrayList<ArrayList<ColumnView> > columns) {
+    int dim[] = columns.stream().mapToInt(inner -> inner.size()).toArray();
+    ColumnView cols[] = columns.stream().flatMap(x -> x.stream()).toArray(ColumnView[]::new);
+    return makeList(dim, cols);
   }
 
   /**
@@ -421,7 +436,7 @@ public final class ColumnVector extends ColumnView {
    *                resulting lists.
    * @return the new LIST ColumnVector
    */
-  public static ColumnVector makeList(long rows, DType type, ColumnView... columns) {
+  public static ColumnVector makeList(long rows, int[] dim, DType type, ColumnView... columns) {
     long[] handles = new long[columns.length];
     for (int i = 0; i < columns.length; i++) {
       ColumnView cv = columns[i];
@@ -438,7 +453,11 @@ public final class ColumnVector extends ColumnView {
       throw new IllegalArgumentException(
           "Creating an empty list column of nested types is not currently supported");
     }
-    return new ColumnVector(makeList(handles, type.typeId.nativeId, type.getScale(), rows));
+    return new ColumnVector(makeList(handles, dim, type.typeId.nativeId, type.getScale(), rows));
+  }
+  public static ColumnVector makeList(long rows, DType type, ColumnView... columns) {
+    int dim[] = {1};
+    return makeList(rows, dim, type);
   }
 
   /**
@@ -664,7 +683,7 @@ public final class ColumnVector extends ColumnView {
 
   private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
 
-  private static native long makeList(long[] handles, long typeHandle, int scale, long rows)
+  private static native long makeList(long[] handles, int[] dimention, long typeHandle, int scale, long rows)
       throws CudfException;
 
   private static native long concatenate(long[] viewHandles) throws CudfException;

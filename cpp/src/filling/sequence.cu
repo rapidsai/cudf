@@ -193,7 +193,7 @@ std::unique_ptr<column> sequence(size_type size,
 
 std::unique_ptr<column> inclusive_scan(
   size_type row_count,
-  std::vector<int> &h_step,
+  std::vector<size_type> &h_step,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {

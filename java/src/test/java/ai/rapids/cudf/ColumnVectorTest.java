@@ -4281,7 +4281,33 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector child21 = ColumnVector.fromInts(10, 11, 12, 13);
          ColumnVector child3 = ColumnVector.fromInts(20, 21, 22, 23);
          ColumnVector child4 = ColumnVector.fromInts(30, 31, 32, 33);
-         ColumnVector created = ColumnVector.makeList(child1, child2, child21, child3, child4)) {
+         ColumnVector created = ColumnVector.makeList(new int[]{3, 2}, child1, child2, child21, child3, child4)) {
+
+      HostColumnVector hc = created.copyToHost();
+      List a = hc.getList(0);
+      List b = hc.getList(1);
+      System.out.println(hc.rows);
+//      assertColumnsAreEqual(expected, created);
+    }
+  }
+
+  @Test
+  void testNewMakeList() {
+    try (ColumnVector expected =
+             ColumnVector.fromLists(
+                 new ListType(false, new BasicType(false, DType.INT32)),
+                 Arrays.asList(1, 3, 5),
+                 Arrays.asList(2, 4, 6));
+         ColumnVector child1 = ColumnVector.fromInts(1, 2, 3, 4);
+         ColumnVector child2 = ColumnVector.fromInts(4, 5, 6, 7);
+         ColumnVector child21 = ColumnVector.fromInts(10, 11, 12, 13);
+         ColumnVector child3 = ColumnVector.fromInts(20, 21, 22, 23);
+         ColumnVector child4 = ColumnVector.fromInts(30, 31, 32, 33);
+         ColumnVector created = ColumnVector.makeList(
+             new ArrayList<ArrayList<ColumnView>>(
+                 Arrays.asList(
+                     new ArrayList<ColumnView>(Arrays.asList(child1, child2, child21)),
+                     new ArrayList<ColumnView>(Arrays.asList(child3, child4)))))) {
 
       HostColumnVector hc = created.copyToHost();
       List a = hc.getList(0);
