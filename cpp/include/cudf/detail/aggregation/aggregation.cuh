@@ -283,8 +283,8 @@ struct update_target_from_dictionary {
  * dictionary's keys child column and maps the input source index through
  * the dictionary's indices child column to pass to the `update_target_element`
  * in the above `update_target_from_dictionary` using the type-dispatcher to
- * resolve the keys column type. 
- * 
+ * resolve the keys column type.
+ *
  * `update_target_element( target, target_index, source.keys(), source.indices()[source_index] )`
  *
  * @tparam target_has_nulls Indicates presence of null elements in `target`
