@@ -1363,20 +1363,9 @@ class Series(SingleColumnFrame, Serializable):
             if is_scalar(rhs):
                 lhs = lhs.fillna(fill_value)
             else:
-                if lhs.nullable and rhs.nullable:
-                    lmask = Series(data=lhs.nullmask)
-                    rmask = Series(data=rhs.nullmask)
-                    mask = (lmask | rmask).data
+                if lhs.nullable:
                     lhs = lhs.fillna(fill_value)
-                    rhs = rhs.fillna(fill_value)
-                    result = lhs._binaryop(rhs, fn=fn, reflect=reflect)
-                    data = column.build_column(
-                        data=result.data, dtype=result.dtype, mask=mask
-                    )
-                    return lhs._copy_construct(data=data)
-                elif lhs.nullable:
-                    lhs = lhs.fillna(fill_value)
-                elif rhs.nullable:
+                if rhs.nullable:
                     rhs = rhs.fillna(fill_value)
 
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)

@@ -1196,3 +1196,11 @@ def test_explode(data, ignore_index, p_index):
             assert_eq(expect, got, check_dtype=False)
     else:
         assert_eq(expect, got, check_dtype=False)
+
+
+def test_binop_add_nullable_fill():
+    """Test a binary op (addition) with a fill value on two nullable series."""
+    x = cudf.Series([1, 2, None])
+    y = cudf.Series([1, None, 3])
+    assert_eq(x.add(y), cudf.Series([2, None, None]))
+    assert_eq(x.add(y, fill_value=0), cudf.Series([2, 2, 3]))
