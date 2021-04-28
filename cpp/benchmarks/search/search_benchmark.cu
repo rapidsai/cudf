@@ -170,11 +170,11 @@ void BM_contains(benchmark::State& state, bool nulls)
 
 BENCHMARK_DEFINE_F(Search, ColumnContains_AllValid)(::benchmark::State& state)
 {
-  BM_column(state, false);
+  BM_contains(state, false);
 }
 BENCHMARK_DEFINE_F(Search, ColumnContains_Nulls)(::benchmark::State& state)
 {
-  BM_column(state, true);
+  BM_contains(state, true);
 }
 
 BENCHMARK_REGISTER_F(Search, ColumnContains_AllValid)
