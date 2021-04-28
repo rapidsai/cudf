@@ -2937,36 +2937,56 @@ def test_string_slice_with_mask():
     "data",
     [
         [
-            """{"store": {
-        "book": [
-        { "category": "reference",
-            "author": "Nigel Rees",
-            "title": "Sayings of the Century",
-            "price": 8.95
-        },
-        { "category": "fiction",
-            "author": "Evelyn Waugh",
-            "title": "Sword of Honour",
-            "price": 12.99
-        },
-        ]}}"""
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "category":"reference",
+                            "author":"Nigel Rees",
+                            "title":"Sayings of the Century",
+                            "price":8.95
+                        },
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            "title":"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """
         ],
         [
-            """{"store": {
-        "book": [
-        { "category": "reference",
-            "author": "Nigel Rees",
-            "title": "Sayings of the Century",
-            "price": 8.95
-        }]}}""",
-            """{"store": {
-        "book": [
-        { "category": "fiction",
-            "author": "Evelyn Waugh",
-            "title": "Sword of Honour",
-            "price": 12.99
-        },
-        ]}}""",
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "category":"reference",
+                            "author":"Nigel Rees",
+                            "title":"Sayings of the Century",
+                            "price":8.95
+                        }
+                    ]
+                }
+            }
+            """,
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            "title":"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """,
         ],
     ],
 )
