@@ -599,6 +599,10 @@ class StringMethods(ColumnMethodsMixin):
         else:
             # If self._column is not a ListColumn, we will have to
             # split each row by character and create a ListColumn out of it.
+
+            # TODO: Remove this workaround after the following
+            # feature request is resolved
+            # FEA: https://github.com/rapidsai/cudf/issues/8094
             strings_column = self._split_by_character()
 
         if is_scalar(sep):
