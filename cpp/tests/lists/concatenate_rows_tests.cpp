@@ -84,8 +84,9 @@ struct ListConcatenateRowsTypedTest : public cudf::test::BaseFixture {
 };
 #define ListsCol cudf::test::lists_column_wrapper<TypeParam>
 
-using TypesForTest =
-  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
+using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
+                                        cudf::test::FloatingPointTypes,
+                                        cudf::test::FixedPointTypes>;
 TYPED_TEST_CASE(ListConcatenateRowsTypedTest, TypesForTest);
 
 TYPED_TEST(ListConcatenateRowsTypedTest, ConcatenateEmptyColumns)
@@ -288,4 +289,102 @@ TYPED_TEST(ListConcatenateRowsTypedTest, SlicedColumnsInputWithNulls)
              null_at(1)}}.release();
   auto const results = cudf::lists::concatenate_rows(TView{{col1, col2, col3, col4, col5}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
+}
+
+TEST_F(ListConcatenateRowsTest, SlicedStringsColumnsInputWithNulls)
+{
+  auto const col =
+    StrListsCol{
+      {StrListsCol{{"Tomato", "Bear" /*NULL*/, "Apple"}, null_at(1)},
+       StrListsCol{{"Banana", "Pig" /*NULL*/, "Kiwi", "Cherry", "Whale" /*NULL*/}, null_at({1, 4})},
+       StrListsCol{"Coconut"},
+       StrListsCol{{"Orange", "Dog" /*NULL*/, "Fox" /*NULL*/, "Duck" /*NULL*/}, null_at({1, 2, 3})},
+       StrListsCol{"Lemon", "Peach"},
+       StrListsCol{{"Deer" /*NULL*/, "Snake" /*NULL*/, "Horse" /*NULL*/}, all_nulls()}}, /*NULL*/
+      null_at(5)}
+      .release();
+  auto const col1 = cudf::slice(col->view(), {0, 3})[0];
+  auto const col2 = cudf::slice(col->view(), {1, 4})[0];
+  auto const col3 = cudf::slice(col->view(), {2, 5})[0];
+  auto const col4 = cudf::slice(col->view(), {3, 6})[0];
+
+  {
+    auto const results  = cudf::lists::concatenate_rows(TView{{col1, col2, col3, col4}});
+    auto const expected = StrListsCol{
+      StrListsCol{{"Tomato",
+                   "" /*NULL*/,
+                   "Apple",
+                   "Banana",
+                   "" /*NULL*/,
+                   "Kiwi",
+                   "Cherry",
+                   "" /*NULL*/,
+                   "Coconut",
+                   "Orange",
+                   "" /*NULL*/,
+                   "" /*NULL*/,
+                   "" /*NULL*/},
+                  null_at({1, 4, 7, 10, 11, 12})},
+      StrListsCol{{"Banana",
+                   "" /*NULL*/,
+                   "Kiwi",
+                   "Cherry",
+                   "" /*NULL*/,
+                   "Coconut",
+                   "Orange",
+                   "" /*NULL*/,
+                   "" /*NULL*/,
+                   "", /*NULL*/
+                   "Lemon",
+                   "Peach"},
+                  null_at({1, 4, 7, 8, 9})},
+      StrListsCol{
+        {
+          "Coconut",
+          "Orange",
+          "" /*NULL*/,
+          "" /*NULL*/,
+          "", /*NULL*/
+          "Lemon",
+          "Peach",
+        },
+        null_at({2, 3, 4})}}.release();
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
+  }
+
+  {
+    auto const results = cudf::lists::concatenate_rows(
+      TView{{col1, col2, col3, col4}}, cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW);
+    auto const expected = StrListsCol{{StrListsCol{{"Tomato",
+                                                    "" /*NULL*/,
+                                                    "Apple",
+                                                    "Banana",
+                                                    "" /*NULL*/,
+                                                    "Kiwi",
+                                                    "Cherry",
+                                                    "" /*NULL*/,
+                                                    "Coconut",
+                                                    "Orange",
+                                                    "" /*NULL*/,
+                                                    "" /*NULL*/,
+                                                    "" /*NULL*/},
+                                                   null_at({1, 4, 7, 10, 11, 12})},
+                                       StrListsCol{{"Banana",
+                                                    "" /*NULL*/,
+                                                    "Kiwi",
+                                                    "Cherry",
+                                                    "" /*NULL*/,
+                                                    "Coconut",
+                                                    "Orange",
+                                                    "" /*NULL*/,
+                                                    "" /*NULL*/,
+                                                    "", /*NULL*/
+                                                    "Lemon",
+                                                    "Peach"},
+                                                   null_at({1, 4, 7, 8, 9})},
+                                       StrListsCol{} /*NULL*/},
+                                      null_at(2)}
+                            .release();
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
+  }
 }
