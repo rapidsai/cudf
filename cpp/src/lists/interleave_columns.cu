@@ -68,17 +68,15 @@ generate_list_offsets_and_validities(table_view const& input,
     [num_cols,
      table_dv     = *table_dv_ptr,
      d_validities = validities.begin(),
-     has_null_mask] __device__(size_type const dst_list_id) {
-      auto const src_col_id     = dst_list_id % num_cols;
-      auto const src_list_id    = dst_list_id / num_cols;
-      auto const& src_lists_col = table_dv.column(src_col_id);
-      if (has_null_mask) {
-        d_validities[dst_list_id] = static_cast<int8_t>(src_lists_col.is_valid(src_list_id));
-      }
-      auto const src_list_offsets =
-        src_lists_col.child(lists_column_view::offsets_column_index).data<offset_type>() +
-        src_lists_col.offset();
-      return src_list_offsets[src_list_id + 1] - src_list_offsets[src_list_id];
+     has_null_mask] __device__(size_type const idx) {
+      auto const col_id     = idx % num_cols;
+      auto const list_id    = idx / num_cols;
+      auto const& lists_col = table_dv.column(col_id);
+      if (has_null_mask) { d_validities[idx] = static_cast<int8_t>(lists_col.is_valid(list_id)); }
+      auto const list_offsets =
+        lists_col.child(lists_column_view::offsets_column_index).data<offset_type>() +
+        lists_col.offset();
+      return list_offsets[list_id + 1] - list_offsets[list_id];
     });
 
   // Compute offsets from sizes.
@@ -93,7 +91,7 @@ generate_list_offsets_and_validities(table_view const& input,
  *
  * This functor is executed twice. In the first pass, the sizes and validities of the output strings
  * will be computed. In the second pass, this will interleave the lists of strings of the given
- * table of lists columns.
+ * table containing those lists.
  */
 struct compute_string_sizes_and_interleave_lists_fn {
   table_device_view const table_dv;
@@ -104,7 +102,7 @@ struct compute_string_sizes_and_interleave_lists_fn {
   // Flag to specify whether to compute string validities.
   bool const has_null_mask;
 
-  // Store offsets of the strings in the chars column.
+  // Store offsets of the strings.
   offset_type* d_offsets{nullptr};
 
   // If d_chars == nullptr: only compute sizes and validities of the output strings.
@@ -114,43 +112,40 @@ struct compute_string_sizes_and_interleave_lists_fn {
   // We need to set `1` or `0` for the validities of the strings in the child column.
   int8_t* d_validities{nullptr};
 
-  __device__ void operator()(size_type const dst_list_id)
+  __device__ void operator()(size_type const idx)
   {
-    auto const num_cols    = table_dv.num_columns();
-    auto const src_col_id  = dst_list_id % num_cols;
-    auto const src_list_id = dst_list_id / num_cols;
+    auto const num_cols = table_dv.num_columns();
+    auto const col_id   = idx % num_cols;
+    auto const list_id  = idx / num_cols;
 
-    auto const& src_lists_col = table_dv.column(src_col_id);
-    if (has_null_mask and src_lists_col.is_null(src_list_id)) { return; }
+    auto const& lists_col = table_dv.column(col_id);
+    if (has_null_mask and lists_col.is_null(list_id)) { return; }
 
-    auto const src_list_offsets =
-      src_lists_col.child(lists_column_view::offsets_column_index).data<offset_type>() +
-      src_lists_col.offset();
-    auto const& src_child = src_lists_col.child(lists_column_view::child_column_index);
-    auto const src_child_offsets =
-      src_child.child(strings_column_view::offsets_column_index).data<offset_type>() +
-      src_child.offset();
+    auto const list_offsets =
+      lists_col.child(lists_column_view::offsets_column_index).data<offset_type>() +
+      lists_col.offset();
+    auto const& str_col = lists_col.child(lists_column_view::child_column_index);
+    auto const str_offsets =
+      str_col.child(strings_column_view::offsets_column_index).data<offset_type>();
 
     // read_idx and write_idx are indices of string elements.
-    size_type write_idx = dst_list_offsets[dst_list_id];
+    size_type write_idx = dst_list_offsets[idx];
     if (not d_chars) {  // just compute sizes of strings within a list
-      for (auto read_idx = src_list_offsets[src_list_id],
-                end_idx  = src_list_offsets[src_list_id + 1];
+      for (auto read_idx = list_offsets[list_id], end_idx = list_offsets[list_id + 1];
            read_idx < end_idx;
            ++read_idx, ++write_idx) {
         if (has_null_mask) {
-          d_validities[write_idx] = static_cast<int8_t>(src_child.is_valid(read_idx));
+          d_validities[write_idx] = static_cast<int8_t>(str_col.is_valid(read_idx));
         }
-        d_offsets[write_idx] = src_child_offsets[read_idx + 1] - src_child_offsets[read_idx];
+        d_offsets[write_idx] = str_offsets[read_idx + 1] - str_offsets[read_idx];
       }
     } else {  // just copy the entire memory region containing all strings in the list
       // start_idx and end_idx are indices of character elements.
-      auto const start_idx = src_child_offsets[src_list_offsets[src_list_id]];
-      auto const end_idx   = src_child_offsets[src_list_offsets[src_list_id + 1]];
+      auto const start_idx = str_offsets[list_offsets[list_id]];
+      auto const end_idx   = str_offsets[list_offsets[list_id + 1]];
       if (start_idx < end_idx) {
         auto const input_ptr =
-          src_child.child(strings_column_view::chars_column_index).data<char>() +
-          src_child.offset() + start_idx;
+          str_col.child(strings_column_view::chars_column_index).data<char>() + start_idx;
         auto const output_ptr = d_chars + d_offsets[write_idx];
         thrust::copy(thrust::seq, input_ptr, input_ptr + end_idx - start_idx, output_ptr);
       }
@@ -177,13 +172,10 @@ struct interleave_list_entries_fn {
     auto const comp_fn      = compute_string_sizes_and_interleave_lists_fn{
       *table_dv_ptr, output_list_offsets.begin<offset_type>(), has_null_mask};
 
-    // Cannot call `cudf::strings::detail::make_strings_children` because that function executes the
-    // functor `comp_fn` on the range equal to `num_output_entries`.
-    auto [offsets_column, chars_column, null_mask, null_count] =
-      cudf::strings::detail::make_strings_children_with_null_mask(
-        comp_fn, num_output_lists, num_output_entries, stream, mr);
-
-    if (has_null_mask and null_count > 0) {
+    if (has_null_mask) {
+      auto [offsets_column, chars_column, null_mask, null_count] =
+        cudf::strings::detail::make_strings_children_with_null_mask(
+          comp_fn, num_output_lists, num_output_entries, stream, mr);
       return make_strings_column(num_output_entries,
                                  std::move(offsets_column),
                                  std::move(chars_column),
@@ -192,6 +184,9 @@ struct interleave_list_entries_fn {
                                  stream,
                                  mr);
     }
+
+    auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
+      comp_fn, num_output_lists, num_output_entries, stream, mr);
     return make_strings_column(num_output_entries,
                                std::move(offsets_column),
                                std::move(chars_column),
@@ -216,9 +211,11 @@ struct interleave_list_entries_fn {
     auto const table_dv_ptr = table_device_view::create(input);
 
     // The output child column.
-    auto const child_col = lists_column_view(*input.begin()).child();
-    auto output =
-      allocate_like(child_col, num_output_entries, mask_allocation_policy::NEVER, stream, mr);
+    auto output        = allocate_like(lists_column_view(*input.begin()).child(),
+                                num_output_entries,
+                                mask_allocation_policy::NEVER,
+                                stream,
+                                mr);
     auto output_dv_ptr = mutable_column_device_view::create(*output);
 
     // The array of int8_t to store entry validities.
@@ -229,34 +226,34 @@ struct interleave_list_entries_fn {
       thrust::make_counting_iterator<size_type>(0),
       num_output_lists,
       [num_cols,
-       table_dv         = *table_dv_ptr,
-       d_validities     = validities.begin(),
-       dst_list_offsets = output_list_offsets.begin<offset_type>(),
-       d_output         = output_dv_ptr->begin<T>(),
-       has_null_mask] __device__(size_type const dst_list_id) {
-        auto const src_col_id     = dst_list_id % num_cols;
-        auto const src_list_id    = dst_list_id / num_cols;
-        auto const& src_lists_col = table_dv.column(src_col_id);
-        auto const src_list_offsets =
-          src_lists_col.child(lists_column_view::offsets_column_index).data<offset_type>() +
-          src_lists_col.offset();
-        auto const& src_child = src_lists_col.child(lists_column_view::child_column_index);
+       table_dv     = *table_dv_ptr,
+       d_validities = validities.begin(),
+       d_offsets    = output_list_offsets.begin<offset_type>(),
+       d_output     = output_dv_ptr->begin<T>(),
+       has_null_mask] __device__(size_type const idx) {
+        auto const col_id     = idx % num_cols;
+        auto const list_id    = idx / num_cols;
+        auto const& lists_col = table_dv.column(col_id);
+        auto const list_offsets =
+          lists_col.child(lists_column_view::offsets_column_index).data<offset_type>() +
+          lists_col.offset();
+        auto const& data_col = lists_col.child(lists_column_view::child_column_index);
 
-        // The indices of the entries in the list to gather from.
-        auto const start_idx   = src_list_offsets[src_list_id];
-        auto const end_idx     = src_list_offsets[src_list_id + 1];
-        auto const write_start = dst_list_offsets[dst_list_id];
+        // The indices of the entries within the source list.
+        auto const start_idx   = list_offsets[list_id];
+        auto const end_idx     = list_offsets[list_id + 1];
+        auto const write_start = d_offsets[idx];
 
         // Fill the validities array if necessary.
         if (has_null_mask) {
           for (auto read_idx = start_idx, write_idx = write_start; read_idx < end_idx;
                ++read_idx, ++write_idx) {
-            d_validities[write_idx] = static_cast<int8_t>(src_child.is_valid(read_idx));
+            d_validities[write_idx] = static_cast<int8_t>(data_col.is_valid(read_idx));
           }
         }
 
         // Do a copy for the entire list entries.
-        auto const input_ptr  = reinterpret_cast<char const*>(src_child.data<T>() + start_idx);
+        auto const input_ptr  = reinterpret_cast<char const*>(data_col.data<T>() + start_idx);
         auto const output_ptr = reinterpret_cast<char*>(&d_output[write_start]);
         thrust::copy(
           thrust::seq, input_ptr, input_ptr + sizeof(T) * (end_idx - start_idx), output_ptr);
