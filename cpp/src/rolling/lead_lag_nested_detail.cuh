@@ -40,7 +40,7 @@ struct lead_lag_gather_map_builder {
                               PrecedingIterator preceding,
                               FollowingIterator following)
     : _input_size{input_size},
-      NULL_INDEX{input_size + 1},
+      _null_index{input_size + 1},  // Out of input range. Gather returns null.
       _row_offset{row_offset},
       _preceding{preceding},
       _following{following}
@@ -54,7 +54,7 @@ struct lead_lag_gather_map_builder {
     // the beginning/end of the group. `rolling_window()` does not.
     // Must trim _following[i] so as not to go past the column end.
     auto following = min(_following[i], _input_size - i - 1);
-    return (_row_offset > following) ? NULL_INDEX : (i + _row_offset);
+    return (_row_offset > following) ? _null_index : (i + _row_offset);
   }
 
   template <aggregation::Kind o = op, CUDF_ENABLE_IF(o == aggregation::LAG)>
@@ -64,15 +64,15 @@ struct lead_lag_gather_map_builder {
     // the beginning/end of the group. `rolling_window()` does not.
     // Must trim _preceding[i] so as not to go past the column start.
     auto preceding = min(_preceding[i], i + 1);
-    return (_row_offset > (preceding - 1)) ? NULL_INDEX : (i - _row_offset);
+    return (_row_offset > (preceding - 1)) ? _null_index : (i - _row_offset);
   }
 
  private:
-  size_type _input_size;
-  size_type NULL_INDEX;
-  size_type _row_offset;
-  PrecedingIterator _preceding;
-  FollowingIterator _following;
+  size_type const _input_size;   // Number of rows in input to LEAD/LAG.
+  size_type const _null_index;   // Index value to use to output NULL for LEAD/LAG calculation.
+  size_type const _row_offset;   // LEAD/LAG offset. E.g. For LEAD(2), _row_offset == 2.
+  PrecedingIterator _preceding;  // Iterator to retrieve preceding window offset.
+  FollowingIterator _following;  // Iterator to retrieve following window offset.
 };
 
 /**
@@ -81,15 +81,15 @@ struct lead_lag_gather_map_builder {
 template <typename GatherMapIter>
 struct is_null_index_predicate_impl {
   is_null_index_predicate_impl(size_type input_size, GatherMapIter gather_)
-    : NULL_INDEX{input_size + 1}, gather{gather_}
+    : null_index{input_size + 1}, gather{gather_}
   {
   }
 
-  bool __device__ operator()(size_type i) const { return gather[i] == NULL_INDEX; }
+  bool __device__ operator()(size_type i) const { return gather[i] == null_index; }
 
  private:
-  const size_type NULL_INDEX;
-  GatherMapIter gather;
+  size_type const null_index;  // Index value to use to output NULL for LEAD/LAG calculation.
+  GatherMapIter gather;        // Iterator for gather-map entries.
 };
 
 /**
@@ -178,15 +178,17 @@ std::unique_ptr<column> compute_lead_lag_for_nested(column_view const& input,
                     lead_lag_gather_map_builder<op, PrecedingIter, FollowingIter>{
                       input.size(), offset, preceding, following});
 
-  auto output_with_nulls = cudf::gather(table_view{std::vector<column_view>{input}},
-                                        gather_map_column->view(),
-                                        out_of_bounds_policy::NULLIFY);
+  auto output_with_nulls =
+    cudf::detail::gather(table_view{std::vector<column_view>{input}},
+                         gather_map_column->view().template begin<size_type>(),
+                         gather_map_column->view().end<size_type>(),
+                         out_of_bounds_policy::NULLIFY,
+                         stream,
+                         mr);
 
   if (default_outputs.is_empty()) { return std::move(output_with_nulls->release()[0]); }
 
   // Must scatter defaults.
-  auto NULL_INDEX = size_type{input.size() + 1};
-
   auto scatter_map = rmm::device_uvector<size_type>(input.size(), stream);
 
   // Find all indices at which LEAD/LAG computed nulls previously.
@@ -215,7 +217,8 @@ std::unique_ptr<column> compute_lead_lag_for_nested(column_view const& input,
     scatter_map_end,
     table_view{std::vector<column_view>{output_with_nulls->release()[0]->view()}},
     false,
-    stream);
+    stream,
+    mr);
   return std::move(scattered_results->release()[0]);
 }
 
