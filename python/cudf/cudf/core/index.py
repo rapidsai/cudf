@@ -363,12 +363,6 @@ class Index(FrameOneD, Serializable):
         return idx_typ(index, name=name)
 
     @property
-    def ndim(self):
-        """Dimension of the data. Apart from MultiIndex ndim is always 1.
-        """
-        return 1
-
-    @property
     def names(self):
         """
         Returns a tuple containing the name of the Index.

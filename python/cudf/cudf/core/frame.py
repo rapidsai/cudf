@@ -3311,6 +3311,11 @@ class FrameOneD(Frame):
     def name(self, value):
         self._data[value] = self._data.pop(self.name)
 
+    @property
+    def ndim(self):
+        """Dimension of the data (always 1)."""
+        return 1
+
 
 def _get_replacement_values_for_columns(
     to_replace: Any, value: Any, columns_dtype_map: Dict[Any, Any]
