@@ -83,7 +83,7 @@ class unordered_multiset {
       cudf::detail::make_zeroed_device_uvector_async<size_type>(2 * d_col.size() + 1, stream);
     auto hash_bins_end =
       cudf::detail::make_zeroed_device_uvector_async<size_type>(2 * d_col.size() + 1, stream);
-    auto hash_data = cudf::detail::make_zeroed_device_uvector_async<Element>(d_col.size(), stream);
+    auto hash_data = rmm::device_uvector<Element>(d_col.size(), stream);
 
     Hasher hasher;
     size_type *d_hash_bins_start = hash_bins_start.data();
@@ -134,11 +134,9 @@ class unordered_multiset {
 
  private:
   unordered_multiset(size_type size,
-                     cudf::device_span<size_type const> hash_bins,
-                     cudf::device_span<Element const> hash_data)
-    : size{size},
-      hash_bins{cudf::detail::make_device_uvector_sync(hash_bins)},
-      hash_data{cudf::detail::make_device_uvector_sync(hash_data)}
+                     rmm::device_uvector<size_type> &&hash_bins,
+                     rmm::device_uvector<Element> &&hash_data)
+    : size{size}, hash_bins{std::move(hash_bins)}, hash_data{std::move(hash_data)}
   {
   }
 
