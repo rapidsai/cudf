@@ -1204,3 +1204,18 @@ def test_binop_add_nullable_fill():
     y = cudf.Series([1, None, 3])
     assert_eq(x.add(y), cudf.Series([2, None, None]))
     assert_eq(x.add(y, fill_value=0), cudf.Series([2, 2, 3]))
+
+
+# def test_binop_indexed_series_withindex():
+#     """Test a binary op (addition) with a non-integral index and an Index."""
+#     psr = pd.Series([1, 2, 3], index=['a', 'b', 'c'])
+#     pidx = pd.Index([1, None, 3])
+#
+#     gsr = cudf.Series(psr)
+#     gidx = cudf.Index(pidx)
+#     assert_eq(psr + pidx, gsr + gidx)
+#     assert_eq(psr + pd.Series(pidx), gsr + cudf.Series(gidx))
+#     assert_eq(pidx + psr, gidx + gsr)
+#     assert_eq(pd.Series(pidx) + psr, cudf.Series(gidx) + gsr)
+#
+#     # TODO: Also test with arbitrary sequence objects (like lists).

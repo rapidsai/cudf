@@ -795,7 +795,60 @@ class Index(SingleColumnFrame, Serializable):
             return as_index(op())
 
     def _binaryop(self, fn, other):
-        return self._apply_op(fn, other)
+        if isinstance(other, cudf.DataFrame):
+            return NotImplemented
+
+        if isinstance(other, cudf.Series):
+            # TODO: Change this to fall back to adding series, first checking
+            # that the lengths of self and other are the same. Should be fine
+            # to just return NotImplemented I think.
+            self._apply_op(fn, other)
+        else:
+            lhs, rhs = self, other
+        rhs = self._normalize_binop_value(rhs)
+
+        if fn == "truediv":
+            if str(lhs.dtype) in truediv_int_dtype_corrections:
+                truediv_type = truediv_int_dtype_corrections[str(lhs.dtype)]
+                lhs = lhs.astype(truediv_type)
+
+        if fill_value is not None:
+            if lhs.nullable:
+                lhs = lhs.fillna(fill_value)
+            if not is_scalar(rhs) and rhs.nullable:
+                rhs = rhs.fillna(fill_value)
+
+        outcol = lhs._column.binary_operator(fn, rhs)
+
+        # Get the appropriate name for output operations involving two objects
+        # that are Series-like objects. The output shares the lhs's name unless
+        # the rhs is a _differently_ named Series-like object.
+        if (
+            isinstance(other, (cudf.Series, cudf.Index, pd.Series, pd.Index))
+            and self.name != other.name
+        ):
+            result_name = None
+        else:
+            result_name = self.name
+
+        return lhs._copy_construct(data=outcol, name=result_name)
+
+    def _normalize_binop_value(self, other):
+        """Returns a *column* (not a Series) or scalar for performing
+        binary operations with self._column.
+        """
+        # TODO: Fix some of this, it may not make sense to have something
+        # general for multiple frame types.
+        if isinstance(other, ColumnBase):
+            return other
+        if isinstance(other, cudf.Series):
+            return other._column
+        elif isinstance(other, cudf.Index):
+            return cudf.Series(other)._column
+        elif other is cudf.NA:
+            return cudf.Scalar(other, dtype=self.dtype)
+        else:
+            return self._column.normalize_binop_value(other)
 
     def sort_values(self, return_indexer=False, ascending=True, key=None):
         """
