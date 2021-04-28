@@ -4377,12 +4377,6 @@ def test_constructor_properties():
     df[key1] = val1
     df[key2] = val2
 
-    # Correct use of _constructor (for DataFrame)
-    assert_eq(df, df._constructor({key1: val1, key2: val2}))
-
-    # Correct use of _constructor (for cudf.Series)
-    assert_eq(df[key1], df[key2]._constructor(val1, name=key1))
-
     # Correct use of _constructor_sliced (for DataFrame)
     assert_eq(df[key1], df._constructor_sliced(val1, name=key1))
 

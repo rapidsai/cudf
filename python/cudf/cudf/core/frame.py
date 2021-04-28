@@ -608,7 +608,7 @@ class Frame(libcudf.table.Table):
 
         """
         data = self._data.select_by_index(indices)
-        return self._constructor(
+        return self.__class__(
             data, columns=data.to_pandas_index(), index=self.index
         )
 

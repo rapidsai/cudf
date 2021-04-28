@@ -63,10 +63,6 @@ from cudf.utils.utils import (
 
 class Series(FrameOneD, Serializable):
     @property
-    def _constructor(self):
-        return Series
-
-    @property
     def _constructor_sliced(self):
         raise NotImplementedError(
             "_constructor_sliced not supported for Series!"
@@ -470,9 +466,9 @@ class Series(FrameOneD, Serializable):
         new_data = super()._get_columns_by_label(labels, downcast)
 
         return (
-            self._constructor(data=new_data, index=self.index)
+            self.__class__(data=new_data, index=self.index)
             if len(new_data) > 0
-            else self._constructor(dtype=self.dtype, name=self.name)
+            else self.__class__(dtype=self.dtype, name=self.name)
         )
 
     @classmethod

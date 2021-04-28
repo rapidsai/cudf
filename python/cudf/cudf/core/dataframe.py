@@ -555,10 +555,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         return data, index
 
     @property
-    def _constructor(self):
-        return DataFrame
-
-    @property
     def _constructor_sliced(self):
         return Series
 
@@ -1456,7 +1452,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     new_data, index=self.index, name=labels
                 )
                 return out
-        out = self._constructor()._from_data(
+        out = self.__class__()._from_data(
             new_data, index=self.index, columns=new_data.to_pandas_index()
         )
         return out
