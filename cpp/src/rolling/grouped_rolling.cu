@@ -20,6 +20,7 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/rolling/range_window_bounds.hpp>
+#include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 
 namespace cudf {
@@ -868,6 +869,21 @@ struct to_duration_bounds {
 };
 
 /**
+ * @brief Get duration type corresponding to specified timestamp type.
+ */
+data_type get_duration_type_for(cudf::data_type timestamp_type)
+{
+  switch (timestamp_type.id()) {
+    case type_id::TIMESTAMP_DAYS: return data_type{type_id::DURATION_DAYS};
+    case type_id::TIMESTAMP_SECONDS: return data_type{type_id::DURATION_SECONDS};
+    case type_id::TIMESTAMP_MILLISECONDS: return data_type{type_id::DURATION_MILLISECONDS};
+    case type_id::TIMESTAMP_MICROSECONDS: return data_type{type_id::DURATION_MICROSECONDS};
+    case type_id::TIMESTAMP_NANOSECONDS: return data_type{type_id::DURATION_NANOSECONDS};
+    default: CUDF_FAIL("Expected timestamp orderby column.");
+  }
+}
+
+/**
  * @brief Bridge function to convert from size_type (number of days) to appropriate duration type.
  *
  * This helps adapt the old `grouped_time_range_rolling_window()` functions that took a "number of
@@ -896,8 +912,7 @@ range_window_bounds to_range_bounds(cudf::window_bounds const& days_bounds,
                                     cudf::data_type timestamp_type)
 {
   return days_bounds.is_unbounded
-           ? range_window_bounds::unbounded(
-               data_type{static_cast<cudf::type_id>(static_cast<int32_t>(timestamp_type.id()) + 5)})
+           ? range_window_bounds::unbounded(get_duration_type_for(timestamp_type))
            : cudf::type_dispatcher(timestamp_type, to_duration_bounds{}, days_bounds.value);
 }
 
