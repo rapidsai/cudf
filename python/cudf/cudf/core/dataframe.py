@@ -3154,20 +3154,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         out.columns = self.columns
         return out
 
-    def __copy__(self):
-        return self.copy(deep=True)
-
-    def __deepcopy__(self, memo=None):
-        """
-        Parameters
-        ----------
-        memo, default None
-            Standard signature. Unused
-        """
-        if memo is None:
-            memo = {}
-        return self.copy(deep=True)
-
     @annotate("INSERT", color="green", domain="cudf_python")
     def insert(self, loc, name, value):
         """ Add a column to DataFrame at the index specified by loc.

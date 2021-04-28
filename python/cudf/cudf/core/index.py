@@ -314,7 +314,7 @@ class Index(FrameOneD, Serializable):
         ]
         """
 
-        return self._data.columns[0].to_arrow()
+        return self._column.to_arrow()
 
     @classmethod
     def deserialize(cls, header, frames):

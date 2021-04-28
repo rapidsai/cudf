@@ -586,14 +586,6 @@ class Series(FrameOneD, Serializable):
         if not inplace:
             return out
 
-    def __copy__(self, deep=True):
-        return self.copy(deep)
-
-    def __deepcopy__(self, memo=None):
-        if memo is None:
-            memo = {}
-        return self.copy()
-
     def append(self, to_append, ignore_index=False, verify_integrity=False):
         """Append values from another ``Series`` or array-like object.
         If ``ignore_index=True``, the index is reset.
