@@ -28,6 +28,8 @@ namespace detail {
  *
  * Retrieves the specified row validity from device memory.
  *
+ * @note Synchronizes `stream`.
+ *
  * @throw cudf::logic_error if `element_index < 0 or >= col_view.size()`
  *
  * @param col_view The column to retrieve the validity from.
@@ -36,7 +38,7 @@ namespace detail {
  * @return Host boolean that indicates the validity of the row.
  */
 
-bool get_valid(column_view const& col_view,
+bool is_element_valid_sync(column_view const& col_view,
                size_type element_index,
                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
