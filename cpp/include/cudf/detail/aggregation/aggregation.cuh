@@ -252,7 +252,7 @@ struct update_target_element<Source,
  * SFINAE is used to prevent recursion for dictionary type. Dictionary keys cannot be a dictionary.
  *
  */
-template <bool target_has_nulls = true, bool source_has_nulls = true>
+template <bool target_has_nulls = true>
 struct update_target_from_dictionary {
   template <typename Source,
             aggregation::Kind k,
@@ -262,7 +262,7 @@ struct update_target_from_dictionary {
                              column_device_view source,
                              size_type source_index) const noexcept
   {
-    update_target_element<Source, k, target_has_nulls, source_has_nulls>{}(
+    update_target_element<Source, k, target_has_nulls, false>{}(
       target, target_index, source, source_index);
   }
   template <typename Source,
@@ -308,7 +308,7 @@ struct update_target_element<
     dispatch_type_and_aggregation(
       source.child(cudf::dictionary_column_view::keys_column_index).type(),
       k,
-      update_target_from_dictionary<target_has_nulls, false>{},
+      update_target_from_dictionary<target_has_nulls>{},
       target,
       target_index,
       source.child(cudf::dictionary_column_view::keys_column_index),
