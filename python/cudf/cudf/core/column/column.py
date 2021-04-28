@@ -1122,6 +1122,13 @@ class ColumnBase(Column, Serializable):
         )
         return sorted_indices
 
+    def __array__(self, dtype=None):
+        raise TypeError(
+            "Implicit conversion to a host NumPy array via __array__ is not "
+            "allowed. To explicitly construct a host array, consider using "
+            ".to_array()"
+        )
+
     @property
     def __cuda_array_interface__(self):
         raise NotImplementedError(
