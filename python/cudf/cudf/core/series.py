@@ -398,12 +398,6 @@ class Series(FrameOneD, Serializable):
         return header, frames
 
     @property
-    def shape(self):
-        """Returns a tuple representing the dimensionality of the Series.
-        """
-        return (len(self),)
-
-    @property
     def dt(self):
         """
         Accessor object for datetimelike properties of the Series values.

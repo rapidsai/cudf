@@ -3316,6 +3316,12 @@ class FrameOneD(Frame):
         """Dimension of the data (always 1)."""
         return 1
 
+    @property
+    def shape(self):
+        """Returns a tuple representing the dimensionality of the Index.
+        """
+        return (len(self),)
+
 
 def _get_replacement_values_for_columns(
     to_replace: Any, value: Any, columns_dtype_map: Dict[Any, Any]

@@ -180,12 +180,6 @@ class Index(FrameOneD, Serializable):
         """  # noqa: E501
         return super().drop_duplicates(keep=keep)
 
-    @property
-    def shape(self):
-        """Returns a tuple representing the dimensionality of the Index.
-        """
-        return (len(self),)
-
     def serialize(self):
         header = {}
         header["index_column"] = {}
