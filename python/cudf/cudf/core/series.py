@@ -329,29 +329,6 @@ class Series(FrameOneD, Serializable):
         """
         return cls(s, nan_as_null=nan_as_null)
 
-    @property
-    def values_host(self):
-        """
-        Return a numpy representation of the Series.
-
-        Only the values in the Series will be returned.
-
-        Returns
-        -------
-        out : numpy.ndarray
-            The values of the Series.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, -10, 100, 20])
-        >>> ser.values_host
-        array([  1, -10, 100,  20])
-        >>> type(ser.values_host)
-        <class 'numpy.ndarray'>
-        """
-        return self._column.values_host
-
     def serialize(self):
         header = {}
         frames = []

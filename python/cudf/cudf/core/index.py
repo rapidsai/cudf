@@ -316,29 +316,6 @@ class Index(FrameOneD, Serializable):
 
         return self._data.columns[0].to_arrow()
 
-    @property
-    def values_host(self):
-        """
-        Return a numpy representation of the Index.
-
-        Only the values in the Index will be returned.
-
-        Returns
-        -------
-        out : numpy.ndarray
-            The values of the Index.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> index = cudf.Index([1, -10, 100, 20])
-        >>> index.values_host
-        array([  1, -10, 100,  20])
-        >>> type(index.values_host)
-        <class 'numpy.ndarray'>
-        """
-        return self._column.values_host
-
     @classmethod
     def deserialize(cls, header, frames):
         h = header["index_column"]

@@ -3347,7 +3347,7 @@ class FrameOneD(Frame):
         Returns
         -------
         out : cupy.ndarray
-            A representation of the underlying data.
+            A device representation of the underlying data.
 
         Examples
         --------
@@ -3364,6 +3364,32 @@ class FrameOneD(Frame):
         <class 'cupy.core.core.ndarray'>
         """
         return self._column.values
+
+    @property
+    def values_host(self):
+        """
+        Return a NumPy representation of the data.
+
+        Returns
+        -------
+        out : numpy.ndarray
+            A host representation of the underlying data.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([1, -10, 100, 20])
+        >>> ser.values_host
+        array([  1, -10, 100,  20])
+        >>> type(ser.values_host)
+        <class 'numpy.ndarray'>
+        >>> index = cudf.Index([1, -10, 100, 20])
+        >>> index.values_host
+        array([  1, -10, 100,  20])
+        >>> type(index.values_host)
+        <class 'numpy.ndarray'>
+        """
+        return self._column.values_host
 
 
 def _get_replacement_values_for_columns(
