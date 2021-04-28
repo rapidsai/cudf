@@ -34,29 +34,24 @@ import java.io.File;
  */
 public class CuFile {
   private static final Logger log = LoggerFactory.getLogger(CuFile.class);
-  private static boolean initialized = false;
+  private static final boolean INITIALIZED = initialize();
   private static CuFileDriver driver;
-
-  static {
-    initialize();
-  }
 
   /**
    * Load the native libraries needed for libcufilejni, if not loaded already; open the cuFile
    * driver, and add a shutdown hook to close it.
    */
-  private static synchronized void initialize() {
-    if (!initialized) {
-      try {
-        NativeDepsLoader.loadNativeDeps(new String[]{"cufilejni"});
-        driver = new CuFileDriver();
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-          driver.close();
-        }));
-        initialized = true;
-      } catch (Throwable t) {
-        log.error("Could not load cuFile jni library...", t);
-      }
+  private static synchronized boolean initialize() {
+    try {
+      NativeDepsLoader.loadNativeDeps(new String[]{"cufilejni"});
+      driver = new CuFileDriver();
+      Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        driver.close();
+      }));
+      return true;
+    } catch (Throwable t) {
+      log.error("Could not load cuFile jni library...", t);
+      return false;
     }
   }
 
@@ -66,7 +61,7 @@ public class CuFile {
    * @return true if the libcufilejni library has been successfully loaded.
    */
   public static boolean libraryLoaded() {
-    return initialized;
+    return INITIALIZED;
   }
 
   /**

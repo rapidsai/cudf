@@ -20,6 +20,8 @@ package ai.rapids.cudf;
  * Represents a cuFile buffer.
  */
 public final class CuFileBuffer extends BaseDeviceMemoryBuffer {
+  @SuppressWarnings("unused")
+  private static final boolean CU_FILE_LIBRARY_LOADED = CuFile.libraryLoaded();
   private static final int ALIGNMENT = 4096;
 
   private final DeviceMemoryBuffer deviceMemoryBuffer;
