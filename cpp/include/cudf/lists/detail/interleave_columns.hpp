@@ -39,7 +39,7 @@ namespace detail {
  * @throws cudf::logic_error if all lists columns do not have the same entry type.
  *
  * @param input Table containing lists columns to interleave.
- * @param has_null_mask A boolean flag indicating that the input columns have null mask.
+ * @param has_null_mask A boolean flag indicating that the input columns have a null mask.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return The interleaved columns as a single column.
