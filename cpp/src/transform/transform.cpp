@@ -67,8 +67,7 @@ void unary_operation(mutable_column_view output,
              cudf::jit::get_data_ptr(input));
 }
 
-void binary_operation(column_view const& A, 
-                      column_view const& B, 
+void binary_operation(table_view data_view,
                       std::string const& binary_udf, 
                       data_type output_type, 
                       column_view const& outcol_view,
@@ -76,9 +75,11 @@ void binary_operation(column_view const& A,
                       rmm::mr::device_memory_resource* mr)
 {
 
+  column_view A = data_view.column(0);
+  column_view B = data_view.column(1);
 
- std::string generic_kernel_name = 
- jitify2::reflection::Template("cudf::transformation::jit::generic_udf_kernel")
+  std::string generic_kernel_name = 
+  jitify2::reflection::Template("cudf::transformation::jit::generic_udf_kernel")
     .instantiate(cudf::jit::get_type_name(outcol_view.type()),
                  "int64_t*",
                  "uint32_t*",
@@ -170,19 +171,17 @@ std::unique_ptr<column> transform(column_view const& input,
   return output;
 }
 
-std::unique_ptr<column> masked_binary_op_inner(column_view const& A, 
-                                         column_view const& B, 
-                                         std::string const& binary_udf, 
-                                         data_type output_type, 
-                                         column_view const& outcol_view,
-                                         column_view const& outmsk_view,
-                                         rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> masked_binary_op_inner(table_view data_view, 
+                                               std::string const& binary_udf, 
+                                               data_type output_type, 
+                                               column_view const& outcol_view,
+                                               column_view const& outmsk_view,
+                                               rmm::mr::device_memory_resource* mr)
 {
   rmm::cuda_stream_view stream = rmm::cuda_stream_default;
-  transformation::jit::binary_operation(A, B, binary_udf, output_type, outcol_view, outmsk_view, mr);
+  transformation::jit::binary_operation(data_view, binary_udf, output_type, outcol_view, outmsk_view, mr);
 
-  std::unique_ptr<column> output = make_fixed_width_column(
-    output_type, A.size(), copy_bitmask(A), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+  std::unique_ptr<column> output;
 
 
   return output;
@@ -220,15 +219,14 @@ std::unique_ptr<column> transform(column_view const& input,
   return detail::transform(input, unary_udf, output_type, is_ptx, rmm::cuda_stream_default, mr);
 }
 
-std::unique_ptr<column> masked_binary_op(column_view const& A, 
-                                         column_view const& B, 
+std::unique_ptr<column> masked_binary_op(table_view data_view,
                                          std::string const& binary_udf, 
                                          data_type output_type, 
                                          column_view const& outcol_view,
                                          column_view const& outmsk_view,
                                          rmm::mr::device_memory_resource* mr)
 {
-  return detail::masked_binary_op_inner(A, B, binary_udf, output_type, outcol_view, outmsk_view, mr);
+  return detail::masked_binary_op_inner(data_view, binary_udf, output_type, outcol_view, outmsk_view, mr);
 }
 
 std::unique_ptr<column> generalized_masked_op(

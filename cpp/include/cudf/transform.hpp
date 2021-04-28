@@ -55,8 +55,7 @@ std::unique_ptr<column> transform(
 
 
 std::unique_ptr<column> masked_binary_op(
-  column_view const& A,
-  column_view const& B,
+  table_view data_view,
   std::string const& binary_udf,
   data_type output_type,
   column_view const& outcol_view,

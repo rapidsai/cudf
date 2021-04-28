@@ -35,6 +35,7 @@ from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
+from cudf.core.udf import compile_udf
 from cudf.core.window import Rolling
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
@@ -4713,6 +4714,11 @@ class DataFrame(Frame, Serializable):
             # Run query
             boolmask = queryutils.query_execute(self, expr, callenv)
             return self._apply_boolean_mask(boolmask)
+
+    def apply(self, func):
+        breakpoint()
+        return super()._apply(func)
+
 
     @applyutils.doc_apply()
     def apply_rows(

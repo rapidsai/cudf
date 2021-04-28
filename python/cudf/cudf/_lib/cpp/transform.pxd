@@ -39,8 +39,7 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     ) except +
 
     cdef unique_ptr[column] masked_binary_op(
-        column_view A,
-        column_view B, 
+        table_view data_view,
         string binary_udf,
         data_type output_type,
         column_view outcol_view,

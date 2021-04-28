@@ -1418,6 +1418,23 @@ class Frame(libcudf.table.Table):
         result._copy_type_metadata(self)
         return result
 
+    def _apply(self, func):
+        from cudf.core.udf import compile_udf
+
+        if not all(np.dtype('int64') == dtype for dtype in self.dtypes):
+            raise TypeError("Currently only int64 is supported")
+
+        kernel, ptx = compile_udf(func)
+
+        output_column = cudf.core.column.column_empty(row_count=len(self), dtype='int64')
+        output_mask = cudf.core.column.column_empty(row_count=len(self), dtype='bool')
+
+        breakpoint()
+        result = cudf._lib.transform.masked_udf(self, ptx, output_column, output_mask)
+        breakpoint()
+        return result
+
+
     def rank(
         self,
         axis=0,
@@ -1456,7 +1473,7 @@ class Frame(libcudf.table.Table):
         pct : bool, default False
             Whether or not to display the returned rankings in percentile
             form.
-
+f
         Returns
         -------
         same type as caller
