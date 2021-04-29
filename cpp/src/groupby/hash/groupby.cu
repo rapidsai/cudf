@@ -103,15 +103,10 @@ bool constexpr is_hash_aggregation(aggregation::Kind t)
 class groupby_simple_aggregations_collector final
   : public cudf::detail::simple_aggregations_collector {
  public:
-  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type, aggregation const& agg)
-  {
-    std::vector<std::unique_ptr<aggregation>> aggs;
-    aggs.push_back(agg.clone());
-    return aggs;
-  }
+  using cudf::detail::simple_aggregations_collector::visit;
 
   std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                  cudf::detail::min_aggregation const& agg)
+                                                  cudf::detail::min_aggregation const& agg) override
   {
     std::vector<std::unique_ptr<aggregation>> aggs;
     aggs.push_back(col_type.id() == type_id::STRING ? make_argmin_aggregation()
@@ -120,7 +115,7 @@ class groupby_simple_aggregations_collector final
   }
 
   std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                  cudf::detail::max_aggregation const& agg)
+                                                  cudf::detail::max_aggregation const& agg) override
   {
     std::vector<std::unique_ptr<aggregation>> aggs;
     aggs.push_back(col_type.id() == type_id::STRING ? make_argmax_aggregation()
@@ -128,8 +123,8 @@ class groupby_simple_aggregations_collector final
     return aggs;
   }
 
-  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                  cudf::detail::mean_aggregation const& agg)
+  std::vector<std::unique_ptr<aggregation>> visit(
+    data_type col_type, cudf::detail::mean_aggregation const& agg) override
   {
     CUDF_EXPECTS(is_fixed_width(col_type), "MEAN aggregation expects fixed width type");
     std::vector<std::unique_ptr<aggregation>> aggs;
@@ -141,7 +136,7 @@ class groupby_simple_aggregations_collector final
   }
 
   std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                  cudf::detail::var_aggregation const& agg)
+                                                  cudf::detail::var_aggregation const& agg) override
   {
     std::vector<std::unique_ptr<aggregation>> aggs;
     aggs.push_back(make_sum_aggregation());
@@ -152,7 +147,7 @@ class groupby_simple_aggregations_collector final
   }
 
   std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                  cudf::detail::std_aggregation const& agg)
+                                                  cudf::detail::std_aggregation const& agg) override
   {
     std::vector<std::unique_ptr<aggregation>> aggs;
     aggs.push_back(make_sum_aggregation());
@@ -178,6 +173,8 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   rmm::cuda_stream_view stream;
 
  public:
+  using cudf::detail::aggregation_finalizer::visit;
+
   hash_compound_agg_finalizer(size_t col_idx,
                               column_view col,
                               cudf::detail::result_cache* sparse_results,
@@ -237,7 +234,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
                            stream,
                            mr);
     return std::move(gather_argminmax->release()[0]);
-  };
+  }
 
   // Declare overloads for each kind of aggregation to dispatch
   void visit(cudf::aggregation const& agg) override
