@@ -313,8 +313,6 @@ struct update_target_element<
       target_index,
       source.child(cudf::dictionary_column_view::keys_column_index),
       static_cast<cudf::size_type>(source.element<dictionary32>(source_index)));
-
-    if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 

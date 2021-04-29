@@ -132,5 +132,24 @@ TYPED_TEST(groupby_product_test, dictionary)
   test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_product_aggregation());
 }
 
+TYPED_TEST(groupby_product_test, dictionary_with_nulls)
+{
+  using V = TypeParam;
+  using R = cudf::detail::target_type_t<V, aggregation::PRODUCT>;
+
+  // clang-format off
+  fixed_width_column_wrapper<K> keys{ 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  dictionary_column_wrapper<V>  vals{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+                                     {1, 0, 0, 1, 1, 1, 1, 1, 1, 1}};
+
+                                        //  { 1, 1, 1,  2, 2, 2, 2,  3, 3, 3}
+  fixed_width_column_wrapper<K> expect_keys({ 1,        2,           3      });
+                                        //  { 0, 3, 6,  @, 4, 5, 9,  @, 7, 8}
+  fixed_width_column_wrapper<R> expect_vals({  0.,     180.,        56. }, all_valid());
+  // clang-format on
+
+  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_product_aggregation());
+}
+
 }  // namespace test
 }  // namespace cudf
