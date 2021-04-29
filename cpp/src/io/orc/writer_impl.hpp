@@ -224,10 +224,12 @@ class writer::impl {
    *
    * @param[in,out] columns List of columns
    * @param[in] stripe_bounds List of stripe boundaries
+   * @param[in] decimal_column_sizes Sizes of encoded decimal columns
    * @return List of stream descriptors
    */
   orc_streams create_streams(host_span<orc_column_view> columns,
-                             host_span<stripe_rowgroups const> stripe_bounds);
+                             host_span<stripe_rowgroups const> stripe_bounds,
+                             std::map<uint32_t, size_t> const& decimal_column_sizes);
 
   /**
    * @brief Gathers stripe information.

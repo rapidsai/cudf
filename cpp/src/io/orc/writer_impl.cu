@@ -362,7 +362,8 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
 
 // DECIMAL: need total size on the host
 orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
-                                         host_span<stripe_rowgroups const> stripe_bounds)
+                                         host_span<stripe_rowgroups const> stripe_bounds,
+                                         std::map<uint32_t, size_t> const &decimal_column_sizes)
 {
   // 'column 0' row index stream
   std::vector<Stream> streams{{ROW_INDEX, 0}};  // TODO: Separate index and data streams?
@@ -398,7 +399,6 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
       present_stream_size = ((row_index_stride_ + 7) >> 3);
       present_stream_size += (present_stream_size + 0x7f) >> 7;
     }
-
     switch (kind) {
       case TypeKind::BOOLEAN:
         data_stream_size = div_rowgroups_by<int64_t>(1024) * (128 + 1);
@@ -483,8 +483,12 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
         data2_kind        = SECONDARY;
         encoding_kind     = DIRECT_V2;
         break;
-        // DECIMAL: data_size computed via varint_len + scan_by_key + "skip scan"
-        // data2_size (scale) RLE estimate OR compute exact since all elems are same
+      case TypeKind::DECIMAL:
+        // varint values (NO RLE)
+        data_stream_size = decimal_column_sizes.at(column.index());
+        // scale stream TODO: compute exact since all elems are same
+        data2_stream_size = div_rowgroups_by<int64_t>(512) * (512 * 4 + 2);
+        break;
       default: CUDF_FAIL("Unsupported ORC type kind");
     }
 
@@ -1140,6 +1144,21 @@ encoder_decimal_info decimal_chunk_sizes(table_view const &table,
   return {std::move(elem_sizes), std::move(rg_sizes)};
 }
 
+std::map<uint32_t, size_t> decimal_column_sizes(
+  std::map<uint32_t, std::vector<uint32_t>> chunk_sizes)
+{
+  std::map<uint32_t, size_t> column_sizes;
+  std::transform(chunk_sizes.cbegin(),
+                 chunk_sizes.cend(),
+                 std::inserter(column_sizes, column_sizes.end()),
+                 [](auto const &chunk_size) -> std::pair<uint32_t, size_t> {
+                   return {
+                     chunk_size.first,
+                     std::accumulate(chunk_size.second.cbegin(), chunk_size.second.cend(), 0lu)};
+                 });
+  return column_sizes;
+}
+
 void writer::impl::write(table_view const &table)
 {
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
@@ -1197,7 +1216,7 @@ void writer::impl::write(table_view const &table)
       orc_columns.data(), str_col_ids, stripe_bounds, dict, dict_index.data(), stripe_dict);
   }
 
-  auto const decimal_chunks_sizes =
+  auto const dec_chunk_sizes =
     decimal_chunk_sizes(table, orc_columns, row_index_stride_, stripe_bounds, stream);
 
   // DECIMAL: to get the required info:
@@ -1208,7 +1227,8 @@ void writer::impl::write(table_view const &table)
   // Note: per-element size is only needed on device; per-RG sizeis needed to init streams (host);
   // total size is used on host
 
-  auto streams  = create_streams(orc_columns, stripe_bounds);
+  auto streams =
+    create_streams(orc_columns, stripe_bounds, decimal_column_sizes(dec_chunk_sizes.rg_sizes));
   auto enc_data = encode_columns(*device_columns,
                                  orc_columns,
                                  str_col_ids,
