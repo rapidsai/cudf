@@ -149,7 +149,7 @@ generate_list_offsets_and_validities(table_view const& input,
         table_dv.end(),
         [idx] __device__(auto const& lists_col) {
           auto const list_offsets =
-            lists_col.child(lists_column_view::offsets_column_index).template data<size_type>() +
+            lists_col.child(lists_column_view::offsets_column_index).template data<offset_type>() +
             lists_col.offset();
           return list_offsets[idx + 1] - list_offsets[idx];  // list size
         },
