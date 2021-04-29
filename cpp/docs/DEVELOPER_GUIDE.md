@@ -255,6 +255,11 @@ currently supported by cudf. Each type of value is represented by a separate typ
 which are all derived from `cudf::scalar`. e.g. A `numeric_scalar` holds a single numerical value, 
 a `string_scalar` holds a single string. The data for the stored value resides in device memory.
 
+A `list_scalar` holds the underlying data of a list. This means the underlying data can be any type
+that cudf supports. e.g. A `list_scalar` representing a list of integers stores an `cudf::column`
+of type `INT32`, a `list_scalar` represents a list of list of integers stores an `cudf::column` of
+type `LIST`, which in turn stores a column of type `INT32`.
+
 |Value type|Scalar class|Notes|
 |-|-|-|
 |fixed-width|`fixed_width_scalar<T>`| `T` can be any fixed-width type|
@@ -263,10 +268,13 @@ a `string_scalar` holds a single string. The data for the stored value resides i
 |timestamp|`timestamp_scalar<T>` | `T` can be `timestamp_D`, `timestamp_s`, etc.|
 |duration|`duration_scalar<T>` | `T` can be `duration_D`, `duration_s`, etc.|
 |string|`string_scalar`| This class object is immutable|
+|list|`list_scalar`| Underlying data can be any type supported by cudf |
 
 ### Construction
 `scalar`s can be created using either their respective constructors or using factory functions like 
 `make_numeric_scalar()`, `make_timestamp_scalar()` or `make_string_scalar()`. 
+
+// TODO: add details for `list_scalar`
 
 ### Casting
 All the factory methods return a `unique_ptr<scalar>` which needs to be statically downcasted to 
@@ -289,6 +297,8 @@ Each scalar type has a corresponding non-owning device view class which allows a
 and its validity from the device. This can be obtained using the function 
 `get_scalar_device_view(ScalarType s)`. Note that a device view is not provided for a base scalar 
 object, only for the derived typed scalar class objects.
+
+// TODO: add details for `list_scalar`
 
 # libcudf++ API and Implementation
 
