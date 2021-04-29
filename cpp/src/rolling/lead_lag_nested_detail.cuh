@@ -34,7 +34,8 @@ namespace {
  * @tparam FollowingIterator Iterator to retrieve following window bounds
  */
 template <aggregation::Kind op, typename PrecedingIterator, typename FollowingIterator>
-struct lead_lag_gather_map_builder {
+class lead_lag_gather_map_builder {
+ public:
   lead_lag_gather_map_builder(size_type input_size,
                               size_type row_offset,
                               PrecedingIterator preceding,
@@ -79,17 +80,18 @@ struct lead_lag_gather_map_builder {
  * @brief Predicate to find indices at which LEAD/LAG evaluated to null.
  */
 template <typename GatherMapIter>
-struct is_null_index_predicate_impl {
+class is_null_index_predicate_impl {
+ public:
   is_null_index_predicate_impl(size_type input_size, GatherMapIter gather_)
-    : null_index{input_size + 1}, gather{gather_}
+    : _null_index{input_size + 1}, _gather{gather_}
   {
   }
 
-  bool __device__ operator()(size_type i) const { return gather[i] == null_index; }
+  bool __device__ operator()(size_type i) const { return _gather[i] == _null_index; }
 
  private:
-  size_type const null_index;  // Index value to use to output NULL for LEAD/LAG calculation.
-  GatherMapIter gather;        // Iterator for gather-map entries.
+  size_type const _null_index;  // Index value to use to output NULL for LEAD/LAG calculation.
+  GatherMapIter _gather;        // Iterator for gather-map entries.
 };
 
 /**
