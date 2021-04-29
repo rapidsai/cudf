@@ -1048,9 +1048,6 @@ class MultiIndex(Index):
         names = pickle.loads(header["names"])
         return MultiIndex(names=names, source_data=source_data)
 
-    def __iter__(self):
-        cudf.utils.utils.raise_iteration_error(obj=self)
-
     def __getitem__(self, index):
         # TODO: This should be a take of the _source_data only
         match = self.take(index)
@@ -1106,29 +1103,6 @@ class MultiIndex(Index):
             self._source_data._data[level], name=self.names[level_idx]
         )
         return level_values
-
-    def _to_frame(self):
-
-        # for each column of codes
-        # replace column with mapping from integers to levels
-        df = self.codes.copy(deep=False)
-        for idx, col in enumerate(df.columns):
-            # use merge as a replace fn
-            level = cudf.DataFrame(
-                {
-                    "idx": column.arange(
-                        len(self.levels[idx]), dtype=df[col].dtype
-                    ),
-                    "level": self.levels[idx],
-                }
-            )
-            code = cudf.DataFrame({"idx": df[col]})
-            df[col] = code.merge(level).level
-        return df
-
-    @property
-    def _values(self):
-        return list([i for i in self])
 
     @classmethod
     def _concat(cls, objs):

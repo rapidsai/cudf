@@ -45,34 +45,6 @@ from cudf.utils.dtypes import (
 from cudf.utils.utils import cached_property, search_range
 
 
-def _to_frame(this_index, index=True, name=None):
-    """Create a DataFrame with a column containing this Index
-
-    Parameters
-    ----------
-    index : boolean, default True
-        Set the index of the returned DataFrame as the original Index
-    name : str, default None
-        Name to be used for the column
-
-    Returns
-    -------
-    DataFrame
-        cudf DataFrame
-    """
-
-    if name is not None:
-        col_name = name
-    elif this_index.name is None:
-        col_name = 0
-    else:
-        col_name = this_index.name
-
-    return cudf.DataFrame(
-        {col_name: this_index._column}, index=this_index if index else None
-    )
-
-
 class Index(FrameOneD, Serializable):
 
     dtype: DtypeObj
@@ -543,6 +515,33 @@ class Index(FrameOneD, Serializable):
         Return whether any elements is True in Index.
         """
         return self._column.any()
+
+    def to_frame(self, index=True, name=None):
+        """Create a DataFrame with a column containing this Index
+
+        Parameters
+        ----------
+        index : boolean, default True
+            Set the index of the returned DataFrame as the original Index
+        name : str, default None
+            Name to be used for the column
+
+        Returns
+        -------
+        DataFrame
+            cudf DataFrame
+        """
+
+        if name is not None:
+            col_name = name
+        elif self.name is None:
+            col_name = 0
+        else:
+            col_name = self.name
+
+        return cudf.DataFrame(
+            {col_name: self._column}, index=self if index else None
+        )
 
     def to_pandas(self):
         """
@@ -1680,7 +1679,7 @@ class RangeIndex(Index):
 
     @property
     def size(self):
-        return self.__len__()
+        return len(self)
 
     def find_label_range(self, first=None, last=None):
         """Find subrange in the ``RangeIndex``, marked by their positions, that
@@ -1720,10 +1719,6 @@ class RangeIndex(Index):
         end = search_range(start, stop, last, step, side="right")
 
         return begin, end
-
-    @copy_docstring(_to_frame)  # type: ignore
-    def to_frame(self, index=True, name=None):
-        return _to_frame(self, index, name)
 
     def to_pandas(self):
         return pd.RangeIndex(
@@ -1977,10 +1972,6 @@ class GenericIndex(Index):
             return res
         else:
             return res
-
-    @copy_docstring(_to_frame)  # type: ignore
-    def to_frame(self, index=True, name=None):
-        return _to_frame(self, index, name)
 
     @property
     def dtype(self):
