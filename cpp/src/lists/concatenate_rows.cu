@@ -298,30 +298,30 @@ struct concatenate_lists_fn {
         if (dst_list_offsets[idx + 1] == dst_list_offsets[idx]) { return; }
 
         auto write_start = dst_list_offsets[idx];
-        for (size_type col_id = 0; col_id < num_cols; ++col_id) {
-          auto const& lists_col = table_dv.column(col_id);
-          auto const list_offsets =
-            lists_col.child(lists_column_view::offsets_column_index).template data<offset_type>() +
-            lists_col.offset();
-          auto const& data_col = lists_col.child(lists_column_view::child_column_index);
+        thrust::for_each(
+          thrust::seq, table_dv.begin(), table_dv.end(), [&] __device__(auto const& lists_col) {
+            auto const list_offsets = lists_col.child(lists_column_view::offsets_column_index)
+                                        .template data<offset_type>() +
+                                      lists_col.offset();
+            auto const& data_col = lists_col.child(lists_column_view::child_column_index);
 
-          // The indices of the entries within the source list.
-          auto const start_idx = list_offsets[idx];
-          auto const end_idx   = list_offsets[idx + 1];
+            // The indices of the entries within the source list.
+            auto const start_idx = list_offsets[idx];
+            auto const end_idx   = list_offsets[idx + 1];
 
-          // Fill the validities array.
-          for (auto read_idx = start_idx, write_idx = write_start; read_idx < end_idx;
-               ++read_idx, ++write_idx) {
-            d_validities[write_idx] = static_cast<int8_t>(data_col.is_valid(read_idx));
-          }
-          // Do a copy for the entire list entries.
-          auto const input_ptr =
-            reinterpret_cast<char const*>(data_col.template data<T>() + start_idx);
-          auto const output_ptr = reinterpret_cast<char*>(&d_output[write_start]);
-          thrust::copy(
-            thrust::seq, input_ptr, input_ptr + sizeof(T) * (end_idx - start_idx), output_ptr);
-          write_start += end_idx - start_idx;
-        }
+            // Fill the validities array.
+            for (auto read_idx = start_idx, write_idx = write_start; read_idx < end_idx;
+                 ++read_idx, ++write_idx) {
+              d_validities[write_idx] = static_cast<int8_t>(data_col.is_valid(read_idx));
+            }
+            // Do a copy for the entire list entries.
+            auto const input_ptr =
+              reinterpret_cast<char const*>(data_col.template data<T>() + start_idx);
+            auto const output_ptr = reinterpret_cast<char*>(&d_output[write_start]);
+            thrust::copy(
+              thrust::seq, input_ptr, input_ptr + sizeof(T) * (end_idx - start_idx), output_ptr);
+            write_start += end_idx - start_idx;
+          });
       });
 
     auto [null_mask, null_count] = cudf::detail::valid_if(
