@@ -56,7 +56,7 @@ from cudf.utils.dtypes import (
     min_unsigned_type,
     np_to_pa_dtype,
 )
-from cudf.utils.utils import mask_dtype
+from cudf.utils.utils import cached_property, mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
 
@@ -932,27 +932,17 @@ class ColumnBase(Column, Serializable):
     def is_monotonic(self) -> bool:
         return self.is_monotonic_increasing
 
-    @property
+    @cached_property
     def is_monotonic_increasing(self) -> bool:
-        if not hasattr(self, "_is_monotonic_increasing"):
-            if self.has_nulls:
-                self._is_monotonic_increasing = False
-            else:
-                self._is_monotonic_increasing = self.as_frame()._is_sorted(
-                    ascending=None, null_position=None
-                )
-        return self._is_monotonic_increasing
+        return not self.has_nulls and self.as_frame()._is_sorted(
+            ascending=None, null_position=None
+        )
 
-    @property
+    @cached_property
     def is_monotonic_decreasing(self) -> bool:
-        if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.has_nulls:
-                self._is_monotonic_decreasing = False
-            else:
-                self._is_monotonic_decreasing = self.as_frame()._is_sorted(
-                    ascending=[False], null_position=None
-                )
-        return self._is_monotonic_decreasing
+        return not self.has_nulls and self.as_frame()._is_sorted(
+            ascending=[False], null_position=None
+        )
 
     def get_slice_bound(
         self, label: ScalarLike, side: builtins.str, kind: builtins.str
@@ -1211,7 +1201,7 @@ class ColumnBase(Column, Serializable):
         )
 
     def serialize(self) -> Tuple[dict, list]:
-        header = {}  # type: Dict[Any, Any]
+        header: Dict[Any, Any] = {}
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
         header["dtype"] = self.dtype.str
@@ -2226,7 +2216,7 @@ def serialize_columns(columns) -> Tuple[List[dict], List]:
     frames : list
         list of frames
     """
-    headers = []  # type List[Dict[Any, Any], ...]
+    headers: List[Dict[Any, Any]] = []
     frames = []
 
     if len(columns) > 0:

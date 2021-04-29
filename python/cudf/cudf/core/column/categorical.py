@@ -35,6 +35,7 @@ from cudf.utils.dtypes import (
     min_signed_type,
     min_unsigned_type,
 )
+from cudf.utils.utils import cached_property
 
 if TYPE_CHECKING:
     from cudf.core.column import (
@@ -819,7 +820,7 @@ class CategoricalColumn(column.ColumnBase):
         return self._encode(item) in self.as_numerical
 
     def serialize(self) -> Tuple[dict, list]:
-        header = {}  # type: Dict[Any, Any]
+        header: Dict[Any, Any] = {}
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
         header["dtype"], dtype_frames = self.dtype.serialize()
@@ -1341,23 +1342,13 @@ class CategoricalColumn(column.ColumnBase):
         """
         return self.as_numerical.find_last_value(self._encode(value))
 
-    @property
+    @cached_property
     def is_monotonic_increasing(self) -> bool:
-        if not hasattr(self, "_is_monotonic_increasing"):
-            self._is_monotonic_increasing = (
-                bool(self.ordered)
-                and self.as_numerical.is_monotonic_increasing
-            )
-        return self._is_monotonic_increasing
+        return bool(self.ordered) and self.as_numerical.is_monotonic_increasing
 
-    @property
+    @cached_property
     def is_monotonic_decreasing(self) -> bool:
-        if not hasattr(self, "_is_monotonic_decreasing"):
-            self._is_monotonic_decreasing = (
-                bool(self.ordered)
-                and self.as_numerical.is_monotonic_decreasing
-            )
-        return self._is_monotonic_decreasing
+        return bool(self.ordered) and self.as_numerical.is_monotonic_decreasing
 
     def as_categorical_column(
         self, dtype: Dtype, **kwargs
