@@ -290,7 +290,6 @@ std::unique_ptr<column> time_range_window_ASC(column_view const& input,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
-  std::cout << "no group offsets version\n";
   size_type nulls_begin_idx, nulls_end_idx;
   std::tie(nulls_begin_idx, nulls_end_idx) = get_null_bounds_for_timestamp_column(timestamp_column);
 
@@ -451,7 +450,6 @@ std::unique_ptr<column> time_range_window_ASC(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  std::cout << "Group_offset version\n";
   // For input of n groups, group_offsets has n+1 values. Drop the last value using a span
   auto group_offsets_span =
     cudf::device_span<cudf::size_type const>(group_offsets.data(), group_offsets.size() - 1);
