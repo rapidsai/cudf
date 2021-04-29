@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import builtins
 import datetime as dt
 import re
 from numbers import Number
-from typing import Any, Sequence, Union, cast
+from types import SimpleNamespace
+from typing import Any, Mapping, Sequence, Union, cast
 
 import numpy as np
 import pandas as pd
@@ -133,20 +135,17 @@ class DatetimeColumn(column.ColumnBase):
         return self.get_dt_field("weekday")
 
     def to_pandas(
-        self, index: "cudf.Index" = None, nullable: bool = False, **kwargs
+        self, index: pd.Index = None, nullable: bool = False, **kwargs
     ) -> "cudf.Series":
         # Workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
 
         # Pandas supports only `datetime64[ns]`, hence the cast.
-        pd_series = pd.Series(
-            self.astype("datetime64[ns]").to_array("NAT"), copy=False
+        return pd.Series(
+            self.astype("datetime64[ns]").to_array("NAT"),
+            copy=False,
+            index=index,
         )
-
-        if index is not None:
-            pd_series.index = index
-
-        return pd_series
 
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
@@ -201,6 +200,33 @@ class DatetimeColumn(column.ColumnBase):
                 size=self.size,
             ),
         )
+
+    @property
+    def __cuda_array_interface__(self) -> Mapping[builtins.str, Any]:
+        output = {
+            "shape": (len(self),),
+            "strides": (self.dtype.itemsize,),
+            "typestr": self.dtype.str,
+            "data": (self.data_ptr, False),
+            "version": 1,
+        }
+
+        if self.nullable and self.has_nulls:
+
+            # Create a simple Python object that exposes the
+            # `__cuda_array_interface__` attribute here since we need to modify
+            # some of the attributes from the numba device array
+            mask = SimpleNamespace(
+                __cuda_array_interface__={
+                    "shape": (len(self),),
+                    "typestr": "<t1",
+                    "data": (self.mask_ptr, True),
+                    "version": 1,
+                }
+            )
+            output["mask"] = mask
+
+        return output
 
     def as_datetime_column(self, dtype: Dtype, **kwargs) -> DatetimeColumn:
         dtype = np.dtype(dtype)
