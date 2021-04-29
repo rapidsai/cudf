@@ -55,7 +55,6 @@ public class CuFile {
         }));
         initialized = true;
       } catch (Throwable t) {
-        log.error("Could not load cuFile jni library...", t);
         throw new RuntimeException(t);
       }
     }
