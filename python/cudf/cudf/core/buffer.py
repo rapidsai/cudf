@@ -142,6 +142,10 @@ class Buffer(Serializable):
         return Buffer(dbuf)
 
     def copy(self):
+        """
+        Create a new Buffer containing a copy of the data contained
+        in this Buffer.
+        """
         from rmm._lib.device_buffer import copy_device_to_ptr
 
         out = Buffer(DeviceBuffer(size=self.size))
