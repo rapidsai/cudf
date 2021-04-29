@@ -18,6 +18,8 @@
 #include "rolling_jit_detail.hpp"
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/rolling.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/unary.hpp>
 
 namespace cudf {
@@ -288,6 +290,7 @@ std::unique_ptr<column> time_range_window_ASC(column_view const& input,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
+  std::cout << "no group offsets version\n";
   size_type nulls_begin_idx, nulls_end_idx;
   std::tie(nulls_begin_idx, nulls_end_idx) = get_null_bounds_for_timestamp_column(timestamp_column);
 
@@ -358,8 +361,8 @@ std::unique_ptr<column> time_range_window_ASC(column_view const& input,
 
   auto following_column = expand_to_column(following_calculator, input.size(), stream, mr);
 
-  return cudf::rolling_window(
-    input, preceding_column->view(), following_column->view(), min_periods, aggr, mr);
+  return cudf::detail::rolling_window(
+    input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);
 }
 
 /// Given a timestamp column grouped as specified in group_offsets,
@@ -371,9 +374,10 @@ std::unique_ptr<column> time_range_window_ASC(column_view const& input,
 /// Each group in the input timestamp column must be sorted,
 /// with null values clustered at either the start or the end of each group.
 /// If there are no nulls for any given group, (nulls_begin, nulls_end) == (0,0).
-std::tuple<rmm::device_vector<size_type>, rmm::device_vector<size_type>>
+std::tuple<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
 get_null_bounds_for_timestamp_column(column_view const& timestamp_column,
-                                     rmm::device_uvector<size_type> const& group_offsets)
+                                     cudf::device_span<size_type const> group_offsets,
+                                     rmm::cuda_stream_view stream)
 {
   // For each group, the null values are themselves clustered
   // at the beginning or the end of the group.
@@ -381,16 +385,16 @@ get_null_bounds_for_timestamp_column(column_view const& timestamp_column,
 
   // If the input has n groups, group_offsets will have n+1 values.
   // null_start and null_end should eventually have 1 entry per group.
-  auto null_start = rmm::device_vector<size_type>(group_offsets.begin(), group_offsets.end() - 1);
-  auto null_end   = rmm::device_vector<size_type>(group_offsets.begin(), group_offsets.end() - 1);
+  auto null_start = cudf::detail::make_device_uvector_async(group_offsets, stream);
+  auto null_end   = cudf::detail::make_device_uvector_async(group_offsets, stream);
 
   if (timestamp_column.has_nulls()) {
-    auto p_timestamps_device_view = column_device_view::create(timestamp_column);
-    auto num_groups               = group_offsets.size() - 1;
+    auto p_timestamps_device_view = column_device_view::create(timestamp_column, stream);
+    auto num_groups               = group_offsets.size();
 
     // Null timestamps exist. Find null bounds, per group.
     thrust::for_each(
-      thrust::device,
+      rmm::exec_policy(stream),
       thrust::make_counting_iterator(static_cast<size_type>(0)),
       thrust::make_counting_iterator(static_cast<size_type>(num_groups)),
       [d_timestamps    = *p_timestamps_device_view,
@@ -447,16 +451,19 @@ std::unique_ptr<column> time_range_window_ASC(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  rmm::device_vector<size_type> null_start, null_end;
-  std::tie(null_start, null_end) =
-    get_null_bounds_for_timestamp_column(timestamp_column, group_offsets);
+  std::cout << "Group_offset version\n";
+  // For input of n groups, group_offsets has n+1 values. Drop the last value using a span
+  auto group_offsets_span =
+    cudf::device_span<cudf::size_type const>(group_offsets.data(), group_offsets.size() - 1);
+  auto [null_start, null_end] =
+    get_null_bounds_for_timestamp_column(timestamp_column, group_offsets_span, stream);
 
   auto preceding_calculator =
     [d_group_offsets = group_offsets.data(),
      d_group_labels  = group_labels.data(),
      d_timestamps    = timestamp_column.data<TimeT>(),
-     d_nulls_begin   = null_start.data().get(),
-     d_nulls_end     = null_end.data().get(),
+     d_nulls_begin   = null_start.data(),
+     d_nulls_end     = null_end.data(),
      preceding_window,
      preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
     auto group_label = d_group_labels[idx];
@@ -495,8 +502,8 @@ std::unique_ptr<column> time_range_window_ASC(
     [d_group_offsets = group_offsets.data(),
      d_group_labels  = group_labels.data(),
      d_timestamps    = timestamp_column.data<TimeT>(),
-     d_nulls_begin   = null_start.data().get(),
-     d_nulls_end     = null_end.data().get(),
+     d_nulls_begin   = null_start.data(),
+     d_nulls_end     = null_end.data(),
      following_window,
      following_window_is_unbounded] __device__(size_type idx) -> size_type {
     auto group_label = d_group_labels[idx];
@@ -535,8 +542,8 @@ std::unique_ptr<column> time_range_window_ASC(
 
   auto following_column = expand_to_column(following_calculator, input.size(), stream, mr);
 
-  return cudf::rolling_window(
-    input, preceding_column->view(), following_column->view(), min_periods, aggr, mr);
+  return cudf::detail::rolling_window(
+    input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);
 }
 
 /// Time-range window computation, with
@@ -627,8 +634,8 @@ std::unique_ptr<column> time_range_window_DESC(column_view const& input,
 
   auto following_column = expand_to_column(following_calculator, input.size(), stream, mr);
 
-  return cudf::rolling_window(
-    input, preceding_column->view(), following_column->view(), min_periods, aggr, mr);
+  return cudf::detail::rolling_window(
+    input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);
 }
 
 // Time-range window computation, for timestamps in DESCENDING order.
@@ -646,16 +653,18 @@ std::unique_ptr<column> time_range_window_DESC(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  rmm::device_vector<size_type> null_start, null_end;
-  std::tie(null_start, null_end) =
-    get_null_bounds_for_timestamp_column(timestamp_column, group_offsets);
+  // For input of n groups, group_offsets has n+1 values. The null bounds omit the final value
+  auto group_offsets_span =
+    cudf::device_span<cudf::size_type const>(group_offsets.data(), group_offsets.size() - 1);
+  auto [null_start, null_end] =
+    get_null_bounds_for_timestamp_column(timestamp_column, group_offsets_span, stream);
 
   auto preceding_calculator =
     [d_group_offsets = group_offsets.data(),
      d_group_labels  = group_labels.data(),
      d_timestamps    = timestamp_column.data<TimeT>(),
-     d_nulls_begin   = null_start.data().get(),
-     d_nulls_end     = null_end.data().get(),
+     d_nulls_begin   = null_start.data(),
+     d_nulls_end     = null_end.data(),
      preceding_window,
      preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
     auto group_label = d_group_labels[idx];
@@ -696,8 +705,8 @@ std::unique_ptr<column> time_range_window_DESC(
     [d_group_offsets = group_offsets.data(),
      d_group_labels  = group_labels.data(),
      d_timestamps    = timestamp_column.data<TimeT>(),
-     d_nulls_begin   = null_start.data().get(),
-     d_nulls_end     = null_end.data().get(),
+     d_nulls_begin   = null_start.data(),
+     d_nulls_end     = null_end.data(),
      following_window,
      following_window_is_unbounded] __device__(size_type idx) -> size_type {
     auto group_label = d_group_labels[idx];
@@ -738,8 +747,8 @@ std::unique_ptr<column> time_range_window_DESC(
   if (aggr->kind == aggregation::CUDA || aggr->kind == aggregation::PTX) {
     CUDF_FAIL("Time ranged rolling window does NOT (yet) support UDF.");
   } else {
-    return cudf::rolling_window(
-      input, preceding_column->view(), following_column->view(), min_periods, aggr, mr);
+    return cudf::detail::rolling_window(
+      input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);
   }
 }
 
