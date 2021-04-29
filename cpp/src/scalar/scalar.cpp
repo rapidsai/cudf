@@ -56,4 +56,12 @@ std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
   return result;
 }
 
+std::unique_ptr<cudf::scalar> get_test_list_scalar(column_view in_col) {
+  std::unique_ptr<cudf::list_scalar> out = std::make_unique<cudf::list_scalar>(
+    cudf::list_scalar(in_col)
+  );
+  return out;
+}
+
+ 
 }  // namespace cudf

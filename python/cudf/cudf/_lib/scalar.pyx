@@ -41,10 +41,16 @@ from cudf._lib.cpp.scalar.scalar cimport (
     timestamp_scalar,
     duration_scalar,
     string_scalar,
-    fixed_point_scalar
+    fixed_point_scalar,
+    list_scalar,
+    get_test_list_scalar,
 )
 from cudf.utils.dtypes import _decimal_to_int64
 cimport cudf._lib.cpp.types as libcudf_types
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.table cimport Table
+from cudf._lib.interop import to_arrow
 
 
 cdef class DeviceScalar:
@@ -440,3 +446,20 @@ def _create_proxy_nat_scalar(dtype):
         return result
     else:
         raise TypeError('NAT only valid for datetime and timedelta')
+
+def test_get_test_list_scalar(Column input_column):
+    cdef column_view in_col = input_column.view()
+    cdef unique_ptr[scalar] unique_ptr_to_scalar = get_test_list_scalar(in_col)
+
+    cdef DeviceScalar devslr = DeviceScalar.__new__(DeviceScalar)
+    devslr.c_value = move(unique_ptr_to_scalar)
+
+    cdef list_scalar* raw_ptr = <list_scalar*>(devslr.c_value).get()
+    cdef column_view the_scalars_data = raw_ptr[0].view()
+
+    cdef Column output_column = Column.from_column_view(the_scalars_data, None)
+    
+    cdef Table to_arrow_table = Table({"col": output_column})
+    arrow_table = to_arrow(to_arrow_table, [["col", []]])
+
+    return arrow_table['col'].to_pylist()
