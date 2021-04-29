@@ -411,28 +411,6 @@ class Series(FrameOneD, Serializable):
             else self.__class__(dtype=self.dtype, name=self.name)
         )
 
-    def to_arrow(self):
-        """
-        Convert Series to a PyArrow Array.
-
-        Returns
-        -------
-        PyArrow Array
-
-        Examples
-        --------
-        >>> import cudf
-        >>> sr = cudf.Series(["a", "b", None])
-        >>> sr.to_arrow()
-        <pyarrow.lib.StringArray object at 0x7f796b0e7600>
-        [
-          "a",
-          "b",
-          null
-        ]
-        """
-        return self._column.to_arrow()
-
     def drop(
         self,
         labels=None,

@@ -267,28 +267,6 @@ class Index(FrameOneD, Serializable):
         else:
             raise KeyError(f"Requested level with name {level} " "not found")
 
-    def to_arrow(self):
-        """Convert Index to PyArrow Array
-
-        Returns
-        -------
-        PyArrow Array
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ind = cudf.Index(["a", "b", None])
-        >>> ind.to_arrow()
-        <pyarrow.lib.StringArray object at 0x7f796b0e7750>
-        [
-          "a",
-          "b",
-          null
-        ]
-        """
-
-        return self._column.to_arrow()
-
     @classmethod
     def deserialize(cls, header, frames):
         h = header["index_column"]

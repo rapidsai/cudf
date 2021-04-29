@@ -3475,6 +3475,36 @@ class FrameOneD(Frame):
         """
         return cls(cudf.core.column.column.ColumnBase.from_arrow(array))
 
+    def to_arrow(self):
+        """
+        Convert to a PyArrow Array.
+
+        Returns
+        -------
+        PyArrow Array
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series(["a", "b", None])
+        >>> sr.to_arrow()
+        <pyarrow.lib.StringArray object at 0x7f796b0e7600>
+        [
+          "a",
+          "b",
+          null
+        ]
+        >>> ind = cudf.Index(["a", "b", None])
+        >>> ind.to_arrow()
+        <pyarrow.lib.StringArray object at 0x7f796b0e7750>
+        [
+          "a",
+          "b",
+          null
+        ]
+        """
+        return self._column.to_arrow()
+
 
 def _get_replacement_values_for_columns(
     to_replace: Any, value: Any, columns_dtype_map: Dict[Any, Any]
