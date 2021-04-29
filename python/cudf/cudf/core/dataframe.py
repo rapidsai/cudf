@@ -7985,7 +7985,7 @@ def _get_union_of_indices(indexes):
     else:
         merged_index = cudf.core.Index._concat(indexes)
         merged_index = merged_index.drop_duplicates()
-        _, inds = merged_index._column.sort_by_values()
+        _, inds = merged_index._values.sort_by_values()
         return merged_index.take(inds)
 
 

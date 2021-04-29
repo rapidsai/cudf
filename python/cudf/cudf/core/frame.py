@@ -481,9 +481,9 @@ class Frame(libcudf.table.Table):
             )
             if not isinstance(
                 out._index, cudf.MultiIndex
-            ) and is_categorical_dtype(out._index._column.dtype):
+            ) and is_categorical_dtype(out._index._values.dtype):
                 out = out.set_index(
-                    cudf.core.index.as_index(out.index._column)
+                    cudf.core.index.as_index(out.index._values)
                 )
 
         # Reassign index and column names
