@@ -146,7 +146,7 @@ class ParquetWriter(IOFuzz):
                 # https://github.com/pandas-dev/pandas/issues/37327
                 - {"uint32"}
             )
-            dtypes_list.extend(["list"])
+            dtypes_list.extend(["list", "decimal64"])
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
