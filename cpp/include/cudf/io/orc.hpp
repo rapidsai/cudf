@@ -49,7 +49,7 @@ class orc_reader_options {
   std::vector<std::string> _columns;
 
   // List of individual stripes to read (ignored if empty)
-  std::vector<size_type> _stripes;
+  std::vector<std::vector<size_type>> _stripes;
   // Rows to skip from the start;
   size_type _skip_rows = 0;
   // Rows to read; -1 is all

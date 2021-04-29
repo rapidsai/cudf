@@ -605,6 +605,7 @@ class metadata {
   Metadata md;
   std::vector<StripeFooter> stripefooters;
   std::unique_ptr<OrcDecompressor> decompressor;
+  datasource *const source;
 
  private:
   struct schema_indexes {
@@ -615,7 +616,6 @@ class metadata {
   void init_column_names();
 
   std::vector<std::string> column_names;
-  datasource *const source;
 };
 
 }  // namespace orc

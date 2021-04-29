@@ -45,6 +45,7 @@ class metadata;
 namespace {
 struct orc_stream_info;
 }
+class aggregate_orc_metadata;
 
 /**
  * @brief Implementation for ORC reader
@@ -58,9 +59,18 @@ class reader::impl {
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::unique_ptr<datasource> source,
+  explicit impl(std::vector<std::unique_ptr<datasource>> &&sources,
                 orc_reader_options const &options,
                 rmm::mr::device_memory_resource *mr);
+
+  void read_individual_file(int file_idx,
+                            std::vector<data_type> column_types
+                              cudf::io::orc::metadata file_metadata,
+                            size_type skip_rows,
+                            size_type num_rows,
+                            std::vector<OrcStripeInfo> const &selected_stripes,
+                            rmm::cuda_stream_view stream,
+                            std::vector<int32_t> orc_col_map);
 
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns
@@ -126,8 +136,8 @@ class reader::impl {
 
  private:
   rmm::mr::device_memory_resource *_mr = nullptr;
-  std::unique_ptr<datasource> _source;
-  std::unique_ptr<cudf::io::orc::metadata> _metadata;
+  std::vector<std::unique_ptr<datasource>> _sources;
+  std::unique_ptr<aggregate_orc_metadata> _metadata;
 
   std::vector<int> _selected_columns;
   bool _use_index            = true;
