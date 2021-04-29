@@ -328,9 +328,7 @@ void BuildChunkDictionaries(device_span<EncColumnChunk> chunks,
                             rmm::cuda_stream_view stream)
 {
   auto num_chunks = chunks.size();
-  if (num_chunks > 0) {
-    gpuBuildChunkDictionaries<1024><<<num_chunks, 1024, 0, stream.value()>>>(chunks, dev_scratch);
-  }
+  gpuBuildChunkDictionaries<1024><<<num_chunks, 1024, 0, stream.value()>>>(chunks, dev_scratch);
 }
 
 }  // namespace gpu

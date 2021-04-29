@@ -537,8 +537,6 @@ void EncodePageHeaders(device_span<EncPage> pages,
  *
  * @param[in,out] chunks Column chunks
  * @param[in] pages Device array of EncPages
- * @param[in] num_chunks Number of column chunks
- * @param[in] comp_out Compressor status
  * @param[in] stream CUDA stream to use, default 0
  */
 void GatherPages(device_span<EncColumnChunk> chunks,

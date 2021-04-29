@@ -141,13 +141,11 @@ class writer::impl {
    * @param dst_stats output statistics
    * @param frag Input page fragments
    * @param col_desc column description array
-   * @param num_columns Total number of columns
    * @param num_fragments Total number of fragments per column
    */
   void gather_fragment_statistics(device_2dspan<statistics_chunk> dst_stats,
                                   device_2dspan<gpu::PageFragment const> frag,
                                   device_span<gpu::parquet_column_device_view const> col_desc,
-                                  uint32_t num_columns,
                                   uint32_t num_fragments);
   /**
    * @brief Build per-chunk dictionaries and count data pages
