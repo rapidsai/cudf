@@ -12,7 +12,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import cuda
-from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
@@ -5302,7 +5301,9 @@ class StringColumn(column.ColumnBase):
             if op == "add":
                 return cast("column.ColumnBase", lhs.str().cat(others=rhs))
             elif op in ("eq", "ne", "gt", "lt", "ge", "le", "NULL_EQUALS"):
-                return _string_column_binop(self, rhs, op=op, out_dtype="bool")
+                return libcudf.binaryop.binaryop(
+                    lhs=self, rhs=rhs, op=op, dtype="bool"
+                )
 
         raise TypeError(
             f"{op} operator not supported between {type(self)} and {type(rhs)}"
@@ -5333,17 +5334,6 @@ class StringColumn(column.ColumnBase):
         )
 
         return to_view.view(dtype)
-
-
-@annotate("BINARY_OP", color="orange", domain="cudf_python")
-def _string_column_binop(
-    lhs: "column.ColumnBase",
-    rhs: "column.ColumnBase",
-    op: str,
-    out_dtype: Dtype,
-) -> "column.ColumnBase":
-    out = libcudf.binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype=out_dtype)
-    return out
 
 
 def _get_cols_list(parent_obj, others):
