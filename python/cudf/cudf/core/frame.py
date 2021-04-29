@@ -1429,9 +1429,7 @@ class Frame(libcudf.table.Table):
         output_column = cudf.core.column.column_empty(row_count=len(self), dtype='int64')
         output_mask = cudf.core.column.column_empty(row_count=len(self), dtype='bool')
 
-        breakpoint()
         result = cudf._lib.transform.masked_udf(self, ptx, output_column, output_mask)
-        breakpoint()
         return result
 
 
