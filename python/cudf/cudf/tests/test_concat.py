@@ -1227,9 +1227,13 @@ def test_concat_single_object(ignore_index, typ):
 
 @pytest.mark.parametrize("ltype", [Decimal64Dtype(3, 1), Decimal64Dtype(7, 2)])
 @pytest.mark.parametrize("rtype", [Decimal64Dtype(3, 2), Decimal64Dtype(8, 4)])
-def test_concat_decimal(ltype, rtype):
-    gdf1 = gd.DataFrame({"val": ["22.3", "59.5", "81.1"]})
-    gdf2 = gd.DataFrame({"val": ["2.35", "5.59", "8.14"]})
+def test_concat_decimal_dataframe(ltype, rtype):
+    gdf1 = gd.DataFrame(
+        {"id": np.random.randint(0, 10, 3), "val": ["22.3", "59.5", "81.1"]}
+    )
+    gdf2 = gd.DataFrame(
+        {"id": np.random.randint(0, 10, 3), "val": ["2.35", "5.59", "8.14"]}
+    )
 
     gdf1["val"] = gdf1["val"].astype(ltype)
     gdf2["val"] = gdf2["val"].astype(rtype)
@@ -1239,5 +1243,22 @@ def test_concat_decimal(ltype, rtype):
 
     got = gd.concat([gdf1, gdf2])
     expected = pd.concat([pdf1, pdf2])
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("ltype", [Decimal64Dtype(4, 1), Decimal64Dtype(8, 2)])
+@pytest.mark.parametrize(
+    "rtype", [Decimal64Dtype(4, 3), Decimal64Dtype(10, 4)]
+)
+def test_concat_decimal_series(ltype, rtype):
+    gs1 = gd.Series(["228.3", "559.5", "281.1"]).astype(ltype)
+    gs2 = gd.Series(["2.345", "5.259", "8.154"]).astype(rtype)
+
+    ps1 = gs1.to_pandas()
+    ps2 = gs2.to_pandas()
+
+    got = gd.concat([gs1, gs2])
+    expected = pd.concat([ps1, ps2])
 
     assert_eq(expected, got)

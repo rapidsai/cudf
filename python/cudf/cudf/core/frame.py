@@ -480,6 +480,11 @@ class Frame(libcudf.table.Table):
                     cudf.core.index.as_index(out.index._values)
                 )
 
+        # Reassign precision for any decimal cols
+        for name, col in out._data.items():
+            if isinstance(col, cudf.core.column.DecimalColumn):
+                col.dtype.precision = tables[0]._data[name].dtype.precision
+
         # Reassign index and column names
         if isinstance(objs[0].columns, pd.MultiIndex):
             out.columns = objs[0].columns
