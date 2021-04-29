@@ -20,13 +20,13 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/detail/converters.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -124,8 +124,7 @@ __device__ inline double stod(string_view const& d_str)
   else if (exp_ten < std::numeric_limits<double>::min_exponent10)
     return double{0};
 
-  // using exp10() since the pow(10.0,exp_ten) function is
-  // very inaccurate in 10.2: http://nvbugs/2971187
+  // exp10() is faster than pow(10.0,exp_ten)
   double const base =
     sign * static_cast<double>(digits) * exp10(static_cast<double>(1 - num_digits));
   double const exponent = exp10(static_cast<double>(exp_ten));

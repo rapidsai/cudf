@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional, Sequence, Tuple, Union, cast, overload
 import cupy
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from numba import cuda
 from nvtx import annotate
 
@@ -4766,6 +4767,29 @@ class StringColumn(column.ColumnBase):
     def data_array_view(self) -> cuda.devicearray.DeviceNDArray:
         raise ValueError("Cannot get an array view of a StringColumn")
 
+    def to_arrow(self) -> pa.Array:
+        """Convert to PyArrow Array
+
+        Examples
+        --------
+        >>> import cudf
+        >>> col = cudf.core.column.as_column([1, 2, 3, 4])
+        >>> col.to_arrow()
+        <pyarrow.lib.Int64Array object at 0x7f886547f830>
+        [
+          1,
+          2,
+          3,
+          4
+        ]
+        """
+        if self.null_count == len(self):
+            return pa.NullArray.from_buffers(
+                pa.null(), len(self), [pa.py_buffer((b""))]
+            )
+        else:
+            return super().to_arrow()
+
     def sum(
         self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
     ):
@@ -4798,15 +4822,6 @@ class StringColumn(column.ColumnBase):
 
     def str(self, parent: ParentType = None) -> StringMethods:
         return StringMethods(self, parent=parent)
-
-    def unary_operator(self, unaryop: builtins.str):
-        raise TypeError(
-            f"Series of dtype `str` cannot perform the operation: "
-            f"{unaryop}"
-        )
-
-    def __len__(self) -> int:
-        return self.size
 
     @property
     def _nbytes(self) -> int:
@@ -4930,20 +4945,18 @@ class StringColumn(column.ColumnBase):
 
         return self.to_arrow().to_pandas().values
 
-    def __array__(self, dtype=None):
-        raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not "
-            "allowed, Conversion to GPU array in strings is not yet "
-            "supported.\nTo explicitly construct a host array, "
-            "consider using .to_array()"
-        )
+    def to_pandas(
+        self, index: ColumnLike = None, nullable: bool = False, **kwargs
+    ) -> "pd.Series":
+        if nullable:
+            pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
+            pd_series = pd.Series(pandas_array, copy=False)
+        else:
+            pd_series = self.to_arrow().to_pandas(**kwargs)
 
-    def __arrow_array__(self, type=None):
-        raise TypeError(
-            "Implicit conversion to a host PyArrow Array via __arrow_array__ "
-            "is not allowed, To explicitly construct a PyArrow Array, "
-            "consider using .to_arrow()"
-        )
+        if index is not None:
+            pd_series.index = index
+        return pd_series
 
     def serialize(self) -> Tuple[dict, list]:
         header = {"null_count": self.null_count}  # type: Dict[Any, Any]
@@ -5112,16 +5125,6 @@ class StringColumn(column.ColumnBase):
 
         raise TypeError(
             f"{op} operator not supported between {type(self)} and {type(rhs)}"
-        )
-
-    @property
-    def is_unique(self) -> bool:
-        return len(self.unique()) == len(self)
-
-    @property
-    def __cuda_array_interface__(self):
-        raise NotImplementedError(
-            "Strings are not yet supported via `__cuda_array_interface__`"
         )
 
     @copy_docstring(column.ColumnBase.view)

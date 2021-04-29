@@ -18,6 +18,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
@@ -25,10 +26,12 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
+#include <structs/utilities.hpp>
 
 #include <hash/unordered_multiset.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
@@ -75,71 +78,56 @@ std::unique_ptr<column> search_ordered(table_view const& t,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  // Allocate result column
-  std::unique_ptr<column> result = make_numeric_column(
-    data_type{type_to_id<size_type>()}, values.num_rows(), mask_state::UNALLOCATED, stream, mr);
+  CUDF_EXPECTS(
+    column_order.empty() or static_cast<std::size_t>(t.num_columns()) == column_order.size(),
+    "Mismatch between number of columns and column order.");
+  CUDF_EXPECTS(
+    null_precedence.empty() or static_cast<std::size_t>(t.num_columns()) == null_precedence.size(),
+    "Mismatch between number of columns and null precedence.");
 
-  mutable_column_view result_view = result.get()->mutable_view();
+  // Allocate result column
+  auto result = make_numeric_column(
+    data_type{type_to_id<size_type>()}, values.num_rows(), mask_state::UNALLOCATED, stream, mr);
+  auto const result_out = result->mutable_view().data<size_type>();
 
   // Handle empty inputs
   if (t.num_rows() == 0) {
-    CUDA_TRY(cudaMemsetAsync(
-      result_view.data<size_type>(), 0, values.num_rows() * sizeof(size_type), stream.value()));
+    CUDA_TRY(cudaMemsetAsync(result_out, 0, values.num_rows() * sizeof(size_type), stream.value()));
     return result;
-  }
-
-  if (not column_order.empty()) {
-    CUDF_EXPECTS(static_cast<std::size_t>(t.num_columns()) == column_order.size(),
-                 "Mismatch between number of columns and column order.");
-  }
-
-  if (not null_precedence.empty()) {
-    CUDF_EXPECTS(static_cast<std::size_t>(t.num_columns()) == null_precedence.size(),
-                 "Mismatch between number of columns and null precedence.");
   }
 
   // This utility will ensure all corresponding dictionary columns have matching keys.
   // It will return any new dictionary columns created as well as updated table_views.
-  auto matched  = dictionary::detail::match_dictionaries({t, values}, stream);
-  auto d_t      = table_device_view::create(matched.second.front(), stream);
-  auto d_values = table_device_view::create(matched.second.back(), stream);
-  auto count_it = thrust::make_counting_iterator<size_type>(0);
+  auto const matched = dictionary::detail::match_dictionaries({t, values}, stream);
 
-  rmm::device_vector<order> d_column_order(column_order.begin(), column_order.end());
-  rmm::device_vector<null_order> d_null_precedence(null_precedence.begin(), null_precedence.end());
+  // 0-table_view, 1-column_order, 2-null_precedence, 3-validity_columns
+  auto const t_flattened =
+    structs::detail::flatten_nested_columns(matched.second.front(), column_order, null_precedence);
+  auto const values_flattened =
+    structs::detail::flatten_nested_columns(matched.second.back(), {}, {});
 
+  auto const t_d      = table_device_view::create(std::get<0>(t_flattened), stream);
+  auto const values_d = table_device_view::create(std::get<0>(values_flattened), stream);
+  auto const& lhs     = find_first ? *t_d : *values_d;
+  auto const& rhs     = find_first ? *values_d : *t_d;
+
+  auto const& column_order_flattened    = std::get<1>(t_flattened);
+  auto const& null_precedence_flattened = std::get<2>(t_flattened);
+  auto const column_order_dv = detail::make_device_uvector_async(column_order_flattened, stream);
+  auto const null_precedence_dv =
+    detail::make_device_uvector_async(null_precedence_flattened, stream);
+
+  auto const count_it = thrust::make_counting_iterator<size_type>(0);
   if (has_nulls(t) or has_nulls(values)) {
-    auto ineq_op =
-      (find_first)
-        ? row_lexicographic_comparator<true>(
-            *d_t, *d_values, d_column_order.data().get(), d_null_precedence.data().get())
-        : row_lexicographic_comparator<true>(
-            *d_values, *d_t, d_column_order.data().get(), d_null_precedence.data().get());
-
-    launch_search(count_it,
-                  count_it,
-                  t.num_rows(),
-                  values.num_rows(),
-                  result_view.data<size_type>(),
-                  ineq_op,
-                  find_first,
-                  stream);
+    auto const comp = row_lexicographic_comparator<true>(
+      lhs, rhs, column_order_dv.data(), null_precedence_dv.data());
+    launch_search(
+      count_it, count_it, t.num_rows(), values.num_rows(), result_out, comp, find_first, stream);
   } else {
-    auto ineq_op =
-      (find_first)
-        ? row_lexicographic_comparator<false>(
-            *d_t, *d_values, d_column_order.data().get(), d_null_precedence.data().get())
-        : row_lexicographic_comparator<false>(
-            *d_values, *d_t, d_column_order.data().get(), d_null_precedence.data().get());
-
-    launch_search(count_it,
-                  count_it,
-                  t.num_rows(),
-                  values.num_rows(),
-                  result_view.data<size_type>(),
-                  ineq_op,
-                  find_first,
-                  stream);
+    auto const comp = row_lexicographic_comparator<false>(
+      lhs, rhs, column_order_dv.data(), null_precedence_dv.data());
+    launch_search(
+      count_it, count_it, t.num_rows(), values.num_rows(), result_out, comp, find_first, stream);
   }
 
   return result;

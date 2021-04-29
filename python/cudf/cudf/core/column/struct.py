@@ -105,6 +105,12 @@ class StructColumn(ColumnBase):
             children=self.base_children,
         )
 
+    @property
+    def __cuda_array_interface__(self):
+        raise NotImplementedError(
+            "Structs are not yet supported via `__cuda_array_interface__`"
+        )
+
 
 class StructMethods(ColumnMethodsMixin):
     """

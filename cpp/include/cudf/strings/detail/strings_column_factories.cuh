@@ -14,17 +14,15 @@
  * limitations under the License.
  */
 
-#include <strings/utilities.cuh>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/strings/detail/gather.cuh>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
