@@ -155,7 +155,7 @@ add_library(cudf
     src/binaryop/compiled/binary_ops.cu
     src/labeling/label_bins.cu
     src/bitmask/null_mask.cu
-    src/bitmask/get_valid.cpp
+    src/bitmask/is_element_valid.cpp
     src/column/column.cu
     src/column/column_device_view.cu
     src/column/column_factories.cpp

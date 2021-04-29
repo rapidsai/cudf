@@ -16,8 +16,8 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
-#include <cudf/detail/get_valid.hpp>
 #include <cudf/detail/indexalator.cuh>
+#include <cudf/detail/is_element_valid.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/detail/copying.hpp>
@@ -125,7 +125,7 @@ struct get_element_functor {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
-    bool valid = get_valid(input, index, stream);
+    bool valid = is_element_valid_sync(input, index, stream);
 
     if (valid) {
       lists_column_view lcv(input);

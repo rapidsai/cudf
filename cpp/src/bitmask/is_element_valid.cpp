@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2021, NVIDIA CORPORATION.
  *
@@ -14,33 +15,33 @@
  * limitations under the License.
  */
 
-#pragma once
-
 #include <cudf/column/column_view.hpp>
+#include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace detail {
 
-/**
- * @brief Return validity of a row
- *
- * Retrieves the specified row validity from device memory.
- *
- * @note Synchronizes `stream`.
- *
- * @throw cudf::logic_error if `element_index < 0 or >= col_view.size()`
- *
- * @param col_view The column to retrieve the validity from.
- * @param element_index The index of the row to retrieve.
- * @param stream The stream to use for copying the validity to the host.
- * @return Host boolean that indicates the validity of the row.
- */
-
 bool is_element_valid_sync(column_view const& col_view,
-               size_type element_index,
-               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                           size_type element_index,
+                           rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(element_index >= 0 and element_index < col_view.size(), "invalid index.");
+  if (!col_view.nullable()) { return true; }
+
+  bitmask_type word;
+  // null_mask() returns device ptr to bitmask without offset
+  size_type index = element_index + col_view.offset();
+  CUDA_TRY(cudaMemcpyAsync(&word,
+                           col_view.null_mask() + word_index(index),
+                           sizeof(bitmask_type),
+                           cudaMemcpyDeviceToHost,
+                           stream.value()));
+  stream.synchronize();
+  return static_cast<bool>(word & (bitmask_type{1} << intra_word_index(index)));
+}
 
 }  // namespace detail
 }  // namespace cudf
