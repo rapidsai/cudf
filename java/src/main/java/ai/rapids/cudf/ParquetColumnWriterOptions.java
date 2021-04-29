@@ -260,7 +260,7 @@ public class ParquetColumnWriterOptions {
 
   protected boolean[] getFlatBooleans(boolean[] ret, ByteArrayProducer producer) {
     boolean[][] childResults = new boolean[childColumnOptions.length][];
-    int totalChildrenFlatLength = 0;
+    int totalChildrenFlatLength = ret.length;
     for (int i = 0 ; i < childColumnOptions.length ; i++) {
       ParquetColumnWriterOptions opt = childColumnOptions[i];
       childResults[i] = producer.apply(opt);
