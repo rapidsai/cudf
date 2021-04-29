@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
+#include <strings/utilities.hpp>
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/replace.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/span.hpp>
-#include <strings/utilities.cuh>
-#include <strings/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -869,14 +870,6 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
 {
   CUDF_FUNC_RANGE();
   return detail::replace(strings, targets, repls, rmm::cuda_stream_default, mr);
-}
-
-std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
-                                      string_scalar const& repl,
-                                      rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::replace_nulls(strings, repl, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

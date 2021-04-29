@@ -228,6 +228,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                                   std::vector<size_type>{0},
                                                   duplicate_keep_option::KEEP_FIRST,
                                                   null_equality::EQUAL,
+                                                  null_order::BEFORE,
                                                   stream,
                                                   mr)
                       ->release();

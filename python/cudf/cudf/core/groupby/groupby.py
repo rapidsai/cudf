@@ -98,6 +98,20 @@ class GroupBy(Serializable):
             .agg("size")
         )
 
+    def cumcount(self):
+        """
+        Return the cumulative count of keys in each group.
+        """
+        return (
+            cudf.Series(
+                cudf.core.column.column_empty(
+                    len(self.obj), "int8", masked=False
+                )
+            )
+            .groupby(self.grouping, sort=self._sort)
+            .agg("cumcount")
+        )
+
     @cached_property
     def _groupby(self):
         return libgroupby.GroupBy(self.grouping.keys, dropna=self._dropna)
@@ -587,6 +601,10 @@ class GroupBy(Serializable):
         """Compute the column-wise sum of the values in each group."""
         return self.agg("sum")
 
+    def prod(self):
+        """Compute the column-wise product of the values in each group."""
+        return self.agg("prod")
+
     def idxmin(self):
         """Get the column-wise index of the minimum value in each group."""
         return self.agg("idxmin")
@@ -669,6 +687,19 @@ class GroupBy(Serializable):
     def unique(self):
         """Get a list of the unique values for each column in each group."""
         return self.agg("unique")
+
+    def cumsum(self):
+        """Compute the column-wise cumulative sum of the values in
+        each group."""
+        return self.agg("cumsum")
+
+    def cummin(self):
+        """Get the column-wise cumulative minimum value in each group."""
+        return self.agg("cummin")
+
+    def cummax(self):
+        """Get the column-wise cumulative maximum value in each group."""
+        return self.agg("cummax")
 
 
 class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
