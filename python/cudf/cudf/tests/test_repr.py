@@ -1493,3 +1493,10 @@ def test_categorical_index_with_nan_repr():
     )
 
     assert cat_index[2:].__repr__() == sliced_expected_repr
+
+
+def test_empty_series_name():
+    ps = pd.Series([], name="abc", dtype="int")
+    gs = cudf.from_pandas(ps)
+
+    assert ps.__repr__() == gs.__repr__()

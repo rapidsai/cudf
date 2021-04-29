@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,27 @@
  * limitations under the License.
  */
 
-#pragma once
+package ai.rapids.cudf;
 
-#include "json_common.h"
+/**
+ * Represents a cuFile file handle.
+ */
+abstract class CuFileHandle implements AutoCloseable {
+  private final CuFileResourceCleaner cleaner;
+
+  protected CuFileHandle(long pointer) {
+    cleaner = new CuFileResourceCleaner(pointer, CuFileHandle::destroy);
+    MemoryCleaner.register(this, cleaner);
+  }
+
+  @Override
+  public void close() {
+    cleaner.close(this);
+  }
+
+  protected long getPointer() {
+    return cleaner.getPointer();
+  }
+
+  private static native void destroy(long pointer);
+}

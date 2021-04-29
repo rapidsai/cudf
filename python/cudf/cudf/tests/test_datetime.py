@@ -1248,3 +1248,17 @@ def test_datetime_infer_format(data, dtype):
 def test_dateoffset_instance_subclass_check():
     assert not issubclass(pd.DateOffset, cudf.DateOffset)
     assert not isinstance(pd.DateOffset(), cudf.DateOffset)
+
+
+def test_datetime_to_datetime_error():
+    assert_exceptions_equal(
+        lfunc=pd.to_datetime,
+        rfunc=cudf.to_datetime,
+        lfunc_args_and_kwargs=(["02-Oct-2017 09:30", "%d-%B-%Y %H:%M"],),
+        rfunc_args_and_kwargs=(["02-Oct-2017 09:30", "%d-%B-%Y %H:%M"],),
+        check_exception_type=False,
+        expected_error_message=re.escape(
+            "errors parameter has to be either one of: ['ignore', 'raise', "
+            "'coerce', 'warn'], found: %d-%B-%Y %H:%M"
+        ),
+    )

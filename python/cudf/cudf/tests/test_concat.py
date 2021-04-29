@@ -1203,3 +1203,22 @@ def test_concat_join_empty_dataframes_axis_1(
     assert_eq(
         expected, actual, check_index_type=False, check_column_type=False
     )
+
+
+def test_concat_preserve_order():
+    """Ensure that order is preserved on 'inner' concatenations."""
+    df = pd.DataFrame([["d", 3, 4.0], ["c", 4, 5.0]], columns=["c", "b", "a"])
+    dfs = [df, df]
+
+    assert_eq(
+        pd.concat(dfs, join="inner"),
+        gd.concat([gd.DataFrame(df) for df in dfs], join="inner"),
+    )
+
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("typ", [gd.DataFrame, gd.Series])
+def test_concat_single_object(ignore_index, typ):
+    """Ensure that concat on a single object does not change it."""
+    obj = typ([1, 2, 3])
+    assert_eq(gd.concat([obj], ignore_index=ignore_index, axis=0), obj)

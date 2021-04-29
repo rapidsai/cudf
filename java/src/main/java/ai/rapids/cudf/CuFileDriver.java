@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,25 @@
  * limitations under the License.
  */
 
-#pragma once
+package ai.rapids.cudf;
 
-#include "csv_common.h"
+/**
+ * Represents a cuFile driver.
+ */
+public final class CuFileDriver implements AutoCloseable {
+  private final CuFileResourceCleaner cleaner;
+
+  public CuFileDriver() {
+    cleaner = new CuFileResourceCleaner(create(), CuFileDriver::destroy);
+    MemoryCleaner.register(this, cleaner);
+  }
+
+  @Override
+  public void close() {
+    cleaner.close(this);
+  }
+
+  private static native long create();
+
+  private static native void destroy(long pointer);
+}

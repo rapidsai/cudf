@@ -452,7 +452,9 @@ public final class Table implements AutoCloseable {
   private static native void readArrowIPCEnd(long handle);
 
   private static native long[] groupByAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
-                                                long[] aggInstances, boolean ignoreNullKeys) throws CudfException;
+                                                long[] aggInstances, boolean ignoreNullKeys,
+                                                boolean keySorted, boolean[] keysDescending,
+                                                boolean[] keysNullSmallest) throws CudfException;
 
   private static native long[] rollingWindowAggregate(
       long inputTable,
@@ -542,6 +544,13 @@ public final class Table implements AutoCloseable {
   private static native long createCudfTableView(long[] nativeColumnViewHandles);
 
   private static native long[] columnViewsFromPacked(ByteBuffer metadata, long dataAddress);
+
+  private static native ContiguousTable[] contiguousSplitGroups(long inputTable,
+                                                                int[] keyIndices,
+                                                                boolean ignoreNullKeys,
+                                                                boolean keySorted,
+                                                                boolean[] keysDescending,
+                                                                boolean[] keysNullSmallest);
 
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
@@ -1636,23 +1645,27 @@ public final class Table implements AutoCloseable {
    * @param groupByOptions Options provided in the builder
    * @param indices columns to be considered for groupBy
    */
-  public AggregateOperation groupBy(GroupByOptions groupByOptions, int... indices) {
+  public GroupByOperation groupBy(GroupByOptions groupByOptions, int... indices) {
     return groupByInternal(groupByOptions, indices);
   }
 
   /**
    * Returns aggregate operations grouped by columns provided in indices
-   * null is considered as key while grouping.
-   * @param indices columnns to be considered for groupBy
+   * with default options as below:
+   *  - null is considered as key while grouping.
+   *  - keys are not presorted.
+   *  - empty key order array.
+   *  - empty null order array.
+   * @param indices columns to be considered for groupBy
    */
-  public AggregateOperation groupBy(int... indices) {
+  public GroupByOperation groupBy(int... indices) {
     return groupByInternal(GroupByOptions.builder().withIgnoreNullKeys(false).build(),
         indices);
   }
 
-  private AggregateOperation groupByInternal(GroupByOptions groupByOptions, int[] indices) {
+  private GroupByOperation groupByInternal(GroupByOptions groupByOptions, int[] indices) {
     int[] operationIndicesArray = copyAndValidate(indices);
-    return new AggregateOperation(this, groupByOptions, operationIndicesArray);
+    return new GroupByOperation(this, groupByOptions, operationIndicesArray);
   }
 
   /**
@@ -2315,14 +2328,14 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Class representing aggregate operations
+   * Class representing groupby operations
    */
-  public static final class AggregateOperation {
+  public static final class GroupByOperation {
 
     private final Operation operation;
     private final GroupByOptions groupByOptions;
 
-    AggregateOperation(final Table table, GroupByOptions groupByOptions, final int... indices) {
+    GroupByOperation(final Table table, GroupByOptions groupByOptions, final int... indices) {
       operation = new Operation(table, indices);
       this.groupByOptions = groupByOptions;
     }
@@ -2379,7 +2392,10 @@ public final class Table implements AutoCloseable {
             operation.indices,
             aggColumnIndexes,
             aggOperationInstances,
-            groupByOptions.getIgnoreNullKeys()))) {
+            groupByOptions.getIgnoreNullKeys(),
+            groupByOptions.getKeySorted(),
+            groupByOptions.getKeysDescending(),
+            groupByOptions.getKeysNullSmallest()))) {
           // prepare the final table
           ColumnVector[] finalCols = new ColumnVector[keysLength + aggregates.length];
 
@@ -2657,6 +2673,47 @@ public final class Table implements AutoCloseable {
       } finally {
         Aggregation.close(aggInstances);
       }
+    }
+
+    /**
+     * Splits the groups in a single table into separate tables according to the grouping keys.
+     * Each split table represents a single group.
+     *
+     * This API will be used by some grouping related operators to process the data
+     * group by group.
+     *
+     * Example:
+     *   Grouping column index: 0
+     *   Input: A table of 3 rows (two groups)
+     *             a    1
+     *             b    2
+     *             b    3
+     *
+     * Result:
+     *   Two tables, one group one table.
+     *   Result[0]:
+     *              a    1
+     *
+     *   Result[1]:
+     *              b    2
+     *              b    3
+     *
+     * Note, the order of the groups returned is NOT always the same with that in the input table.
+     * The split is done in native to avoid copying the offset array to JVM.
+     *
+     * @return The tables split according to the groups in the table. NOTE: It is the
+     * responsibility of the caller to close the result. Each table and column holds a
+     * reference to the original buffer. But both the buffer and the table must be closed
+     * for the memory to be released.
+     */
+    public ContiguousTable[] contiguousSplitGroups() {
+      return Table.contiguousSplitGroups(
+          operation.table.nativeHandle,
+          operation.indices,
+          groupByOptions.getIgnoreNullKeys(),
+          groupByOptions.getKeySorted(),
+          groupByOptions.getKeysDescending(),
+          groupByOptions.getKeysNullSmallest());
     }
   }
 

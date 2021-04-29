@@ -27,7 +27,7 @@ _now = np.datetime64("now")
 _tomorrow = _now + np.timedelta64(1, "D")
 _now = np.int64(_now.astype("datetime64[ns]"))
 _tomorrow = np.int64(_tomorrow.astype("datetime64[ns]"))
-_index_type_aggs = {"count", "idxmin", "idxmax"}
+_index_type_aggs = {"count", "idxmin", "idxmax", "cumcount"}
 
 
 def assert_groupby_results_equal(expect, got, sort=True, **kwargs):
@@ -314,7 +314,18 @@ def test_groupby_apply_grouped():
 @pytest.mark.parametrize("nelem", [2, 3, 100, 500, 1000])
 @pytest.mark.parametrize(
     "func",
-    ["mean", "std", "var", "min", "max", "idxmin", "idxmax", "count", "sum"],
+    [
+        "mean",
+        "std",
+        "var",
+        "min",
+        "max",
+        "idxmin",
+        "idxmax",
+        "count",
+        "sum",
+        "prod",
+    ],
 )
 def test_groupby_2keys_agg(nelem, func):
     # gdf (Note: lack of multiIndex)
@@ -390,7 +401,7 @@ def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
 
 
 @pytest.mark.parametrize(
-    "agg", ["min", "max", "idxmin", "idxmax", "count", "sum", "mean"]
+    "agg", ["min", "max", "idxmin", "idxmax", "count", "sum", "prod", "mean"]
 )
 def test_series_groupby(agg):
     s = pd.Series([1, 2, 3])
@@ -404,7 +415,7 @@ def test_series_groupby(agg):
 
 
 @pytest.mark.parametrize(
-    "agg", ["min", "max", "idxmin", "idxmax", "count", "sum", "mean"]
+    "agg", ["min", "max", "idxmin", "idxmax", "count", "sum", "prod", "mean"]
 )
 def test_series_groupby_agg(agg):
     s = pd.Series([1, 2, 3])
@@ -422,6 +433,7 @@ def test_series_groupby_agg(agg):
         "max",
         "count",
         "sum",
+        "prod",
         "mean",
         pytest.param(
             "idxmin",
@@ -451,6 +463,7 @@ def test_groupby_level_zero(agg):
         "max",
         "count",
         "sum",
+        "prod",
         "mean",
         pytest.param(
             "idxmin",
@@ -815,7 +828,7 @@ def test_groupby_multi_agg_hash_groupby(agg):
 
 
 @pytest.mark.parametrize(
-    "agg", ["min", "max", "idxmax", "idxmax", "sum", "count", "mean"]
+    "agg", ["min", "max", "idxmax", "idxmax", "sum", "prod", "count", "mean"]
 )
 def test_groupby_nulls_basic(agg):
     check_dtype = False if agg in _index_type_aggs else True
@@ -855,7 +868,7 @@ def test_groupby_nulls_basic(agg):
     # Pandas' null semantics. Should we change it?
     assert_groupby_results_equal(
         getattr(pdf.groupby("a"), agg)().fillna(0),
-        getattr(gdf.groupby("a"), agg)().fillna(0),
+        getattr(gdf.groupby("a"), agg)().fillna(0 if agg != "prod" else 1),
         check_dtype=check_dtype,
     )
 
@@ -1023,6 +1036,36 @@ def test_groupby_size():
     sr = pd.Series(range(len(pdf)))
     assert_groupby_results_equal(
         pdf.groupby(sr).size(), gdf.groupby(sr).size(), check_dtype=False,
+    )
+
+
+def test_groupby_cumcount():
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 3, 4],
+            "b": ["bob", "bob", "alice", "cooper"],
+            "c": [1, 2, 3, 4],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_groupby_results_equal(
+        pdf.groupby("a").cumcount(),
+        gdf.groupby("a").cumcount(),
+        check_dtype=False,
+    )
+
+    assert_groupby_results_equal(
+        pdf.groupby(["a", "b", "c"]).cumcount(),
+        gdf.groupby(["a", "b", "c"]).cumcount(),
+        check_dtype=False,
+    )
+
+    sr = pd.Series(range(len(pdf)))
+    assert_groupby_results_equal(
+        pdf.groupby(sr).cumcount(),
+        gdf.groupby(sr).cumcount(),
+        check_dtype=False,
     )
 
 
@@ -1236,7 +1279,11 @@ def test_raise_data_error():
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
     gdf = cudf.from_pandas(pdf)
 
-    assert_exceptions_equal(pdf.groupby("a").mean, gdf.groupby("a").mean)
+    assert_exceptions_equal(
+        pdf.groupby("a").mean,
+        gdf.groupby("a").mean,
+        compare_error_message=False,
+    )
 
 
 def test_drop_unsupported_multi_agg():
@@ -1588,3 +1635,34 @@ def test_groupby_unique(by, data, dtype):
     expect = pdf.groupby("by")["data"].unique()
     got = gdf.groupby("by")["data"].unique()
     assert_groupby_results_equal(expect, got)
+
+
+@pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
+@pytest.mark.parametrize("func", ["cummin", "cummax", "cumcount", "cumsum"])
+def test_groupby_2keys_scan(nelem, func):
+    pdf = make_frame(pd.DataFrame, nelem=nelem)
+    expect_df = pdf.groupby(["x", "y"], sort=True).agg(func)
+    got_df = (
+        make_frame(DataFrame, nelem=nelem)
+        .groupby(["x", "y"], sort=True)
+        .agg(func)
+    )
+    # pd.groupby.cumcount returns a series.
+    if isinstance(expect_df, pd.Series):
+        expect_df = expect_df.to_frame("val")
+    expect_df = expect_df.set_index([pdf["x"], pdf["y"]]).sort_index()
+
+    check_dtype = False if func in _index_type_aggs else True
+    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
+
+
+def test_groupby_mix_agg_scan():
+    err_msg = "Cannot perform both aggregation and scan in one operation"
+    func = ["cumsum", "sum"]
+    gb = make_frame(DataFrame, nelem=10).groupby(["x", "y"], sort=True)
+
+    gb.agg(func[0])
+    gb.agg(func[1])
+    gb.agg(func[1:])
+    with pytest.raises(NotImplementedError, match=err_msg):
+        gb.agg(func)

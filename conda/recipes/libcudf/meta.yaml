@@ -152,6 +152,7 @@ test:
     - test -f $PREFIX/include/cudf/replace.hpp
     - test -f $PREFIX/include/cudf/reshape.hpp
     - test -f $PREFIX/include/cudf/rolling.hpp
+    - test -f $PREFIX/include/cudf/rolling/range_window_bounds.hpp
     - test -f $PREFIX/include/cudf/round.hpp
     - test -f $PREFIX/include/cudf/scalar/scalar_factories.hpp
     - test -f $PREFIX/include/cudf/scalar/scalar.hpp

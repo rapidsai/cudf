@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -194,14 +195,13 @@ def test_scalar_roundtrip(value):
     + TEST_DECIMAL_TYPES,
 )
 def test_null_scalar(dtype):
-    if isinstance(dtype, cudf.Decimal64Dtype):
-        with pytest.raises(NotImplementedError):
-            s = cudf.Scalar(None, dtype=dtype)
-        return
-
     s = cudf.Scalar(None, dtype=dtype)
     assert s.value is cudf.NA
-    assert s.dtype == np.dtype(dtype)
+    assert s.dtype == (
+        np.dtype(dtype)
+        if not isinstance(dtype, cudf.Decimal64Dtype)
+        else dtype
+    )
     assert s.is_valid() is False
 
 
@@ -234,23 +234,34 @@ def test_generic_null_scalar_construction_fails(value):
 
 
 @pytest.mark.parametrize(
-    "dtype",
-    NUMERIC_TYPES
-    + DATETIME_TYPES
-    + TIMEDELTA_TYPES
-    + ["object"]
-    + TEST_DECIMAL_TYPES,
+    "dtype", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["object"]
 )
 def test_scalar_dtype_and_validity(dtype):
-    if isinstance(dtype, cudf.Decimal64Dtype):
-        with pytest.raises(NotImplementedError):
-            s = cudf.Scalar(None, dtype=dtype)
-        return
-
     s = cudf.Scalar(1, dtype=dtype)
 
     assert s.dtype == np.dtype(dtype)
     assert s.is_valid() is True
+
+
+@pytest.mark.parametrize(
+    "slr,dtype,expect",
+    [
+        (1, cudf.Decimal64Dtype(1, 0), Decimal("1")),
+        (Decimal(1), cudf.Decimal64Dtype(1, 0), Decimal("1")),
+        (Decimal("1.1"), cudf.Decimal64Dtype(2, 1), Decimal("1.1")),
+        (Decimal("1.1"), cudf.Decimal64Dtype(4, 3), Decimal("1.100")),
+        (Decimal("1.11"), cudf.Decimal64Dtype(2, 2), pa.lib.ArrowInvalid),
+    ],
+)
+def test_scalar_dtype_and_validity_decimal(slr, dtype, expect):
+    if expect is pa.lib.ArrowInvalid:
+        with pytest.raises(expect):
+            cudf.Scalar(slr, dtype=dtype)
+        return
+    else:
+        result = cudf.Scalar(slr, dtype=dtype)
+        assert result.dtype == dtype
+        assert result.is_valid
 
 
 @pytest.mark.parametrize(

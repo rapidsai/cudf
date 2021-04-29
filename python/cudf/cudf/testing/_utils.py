@@ -3,6 +3,7 @@
 import re
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
+from decimal import Decimal
 
 import cupy
 import numpy as np
@@ -298,6 +299,12 @@ def gen_rand_series(dtype, size, **kwargs):
     return cudf.Series(values)
 
 
+def _decimal_series(input, dtype):
+    return cudf.Series(
+        [x if x is None else Decimal(x) for x in input], dtype=dtype,
+    )
+
+
 @contextmanager
 def does_not_raise():
     yield
@@ -332,3 +339,7 @@ def assert_join_results_equal(expect, got, how, **kwargs):
         return assert_eq(expect.sort_values(), got.sort_values(), **kwargs)
     else:
         raise ValueError(f"Not a join result: {type(expect).__name__}")
+
+
+def xfail_param(param, **kwargs):
+    return pytest.param(param, marks=pytest.mark.xfail(**kwargs))
