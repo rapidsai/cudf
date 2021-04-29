@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "string_bench_args.hpp"
+
 #include <benchmark/benchmark.h>
 #include <benchmarks/common/generate_benchmark_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
@@ -24,8 +26,6 @@
 #include <cudf/strings/find_multiple.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf_test/column_wrapper.hpp>
-
-#include <limits>
 
 enum FindAPI { find, find_multi, contains, starts_with, ends_with };
 
@@ -69,15 +69,7 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
   int const min_rowlen = 1 << 5;
   int const max_rowlen = 1 << 13;
   int const len_mult   = 4;
-  for (int row_count = min_rows; row_count <= max_rows; row_count *= row_mult) {
-    for (int rowlen = min_rowlen; rowlen <= max_rowlen; rowlen *= len_mult) {
-      // avoid generating combinations that exceed the cudf column limit
-      size_t total_chars = static_cast<size_t>(row_count) * rowlen;
-      if (total_chars < std::numeric_limits<cudf::size_type>::max()) {
-        b->Args({row_count, rowlen});
-      }
-    }
-  }
+  generate_string_bench_args(b, min_rows, max_rows, row_mult, min_rowlen, max_rowlen, len_mult);
 }
 
 #define STRINGS_BENCHMARK_DEFINE(name)                    \
