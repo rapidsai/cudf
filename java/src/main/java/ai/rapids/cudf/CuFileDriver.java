@@ -19,10 +19,10 @@ package ai.rapids.cudf;
 /**
  * Represents a cuFile driver.
  */
-public final class CuFileDriver implements AutoCloseable {
+final class CuFileDriver implements AutoCloseable {
   private final CuFileResourceCleaner cleaner;
 
-  public CuFileDriver() {
+  CuFileDriver() {
     cleaner = new CuFileResourceCleaner(create(), CuFileDriver::destroy);
     MemoryCleaner.register(this, cleaner);
   }
