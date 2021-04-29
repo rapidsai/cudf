@@ -267,33 +267,6 @@ class Index(FrameOneD, Serializable):
         else:
             raise KeyError(f"Requested level with name {level} " "not found")
 
-    @classmethod
-    def from_arrow(cls, array):
-        """Convert PyArrow Array/ChunkedArray to Index
-
-        Parameters
-        ----------
-        array : PyArrow Array/ChunkedArray
-            PyArrow Object which has to be converted to Index
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Returns
-        -------
-        cudf Index
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pyarrow as pa
-        >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
-        StringIndex(['a' 'b' None], dtype='object')
-        """
-
-        return cls(cudf.core.column.column.ColumnBase.from_arrow(array))
-
     def to_arrow(self):
         """Convert Index to PyArrow Array
 

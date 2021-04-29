@@ -3444,6 +3444,37 @@ class FrameOneD(Frame):
         """
         return self._column.to_gpu_array(fillna=fillna)
 
+    @classmethod
+    def from_arrow(cls, array):
+        """Create from PyArrow Array/ChunkedArray.
+
+        Parameters
+        ----------
+        array : PyArrow Array/ChunkedArray
+            PyArrow Object which has to be converted.
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Returns
+        -------
+        FrameOneD
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
+        StringIndex(['a' 'b' None], dtype='object')
+        >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
+        0       a
+        1       b
+        2    <NA>
+        dtype: object
+        """
+        return cls(cudf.core.column.column.ColumnBase.from_arrow(array))
+
 
 def _get_replacement_values_for_columns(
     to_replace: Any, value: Any, columns_dtype_map: Dict[Any, Any]

@@ -411,37 +411,6 @@ class Series(FrameOneD, Serializable):
             else self.__class__(dtype=self.dtype, name=self.name)
         )
 
-    @classmethod
-    def from_arrow(cls, array):
-        """
-        Convert from PyArrow Array/ChunkedArray to Series.
-
-        Parameters
-        ----------
-        array : PyArrow Array/ChunkedArray
-            PyArrow Object which has to be converted to cudf Series.
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Returns
-        -------
-        cudf Series
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pyarrow as pa
-        >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
-        0       a
-        1       b
-        2    <NA>
-        dtype: object
-        """
-
-        return cls(cudf.core.column.ColumnBase.from_arrow(array))
-
     def to_arrow(self):
         """
         Convert Series to a PyArrow Array.
