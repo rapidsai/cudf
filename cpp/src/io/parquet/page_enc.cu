@@ -615,6 +615,7 @@ __global__ void __launch_bounds__(128)
   }
   __syncthreads();
   if (t == 0) {
+    if (not pages.empty()) ck_g.pages = &pages[ck_g.first_page];
     chunks[blockIdx.y][blockIdx.x] = ck_g;
     if (chunk_grstats) chunk_grstats[blockIdx.y * num_columns + blockIdx.x] = pagestats_g;
   }
@@ -1272,8 +1273,7 @@ __global__ void __launch_bounds__(128, 8)
 }
 
 // blockDim(128, 1, 1)
-__global__ void __launch_bounds__(128)
-  gpuDecideCompression(device_span<EncColumnChunk> chunks, device_span<gpu::EncPage const> pages)
+__global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColumnChunk> chunks)
 {
   // After changing the way structs are loaded from coop to normal, this kernel has no business
   // being launched with 128 thread block. It can easily be a single warp.
@@ -1286,7 +1286,7 @@ __global__ void __launch_bounds__(128)
   uint32_t t                      = threadIdx.x;
   uint32_t uncompressed_data_size = 0;
   uint32_t compressed_data_size   = 0;
-  uint32_t first_page, num_pages;
+  uint32_t num_pages;
 
   if (t == 0) {
     ck_g = chunks[blockIdx.x];
@@ -1295,10 +1295,9 @@ __global__ void __launch_bounds__(128)
   }
   __syncthreads();
   if (t < 32) {
-    first_page = ck_g.first_page;
-    num_pages  = ck_g.num_pages;
+    num_pages = ck_g.num_pages;
     for (uint32_t page = t; page < num_pages; page += 32) {
-      auto &curr_page         = pages[first_page + page];
+      auto &curr_page         = ck_g.pages[page];
       uint32_t page_data_size = curr_page.max_data_size;
       uncompressed_data_size += page_data_size;
       if (auto comp_status = curr_page.comp_stat; comp_status != nullptr) {
@@ -1507,7 +1506,7 @@ __global__ void __launch_bounds__(128)
     ck_g   = *page_g.chunk;
     col_g  = *ck_g.col_desc;
 
-    if (chunk_stats && start_page + blockIdx.x == ck_g.first_page) {
+    if (chunk_stats && &pages[blockIdx.x] == ck_g.pages) {  // Is this the first page in a chunk?
       hdr_start = (ck_g.is_compressed) ? ck_g.compressed_bfr : ck_g.uncompressed_bfr;
       hdr_end =
         EncodeStatistics(hdr_start, &chunk_stats[page_g.chunk_id], col_g.stats_dtype, fp_scratch);
@@ -1586,7 +1585,7 @@ __global__ void __launch_bounds__(1024)
   if (t == 0) ck_g = chunks[blockIdx.x];
   __syncthreads();
 
-  first_page = &pages[ck_g.first_page];
+  first_page = ck_g.pages;
   num_pages  = ck_g.num_pages;
   dst        = (ck_g.is_compressed) ? ck_g.compressed_bfr : ck_g.uncompressed_bfr;
   dst += ck_g.ck_stat_size;  // Skip over chunk statistics
@@ -2181,14 +2180,11 @@ void EncodePages(device_span<gpu::EncPage> pages,
  * @brief Launches kernel to make the compressed vs uncompressed chunk-level decision
  *
  * @param[in,out] chunks Column chunks
- * @param[in] pages Device array of EncPages (unordered)
  * @param[in] stream CUDA stream to use, default 0
  */
-void DecideCompression(device_span<EncColumnChunk> chunks,
-                       device_span<gpu::EncPage const> pages,
-                       rmm::cuda_stream_view stream)
+void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
 {
-  gpuDecideCompression<<<chunks.size(), 128, 0, stream.value()>>>(chunks, pages);
+  gpuDecideCompression<<<chunks.size(), 128, 0, stream.value()>>>(chunks);
 }
 
 /**

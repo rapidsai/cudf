@@ -822,7 +822,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks
   // TBD: Not clear if the official spec actually allows dynamically turning off compression at the
   // chunk-level
   auto d_chunks_in_batch = chunks.device_view().subspan(first_rowgroup, rowgroups_in_batch);
-  DecideCompression(d_chunks_in_batch.flat_view(), pages, stream);
+  DecideCompression(d_chunks_in_batch.flat_view(), stream);
   EncodePageHeaders(batch_pages, first_page_in_batch, comp_stat, page_stats, chunk_stats, stream);
   GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
 

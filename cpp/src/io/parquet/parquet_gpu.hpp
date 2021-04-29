@@ -285,6 +285,8 @@ inline size_t __device__ __host__ GetMaxCompressedBfrSize(size_t uncomp_size,
   return uncomp_size + (uncomp_size >> 7) + num_pages * 8;
 }
 
+struct EncPage;
+
 /**
  * @brief Struct describing an encoder column chunk
  */
@@ -300,6 +302,7 @@ struct EncColumnChunk {
   uint32_t num_rows;                           //!< Number of rows in chunk
   uint32_t num_values;      //!< Number of values in chunk. Different from num_rows for nested types
   uint32_t first_fragment;  //!< First fragment of chunk
+  EncPage *pages;           //!< Ptr to pages that belong to this chunk
   uint32_t first_page;      //!< First page of chunk
   uint32_t num_pages;       //!< Number of pages in chunk
   uint32_t dictionary_id;   //!< Dictionary id for this chunk
@@ -504,11 +507,9 @@ void EncodePages(device_span<EncPage> pages,
  * @brief Launches kernel to make the compressed vs uncompressed chunk-level decision
  *
  * @param[in,out] chunks Column chunks (updated with actual compressed/uncompressed sizes)
- * @param[in] pages Device array of EncPages
  * @param[in] stream CUDA stream to use, default 0
  */
 void DecideCompression(device_span<EncColumnChunk> chunks,
-                       device_span<gpu::EncPage const> pages,
                        rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
