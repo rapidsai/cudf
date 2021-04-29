@@ -1273,10 +1273,7 @@ __global__ void __launch_bounds__(128, 8)
 
 // blockDim(128, 1, 1)
 __global__ void __launch_bounds__(128)
-  gpuDecideCompression(device_span<EncColumnChunk> chunks,
-                       device_span<gpu::EncPage const> pages,
-                       device_span<gpu_inflate_status_s const> comp_stat,
-                       uint32_t start_page)
+  gpuDecideCompression(device_span<EncColumnChunk> chunks, device_span<gpu::EncPage const> pages)
 {
   // After changing the way structs are loaded from coop to normal, this kernel has no business
   // being launched with 128 thread block. It can easily be a single warp.
@@ -2185,18 +2182,13 @@ void EncodePages(device_span<gpu::EncPage> pages,
  *
  * @param[in,out] chunks Column chunks
  * @param[in] pages Device array of EncPages (unordered)
- * @param[in] start_page First page to encode in page array
- * @param[in] comp_stat Compressor status
  * @param[in] stream CUDA stream to use, default 0
  */
 void DecideCompression(device_span<EncColumnChunk> chunks,
                        device_span<gpu::EncPage const> pages,
-                       uint32_t start_page,
-                       device_span<gpu_inflate_status_s const> comp_stat,
                        rmm::cuda_stream_view stream)
 {
-  gpuDecideCompression<<<chunks.size(), 128, 0, stream.value()>>>(
-    chunks, pages, comp_stat, start_page);
+  gpuDecideCompression<<<chunks.size(), 128, 0, stream.value()>>>(chunks, pages);
 }
 
 /**

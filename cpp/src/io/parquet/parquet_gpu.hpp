@@ -505,16 +505,11 @@ void EncodePages(device_span<EncPage> pages,
  *
  * @param[in,out] chunks Column chunks (updated with actual compressed/uncompressed sizes)
  * @param[in] pages Device array of EncPages
- * @param[in] num_chunks Number of column chunks
- * @param[in] start_page First page to encode in page array
- * @param[in] comp_out Compressor status or nullptr if no compression
  * @param[in] stream CUDA stream to use, default 0
  */
 void DecideCompression(device_span<EncColumnChunk> chunks,
                        device_span<gpu::EncPage const> pages,
-                       uint32_t start_page,
-                       device_span<gpu_inflate_status_s const> comp_out = {},
-                       rmm::cuda_stream_view stream                     = rmm::cuda_stream_default);
+                       rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel to encode page headers
