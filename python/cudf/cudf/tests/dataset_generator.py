@@ -131,30 +131,47 @@ def _generate_column(column_params, num_rows):
         else:
             arrow_type = None
 
-        vals = pa.array(
-            column_params.generator,
-            size=column_params.cardinality,
-            safe=False,
-            type=arrow_type,
-        )
-        # Generate data for current column
-        return pa.array(
-            np.random.choice(vals, size=num_rows),
-            mask=np.random.choice(
-                [True, False],
+        if isinstance(arrow_type, pa.lib.Decimal128Type):
+            vals = pa.array(
+                np.random.choice(column_params.generator, size=num_rows),
+                mask=np.random.choice(
+                    [True, False],
+                    size=num_rows,
+                    p=[
+                        column_params.null_frequency,
+                        1 - column_params.null_frequency,
+                    ],
+                )
+                if column_params.null_frequency > 0.0
+                else None,
                 size=num_rows,
-                p=[
-                    column_params.null_frequency,
-                    1 - column_params.null_frequency,
-                ],
+                safe=False,
             )
-            if column_params.null_frequency > 0.0
-            else None,
-            size=num_rows,
-            safe=False,
-            type=arrow_type,
-        )
-
+            vals = vals.cast(arrow_type, safe=False)
+            return vals
+        else:
+            vals = pa.array(
+                column_params.generator,
+                size=column_params.cardinality,
+                safe=False,
+                type=arrow_type,
+            )
+            return pa.array(
+                np.random.choice(vals, size=num_rows),
+                mask=np.random.choice(
+                    [True, False],
+                    size=num_rows,
+                    p=[
+                        column_params.null_frequency,
+                        1 - column_params.null_frequency,
+                    ],
+                )
+                if column_params.null_frequency > 0.0
+                else None,
+                size=num_rows,
+                safe=False,
+                type=arrow_type,
+            )
     else:
         # Generate data for current column
         return pa.array(
@@ -340,6 +357,22 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
                     dtype=dtype,
                 )
             )
+        elif dtype == "decimal64":
+            max_precision = meta.get(
+                "max_precision", np.floor(np.log10(np.iinfo("int64").max))
+            )
+            precision = np.random.randint(1, max_precision)
+            scale = np.random.randint(0, precision)
+            dtype = cudf.Decimal64Dtype(precision=precision, scale=scale)
+            column_params.append(
+                ColumnParameters(
+                    cardinality=cardinality,
+                    null_frequency=null_frequency,
+                    generator=decimal_generator(dtype=dtype, size=cardinality),
+                    is_sorted=False,
+                    dtype=dtype,
+                )
+            )
         elif dtype == "category":
             column_params.append(
                 ColumnParameters(
@@ -493,6 +526,18 @@ def boolean_generator(size):
     Generator for bool data
     """
     return lambda: np.random.choice(a=[False, True], size=size)
+
+
+def decimal_generator(dtype, size):
+    max_integral = int("9" * (dtype.precision - dtype.scale))
+    max_float = int("9" * abs(dtype.scale)) if dtype.scale != 0 else 0
+    return lambda: (
+        np.random.uniform(
+            low=-max_integral,
+            high=max_integral + (max_float / 10 ** dtype.scale),
+            size=size,
+        )
+    )
 
 
 def get_values_for_nested_data(dtype, lists_max_length):

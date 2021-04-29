@@ -114,6 +114,8 @@ def _generate_rand_meta(obj, dtypes_list, null_frequency_override=None):
             meta["value_type"] = random.choice(
                 list(cudf.utils.dtypes.ALL_TYPES - {"category"})
             )
+        elif dtype == "decimal64":
+            meta["max_precision"] = np.floor(np.log10(np.iinfo("int64").max))
 
         meta["dtype"] = dtype
         meta["null_frequency"] = null_frequency
