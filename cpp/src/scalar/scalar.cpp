@@ -95,10 +95,6 @@ std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
   return result;
 }
 
-//#define FPS_CTOR_DEFAULT(Type)
-//  template <>
-//  fixed_point_scalar<Type>::fixed_point_scalar() : scalar(data_type(type_to_id<Type>())){};
-
 template <typename T>
 fixed_point_scalar<T>::fixed_point_scalar() : scalar(data_type(type_to_id<T>())){};
 
@@ -332,31 +328,6 @@ template class duration_scalar<duration_ms>;
 template class duration_scalar<duration_us>;
 template class duration_scalar<duration_ns>;
 
-#if 0
-#define TS_CTOR(TimestampType, DurationType)                                    \
-  template <>                                                                   \
-  template <>                                                                   \
-  timestamp_scalar<TimestampType>::timestamp_scalar<DurationType>(              \
-    DurationType const& value,                                                  \
-    bool is_valid,                                                              \
-    rmm::cuda_stream_view stream,                                               \
-    rmm::mr::device_memory_resource* mr)                                        \
-    : chrono_scalar<value_type>(                                                \
-        value_type{typename value_type::duration{value}}, is_valid, stream, mr) \
-  {                                                                             \
-  }
-#endif
-
-// template <typename T>
-// template <typename D>
-// timestamp_scalar<T>::timestamp_scalar(D const& value,
-//                                      bool is_valid,
-//                                      rmm::cuda_stream_view stream,
-//                                      rmm::mr::device_memory_resource* mr)
-//  : chrono_scalar<T>(T{typename T::duration{value}}, is_valid, stream, mr)
-//{
-//}
-
 template <typename T>
 typename timestamp_scalar<T>::rep_type timestamp_scalar<T>::ticks_since_epoch()
 {
@@ -460,66 +431,16 @@ template timestamp_scalar<timestamp_ns>::timestamp_scalar(int64_t const& value,
                                                           rmm::cuda_stream_view stream,
                                                           rmm::mr::device_memory_resource* mr);
 
-// TS_CTOR(timestamp_D, duration_D)
-// TS_CTOR(timestamp_D, int32_t)
-// TS_CTOR(timestamp_s, duration_D)
-// TS_CTOR(timestamp_s, duration_s)
-// TS_CTOR(timestamp_s, int64_t)
-// TS_CTOR(timestamp_ms, duration_D)
-// TS_CTOR(timestamp_ms, duration_s)
-// TS_CTOR(timestamp_ms, duration_ms)
-// TS_CTOR(timestamp_ms, int64_t)
-// TS_CTOR(timestamp_us, duration_D)
-// TS_CTOR(timestamp_us, duration_s)
-// TS_CTOR(timestamp_us, duration_ms)
-// TS_CTOR(timestamp_us, duration_us)
-// TS_CTOR(timestamp_us, int64_t)
-// TS_CTOR(timestamp_ns, duration_D)
-// TS_CTOR(timestamp_ns, duration_s)
-// TS_CTOR(timestamp_ns, duration_ms)
-// TS_CTOR(timestamp_ns, duration_us)
-// TS_CTOR(timestamp_ns, duration_ns)
-// TS_CTOR(timestamp_ns, int64_t)
-
-// TS_CTOR(timestamp_D, duration_s)
-// TS_CTOR(timestamp_D, duration_ms)
-// TS_CTOR(timestamp_D, duration_us)
-// TS_CTOR(timestamp_D, duration_ns)
-// TS_CTOR(timestamp_s, duration_ms)
-// TS_CTOR(timestamp_s, duration_us)
-// TS_CTOR(timestamp_s, duration_ns)
-// TS_CTOR(timestamp_ms, duration_us)
-// TS_CTOR(timestamp_ms, duration_ns)
-// TS_CTOR(timestamp_us, duration_ns)
-
-struct list_scalar::list_scalar_impl {
-  cudf::column _data;
-};
-
-list_scalar::list_scalar() : scalar(data_type(type_id::LIST)), impl(new list_scalar_impl{}) {}
-
-list_scalar::~list_scalar() { delete impl; }
-
-list_scalar::list_scalar(list_scalar&& other) : scalar(std::move(other))
-{
-  impl       = other.impl;
-  other.impl = new list_scalar_impl;
-}
-
-list_scalar::list_scalar(list_scalar const& other) : scalar(other)
-{
-  impl = new list_scalar_impl{other.impl->_data};
-}
+list_scalar::list_scalar() : scalar(data_type(type_id::LIST)) {}
 
 list_scalar::list_scalar(cudf::column_view const& elements,
                          bool is_valid,
                          rmm::cuda_stream_view stream,
                          rmm::mr::device_memory_resource* mr)
-  : scalar(data_type(type_id::LIST), is_valid)
+  : scalar(data_type(type_id::LIST), is_valid, stream, mr), _data(elements, stream, mr)
 {
-  impl = new list_scalar_impl{cudf::column(elements, stream, mr)};
 }
 
-column_view list_scalar::view() const { return impl->_data.view(); }
+column_view list_scalar::view() const { return _data.view(); }
 
 }  // namespace cudf

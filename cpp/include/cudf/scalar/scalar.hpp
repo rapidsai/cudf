@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/column/column.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -528,9 +529,9 @@ struct duration_scalar : chrono_scalar<T> {
 class list_scalar : public scalar {
  public:
   list_scalar();
-  ~list_scalar();
-  list_scalar(list_scalar&& other);
-  list_scalar(list_scalar const& other);
+  ~list_scalar()                        = default;
+  list_scalar(list_scalar&& other)      = default;
+  list_scalar(list_scalar const& other) = default;
   list_scalar& operator=(list_scalar const& other) = delete;
   list_scalar& operator=(list_scalar&& other) = delete;
 
@@ -553,9 +554,7 @@ class list_scalar : public scalar {
   column_view view() const;
 
  private:
-  // cudf::column _data;
-  struct list_scalar_impl;
-  list_scalar_impl* impl{0};
+  cudf::column _data;
 };
 
 /** @} */  // end of group
