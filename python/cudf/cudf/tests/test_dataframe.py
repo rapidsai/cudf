@@ -6063,7 +6063,7 @@ def test_dataframe_init_1d_list(data, columns):
 def test_dataframe_init_from_arrays_cols(data, cols, index):
 
     gd_data = data
-    if isinstance(data, cupy.core.ndarray):
+    if isinstance(data, cupy.ndarray):
         # pandas can't handle cupy arrays in general
         pd_data = data.get()
 
