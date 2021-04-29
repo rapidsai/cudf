@@ -5003,13 +5003,6 @@ class StringColumn(column.ColumnBase):
     def str(self, parent: ParentType = None) -> StringMethods:
         return StringMethods(self, parent=parent)
 
-    @property
-    def _nbytes(self) -> int:
-        if self.size == 0:
-            return 0
-        else:
-            return self.children[1].size
-
     def as_numerical_column(
         self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
@@ -5126,7 +5119,7 @@ class StringColumn(column.ColumnBase):
         return self.to_arrow().to_pandas().values
 
     def to_pandas(
-        self, index: ColumnLike = None, nullable: bool = False, **kwargs
+        self, index: pd.Index = None, nullable: bool = False, **kwargs
     ) -> "pd.Series":
         if nullable:
             pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
@@ -5139,7 +5132,7 @@ class StringColumn(column.ColumnBase):
         return pd_series
 
     def serialize(self) -> Tuple[dict, list]:
-        header = {"null_count": self.null_count}  # type: Dict[Any, Any]
+        header: Dict[Any, Any] = {"null_count": self.null_count}
         header["type-serialized"] = pickle.dumps(type(self))
         header["size"] = self.size
 

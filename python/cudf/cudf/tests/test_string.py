@@ -1317,7 +1317,6 @@ def test_string_no_children_properties():
     assert empty_col.children == ()
     assert empty_col.size == 0
 
-    assert empty_col._nbytes == 0
     assert getsizeof(empty_col) >= 0  # Accounts for Python GC overhead
 
 
