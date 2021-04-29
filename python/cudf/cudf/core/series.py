@@ -261,8 +261,7 @@ class Series(FrameOneD, Serializable):
 
     @classmethod
     def _from_table(cls, table, index=None):
-        name = next(iter(table._data.keys()))
-        data = next(iter(table._data.values()))
+        name, data = next(iter(table._data.items()))
         if index is None:
             if table._index is not None:
                 index = Index._from_table(table._index)
