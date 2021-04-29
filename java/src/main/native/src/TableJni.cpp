@@ -663,9 +663,8 @@ int set_column_metadata(cudf::io::column_in_metadata &column_metadata,
                          cudf::jni::native_jbooleanArray &nullability,
                          cudf::jni::native_jbooleanArray &isInt96,
                          cudf::jni::native_jintArray &precisions,
-                         cudf::jni::native_jintArray &children, int read_index) {
+                         cudf::jni::native_jintArray &children, int num_children, int read_index) {
   int write_index = 0;
-  int num_children = children[read_index++];
   for (int i = 0; i < num_children; i++, write_index++) {
     cudf::io::column_in_metadata child;
     child.set_name(col_names[read_index])
@@ -675,7 +674,7 @@ int set_column_metadata(cudf::io::column_in_metadata &column_metadata,
     column_metadata.add_child(child);
     if (children[read_index] > 0) {
       read_index = set_column_metadata(column_metadata.child(write_index), col_names, nullability,
-                                       isInt96, precisions, children, read_index);
+                                       isInt96, precisions, children, children[read_index], read_index + 1);
     } else {
       read_index++;
     }
@@ -711,7 +710,7 @@ void createTableMetaData(JNIEnv *env, jint num_children, jobjectArray &j_col_nam
         .set_decimal_precision(precisions[read_index]);
     if (children[read_index] > 0) {
       read_index = set_column_metadata(metadata.column_metadata[write_index], cpp_names,
-                                       col_nullability, isInt96, precisions, children, read_index);
+                                       col_nullability, isInt96, precisions, children, children[read_index], read_index + 1);
     } else {
       read_index++;
     }
