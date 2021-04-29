@@ -20,9 +20,11 @@ package ai.rapids.cudf;
  * Represents a cuFile file handle.
  */
 abstract class CuFileHandle implements AutoCloseable {
-  @SuppressWarnings("unused")
-  private static final boolean CU_FILE_LIBRARY_LOADED = CuFile.libraryLoaded();
   private final CuFileResourceCleaner cleaner;
+
+  static {
+    CuFile.initialize();
+  }
 
   protected CuFileHandle(long pointer) {
     cleaner = new CuFileResourceCleaner(pointer, CuFileHandle::destroy);
