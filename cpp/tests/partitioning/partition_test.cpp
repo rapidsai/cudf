@@ -292,4 +292,5 @@ TEST_F(PartitionTestNotTyped, ListOfStringsEmpty)
 
   auto result = cudf::partition(table_to_partition, map, 2);
   CUDF_TEST_EXPECT_TABLES_EQUAL(table_to_partition, result.first->view());
+  EXPECT_EQ(3, result.second.size());
 }
