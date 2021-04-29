@@ -267,7 +267,7 @@ public class ParquetColumnWriterOptions {
       totalChildrenFlatLength += childResults[i].length;
     }
 
-    boolean[] result = new boolean[ret.length + totalChildrenFlatLength];
+    boolean[] result = new boolean[totalChildrenFlatLength];
     System.arraycopy(ret, 0, result, 0, ret.length);
     int copiedSoFar = ret.length;
     for (int i = 0 ; i < childColumnOptions.length ; i++) {

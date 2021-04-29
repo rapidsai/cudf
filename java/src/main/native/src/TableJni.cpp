@@ -672,9 +672,10 @@ int set_column_metadata(cudf::io::column_in_metadata &column_metadata,
         .set_int96_timestamps(isInt96[read_index])
         .set_nullability(nullability[read_index]);
     column_metadata.add_child(child);
-    if (children[read_index] > 0) {
+    int childs_children = children[read_index];
+    if (childs_children > 0) {
       read_index = set_column_metadata(column_metadata.child(write_index), col_names, nullability,
-                                       isInt96, precisions, children, children[read_index], read_index + 1);
+                                       isInt96, precisions, children, childs_children, read_index + 1);
     } else {
       read_index++;
     }
@@ -708,9 +709,10 @@ void createTableMetaData(JNIEnv *env, jint num_children, jobjectArray &j_col_nam
         .set_nullability(col_nullability[read_index])
         .set_int96_timestamps(isInt96[read_index])
         .set_decimal_precision(precisions[read_index]);
-    if (children[read_index] > 0) {
+        int childs_children = children[read_index];
+    if (childs_children > 0) {
       read_index = set_column_metadata(metadata.column_metadata[write_index], cpp_names,
-                                       col_nullability, isInt96, precisions, children, children[read_index], read_index + 1);
+                                       col_nullability, isInt96, precisions, children, childs_children, read_index + 1);
     } else {
       read_index++;
     }
