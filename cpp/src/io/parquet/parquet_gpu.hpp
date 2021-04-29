@@ -330,6 +330,7 @@ struct EncPage {
   uint32_t num_leaf_values;  //!< Values in page. Different from num_rows in case of nested types
   uint32_t num_values;  //!< Number of def/rep level values in page. Includes null/empty elements in
                         //!< non-leaf levels
+  gpu_inflate_status_s *comp_stat;  //!< Ptr to compression status
 };
 
 /**

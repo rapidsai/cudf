@@ -1264,7 +1264,10 @@ __global__ void __launch_bounds__(128, 8)
   if (t == 0) {
     pages[blockIdx.x] = s->page;
     if (not comp_in.empty()) comp_in[blockIdx.x] = s->comp_in;
-    if (not comp_stat.empty()) comp_stat[blockIdx.x] = s->comp_stat;
+    if (not comp_stat.empty()) {
+      comp_stat[blockIdx.x]       = s->comp_stat;
+      pages[blockIdx.x].comp_stat = &comp_stat[blockIdx.x];
+    }
   }
 }
 
@@ -1281,6 +1284,7 @@ __global__ void __launch_bounds__(128)
   __shared__ __align__(4) unsigned int error_count;
   using warp_reduce = cub::WarpReduce<uint32_t>;
   __shared__ typename warp_reduce::TempStorage temp_storage[2];
+  __shared__ volatile bool has_compression;
 
   uint32_t t                      = threadIdx.x;
   uint32_t uncompressed_data_size = 0;
@@ -1290,18 +1294,20 @@ __global__ void __launch_bounds__(128)
   if (t == 0) {
     ck_g = chunks[blockIdx.x];
     atomicAnd(&error_count, 0);
+    has_compression = false;
   }
   __syncthreads();
   if (t < 32) {
     first_page = ck_g.first_page;
     num_pages  = ck_g.num_pages;
     for (uint32_t page = t; page < num_pages; page += 32) {
-      uint32_t page_data_size = pages[first_page + page].max_data_size;
-      uint32_t comp_idx       = first_page + page - start_page;
+      auto &curr_page         = pages[first_page + page];
+      uint32_t page_data_size = curr_page.max_data_size;
       uncompressed_data_size += page_data_size;
-      if (not comp_stat.empty()) {
-        compressed_data_size += (uint32_t)comp_stat[comp_idx].bytes_written;
-        if (comp_stat[comp_idx].status != 0) { atomicAdd(&error_count, 1); }
+      if (auto comp_status = curr_page.comp_stat; comp_status != nullptr) {
+        has_compression = true;
+        compressed_data_size += comp_status->bytes_written;
+        if (comp_status->status != 0) { atomicAdd(&error_count, 1); }
       }
     }
     uncompressed_data_size = warp_reduce(temp_storage[0]).Sum(uncompressed_data_size);
@@ -1310,7 +1316,7 @@ __global__ void __launch_bounds__(128)
   __syncthreads();
   if (t == 0) {
     bool is_compressed;
-    if (not comp_stat.empty()) {
+    if (has_compression) {
       uint32_t compression_error = atomicAdd(&error_count, 0);
       is_compressed = (!compression_error && compressed_data_size < uncompressed_data_size);
     } else {
