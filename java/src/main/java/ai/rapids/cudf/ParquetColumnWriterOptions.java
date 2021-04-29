@@ -251,7 +251,11 @@ public class ParquetColumnWriterOptions {
 
   boolean[] getFlatIsTimeTypeInt96() {
     boolean[] ret = {isTimestampTypeInt96};
-    return getFlatBooleans(ret, (opt) -> opt.getFlatIsTimeTypeInt96());
+    if (childColumnOptions.length > 0) {
+      return getFlatBooleans(ret, (opt) -> opt.getFlatIsTimeTypeInt96());
+    } else {
+      return ret;
+    }
   }
 
   protected boolean[] getFlatBooleans(boolean[] ret, ByteArrayProducer producer) {
@@ -275,29 +279,41 @@ public class ParquetColumnWriterOptions {
 
   int[] getFlatPrecision() {
     int[] ret = {precision};
-    return getFlatInts(ret, (opt) -> opt.getFlatPrecision());
+    if (childColumnOptions.length > 0) {
+      return getFlatInts(ret, (opt) -> opt.getFlatPrecision());
+    } else {
+      return ret;
+    }
   }
 
   boolean[] getFlatIsNullable() {
     boolean[] ret = {isNullable};
-    return getFlatBooleans(ret, (opt) -> opt.getFlatIsNullable());
+    if (childColumnOptions.length > 0) {
+      return getFlatBooleans(ret, (opt) -> opt.getFlatIsNullable());
+    } else {
+      return ret;
+    }
   }
 
   int[] getFlatNumChildren() {
     int[] ret = {childColumnOptions.length};
-    return getFlatInts(ret, (opt) -> opt.getFlatNumChildren());
+    if (childColumnOptions.length > 0) {
+      return getFlatInts(ret, (opt) -> opt.getFlatNumChildren());
+    } else {
+      return ret;
+    }
   }
 
   protected int[] getFlatInts(int[] ret, IntArrayProducer producer) {
     int[][] childResults = new int[childColumnOptions.length][];
-    int totalChildrenFlatLength = 0;
+    int totalChildrenFlatLength = ret.length;
     for (int i = 0 ; i < childColumnOptions.length ; i++) {
       ParquetColumnWriterOptions opt = childColumnOptions[i];
       childResults[i] = producer.apply(opt);
       totalChildrenFlatLength += childResults[i].length;
     }
 
-    int[] result = new int[ret.length + totalChildrenFlatLength];
+    int[] result = new int[totalChildrenFlatLength];
     System.arraycopy(ret, 0, result, 0, ret.length);
     int copiedSoFar = ret.length;
     for (int i = 0 ; i < childColumnOptions.length ; i++) {
@@ -309,19 +325,23 @@ public class ParquetColumnWriterOptions {
 
   String[] getFlatColumnNames() {
     String[] ret = {columName};
-    return getFlatColumnNames(ret);
+    if (childColumnOptions.length > 0) {
+      return getFlatColumnNames(ret);
+    } else {
+      return ret;
+    }
   }
 
   protected String[] getFlatColumnNames(String[] ret) {
     String[][] childResults = new String[childColumnOptions.length][];
-    int totalChildrenFlatLength = 0;
+    int totalChildrenFlatLength = ret.length;
     for (int i = 0 ; i < childColumnOptions.length ; i++) {
       ParquetColumnWriterOptions opt = childColumnOptions[i];
       childResults[i] = opt.getFlatColumnNames();
       totalChildrenFlatLength += childResults[i].length;
     }
 
-    String[] result = new String[ret.length + totalChildrenFlatLength];
+    String[] result = new String[totalChildrenFlatLength];
     System.arraycopy(ret, 0, result, 0, ret.length);
     int copiedSoFar = ret.length;
     for (int i = 0 ; i < childColumnOptions.length ; i++) {
