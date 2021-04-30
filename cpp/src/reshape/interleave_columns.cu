@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-#include <strings/utilities.cuh>
-
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -21,7 +21,9 @@ package ai.rapids.cudf;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 
+import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class ScalarTest extends CudfTestBase {
@@ -54,7 +56,7 @@ public class ScalarTest extends CudfTestBase {
       } else {
         type = DType.create(dataType);
       }
-      if (!type.isNestedType()) {
+      if (!type.isNestedType() || type.equals(DType.LIST)) {
         try (Scalar s = Scalar.fromNull(type)) {
           assertEquals(type, s.getType());
           assertFalse(s.isValid(), "null validity for " + type);
@@ -203,6 +205,33 @@ public class ScalarTest extends CudfTestBase {
       assertTrue(s.isValid());
       assertEquals("TEST", s.getJavaString());
       assertArrayEquals(new byte[]{'T', 'E', 'S', 'T'}, s.getUTF8());
+    }
+  }
+
+  @Test
+  public void testList() {
+    // list of int
+    try (ColumnVector listInt = ColumnVector.fromInts(1, 2, 3, 4);
+         Scalar s = Scalar.listFromColumnView(listInt)) {
+      assertEquals(DType.LIST, s.getType());
+      assertTrue(s.isValid());
+      try (ColumnView v = s.getListAsColumnView()) {
+        assertColumnsAreEqual(listInt, v);
+      }
+    }
+
+    // list of list
+    HostColumnVector.DataType listDT = new HostColumnVector.ListType(true,
+            new HostColumnVector.BasicType(true, DType.INT32));
+    try (ColumnVector listList = ColumnVector.fromLists(listDT,
+            Arrays.asList(1, 2, 3),
+            Arrays.asList(4, 5, 6));
+         Scalar s = Scalar.listFromColumnView(listList)) {
+      assertEquals(DType.LIST, s.getType());
+      assertTrue(s.isValid());
+      try (ColumnView v = s.getListAsColumnView()) {
+        assertColumnsAreEqual(listList, v);
+      }
     }
   }
 }
