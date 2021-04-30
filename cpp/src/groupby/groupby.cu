@@ -196,7 +196,7 @@ detail::sort::sort_groupby_helper& groupby::helper()
 
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
   table_view const& values,
-  size_type offset,
+  std::vector<size_type> const& offsets,
   std::vector<std::reference_wrapper<const scalar>> const& fill_values,
   rmm::mr::device_memory_resource* mr)
 {
@@ -220,7 +220,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
     [&](size_type i) {
       auto grouped_values = helper().grouped_values(values.column(i), stream);
       return cudf::detail::segmented_shift(
-        grouped_values->view(), group_offsets, offset, fill_values[i].get(), stream, mr);
+        grouped_values->view(), group_offsets, offsets[i], fill_values[i].get(), stream, mr);
     });
 
   return std::make_pair(helper().sorted_keys(stream, mr),

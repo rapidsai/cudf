@@ -66,7 +66,7 @@ void BM_group_shift(benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    auto result = gb_obj.shift(cudf::table_view{{vals}}, offset, {*fill_value});
+    auto result = gb_obj.shift(cudf::table_view{{vals}}, {offset}, {*fill_value});
   }
 }
 

@@ -41,7 +41,7 @@ void test_groupby_shift_fixed_width_single(fixed_width_column_wrapper<K> const& 
                                            fixed_width_column_wrapper<V> const& expected)
 {
   groupby::groupby gb_obj(table_view({key}));
-  auto got = gb_obj.shift(table_view{{value}}, offset, {fill_value});
+  auto got = gb_obj.shift(table_view{{value}}, {offset}, {fill_value});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL((*got.second).view().column(0), expected);
 }
 
@@ -217,7 +217,7 @@ void test_groupby_shift_string_single(fixed_width_column_wrapper<K> const& key,
                                       strings_column_wrapper const& expected)
 {
   groupby::groupby gb_obj(table_view({key}));
-  auto got = gb_obj.shift(table_view{{value}}, offset, {fill_value});
+  auto got = gb_obj.shift(table_view{{value}}, {offset}, {fill_value});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL((*got.second).view().column(0), expected);
 }
 
@@ -371,12 +371,12 @@ TYPED_TEST_CASE(groupby_shift_mixed_test, FixedWidthTypes);
 
 void test_groupby_shift_multi(fixed_width_column_wrapper<K> const& key,
                               table_view const& value,
-                              size_type offset,
+                              std::vector<size_type> offsets,
                               std::vector<std::reference_wrapper<const scalar>> fill_values,
                               table_view const& expected)
 {
   groupby::groupby gb_obj(table_view({key}));
-  auto got = gb_obj.shift(value, offset, fill_values);
+  auto got = gb_obj.shift(value, offsets, fill_values);
   CUDF_TEST_EXPECT_TABLES_EQUAL((*got.second).view(), expected);
 }
 
@@ -388,12 +388,12 @@ TYPED_TEST(groupby_shift_mixed_test, NoFill)
   table_view value{{v1, v2}};
 
   strings_column_wrapper e1({"", "", "a", "cc", "", "", "bb"}, {0, 0, 1, 1, 0, 0, 1});
-  fixed_width_column_wrapper<TypeParam> e2({-1, -1, 1, 3, -1, -1, 2}, {0, 0, 1, 1, 0, 0, 1});
+  fixed_width_column_wrapper<TypeParam> e2({-1, 1, 3, 6, -1, 2, 4}, {0, 1, 1, 1, 0, 1, 1});
   table_view expected{{e1, e2}};
 
-  size_type offset = 2;
-  auto slr1        = cudf::make_default_constructed_scalar(column_view(v1).type());
-  auto slr2        = cudf::make_default_constructed_scalar(column_view(v2).type());
+  std::vector<size_type> offset{2, 1};
+  auto slr1 = cudf::make_default_constructed_scalar(column_view(v1).type());
+  auto slr2 = cudf::make_default_constructed_scalar(column_view(v2).type());
   std::vector<std::reference_wrapper<const scalar>> fill_values{*slr1, *slr2};
 
   test_groupby_shift_multi(key, value, offset, fill_values, expected);
@@ -406,11 +406,11 @@ TYPED_TEST(groupby_shift_mixed_test, Fill)
   fixed_width_column_wrapper<TypeParam> v2{1, 2, 3, 4, 5, 6, 7};
   table_view value{{v1, v2}};
 
-  strings_column_wrapper e1({"f", "gg", "42", "42", "eee", "42", "42"});
+  strings_column_wrapper e1({"cc", "f", "gg", "42", "d", "eee", "42"});
   fixed_width_column_wrapper<TypeParam> e2({6, 7, 42, 42, 5, 42, 42});
   table_view expected{{e1, e2}};
 
-  size_type offset = -2;
+  std::vector<size_type> offset{-1, -2};
 
   auto slr1 = cudf::make_string_scalar("42");
   auto slr2 = cudf::scalar_type_t<TypeParam>(make_type_param_scalar<TypeParam>(42), true);
