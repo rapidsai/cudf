@@ -2273,25 +2273,19 @@ def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
             else:
                 raise ValueError("All columns must be the same type")
 
-    is_categorical = all(is_categorical_dtype(o.dtype) for o in objs)
-
-    # Combine CategoricalColumn categories
-    if is_categorical:
-        # Combine and de-dupe the categories
-        cats = (
-            cudf.concat([o.cat().categories for o in objs])
-            .to_series()
-            .drop_duplicates(ignore_index=True)
-            ._column
+    # TODO: This logic should be generalized to a dispatch to
+    # ColumnBase._concat so that all subclasses can override necessary
+    # behavior. However, at the moment it's not clear what that API should look
+    # like, so CategoricalColumn simply implements a minimal working API.
+    if all(is_categorical_dtype(o.dtype) for o in objs):
+        return cudf.core.column.categorical.CategoricalColumn._concat(
+            cast(
+                MutableSequence[
+                    cudf.core.column.categorical.CategoricalColumn
+                ],
+                objs,
+            )
         )
-        objs = [
-            o.cat()._set_categories(o.cat().categories, cats, is_unique=True)
-            for o in objs
-        ]
-        # Map `objs` into a list of the codes until we port Categorical to
-        # use the libcudf++ Category data type.
-        objs = [o.cat().codes._column for o in objs]
-        head = head.cat().codes._column
 
     newsize = sum(map(len, objs))
     if newsize > libcudf.MAX_COLUMN_SIZE:
@@ -2305,14 +2299,4 @@ def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
         # Filter out inputs that have 0 length, then concatenate.
         objs = [o for o in objs if len(o) > 0]
         col = libcudf.concat.concat_columns(objs)
-
-    if is_categorical:
-        col = build_categorical_column(
-            categories=as_column(cats),
-            codes=as_column(col.base_data, dtype=col.dtype),
-            mask=col.base_mask,
-            size=col.size,
-            offset=col.offset,
-        )
-
     return col

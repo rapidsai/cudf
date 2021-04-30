@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pickle
+from collections.abc import MutableSequence
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -1461,6 +1462,52 @@ class CategoricalColumn(column.ColumnBase):
     def view(self, dtype: Dtype) -> ColumnBase:
         raise NotImplementedError(
             "Categorical column views are not currently supported"
+        )
+
+    @staticmethod
+    def _concat(objs: MutableSequence[CategoricalColumn]) -> CategoricalColumn:
+        # TODO: This function currently assumes it is being called from
+        # column._concat_columns, at least to the extent that all the
+        # preprocessing in that function has already been done. That should be
+        # improved as the concatenation API is solidified.
+        # Find the first non-null column:
+        head = next((obj for obj in objs if obj.valid_count), objs[0])
+
+        # Combine and de-dupe the categories
+        cats = (
+            cudf.concat([o.cat().categories for o in objs])
+            .to_series()
+            .drop_duplicates(ignore_index=True)
+            ._column
+        )
+        objs = [
+            o.cat()._set_categories(o.cat().categories, cats, is_unique=True)
+            for o in objs
+        ]
+        # Map `objs` into a list of the codes until we port Categorical to
+        # use the libcudf++ Category data type.
+        objs = [o.cat().codes._column for o in objs]
+        head = head.cat().codes._column
+
+        newsize = sum(map(len, objs))
+        if newsize > libcudf.MAX_COLUMN_SIZE:
+            raise MemoryError(
+                f"Result of concat cannot have "
+                f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
+            )
+        elif newsize == 0:
+            col = column.column_empty(0, head.dtype, masked=True)
+        else:
+            # Filter out inputs that have 0 length, then concatenate.
+            objs = [o for o in objs if len(o) > 0]
+            col = libcudf.concat.concat_columns(objs)
+
+        return column.build_categorical_column(
+            categories=column.as_column(cats),
+            codes=column.as_column(col.base_data, dtype=col.dtype),
+            mask=col.base_mask,
+            size=col.size,
+            offset=col.offset,
         )
 
 
