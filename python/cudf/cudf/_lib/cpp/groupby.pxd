@@ -5,11 +5,13 @@ from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp cimport bool
 
+from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.aggregation cimport aggregation
+from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.types cimport size_type, order, null_order, null_policy
 
 
@@ -70,6 +72,15 @@ cdef extern from "cudf/groupby.hpp" \
             vector[aggregation_result]
         ] scan(
             const vector[aggregation_request]& requests,
+        ) except +
+
+        pair[
+            unique_ptr[table],
+            unique_ptr[table]
+        ] shift(
+            const table_view values,
+            size_type offset,
+            vector[reference_wrapper[scalar]] fill_values
         ) except +
 
         groups get_groups() except +
