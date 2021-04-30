@@ -107,20 +107,14 @@ inline auto iterator_with_null_at(cudf::size_type const& index)
  *
  * @return auto Validity iterator which always yields `false`
  */
-inline auto iterator_all_nulls()
-{
-  return cudf::detail::make_counting_transform_iterator(0, [](auto) { return false; });
-}
+inline auto iterator_all_nulls() { return thrust::make_constant_iterator(false); }
 
 /**
  * @brief Bool iterator for marking all elements are valid (non-null)
  *
  * @return auto Validity iterator which always yields `true`
  */
-inline auto iterator_no_null()
-{
-  return cudf::detail::make_counting_transform_iterator(0, [](auto) { return true; });
-}
+inline auto iterator_no_null() { return thrust::make_constant_iterator(true); }
 
 }  // namespace test
 }  // namespace cudf
