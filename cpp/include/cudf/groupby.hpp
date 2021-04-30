@@ -252,10 +252,10 @@ class groupby {
    *
    * @throws cudf::logic_error if @p fill_value dtype does not match @p input dtype
    */
-  std::pair<std::unique_ptr<table>, std::unique_ptr<column>> shift(
-    column_view const& values,
+  std::pair<std::unique_ptr<table>, std::unique_ptr<table>> shift(
+    table_view const& values,
     size_type offset,
-    scalar const& fill_value,
+    std::vector<std::reference_wrapper<const scalar>> const& fill_values,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
