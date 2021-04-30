@@ -117,7 +117,7 @@ inline auto iterator_all_nulls()
  *
  * @return auto Validity iterator which always yields `true`
  */
-inline auto iterator_no_nulls()
+inline auto iterator_no_null()
 {
   return cudf::detail::make_counting_transform_iterator(0, [](auto) { return true; });
 }
