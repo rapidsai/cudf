@@ -41,7 +41,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Constructs a Column View given a native view address
    * @param address the view handle
    */
-  protected ColumnView(long address) {
+  ColumnView(long address) {
     this.viewHandle = address;
     this.type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
     this.rows = ColumnView.getNativeRowCount(viewHandle);
@@ -209,6 +209,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public void close() {
     ColumnView.deleteColumnView(viewHandle);
     viewHandle = 0;
+  }
+
+  @Override
+  public String toString() {
+    return "ColumnView{" +
+           "rows=" + rows +
+           ", type=" + type +
+           ", nullCount=" + nullCount +
+           '}';
   }
 
   /**
