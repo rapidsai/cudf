@@ -4,7 +4,6 @@ from libcpp.memory cimport unique_ptr
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.table.table_view cimport table_view
-# from cudf._lib.cpp.types cimport null_policy
 
 cdef extern from "cudf/lists/concatenate_rows.hpp" namespace
 "cudf::lists" nogil:
