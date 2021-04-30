@@ -607,7 +607,7 @@ class list_scalar : public scalar {
   list_scalar& operator=(list_scalar&& other) = delete;
 
   /**
-   * @brief Construct a new list scalar object copying from existing device data
+   * @brief Construct a new list scalar object by copying from existing device data
    *
    * @param elements The elements of the list
    * @param is_valid Whether the value held by the scalar is valid
