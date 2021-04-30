@@ -53,7 +53,7 @@ def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
     if size_hint:
         warn("size_hint is not applicable for cudf.factorize")
 
-    return_cupy_array = isinstance(values, cp.core.core.ndarray)
+    return_cupy_array = isinstance(values, cp.ndarray)
 
     values = Series(values)
 

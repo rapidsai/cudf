@@ -807,8 +807,7 @@ def test_string_cat_str_error():
         gs.str.cat(gs.str)
 
 
-@pytest.mark.xfail(raises=(NotImplementedError, AttributeError))
-@pytest.mark.parametrize("sep", [None, "", " ", "|", ",", "|||"])
+@pytest.mark.parametrize("sep", ["", " ", "|", ",", "|||"])
 def test_string_join(ps_gs, sep):
     ps, gs = ps_gs
 
@@ -2930,4 +2929,123 @@ def test_string_slice_with_mask():
     assert_eq(actual._column.base_size, expected._column.base_size)
     assert_eq(actual._column.null_count, expected._column.null_count)
 
+    assert_eq(actual, expected)
+
+
+def test_str_join_lists_error():
+    sr = cudf.Series([["a", "a"], ["b"], ["c"]])
+
+    with pytest.raises(
+        ValueError, match="sep_na_rep cannot be defined when `sep` is scalar."
+    ):
+        sr.str.join(sep="-", sep_na_rep="-")
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "string_na_rep should be a string scalar, got [10, 20] of type "
+            ": <class 'list'>"
+        ),
+    ):
+        sr.str.join(string_na_rep=[10, 20])
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "sep should be of similar size to the series, got: 2, expected: 3"
+        ),
+    ):
+        sr.str.join(sep=["=", "-"])
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "sep_na_rep should be a string scalar, got "
+            "['na'] of type: <class 'list'>"
+        ),
+    ):
+        sr.str.join(sep=["-", "+", "."], sep_na_rep=["na"])
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "sep should be an str, array-like or Series object, "
+            "found <class 'cudf.core.dataframe.DataFrame'>"
+        ),
+    ):
+        sr.str.join(sep=cudf.DataFrame())
+
+
+@pytest.mark.parametrize(
+    "sr,sep,string_na_rep,sep_na_rep,expected",
+    [
+        (
+            cudf.Series([["a", "a"], ["b"], ["c"]]),
+            "-",
+            None,
+            None,
+            cudf.Series(["a-a", "b", "c"]),
+        ),
+        (
+            cudf.Series([["a", "b"], [None], [None, "hello", None, "world"]]),
+            "__",
+            "=",
+            None,
+            cudf.Series(["a__b", "=", "=__hello__=__world"]),
+        ),
+        (
+            cudf.Series(
+                [
+                    ["a", None, "b"],
+                    [None],
+                    [None, "hello", None, "world"],
+                    None,
+                ]
+            ),
+            ["-", "_", "**", "!"],
+            None,
+            None,
+            cudf.Series(["a--b", "", "**hello****world", None]),
+        ),
+        (
+            cudf.Series(
+                [
+                    ["a", None, "b"],
+                    [None],
+                    [None, "hello", None, "world"],
+                    None,
+                ]
+            ),
+            ["-", "_", "**", None],
+            "rep_str",
+            "sep_str",
+            cudf.Series(
+                [
+                    "a-rep_str-b",
+                    "rep_str",
+                    "rep_str**hello**rep_str**world",
+                    None,
+                ]
+            ),
+        ),
+        (
+            cudf.Series([[None, "a"], [None], None]),
+            ["-", "_", None],
+            "rep_str",
+            None,
+            cudf.Series(["rep_str-a", "rep_str", None]),
+        ),
+        (
+            cudf.Series([[None, "a"], [None], None]),
+            ["-", "_", None],
+            None,
+            "sep_str",
+            cudf.Series(["-a", "", None]),
+        ),
+    ],
+)
+def test_str_join_lists(sr, sep, string_na_rep, sep_na_rep, expected):
+    actual = sr.str.join(
+        sep=sep, string_na_rep=string_na_rep, sep_na_rep=sep_na_rep
+    )
     assert_eq(actual, expected)
