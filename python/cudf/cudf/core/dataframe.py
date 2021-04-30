@@ -554,6 +554,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         return data, index
 
+    # The `constructor*` properties are used by `dask` (and `dask_cudf`)
+    @property
+    def _constructor(self):
+        return DataFrame
+
     @property
     def _constructor_sliced(self):
         return Series

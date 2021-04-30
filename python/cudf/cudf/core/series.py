@@ -62,6 +62,11 @@ from cudf.utils.utils import (
 
 
 class Series(FrameOneD, Serializable):
+    # The `constructor*` properties are used by `dask` (and `dask_cudf`)
+    @property
+    def _constructor(self):
+        return Series
+
     @property
     def _constructor_sliced(self):
         raise NotImplementedError(
