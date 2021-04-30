@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include <cudf/binaryop.hpp>
+#include <fixture/benchmark_fixture.hpp>
+#include <synchronization/synchronization.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
-#include <fixture/benchmark_fixture.hpp>
-#include <synchronization/synchronization.hpp>
+#include <cudf/binaryop.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -66,15 +66,6 @@ void BM_binaryop(benchmark::State& state, cudf::binary_operator binop)
     ->Arg(100000000); /* 100M */
 
 using namespace cudf;
-
-// Types from tests.
-// BINARYOP_BENCHMARK_DEFINE(timestamp_D,  duration_s,   ADD,                  timestamp_us);
-// BINARYOP_BENCHMARK_DEFINE(timestamp_D,  timestamp_s,  SUB,                  duration_s);
-// BINARYOP_BENCHMARK_DEFINE(duration_s,   int32_t,      MUL,                  duration_ns);
-// BINARYOP_BENCHMARK_DEFINE(duration_D,   duration_s,   DIV,                  int64_t);
-// BINARYOP_BENCHMARK_DEFINE(float,        float,        FLOOR_DIV,            int64_t);
-// BINARYOP_BENCHMARK_DEFINE(duration_D,   int64_t,      MOD,                  duration_us);
-// BINARYOP_BENCHMARK_DEFINE(duration_s,   duration_ms,  MOD,                  duration_us);
 
 // clang-format off
 BINARYOP_BENCHMARK_DEFINE(float,        int64_t,      ADD,                  int32_t);
