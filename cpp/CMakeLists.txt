@@ -303,6 +303,7 @@ add_library(cudf
     src/reshape/tile.cu
     src/rolling/grouped_rolling.cu
     src/rolling/rolling.cu
+    src/rolling/range_window_bounds.cpp
     src/round/round.cu
     src/scalar/scalar.cpp
     src/scalar/scalar_factories.cpp
