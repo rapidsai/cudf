@@ -22,6 +22,10 @@ package ai.rapids.cudf;
 abstract class CuFileHandle implements AutoCloseable {
   private final CuFileResourceCleaner cleaner;
 
+  static {
+    CuFile.initialize();
+  }
+
   protected CuFileHandle(long pointer) {
     cleaner = new CuFileResourceCleaner(pointer, CuFileHandle::destroy);
     MemoryCleaner.register(this, cleaner);
