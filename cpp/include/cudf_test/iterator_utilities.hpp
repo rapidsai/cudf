@@ -77,7 +77,7 @@ template <typename Iter>
  * @param indices The indices for which the validity iterator must return `false` (i.e. null)
  * @return auto Validity iterator
  */
-[[maybe_unused]] auto iterator_with_null_at(cudf::host_span<cudf::size_type const> const& indices)
+[[maybe_unused]] auto iterator_with_null_at(cudf::host_span<cudf::size_type const> indices)
 {
   return iterator_with_null_at(indices.begin(), indices.end());
 }
@@ -97,7 +97,7 @@ template <typename Iter>
  * @param index The index for which the validity iterator must return `false` (i.e. null)
  * @return auto Validity iterator
  */
-[[maybe_unused]] auto iterator_with_null_at(cudf::size_type const& index)
+[[maybe_unused]] auto iterator_with_null_at(cudf::size_type index)
 {
   return iterator_with_null_at(std::vector<size_type>{index});
 }
