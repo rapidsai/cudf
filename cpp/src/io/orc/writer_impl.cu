@@ -525,25 +525,29 @@ orc_streams::orc_stream_offsets orc_streams::compute_offsets(
   for (size_t i = 0; i < streams.size(); ++i) {
     const auto &stream = streams[i];
 
-    auto const is_str_data = [&]() {
-      // First stream is an index stream
-      if (!stream.column_index().has_value()) return false;
+    auto const is_rle_data = [&]() {
+      // First stream is an index stream, don't check types, etc.
+      if (!stream.column_index().has_value()) return true;
 
       auto const &column = columns[stream.column_index().value()];
-      if (column.orc_kind() != TypeKind::STRING) return false;
+      // Dictionary encoded string column - dictionary characters or
+      // directly encoded string - column characters
+      if (column.orc_kind() == TypeKind::STRING &&
+          ((stream.kind == DICTIONARY_DATA && column.orc_encoding() == DICTIONARY_V2) ||
+           (stream.kind == DATA && column.orc_encoding() == DIRECT_V2)))
+        return false;
+      // Decimal data
+      if (column.orc_kind() == TypeKind::DECIMAL && stream.kind == DATA) return false;
 
-      // Dictionary encoded string column dictionary characters or
-      // directly encoded string column characters or
-      // DECIMAL: add decimal data condition
-      return ((stream.kind == DICTIONARY_DATA && column.orc_encoding() == DICTIONARY_V2) ||
-              (stream.kind == DATA && column.orc_encoding() == DIRECT_V2));
+      // Everything else uses RLE
+      return true;
     }();
-    if (is_str_data) {
-      strm_offsets[i] = non_rle_data_size;
-      non_rle_data_size += stream.length;
-    } else {
+    if (is_rle_data) {
       strm_offsets[i] = rle_data_size;
       rle_data_size += (stream.length * num_rowgroups + 7) & ~7;
+    } else {
+      strm_offsets[i] = non_rle_data_size;
+      non_rle_data_size += stream.length;
     }
   }
   non_rle_data_size = (non_rle_data_size + 7) & ~7;
@@ -556,7 +560,6 @@ struct segmented_valid_cnt_input {
   std::vector<size_type> indices;
 };
 
-// DECIMAL: need per-rowgroup sizes on the host, need elem sizes on device
 encoded_data writer::impl::encode_columns(const table_device_view &view,
                                           host_span<orc_column_view const> columns,
                                           std::vector<int> const &str_col_ids,
@@ -1219,14 +1222,6 @@ void writer::impl::write(table_view const &table)
 
   auto dec_chunk_sizes =
     decimal_chunk_sizes(table, orc_columns, row_index_stride_, stripe_bounds, stream);
-
-  // DECIMAL: to get the required info:
-  //  1. compute elem sizes on device;
-  //  2. scan per rowgroup(device);
-  //  3. Copy last elems in each rowgroup to host;
-  //  4. Accumulate to get total size;
-  // Note: per-element size is only needed on device; per-RG sizeis needed to init streams (host);
-  // total size is used on host
 
   auto streams =
     create_streams(orc_columns, stripe_bounds, decimal_column_sizes(dec_chunk_sizes.rg_sizes));
