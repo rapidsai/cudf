@@ -27,6 +27,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -1095,20 +1096,23 @@ encoder_decimal_info decimal_chunk_sizes(table_view const &table,
   std::map<uint32_t, rmm::device_uvector<uint32_t>> elem_sizes;
 
   for (size_t col_idx = 0; col_idx < orc_columns.size(); ++col_idx) {
-    auto &col = orc_columns[col_idx];
-    if (col.orc_kind() == DECIMAL) {
+    auto &orc_col = orc_columns[col_idx];
+    if (orc_col.orc_kind() == DECIMAL) {
+      auto col = table.column(col_idx);
       auto &curr_sizes =
-        elem_sizes.insert({col_idx, rmm::device_uvector<uint32_t>(col.data_count(), stream)})
+        elem_sizes.insert({col_idx, rmm::device_uvector<uint32_t>(col.size(), stream)})
           .first->second;
-      // TODO: null support
+      auto d_column = column_device_view::create(col, stream);
       thrust::transform(rmm::exec_policy(stream),
-                        table.column(col_idx).begin<int64_t>(),
-                        table.column(col_idx).end<int64_t>(),
+                        thrust::make_counting_iterator<size_type>(0),
+                        thrust::make_counting_iterator<size_type>(col.size()),
                         curr_sizes.begin(),
-                        [] __device__(auto v) {
-                          uint32_t len = 1;
-                          while (v > 127) {
-                            v >>= 7u;
+                        [d_col = *d_column] __device__(auto idx) {
+                          if (!d_col.is_valid(idx)) return 0u;
+                          uint32_t len  = 1;
+                          uint64_t elem = d_col.element<uint64_t>(idx);
+                          while (elem > 127) {
+                            elem >>= 7u;
                             ++len;
                           }
                           return len;
@@ -1116,11 +1120,11 @@ encoder_decimal_info decimal_chunk_sizes(table_view const &table,
 
       thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                     rowgroup_iterator{0, rowgroup_size},
-                                    rowgroup_iterator{col.data_count(), rowgroup_size},
+                                    rowgroup_iterator{col.size(), rowgroup_size},
                                     curr_sizes.begin(),
                                     curr_sizes.begin());
 
-      col.attach_decimal_sizes(curr_sizes.data());
+      orc_col.attach_decimal_sizes(curr_sizes.data());
     }
   }
   if (elem_sizes.empty()) return {};
