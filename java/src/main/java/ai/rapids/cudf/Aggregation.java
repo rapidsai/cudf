@@ -356,8 +356,10 @@ public abstract class Aggregation {
 
         @Override
         public int hashCode() {
-            boolean[] configs = new boolean[]{nullPolicy.includeNulls, nullEquality.nullsEqual, nanEquality.nansEqual};
-            return 31 * kind.hashCode() + Arrays.hashCode(configs);
+            return 31 * kind.hashCode()
+                + Boolean.hashCode(nullPolicy.includeNulls)
+                + Boolean.hashCode(nullEquality.nullsEqual)
+                + Boolean.hashCode(nanEquality.nansEqual);
         }
 
         @Override
