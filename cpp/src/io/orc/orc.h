@@ -588,12 +588,12 @@ class metadata {
    * @return List of ORC column indexes
    */
   std::vector<int> select_columns(std::vector<std::string> const &use_names,
-                                  bool &has_timestamp_column);
+                                  bool &has_timestamp_column) const;
 
   size_t get_total_rows() const { return ff.numberOfRows; }
   int get_num_stripes() const { return ff.stripes.size(); }
   int get_num_columns() const { return ff.types.size(); }
-  std::string const &get_column_name(int32_t column_id)
+  std::string const &get_column_name(int32_t column_id) const
   {
     if (column_names.empty() && get_num_columns() != 0) { init_column_names(); }
     return column_names[column_id];
@@ -614,9 +614,9 @@ class metadata {
     int32_t field  = -1;
   };
   std::vector<schema_indexes> get_schema_indexes() const;
-  void init_column_names();
+  void init_column_names() const;
 
-  std::vector<std::string> column_names;
+  mutable std::vector<std::string> column_names;
 };
 
 }  // namespace orc

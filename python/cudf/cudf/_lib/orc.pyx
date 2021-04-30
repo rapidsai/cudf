@@ -172,7 +172,7 @@ cdef orc_reader_options make_orc_reader_options(
 ) except*:
 
     cdef vector[string] c_column_names
-    cdef vector[size_type] strps = stripes
+    cdef vector[vector[size_type]] strps = stripes
     c_column_names.reserve(len(column_names))
     for col in column_names:
         c_column_names.push_back(str(col).encode())

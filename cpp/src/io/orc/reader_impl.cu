@@ -418,7 +418,7 @@ void reader::impl::decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks
 class aggregate_orc_metadata {
   using OrcStripeInfo = std::pair<const StripeInformation *, const StripeFooter *>;
 
-  std::vector<cudf::io::orc::metadata> const per_file_metadata;
+  mutable std::vector<cudf::io::orc::metadata> per_file_metadata;
   size_type const num_rows;
   size_type const num_columns;
   size_type const num_stripes;
@@ -533,7 +533,7 @@ class aggregate_orc_metadata {
 
       row_count = 0;
       for (size_t src_idx = 0; src_idx < stripes.size(); ++src_idx) {
-        for (const auto &stripe_idx : stripes[src_idx]) {
+        for (const size_t &stripe_idx : stripes[src_idx]) {
           CUDF_EXPECTS(stripe_idx >= 0 && stripe_idx < per_file_metadata[src_idx].ff.stripes.size(),
                        "Invalid stripe index");
           selection.emplace_back(&per_file_metadata[src_idx].ff.stripes[stripe_idx], nullptr);
@@ -597,7 +597,7 @@ class aggregate_orc_metadata {
    *
    * @return vector<int> of indexes that should be used in the resulting Dataframe.
    */
-  auto select_columns(std::vector<std::string> const &use_names, bool &has_timestamp_column)
+  auto select_columns(std::vector<std::string> const &use_names, bool &has_timestamp_column) const
   {
     auto const &pfm = per_file_metadata[0];
 

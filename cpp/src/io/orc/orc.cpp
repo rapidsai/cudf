@@ -568,7 +568,7 @@ metadata::metadata(datasource *const src) : source(src)
 //   return selection;
 // }
 
-void metadata::init_column_names()
+void metadata::init_column_names() const
 {
   auto const schema_idxs = get_schema_indexes();
   auto const &types      = ff.types;
