@@ -197,106 +197,6 @@ class ColumnBase(Column, Serializable):
     def str(self, parent=None) -> "cudf.core.column.string.StringMethods":
         raise NotImplementedError()
 
-    @classmethod
-    def _concat(
-        cls, objs: "MutableSequence[ColumnBase]", dtype: Dtype = None
-    ) -> ColumnBase:
-        if len(objs) == 0:
-            dtype = pd.api.types.pandas_dtype(dtype)
-            if is_categorical_dtype(dtype):
-                dtype = CategoricalDtype()
-            return column_empty(0, dtype=dtype, masked=True)
-
-        # If all columns are `NumericalColumn` with different dtypes,
-        # we cast them to a common dtype.
-        # Notice, we can always cast pure null columns
-        not_null_cols = list(filter(lambda o: o.valid_count > 0, objs))
-        if len(not_null_cols) > 0 and (
-            len(
-                [
-                    o
-                    for o in not_null_cols
-                    if not is_numerical_dtype(o.dtype)
-                    or np.issubdtype(o.dtype, np.datetime64)
-                ]
-            )
-            == 0
-        ):
-            col_dtypes = [o.dtype for o in not_null_cols]
-            # Use NumPy to find a common dtype
-            common_dtype = np.find_common_type(col_dtypes, [])
-            # Cast all columns to the common dtype
-            for i in range(len(objs)):
-                objs[i] = objs[i].astype(common_dtype)
-
-        # Find the first non-null column:
-        head = objs[0]
-        for i, obj in enumerate(objs):
-            if obj.valid_count > 0:
-                head = obj
-                break
-
-        for i, obj in enumerate(objs):
-            # Check that all columns are the same type:
-            if not pd.api.types.is_dtype_equal(obj.dtype, head.dtype):
-                # if all null, cast to appropriate dtype
-                if obj.valid_count == 0:
-                    objs[i] = column_empty_like(
-                        head, dtype=head.dtype, masked=True, newsize=len(obj)
-                    )
-                else:
-                    raise ValueError("All columns must be the same type")
-
-        cats = None
-        is_categorical = all(is_categorical_dtype(o.dtype) for o in objs)
-
-        # Combine CategoricalColumn categories
-        if is_categorical:
-            # Combine and de-dupe the categories
-            cats = (
-                cudf.concat([o.cat().categories for o in objs])
-                .to_series()
-                .drop_duplicates(ignore_index=True)
-                ._column
-            )
-            objs = [
-                o.cat()._set_categories(
-                    o.cat().categories, cats, is_unique=True
-                )
-                for o in objs
-            ]
-            # Map `objs` into a list of the codes until we port Categorical to
-            # use the libcudf++ Category data type.
-            objs = [o.cat().codes._column for o in objs]
-            head = head.cat().codes._column
-
-        newsize = sum(map(len, objs))
-        if newsize > libcudf.MAX_COLUMN_SIZE:
-            raise MemoryError(
-                f"Result of concat cannot have "
-                f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
-            )
-
-        # Filter out inputs that have 0 length
-        objs = [o for o in objs if len(o) > 0]
-
-        # Perform the actual concatenation
-        if newsize > 0:
-            col = libcudf.concat.concat_columns(objs)
-        else:
-            col = column_empty(0, head.dtype, masked=True)
-
-        if is_categorical:
-            col = build_categorical_column(
-                categories=as_column(cats),
-                codes=as_column(col.base_data, dtype=col.dtype),
-                mask=col.base_mask,
-                size=col.size,
-                offset=col.offset,
-            )
-
-        return col
-
     def dropna(self, drop_nan: bool = False) -> ColumnBase:
         if drop_nan:
             col = self.nans_to_nulls()
@@ -796,7 +696,7 @@ class ColumnBase(Column, Serializable):
         return indices[-1]
 
     def append(self, other: ColumnBase) -> ColumnBase:
-        return self.__class__._concat([self, as_column(other)])
+        return _concat_columns([self, as_column(other)])
 
     def quantile(
         self,
@@ -2336,3 +2236,102 @@ def full(size: int, fill_value: ScalarLike, dtype: Dtype = None) -> ColumnBase:
     dtype: int8
     """
     return ColumnBase.from_scalar(cudf.Scalar(fill_value, dtype), size)
+
+
+def _concat_columns(
+    objs: "MutableSequence[ColumnBase]", dtype: Dtype = None
+) -> ColumnBase:
+    """Concatenate a sequence of columns."""
+    if len(objs) == 0:
+        dtype = pd.api.types.pandas_dtype(dtype)
+        if is_categorical_dtype(dtype):
+            dtype = CategoricalDtype()
+        return column_empty(0, dtype=dtype, masked=True)
+
+    # If all columns are `NumericalColumn` with different dtypes,
+    # we cast them to a common dtype.
+    # Notice, we can always cast pure null columns
+    not_null_cols = list(filter(lambda o: o.valid_count > 0, objs))
+    if len(not_null_cols) > 0 and (
+        len(
+            [
+                o
+                for o in not_null_cols
+                if not is_numerical_dtype(o.dtype)
+                or np.issubdtype(o.dtype, np.datetime64)
+            ]
+        )
+        == 0
+    ):
+        col_dtypes = [o.dtype for o in not_null_cols]
+        # Use NumPy to find a common dtype
+        common_dtype = np.find_common_type(col_dtypes, [])
+        # Cast all columns to the common dtype
+        for i in range(len(objs)):
+            objs[i] = objs[i].astype(common_dtype)
+
+    # Find the first non-null column:
+    head = objs[0]
+    for i, obj in enumerate(objs):
+        if obj.valid_count > 0:
+            head = obj
+            break
+
+    for i, obj in enumerate(objs):
+        # Check that all columns are the same type:
+        if not pd.api.types.is_dtype_equal(obj.dtype, head.dtype):
+            # if all null, cast to appropriate dtype
+            if obj.valid_count == 0:
+                objs[i] = column_empty_like(
+                    head, dtype=head.dtype, masked=True, newsize=len(obj)
+                )
+            else:
+                raise ValueError("All columns must be the same type")
+
+    cats = None
+    is_categorical = all(is_categorical_dtype(o.dtype) for o in objs)
+
+    # Combine CategoricalColumn categories
+    if is_categorical:
+        # Combine and de-dupe the categories
+        cats = (
+            cudf.concat([o.cat().categories for o in objs])
+            .to_series()
+            .drop_duplicates(ignore_index=True)
+            ._column
+        )
+        objs = [
+            o.cat()._set_categories(o.cat().categories, cats, is_unique=True)
+            for o in objs
+        ]
+        # Map `objs` into a list of the codes until we port Categorical to
+        # use the libcudf++ Category data type.
+        objs = [o.cat().codes._column for o in objs]
+        head = head.cat().codes._column
+
+    newsize = sum(map(len, objs))
+    if newsize > libcudf.MAX_COLUMN_SIZE:
+        raise MemoryError(
+            f"Result of concat cannot have "
+            f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
+        )
+
+    # Filter out inputs that have 0 length
+    objs = [o for o in objs if len(o) > 0]
+
+    # Perform the actual concatenation
+    if newsize > 0:
+        col = libcudf.concat.concat_columns(objs)
+    else:
+        col = column_empty(0, head.dtype, masked=True)
+
+    if is_categorical:
+        col = build_categorical_column(
+            categories=as_column(cats),
+            codes=as_column(col.base_data, dtype=col.dtype),
+            mask=col.base_mask,
+            size=col.size,
+            offset=col.offset,
+        )
+
+    return col

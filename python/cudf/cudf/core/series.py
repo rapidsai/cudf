@@ -34,6 +34,7 @@ from cudf.core.column import (
 from cudf.core.column.categorical import (
     CategoricalAccessor as CategoricalAccessor,
 )
+from cudf.core.column.column import _concat_columns
 from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
@@ -2749,7 +2750,7 @@ class Series(Frame, Serializable):
             if dtype_mismatch:
                 objs = numeric_normalize_types(*objs)
 
-        col = ColumnBase._concat([o._column for o in objs])
+        col = _concat_columns([o._column for o in objs])
         return cls(data=col, index=index, name=name)
 
     @property

@@ -27,6 +27,7 @@ from cudf.core.column import (
     arange,
     column,
 )
+from cudf.core.column.column import _concat_columns
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import Frame
@@ -779,7 +780,7 @@ class Index(Frame, Serializable):
 
     @classmethod
     def _concat(cls, objs):
-        data = ColumnBase._concat([o._values for o in objs])
+        data = _concat_columns([o._values for o in objs])
         names = {obj.name for obj in objs}
         if len(names) == 1:
             [name] = names
