@@ -225,32 +225,39 @@ class groupby {
   /**
    * @brief Performs grouped shifts for specified values.
    *
-   * For each group, `i`th element is determined by the `i - offset`th element
-   * of the group. If `i - offset < 0 or >= group_size`, the value is determined by
-   * @p fill_value.
+   * In `j`th column, for each group, `i`th element is determined by the `i - offsets[j]`th
+   * element of the group. If `i - offsets[j] < 0 or >= group_size`, the value is determined by
+   * @p fill_values[j].
    *
    * Example:
    * @code{.pseudo}
-   * keys:   {1 1 1 1 2 2 2}
-   * values: {3 1 4 7 9 2 5}
-   * offset: 2
-   * fill_value: @
-   * result: {@ @ 3 1 @ @ 9}
+   * keys:   {{1 2 1 1 2 2 1}}
+   * values: {{3 9 1 4 2 5 7}, {"a" "c" "bb" "ee" "z" "x" "d"}}
+   * offset: {2, -1}
+   * fill_value: {@, @}
+   * result:
+   *    keys: {{1 1 1 1 2 2 2}}
+   *    values: {{@ @ 3 1 @ @ 9}, {"bb" "ee" "d" @ "z" "x" @}}
+   *
    * -------------------------------------------------
-   * keys:   {1 1 1 1 2 2 2}
-   * values: {3 1 4 7 9 2 5}
-   * offset: -2
-   * fill_value: -1
-   * result: {4 7 -1 -1 5 -1 -1}
+   * keys:   {{1 2 1 1 2 2 1}}
+   * values: {{3 9 1 4 2 5 7}, {"a" "c" "bb" "ee" "z" "x" "d"}}
+   * offset: {-2, 1}
+   * fill_value: {-1, "42"}
+   * result:
+   *    keys: {{1 1 1 1 2 2 2}}
+   *    values: {{4 7 -1 -1 5 -1 -1}, {"42", "a", "bb", "ee", "42", "c", "z"}}
+   *
    * @endcode
    *
-   * @param values Column to be shifted
-   * @param offset The off set by which to shift the input
-   * @param fill_value Fill value for indeterminable outputs
+   * @param values Table whose columns to be shifted
+   * @param offsets The offsets by which to shift the input
+   * @param fill_values Fill values for indeterminable outputs
    * @param mr Device memory resource used to allocate the returned table and columns' device memory
-   * @return Pair containing the table with each group's key and the column shifted
+   * @return Pair containing the tables with each group's key and the columns shifted
    *
-   * @throws cudf::logic_error if @p fill_value dtype does not match @p input dtype
+   * @throws cudf::logic_error if @p fill_value[i] dtype does not match @p values[i] dtype for
+   * `i`th column
    */
   std::pair<std::unique_ptr<table>, std::unique_ptr<table>> shift(
     table_view const& values,
