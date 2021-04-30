@@ -49,7 +49,7 @@ namespace test {
  * @return auto Validity iterator
  */
 template <typename Iter>
-static auto iterator_with_null_at(Iter index_start, Iter index_end)
+auto iterator_with_null_at(Iter index_start, Iter index_end)
 {
   using index_type = typename std::iterator_traits<Iter>::value_type;
 
@@ -77,7 +77,7 @@ static auto iterator_with_null_at(Iter index_start, Iter index_end)
  * @param indices The indices for which the validity iterator must return `false` (i.e. null)
  * @return auto Validity iterator
  */
-static auto iterator_with_null_at(cudf::host_span<cudf::size_type const> const& indices)
+inline auto iterator_with_null_at(cudf::host_span<cudf::size_type const> const& indices)
 {
   return iterator_with_null_at(indices.begin(), indices.end());
 }
@@ -97,9 +97,19 @@ static auto iterator_with_null_at(cudf::host_span<cudf::size_type const> const& 
  * @param index The index for which the validity iterator must return `false` (i.e. null)
  * @return auto Validity iterator
  */
-static auto iterator_with_null_at(cudf::size_type const& index)
+inline auto iterator_with_null_at(cudf::size_type const& index)
 {
   return iterator_with_null_at(std::vector<size_type>{index});
+}
+
+/**
+ * @brief Bool iterator for marking all elements are null
+ *
+ * @return auto Validity iterator which always yields `false`
+ */
+inline auto iterator_all_nulls()
+{
+  return cudf::detail::make_counting_transform_iterator(0, [](auto) { return false; });
 }
 
 }  // namespace test
