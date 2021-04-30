@@ -293,6 +293,8 @@ inline size_t __device__ __host__ GetMaxCompressedBfrSize(size_t uncomp_size,
   return uncomp_size + (uncomp_size >> 7) + num_pages * 8;
 }
 
+struct EncPage;
+
 /**
  * @brief Struct describing an encoder column chunk
  */
@@ -308,6 +310,7 @@ struct EncColumnChunk {
   uint32_t num_rows;                           //!< Number of rows in chunk
   uint32_t num_values;      //!< Number of values in chunk. Different from num_rows for nested types
   uint32_t first_fragment;  //!< First fragment of chunk
+  EncPage *pages;           //!< Ptr to pages that belong to this chunk
   uint32_t first_page;      //!< First page of chunk
   uint32_t num_pages;       //!< Number of pages in chunk
   uint32_t dictionary_id;   //!< Dictionary id for this chunk
@@ -342,6 +345,7 @@ struct EncPage {
   uint32_t num_leaf_values;  //!< Values in page. Different from num_rows in case of nested types
   uint32_t num_values;  //!< Number of def/rep level values in page. Includes null/empty elements in
                         //!< non-leaf levels
+  gpu_inflate_status_s *comp_stat;  //!< Ptr to compression status
 };
 
 /**
@@ -515,32 +519,23 @@ void EncodePages(device_span<EncPage> pages,
  * @brief Launches kernel to make the compressed vs uncompressed chunk-level decision
  *
  * @param[in,out] chunks Column chunks (updated with actual compressed/uncompressed sizes)
- * @param[in] pages Device array of EncPages
- * @param[in] num_chunks Number of column chunks
- * @param[in] start_page First page to encode in page array
- * @param[in] comp_out Compressor status or nullptr if no compression
  * @param[in] stream CUDA stream to use, default 0
  */
 void DecideCompression(device_span<EncColumnChunk> chunks,
-                       device_span<gpu::EncPage const> pages,
-                       uint32_t start_page,
-                       device_span<gpu_inflate_status_s const> comp_out = {},
-                       rmm::cuda_stream_view stream                     = rmm::cuda_stream_default);
+                       rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @brief Launches kernel to encode page headers
  *
  * @param[in,out] pages Device array of EncPages
- * @param[in] start_page First page to encode in page array
  * @param[in] comp_out Compressor status or nullptr if no compression
  * @param[in] page_stats Optional page-level statistics to be included in page header
  * @param[in] chunk_stats Optional chunk-level statistics to be encoded
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePageHeaders(device_span<EncPage> pages,
-                       uint32_t start_page                              = 0,
                        device_span<gpu_inflate_status_s const> comp_out = {},
-                       const statistics_chunk *page_stats               = nullptr,
+                       device_span<statistics_chunk const> page_stats   = {},
                        const statistics_chunk *chunk_stats              = nullptr,
                        rmm::cuda_stream_view stream                     = rmm::cuda_stream_default);
 
@@ -549,8 +544,6 @@ void EncodePageHeaders(device_span<EncPage> pages,
  *
  * @param[in,out] chunks Column chunks
  * @param[in] pages Device array of EncPages
- * @param[in] num_chunks Number of column chunks
- * @param[in] comp_out Compressor status
  * @param[in] stream CUDA stream to use, default 0
  */
 void GatherPages(device_span<EncColumnChunk> chunks,
