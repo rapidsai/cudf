@@ -541,6 +541,12 @@ class Index(FrameOneD, Serializable):
             {col_name: self._values}, index=self if index else None
         )
 
+    def any(self):
+        """
+        Return whether any elements is True in Index.
+        """
+        return self._values.any()
+
     def to_pandas(self):
         """
         Convert to a Pandas Index.
