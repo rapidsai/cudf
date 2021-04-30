@@ -65,6 +65,15 @@ struct stripe_rowgroups {
 };
 
 /**
+ * @brief TODO
+ *
+ */
+struct encoder_decimal_info {
+  std::map<uint32_t, rmm::device_uvector<uint32_t>> elem_sizes;
+  std::map<uint32_t, std::vector<uint32_t>> rg_sizes;
+};
+
+/**
  * @brief Returns the total number of rowgroups in the list of contigious stripes.
  */
 inline auto stripes_size(host_span<stripe_rowgroups const> stripes)
@@ -94,9 +103,9 @@ class orc_streams {
    */
   struct orc_stream_offsets {
     std::vector<size_t> offsets;
-    size_t str_data_size = 0;
-    size_t rle_data_size = 0;
-    auto data_size() const { return str_data_size + rle_data_size; }
+    size_t non_rle_data_size = 0;
+    size_t rle_data_size     = 0;
+    auto data_size() const { return non_rle_data_size + rle_data_size; }
   };
   orc_stream_offsets compute_offsets(host_span<orc_column_view const> columns,
                                      size_t num_rowgroups) const;
@@ -249,6 +258,7 @@ class writer::impl {
    * @param str_col_ids List of columns that are strings type
    * @param dict_data Dictionary data memory
    * @param dict_index Dictionary index memory
+   * @param dec_chunk_sizes Information about size of encoded decimal columns
    * @param stripe_bounds List of stripe boundaries
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Encoded data and per-chunk stream descriptors
@@ -258,6 +268,7 @@ class writer::impl {
                               std::vector<int> const& str_col_ids,
                               rmm::device_uvector<uint32_t>&& dict_data,
                               rmm::device_uvector<uint32_t>&& dict_index,
+                              encoder_decimal_info&& dec_chunk_sizes,
                               host_span<stripe_rowgroups const> stripe_bounds,
                               orc_streams const& streams);
 

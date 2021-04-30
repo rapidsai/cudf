@@ -227,11 +227,6 @@ class orc_column_view {
   uint32_t *d_decimal_sizes = nullptr;
 };
 
-struct encoder_decimal_info {
-  std::map<uint32_t, rmm::device_uvector<uint32_t>> elem_sizes;
-  std::map<uint32_t, std::vector<uint32_t>> rg_sizes;
-};
-
 std::vector<stripe_rowgroups> writer::impl::gather_stripe_info(
   host_span<orc_column_view const> columns, size_t num_rowgroups)
 {
@@ -526,9 +521,8 @@ orc_streams::orc_stream_offsets orc_streams::compute_offsets(
   host_span<orc_column_view const> columns, size_t num_rowgroups) const
 {
   std::vector<size_t> strm_offsets(streams.size());
-  size_t str_data_size =
-    0;  // DECIMAL: rename to non_rle_data; decimal DATA stream should be in there
-  size_t rle_data_size = 0;
+  size_t non_rle_data_size = 0;
+  size_t rle_data_size     = 0;
   for (size_t i = 0; i < streams.size(); ++i) {
     const auto &stream = streams[i];
 
@@ -546,16 +540,16 @@ orc_streams::orc_stream_offsets orc_streams::compute_offsets(
               (stream.kind == DATA && column.orc_encoding() == DIRECT_V2));
     }();
     if (is_str_data) {
-      strm_offsets[i] = str_data_size;
-      str_data_size += stream.length;
+      strm_offsets[i] = non_rle_data_size;
+      non_rle_data_size += stream.length;
     } else {
       strm_offsets[i] = rle_data_size;
       rle_data_size += (stream.length * num_rowgroups + 7) & ~7;
     }
   }
-  str_data_size = (str_data_size + 7) & ~7;
+  non_rle_data_size = (non_rle_data_size + 7) & ~7;
 
-  return {std::move(strm_offsets), str_data_size, rle_data_size};
+  return {std::move(strm_offsets), non_rle_data_size, rle_data_size};
 }
 
 struct segmented_valid_cnt_input {
@@ -569,6 +563,7 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
                                           std::vector<int> const &str_col_ids,
                                           rmm::device_uvector<uint32_t> &&dict_data,
                                           rmm::device_uvector<uint32_t> &&dict_index,
+                                          encoder_decimal_info &&dec_chunk_sizes,
                                           host_span<stripe_rowgroups const> stripe_bounds,
                                           orc_streams const &streams)
 {
@@ -683,7 +678,7 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
             }  // DECIMAL: if decimal data, use partial sums for offsets/lengths
             else {
               strm.lengths[strm_type]   = streams[strm_id].length;
-              strm.data_ptrs[strm_type] = encoded_data.data() + stream_offsets.str_data_size +
+              strm.data_ptrs[strm_type] = encoded_data.data() + stream_offsets.non_rle_data_size +
                                           stream_offsets.offsets[strm_id] +
                                           streams[strm_id].length * rg_idx;
             }
@@ -1220,7 +1215,7 @@ void writer::impl::write(table_view const &table)
       orc_columns.data(), str_col_ids, stripe_bounds, dict, dict_index.data(), stripe_dict);
   }
 
-  auto const dec_chunk_sizes =
+  auto dec_chunk_sizes =
     decimal_chunk_sizes(table, orc_columns, row_index_stride_, stripe_bounds, stream);
 
   // DECIMAL: to get the required info:
@@ -1238,6 +1233,7 @@ void writer::impl::write(table_view const &table)
                                  str_col_ids,
                                  std::move(dict_data),
                                  std::move(dict_index),
+                                 std::move(dec_chunk_sizes),
                                  stripe_bounds,
                                  streams);
   // Assemble individual disparate column chunks into contiguous data streams
