@@ -21,9 +21,12 @@ package ai.rapids.cudf;
  */
 public final class CuFileBuffer extends BaseDeviceMemoryBuffer {
   private static final int ALIGNMENT = 4096;
-
   private final DeviceMemoryBuffer deviceMemoryBuffer;
   private final CuFileResourceCleaner cleaner;
+
+  static {
+    CuFile.initialize();
+  }
 
   /**
    * Construct a new cuFile buffer.
