@@ -3525,7 +3525,7 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
             s = max([col.dtype.scale for col in cols])
             lhs = max([col.dtype.precision - col.dtype.scale for col in cols])
             # Combine to get the necessary precision and clip at 18
-            p = min(18, s + lhs)
+            p = min(cudf.Decimal64Dtype.MAX_PRECISION, s + lhs)
             dtypes[idx] = cudf.Decimal64Dtype(p, s)
         # Otherwise raise an error if columns have different dtypes
         elif not all(is_dtype_equal(c.dtype, dtypes[idx]) for c in cols):

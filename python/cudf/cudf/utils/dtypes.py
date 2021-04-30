@@ -293,7 +293,7 @@ def is_decimal_dtype(obj):
 def _decimal_normalize_types(*args):
     s = max([a.dtype.scale for a in args])
     lhs = max([a.dtype.precision - a.dtype.scale for a in args])
-    p = min(18, s + lhs)
+    p = min(cudf.Decimal64Dtype.MAX_PRECISION, s + lhs)
     dtype = cudf.Decimal64Dtype(p, s)
 
     return [a.astype(dtype) for a in args]
