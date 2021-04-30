@@ -530,7 +530,7 @@ Note:  `std::tuple`  _could_  be used if not for the fact that Cython does not s
 only two objects of different types. Multiple objects of the same type may be returned via a 
 `std::vector<T>`.
 
-Alternatively, with C++17, [structured binding](https://en.cppreference.com/w/cpp/language/structured_binding) 
+Alternatively, with C++17 (supported from cudf v0.20), [structured binding](https://en.cppreference.com/w/cpp/language/structured_binding) 
 may be used to disaggregate multiple return values:
 
 ```c++
