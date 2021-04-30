@@ -2992,7 +2992,7 @@ def test_string_slice_with_mask():
 @pytest.mark.parametrize(
     "json_path", ["$.store", "$.store.book", "$.store.book[*].category", " "],
 )
-def test_string_get_json_object_n(data, json_path):
+def test_string_get_json_object(data, json_path):
     gs = cudf.Series(data)
     gs.str.get_json_object(json_path)
 
@@ -3003,17 +3003,24 @@ def test_string_get_json_object_n(data, json_path):
 def test_string_get_json_object_empty_json_strings(json_path):
     gs = cudf.Series(
         [
-            """{"": {
-        "": [
-        { "": "",
-          "": "",
-          "": "",
-        },
-        { "": "fiction",
-          "": "",
-          "title": "",
-        },
-        ]}}"""
+            """
+            {
+                "":{
+                    "":[
+                        {
+                            "":"",
+                            "":"",
+                            "":""
+                        },
+                        {
+                            "":"fiction",
+                            "":"",
+                            "title":""
+                        }
+                    ]
+                }
+            }
+            """
         ]
     )
 
@@ -3024,19 +3031,26 @@ def test_string_get_json_object_empty_json_strings(json_path):
 def test_string_get_json_object_invalid_JSONPath(json_path):
     gs = cudf.Series(
         [
-            """{"store": {
-        "book": [
-        { "category": "reference",
-            "author": "Nigel Rees",
-            "title": "Sayings of the Century",
-            "price": 8.95
-        },
-        { "category": "fiction",
-            "author": "Evelyn Waugh",
-            "title": "Sword of Honour",
-            "price": 12.99
-        },
-        ]}}"""
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "category":"reference",
+                            "author":"Nigel Rees",
+                            "title":"Sayings of the Century",
+                            "price":8.95
+                        },
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            "title":"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """
         ]
     )
 
