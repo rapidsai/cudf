@@ -538,7 +538,7 @@ auto [out0, out1] = cudf::return_two_outputs();
 ```
 
 Note that the compiler might not support capturing aliases defined in a structured binding 
-in a lambda. This may be worked around by using a capture with an initializer instead:
+in a lambda. One may work around this by using a capture with an initializer instead:
 
 ```c++
 auto [out0, out1] = cudf::return_two_outputs();
