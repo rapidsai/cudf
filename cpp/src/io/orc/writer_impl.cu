@@ -356,7 +356,6 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
   stripe_dict.device_to_host(stream, true);
 }
 
-// DECIMAL: need total size on the host
 orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
                                          host_span<stripe_rowgroups const> stripe_bounds,
                                          std::map<uint32_t, size_t> const &decimal_column_sizes)
@@ -675,8 +674,13 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
               strm.lengths[strm_type]   = ck.num_rows * ck.dtype_len;
               strm.data_ptrs[strm_type] = nullptr;
 
-            }  // DECIMAL: if decimal data, use partial sums for offsets/lengths
-            else {
+            } else if (ck.type_kind == DECIMAL && strm_type == gpu::CI_DATA) {
+              strm.lengths[strm_type]   = dec_chunk_sizes.rg_sizes.at(col_idx)[rg_idx];
+              strm.data_ptrs[strm_type] = (rg_idx == 0)
+                                            ? encoded_data.data() + stream_offsets.offsets[strm_id]
+                                            : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
+                                               col_streams[rg_idx - 1].lengths[strm_type]);
+            } else {
               strm.lengths[strm_type]   = streams[strm_id].length;
               strm.data_ptrs[strm_type] = encoded_data.data() + stream_offsets.non_rle_data_size +
                                           stream_offsets.offsets[strm_id] +
@@ -701,8 +705,6 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
     gpu::EncodeStripeDictionaries(
       d_stripe_dict, chunks, str_col_ids.size(), stripe_bounds.size(), chunk_streams, stream);
   }
-
-  // DECIMAL: add encode here (?)
 
   gpu::EncodeOrcColumnData(chunks, chunk_streams, stream);
   dict_data.release();
