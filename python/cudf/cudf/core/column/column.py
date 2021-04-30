@@ -189,14 +189,6 @@ class ColumnBase(Column, Serializable):
             n += bitmask_allocation_size_bytes(self.size)
         return n
 
-    def cat(
-        self, parent=None
-    ) -> "cudf.core.column.categorical.CategoricalAccessor":
-        raise NotImplementedError()
-
-    def str(self, parent=None) -> "cudf.core.column.string.StringMethods":
-        raise NotImplementedError()
-
     def dropna(self, drop_nan: bool = False) -> ColumnBase:
         if drop_nan:
             col = self.nans_to_nulls()

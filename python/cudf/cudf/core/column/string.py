@@ -4976,7 +4976,7 @@ class StringColumn(column.ColumnBase):
         result_col = self._process_for_reduction(
             skipna=skipna, min_count=min_count
         )
-        if isinstance(result_col, cudf.core.column.ColumnBase):
+        if isinstance(result_col, type(self)):
             return result_col.str().cat()
         else:
             return result_col
