@@ -419,7 +419,6 @@ class aggregate_orc_metadata {
   using OrcStripeInfo = std::pair<const StripeInformation *, const StripeFooter *>;
 
   std::vector<cudf::io::orc::metadata> const per_file_metadata;
-  std::map<std::string, std::string> const agg_keyval_map;
   size_type const num_rows;
   size_type const num_columns;
   size_type const num_stripes;
@@ -507,67 +506,7 @@ class aggregate_orc_metadata {
 
   auto get_row_index_stride() const { return per_file_metadata[0].ff.rowIndexStride; }
 
-  auto const &get_key_value_metadata() const { return agg_keyval_map; }
-
   auto get_post_script_for_metadata(int metadata_idx) { return per_file_metadata[metadata_idx].ps; }
-
-  /**
-   * @brief Extracts the pandas "index_columns" section
-   *
-   * PANDAS adds its own metadata to the key_value section when writing out the
-   * dataframe to a file to aid in exact reconstruction. The JSON-formatted
-   * metadata contains the index column(s) and PANDA-specific datatypes.
-   *
-   * @return comma-separated index column names in quotes
-   */
-  std::string get_pandas_index() const
-  {
-    auto it = agg_keyval_map.find("pandas");
-    if (it != agg_keyval_map.end()) {
-      // Captures a list of quoted strings found inside square brackets after `"index_columns":`
-      // Inside quotes supports newlines, brackets, escaped quotes, etc.
-      // One-liner regex:
-      // "index_columns"\s*:\s*\[\s*((?:"(?:|(?:.*?(?![^\\]")).?)[^\\]?",?\s*)*)\]
-      // Documented below.
-      std::regex index_columns_expr{
-        R"("index_columns"\s*:\s*\[\s*)"  // match preamble, opening square bracket, whitespace
-        R"(()"                            // Open first capturing group
-        R"((?:")"                         // Open non-capturing group match opening quote
-        R"((?:|(?:.*?(?![^\\]")).?))"     // match empty string or anything between quotes
-        R"([^\\]?")"                      // Match closing non-escaped quote
-        R"(,?\s*)"                        // Match optional comma and whitespace
-        R"()*)"                           // Close non-capturing group and repeat 0 or more times
-        R"())"                            // Close first capturing group
-        R"(\])"                           // Match closing square brackets
-      };
-      std::smatch sm;
-      if (std::regex_search(it->second, sm, index_columns_expr)) { return sm[1].str(); }
-    }
-    return "";
-  }
-
-  /**
-   * @brief Extracts the column name(s) used for the row indexes in a dataframe
-   *
-   * @param names List of column names to load, where index column name(s) will be added
-   */
-  void add_pandas_index_names(std::vector<std::string> &names) const
-  {
-    auto str = get_pandas_index();
-    if (str.length() != 0) {
-      std::regex index_name_expr{R"(\"((?:\\.|[^\"])*)\")"};
-      std::smatch sm;
-      while (std::regex_search(str, sm, index_name_expr)) {
-        if (sm.size() == 2) {  // 2 = whole match, first item
-          if (std::find(names.begin(), names.end(), sm[1].str()) == names.end()) {
-            std::regex esc_quote{R"(\\")"};
-            names.emplace_back(std::regex_replace(sm[1].str(), esc_quote, R"(")"));
-          }
-        }
-        str = sm.suffix();
-      }
-    }
-  }
 
   struct row_group_info {
     size_type const index;
@@ -579,67 +518,71 @@ class aggregate_orc_metadata {
     }
   };
 
-  std::vector<OrcStripeInfo> select_stripes(const std::vector<size_type> &stripes,
+  std::vector<OrcStripeInfo> select_stripes(std::vector<std::vector<size_type>> const &stripes,
                                             size_type &row_start,
                                             size_type &row_count)
   {
-    auto const &pfm = per_file_metadata[0];
     std::vector<OrcStripeInfo> selection;
 
     if (!stripes.empty()) {
-      size_t stripe_rows = 0;
-      for (const auto &stripe_idx : stripes) {
-        CUDF_EXPECTS(stripe_idx >= 0 && stripe_idx < pfm.get_num_stripes(), "Invalid stripe index");
-        selection.emplace_back(&pfm.ff.stripes[stripe_idx], nullptr);
-        stripe_rows += pfm.ff.stripes[stripe_idx].numberOfRows;
-      }
+      CUDF_EXPECTS(stripes.size() == per_file_metadata.size(),
+                   "Must specify stripes for each source");
       // row_start is 0 if stripes are set. If this is not true anymore, then
       // row_start needs to be subtracted to get the correct row_count
       CUDF_EXPECTS(row_start == 0, "Start row index should be 0");
-      row_count = static_cast<size_type>(stripe_rows);
-    } else {
-      row_start = std::max(row_start, 0);
-      if (row_count < 0) {
-        row_count = static_cast<size_type>(
-          std::min<size_t>(get_num_rows() - row_start, std::numeric_limits<size_type>::max()));
-      } else {
-        row_count = static_cast<size_type>(std::min<size_t>(get_num_rows() - row_start, row_count));
-      }
-      CUDF_EXPECTS(row_count >= 0 && row_start >= 0, "Negative row count or starting row");
-      CUDF_EXPECTS(
-        !(row_start > 0 && (row_count > (std::numeric_limits<size_type>::max() - row_start))),
-        "Summation of starting row index and number of rows would cause overflow");
 
-      size_type stripe_skip_rows = 0;
-      for (size_t i = 0, count = 0; i < pfm.ff.stripes.size(); ++i) {
-        count += pfm.ff.stripes[i].numberOfRows;
-        if (count > static_cast<size_t>(row_start)) {
-          if (selection.empty()) {
-            stripe_skip_rows =
-              static_cast<size_type>(row_start - (count - pfm.ff.stripes[i].numberOfRows));
-          }
-          selection.emplace_back(&pfm.ff.stripes[i], nullptr);
+      row_count = 0;
+      for (size_t src_idx = 0; src_idx < stripes.size(); ++src_idx) {
+        for (const auto &stripe_idx : stripes[src_idx]) {
+          CUDF_EXPECTS(stripe_idx >= 0 && stripe_idx < per_file_metadata[src_idx].ff.stripes.size(),
+                       "Invalid stripe index");
+          selection.emplace_back(&per_file_metadata[src_idx].ff.stripes[stripe_idx], nullptr);
+          row_count += per_file_metadata[src_idx].ff.stripes[stripe_idx].numberOfRows;
         }
-        if (count >= static_cast<size_t>(row_start) + static_cast<size_t>(row_count)) { break; }
       }
-      row_start = stripe_skip_rows;
+    }
+
+    row_start = std::max(row_start, 0);
+    if (row_count < 0) {
+      row_count = static_cast<size_type>(
+        std::min<int64_t>(get_num_rows(), std::numeric_limits<size_type>::max()));
+    }
+    row_count = std::min(row_count, get_num_rows() - row_start);
+    CUDF_EXPECTS(row_count >= 0, "Invalid row count");
+    CUDF_EXPECTS(row_start <= get_num_rows(), "Invalid row start");
+
+    size_type count = 0;
+    for (size_t src_idx = 0; src_idx < per_file_metadata.size(); ++src_idx) {
+      for (size_t stripe_idx = 0; stripe_idx < per_file_metadata[src_idx].ff.stripes.size();
+           ++stripe_idx) {
+        count += per_file_metadata[src_idx].ff.numberOfRows;
+        if (count > row_start || count == 0) {
+          selection.emplace_back(&per_file_metadata[src_idx].ff.stripes[stripe_idx], nullptr);
+        }
+        if (count >= row_start + row_count) { break; }
+      }
     }
 
     // Read each stripe's stripefooter metadata
     if (not selection.empty()) {
-      pfm.stripefooters.resize(selection.size());
-      for (size_t i = 0; i < selection.size(); ++i) {
-        const auto stripe         = selection[i].first;
-        const auto sf_comp_offset = stripe->offset + stripe->indexLength + stripe->dataLength;
-        const auto sf_comp_length = stripe->footerLength;
-        CUDF_EXPECTS(sf_comp_offset + sf_comp_length < pfm.source->size(),
-                     "Invalid stripe information");
+      for (size_t src_idx = 0; src_idx < per_file_metadata.size(); ++src_idx) {
+        per_file_metadata[src_idx].stripefooters.resize(selection.size());
 
-        const auto buffer = pfm.source->host_read(sf_comp_offset, sf_comp_length);
-        size_t sf_length  = 0;
-        auto sf_data = pfm.decompressor->Decompress(buffer->data(), sf_comp_length, &sf_length);
-        ProtobufReader(sf_data, sf_length).read(pfm.stripefooters[i]);
-        selection[i].second = &pfm.stripefooters[i];
+        for (size_t i = 0; i < selection.size(); ++i) {
+          const auto stripe         = selection[i].first;
+          const auto sf_comp_offset = stripe->offset + stripe->indexLength + stripe->dataLength;
+          const auto sf_comp_length = stripe->footerLength;
+          CUDF_EXPECTS(sf_comp_offset + sf_comp_length < per_file_metadata[src_idx].source->size(),
+                       "Invalid stripe information");
+
+          const auto buffer =
+            per_file_metadata[src_idx].source->host_read(sf_comp_offset, sf_comp_length);
+          size_t sf_length = 0;
+          auto sf_data     = per_file_metadata[src_idx].decompressor->Decompress(
+            buffer->data(), sf_comp_length, &sf_length);
+          ProtobufReader(sf_data, sf_length).read(per_file_metadata[src_idx].stripefooters[i]);
+          selection[i].second = &per_file_metadata[src_idx].stripefooters[i];
+        }
       }
     }
 
@@ -654,11 +597,8 @@ class aggregate_orc_metadata {
    *
    * @return vector<int> of indexes that should be used in the resulting Dataframe.
    */
-  auto select_columns(std::vector<std::string> const &use_names, bool &has_timestamp_column) const
+  auto select_columns(std::vector<std::string> const &use_names, bool &has_timestamp_column)
   {
-    // XXX: Do we really need to use a single metadata object here? We already know all schemas
-    // "match" by this point BUT are they in the same order so is returning a vector<int> going
-    // to produce un-expected results?
     auto const &pfm = per_file_metadata[0];
 
     // Indexes of columns that should be included in resulting Dataframe
@@ -666,11 +606,11 @@ class aggregate_orc_metadata {
 
     if (not use_names.empty()) {
       int index = 0;
-      for (const auto &use_name : use_names) {
+      for (auto const &use_name : use_names) {
         bool name_found = false;
         for (int i = 0; i < pfm.get_num_columns(); ++i, ++index) {
           if (index >= pfm.get_num_columns()) { index = 0; }
-          if (pfm.get_column_name(index) == use_name) {
+          if (pfm.get_column_name(index).compare(use_name) == 0) {
             name_found = true;
             selection.emplace_back(index);
             if (pfm.ff.types[index].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
@@ -719,7 +659,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
 
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
-                                       const std::vector<size_type> &stripes,
+                                       std::vector<std::vector<size_type>> const &stripes,
                                        rmm::cuda_stream_view stream)
 {
   std::vector<std::unique_ptr<column>> out_columns;
@@ -761,182 +701,24 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                    std::back_inserter(out_columns),
                    [](auto const &dtype) { return make_empty_column(dtype); });
   } else {
-    for (int file_idx = 0; file_idx < _metadata.get_num_source_files(); file_idx++) {
-      read_individual_file(file_idx, _metadata skip_rows, num_rows, selected_stripes, stream);
-    }
+    //  for (int file_idx = 0; file_idx < _metadata.get_num_source_files(); file_idx++) {
+    //    read_individual_file(file_idx, _metadata skip_rows, num_rows, selected_stripes, stream);
+    //  }
   }
 
-  // Return column names (must match order of returned columns)
-  out_metadata.column_names.resize(_selected_columns.size());
-  for (size_t i = 0; i < _selected_columns.size(); i++) {
-    out_metadata.column_names[i] = _metadata->get_column_name(_selected_columns[i]);
-  }
-  // Return user metadata
-  for (const auto &kv : _metadata->ff.metadata) {
-    out_metadata.user_data.insert({kv.name, kv.value});
-  }
+  /*
+    // Return column names (must match order of returned columns)
+    out_metadata.column_names.resize(_selected_columns.size());
+    for (size_t i = 0; i < _selected_columns.size(); i++) {
+      out_metadata.column_names[i] = _metadata->get_column_name(_selected_columns[i]);
+    }
+    // Return user metadata
+    for (const auto &kv : _metadata->ff.metadata) {
+      out_metadata.user_data.insert({kv.name, kv.value});
+    }
+  */
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
-}
-
-void reader::impl::read_individual_file(int file_idx,
-                                        std::vector<data_type> column_types,
-                                        cudf::io::orc::metadata file_metadata,
-                                        size_type skip_rows,
-                                        size_type num_rows,
-                                        std::vector<OrcStripeInfo> const &selected_stripes,
-                                        rmm::cuda_stream_view stream,
-                                        std::vector<int32_t> orc_col_map)
-{
-  const auto num_columns = _selected_columns.size();
-  const auto num_chunks  = selected_stripes.size() * num_columns;
-  hostdevice_vector<gpu::ColumnDesc> chunks(num_chunks, stream);
-  memset(chunks.host_ptr(), 0, chunks.memory_size());
-
-  const bool use_index =
-    (_use_index == true) &&
-    // Only use if we don't have much work with complete columns & stripes
-    // TODO: Consider nrows, gpu, and tune the threshold
-    (num_rows > _metadata->get_row_index_stride() && !(_metadata->get_row_index_stride() & 7) &&
-     _metadata->get_row_index_stride() > 0 && num_columns * selected_stripes.size() < 8 * 128) &&
-    // Only use if first row is aligned to a stripe boundary
-    // TODO: Fix logic to handle unaligned rows
-    (skip_rows == 0);
-
-  // Logically view streams as columns
-  std::vector<orc_stream_info> stream_info;
-
-  // Tracker for eventually deallocating compressed and uncompressed data
-  std::vector<rmm::device_buffer> stripe_data;
-
-  size_t stripe_start_row = 0;
-  size_t num_dict_entries = 0;
-  size_t num_rowgroups    = 0;
-
-  for (size_t i = 0; i < selected_stripes.size(); ++i) {
-    const auto stripe_info   = selected_stripes[i].first;
-    const auto stripe_footer = selected_stripes[i].second;
-
-    auto stream_count          = stream_info.size();
-    const auto total_data_size = gather_stream_info(i,
-                                                    stripe_info,
-                                                    stripe_footer,
-                                                    orc_col_map,
-                                                    _selected_columns,
-                                                    _metadata->get_types(),
-                                                    use_index,
-                                                    &num_dict_entries,
-                                                    chunks,
-                                                    stream_info);
-    CUDF_EXPECTS(total_data_size > 0, "Expected streams data within stripe");
-
-    stripe_data.emplace_back(total_data_size, stream);
-    auto dst_base = static_cast<uint8_t *>(stripe_data.back().data());
-
-    // Coalesce consecutive streams into one read
-    while (stream_count < stream_info.size()) {
-      const auto d_dst  = dst_base + stream_info[stream_count].dst_pos;
-      const auto offset = stream_info[stream_count].offset;
-      auto len          = stream_info[stream_count].length;
-      stream_count++;
-
-      while (stream_count < stream_info.size() &&
-             stream_info[stream_count].offset == offset + len) {
-        len += stream_info[stream_count].length;
-        stream_count++;
-      }
-      const auto buffer = _sources[file_idx]->host_read(offset, len);
-      CUDA_TRY(cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyHostToDevice, stream.value()));
-      stream.synchronize();
-    }
-
-    // Update chunks to reference streams pointers
-    for (size_t j = 0; j < num_columns; j++) {
-      auto &chunk         = chunks[i * num_columns + j];
-      chunk.start_row     = stripe_start_row;
-      chunk.num_rows      = stripe_info->numberOfRows;
-      chunk.encoding_kind = stripe_footer->columns[_selected_columns[j]].kind;
-      chunk.type_kind     = _metadata->get_types()[_selected_columns[j]].kind;
-      chunk.decimal_scale = _metadata->get_types()[_selected_columns[j]].scale;
-      chunk.rowgroup_id   = num_rowgroups;
-      chunk.dtype_len     = (column_types[j].id() == type_id::STRING)
-                          ? sizeof(std::pair<const char *, size_t>)
-                          : cudf::size_of(column_types[j]);
-      if (chunk.type_kind == orc::TIMESTAMP) {
-        chunk.ts_clock_rate = to_clockrate(_timestamp_type.id());
-      }
-      for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
-        chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
-      }
-    }
-    stripe_start_row += stripe_info->numberOfRows;
-    if (use_index) {
-      num_rowgroups += (stripe_info->numberOfRows + _metadata->get_row_index_stride() - 1) /
-                       _metadata->get_row_index_stride();
-    }
-  }
-
-  // Process dataset chunk pages into output columns
-  if (stripe_data.size() != 0) {
-    // Setup row group descriptors if using indexes
-    rmm::device_uvector<gpu::RowGroup> row_groups(num_rowgroups * num_columns, stream);
-    if (file_metadata.ps.compression != orc::NONE) {
-      auto decomp_data = decompress_stripe_data(chunks,
-                                                stripe_data,
-                                                file_metadata.decompressor.get(),
-                                                stream_info,
-                                                selected_stripes.size(),
-                                                row_groups,
-                                                _metadata->get_row_index_stride(),
-                                                stream);
-      stripe_data.clear();
-      stripe_data.push_back(std::move(decomp_data));
-    } else {
-      if (not row_groups.is_empty()) {
-        chunks.host_to_device(stream);
-        gpu::ParseRowGroupIndex(row_groups.data(),
-                                nullptr,
-                                chunks.device_ptr(),
-                                num_columns,
-                                selected_stripes.size(),
-                                num_rowgroups,
-                                _metadata->get_row_index_stride(),
-                                stream);
-      }
-    }
-
-    // Setup table for converting timestamp columns from local to UTC time
-    auto const tz_table =
-      _has_timestamp_column
-        ? build_timezone_transition_table(selected_stripes[0].second->writerTimezone, stream)
-        : timezone_table{};
-
-    std::vector<column_buffer> out_buffers;
-    for (size_t i = 0; i < column_types.size(); ++i) {
-      bool is_nullable = false;
-      for (size_t j = 0; j < selected_stripes.size(); ++j) {
-        if (chunks[j * num_columns + i].strm_len[gpu::CI_PRESENT] != 0) {
-          is_nullable = true;
-          break;
-        }
-      }
-      out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
-    }
-
-    decode_stream_data(chunks,
-                       num_dict_entries,
-                       skip_rows,
-                       num_rows,
-                       tz_table.view(),
-                       row_groups,
-                       _metadata->get_row_index_stride(),
-                       out_buffers,
-                       stream);
-
-    for (size_t i = 0; i < column_types.size(); ++i) {
-      out_columns.emplace_back(make_column(out_buffers[i], nullptr, stream, _mr));
-    }
-  }
 }
 
 // Forward to implementation

@@ -587,7 +587,8 @@ class metadata {
    *
    * @return List of ORC column indexes
    */
-  std::vector<int> select_columns(std::vector<std::string> use_names, bool &has_timestamp_column);
+  std::vector<int> select_columns(std::vector<std::string> const &use_names,
+                                  bool &has_timestamp_column);
 
   size_t get_total_rows() const { return ff.numberOfRows; }
   int get_num_stripes() const { return ff.stripes.size(); }

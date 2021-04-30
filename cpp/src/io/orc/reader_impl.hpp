@@ -63,15 +63,6 @@ class reader::impl {
                 orc_reader_options const &options,
                 rmm::mr::device_memory_resource *mr);
 
-  void read_individual_file(int file_idx,
-                            std::vector<data_type> column_types
-                              cudf::io::orc::metadata file_metadata,
-                            size_type skip_rows,
-                            size_type num_rows,
-                            std::vector<OrcStripeInfo> const &selected_stripes,
-                            rmm::cuda_stream_view stream,
-                            std::vector<int32_t> orc_col_map);
-
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns
    *
@@ -84,7 +75,7 @@ class reader::impl {
    */
   table_with_metadata read(size_type skip_rows,
                            size_type num_rows,
-                           const std::vector<size_type> &stripes,
+                           const std::vector<std::vector<size_type>> &stripes,
                            rmm::cuda_stream_view stream);
 
  private:

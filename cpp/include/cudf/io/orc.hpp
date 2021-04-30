@@ -101,7 +101,7 @@ class orc_reader_options {
   /**
    * @brief Returns list of individual stripes to read.
    */
-  std::vector<size_type> const& get_stripes() const { return _stripes; }
+  std::vector<std::vector<size_type>> const& get_stripes() const { return _stripes; }
 
   /**
    * @brief Returns number of rows to skip from the start.
@@ -142,7 +142,7 @@ class orc_reader_options {
    *
    * @param stripes Vector of individual stripes.
    */
-  void set_stripes(std::vector<size_type> stripes)
+  void set_stripes(std::vector<std::vector<size_type>> stripes)
   {
     CUDF_EXPECTS(stripes.empty() or (_skip_rows == 0), "Can't set stripes along with skip_rows");
     CUDF_EXPECTS(stripes.empty() or (_num_rows == -1), "Can't set stripes along with num_rows");
@@ -229,7 +229,7 @@ class orc_reader_options_builder {
    * @param stripes Vector of individual stripes.
    * @return this for chaining.
    */
-  orc_reader_options_builder& stripes(std::vector<size_type> stripes)
+  orc_reader_options_builder& stripes(std::vector<std::vector<size_type>> stripes)
   {
     options.set_stripes(std::move(stripes));
     return *this;
