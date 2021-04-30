@@ -112,5 +112,15 @@ inline auto iterator_all_nulls()
   return cudf::detail::make_counting_transform_iterator(0, [](auto) { return false; });
 }
 
+/**
+ * @brief Bool iterator for marking all elements are valid (non-null)
+ *
+ * @return auto Validity iterator which always yields `true`
+ */
+inline auto iterator_no_nulls()
+{
+  return cudf::detail::make_counting_transform_iterator(0, [](auto) { return true; });
+}
+
 }  // namespace test
 }  // namespace cudf
