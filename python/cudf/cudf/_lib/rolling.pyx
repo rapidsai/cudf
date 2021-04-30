@@ -49,7 +49,8 @@ def rolling(Column source_column, Column pre_column_window,
     cdef RollingAggregation cython_agg
 
     if callable(op):
-        cython_agg = make_rolling_aggregation(op, {'dtype': source_column.dtype})
+        cython_agg = make_rolling_aggregation(
+            op, {'dtype': source_column.dtype})
     else:
         cython_agg = make_rolling_aggregation(op)
 
