@@ -14,6 +14,9 @@ from cudf._lib.cpp.aggregation cimport aggregation
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.types cimport size_type, order, null_order, null_policy
 
+# workaround for https://github.com/cython/cython/issues/3885
+ctypedef const scalar constscalar
+
 
 cdef extern from "cudf/groupby.hpp" \
         namespace "cudf::groupby" nogil:
@@ -79,8 +82,8 @@ cdef extern from "cudf/groupby.hpp" \
             unique_ptr[table]
         ] shift(
             const table_view values,
-            size_type offset,
-            vector[reference_wrapper[scalar]] fill_values
+            const vector[size_type] offset,
+            const vector[reference_wrapper[constscalar]] fill_values
         ) except +
 
         groups get_groups() except +

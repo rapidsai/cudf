@@ -44,7 +44,9 @@ _INTERVAL_AGGS = set()
 _DECIMAL_AGGS = {"COUNT", "SUM", "ARGMIN", "ARGMAX", "MIN", "MAX", "NUNIQUE",
                  "NTH", "COLLECT"}
 
-ctypedef vector[reference_wrapper[scalar]] slrref_vec_t
+# workaround for https://github.com/cython/cython/issues/3885
+ctypedef const scalar constscalar
+ctypedef vector[reference_wrapper[constscalar]] slrcref_vec_t
 
 cdef class GroupBy:
     cdef unique_ptr[libcudf_groupby.groupby] c_obj
@@ -212,14 +214,17 @@ cdef class GroupBy:
         cdef size_type num_col = view.num_columns()
         cdef vector[size_type] offsets = vector[size_type](num_col, periods)
 
-        cdef slrref_vec_t fill_values = slrref_vec_t(
-            num_col, reference_wrapper[scalar](fill_value.get_raw_ptr()[0])
+        cdef slrcref_vec_t fill_values = slrcref_vec_t(
+            num_col,
+            reference_wrapper[constscalar](fill_value.get_raw_ptr()[0])
         )
 
         cdef pair[unique_ptr[table], unique_ptr[table]] c_result
 
         with nogil:
-            c_result = self.c_obj.get()[0].shift(view, offsets, fill_values)
+            c_result = move(
+                self.c_obj.get()[0].shift(view, offsets, fill_values)
+            )
 
         grouped_keys = Table.from_unique_ptr(
             move(c_result.first),
