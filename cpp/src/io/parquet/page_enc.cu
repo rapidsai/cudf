@@ -422,8 +422,9 @@ __global__ void __launch_bounds__(128)
   uint32_t t = threadIdx.x;
 
   if (t == 0) {
-    col_g = col_desc[blockIdx.x];
-    ck_g  = chunks[blockIdx.y][blockIdx.x];
+    col_g  = col_desc[blockIdx.x];
+    ck_g   = chunks[blockIdx.y][blockIdx.x];
+    page_g = {};
   }
   __syncthreads();
   if (t < 32) {
