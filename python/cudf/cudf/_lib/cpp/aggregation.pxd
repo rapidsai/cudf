@@ -40,7 +40,7 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
             CUDA 'cudf::aggregation::CUDA'
         Kind kind
 
-    cdef cppclass rolling_aggregation:       
+    cdef cppclass rolling_aggregation:
         aggregation.Kind kind
 
     ctypedef enum udf_type:

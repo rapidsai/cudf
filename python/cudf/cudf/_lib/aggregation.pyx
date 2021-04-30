@@ -70,19 +70,22 @@ cdef class Aggregation:
     @classmethod
     def sum(cls):
         cdef Aggregation agg = cls()
-        agg.c_obj = move(libcudf_aggregation.make_sum_aggregation[aggregation]())
+        agg.c_obj = move(
+            libcudf_aggregation.make_sum_aggregation[aggregation]())
         return agg
 
     @classmethod
     def min(cls):
         cdef Aggregation agg = cls()
-        agg.c_obj = move(libcudf_aggregation.make_min_aggregation[aggregation]())
+        agg.c_obj = move(
+            libcudf_aggregation.make_min_aggregation[aggregation]())
         return agg
 
     @classmethod
     def max(cls):
         cdef Aggregation agg = cls()
-        agg.c_obj = move(libcudf_aggregation.make_max_aggregation[aggregation]())
+        agg.c_obj = move(
+            libcudf_aggregation.make_max_aggregation[aggregation]())
         return agg
 
     @classmethod
@@ -117,8 +120,8 @@ cdef class Aggregation:
         cdef Aggregation agg = cls()
         agg.c_obj = move(
             libcudf_aggregation.make_count_aggregation[aggregation](
-            c_null_handling
-        ))
+                c_null_handling
+            ))
         return agg
 
     @classmethod
@@ -143,9 +146,8 @@ cdef class Aggregation:
     def nth(cls, libcudf_types.size_type size):
         cdef Aggregation agg = cls()
         agg.c_obj = move(
-            libcudf_aggregation.
-                make_nth_element_aggregation[aggregation](size)
-        )
+            libcudf_aggregation.make_nth_element_aggregation[aggregation](
+                size))
         return agg
 
     @classmethod
@@ -215,8 +217,8 @@ cdef class Aggregation:
             )
         )
         agg.c_obj = move(
-            libcudf_aggregation.
-                make_quantile_aggregation[aggregation](c_q, c_interp)
+            libcudf_aggregation.make_quantile_aggregation[aggregation](
+                c_q, c_interp)
         )
         return agg
 
@@ -230,7 +232,7 @@ cdef class Aggregation:
     @classmethod
     def unique(cls):
         cdef Aggregation agg = cls()
-        agg.c_obj = move(  
+        agg.c_obj = move(
             libcudf_aggregation.make_collect_set_aggregation[aggregation]())
         return agg
 
@@ -326,16 +328,16 @@ cdef class RollingAggregation:
     def idxmin(cls):
         cdef RollingAggregation agg = cls()
         agg.c_obj = move(
-            libcudf_aggregation.
-                make_argmin_aggregation[rolling_aggregation]())
+            libcudf_aggregation.make_argmin_aggregation[
+                rolling_aggregation]())
         return agg
 
     @classmethod
     def idxmax(cls):
         cdef RollingAggregation agg = cls()
         agg.c_obj = move(
-            libcudf_aggregation.
-                make_argmax_aggregation[rolling_aggregation]())
+            libcudf_aggregation.make_argmax_aggregation[
+                rolling_aggregation]())
         return agg
 
     @classmethod
@@ -365,18 +367,17 @@ cdef class RollingAggregation:
         cdef RollingAggregation agg = cls()
         agg.c_obj = move(
             libcudf_aggregation.make_count_aggregation[rolling_aggregation](
-            <libcudf_types.null_policy><underlying_type_t_null_policy>(
-                NullHandling.INCLUDE
-            )
-        ))
+                <libcudf_types.null_policy><underlying_type_t_null_policy>(
+                    NullHandling.INCLUDE)
+            ))
         return agg
 
     @classmethod
     def collect(cls):
         cdef RollingAggregation agg = cls()
         agg.c_obj = move(
-            libcudf_aggregation.
-                make_collect_list_aggregation[rolling_aggregation]())
+            libcudf_aggregation.make_collect_list_aggregation[
+                rolling_aggregation]())
         return agg
 
     @classmethod
@@ -409,8 +410,8 @@ cdef class RollingAggregation:
 
         agg.c_obj = move(
             libcudf_aggregation.make_udf_aggregation[rolling_aggregation](
-            libcudf_aggregation.udf_type.PTX, cpp_str, out_dtype
-        ))
+                libcudf_aggregation.udf_type.PTX, cpp_str, out_dtype
+            ))
         return agg
 
     # scan aggregations
@@ -425,8 +426,8 @@ cdef class RollingAggregation:
         cdef RollingAggregation agg = cls()
         agg.c_obj = move(
             libcudf_aggregation.make_count_aggregation[rolling_aggregation](
-            libcudf_types.null_policy.INCLUDE
-        ))
+                libcudf_types.null_policy.INCLUDE
+            ))
         return agg
 
 cdef Aggregation make_aggregation(op, kwargs=None):
