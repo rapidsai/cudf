@@ -6,7 +6,6 @@ channels:
   - nvidia
   - rapidsai-nightly
   - conda-forge
-  - defaults
 dependencies:
   - clang=8.0.1
   - clang-tools=8.0.1
