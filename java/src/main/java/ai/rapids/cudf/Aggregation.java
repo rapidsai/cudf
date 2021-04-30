@@ -97,7 +97,7 @@ public abstract class Aggregation {
         UNEQUAL(false),
         ALL_EQUAL(true);
 
-        NanEquality(boolean nansEqual) { this.nansEqual = nansEqual; }
+        NaNEquality(boolean nansEqual) { this.nansEqual = nansEqual; }
 
         final boolean nansEqual;
     }
@@ -338,9 +338,9 @@ public abstract class Aggregation {
     private static final class CollectSetAggregation extends Aggregation {
         private final NullPolicy nullPolicy;
         private final NullEquality nullEquality;
-        private final NanEquality nanEquality;
+        private final NaNEquality nanEquality;
 
-        public CollectSetAggregation(NullPolicy nullPolicy, NullEquality nullEquality, NanEquality nanEquality) {
+        public CollectSetAggregation(NullPolicy nullPolicy, NullEquality nullEquality, NaNEquality nanEquality) {
             super(Kind.COLLECT_SET);
             this.nullPolicy = nullPolicy;
             this.nullEquality = nullEquality;
@@ -657,7 +657,7 @@ public abstract class Aggregation {
 
     /**
      * Collect the values into a list. nulls will be skipped.
-     * WARNING: This method is deprecated, please use collectList as instead.
+     * @deprecated please use collectList as instead.
      */
     @Deprecated
     public static Aggregation collect() {
@@ -666,7 +666,7 @@ public abstract class Aggregation {
 
     /**
      * Collect the values into a list.
-     * WARNING: This method is deprecated, please use collectList as instead.
+     * @deprecated please use collectList as instead.
      *
      * @param nullPolicy Indicates whether to include/exclude nulls during collection.
      */
@@ -676,7 +676,7 @@ public abstract class Aggregation {
     }
 
     /**
-     * Collect the values into a list. nulls will be skipped.
+     * Collect the values into a list. Nulls will be skipped.
      */
     public static Aggregation collectList() {
         return collectList(NullPolicy.EXCLUDE);
@@ -692,11 +692,11 @@ public abstract class Aggregation {
     }
 
     /**
-     * Collect the values into a set. All null values will be excluded. And all nan values are regarded as
+     * Collect the values into a set. All null values will be excluded, qnd all nan values are regarded as
      * unique instances.
      */
     public static Aggregation collectSet() {
-        return new CollectSetAggregation(NullPolicy.EXCLUDE, NullEquality.UNEQUAL, NanEquality.UNEQUAL);
+        return new CollectSetAggregation(NullPolicy.EXCLUDE, NullEquality.UNEQUAL, NaNEquality.UNEQUAL);
     }
 
     /**
@@ -706,7 +706,7 @@ public abstract class Aggregation {
      * @param nullEquality Flag to specify whether null entries within each list should be considered equal.
      * @param nanEquality  Flag to specify whether NaN values in floating point column should be considered equal.
      */
-    public static Aggregation collectSet(NullPolicy nullPolicy, NullEquality nullEquality, NanEquality nanEquality) {
+    public static Aggregation collectSet(NullPolicy nullPolicy, NullEquality nullEquality, NaNEquality nanEquality) {
         return new CollectSetAggregation(nullPolicy, nullEquality, nanEquality);
     }
 
