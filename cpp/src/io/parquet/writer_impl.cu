@@ -803,6 +803,11 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks
 {
   auto batch_pages = pages.subspan(first_page_in_batch, pages_in_batch);
 
+  auto batch_pages_stats =
+    (page_stats != nullptr)
+      ? device_span<statistics_chunk const>(page_stats + first_page_in_batch, pages_in_batch)
+      : device_span<statistics_chunk const>();
+
   uint32_t max_comp_pages =
     (compression_ != parquet::Compression::UNCOMPRESSED) ? pages_in_batch : 0;
 
@@ -823,7 +828,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks
   // chunk-level
   auto d_chunks_in_batch = chunks.device_view().subspan(first_rowgroup, rowgroups_in_batch);
   DecideCompression(d_chunks_in_batch.flat_view(), stream);
-  EncodePageHeaders(batch_pages, first_page_in_batch, comp_stat, page_stats, chunk_stats, stream);
+  EncodePageHeaders(batch_pages, comp_stat, batch_pages_stats, chunk_stats, stream);
   GatherPages(d_chunks_in_batch.flat_view(), pages, stream);
 
   auto h_chunks_in_batch = chunks.host_view().subspan(first_rowgroup, rowgroups_in_batch);
@@ -1173,6 +1178,7 @@ void writer::impl::write(table_view const &table)
     uint32_t first_page_in_next_batch =
       (rnext < num_rowgroups) ? chunks[rnext][0].first_page : num_pages;
     uint32_t pages_in_batch = first_page_in_next_batch - first_page_in_batch;
+    // device_span<gpu::EncPage> batch_pages{pages.data() + first_page_in_batch, }
     encode_pages(
       chunks,
       {pages.data(), pages.size()},

@@ -1486,9 +1486,8 @@ __device__ uint8_t *EncodeStatistics(uint8_t *start,
 __global__ void __launch_bounds__(128)
   gpuEncodePageHeaders(device_span<EncPage> pages,
                        device_span<gpu_inflate_status_s const> comp_stat,
-                       const statistics_chunk *page_stats,
-                       const statistics_chunk *chunk_stats,
-                       uint32_t start_page)
+                       device_span<statistics_chunk const> page_stats,
+                       const statistics_chunk *chunk_stats)
 {
   // When this whole kernel becomes single thread,
   __shared__ __align__(8) parquet_column_device_view col_g;
@@ -1549,10 +1548,10 @@ __global__ void __launch_bounds__(128)
       encoder.field_int32(3, Encoding::RLE);      // definition_level_encoding
       encoder.field_int32(4, Encoding::RLE);      // repetition_level_encoding
       // Optionally encode page-level statistics
-      if (page_stats) {
+      if (not page_stats.empty()) {
         encoder.field_struct_begin(5);
         encoder.set_ptr(EncodeStatistics(
-          encoder.get_ptr(), &page_stats[start_page + blockIdx.x], col_g.stats_dtype, fp_scratch));
+          encoder.get_ptr(), &page_stats[blockIdx.x], col_g.stats_dtype, fp_scratch));
         encoder.field_struct_end(5);
       }
       encoder.field_struct_end(5);
@@ -2191,23 +2190,21 @@ void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
  * @brief Launches kernel to encode page headers
  *
  * @param[in,out] pages Device array of EncPages
- * @param[in] start_page First page to encode in page array
  * @param[in] comp_stat Compressor status or nullptr if no compression
  * @param[in] page_stats Optional page-level statistics to be included in page header
  * @param[in] chunk_stats Optional chunk-level statistics to be encoded
  * @param[in] stream CUDA stream to use, default 0
  */
 void EncodePageHeaders(device_span<EncPage> pages,
-                       uint32_t start_page,
                        device_span<gpu_inflate_status_s const> comp_stat,
-                       const statistics_chunk *page_stats,
+                       device_span<statistics_chunk const> page_stats,
                        const statistics_chunk *chunk_stats,
                        rmm::cuda_stream_view stream)
 {
   // TODO: single thread task. No need for 128 threads/block. Earlier it used to employ rest of the
   // threads to coop load structs
   gpuEncodePageHeaders<<<pages.size(), 128, 0, stream.value()>>>(
-    pages, comp_stat, page_stats, chunk_stats, start_page);
+    pages, comp_stat, page_stats, chunk_stats);
 }
 
 /**
