@@ -54,7 +54,7 @@ from cudf.utils.dtypes import (
     is_scalar,
     min_scalar_type,
     numeric_normalize_types,
-    decimal_normalize_types,
+    _decimal_normalize_types,
 )
 from cudf.utils.utils import (
     get_appropriate_dispatched_func,
@@ -2749,7 +2749,7 @@ class Series(Frame, Serializable):
 
             if dtype_mismatch:
                 if isinstance(objs[0]._column, cudf.core.column.DecimalColumn):
-                    objs = decimal_normalize_types(*objs)
+                    objs = _decimal_normalize_types(*objs)
                 else:
                     objs = numeric_normalize_types(*objs)
 

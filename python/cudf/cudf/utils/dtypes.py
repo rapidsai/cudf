@@ -290,7 +290,7 @@ def is_decimal_dtype(obj):
     )
 
 
-def decimal_normalize_types(*args):
+def _decimal_normalize_types(*args):
     s = max([a.dtype.scale for a in args])
     lhs = max([a.dtype.precision - a.dtype.scale for a in args])
     p = min(18, s + lhs)
