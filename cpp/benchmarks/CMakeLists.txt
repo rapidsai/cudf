@@ -107,6 +107,11 @@ ConfigureBench(SORT_BENCH
   sort/sort_strings_benchmark.cpp)
 
 ###################################################################################################
+# - quantiles benchmark --------------------------------------------------------------------------------
+ConfigureBench(QUANTILES_BENCH
+  quantiles/quantiles_benchmark.cpp)
+
+###################################################################################################
 # - type_dispatcher benchmark ---------------------------------------------------------------------
 ConfigureBench(TYPE_DISPATCHER_BENCH type_dispatcher/type_dispatcher_benchmark.cu)
 
@@ -118,6 +123,11 @@ ConfigureBench(REDUCTION_BENCH
   reduction/reduce_benchmark.cpp
   reduction/scan_benchmark.cpp
   reduction/minmax_benchmark.cpp)
+
+###################################################################################################
+# - filling benchmark -----------------------------------------------------------------------------
+ConfigureBench(FILL_BENCH
+  filling/repeat_benchmark.cpp)
 
 ###################################################################################################
 # - groupby benchmark -----------------------------------------------------------------------------
