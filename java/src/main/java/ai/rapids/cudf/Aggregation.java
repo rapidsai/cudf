@@ -40,27 +40,26 @@ public abstract class Aggregation {
         PRODUCT(1),
         MIN(2),
         MAX(3),
-        COUNT_VALID(4),
-        COUNT_ALL(5),
-        ANY(6),
-        ALL(7),
-        SUM_OF_SQUARES(8),
-        MEAN(9),
-        VARIANCE(10), // This can take a delta degrees of freedom
-        STD(11), // This can take a delta degrees of freedom
-        MEDIAN(12),
-        QUANTILE(13),
-        ARGMAX(14),
-        ARGMIN(15),
-        NUNIQUE(16),
-        NTH_ELEMENT(17),
-        ROW_NUMBER(18),
-        COLLECT_LIST(19),
-        COLLECT_SET(20),
-        LEAD(21),
-        LAG(22),
-        PTX(23),
-        CUDA(24);
+        COUNT(4),
+        ANY(5),
+        ALL(6),
+        SUM_OF_SQUARES(7),
+        MEAN(8),
+        VARIANCE(9), // This can take a delta degrees of freedom
+        STD(10), // This can take a delta degrees of freedom
+        MEDIAN(11),
+        QUANTILE(12),
+        ARGMAX(13),
+        ARGMIN(14),
+        NUNIQUE(15),
+        NTH_ELEMENT(16),
+        ROW_NUMBER(17),
+        COLLECT_LIST(18),
+        COLLECT_SET(19),
+        LEAD(20),
+        LAG(21),
+        PTX(22),
+        CUDA(23);
 
         final int nativeId;
 
@@ -98,7 +97,7 @@ public abstract class Aggregation {
         UNEQUAL(false),
         ALL_EQUAL(true);
 
-        NaNEquality(boolean nansEqual) { this.nansEqual = nansEqual; }
+        NanEquality(boolean nansEqual) { this.nansEqual = nansEqual; }
 
         final boolean nansEqual;
     }
@@ -339,9 +338,9 @@ public abstract class Aggregation {
     private static final class CollectSetAggregation extends Aggregation {
         private final NullPolicy nullPolicy;
         private final NullEquality nullEquality;
-        private final NaNEquality nanEquality;
+        private final NanEquality nanEquality;
 
-        public CollectSetAggregation(NullPolicy nullPolicy, NullEquality nullEquality, NaNEquality nanEquality) {
+        public CollectSetAggregation(NullPolicy nullPolicy, NullEquality nullEquality, NanEquality nanEquality) {
             super(Kind.COLLECT_SET);
             this.nullPolicy = nullPolicy;
             this.nullEquality = nullEquality;
@@ -478,8 +477,7 @@ public abstract class Aggregation {
      *                   should be counted.
      */
     public static Aggregation count(NullPolicy nullPolicy) {
-        Aggregation.Kind kind = nullPolicy.includeNulls ? Kind.COUNT_ALL : Kind.COUNT_VALID;
-        return new CountLikeAggregation(kind, nullPolicy);
+        return new CountLikeAggregation(Kind.COUNT, nullPolicy);
     }
 
     /**
@@ -698,7 +696,7 @@ public abstract class Aggregation {
      * unique instances.
      */
     public static Aggregation collectSet() {
-        return new CollectSetAggregation(NullPolicy.EXCLUDE, NullEquality.UNEQUAL, NaNEquality.UNEQUAL);
+        return new CollectSetAggregation(NullPolicy.EXCLUDE, NullEquality.UNEQUAL, NanEquality.UNEQUAL);
     }
 
     /**
@@ -708,7 +706,7 @@ public abstract class Aggregation {
      * @param nullEquality Flag to specify whether null entries within each list should be considered equal.
      * @param nanEquality  Flag to specify whether NaN values in floating point column should be considered equal.
      */
-    public static Aggregation collectSet(NullPolicy nullPolicy, NullEquality nullEquality, NaNEquality nanEquality) {
+    public static Aggregation collectSet(NullPolicy nullPolicy, NullEquality nullEquality, NanEquality nanEquality) {
         return new CollectSetAggregation(nullPolicy, nullEquality, nanEquality);
     }
 
