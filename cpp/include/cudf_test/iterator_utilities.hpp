@@ -49,7 +49,7 @@ namespace test {
  * @return auto Validity iterator
  */
 template <typename Iter>
-[[maybe_unused]] auto iterator_with_null_at(Iter index_start, Iter index_end)
+[[maybe_unused]] static auto iterator_with_null_at(Iter index_start, Iter index_end)
 {
   using index_type = typename std::iterator_traits<Iter>::value_type;
 
@@ -77,7 +77,7 @@ template <typename Iter>
  * @param indices The indices for which the validity iterator must return `false` (i.e. null)
  * @return auto Validity iterator
  */
-[[maybe_unused]] auto iterator_with_null_at(cudf::host_span<cudf::size_type const> indices)
+[[maybe_unused]] static auto iterator_with_null_at(cudf::host_span<cudf::size_type const> indices)
 {
   return iterator_with_null_at(indices.begin(), indices.end());
 }
@@ -97,7 +97,7 @@ template <typename Iter>
  * @param index The index for which the validity iterator must return `false` (i.e. null)
  * @return auto Validity iterator
  */
-[[maybe_unused]] auto iterator_with_null_at(cudf::size_type index)
+[[maybe_unused]] static auto iterator_with_null_at(cudf::size_type index)
 {
   return iterator_with_null_at(std::vector<size_type>{index});
 }
@@ -107,14 +107,14 @@ template <typename Iter>
  *
  * @return auto Validity iterator which always yields `false`
  */
-[[maybe_unused]] auto iterator_all_nulls() { return thrust::make_constant_iterator(false); }
+[[maybe_unused]] static auto iterator_all_nulls() { return thrust::make_constant_iterator(false); }
 
 /**
  * @brief Bool iterator for marking all elements are valid (non-null)
  *
  * @return auto Validity iterator which always yields `true`
  */
-[[maybe_unused]] auto iterator_no_null() { return thrust::make_constant_iterator(true); }
+[[maybe_unused]] static auto iterator_no_null() { return thrust::make_constant_iterator(true); }
 
 }  // namespace test
 }  // namespace cudf
