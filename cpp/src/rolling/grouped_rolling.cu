@@ -313,13 +313,12 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  size_type nulls_begin_idx, nulls_end_idx;
-  std::tie(nulls_begin_idx, nulls_end_idx) = get_null_bounds_for_orderby_column(orderby_column);
+  auto [h_nulls_begin_idx, h_nulls_end_idx] = get_null_bounds_for_orderby_column(orderby_column);
 
   auto preceding_calculator =
-    [nulls_begin_idx,
-     nulls_end_idx,
-     d_orderby = orderby_column.data<T>(),
+    [nulls_begin_idx = h_nulls_begin_idx,
+     nulls_end_idx   = h_nulls_end_idx,
+     d_orderby       = orderby_column.data<T>(),
      preceding_window,
      preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
     if (preceding_window_is_unbounded) {
@@ -351,10 +350,10 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
   auto preceding_column = expand_to_column(preceding_calculator, input.size(), stream, mr);
 
   auto following_calculator =
-    [nulls_begin_idx,
-     nulls_end_idx,
-     num_rows  = input.size(),
-     d_orderby = orderby_column.data<T>(),
+    [nulls_begin_idx = h_nulls_begin_idx,
+     nulls_end_idx   = h_nulls_end_idx,
+     num_rows        = input.size(),
+     d_orderby       = orderby_column.data<T>(),
      following_window,
      following_window_is_unbounded] __device__(size_type idx) -> size_type {
     if (following_window_is_unbounded) { return num_rows - idx - 1; }
@@ -471,8 +470,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  rmm::device_vector<size_type> null_start, null_end;
-  std::tie(null_start, null_end) =
+  auto [null_start, null_end] =
     get_null_bounds_for_orderby_column(orderby_column, group_offsets, stream);
 
   auto preceding_calculator =
@@ -577,13 +575,12 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
-  size_type nulls_begin_idx, nulls_end_idx;
-  std::tie(nulls_begin_idx, nulls_end_idx) = get_null_bounds_for_orderby_column(orderby_column);
+  auto [h_nulls_begin_idx, h_nulls_end_idx] = get_null_bounds_for_orderby_column(orderby_column);
 
   auto preceding_calculator =
-    [nulls_begin_idx,
-     nulls_end_idx,
-     d_orderby = orderby_column.data<T>(),
+    [nulls_begin_idx = h_nulls_begin_idx,
+     nulls_end_idx   = h_nulls_end_idx,
+     d_orderby       = orderby_column.data<T>(),
      preceding_window,
      preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
     if (preceding_window_is_unbounded) {
@@ -617,10 +614,10 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
   auto preceding_column = expand_to_column(preceding_calculator, input.size(), stream, mr);
 
   auto following_calculator =
-    [nulls_begin_idx,
-     nulls_end_idx,
-     num_rows  = input.size(),
-     d_orderby = orderby_column.data<T>(),
+    [nulls_begin_idx = h_nulls_begin_idx,
+     nulls_end_idx   = h_nulls_end_idx,
+     num_rows        = input.size(),
+     d_orderby       = orderby_column.data<T>(),
      following_window,
      following_window_is_unbounded] __device__(size_type idx) -> size_type {
     if (following_window_is_unbounded) { return (num_rows - idx) - 1; }
@@ -669,8 +666,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
-  rmm::device_vector<size_type> null_start, null_end;
-  std::tie(null_start, null_end) =
+  auto [null_start, null_end] =
     get_null_bounds_for_orderby_column(orderby_column, group_offsets, stream);
 
   auto preceding_calculator =
