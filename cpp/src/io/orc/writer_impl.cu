@@ -481,7 +481,7 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
       case TypeKind::DECIMAL:
         // varint values (NO RLE)
         data_stream_size = decimal_column_sizes.at(column.index());
-        // scale stream TODO: compute exact since all elems are same
+        // scale stream TODO: compute exact size since all elems are equal
         data2_stream_size = div_rowgroups_by<int64_t>(512) * (512 * 4 + 2);
         break;
       default: CUDF_FAIL("Unsupported ORC type kind");
@@ -782,6 +782,7 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
       case TypeKind::DOUBLE: desc->stats_dtype = dtype_float64; break;
       case TypeKind::BOOLEAN: desc->stats_dtype = dtype_bool; break;
       case TypeKind::DATE: desc->stats_dtype = dtype_int32; break;
+      case TypeKind::DECIMAL: desc->stats_dtype = dtype_decimal64; break;
       case TypeKind::TIMESTAMP: desc->stats_dtype = dtype_timestamp64; break;
       case TypeKind::STRING: desc->stats_dtype = dtype_string; break;
       default: desc->stats_dtype = dtype_none; break;
@@ -1149,7 +1150,7 @@ encoder_decimal_info decimal_chunk_sizes(table_view const &table,
 }
 
 std::map<uint32_t, size_t> decimal_column_sizes(
-  std::map<uint32_t, std::vector<uint32_t>> chunk_sizes)
+  std::map<uint32_t, std::vector<uint32_t>> const &chunk_sizes)
 {
   std::map<uint32_t, size_t> column_sizes;
   std::transform(chunk_sizes.cbegin(),
