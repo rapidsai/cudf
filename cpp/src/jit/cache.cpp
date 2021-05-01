@@ -20,6 +20,8 @@
 #include <boost/filesystem.hpp>
 #include <jitify2.hpp>
 
+#include <cstddef>
+
 namespace cudf {
 namespace jit {
 
@@ -112,9 +114,14 @@ jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData prep
   auto existing_cache = caches.find(preprog.name());
 
   if (existing_cache == caches.end()) {
-    auto res = caches.insert(
-      {preprog.name(),
-       std::make_unique<jitify2::ProgramCache<>>(100, preprog, nullptr, get_program_cache_dir())});
+    auto max_files = std::getenv("LIBCUDF_KERNEL_CACHE_FILE_LIMIT");
+    auto res       = caches.insert({preprog.name(),
+                              std::make_unique<jitify2::ProgramCache<>>(
+                                100,
+                                preprog,
+                                nullptr,
+                                get_program_cache_dir(),
+                                max_files == nullptr ? 0 : std::stoul(max_files))});
 
     existing_cache = res.first;
   }
