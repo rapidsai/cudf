@@ -15,6 +15,7 @@ import rmm
 import cudf
 from cudf.core import DataFrame, Series
 from cudf.core._compat import PANDAS_GE_110
+from cudf.tests.dataset_generator import rand_dataframe
 from cudf.tests.utils import (
     DATETIME_TYPES,
     SIGNED_TYPES,
@@ -1666,3 +1667,53 @@ def test_groupby_mix_agg_scan():
     gb.agg(func[1:])
     with pytest.raises(NotImplementedError, match=err_msg):
         gb.agg(func)
+
+
+@pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
+@pytest.mark.parametrize("shift_perc", [0, 0.1, 0.3, 0.5, 0.7, 1.0, 1.3, 1.5])
+@pytest.mark.parametrize("direction", [1, -1])
+@pytest.mark.parametrize("fill_value", [None, 42])
+def test_groupby_shift_row(nelem, shift_perc, direction, fill_value):
+    pdf = make_frame(pd.DataFrame, nelem=nelem, extra_vals=["val2"])
+    gdf = cudf.from_pandas(pdf)
+    n_shift = int(nelem * shift_perc) * direction
+
+    expected = pdf.groupby(["x", "y"]).shift(
+        periods=n_shift, fill_value=fill_value
+    )
+    got = gdf.groupby(["x", "y"]).shift(periods=n_shift, fill_value=fill_value)
+
+    assert_groupby_results_equal(expected, got)
+
+
+@pytest.mark.parametrize("nelem", [10, 50, 100, 1000])
+@pytest.mark.parametrize("shift_perc", [0, 0.1, 0.3, 0.5, 0.7, 1.0, 1.3, 1.5])
+@pytest.mark.parametrize("direction", [1, -1])
+def test_groupby_shift_row_mixed(nelem, shift_perc, direction):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "str", "null_frequency": 0.4, "cardinality": 10},
+            {
+                "dtype": "datetime64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "timedelta64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+        ],
+        rows=nelem,
+        use_threads=False,
+    )
+    pdf = t.to_pandas()
+    gdf = cudf.from_pandas(pdf)
+    n_shift = int(nelem * shift_perc) * direction
+
+    expected = pdf.groupby(["0"]).shift(periods=n_shift)
+    got = gdf.groupby(["0"]).shift(periods=n_shift)
+
+    assert_groupby_results_equal(expected, got)
