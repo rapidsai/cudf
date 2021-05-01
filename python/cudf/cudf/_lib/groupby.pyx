@@ -23,6 +23,7 @@ from libcpp cimport bool
 from cudf._lib.column cimport Column
 from cudf._lib.table cimport Table
 from cudf._lib.scalar cimport DeviceScalar
+from cudf._lib.scalar import as_device_scalar
 from cudf._lib.aggregation cimport Aggregation, make_aggregation
 
 from cudf._lib.cpp.types cimport size_type
@@ -209,21 +210,27 @@ cdef class GroupBy:
 
         return Table(data=result_data, index=grouped_keys)
 
-    def shift(self, Table values, int periods, DeviceScalar fill_value):
+    def shift(self, Table values, int periods, list fill_values):
         cdef table_view view = values.view()
         cdef size_type num_col = view.num_columns()
         cdef vector[size_type] offsets = vector[size_type](num_col, periods)
 
-        cdef slrcref_vec_t fill_values = slrcref_vec_t(
-            num_col,
-            reference_wrapper[constscalar](fill_value.get_raw_ptr()[0])
-        )
+        cdef slrcref_vec_t c_fill_values
+        cdef DeviceScalar d_slr
+        d_slrs = []
+        c_fill_values.reserve(num_col)
+        for val, col in zip(fill_values, values._columns):
+            d_slrs.append(as_device_scalar(val, dtype=col.dtype))
+            d_slr = d_slrs[-1]
+            c_fill_values.push_back(
+                reference_wrapper[constscalar](d_slr.get_raw_ptr()[0])
+            )
 
         cdef pair[unique_ptr[table], unique_ptr[table]] c_result
 
         with nogil:
             c_result = move(
-                self.c_obj.get()[0].shift(view, offsets, fill_values)
+                self.c_obj.get()[0].shift(view, offsets, c_fill_values)
             )
 
         grouped_keys = Table.from_unique_ptr(
@@ -235,7 +242,7 @@ cdef class GroupBy:
             move(c_result.second), column_names=values._column_names
         )
 
-        return Table(data=shifted, index=grouped_keys)
+        return Table(data=shifted._data, index=grouped_keys)
 
 
 _GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax"}
