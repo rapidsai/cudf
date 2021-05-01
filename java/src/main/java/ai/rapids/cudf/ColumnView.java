@@ -1308,7 +1308,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * This is similar to a rolling window SUM with unbounded preceding and none following.
    * Input values 1, 2, 3
    * Output values 1, 3, 6
-   * This currently only works for long values that are not nullable.
+   * This currently only works for long values that are not nullable as this is currently a
+   * very simple implementation. It may be expanded in the future if needed.
    */
   public final ColumnVector prefixSum() {
     return new ColumnVector(prefixSum(getNativeView()));
