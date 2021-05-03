@@ -359,7 +359,7 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
             )
         elif dtype == "decimal64":
             max_precision = meta.get(
-                "max_precision", np.floor(np.log10(np.iinfo("int64").max))
+                "max_precision", cudf.Decimal64Dtype.MAX_PRECISION
             )
             precision = np.random.randint(1, max_precision)
             scale = np.random.randint(0, precision)
