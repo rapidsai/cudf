@@ -420,11 +420,11 @@ TS_CTOR(timestamp_ns, int64_t)
 
 list_scalar::list_scalar() : scalar(data_type(type_id::LIST)) {}
 
-list_scalar::list_scalar(cudf::column_view const& elements,
+list_scalar::list_scalar(cudf::column_view const& data,
                          bool is_valid,
                          rmm::cuda_stream_view stream,
                          rmm::mr::device_memory_resource* mr)
-  : scalar(data_type(type_id::LIST), is_valid, stream, mr), _data(elements, stream, mr)
+  : scalar(data_type(type_id::LIST), is_valid, stream, mr), _data(data, stream, mr)
 {
 }
 
