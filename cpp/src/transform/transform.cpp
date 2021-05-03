@@ -67,12 +67,12 @@ void unary_operation(mutable_column_view output,
              cudf::jit::get_data_ptr(input));
 }
 
-void binary_operation(table_view data_view,
-                      std::string const& binary_udf, 
-                      data_type output_type, 
-                      column_view const& outcol_view,
-                      column_view const& outmsk_view,
-                      rmm::mr::device_memory_resource* mr)
+void generalized_operation(table_view data_view,
+                           std::string const& binary_udf, 
+                           data_type output_type, 
+                           column_view const& outcol_view,
+                           column_view const& outmsk_view,
+                           rmm::mr::device_memory_resource* mr)
 {
 
   std::vector<std::string> template_types(
@@ -162,7 +162,7 @@ std::unique_ptr<column> transform(column_view const& input,
   return output;
 }
 
-std::unique_ptr<column> masked_binary_op_inner(table_view data_view, 
+std::unique_ptr<column> generalized_masked_op(table_view data_view, 
                                                std::string const& binary_udf, 
                                                data_type output_type, 
                                                column_view const& outcol_view,
@@ -170,7 +170,7 @@ std::unique_ptr<column> masked_binary_op_inner(table_view data_view,
                                                rmm::mr::device_memory_resource* mr)
 {
   rmm::cuda_stream_view stream = rmm::cuda_stream_default;
-  transformation::jit::binary_operation(data_view, binary_udf, output_type, outcol_view, outmsk_view, mr);
+  transformation::jit::generalized_operation(data_view, binary_udf, output_type, outcol_view, outmsk_view, mr);
 
   std::unique_ptr<column> output;
 
@@ -192,14 +192,14 @@ std::unique_ptr<column> transform(column_view const& input,
   return detail::transform(input, unary_udf, output_type, is_ptx, rmm::cuda_stream_default, mr);
 }
 
-std::unique_ptr<column> masked_binary_op(table_view data_view,
-                                         std::string const& binary_udf, 
-                                         data_type output_type, 
-                                         column_view const& outcol_view,
-                                         column_view const& outmsk_view,
-                                         rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> generalized_masked_op(table_view data_view,
+                                              std::string const& binary_udf, 
+                                              data_type output_type, 
+                                              column_view const& outcol_view,
+                                              column_view const& outmsk_view,
+                                              rmm::mr::device_memory_resource* mr)
 {
-  return detail::masked_binary_op_inner(data_view, binary_udf, output_type, outcol_view, outmsk_view, mr);
+  return detail::generalized_masked_op(data_view, binary_udf, output_type, outcol_view, outmsk_view, mr);
 }
 
 }  // namespace cudf

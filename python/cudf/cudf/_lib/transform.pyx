@@ -142,7 +142,7 @@ def masked_udf(Table incols, op, Column output_column, Column output_mask):
     cdef column_view outmsk_view = output_mask.view()
 
     with nogil:
-        c_output = move(libcudf_transform.masked_binary_op(
+        c_output = move(libcudf_transform.generalized_masked_op(
             data_view,
             c_str,
             c_dtype,

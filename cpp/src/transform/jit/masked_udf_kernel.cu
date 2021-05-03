@@ -42,43 +42,7 @@ struct Masked {
   int64_t value;
   bool valid;
 };
-/*
-template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-__global__
-void binop_kernel(cudf::size_type size,
-                  TypeOut* out_data, 
-                  TypeLhs* lhs_data,
-                  TypeRhs* rhs_data,
-                  bool* out_mask,
-                  cudf::bitmask_type const* lhs_mask,
-                  cudf::size_type lhs_offset,
-                  cudf::bitmask_type const* rhs_mask,
-                  cudf::size_type rhs_offset
-) {
-    int tid = threadIdx.x;
-    int blkid = blockIdx.x;
-    int blksz = blockDim.x;
-    int gridsz = gridDim.x;
-    int start = tid + blkid * blksz;
-    int step = blksz * gridsz;
 
-    Masked output;
-    char l_valid;
-    char r_valid;
-    long int l_data;
-    long int r_data;
-
-    for (cudf::size_type i=start; i<size; i+=step) {
-      l_valid = lhs_mask ? cudf::bit_is_set(lhs_mask, lhs_offset + i) : true;
-      r_valid = rhs_mask ? cudf::bit_is_set(rhs_mask, rhs_offset + i) : true;
-      l_data = lhs_data[i];
-      r_data = rhs_data[i];
-      GENERIC_BINARY_OP(&output.value, lhs_data[i], l_valid, rhs_data[i], r_valid);
-      out_data[i] = output.value;
-      out_mask[i] = output.valid;
-    }
-}
-*/
 template <typename TypeIn, typename MaskType, typename OffsetType>
 __device__ auto make_args(cudf::size_type id,
                           TypeIn in_ptr,
