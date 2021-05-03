@@ -146,7 +146,13 @@ class ParquetWriter(IOFuzz):
                 # https://github.com/pandas-dev/pandas/issues/37327
                 - {"uint32"}
             )
-            dtypes_list.extend(["list", "decimal64"])
+            dtypes_list = list(
+                cudf.utils.dtypes.ALL_TYPES
+                - {"category", "timedelta64[ns]", "datetime64[ns]"}
+                # TODO: Remove uint32 below after this bug is fixed
+                # https://github.com/pandas-dev/pandas/issues/37327
+                - {"uint32"} | {"list", "decimal64"}
+            )
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
