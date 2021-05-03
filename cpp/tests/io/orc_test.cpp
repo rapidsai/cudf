@@ -808,7 +808,7 @@ TEST_F(OrcChunkedWriterTest, ReadStripes)
   cudf_io::orc_chunked_writer(opts).write(*table1).write(*table2);
 
   cudf_io::orc_reader_options read_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).stripes({1, 0, 1});
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).stripes({{1, 0, 1}});
   auto result = cudf_io::read_orc(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
@@ -825,9 +825,9 @@ TEST_F(OrcChunkedWriterTest, ReadStripesError)
   cudf_io::orc_chunked_writer(opts).write(*table1);
 
   cudf_io::orc_reader_options read_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).stripes({0, 1});
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).stripes({{0, 1}});
   EXPECT_THROW(cudf_io::read_orc(read_opts), cudf::logic_error);
-  read_opts.set_stripes({-1});
+  read_opts.set_stripes({{-1}});
   EXPECT_THROW(cudf_io::read_orc(read_opts), cudf::logic_error);
 }
 
