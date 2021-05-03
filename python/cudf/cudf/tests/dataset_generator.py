@@ -529,8 +529,8 @@ def boolean_generator(size):
 
 
 def decimal_generator(dtype, size):
-    max_integral = int("9" * (dtype.precision - dtype.scale))
-    max_float = int("9" * abs(dtype.scale)) if dtype.scale != 0 else 0
+    max_integral = 10 ** (dtype.precision - dtype.scale) - 1
+    max_float =(10 ** dtype.scale - 1) if dtype.scale != 0 else 0
     return lambda: (
         np.random.uniform(
             low=-max_integral,
