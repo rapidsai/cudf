@@ -3301,10 +3301,10 @@ class Frame(libcudf.table.Table):
         return self._mimic_inplace(result, inplace=inplace)
 
 
-class FrameOneD(Frame):
+class SingleColumnFrame(Frame):
     """A one-dimensional frame.
 
-    Frames with only a single dimension share certain logic that is encoded in
+    Frames with only a single column share certain logic that is encoded in
     this class.
     """
 
@@ -3459,7 +3459,7 @@ class FrameOneD(Frame):
 
         Returns
         -------
-        FrameOneD
+        SingleColumnFrame
 
         Examples
         --------

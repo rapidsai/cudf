@@ -38,7 +38,7 @@ from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import FrameOneD, _drop_rows_by_labels
+from cudf.core.frame import SingleColumnFrame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
@@ -61,7 +61,7 @@ from cudf.utils.utils import (
 )
 
 
-class Series(FrameOneD, Serializable):
+class Series(SingleColumnFrame, Serializable):
     # The `constructor*` properties are used by `dask` (and `dask_cudf`)
     @property
     def _constructor(self):
@@ -1043,9 +1043,9 @@ class Series(FrameOneD, Serializable):
         else:
             return self.loc[arg]
 
-    iteritems = FrameOneD.__iter__
+    iteritems = SingleColumnFrame.__iter__
 
-    items = FrameOneD.__iter__
+    items = SingleColumnFrame.__iter__
 
     def to_dict(self, into=dict):
         raise TypeError(

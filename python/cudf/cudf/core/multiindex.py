@@ -19,7 +19,7 @@ from cudf._typing import DataFrameOrSeries
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.column import column
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame, FrameOneD
+from cudf.core.frame import Frame, SingleColumnFrame
 from cudf.core.index import Index, as_index
 
 
@@ -572,7 +572,7 @@ class MultiIndex(Index):
                    names=['a', 'b'])
         """
 
-        return super(FrameOneD, cls).from_arrow(table)
+        return super(SingleColumnFrame, cls).from_arrow(table)
 
     def to_arrow(self):
         """Convert MultiIndex to PyArrow Table
@@ -606,7 +606,7 @@ class MultiIndex(Index):
         ]
         """
 
-        return super(FrameOneD, self).to_arrow()
+        return super(SingleColumnFrame, self).to_arrow()
 
     @property
     def codes(self):
