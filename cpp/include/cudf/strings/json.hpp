@@ -41,8 +41,6 @@ class get_json_object_options {
  public:
   /**
    * @brief Default constructor.
-   *
-   * This has been added since Cython requires a default constructor to create objects on stack.
    */
   explicit get_json_object_options() = default;
 
