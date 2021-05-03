@@ -488,5 +488,26 @@ std::unique_ptr<column> rolling_window(
   std::unique_ptr<aggregation> const& agg,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+
+/**
+ * @copydoc std::unique_ptr<column> rolling_window(
+ *            column_view const& input,
+ *            column_view preceding_window,
+ *            column_view following_window,
+ *            size_type min_periods,
+ *            std::unique_ptr<aggregation> const& aggr,
+ *            rmm::mr::device_memory_resource* mr)
+ *
+ * @param order_by The table used to order the input columns
+ */
+std::unique_ptr<column> rolling_window(
+  column_view const& input,
+  table_view const& order_by,
+  column_view const& preceding_window,
+  column_view const& following_window,
+  size_type min_periods,
+  std::unique_ptr<aggregation> const& agg,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of group
 }  // namespace cudf

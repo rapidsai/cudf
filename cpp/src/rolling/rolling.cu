@@ -82,6 +82,45 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 
 // Applies a variable-size rolling window function to the values in a column.
 std::unique_ptr<column> rolling_window(column_view const& input,
+                                       table_view const& order_by,
+                                       column_view const& preceding_window,
+                                       column_view const& following_window,
+                                       size_type min_periods,
+                                       std::unique_ptr<aggregation> const& agg,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+
+  if (preceding_window.is_empty() || following_window.is_empty() || input.is_empty())
+    return empty_like(input);
+
+  CUDF_EXPECTS(preceding_window.type().id() == type_id::INT32 &&
+                 following_window.type().id() == type_id::INT32,
+               "preceding_window/following_window must have type_id::INT32 type");
+
+  CUDF_EXPECTS(preceding_window.size() == input.size() && following_window.size() == input.size(),
+               "preceding_window/following_window size must match input size");
+
+  if (agg->kind == aggregation::CUDA || agg->kind == aggregation::PTX) {
+    CUDF_FAIL("Order by input not yet supported for specified aggregate type");
+  } else {
+    auto defaults_col =
+      cudf::is_dictionary(input.type()) ? dictionary_column_view(input).indices() : input;
+    return cudf::detail::rolling_window(input,
+                                        empty_like(defaults_col)->view(),
+                                        order_by,
+                                        preceding_window.begin<size_type>(),
+                                        following_window.begin<size_type>(),
+                                        min_periods,
+                                        agg,
+                                        stream,
+                                        mr);
+  }
+}
+
+// Applies a variable-size rolling window function to the values in a column.
+std::unique_ptr<column> rolling_window(column_view const& input,
                                        column_view const& preceding_window,
                                        column_view const& following_window,
                                        size_type min_periods,
@@ -184,6 +223,27 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 {
   return detail::rolling_window(input,
                                 default_outputs,
+                                order_by,
+                                preceding_window,
+                                following_window,
+                                min_periods,
+                                agg,
+                                rmm::cuda_stream_default,
+                                mr);
+}
+
+// Applies a variable-size rolling window function to the values in a column.
+std::unique_ptr<column> rolling_window(column_view const& input,
+                                       table_view const& order_by,
+                                       column_view const& preceding_window,
+                                       column_view const& following_window,
+                                       size_type min_periods,
+                                       std::unique_ptr<aggregation> const& agg,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  auto defaults =
+    cudf::is_dictionary(input.type()) ? dictionary_column_view(input).indices() : input;
+  return detail::rolling_window(input,
                                 order_by,
                                 preceding_window,
                                 following_window,
