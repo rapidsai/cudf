@@ -1639,12 +1639,11 @@ TEST_F(JoinTest, FullJoinWithStructsAndNulls)
 TEST_F(JoinTest, LargeJoinResult)
 {
   auto one    = thrust::make_constant_iterator(1);
-  auto two    = thrust::make_constant_iterator(2);
-  auto c0     = column_wrapper<int32_t>(one, one + std::numeric_limits<int32_t>::max());
-  auto c1     = column_wrapper<int32_t>(two, two + 1);
+  auto c0     = column_wrapper<int8_t>(one, one + std::numeric_limits<int32_t>::max() / 2);
+  auto c1     = column_wrapper<int8_t>(one, one + 2);
   auto lhs    = cudf::table_view({c0});
   auto rhs    = cudf::table_view({c1});
-  auto result = cudf::full_join(lhs, rhs);
+  auto result = cudf::left_join(lhs, rhs);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
