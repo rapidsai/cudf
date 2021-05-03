@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_factories.hpp>
@@ -27,8 +28,6 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
-#include "build/cuda-11.2/groupshift-python/release/_deps/gtest-src/googletest/include/gtest/gtest.h"
-#include "cudf/concatenate.hpp"
 
 namespace cudf {
 namespace test {
