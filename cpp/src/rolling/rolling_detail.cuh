@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include "rolling_detail.hpp"
 #include "lead_lag_nested_detail.cuh"
+#include "rolling_detail.hpp"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
