@@ -29,8 +29,14 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   auto defaults =
     cudf::is_dictionary(input.type()) ? dictionary_column_view(input).indices() : input;
   const auto empty_order_by = table_view();
-  return rolling_window(
-    input, empty_like(defaults)->view(), empty_order_by, preceding_window, following_window, min_periods, agg, mr);
+  return rolling_window(input,
+                        empty_like(defaults)->view(),
+                        empty_order_by,
+                        preceding_window,
+                        following_window,
+                        min_periods,
+                        agg,
+                        mr);
 }
 
 namespace detail {

@@ -488,7 +488,6 @@ std::unique_ptr<column> rolling_window(
   std::unique_ptr<aggregation> const& agg,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-
 /**
  * @copydoc std::unique_ptr<column> rolling_window(
  *            column_view const& input,

@@ -132,7 +132,6 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
     // No Groupby columns specified. Treat as one big group.
     return rolling_window(
       input, default_outputs, order_by, preceding_window, following_window, min_periods, aggr, mr);
-      // input, default_outputs, preceding_window, following_window, min_periods, aggr, stream, mr);
   }
 
   using sort_groupby_helper = cudf::groupby::detail::sort::sort_groupby_helper;

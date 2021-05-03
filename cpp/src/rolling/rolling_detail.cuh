@@ -175,11 +175,11 @@ bool __device__ process_rolling_window(column_device_view input,
                                        size_type current_index,
                                        size_type min_periods)
 {
-  bool output_is_valid = end_index - start_index >= min_periods;
+  bool output_is_valid               = end_index - start_index >= min_periods;
   column_device_view row_comparisons = order_by.column(0);
-  size_type search_index = current_index;
+  size_type search_index             = current_index;
 
-  while(search_index > start_index && row_comparisons.element<uint32_t>(search_index) == 1) {
+  while (search_index > start_index && row_comparisons.element<uint32_t>(search_index) == 1) {
     search_index--;
   }
   output.element<OutputType>(current_index) = search_index - start_index + 1;
@@ -202,12 +202,12 @@ bool __device__ process_rolling_window(column_device_view input,
                                        size_type current_index,
                                        size_type min_periods)
 {
-  bool output_is_valid = end_index - start_index >= min_periods;
+  bool output_is_valid               = end_index - start_index >= min_periods;
   column_device_view row_comparisons = order_by.column(0);
-  size_type search_index = current_index;
-  uint32_t duplicate_count = 0;
+  size_type search_index             = current_index;
+  uint32_t duplicate_count           = 0;
 
-  while(search_index > start_index) {
+  while (search_index > start_index) {
     duplicate_count += row_comparisons.element<uint32_t>(search_index);
     search_index--;
   }
@@ -534,8 +534,16 @@ __launch_bounds__(block_size) __global__
     //       for dynamic and static sizes.
 
     volatile bool output_is_valid = false;
-    output_is_valid = process_rolling_window<InputType, OutputType, agg_op, op, has_nulls>(
-      input, default_outputs, order_by, output, start_index, end_index, i, min_periods, device_agg_op);
+    output_is_valid =
+      process_rolling_window<InputType, OutputType, agg_op, op, has_nulls>(input,
+                                                                           default_outputs,
+                                                                           order_by,
+                                                                           output,
+                                                                           start_index,
+                                                                           end_index,
+                                                                           i,
+                                                                           min_periods,
+                                                                           device_agg_op);
 
     // set the mask
     cudf::bitmask_type result_mask{__ballot_sync(active_threads, output_is_valid)};
@@ -895,7 +903,8 @@ struct rolling_window_launcher {
             typename PrecedingWindowIterator,
             typename FollowingWindowIterator>
   std::enable_if_t<!(op == aggregation::MEAN || op == aggregation::LEAD || op == aggregation::LAG ||
-                     op == aggregation::COLLECT_LIST || op == aggregation::RANK || op == aggregation::DENSE_RANK),
+                     op == aggregation::COLLECT_LIST || op == aggregation::RANK ||
+                     op == aggregation::DENSE_RANK),
                    std::unique_ptr<column>>
   operator()(column_view const& input,
              column_view const& default_outputs,
@@ -958,56 +967,60 @@ struct rolling_window_launcher {
   template <aggregation::Kind op,
             typename PrecedingWindowIterator,
             typename FollowingWindowIterator>
-  std::enable_if_t<(op == aggregation::RANK || op == aggregation::DENSE_RANK), std::unique_ptr<column>> operator()(
-    column_view const& input,
-    column_view const& default_outputs,
-    table_view const& order_by,
-    PrecedingWindowIterator preceding_window_begin,
-    FollowingWindowIterator following_window_begin,
-    size_type min_periods,
-    std::unique_ptr<aggregation> const& agg,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+  std::enable_if_t<(op == aggregation::RANK || op == aggregation::DENSE_RANK),
+                   std::unique_ptr<column>>
+  operator()(column_view const& input,
+             column_view const& default_outputs,
+             table_view const& order_by,
+             PrecedingWindowIterator preceding_window_begin,
+             FollowingWindowIterator following_window_begin,
+             size_type min_periods,
+             std::unique_ptr<aggregation> const& agg,
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr)
   {
     CUDF_EXPECTS(default_outputs.is_empty(),
                  "Only LEAD/LAG window functions support default values.");
 
-    CUDF_EXPECTS(!order_by.is_empty(),
-                 "Order by empty");
+    CUDF_EXPECTS(!order_by.is_empty(), "Order by empty");
 
-    auto d_order_by = table_device_view::create(order_by);
-    auto comparisons = make_fixed_width_column(cudf::data_type{cudf::type_to_id<uint32_t>()}, order_by.num_rows(), mask_state::ALL_VALID, stream, mr);
+    auto d_order_by         = table_device_view::create(order_by);
+    auto comparisons        = make_fixed_width_column(cudf::data_type{cudf::type_to_id<uint32_t>()},
+                                               order_by.num_rows(),
+                                               mask_state::ALL_VALID,
+                                               stream,
+                                               mr);
     auto mutable_comparison = comparisons->mutable_view();
 
     if (has_nulls(order_by)) {
       row_equality_comparator<true> row_comparator(*d_order_by, *d_order_by, true);
       thrust::tabulate(rmm::exec_policy(stream),
-                     mutable_comparison.begin<uint32_t>(),
-                     mutable_comparison.end<uint32_t>(),
-                     [comparator = row_comparator] __device__(auto row_index) {
-                       if (row_index == 0 || !comparator(row_index, row_index-1)) {
-                         return 0;
-                       } else {
-                         return 1;
-                       }
-                     });
+                       mutable_comparison.begin<uint32_t>(),
+                       mutable_comparison.end<uint32_t>(),
+                       [comparator = row_comparator] __device__(auto row_index) {
+                         if (row_index == 0 || !comparator(row_index, row_index - 1)) {
+                           return 0;
+                         } else {
+                           return 1;
+                         }
+                       });
     } else {
       row_equality_comparator<false> row_comparator(*d_order_by, *d_order_by, true);
       thrust::tabulate(rmm::exec_policy(stream),
-                     mutable_comparison.begin<uint32_t>(),
-                     mutable_comparison.end<uint32_t>(),
-                     [comparator = row_comparator] __device__(auto row_index) {
-                       if (row_index == 0 || !comparator(row_index, row_index-1)) {
-                         return 0;
-                       } else {
-                         return 1;
-                       }
-                     });
+                       mutable_comparison.begin<uint32_t>(),
+                       mutable_comparison.end<uint32_t>(),
+                       [comparator = row_comparator] __device__(auto row_index) {
+                         if (row_index == 0 || !comparator(row_index, row_index - 1)) {
+                           return 0;
+                         } else {
+                           return 1;
+                         }
+                       });
     }
 
     std::vector<cudf::column_view> column_views;
     column_views.emplace_back(comparisons->view());
-    cudf::table_view *comparison_order_by = new cudf::table_view(column_views);
+    cudf::table_view* comparison_order_by = new cudf::table_view(column_views);
 
     return launch<InputType, cudf::DeviceSum, op, PrecedingWindowIterator, FollowingWindowIterator>(
       input,
@@ -1502,7 +1515,15 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        rmm::mr::device_memory_resource* mr)
 {
   const auto empty_order_by = table_view();
-  return rolling_window(input, default_outputs, empty_order_by, preceding_window_begin, following_window_begin, min_periods, agg, stream, mr);
+  return rolling_window(input,
+                        default_outputs,
+                        empty_order_by,
+                        preceding_window_begin,
+                        following_window_begin,
+                        min_periods,
+                        agg,
+                        stream,
+                        mr);
 }
 
 /**

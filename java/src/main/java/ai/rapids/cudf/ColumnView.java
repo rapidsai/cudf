@@ -1297,7 +1297,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
               options.getPreceding(),
               options.getFollowing(),
               options.getPrecedingCol() == null ? 0 : options.getPrecedingCol().getNativeView(),
-              options.getFollowingCol() == null ? 0 : options.getFollowingCol().getNativeView()));
+              options.getFollowingCol() == null ? 0 : options.getFollowingCol().getNativeView(),
+              options.getOrderByColArray()));
     } finally {
       Aggregation.close(nativePtr);
     }
@@ -2908,7 +2909,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       int preceding,
       int following,
       long preceding_col,
-      long following_col);
+      long following_col,
+      long[] order_by);
 
   private static native long nansToNulls(long viewHandle) throws CudfException;
 
