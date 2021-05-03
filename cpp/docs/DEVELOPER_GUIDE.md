@@ -530,6 +530,30 @@ Note:  `std::tuple`  _could_  be used if not for the fact that Cython does not s
 only two objects of different types. Multiple objects of the same type may be returned via a 
 `std::vector<T>`.
 
+Alternatively, with C++17 (supported from cudf v0.20), [structured binding](https://en.cppreference.com/w/cpp/language/structured_binding) 
+may be used to disaggregate multiple return values:
+
+```c++
+auto [out0, out1] = cudf::return_two_outputs();
+```
+
+Note that the compiler might not support capturing aliases defined in a structured binding 
+in a lambda. One may work around this by using a capture with an initializer instead:
+
+```c++
+auto [out0, out1] = cudf::return_two_outputs();
+
+// Direct capture of alias from structured binding might fail with:
+// "error: structured binding cannot be captured"
+// auto foo = [out0]() {...};
+
+// Use an initializing capture:
+auto foo = [&out0 = out0] {
+  // Use out0 to compute something.
+  // ...
+};
+```
+
 ## Iterator-based interfaces
 
 Increasingly, libcudf is moving toward internal (`detail`) APIs with iterator parameters rather 
