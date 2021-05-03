@@ -650,27 +650,17 @@ struct identity_initializer {
   }
 
   template <typename T, aggregation::Kind k>
-  typename std::enable_if<cudf::is_timestamp_t<T>::value, T>::type get_identity()
+  T get_identity()
   {
-    if (k == aggregation::ARGMAX)
-      return T{typename T::duration(ARGMAX_SENTINEL)};
-    else if (k == aggregation::ARGMIN)
-      return T{typename T::duration(ARGMIN_SENTINEL)};
-    else
-      // In C++17, we can use compile time if and not make this function SFINAE
-      return identity_from_operator<T, k>();
-  }
-
-  template <typename T, aggregation::Kind k>
-  typename std::enable_if<!cudf::is_timestamp_t<T>::value, T>::type get_identity()
-  {
-    if (k == aggregation::ARGMAX)
-      return static_cast<T>(ARGMAX_SENTINEL);
-    else if (k == aggregation::ARGMIN)
-      return static_cast<T>(ARGMIN_SENTINEL);
-    else
-      // In C++17, we can use compile time if and not make this function SFINAE
-      return identity_from_operator<T, k>();
+    if (k == aggregation::ARGMAX || k == aggregation::ARGMIN) {
+      if constexpr (cudf::is_timestamp<T>())
+        return k == aggregation::ARGMAX ? T{typename T::duration(ARGMAX_SENTINEL)}
+                                        : T{typename T::duration(ARGMIN_SENTINEL)};
+      else
+        return k == aggregation::ARGMAX ? static_cast<T>(ARGMAX_SENTINEL)
+                                        : static_cast<T>(ARGMIN_SENTINEL);
+    }
+    return identity_from_operator<T, k>();
   }
 
  public:

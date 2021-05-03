@@ -45,7 +45,7 @@ public class CuFile {
    * Load the native libraries needed for libcufilejni, if not loaded already; open the cuFile
    * driver, and add a shutdown hook to close it.
    */
-  private static synchronized void initialize() {
+  static synchronized void initialize() {
     if (!initialized) {
       try {
         NativeDepsLoader.loadNativeDeps(new String[]{"cufilejni"});
@@ -55,7 +55,7 @@ public class CuFile {
         }));
         initialized = true;
       } catch (Throwable t) {
-        log.error("Could not load cuFile jni library...", t);
+        throw new RuntimeException(t);
       }
     }
   }
