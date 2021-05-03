@@ -433,8 +433,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // sign of the scale is changed since cuDF follows c++ libraries like CNL
     // which uses negative scaling, but liborc and other libraries
     // follow positive scaling.
-    auto scale =
-      (col_type == type_id::DECIMAL64) ? -static_cast<int32_t>(_metadata->ff.types[col].scale) : 0;
+    auto scale = -static_cast<int32_t>(_metadata->ff.types[col].scale.value_or(0));
     column_types.emplace_back(col_type, scale);
 
     // Map each ORC column to its column
@@ -518,14 +517,15 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
       // Update chunks to reference streams pointers
       for (size_t j = 0; j < num_columns; j++) {
-        auto &chunk         = chunks[i * num_columns + j];
-        chunk.start_row     = stripe_start_row;
-        chunk.num_rows      = stripe_info->numberOfRows;
-        chunk.encoding_kind = stripe_footer->columns[_selected_columns[j]].kind;
-        chunk.type_kind     = _metadata->ff.types[_selected_columns[j]].kind;
-        chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale;
-        chunk.rowgroup_id   = num_rowgroups;
-        chunk.dtype_len     = (column_types[j].id() == type_id::STRING)
+        auto &chunk          = chunks[i * num_columns + j];
+        chunk.start_row      = stripe_start_row;
+        chunk.num_rows       = stripe_info->numberOfRows;
+        chunk.encoding_kind  = stripe_footer->columns[_selected_columns[j]].kind;
+        chunk.type_kind      = _metadata->ff.types[_selected_columns[j]].kind;
+        auto const scale_opt = _metadata->ff.types[_selected_columns[j]].scale;
+        if (scale_opt) chunk.decimal_scale = *scale_opt;
+        chunk.rowgroup_id = num_rowgroups;
+        chunk.dtype_len   = (column_types[j].id() == type_id::STRING)
                             ? sizeof(std::pair<const char *, size_t>)
                             : cudf::size_of(column_types[j]);
         if (chunk.type_kind == orc::TIMESTAMP) {

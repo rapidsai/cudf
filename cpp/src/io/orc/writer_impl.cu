@@ -137,6 +137,7 @@ class orc_column_view {
       _null_count(col.null_count()),
       _nulls(col.null_mask()),
       _clockscale(to_clockscale<uint8_t>(col.type().id())),
+      _scale{col.type().scale()},
       _type_kind(to_orc_type(col.type().id()))
   {
     // Generating default name if name isn't present in metadata
@@ -194,6 +195,7 @@ class orc_column_view {
   bool nullable() const noexcept { return (_nulls != nullptr); }
   uint32_t const *nulls() const noexcept { return _nulls; }
   uint8_t clockscale() const noexcept { return _clockscale; }
+  auto scale() const noexcept { return _scale; }
 
   void set_orc_encoding(ColumnEncodingKind e) { _encoding_kind = e; }
   auto orc_kind() const noexcept { return _type_kind; }
@@ -211,6 +213,7 @@ class orc_column_view {
   size_t _null_count     = 0;
   uint32_t const *_nulls = nullptr;
   uint8_t _clockscale    = 0;
+  numeric::scale_type _scale;
 
   // ORC-related members
   std::string _name{};
@@ -1405,7 +1408,8 @@ void writer::impl::write(table_view const &table)
     ff.types[0].subtypes.resize(num_columns);
     ff.types[0].fieldNames.resize(num_columns);
     for (auto const &column : orc_columns) {
-      ff.types[column.id()].kind             = column.orc_kind();
+      ff.types[column.id()].kind = column.orc_kind();
+      if (column.orc_kind() == DECIMAL) { ff.types[column.id()].scale = -column.scale(); }
       ff.types[0].subtypes[column.index()]   = column.id();
       ff.types[0].fieldNames[column.index()] = column.orc_name();
     }

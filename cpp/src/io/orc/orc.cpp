@@ -293,8 +293,8 @@ size_t ProtobufWriter::write(const SchemaType &s)
   w.field_packed_uint(2, s.subtypes);
   w.field_repeated_string(3, s.fieldNames);
   // w.field_uint(4, s.maximumLength);
-  // w.field_uint(5, s.precision);
-  // w.field_uint(6, s.scale);
+  if (s.precision) w.field_uint(5, *s.precision);
+  if (s.scale) w.field_uint(6, *s.scale);
   return w.value();
 }
 
