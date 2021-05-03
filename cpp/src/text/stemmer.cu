@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <strings/utilities.cuh>
-
 #include <nvtext/stemmer.hpp>
 
 #include <cudf/column/column.hpp>
@@ -24,6 +22,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>

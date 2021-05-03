@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +19,12 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>

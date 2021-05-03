@@ -21,6 +21,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/detail/converters.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -28,8 +29,6 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>

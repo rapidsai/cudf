@@ -19,12 +19,12 @@ from setuptools.extension import Extension
 import versioneer
 
 install_requires = [
-    "numba>=0.49.0,!=0.51.0",
+    "numba>=0.53.1",
     "Cython>=0.29,<0.30",
     "fastavro>=0.22.9",
     "fsspec>=0.6.0",
     "numpy",
-    "pandas>=1.0,<=1.2.4",
+    "pandas>=1.0,<1.3.0dev0",
     "typing_extensions",
     "protobuf",
     "nvtx>=0.2.1",
