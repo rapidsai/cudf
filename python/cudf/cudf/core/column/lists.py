@@ -492,13 +492,10 @@ class ListMethods(ColumnMethodsMixin):
         if not isinstance(result_dtype, ListDtype):
             return self._return_or_inplace(self._column)
 
-        self_offsets = self._column.children[0]
-        child_offsets = self._column.children[1].children[0]
+        self_offsets = self._column.offsets
+        child_offsets = self._column.elements.offsets
         result_offsets = child_offsets[self_offsets]
-        result_children = (
-            result_offsets,
-            self._column.children[1].children[1],
-        )
+        result_children = (result_offsets, self._column.elements.elements)
 
         return self._return_or_inplace(
             ListColumn(
