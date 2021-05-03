@@ -422,8 +422,9 @@ __global__ void __launch_bounds__(128)
   uint32_t t = threadIdx.x;
 
   if (t == 0) {
-    col_g = col_desc[blockIdx.x];
-    ck_g  = chunks[blockIdx.y][blockIdx.x];
+    col_g  = col_desc[blockIdx.x];
+    ck_g   = chunks[blockIdx.y][blockIdx.x];
+    page_g = {};
   }
   __syncthreads();
   if (t < 32) {
@@ -1489,7 +1490,7 @@ __global__ void __launch_bounds__(128)
                        device_span<statistics_chunk const> page_stats,
                        const statistics_chunk *chunk_stats)
 {
-  // When this whole kernel becomes single thread,
+  // When this whole kernel becomes single thread, the following variables need not be __shared__
   __shared__ __align__(8) parquet_column_device_view col_g;
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
