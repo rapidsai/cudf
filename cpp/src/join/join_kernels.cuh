@@ -311,7 +311,7 @@ __global__ void probe_hash_table(multimap_type multi_map,
                                  size_type* join_output_l,
                                  size_type* join_output_r,
                                  cudf::size_type* current_idx,
-                                 const cudf::size_type max_size)
+                                 size_t max_size)
 {
   constexpr int num_warps = block_size / detail::warp_size;
   __shared__ size_type current_idx_shared[num_warps];

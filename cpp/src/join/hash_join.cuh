@@ -62,11 +62,11 @@ namespace detail {
  * @return An estimate of the size of the output of the join operation
  */
 template <join_kind JoinKind, typename multimap_type>
-size_type estimate_join_output_size(table_device_view build_table,
-                                    table_device_view probe_table,
-                                    multimap_type const& hash_table,
-                                    null_equality compare_nulls,
-                                    rmm::cuda_stream_view stream)
+size_t estimate_join_output_size(table_device_view build_table,
+                                 table_device_view probe_table,
+                                 multimap_type const& hash_table,
+                                 null_equality compare_nulls,
+                                 rmm::cuda_stream_view stream)
 {
   using estimate_size_type = int64_t;  // use 64-bit size so we can detect overflow
 
@@ -148,11 +148,6 @@ size_type estimate_join_output_size(table_device_view build_table,
       h_size_estimate = size_estimate.value(stream);
     }
 
-    // Detect overflow
-    CUDF_EXPECTS(h_size_estimate <
-                   static_cast<estimate_size_type>(std::numeric_limits<cudf::size_type>::max()),
-                 "Maximum join output size exceeded");
-
     // If the size estimate is non-zero, then we have a valid estimate and can break
     // If sample_probe_num_rows >= probe_table_num_rows, then we've sampled the entire
     // probe table, in which case the estimate is exact and we can break
@@ -165,12 +160,12 @@ size_type estimate_join_output_size(table_device_view build_table,
       constexpr size_type GROW_RATIO{2};
       sample_probe_num_rows *= GROW_RATIO;
       probe_to_build_ratio =
-        static_cast<size_type>(std::ceil(static_cast<float>(probe_to_build_ratio) / GROW_RATIO));
+        static_cast<size_t>(std::ceil(static_cast<float>(probe_to_build_ratio) / GROW_RATIO));
     }
 
   } while (true);
 
-  return static_cast<cudf::size_type>(h_size_estimate);
+  return h_size_estimate;
 }
 
 /**

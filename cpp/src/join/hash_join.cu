@@ -228,7 +228,7 @@ probe_join_hash_table(cudf::table_device_view build_table,
                       rmm::cuda_stream_view stream,
                       rmm::mr::device_memory_resource *mr)
 {
-  size_type estimated_size = estimate_join_output_size<JoinKind, multimap_type>(
+  size_t estimated_size = estimate_join_output_size<JoinKind, multimap_type>(
     build_table, probe_table, hash_table, compare_nulls, stream);
 
   // If the estimated output size is zero, return immediately
@@ -242,7 +242,7 @@ probe_join_hash_table(cudf::table_device_view build_table,
   // As such we will need to de-allocate memory and re-allocate memory to ensure
   // that the final output is correct.
   rmm::device_scalar<size_type> write_index(0, stream);
-  size_type join_size{0};
+  size_t join_size{0};
 
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
@@ -304,8 +304,6 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const &build,
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(0 != build.num_columns(), "Hash join build table is empty");
-  CUDF_EXPECTS(build.num_rows() < cudf::detail::MAX_JOIN_SIZE,
-               "Build column size is too big for hash join");
 
   auto flattened_build = structs::detail::flatten_nested_columns(
     build, {}, {}, structs::detail::column_nullability::FORCE);
@@ -360,8 +358,6 @@ hash_join::hash_join_impl::compute_hash_join(cudf::table_view const &probe,
                                              rmm::mr::device_memory_resource *mr) const
 {
   CUDF_EXPECTS(0 != probe.num_columns(), "Hash join probe table is empty");
-  CUDF_EXPECTS(probe.num_rows() < cudf::detail::MAX_JOIN_SIZE,
-               "Probe column size is too big for hash join");
 
   auto flattened_probe = structs::detail::flatten_nested_columns(
     probe, {}, {}, structs::detail::column_nullability::FORCE);
