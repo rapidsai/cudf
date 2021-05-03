@@ -37,7 +37,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
-#include <rmm/device_vector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/optional.h>
@@ -559,10 +558,11 @@ table_with_metadata reader::impl::convert_data_to_table(device_span<uint64_t con
     h_valid[i]  = out_buffers[i].null_mask();
   }
 
-  rmm::device_vector<data_type> d_dtypes           = h_dtypes;
-  rmm::device_vector<void *> d_data                = h_data;
-  rmm::device_vector<cudf::bitmask_type *> d_valid = h_valid;
-  rmm::device_vector<cudf::size_type> d_valid_counts(num_columns, 0);
+  auto d_dtypes = cudf::detail::make_device_uvector_async<data_type>(h_dtypes, stream);
+  auto d_data   = cudf::detail::make_device_uvector_async<void *>(h_data, stream);
+  auto d_valid  = cudf::detail::make_device_uvector_async<cudf::bitmask_type *>(h_valid, stream);
+  auto d_valid_counts =
+    cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(num_columns, stream);
 
   cudf::io::json::gpu::convert_json_to_columns(
     opts_.view(),
@@ -595,7 +595,7 @@ table_with_metadata reader::impl::convert_data_to_table(device_span<uint64_t con
                                   0,
                                   stream);
 
-  thrust::host_vector<cudf::size_type> h_valid_counts = d_valid_counts;
+  auto const h_valid_counts = cudf::detail::make_std_vector_sync(d_valid_counts, stream);
   std::vector<std::unique_ptr<column>> out_columns;
   for (size_t i = 0; i < num_columns; ++i) {
     out_buffers[i].null_count() = num_records - h_valid_counts[i];
