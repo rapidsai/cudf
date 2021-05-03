@@ -1476,8 +1476,8 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if other is None:
             for col in self._data:
                 result[col] = getattr(self[col], fn)()
+            return result
         elif isinstance(other, Sequence):
-            # This adds the ith element of other to the ith column of self.
             for k, col in enumerate(self._data):
                 result[col] = getattr(self[col], fn)(other[k])
         elif isinstance(other, DataFrame):
@@ -1515,18 +1515,23 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     result[col] = fallback(rhs[col], _reverse_op(fn))
         elif isinstance(other, Series):
             other_cols = other.to_pandas().to_dict()
-            df_cols = self._column_names
-            result_cols = df_cols + tuple(
-                col for col in other_cols if col not in df_cols
-            )
-
+            other_cols_keys = list(other_cols.keys())
+            result_cols = list(self.columns)
+            df_cols = list(result_cols)
+            for new_col in other_cols.keys():
+                if new_col not in result_cols:
+                    result_cols.append(new_col)
             for col in result_cols:
-                l_opr = (
-                    self[col]
-                    if col in df_cols
-                    else Series(as_column(np.nan, length=len(self)))
-                )
-                r_opr = other_cols.get(col)
+                if col in df_cols and col in other_cols_keys:
+                    l_opr = self[col]
+                    r_opr = other_cols[col]
+                else:
+                    if col not in df_cols:
+                        r_opr = other_cols[col]
+                        l_opr = Series(as_column(np.nan, length=len(self)))
+                    if col not in other_cols_keys:
+                        r_opr = None
+                        l_opr = self[col]
                 result[col] = op(l_opr, r_opr)
 
         elif isinstance(other, (numbers.Number, cudf.Scalar)) or (
