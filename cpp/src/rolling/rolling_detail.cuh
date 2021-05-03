@@ -17,25 +17,22 @@
 #pragma once
 
 #include "rolling_detail.hpp"
+#include "lead_lag_nested_detail.cuh"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/scatter.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
@@ -63,7 +60,6 @@
 #include <thrust/transform.h>
 
 #include <memory>
-#include "lead_lag_nested_detail.cuh"
 
 namespace cudf {
 

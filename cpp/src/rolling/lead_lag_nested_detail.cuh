@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
@@ -41,7 +42,7 @@ class lead_lag_gather_map_builder {
                               PrecedingIterator preceding,
                               FollowingIterator following)
     : _input_size{input_size},
-      _null_index{input_size + 1},  // Out of input range. Gather returns null.
+      _null_index{input_size},  // Out of input range. Gather returns null.
       _row_offset{row_offset},
       _preceding{preceding},
       _following{following}
@@ -83,7 +84,7 @@ template <typename GatherMapIter>
 class is_null_index_predicate_impl {
  public:
   is_null_index_predicate_impl(size_type input_size, GatherMapIter gather_)
-    : _null_index{input_size + 1}, _gather{gather_}
+    : _null_index{input_size}, _gather{gather_}
   {
   }
 
@@ -161,7 +162,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(column_view const& input,
   //        {NULL_INDEX, NULL_INDEX, 0, 1, 2...}
   //
   // 2. Gather input column based on the gather_map.
-  // 3. If default outputs are available, scatter contents of default_outputs`
+  // 3. If default outputs are available, scatter contents of `default_outputs`
   //    to all positions where nulls where gathered in step 2.
   //
   // Note: Step 3 can be switched to use `copy_if_else()`, once it supports
