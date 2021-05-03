@@ -27,7 +27,7 @@ _now = np.datetime64("now")
 _tomorrow = _now + np.timedelta64(1, "D")
 _now = np.int64(_now.astype("datetime64[ns]"))
 _tomorrow = np.int64(_tomorrow.astype("datetime64[ns]"))
-_index_type_aggs = {"count", "idxmin", "idxmax"}
+_index_type_aggs = {"count", "idxmin", "idxmax", "cumcount"}
 
 
 def assert_groupby_results_equal(expect, got, sort=True, **kwargs):
@@ -1039,6 +1039,36 @@ def test_groupby_size():
     )
 
 
+def test_groupby_cumcount():
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 3, 4],
+            "b": ["bob", "bob", "alice", "cooper"],
+            "c": [1, 2, 3, 4],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_groupby_results_equal(
+        pdf.groupby("a").cumcount(),
+        gdf.groupby("a").cumcount(),
+        check_dtype=False,
+    )
+
+    assert_groupby_results_equal(
+        pdf.groupby(["a", "b", "c"]).cumcount(),
+        gdf.groupby(["a", "b", "c"]).cumcount(),
+        check_dtype=False,
+    )
+
+    sr = pd.Series(range(len(pdf)))
+    assert_groupby_results_equal(
+        pdf.groupby(sr).cumcount(),
+        gdf.groupby(sr).cumcount(),
+        check_dtype=False,
+    )
+
+
 @pytest.mark.parametrize("nelem", get_nelem())
 @pytest.mark.parametrize("as_index", [True, False])
 @pytest.mark.parametrize(
@@ -1605,3 +1635,34 @@ def test_groupby_unique(by, data, dtype):
     expect = pdf.groupby("by")["data"].unique()
     got = gdf.groupby("by")["data"].unique()
     assert_groupby_results_equal(expect, got)
+
+
+@pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
+@pytest.mark.parametrize("func", ["cummin", "cummax", "cumcount", "cumsum"])
+def test_groupby_2keys_scan(nelem, func):
+    pdf = make_frame(pd.DataFrame, nelem=nelem)
+    expect_df = pdf.groupby(["x", "y"], sort=True).agg(func)
+    got_df = (
+        make_frame(DataFrame, nelem=nelem)
+        .groupby(["x", "y"], sort=True)
+        .agg(func)
+    )
+    # pd.groupby.cumcount returns a series.
+    if isinstance(expect_df, pd.Series):
+        expect_df = expect_df.to_frame("val")
+    expect_df = expect_df.set_index([pdf["x"], pdf["y"]]).sort_index()
+
+    check_dtype = False if func in _index_type_aggs else True
+    assert_groupby_results_equal(got_df, expect_df, check_dtype=check_dtype)
+
+
+def test_groupby_mix_agg_scan():
+    err_msg = "Cannot perform both aggregation and scan in one operation"
+    func = ["cumsum", "sum"]
+    gb = make_frame(DataFrame, nelem=10).groupby(["x", "y"], sort=True)
+
+    gb.agg(func[0])
+    gb.agg(func[1])
+    gb.agg(func[1:])
+    with pytest.raises(NotImplementedError, match=err_msg):
+        gb.agg(func)

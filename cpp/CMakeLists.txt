@@ -173,6 +173,7 @@ add_library(cudf
     src/copying/shift.cu
     src/copying/slice.cpp
     src/copying/split.cpp
+    src/copying/segmented_shift.cu
     src/datetime/datetime_ops.cu
     src/dictionary/add_keys.cu
     src/dictionary/decode.cu
@@ -301,6 +302,7 @@ add_library(cudf
     src/reshape/tile.cu
     src/rolling/grouped_rolling.cu
     src/rolling/rolling.cu
+    src/rolling/range_window_bounds.cpp
     src/round/round.cu
     src/scalar/scalar.cpp
     src/scalar/scalar_factories.cpp
@@ -323,6 +325,7 @@ add_library(cudf
     src/strings/char_types/char_cases.cu
     src/strings/char_types/char_types.cu
     src/strings/combine/concatenate.cu
+    src/strings/combine/concatenate_list_elements.cu
     src/strings/combine/join.cu
     src/strings/contains.cu
     src/strings/convert/convert_booleans.cu

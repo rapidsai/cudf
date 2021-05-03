@@ -15,7 +15,6 @@
  */
 
 #include <strings/regex/regex.cuh>
-#include <strings/utilities.cuh>
 #include <strings/utilities.hpp>
 
 #include <cudf/column/column.hpp>
@@ -23,6 +22,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
