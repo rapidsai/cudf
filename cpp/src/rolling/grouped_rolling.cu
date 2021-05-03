@@ -364,15 +364,18 @@ std::unique_ptr<column> time_range_window_ASC(column_view const& input,
     input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);
 }
 
-/// Given a timestamp column grouped as specified in group_offsets,
-/// return the following two vectors:
-///  1. Vector with one entry per group, indicating the offset in the group
-///     where the null values begin.
-///  2. Vector with one entry per group, indicating the offset in the group
-///     where the null values end. (i.e. 1 past the last null.)
-/// Each group in the input timestamp column must be sorted,
-/// with null values clustered at either the start or the end of each group.
-/// If there are no nulls for any given group, (nulls_begin, nulls_end) == (0,0).
+// Given a timestamp column grouped as specified in group_offsets,
+// return the following two vectors:
+//  1. Vector with one entry per group, indicating the offset in the group
+//     where the null values begin.
+//  2. Vector with one entry per group, indicating the offset in the group
+//     where the null values end. (i.e. 1 past the last null.)
+// Each group in the input timestamp column must be sorted,
+// with null values clustered at either the start or the end of each group.
+// If there are no nulls for any given group, (nulls_begin, nulls_end) == (0,0).
+//
+// Note: `group_offsets` spans N+1 elements, where N is the number of groups, so that the
+// end of the last group is stored as an offset.
 std::tuple<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
 get_null_bounds_for_timestamp_column(column_view const& timestamp_column,
                                      cudf::device_span<size_type const> group_offsets,
@@ -381,12 +384,13 @@ get_null_bounds_for_timestamp_column(column_view const& timestamp_column,
   // For each group, the null values are clustered at the beginning or the end of the group.
   // These nulls cannot participate, except in their own window.
 
+  auto num_groups = group_offsets.size() - 1;
+
   if (timestamp_column.has_nulls()) {
-    auto null_start = rmm::device_uvector<size_type>(group_offsets.size(), stream);
-    auto null_end   = rmm::device_uvector<size_type>(group_offsets.size(), stream);
+    auto null_start = rmm::device_uvector<size_type>(num_groups, stream);
+    auto null_end   = rmm::device_uvector<size_type>(num_groups, stream);
 
     auto p_timestamps_device_view = column_device_view::create(timestamp_column, stream);
-    auto num_groups               = group_offsets.size();
 
     // Null timestamps exist. Find null bounds, per group.
     thrust::for_each(
@@ -430,8 +434,14 @@ get_null_bounds_for_timestamp_column(column_view const& timestamp_column,
 
     return std::make_tuple(std::move(null_start), std::move(null_end));
   } else {
-    return std::make_tuple(cudf::detail::make_device_uvector_async(group_offsets, stream),
-                           cudf::detail::make_device_uvector_async(group_offsets, stream));
+    // The returned vectors have num_groups items, but the input offsets have num_groups+1
+    // Drop the last element using a span
+    auto group_offsets_span =
+      cudf::device_span<cudf::size_type const>(group_offsets.data(), num_groups);
+
+    // When there are no nulls, just copy the input group offsets to the output.
+    return std::make_tuple(cudf::detail::make_device_uvector_async(group_offsets_span, stream),
+                           cudf::detail::make_device_uvector_async(group_offsets_span, stream));
   }
 }
 
@@ -450,11 +460,8 @@ std::unique_ptr<column> time_range_window_ASC(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  // For input of n groups, group_offsets has n+1 values. Drop the last value using a span
-  auto group_offsets_span =
-    cudf::device_span<cudf::size_type const>(group_offsets.data(), group_offsets.size() - 1);
   auto [null_start, null_end] =
-    get_null_bounds_for_timestamp_column(timestamp_column, group_offsets_span, stream);
+    get_null_bounds_for_timestamp_column(timestamp_column, group_offsets, stream);
 
   auto preceding_calculator =
     [d_group_offsets = group_offsets.data(),
@@ -651,11 +658,8 @@ std::unique_ptr<column> time_range_window_DESC(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  // For input of n groups, group_offsets has n+1 values. The null bounds omit the final value
-  auto group_offsets_span =
-    cudf::device_span<cudf::size_type const>(group_offsets.data(), group_offsets.size() - 1);
   auto [null_start, null_end] =
-    get_null_bounds_for_timestamp_column(timestamp_column, group_offsets_span, stream);
+    get_null_bounds_for_timestamp_column(timestamp_column, group_offsets, stream);
 
   auto preceding_calculator =
     [d_group_offsets = group_offsets.data(),
