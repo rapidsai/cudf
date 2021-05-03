@@ -303,9 +303,9 @@ void reader::impl::set_record_starts(rmm::cuda_stream_view stream)
   // If not starting at an offset, add an extra row to account for the first row in the file
   cudf::size_type prefilter_count = ((byte_range_offset_ == 0) ? 1 : 0);
   if (load_whole_file_) {
-    prefilter_count += count_all_from_set(data_, chars_to_count);
+    prefilter_count += count_all_from_set(data_, chars_to_count, stream);
   } else {
-    prefilter_count += count_all_from_set(uncomp_data_, uncomp_size_, chars_to_count);
+    prefilter_count += count_all_from_set(uncomp_data_, uncomp_size_, chars_to_count, stream);
   }
 
   rec_starts_.resize(prefilter_count);
@@ -321,9 +321,9 @@ void reader::impl::set_record_starts(rmm::cuda_stream_view stream)
   if (allow_newlines_in_strings_) { chars_to_find.push_back('\"'); }
   // Passing offset = 1 to return positions AFTER the found character
   if (load_whole_file_) {
-    find_all_from_set(data_, chars_to_find, 1, find_result_ptr);
+    find_all_from_set(data_, chars_to_find, 1, find_result_ptr, stream);
   } else {
-    find_all_from_set(uncomp_data_, uncomp_size_, chars_to_find, 1, find_result_ptr);
+    find_all_from_set(uncomp_data_, uncomp_size_, chars_to_find, 1, find_result_ptr, stream);
   }
 
   // Previous call stores the record pinput_file.typeositions as encountered by all threads

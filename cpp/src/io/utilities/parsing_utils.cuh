@@ -388,7 +388,8 @@ template <class T>
 cudf::size_type find_all_from_set(const rmm::device_buffer& d_data,
                                   const std::vector<char>& keys,
                                   uint64_t result_offset,
-                                  T* positions);
+                                  T* positions,
+                                  rmm::cuda_stream_view stream);
 
 /**
  * @brief Searches the input character array for each of characters in a set.
@@ -411,7 +412,8 @@ cudf::size_type find_all_from_set(const char* h_data,
                                   size_t h_size,
                                   const std::vector<char>& keys,
                                   uint64_t result_offset,
-                                  T* positions);
+                                  T* positions,
+                                  rmm::cuda_stream_view stream);
 
 /**
  * @brief Searches the input character array for each of characters in a set
@@ -422,7 +424,9 @@ cudf::size_type find_all_from_set(const char* h_data,
  *
  * @return cudf::size_type total number of occurrences
  */
-cudf::size_type count_all_from_set(const rmm::device_buffer& d_data, const std::vector<char>& keys);
+cudf::size_type count_all_from_set(const rmm::device_buffer& d_data,
+                                   const std::vector<char>& keys,
+                                   rmm::cuda_stream_view stream);
 
 /**
  * @brief Searches the input character array for each of characters in a set
@@ -439,7 +443,8 @@ cudf::size_type count_all_from_set(const rmm::device_buffer& d_data, const std::
  */
 cudf::size_type count_all_from_set(const char* h_data,
                                    size_t h_size,
-                                   const std::vector<char>& keys);
+                                   const std::vector<char>& keys,
+                                   rmm::cuda_stream_view stream);
 
 /**
  * @brief Infer file compression type based on user supplied arguments.
