@@ -1261,7 +1261,7 @@ public final class Table implements AutoCloseable {
    * @return the new Table.
    * @throws CudfException on any error.
    */
-  public Table repeat(ColumnVector counts) {
+  public Table repeat(ColumnView counts) {
     return repeat(counts, true);
   }
 
@@ -1276,7 +1276,7 @@ public final class Table implements AutoCloseable {
    * @return the new Table.
    * @throws CudfException on any error.
    */
-  public Table repeat(ColumnVector counts, boolean checkCount) {
+  public Table repeat(ColumnView counts, boolean checkCount) {
     return new Table(repeatColumnCount(this.nativeHandle, counts.getNativeView(), checkCount));
   }
 
@@ -1719,7 +1719,7 @@ public final class Table implements AutoCloseable {
    * @return table containing copy of all elements of this table passing
    * the filter defined by the boolean mask
    */
-  public Table filter(ColumnVector mask) {
+  public Table filter(ColumnView mask) {
     assert mask.getType().equals(DType.BOOL8) : "Mask column must be of type BOOL8";
     assert getRowCount() == 0 || getRowCount() == mask.getRowCount() : "Mask column has incorrect size";
     return new Table(filter(nativeHandle, mask.getNativeView()));
@@ -1955,7 +1955,7 @@ public final class Table implements AutoCloseable {
    * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
    * @return the resulting Table.
    */
-  public Table gather(ColumnVector gatherMap) {
+  public Table gather(ColumnView gatherMap) {
     return gather(gatherMap, true);
   }
 
@@ -1973,7 +1973,7 @@ public final class Table implements AutoCloseable {
    *                    when setting this to false.
    * @return the resulting Table.
    */
-  public Table gather(ColumnVector gatherMap, boolean checkBounds) {
+  public Table gather(ColumnView gatherMap, boolean checkBounds) {
     return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
   }
 
@@ -2191,7 +2191,7 @@ public final class Table implements AutoCloseable {
    * @param schema the types of each column.
    * @return the parsed table.
    */
-  public static Table convertFromRows(ColumnVector vec, DType ... schema) {
+  public static Table convertFromRows(ColumnView vec, DType ... schema) {
     // TODO at some point we need a schema that support nesting so we can support nested types
     // TODO we will need scale at some point very soon too
     int[] types = new int[schema.length];
