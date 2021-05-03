@@ -88,21 +88,9 @@ void binary_operation(table_view data_view,
     template_types[offset + 2] = "int64_t";
   }
 
-
-  column_view A = data_view.column(0);
-  column_view B = data_view.column(1);
-
-
-
   std::string generic_kernel_name = 
   jitify2::reflection::Template("cudf::transformation::jit::generic_udf_kernel")
-    .instantiate(cudf::jit::get_type_name(outcol_view.type()),
-                 "int64_t*",
-                 "uint32_t*",
-                 "int64_t",
-                 "int64_t*",
-                 "uint32_t*",
-                 "int64_t");
+    .instantiate(template_types);
 
   std::string generic_cuda_source = cudf::jit::parse_single_function_ptx(
                      binary_udf, "GENERIC_OP", cudf::jit::get_type_name(output_type), {0});
