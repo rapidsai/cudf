@@ -103,7 +103,6 @@ __device__ auto make_args(cudf::size_type id,
     );
 }
 
-
 template <typename TypeOut, typename ... Arguments>
 __global__
 void generic_udf_kernel(cudf::size_type size, 

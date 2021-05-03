@@ -67,38 +67,6 @@ void unary_operation(mutable_column_view output,
              cudf::jit::get_data_ptr(input));
 }
 
-std::vector<void*> make_launch_args(table_view data, column_view outcol_view, column_view outmsk_view) {
-  int n_cols = data.num_columns();
-  std::vector<void*> results((n_cols * 3) + 3);
-
-  int64_t size = outcol_view.size();
-  void* outcol_ptr = (void*)cudf::jit::get_data_ptr(outcol_view);
-  void* outmsk_ptr = (void*)cudf::jit::get_data_ptr(outmsk_view);
-
-  results[0] = (void*)&size;
-  results[1] = (void*)&outcol_ptr;
-  results[2] = (void*)&outmsk_ptr;
-
-  for (int i = 0; i < n_cols; i++) {
-    int offset = 3 + (i * n_cols);
-    column_view col = data.column(i);
-
-    void* data_ptr = (void*)cudf::jit::get_data_ptr(col);
-    results[offset] = (void*)&data_ptr;
-
-    cudf::bitmask_type const* mask_ptr = col.null_mask();
-    results[offset + 1] = (void*)&mask_ptr;
-    
-    int64_t col_offset = col.offset();
-    results[offset + 2] = (void*)&col_offset;
-  }
-  return results;
-}
-
-auto make_launch_args_variadic(table_view data) {
-  
-}
-
 void binary_operation(table_view data_view,
                       std::string const& binary_udf, 
                       data_type output_type, 
@@ -120,46 +88,63 @@ void binary_operation(table_view data_view,
     template_types[offset + 2] = "int64_t";
   }
 
-  auto launch_args = make_launch_args(data_view, outcol_view, outmsk_view);
 
   column_view A = data_view.column(0);
   column_view B = data_view.column(1);
 
+
+
   std::string generic_kernel_name = 
   jitify2::reflection::Template("cudf::transformation::jit::generic_udf_kernel")
-    .instantiate(template_types);
+    .instantiate(cudf::jit::get_type_name(outcol_view.type()),
+                 "int64_t*",
+                 "uint32_t*",
+                 "int64_t",
+                 "int64_t*",
+                 "uint32_t*",
+                 "int64_t");
 
   std::string generic_cuda_source = cudf::jit::parse_single_function_ptx(
                      binary_udf, "GENERIC_OP", cudf::jit::get_type_name(output_type), {0});
 
-  std::vector<void*> func_args(9);
+  int n_cols = data_view.num_columns();
+  std::vector<void*> results((n_cols * 3) + 3);
 
-  cudf::size_type arg_size = outcol_view.size();
-  const void* arg_outcol_view = cudf::jit::get_data_ptr(outcol_view);
-  const void* arg_outmsk_view = cudf::jit::get_data_ptr(outcol_view);
-  const void* arg_A = cudf::jit::get_data_ptr(A);
-  cudf::bitmask_type const* arg_A_mask = A.null_mask();
-  int64_t arg_A_offset = A.offset();
-  const void* arg_B = cudf::jit::get_data_ptr(B);
-  cudf::bitmask_type const* arg_B_mask = B.null_mask();
-  int64_t arg_B_offset = B.offset();
+  cudf::size_type size = outcol_view.size();
+  const void* outcol_ptr = cudf::jit::get_data_ptr(outcol_view);
+  const void* outmsk_ptr = cudf::jit::get_data_ptr(outmsk_view);
 
-  func_args[0] = &arg_size;
-  func_args[1] = &arg_outcol_view;
-  func_args[2] = &arg_outmsk_view;
-  func_args[3] = &arg_A;
-  func_args[4] = &arg_A_mask;
-  func_args[5] = &arg_A_offset;
-  func_args[6] = &arg_B;
-  func_args[7] = &arg_B_mask;
-  func_args[8] = &arg_B_offset;
-     
+  results[0] = &size;
+  results[1] = &outcol_ptr;
+  results[2] = &outmsk_ptr;
+  column_view col;
+
+  std::vector<const void*> data_ptrs(n_cols);
+  std::vector<cudf::bitmask_type const*> mask_ptrs(n_cols);
+  std::vector<int64_t> offsets(n_cols);
+
+  for (int i = 0; i < n_cols; i++) {
+    col = data_view.column(i);
+    data_ptrs[i] = cudf::jit::get_data_ptr(col);
+    mask_ptrs[i] = col.null_mask();
+    offsets[i] = col.offset();
+  }
+
+  int idx = 3;
+  for (int i = 0; i < n_cols; i++) {
+    results[idx] = &data_ptrs[i];
+    results[idx + 1] = &mask_ptrs[i];
+    results[idx + 2] = &offsets[i];
+    idx += 3;
+  }
+  
+
   rmm::cuda_stream_view generic_stream;
   cudf::jit::get_program_cache(*transform_jit_binop_kernel_cu_jit)
     .get_kernel(
       generic_kernel_name, {}, {{"transform/jit/operation-udf.hpp", generic_cuda_source}}, {"-arch=sm_."})  //
     ->configure_1d_max_occupancy(0, 0, 0, generic_stream.value())                                   //
-    ->launch(func_args);
+    ->launch(results.data());
 
 }
 
