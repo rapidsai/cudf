@@ -61,15 +61,15 @@ namespace detail {
  * each thread.
  */
 template <cudf::size_type max_block_size>
-__launch_bounds__(max_block_size) __global__
-  void compute_column_kernel(table_device_view const table,
-                             const cudf::detail::fixed_width_scalar_device_view_base* literals,
-                             mutable_column_device_view output_column,
-                             const detail::device_data_reference* data_references,
-                             const ast_operator* operators,
-                             const cudf::size_type* operator_source_indices,
-                             cudf::size_type num_operators,
-                             cudf::size_type num_intermediates)
+__launch_bounds__(max_block_size) __global__ void compute_column_kernel(
+  table_device_view const table,
+  device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals,
+  mutable_column_device_view output_column,
+  device_span<const detail::device_data_reference> data_references,
+  device_span<const ast_operator> operators,
+  device_span<const cudf::size_type> operator_source_indices,
+  cudf::size_type num_operators,
+  cudf::size_type num_intermediates)
 {
   extern __shared__ std::int64_t intermediate_storage[];
   auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * num_intermediates];
@@ -123,11 +123,11 @@ std::unique_ptr<column> compute_column(table_view const table,
   cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       *table_device,
-      plan._device_literals.data(),
+      plan._device_literals,
       *mutable_output_device,
-      plan._device_data_references.data(),
-      plan._device_operators.data(),
-      plan._device_operator_source_indices.data(),
+      plan._device_data_references,
+      plan._device_operators,
+      plan._device_operator_source_indices,
       num_operators,
       num_intermediates);
   CHECK_CUDA(stream.value());

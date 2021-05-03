@@ -157,10 +157,11 @@ struct row_evaluator {
    * storing intermediates.
    * @param output_column The output column where results are stored.
    */
-  __device__ row_evaluator(table_device_view const& table,
-                           const cudf::detail::fixed_width_scalar_device_view_base* literals,
-                           std::int64_t* thread_intermediate_storage,
-                           mutable_column_device_view* output_column)
+  __device__ row_evaluator(
+    table_device_view const& table,
+    device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals,
+    std::int64_t* thread_intermediate_storage,
+    mutable_column_device_view* output_column)
     : table(table),
       literals(literals),
       thread_intermediate_storage(thread_intermediate_storage),
@@ -266,7 +267,7 @@ struct row_evaluator {
 
  private:
   table_device_view const& table;
-  const cudf::detail::fixed_width_scalar_device_view_base* literals;
+  device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals;
   std::int64_t* thread_intermediate_storage;
   mutable_column_device_view* output_column;
 };
@@ -300,12 +301,13 @@ __device__ void row_output::resolve_output(detail::device_data_reference device_
  * @param num_operators Number of operators.
  * @param row_index Row index of data column(s).
  */
-__device__ void evaluate_row_expression(detail::row_evaluator const& evaluator,
-                                        const detail::device_data_reference* data_references,
-                                        const ast_operator* operators,
-                                        const cudf::size_type* operator_source_indices,
-                                        cudf::size_type num_operators,
-                                        cudf::size_type row_index)
+__device__ void evaluate_row_expression(
+  detail::row_evaluator const& evaluator,
+  device_span<const detail::device_data_reference> data_references,
+  device_span<const ast_operator> operators,
+  device_span<const cudf::size_type> operator_source_indices,
+  cudf::size_type num_operators,
+  cudf::size_type row_index)
 {
   auto operator_source_index = static_cast<cudf::size_type>(0);
   for (cudf::size_type operator_index = 0; operator_index < num_operators; operator_index++) {
