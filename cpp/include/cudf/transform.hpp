@@ -62,13 +62,6 @@ std::unique_ptr<column> masked_binary_op(
   column_view const& outmsk_view,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-std::unique_ptr<column> generalized_masked_op(
-  table_view const& data_view,
-  std::string const& udf,
-  data_type output_type,
-  column_view const& outcol_view,
-  column_view const& outmsk_view,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Creates a null_mask from `input` by converting `NaN` to null and

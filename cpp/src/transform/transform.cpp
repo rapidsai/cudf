@@ -15,7 +15,7 @@
  */
 
 #include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
-#include <jit_preprocessed_files/transform/jit/binop_kernel.cu.jit.hpp>
+#include <jit_preprocessed_files/transform/jit/masked_udf_kernel.cu.jit.hpp>
 #include <jit_preprocessed_files/transform/jit/baked_udf_requirements.cu.jit.hpp>
 
 
@@ -128,7 +128,7 @@ void binary_operation(table_view data_view,
   
 
   rmm::cuda_stream_view generic_stream;
-  cudf::jit::get_program_cache(*transform_jit_binop_kernel_cu_jit)
+  cudf::jit::get_program_cache(*transform_jit_masked_udf_kernel_cu_jit)
     .get_kernel(
       generic_kernel_name, {}, {{"transform/jit/operation-udf.hpp", generic_cuda_source}}, {"-arch=sm_."})  //
     ->configure_1d_max_occupancy(0, 0, 0, generic_stream.value())                                   //
