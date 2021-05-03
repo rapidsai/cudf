@@ -536,14 +536,29 @@ class list_scalar : public scalar {
   list_scalar& operator=(list_scalar&& other) = delete;
 
   /**
-   * @brief Construct a new list scalar object from existing device data
+   * @brief Construct a new list scalar object from column_view
    *
-   * @param elements The elements of the list
+   * The input column_view is copied.
+   *
+   * @param elements The column data to copy.
    * @param is_valid Whether the value held by the scalar is valid
    * @param stream CUDA stream used for device memory operations.
    * @param mr Device memory resource to use for device memory allocation
    */
   list_scalar(cudf::column_view const& elements,
+              bool is_valid                       = true,
+              rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  /**
+   * @brief Construct a new list scalar object from existing column.
+   *
+   * @param elements The column to take ownership of
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  list_scalar(cudf::column&& data,
               bool is_valid                       = true,
               rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
