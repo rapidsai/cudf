@@ -2127,10 +2127,8 @@ class Series(SingleColumnFrame, Serializable):
         """
         if isinstance(other, ColumnBase):
             return other
-        if isinstance(other, Series):
+        if isinstance(other, (Series, Index)):
             return other._column
-        elif isinstance(other, Index):
-            return Series(other)._column
         elif other is cudf.NA:
             return cudf.Scalar(other, dtype=self.dtype)
         else:

@@ -795,29 +795,36 @@ class Index(SingleColumnFrame, Serializable):
             return as_index(op())
 
     def _binaryop(self, fn, other):
-        if isinstance(other, cudf.DataFrame):
+        assert False
+        if isinstance(other, (cudf.DataFrame, cudf.Series)):
             return NotImplemented
 
-        if isinstance(other, cudf.Series):
-            # TODO: Change this to fall back to adding series, first checking
-            # that the lengths of self and other are the same. Should be fine
-            # to just return NotImplemented I think.
-            self._apply_op(fn, other)
-        else:
-            lhs, rhs = self, other
-        rhs = self._normalize_binop_value(rhs)
+        lhs, rhs = self, self._normalize_binop_value(other)
+
+        truediv_int_dtype_corrections = {
+            "int8": "float32",
+            "int16": "float32",
+            "int32": "float32",
+            "int64": "float64",
+            "uint8": "float32",
+            "uint16": "float32",
+            "uint32": "float64",
+            "uint64": "float64",
+            "bool": "float32",
+            "int": "float",
+        }
 
         if fn == "truediv":
             if str(lhs.dtype) in truediv_int_dtype_corrections:
                 truediv_type = truediv_int_dtype_corrections[str(lhs.dtype)]
                 lhs = lhs.astype(truediv_type)
 
-        if fill_value is not None:
-            if lhs.nullable:
-                lhs = lhs.fillna(fill_value)
-            if not is_scalar(rhs) and rhs.nullable:
-                rhs = rhs.fillna(fill_value)
-
+        # if fill_value is not None:
+        #     if lhs.nullable:
+        #         lhs = lhs.fillna(fill_value)
+        #     if not is_scalar(rhs) and rhs.nullable:
+        #         rhs = rhs.fillna(fill_value)
+        #
         outcol = lhs._column.binary_operator(fn, rhs)
 
         # Get the appropriate name for output operations involving two objects
@@ -841,10 +848,8 @@ class Index(SingleColumnFrame, Serializable):
         # general for multiple frame types.
         if isinstance(other, ColumnBase):
             return other
-        if isinstance(other, cudf.Series):
+        if isinstance(other, (cudf.Series, cudf.Index)):
             return other._column
-        elif isinstance(other, cudf.Index):
-            return cudf.Series(other)._column
         elif other is cudf.NA:
             return cudf.Scalar(other, dtype=self.dtype)
         else:
@@ -946,40 +951,40 @@ class Index(SingleColumnFrame, Serializable):
         return as_index(self._values.unique(), name=self.name)
 
     def __add__(self, other):
-        return self._binaryop("__add__", other)
+        return self._binaryop("add", other)
 
     def __radd__(self, other):
         return self._apply_op("__radd__", other)
 
     def __sub__(self, other):
-        return self._binaryop("__sub__", other)
+        return self._binaryop("sub", other)
 
     def __rsub__(self, other):
         return self._apply_op("__rsub__", other)
 
     def __mul__(self, other):
-        return self._binaryop("__mul__", other)
+        return self._binaryop("mul", other)
 
     def __rmul__(self, other):
         return self._apply_op("__rmul__", other)
 
     def __mod__(self, other):
-        return self._binaryop("__mod__", other)
+        return self._binaryop("mod", other)
 
     def __rmod__(self, other):
         return self._apply_op("__rmod__", other)
 
     def __pow__(self, other):
-        return self._binaryop("__pow__", other)
+        return self._binaryop("pow", other)
 
     def __floordiv__(self, other):
-        return self._binaryop("__floordiv__", other)
+        return self._binaryop("floordiv", other)
 
     def __rfloordiv__(self, other):
         return self._apply_op("__rfloordiv__", other)
 
     def __truediv__(self, other):
-        return self._binaryop("__truediv__", other)
+        return self._binaryop("truediv", other)
 
     def __rtruediv__(self, other):
         return self._apply_op("__rtruediv__", other)
@@ -996,22 +1001,22 @@ class Index(SingleColumnFrame, Serializable):
         return self._apply_op("__xor__", other)
 
     def __eq__(self, other):
-        return self._binaryop("__eq__", other)
+        return self._binaryop("eq", other)
 
     def __ne__(self, other):
-        return self._binaryop("__ne__", other)
+        return self._binaryop("ne", other)
 
     def __lt__(self, other):
-        return self._binaryop("__lt__", other)
+        return self._binaryop("lt", other)
 
     def __le__(self, other):
-        return self._binaryop("__le__", other)
+        return self._binaryop("le", other)
 
     def __gt__(self, other):
-        return self._binaryop("__gt__", other)
+        return self._binaryop("gt", other)
 
     def __ge__(self, other):
-        return self._binaryop("__ge__", other)
+        return self._binaryop("ge", other)
 
     def join(
         self, other, how="left", level=None, return_indexers=False, sort=False
