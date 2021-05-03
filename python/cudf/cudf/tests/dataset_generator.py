@@ -131,47 +131,36 @@ def _generate_column(column_params, num_rows):
         else:
             arrow_type = None
 
-        if isinstance(arrow_type, pa.lib.Decimal128Type):
-            vals = pa.array(
-                np.random.choice(column_params.generator, size=num_rows),
-                mask=np.random.choice(
-                    [True, False],
-                    size=num_rows,
-                    p=[
-                        column_params.null_frequency,
-                        1 - column_params.null_frequency,
-                    ],
-                )
-                if column_params.null_frequency > 0.0
-                else None,
-                size=num_rows,
-                safe=False,
-            )
-            vals = vals.cast(arrow_type, safe=False)
-            return vals
-        else:
+        if not isinstance(arrow_type, pa.lib.Decimal128Type):
             vals = pa.array(
                 column_params.generator,
                 size=column_params.cardinality,
                 safe=False,
                 type=arrow_type,
             )
-            return pa.array(
-                np.random.choice(vals, size=num_rows),
-                mask=np.random.choice(
-                    [True, False],
-                    size=num_rows,
-                    p=[
-                        column_params.null_frequency,
-                        1 - column_params.null_frequency,
-                    ],
-                )
-                if column_params.null_frequency > 0.0
-                else None,
+        vals = pa.array(
+            np.random.choice(column_params.generator, size=num_rows)
+            if isinstance(arrow_type, pa.lib.Decimal128Type)
+            else np.random.choice(vals, size=num_rows),
+            mask=np.random.choice(
+                [True, False],
                 size=num_rows,
-                safe=False,
-                type=arrow_type,
+                p=[
+                    column_params.null_frequency,
+                    1 - column_params.null_frequency,
+                ],
             )
+            if column_params.null_frequency > 0.0
+            else None,
+            size=num_rows,
+            safe=False,
+            type=None
+            if isinstance(arrow_type, pa.lib.Decimal128Type)
+            else arrow_type,
+        )
+        if isinstance(arrow_type, pa.lib.Decimal128Type):
+            vals = vals.cast(arrow_type, safe=False)
+        return vals
     else:
         # Generate data for current column
         return pa.array(
@@ -530,7 +519,7 @@ def boolean_generator(size):
 
 def decimal_generator(dtype, size):
     max_integral = 10 ** (dtype.precision - dtype.scale) - 1
-    max_float =(10 ** dtype.scale - 1) if dtype.scale != 0 else 0
+    max_float = (10 ** dtype.scale - 1) if dtype.scale != 0 else 0
     return lambda: (
         np.random.uniform(
             low=-max_integral,
