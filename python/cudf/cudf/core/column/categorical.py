@@ -36,7 +36,6 @@ from cudf.utils.dtypes import (
     min_signed_type,
     min_unsigned_type,
 )
-from cudf.utils.utils import cached_property
 
 if TYPE_CHECKING:
     from cudf.core.column import (
@@ -1343,11 +1342,11 @@ class CategoricalColumn(column.ColumnBase):
         """
         return self.as_numerical.find_last_value(self._encode(value))
 
-    @cached_property
+    @property
     def is_monotonic_increasing(self) -> bool:
         return bool(self.ordered) and self.as_numerical.is_monotonic_increasing
 
-    @cached_property
+    @property
     def is_monotonic_decreasing(self) -> bool:
         return bool(self.ordered) and self.as_numerical.is_monotonic_decreasing
 
@@ -1470,6 +1469,7 @@ class CategoricalColumn(column.ColumnBase):
         # column._concat_columns, at least to the extent that all the
         # preprocessing in that function has already been done. That should be
         # improved as the concatenation API is solidified.
+
         # Find the first non-null column:
         head = next((obj for obj in objs if obj.valid_count), objs[0])
 

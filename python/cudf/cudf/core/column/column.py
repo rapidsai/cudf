@@ -56,7 +56,7 @@ from cudf.utils.dtypes import (
     min_unsigned_type,
     np_to_pa_dtype,
 )
-from cudf.utils.utils import cached_property, mask_dtype
+from cudf.utils.utils import mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
 
@@ -824,13 +824,13 @@ class ColumnBase(Column, Serializable):
     def is_monotonic(self) -> bool:
         return self.is_monotonic_increasing
 
-    @cached_property
+    @property
     def is_monotonic_increasing(self) -> bool:
         return not self.has_nulls and self.as_frame()._is_sorted(
             ascending=None, null_position=None
         )
 
-    @cached_property
+    @property
     def is_monotonic_decreasing(self) -> bool:
         return not self.has_nulls and self.as_frame()._is_sorted(
             ascending=[False], null_position=None
