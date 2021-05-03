@@ -1636,14 +1636,4 @@ TEST_F(JoinTest, FullJoinWithStructsAndNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-TEST_F(JoinTest, LargeJoinResult)
-{
-  auto one    = thrust::make_constant_iterator(1);
-  auto c0     = column_wrapper<int8_t>(one, one + std::numeric_limits<int32_t>::max() / 2);
-  auto c1     = column_wrapper<int8_t>(one, one + 2);
-  auto lhs    = cudf::table_view({c0});
-  auto rhs    = cudf::table_view({c1});
-  auto result = cudf::left_join(lhs, rhs);
-}
-
 CUDF_TEST_PROGRAM_MAIN()
