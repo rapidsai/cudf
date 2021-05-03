@@ -478,23 +478,21 @@ void reader::impl::set_data_types(rmm::cuda_stream_view stream)
         return std::find(std::cbegin(s), std::cend(s), ':') != std::cend(s);
       });
 
-    // When C++17, use std::string_view and CTAD
-    auto split_on_colon = [](auto const &s) -> std::pair<std::string, std::string> {
+    auto split_on_colon = [](std::string_view s) {
       auto const i = s.find(":");
-      auto const a = s.substr(0, i);
-      auto const b = s.substr(i + 1);
-      return {a, b};
+      return std::pair{s.substr(0, i), s.substr(i + 1)};
     };
 
     if (is_dict) {
       std::map<std::string, data_type> col_type_map;
-      std::transform(std::cbegin(dtype),
-                     std::cend(dtype),
-                     std::inserter(col_type_map, col_type_map.end()),
-                     [&](auto const &ts) -> std::pair<std::string, data_type> {
-                       auto const &[col_name, type_str] = split_on_colon(ts);
-                       return {col_name, convert_string_to_dtype(type_str)};
-                     });
+      std::transform(
+        std::cbegin(dtype),
+        std::cend(dtype),
+        std::inserter(col_type_map, col_type_map.end()),
+        [&](auto const &ts) {
+          auto const [col_name, type_str] = split_on_colon(ts);
+          return std::pair{std::string{col_name}, convert_string_to_dtype(std::string{type_str})};
+        });
 
       // Using the map here allows O(n log n) complexity
       std::transform(std::cbegin(metadata_.column_names),

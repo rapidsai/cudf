@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,8 +50,7 @@ namespace {
  */
 constexpr type_id to_type_id(const orc::SchemaType &schema,
                              bool use_np_dtypes,
-                             type_id timestamp_type_id,
-                             bool decimals_as_float64)
+                             type_id timestamp_type_id)
 {
   switch (schema.kind) {
     case orc::BOOLEAN: return type_id::BOOL8;
@@ -73,9 +72,7 @@ constexpr type_id to_type_id(const orc::SchemaType &schema,
     case orc::DATE:
       // There isn't a (DAYS -> np.dtype) mapping
       return (use_np_dtypes) ? type_id::TIMESTAMP_MILLISECONDS : type_id::TIMESTAMP_DAYS;
-    case orc::DECIMAL:
-      // There isn't an arbitrary-precision type in cuDF, so map as float or int
-      return (decimals_as_float64) ? type_id::FLOAT64 : type_id::INT64;
+    case orc::DECIMAL: return type_id::DECIMAL64;
     default: break;
   }
 
@@ -406,10 +403,6 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 
   // Enable or disable the conversion to numpy-compatible dtypes
   _use_np_dtypes = options.is_enabled_use_np_dtypes();
-
-  // Control decimals conversion (float64 or int64 with optional scale)
-  _decimals_as_float64   = options.is_enabled_decimals_as_float64();
-  _decimals_as_int_scale = options.get_forced_decimals_scale();
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,
@@ -432,10 +425,17 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   // Get a list of column data types
   std::vector<data_type> column_types;
   for (const auto &col : _selected_columns) {
-    auto col_type = to_type_id(
-      _metadata->ff.types[col], _use_np_dtypes, _timestamp_type.id(), _decimals_as_float64);
+    auto col_type = to_type_id(_metadata->ff.types[col], _use_np_dtypes, _timestamp_type.id());
     CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
-    column_types.emplace_back(col_type);
+    // Remove this once we support Decimal128 data type
+    CUDF_EXPECTS((col_type != type_id::DECIMAL64) or (_metadata->ff.types[col].precision <= 18),
+                 "Decimal data has precision > 18, Decimal64 data type doesn't support it.");
+    // sign of the scale is changed since cuDF follows c++ libraries like CNL
+    // which uses negative scaling, but liborc and other libraries
+    // follow positive scaling.
+    auto scale =
+      (col_type == type_id::DECIMAL64) ? -static_cast<int32_t>(_metadata->ff.types[col].scale) : 0;
+    column_types.emplace_back(col_type, scale);
 
     // Map each ORC column to its column
     orc_col_map[col] = column_types.size() - 1;
@@ -504,10 +504,16 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           len += stream_info[stream_count].length;
           stream_count++;
         }
-        const auto buffer = _source->host_read(offset, len);
-        CUDA_TRY(
-          cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyHostToDevice, stream.value()));
-        stream.synchronize();
+        if (_source->is_device_read_preferred(len)) {
+          CUDF_EXPECTS(_source->device_read(offset, len, d_dst, stream) == len,
+                       "Unexpected discrepancy in bytes read.");
+        } else {
+          const auto buffer = _source->host_read(offset, len);
+          CUDF_EXPECTS(buffer->size() == len, "Unexpected discrepancy in bytes read.");
+          CUDA_TRY(
+            cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyHostToDevice, stream.value()));
+          stream.synchronize();
+        }
       }
 
       // Update chunks to reference streams pointers
@@ -517,16 +523,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         chunk.num_rows      = stripe_info->numberOfRows;
         chunk.encoding_kind = stripe_footer->columns[_selected_columns[j]].kind;
         chunk.type_kind     = _metadata->ff.types[_selected_columns[j]].kind;
-        if (_decimals_as_float64) {
-          chunk.decimal_scale =
-            _metadata->ff.types[_selected_columns[j]].scale | orc::gpu::orc_decimal2float64_scale;
-        } else if (_decimals_as_int_scale < 0) {
-          chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale;
-        } else {
-          chunk.decimal_scale = _decimals_as_int_scale;
-        }
-        chunk.rowgroup_id = num_rowgroups;
-        chunk.dtype_len   = (column_types[j].id() == type_id::STRING)
+        chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale;
+        chunk.rowgroup_id   = num_rowgroups;
+        chunk.dtype_len     = (column_types[j].id() == type_id::STRING)
                             ? sizeof(std::pair<const char *, size_t>)
                             : cudf::size_of(column_types[j]);
         if (chunk.type_kind == orc::TIMESTAMP) {

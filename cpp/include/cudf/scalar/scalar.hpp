@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/lists/list_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -28,6 +29,8 @@
 #include <memory>
 #include <utility>
 #include <vector>
+
+#include <cudf/column/column.hpp>
 
 /**
  * @file
@@ -590,5 +593,43 @@ struct duration_scalar : chrono_scalar<T> {
    */
   typename T::rep count() { return this->value().count(); }
 };
+
+/**
+ * @brief An owning class to represent a list value in device memory
+ */
+class list_scalar : public scalar {
+ public:
+  list_scalar() : scalar(data_type(type_id::LIST)) {}
+  ~list_scalar()                        = default;
+  list_scalar(list_scalar&& other)      = default;
+  list_scalar(list_scalar const& other) = default;
+  list_scalar& operator=(list_scalar const& other) = delete;
+  list_scalar& operator=(list_scalar&& other) = delete;
+
+  /**
+   * @brief Construct a new list scalar object from existing device data
+   *
+   * @param elements The elements of the list
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  list_scalar(cudf::column_view const& elements,
+              bool is_valid                       = true,
+              rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+    : scalar(data_type(type_id::LIST), is_valid, stream, mr), _data(elements, stream, mr)
+  {
+  }
+
+  /**
+   * @brief Returns a non-owning, immutable view to underlying device data
+   */
+  column_view view() const { return _data.view(); }
+
+ private:
+  cudf::column _data;
+};
+
 /** @} */  // end of group
 }  // namespace cudf

@@ -45,6 +45,28 @@ def test_init_via_list_of_tuples():
     assert_eq(pdf, gdf)
 
 
+@pytest.mark.parametrize("columns", [["a", "b"], pd.Series(["a", "b"])])
+def test_init_via_list_of_series(columns):
+    data = [pd.Series([1, 2]), pd.Series([3, 4])]
+
+    pdf = cudf.DataFrame(data, columns=columns)
+    gdf = cudf.DataFrame(data, columns=columns)
+
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize("index", [None, [0, 1, 2]])
+def test_init_with_missing_columns(index):
+    """Test initialization when columns and data keys are disjoint."""
+    data = {"a": [1, 2, 3], "b": [2, 3, 4]}
+    columns = ["c", "d"]
+
+    pdf = cudf.DataFrame(data, columns=columns, index=index)
+    gdf = cudf.DataFrame(data, columns=columns, index=index)
+
+    assert_eq(pdf, gdf)
+
+
 def _dataframe_na_data():
     return [
         pd.DataFrame(
@@ -1070,6 +1092,13 @@ def test_dataframe_setitem_index_len1():
     np.testing.assert_equal(gdf.b.to_array(), [0])
 
 
+def test_empty_dataframe_setitem_df():
+    gdf1 = cudf.DataFrame()
+    gdf2 = cudf.DataFrame({"a": [1, 2, 3, 4, 5]})
+    gdf1["a"] = gdf2["a"]
+    assert_eq(gdf1, gdf2)
+
+
 def test_assign():
     gdf = cudf.DataFrame({"x": [1, 2, 3]})
     gdf2 = gdf.assign(y=gdf.x + 1)
@@ -2000,6 +2029,27 @@ def test_quantile(q, numeric_only):
             ),
             gdf.quantile(q, numeric_only=False),
         )
+
+
+@pytest.mark.parametrize("q", [0.2, 1, 0.001, [0.5], [], [0.005, 0.8, 0.03]])
+@pytest.mark.parametrize("interpolation", ["higher", "lower", "nearest"])
+def test_decimal_quantile(q, interpolation):
+    data = ["244.8", "32.24", "2.22", "98.14", "453.23", "5.45"]
+    gdf = cudf.DataFrame(
+        {"id": np.random.randint(0, 10, size=len(data)), "val": data}
+    )
+    gdf["id"] = gdf["id"].astype("float64")
+    gdf["val"] = gdf["val"].astype(cudf.Decimal64Dtype(7, 2))
+    pdf = gdf.to_pandas()
+
+    got = gdf.quantile(q, numeric_only=False, interpolation=interpolation)
+    expected = pdf.quantile(
+        q if isinstance(q, list) else [q],
+        numeric_only=False,
+        interpolation=interpolation,
+    )
+
+    assert_eq(got, expected)
 
 
 def test_empty_quantile():
@@ -6019,7 +6069,7 @@ def test_dataframe_init_1d_list(data, columns):
 def test_dataframe_init_from_arrays_cols(data, cols, index):
 
     gd_data = data
-    if isinstance(data, cupy.core.ndarray):
+    if isinstance(data, cupy.ndarray):
         # pandas can't handle cupy arrays in general
         pd_data = data.get()
 
@@ -7779,6 +7829,7 @@ def test_equals_dtypes():
     [
         pd.DataFrame({"a": [10, 11, 12]}, index=["a", "b", "z"]),
         pd.DataFrame({"z": ["a"]}),
+        pd.DataFrame({"a": [], "b": []}),
     ],
 )
 @pytest.mark.parametrize(
@@ -8511,3 +8562,26 @@ def test_dataframe_argsort(df, ascending, expected):
     actual = df.argsort(ascending=ascending)
 
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "data,columns,index",
+    [
+        (pd.Series([1, 2, 3]), None, None),
+        (pd.Series(["a", "b", None, "c"], name="abc"), None, None),
+        (
+            pd.Series(["a", "b", None, "c"], name="abc"),
+            ["abc", "b"],
+            [1, 2, 3],
+        ),
+    ],
+)
+def test_dataframe_init_from_series(data, columns, index):
+    expected = pd.DataFrame(data, columns=columns, index=index)
+    actual = cudf.DataFrame(data, columns=columns, index=index)
+
+    assert_eq(
+        expected,
+        actual,
+        check_index_type=False if len(expected) == 0 else True,
+    )
