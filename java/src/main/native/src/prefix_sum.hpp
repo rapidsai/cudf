@@ -14,25 +14,23 @@
  * limitations under the License.
  */
 
-package ai.rapids.cudf;
+#pragma once
+
+#include <cudf/column/column.hpp>
+#include <rmm/cuda_stream_view.hpp>
+
+namespace cudf {
+
+namespace jni {
 
 /**
- * Represents a cuFile driver.
+ * @brief compute the prefix sum of a column of longs
  */
-final class CuFileDriver implements AutoCloseable {
-  private final CuFileResourceCleaner cleaner;
+std::unique_ptr<column>
+prefix_sum(column_view const &value_column,
+           rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+           rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
-  CuFileDriver() {
-    cleaner = new CuFileResourceCleaner(create(), CuFileDriver::destroy);
-    MemoryCleaner.register(this, cleaner);
-  }
+} // namespace jni
 
-  @Override
-  public void close() {
-    cleaner.close(this);
-  }
-
-  private static native long create();
-
-  private static native void destroy(long pointer);
-}
+} // namespace cudf

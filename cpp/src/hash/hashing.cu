@@ -22,6 +22,7 @@
 #include <cudf/detail/scatter.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/partitioning.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
@@ -62,7 +63,7 @@ namespace detail {
 
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
-                             std::vector<uint32_t> const& initial_hash,
+                             cudf::host_span<uint32_t const> initial_hash,
                              uint32_t seed,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
@@ -197,7 +198,7 @@ std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
 }
 
 std::unique_ptr<column> murmur_hash3_32(table_view const& input,
-                                        std::vector<uint32_t> const& initial_hash,
+                                        cudf::host_span<uint32_t const> initial_hash,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
@@ -216,20 +217,20 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
   if (!initial_hash.empty()) {
     CUDF_EXPECTS(initial_hash.size() == size_t(input.num_columns()),
                  "Expected same size of initial hash values as number of columns");
-    auto device_initial_hash = rmm::device_vector<uint32_t>(initial_hash);
+    auto device_initial_hash = make_device_uvector_async(initial_hash, stream);
 
     if (nullable) {
-      thrust::tabulate(rmm::exec_policy(stream),
-                       output_view.begin<int32_t>(),
-                       output_view.end<int32_t>(),
-                       row_hasher_initial_values<MurmurHash3_32, true>(
-                         *device_input, device_initial_hash.data().get()));
+      thrust::tabulate(
+        rmm::exec_policy(stream),
+        output_view.begin<int32_t>(),
+        output_view.end<int32_t>(),
+        row_hasher_initial_values<MurmurHash3_32, true>(*device_input, device_initial_hash.data()));
     } else {
       thrust::tabulate(rmm::exec_policy(stream),
                        output_view.begin<int32_t>(),
                        output_view.end<int32_t>(),
                        row_hasher_initial_values<MurmurHash3_32, false>(
-                         *device_input, device_initial_hash.data().get()));
+                         *device_input, device_initial_hash.data()));
     }
   } else {
     if (nullable) {
@@ -252,7 +253,7 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
 
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
-                             std::vector<uint32_t> const& initial_hash,
+                             cudf::host_span<uint32_t const> initial_hash,
                              uint32_t seed,
                              rmm::mr::device_memory_resource* mr)
 {
@@ -261,7 +262,7 @@ std::unique_ptr<column> hash(table_view const& input,
 }
 
 std::unique_ptr<column> murmur_hash3_32(table_view const& input,
-                                        std::vector<uint32_t> const& initial_hash,
+                                        cudf::host_span<uint32_t const> initial_hash,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
