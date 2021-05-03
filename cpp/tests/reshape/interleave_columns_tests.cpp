@@ -420,8 +420,8 @@ struct ListsColumnsInterleaveTypedTest : public cudf::test::BaseFixture {
 };
 
 using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
-  cudf::test::FloatingPointTypes,
-  cudf::test::FixedPointTypes>;
+                                        cudf::test::FloatingPointTypes,
+                                        cudf::test::FixedPointTypes>;
 TYPED_TEST_CASE(ListsColumnsInterleaveTypedTest, TypesForTest);
 
 TYPED_TEST(ListsColumnsInterleaveTypedTest, InterleaveEmptyColumns)
@@ -451,7 +451,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, InterleaveOneColumnWithNulls)
                              ListsCol{{null, 3, 4, 4, 4, 4}, null_at(0)},
                              ListsCol{5, 6}},
                             null_at(1)}
-    .release();
+                     .release();
   auto const results = cudf::interleave_columns(TView{{col->view()}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*col, *results, print_all);
 }
@@ -498,7 +498,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SimpleInputWithNulls)
                               ListsCol{{1, 2, null, 4}, null_at(2)},
                               ListsCol{{1, 2, 3, null}, null_at(3)}},
                              null_at(3)}
-    .release();
+                      .release();
   auto const col2 = ListsCol{{ListsCol{{10, 11, 12, null}, null_at(3)},
                               ListsCol{{13, 14, 15, 16, 17, null}, null_at(5)},
                               ListsCol{} /*NULL*/,
@@ -506,7 +506,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SimpleInputWithNulls)
                               ListsCol{{19, 20, null}, null_at(2)},
                               ListsCol{{null}, null_at(0)}},
                              null_at(2)}
-    .release();
+                      .release();
   auto const col3 = ListsCol{{ListsCol{} /*NULL*/,
                               ListsCol{{20, null}, null_at(1)},
                               ListsCol{{null, 21, null, null}, null_at({0, 2, 3})},
@@ -514,7 +514,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SimpleInputWithNulls)
                               ListsCol{22, 23, 24, 25},
                               ListsCol{{null, null, null, null, null}, all_nulls()}},
                              null_at(0)}
-    .release();
+                      .release();
   auto const expected = ListsCol{{ListsCol{{1, null, 3, 4}, null_at(1)},
                                   ListsCol{{10, 11, 12, null}, null_at(3)},
                                   ListsCol{} /*NULL*/,
@@ -534,7 +534,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SimpleInputWithNulls)
                                   ListsCol{{null}, null_at(0)},
                                   ListsCol{{null, null, null, null, null}, all_nulls()}},
                                  null_at({2, 7, 9})}
-    .release();
+                          .release();
   auto const results = cudf::interleave_columns(TView{{col1->view(), col2->view(), col3->view()}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
 }
@@ -606,7 +606,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputWithNulls)
                              ListsCol{7},
                              ListsCol{8, 9, 10}},
                             null_at({1, 3, 4})}
-    .release();
+                     .release();
   auto const col1     = cudf::slice(col->view(), {0, 3})[0];
   auto const col2     = cudf::slice(col->view(), {1, 4})[0];
   auto const col3     = cudf::slice(col->view(), {2, 5})[0];
@@ -628,7 +628,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputWithNulls)
                                   ListsCol{7},
                                   ListsCol{8, 9, 10}},
                                  null_at({1, 3, 4, 5, 7, 8, 11, 12})}
-    .release();
+                          .release();
   auto const results = cudf::interleave_columns(TView{{col1, col2, col3, col4, col5}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
 }
