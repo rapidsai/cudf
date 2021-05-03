@@ -26,6 +26,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -371,14 +372,19 @@ struct ast_plan {
 
     // Create device pointers to components of plan
     auto device_data_buffer_ptr = static_cast<const char*>(_device_data_buffer.data());
-    _device_data_references     = reinterpret_cast<const detail::device_data_reference*>(
-      device_data_buffer_ptr + buffer_offsets[0]);
-    _device_literals = reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
-      device_data_buffer_ptr + buffer_offsets[1]);
-    _device_operators =
-      reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]);
-    _device_operator_source_indices =
-      reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]);
+    _device_data_references     = device_span<const detail::device_data_reference>(
+      reinterpret_cast<const detail::device_data_reference*>(device_data_buffer_ptr +
+                                                             buffer_offsets[0]),
+      _sizes[0]);
+    _device_literals = device_span<const cudf::detail::fixed_width_scalar_device_view_base>(
+      reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
+        device_data_buffer_ptr + buffer_offsets[1]),
+      _sizes[1]);
+    _device_operators = device_span<const ast_operator>(
+      reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]), _sizes[2]);
+    _device_operator_source_indices = device_span<const cudf::size_type>(
+      reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]),
+      _sizes[3]);
   }
 
   /**
@@ -399,10 +405,10 @@ struct ast_plan {
   std::vector<const void*> _data_pointers;
 
   rmm::device_buffer _device_data_buffer;
-  const detail::device_data_reference* _device_data_references;
-  const cudf::detail::fixed_width_scalar_device_view_base* _device_literals;
-  const ast_operator* _device_operators;
-  const cudf::size_type* _device_operator_source_indices;
+  device_span<const detail::device_data_reference> _device_data_references;
+  device_span<const cudf::detail::fixed_width_scalar_device_view_base> _device_literals;
+  device_span<const ast_operator> _device_operators;
+  device_span<const cudf::size_type> _device_operator_source_indices;
 };
 
 /**

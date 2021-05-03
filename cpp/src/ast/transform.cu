@@ -123,11 +123,11 @@ std::unique_ptr<column> compute_column(table_view const table,
   cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
       *table_device,
-      plan._device_literals,
+      plan._device_literals.data(),
       *mutable_output_device,
-      plan._device_data_references,
-      plan._device_operators,
-      plan._device_operator_source_indices,
+      plan._device_data_references.data(),
+      plan._device_operators.data(),
+      plan._device_operator_source_indices.data(),
       num_operators,
       num_intermediates);
   CHECK_CUDA(stream.value());
