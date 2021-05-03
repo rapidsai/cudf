@@ -224,6 +224,14 @@ fixed_width_scalar<T>::operator value_type() const
   return this->value(rmm::cuda_stream_default);
 }
 
+/**
+ * @brief These define the valid fixed-width scalar types.
+ *
+ * See `is_fixed_width` in @see cudf/utilities/traits.hpp
+ *
+ * Adding a new supported type only requires adding the appropriate line here
+ * and does not require updating the scalar.hpp file.
+ */
 template class fixed_width_scalar<bool>;
 template class fixed_width_scalar<int8_t>;
 template class fixed_width_scalar<int16_t>;
@@ -266,6 +274,14 @@ numeric_scalar<T>::numeric_scalar(rmm::device_scalar<T>&& data,
 {
 }
 
+/**
+ * @brief These define the valid numeric scalar types.
+ *
+ * See `is_numeric` in @see cudf/utilities/traits.hpp
+ *
+ * Adding a new supported type only requires adding the appropriate line here
+ * and does not require updating the scalar.hpp file.
+ */
 template class numeric_scalar<bool>;
 template class numeric_scalar<int8_t>;
 template class numeric_scalar<int16_t>;
@@ -296,6 +312,14 @@ chrono_scalar<T>::chrono_scalar(rmm::device_scalar<T>&& data,
 {
 }
 
+/**
+ * @brief These define the valid chrono scalar types.
+ *
+ * See `is_chrono` in @see cudf/utilities/traits.hpp
+ *
+ * Adding a new supported type only requires adding the appropriate line here
+ * and does not require updating the scalar.hpp file.
+ */
 template class chrono_scalar<timestamp_D>;
 template class chrono_scalar<timestamp_s>;
 template class chrono_scalar<timestamp_ms>;
@@ -322,6 +346,14 @@ typename duration_scalar<T>::rep_type duration_scalar<T>::count()
   return this->value().count();
 }
 
+/**
+ * @brief These define the valid duration scalar types.
+ *
+ * See `is_duration` in @see cudf/utilities/traits.hpp
+ *
+ * Adding a new supported type only requires adding the appropriate line here
+ * and does not require updating the scalar.hpp file.
+ */
 template class duration_scalar<duration_D>;
 template class duration_scalar<duration_s>;
 template class duration_scalar<duration_ms>;
@@ -334,6 +366,14 @@ typename timestamp_scalar<T>::rep_type timestamp_scalar<T>::ticks_since_epoch()
   return this->value().time_since_epoch().count();
 }
 
+/**
+ * @brief These define the valid timestamp scalar types.
+ *
+ * See `is_timestamp` in @see cudf/utilities/traits.hpp
+ *
+ * Adding a new supported type only requires adding the appropriate line here
+ * and does not require updating the scalar.hpp file.
+ */
 template class timestamp_scalar<timestamp_D>;
 template class timestamp_scalar<timestamp_s>;
 template class timestamp_scalar<timestamp_ms>;
@@ -350,86 +390,33 @@ timestamp_scalar<T>::timestamp_scalar(D const& value,
 {
 }
 
-template timestamp_scalar<timestamp_D>::timestamp_scalar(duration_D const& value,
-                                                         bool is_valid,
-                                                         rmm::cuda_stream_view stream,
-                                                         rmm::mr::device_memory_resource* mr);
-template timestamp_scalar<timestamp_D>::timestamp_scalar(int32_t const& value,
-                                                         bool is_valid,
-                                                         rmm::cuda_stream_view stream,
-                                                         rmm::mr::device_memory_resource* mr);
-template timestamp_scalar<timestamp_s>::timestamp_scalar(duration_D const& value,
-                                                         bool is_valid,
-                                                         rmm::cuda_stream_view stream,
-                                                         rmm::mr::device_memory_resource* mr);
-template timestamp_scalar<timestamp_s>::timestamp_scalar(duration_s const& value,
-                                                         bool is_valid,
-                                                         rmm::cuda_stream_view stream,
-                                                         rmm::mr::device_memory_resource* mr);
-template timestamp_scalar<timestamp_s>::timestamp_scalar(int64_t const& value,
-                                                         bool is_valid,
-                                                         rmm::cuda_stream_view stream,
-                                                         rmm::mr::device_memory_resource* mr);
-template timestamp_scalar<timestamp_ms>::timestamp_scalar(duration_D const& value,
-                                                          bool is_valid,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr);
-template timestamp_scalar<timestamp_ms>::timestamp_scalar(duration_s const& value,
-                                                          bool is_valid,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr);
-template timestamp_scalar<timestamp_ms>::timestamp_scalar(duration_ms const& value,
-                                                          bool is_valid,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr);
-template timestamp_scalar<timestamp_ms>::timestamp_scalar(int64_t const& value,
-                                                          bool is_valid,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr);
-template timestamp_scalar<timestamp_us>::timestamp_scalar(duration_D const& value,
-                                                          bool is_valid,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr);
-template timestamp_scalar<timestamp_us>::timestamp_scalar(duration_s const& value,
-                                                          bool is_valid,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr);
-template timestamp_scalar<timestamp_us>::timestamp_scalar(duration_ms const& value,
-                                                          bool is_valid,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr);
-template timestamp_scalar<timestamp_us>::timestamp_scalar(duration_us const& value,
-                                                          bool is_valid,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr);
-template timestamp_scalar<timestamp_us>::timestamp_scalar(int64_t const& value,
-                                                          bool is_valid,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr);
-template timestamp_scalar<timestamp_ns>::timestamp_scalar(duration_D const& value,
-                                                          bool is_valid,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr);
-template timestamp_scalar<timestamp_ns>::timestamp_scalar(duration_s const& value,
-                                                          bool is_valid,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr);
-template timestamp_scalar<timestamp_ns>::timestamp_scalar(duration_ms const& value,
-                                                          bool is_valid,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr);
-template timestamp_scalar<timestamp_ns>::timestamp_scalar(duration_us const& value,
-                                                          bool is_valid,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr);
-template timestamp_scalar<timestamp_ns>::timestamp_scalar(duration_ns const& value,
-                                                          bool is_valid,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr);
-template timestamp_scalar<timestamp_ns>::timestamp_scalar(int64_t const& value,
-                                                          bool is_valid,
-                                                          rmm::cuda_stream_view stream,
-                                                          rmm::mr::device_memory_resource* mr);
+#define TS_CTOR(TimestampType, DurationType)                  \
+  template timestamp_scalar<TimestampType>::timestamp_scalar( \
+    DurationType const&, bool, rmm::cuda_stream_view, rmm::mr::device_memory_resource*);
+
+/**
+ * @brief These are the valid combinations of duration types to timestamp types.
+ */
+TS_CTOR(timestamp_D, duration_D)
+TS_CTOR(timestamp_D, int32_t)
+TS_CTOR(timestamp_s, duration_D)
+TS_CTOR(timestamp_s, duration_s)
+TS_CTOR(timestamp_s, int64_t)
+TS_CTOR(timestamp_ms, duration_D)
+TS_CTOR(timestamp_ms, duration_s)
+TS_CTOR(timestamp_ms, duration_ms)
+TS_CTOR(timestamp_ms, int64_t)
+TS_CTOR(timestamp_us, duration_D)
+TS_CTOR(timestamp_us, duration_s)
+TS_CTOR(timestamp_us, duration_ms)
+TS_CTOR(timestamp_us, duration_us)
+TS_CTOR(timestamp_us, int64_t)
+TS_CTOR(timestamp_ns, duration_D)
+TS_CTOR(timestamp_ns, duration_s)
+TS_CTOR(timestamp_ns, duration_ms)
+TS_CTOR(timestamp_ns, duration_us)
+TS_CTOR(timestamp_ns, duration_ns)
+TS_CTOR(timestamp_ns, int64_t)
 
 list_scalar::list_scalar() : scalar(data_type(type_id::LIST)) {}
 
