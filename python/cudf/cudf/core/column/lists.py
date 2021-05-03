@@ -458,7 +458,7 @@ class ListMethods(ColumnMethodsMixin):
             retain_index=not ignore_index,
         )
 
-    def ravel(self) -> ParentType:
+    def flatten(self) -> ParentType:
         """
         Removes one level of nesting from each row of the list Series.
 
@@ -472,7 +472,7 @@ class ListMethods(ColumnMethodsMixin):
         0      [[1.0, 2.0], [3.0, 4.0, 5.0]]
         1    [[6.0, nan], [7.0], [8.0, 9.0]]
         dtype: list
-        >>> s1.list.ravel()
+        >>> s1.list.flatten()
         0    [1.0, 2.0, 3.0, 4.0, 5.0]
         1    [6.0, nan, 7.0, 8.0, 9.0]
         dtype: list
@@ -483,7 +483,7 @@ class ListMethods(ColumnMethodsMixin):
         0    [[1.0, 2.0], None, [3.0, 4.0, 5.0]]
         1        [[6.0, nan], [7.0], [8.0, 9.0]]
         dtype: list
-        >>> s2.list.ravel()
+        >>> s2.list.flatten()
         0    [1.0, 2.0, 3.0, 4.0, 5.0]
         1    [6.0, nan, 7.0, 8.0, 9.0]
         dtype: list
