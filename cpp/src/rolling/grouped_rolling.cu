@@ -378,16 +378,13 @@ get_null_bounds_for_timestamp_column(column_view const& timestamp_column,
                                      cudf::device_span<size_type const> group_offsets,
                                      rmm::cuda_stream_view stream)
 {
-  // For each group, the null values are themselves clustered
-  // at the beginning or the end of the group.
+  // For each group, the null values are clustered at the beginning or the end of the group.
   // These nulls cannot participate, except in their own window.
 
-  // If the input has n groups, group_offsets will have n+1 values.
-  // null_start and null_end should eventually have 1 entry per group.
-  auto null_start = cudf::detail::make_device_uvector_async(group_offsets, stream);
-  auto null_end   = cudf::detail::make_device_uvector_async(group_offsets, stream);
-
   if (timestamp_column.has_nulls()) {
+    auto null_start = rmm::device_uvector<size_type>(group_offsets.size(), stream);
+    auto null_end   = rmm::device_uvector<size_type>(group_offsets.size(), stream);
+
     auto p_timestamps_device_view = column_device_view::create(timestamp_column, stream);
     auto num_groups               = group_offsets.size();
 
@@ -430,9 +427,12 @@ get_null_bounds_for_timestamp_column(column_view const& timestamp_column,
             [&d_timestamps] __device__(auto i) { return d_timestamps.is_valid_nocheck(i); });
         }
       });
-  }
 
-  return std::make_tuple(std::move(null_start), std::move(null_end));
+    return std::make_tuple(std::move(null_start), std::move(null_end));
+  } else {
+    return std::make_tuple(cudf::detail::make_device_uvector_async(group_offsets, stream),
+                           cudf::detail::make_device_uvector_async(group_offsets, stream));
+  }
 }
 
 // Time-range window computation, for timestamps in ASCENDING order.
