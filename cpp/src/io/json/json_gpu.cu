@@ -22,6 +22,7 @@
 
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/detail/utilities/trie.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -32,7 +33,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/detail/copy.h>
@@ -791,8 +792,9 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
   CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, detect_data_types_kernel));
 
-  rmm::device_vector<cudf::io::column_type_histogram> d_column_infos(
-    num_columns, cudf::io::column_type_histogram{});
+  auto d_column_infos =
+    cudf::detail::make_zeroed_device_uvector_async<cudf::io::column_type_histogram>(num_columns,
+                                                                                    stream);
 
   if (do_set_null_count) {
     // Set the null count to the row count (all fields assumes to be null).
@@ -809,13 +811,7 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
   detect_data_types_kernel<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, row_offsets, col_map, num_columns, d_column_infos);
 
-  CUDA_TRY(cudaGetLastError());
-
-  auto h_column_infos = std::vector<cudf::io::column_type_histogram>(num_columns);
-
-  thrust::copy(d_column_infos.begin(), d_column_infos.end(), h_column_infos.begin());
-
-  return h_column_infos;
+  return cudf::detail::make_std_vector_sync(d_column_infos, stream);
 }
 
 /**
