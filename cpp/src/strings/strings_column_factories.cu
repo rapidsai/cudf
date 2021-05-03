@@ -18,12 +18,11 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
 #include <rmm/exec_policy.hpp>
 
 namespace cudf {

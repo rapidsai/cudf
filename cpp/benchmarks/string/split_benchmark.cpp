@@ -44,7 +44,7 @@ static void BM_split(benchmark::State& state, split_type rt)
   cudf::string_scalar target("+");
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, 0);
+    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
     switch (rt) {
       case split: cudf::strings::split(input, target); break;
       case split_ws: cudf::strings::split(input); break;
@@ -68,7 +68,7 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
     for (int rowlen = min_rowlen; rowlen <= max_rowlen; rowlen *= len_mult) {
       // avoid generating combinations that exceed the cudf column limit
       size_t total_chars = static_cast<size_t>(row_count) * rowlen;
-      if (total_chars < std::numeric_limits<cudf::size_type>::max()) {
+      if (total_chars < static_cast<size_t>(std::numeric_limits<cudf::size_type>::max())) {
         b->Args({row_count, rowlen});
       }
     }

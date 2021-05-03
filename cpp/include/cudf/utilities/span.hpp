@@ -22,6 +22,7 @@
 
 #include <thrust/detail/raw_pointer_cast.h>
 #include <thrust/device_vector.h>
+#include <thrust/host_vector.h>
 
 #include <cstddef>
 #include <limits>
@@ -255,6 +256,17 @@ class base_2dspan {
   constexpr RowType<T, dynamic_extent> operator[](size_t row)
   {
     return {this->data() + flatten_index(row, 0, this->size()), this->size().second};
+  }
+
+  constexpr base_2dspan subspan(size_t first_row, size_t num_rows) const noexcept
+  {
+    return base_2dspan(
+      _data + flatten_index(first_row, 0, this->size()), num_rows, this->size().second);
+  }
+
+  constexpr RowType<T, dynamic_extent> flat_view()
+  {
+    return {this->data(), this->size().first * this->size().second};
   }
 
   template <typename OtherT,

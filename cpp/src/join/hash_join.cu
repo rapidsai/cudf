@@ -15,6 +15,7 @@
  */
 #include <thrust/uninitialized_fill.h>
 #include <join/hash_join.cuh>
+#include <structs/utilities.hpp>
 
 #include <cudf/detail/concatenate.cuh>
 #include <cudf/detail/gather.cuh>
@@ -299,12 +300,18 @@ hash_join::hash_join_impl::~hash_join_impl() = default;
 hash_join::hash_join_impl::hash_join_impl(cudf::table_view const &build,
                                           null_equality compare_nulls,
                                           rmm::cuda_stream_view stream)
-  : _build(build), _hash_table(nullptr)
+  : _hash_table(nullptr)
 {
   CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(0 != _build.num_columns(), "Hash join build table is empty");
-  CUDF_EXPECTS(_build.num_rows() < cudf::detail::MAX_JOIN_SIZE,
+  CUDF_EXPECTS(0 != build.num_columns(), "Hash join build table is empty");
+  CUDF_EXPECTS(build.num_rows() < cudf::detail::MAX_JOIN_SIZE,
                "Build column size is too big for hash join");
+
+  auto flattened_build = structs::detail::flatten_nested_columns(
+    build, {}, {}, structs::detail::column_nullability::FORCE);
+  _build = std::get<0>(flattened_build);
+  // need to store off the owning structures for some of the views in _build
+  _created_null_columns = std::move(std::get<3>(flattened_build));
 
   if (0 == build.num_rows()) { return; }
 
@@ -355,22 +362,27 @@ hash_join::hash_join_impl::compute_hash_join(cudf::table_view const &probe,
   CUDF_EXPECTS(0 != probe.num_columns(), "Hash join probe table is empty");
   CUDF_EXPECTS(probe.num_rows() < cudf::detail::MAX_JOIN_SIZE,
                "Probe column size is too big for hash join");
-  CUDF_EXPECTS(_build.num_columns() == probe.num_columns(),
+
+  auto flattened_probe = structs::detail::flatten_nested_columns(
+    probe, {}, {}, structs::detail::column_nullability::FORCE);
+  auto const flattened_probe_table = std::get<0>(flattened_probe);
+
+  CUDF_EXPECTS(_build.num_columns() == flattened_probe_table.num_columns(),
                "Mismatch in number of columns to be joined on");
 
-  if (is_trivial_join(probe, _build, JoinKind)) {
+  if (is_trivial_join(flattened_probe_table, _build, JoinKind)) {
     return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
                           std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
   CUDF_EXPECTS(std::equal(std::cbegin(_build),
                           std::cend(_build),
-                          std::cbegin(probe),
-                          std::cend(probe),
+                          std::cbegin(flattened_probe_table),
+                          std::cend(flattened_probe_table),
                           [](const auto &b, const auto &p) { return b.type() == p.type(); }),
                "Mismatch in joining column data types");
 
-  return probe_join_indices<JoinKind>(probe, compare_nulls, stream, mr);
+  return probe_join_indices<JoinKind>(flattened_probe_table, compare_nulls, stream, mr);
 }
 
 template <cudf::detail::join_kind JoinKind>

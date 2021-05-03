@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
@@ -24,17 +24,17 @@ build:
 
 requirements:
   build:
-    - cmake >=3.17.0
+    - cmake >=3.18
   host:
     - python
     - cython >=0.29,<0.30
     - setuptools
-    - cudf {{ version }}=*_{{ GIT_DESCRIBE_NUMBER }}
-    - libcudf_kafka {{ version }}=*_{{ GIT_DESCRIBE_NUMBER }}
+    - cudf {{ version }}
+    - libcudf_kafka {{ version }}
   run:
-    - libcudf_kafka {{ version }}=*_{{ GIT_DESCRIBE_NUMBER }}
+    - libcudf_kafka {{ version }}
     - python-confluent-kafka
-    - cudf {{ version }}=*_{{ GIT_DESCRIBE_NUMBER }}
+    - cudf {{ version }}
 
 test:
   requires:

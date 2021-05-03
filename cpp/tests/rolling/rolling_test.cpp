@@ -879,15 +879,14 @@ TEST_F(RollingTestUdf, StaticWindow)
 
   std::unique_ptr<cudf::column> output;
 
-  auto start = cudf::detail::make_counting_transform_iterator(0, [size] __device__(size_type row) {
+  auto start = cudf::detail::make_counting_transform_iterator(0, [size](size_type row) {
     return std::accumulate(thrust::make_counting_iterator(std::max(0, row - 2 + 1)),
                            thrust::make_counting_iterator(std::min(size, row + 2 + 1)),
                            0);
   });
 
-  auto valid = cudf::detail::make_counting_transform_iterator(0, [size] __device__(size_type row) {
-    return (row != 0 && row != size - 2 && row != size - 1);
-  });
+  auto valid = cudf::detail::make_counting_transform_iterator(
+    0, [size](size_type row) { return (row != 0 && row != size - 2 && row != size - 1); });
 
   fixed_width_column_wrapper<int64_t> expected{start, start + size, valid};
 
@@ -895,7 +894,7 @@ TEST_F(RollingTestUdf, StaticWindow)
   auto cuda_udf_agg = cudf::make_udf_aggregation(
     cudf::udf_type::CUDA, this->cuda_func, cudf::data_type{cudf::type_id::INT64});
 
-  EXPECT_NO_THROW(output = cudf::rolling_window(input, 2, 2, 4, cuda_udf_agg));
+  output = cudf::rolling_window(input, 2, 2, 4, cuda_udf_agg);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, expected);
 
@@ -903,7 +902,7 @@ TEST_F(RollingTestUdf, StaticWindow)
   auto ptx_udf_agg = cudf::make_udf_aggregation(
     cudf::udf_type::PTX, this->ptx_func, cudf::data_type{cudf::type_id::INT64});
 
-  EXPECT_NO_THROW(output = cudf::rolling_window(input, 2, 2, 4, ptx_udf_agg));
+  output = cudf::rolling_window(input, 2, 2, 4, ptx_udf_agg);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, expected);
 }
@@ -941,7 +940,7 @@ TEST_F(RollingTestUdf, DynamicWindow)
   auto cuda_udf_agg = cudf::make_udf_aggregation(
     cudf::udf_type::CUDA, this->cuda_func, cudf::data_type{cudf::type_id::INT64});
 
-  EXPECT_NO_THROW(output = cudf::rolling_window(input, preceding, following, 2, cuda_udf_agg));
+  output = cudf::rolling_window(input, preceding, following, 2, cuda_udf_agg);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, expected);
 
@@ -949,7 +948,7 @@ TEST_F(RollingTestUdf, DynamicWindow)
   auto ptx_udf_agg = cudf::make_udf_aggregation(
     cudf::udf_type::PTX, this->ptx_func, cudf::data_type{cudf::type_id::INT64});
 
-  EXPECT_NO_THROW(output = cudf::rolling_window(input, preceding, following, 2, ptx_udf_agg));
+  output = cudf::rolling_window(input, preceding, following, 2, ptx_udf_agg);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, expected);
 }

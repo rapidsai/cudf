@@ -199,19 +199,24 @@ template <>
 inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(column_view c)
 {
   auto strings_data = cudf::strings::create_offsets(strings_column_view(c));
-  thrust::host_vector<char> h_chars(strings_data.first);
-  thrust::host_vector<size_type> h_offsets(strings_data.second);
+  thrust::host_vector<char> h_chars(strings_data.first.size());
+  thrust::host_vector<size_type> h_offsets(strings_data.second.size());
+  CUDA_TRY(
+    cudaMemcpy(h_chars.data(), strings_data.first.data(), h_chars.size(), cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaMemcpy(h_offsets.data(),
+                      strings_data.second.data(),
+                      h_offsets.size() * sizeof(cudf::size_type),
+                      cudaMemcpyDeviceToHost));
 
   // build std::string vector from chars and offsets
   std::vector<std::string> host_data;
   host_data.reserve(c.size());
-
-  // When C++17, replace this loop with std::adjacent_difference()
-  for (size_type idx = 0; idx < c.size(); ++idx) {
-    auto offset = h_offsets[idx];
-    auto length = h_offsets[idx + 1] - offset;
-    host_data.push_back(std::string(h_chars.data() + offset, length));
-  }
+  std::transform(
+    std::begin(h_offsets),
+    std::end(h_offsets) - 1,
+    std::begin(h_offsets) + 1,
+    std::back_inserter(host_data),
+    [&](auto start, auto end) { return std::string(h_chars.data() + start, end - start); });
 
   return {host_data, bitmask_to_host(c)};
 }

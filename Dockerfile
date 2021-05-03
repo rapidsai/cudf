@@ -1,18 +1,20 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
 # An integration test & dev container which builds and installs cuDF from main
-ARG CUDA_VERSION=10.1
+ARG CUDA_VERSION=11.0
 ARG CUDA_SHORT_VERSION=${CUDA_VERSION}
-ARG LINUX_VERSION=ubuntu16.04
+ARG LINUX_VERSION=ubuntu18.04
 FROM nvidia/cuda:${CUDA_VERSION}-devel-${LINUX_VERSION}
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/lib
-# Needed for cudf.concat(), avoids "OSError: library nvvm not found"
-ENV NUMBAPRO_NVVM=/usr/local/cuda/nvvm/lib64/libnvvm.so
-ENV NUMBAPRO_LIBDEVICE=/usr/local/cuda/nvvm/libdevice/
 ENV DEBIAN_FRONTEND=noninteractive
 
-ARG CC=5
-ARG CXX=5
+ARG CC=9
+ARG CXX=9
 RUN apt update -y --fix-missing && \
     apt upgrade -y && \
+    apt install -y --no-install-recommends software-properties-common && \
+    add-apt-repository ppa:ubuntu-toolchain-r/test && \
+    apt update -y --fix-missing && \
     apt install -y --no-install-recommends \
       git \
       gcc-${CC} \
@@ -66,18 +68,10 @@ RUN if [ -f /cudf/docker/package_versions.sh ]; \
          conda env create --name cudf --file /cudf/conda/environments/cudf_dev_cuda${CUDA_SHORT_VERSION}.yml ; \
     fi
 
-# libcudf build/install
 ENV CC=/usr/bin/gcc-${CC}
 ENV CXX=/usr/bin/g++-${CXX}
-RUN source activate cudf && \
-    mkdir -p /cudf/cpp/build && \
-    cd /cudf/cpp/build && \
-    cmake .. -DCMAKE_INSTALL_PREFIX=${CONDA_PREFIX} && \
-    make -j"$(nproc)" install
 
-# cuDF build/install
+# libcudf & cudf build/install
 RUN source activate cudf && \
-    cd /cudf/python/cudf && \
-    python setup.py build_ext --inplace && \
-    python setup.py install && \
-    python setup.py install
+    cd /cudf/ && \
+    ./build.sh libcudf cudf
