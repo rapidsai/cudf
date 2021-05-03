@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cub/cub.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -311,7 +312,7 @@ __global__ void probe_hash_table(multimap_type multi_map,
                                  size_type* join_output_l,
                                  size_type* join_output_r,
                                  cudf::size_type* current_idx,
-                                 size_t max_size)
+                                 std::size_t max_size)
 {
   constexpr int num_warps = block_size / detail::warp_size;
   __shared__ size_type current_idx_shared[num_warps];
