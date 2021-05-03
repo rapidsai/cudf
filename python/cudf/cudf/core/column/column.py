@@ -5,13 +5,13 @@ from __future__ import annotations
 import builtins
 import pickle
 import warnings
-from collections.abc import MutableSequence
 from types import SimpleNamespace
 from typing import (
     Any,
     Callable,
     Dict,
     List,
+    MutableSequence,
     Optional,
     Sequence,
     Tuple,
