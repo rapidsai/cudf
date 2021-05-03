@@ -483,7 +483,7 @@ class Frame(libcudf.table.Table):
         # Reassign precision for any decimal cols
         for name, col in out._data.items():
             if isinstance(col, cudf.core.column.DecimalColumn):
-                col.dtype.precision = tables[0]._data[name].dtype.precision
+                col = tables[0]._data[name]._copy_type_metadata(col)
 
         # Reassign index and column names
         if isinstance(objs[0].columns, pd.MultiIndex):
@@ -3524,7 +3524,8 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
             # precision and scale of the columns to be concatenated
             s = max([col.dtype.scale for col in cols])
             lhs = max([col.dtype.precision - col.dtype.scale for col in cols])
-            # Combine to get the necessary precision and clip at 18
+            # Combine to get the necessary precision and clip at the maximum
+            # precision
             p = min(cudf.Decimal64Dtype.MAX_PRECISION, s + lhs)
             dtypes[idx] = cudf.Decimal64Dtype(p, s)
         # Otherwise raise an error if columns have different dtypes
