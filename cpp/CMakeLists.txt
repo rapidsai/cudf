@@ -268,9 +268,10 @@ add_library(cudf
     src/lists/copying/gather.cu
     src/lists/copying/segmented_gather.cu
     src/lists/count_elements.cu
+    src/lists/drop_list_duplicates.cu
     src/lists/explode.cu
     src/lists/extract.cu
-    src/lists/drop_list_duplicates.cu
+    src/lists/interleave_columns.cu
     src/lists/lists_column_factories.cu
     src/lists/lists_column_view.cu
     src/lists/segmented_sort.cu
@@ -302,6 +303,7 @@ add_library(cudf
     src/reshape/tile.cu
     src/rolling/grouped_rolling.cu
     src/rolling/rolling.cu
+    src/rolling/range_window_bounds.cpp
     src/round/round.cu
     src/scalar/scalar.cpp
     src/scalar/scalar_factories.cpp

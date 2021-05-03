@@ -46,8 +46,8 @@ namespace {
  *        also holding a reference to the list column.
  *
  * Analogous to the list_view, this class is default constructable,
- * and can thus be stored in rmm::device_vector. It is used to represent
- * the results of a `scatter()` operation; a device_vector may hold
+ * and can thus be stored in rmm::device_uvector. It is used to represent
+ * the results of a `scatter()` operation; a device_uvector may hold
  * several instances of unbound_list_view, each with a flag indicating
  * whether it came from the scatter source or target. Each instance
  * may later be "bound" to the appropriate source/target column, to
@@ -131,7 +131,7 @@ struct unbound_list_view {
   }
 
  private:
-  // Note: Cannot store reference to list column, because of storage in device_vector.
+  // Note: Cannot store reference to list column, because of storage in device_uvector.
   // Only keep track of whether this list row came from the source or target of scatter.
 
   label_type _label{
@@ -247,7 +247,7 @@ void print(std::string const& msg,
  * The protocol is as follows:
  *
  * Inputs:
- *  1. list_vector:  A device_vector of unbound_list_view, with each element
+ *  1. list_vector:  A device_uvector of unbound_list_view, with each element
  *                   indicating the position, size, and which column the list
  *                   row came from.
  *  2. list_offsets: The offsets column for the (outer) lists column, each offset

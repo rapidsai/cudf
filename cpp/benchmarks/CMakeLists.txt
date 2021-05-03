@@ -97,7 +97,7 @@ ConfigureBench(ITERATOR_BENCH iterator/iterator_benchmark.cu)
 
 ###################################################################################################
 # - search benchmark ------------------------------------------------------------------------------
-ConfigureBench(SEARCH_BENCH search/search_benchmark.cu)
+ConfigureBench(SEARCH_BENCH search/search_benchmark.cpp)
 
 ###################################################################################################
 # - sort benchmark --------------------------------------------------------------------------------
@@ -123,6 +123,11 @@ ConfigureBench(REDUCTION_BENCH
   reduction/reduce_benchmark.cpp
   reduction/scan_benchmark.cpp
   reduction/minmax_benchmark.cpp)
+
+###################################################################################################
+# - filling benchmark -----------------------------------------------------------------------------
+ConfigureBench(FILL_BENCH
+  filling/repeat_benchmark.cpp)
 
 ###################################################################################################
 # - groupby benchmark -----------------------------------------------------------------------------
