@@ -148,7 +148,7 @@ def compile_udf(func):
     ptx, _ = cuda.compile_ptx_for_current_device(func, to_compiler_sig, device=True)
 
     # get the kernel that calls the inlineable function
-    kernel = make_kernel(n_params)
+    kernel = None
     return kernel, ptx
 
 NA = _NAType()

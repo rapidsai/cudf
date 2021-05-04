@@ -4716,7 +4716,6 @@ class DataFrame(Frame, Serializable):
             return self._apply_boolean_mask(boolmask)
 
     def apply(self, func):
-        breakpoint()
         return super()._apply(func)
 
 
