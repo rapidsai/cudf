@@ -4715,7 +4715,7 @@ class DataFrame(Frame, Serializable):
             boolmask = queryutils.query_execute(self, expr, callenv)
             return self._apply_boolean_mask(boolmask)
 
-    def apply(self, func):
+    def apply(self, func, axis=1):
         return func(self)
         #return super()._apply(func)
 
