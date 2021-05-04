@@ -281,6 +281,20 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_sync(
   return make_device_uvector_sync(device_span<typename Container::value_type const>{c}, stream, mr);
 }
 
+namespace {
+
+// Utility function template to allow copying to either a thrust::host_vector or std::vector
+template <typename T, typename OutContainer>
+OutContainer make_vector_async(device_span<T const> v,
+                               rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+{
+  OutContainer result(v.size());
+  CUDA_TRY(cudaMemcpyAsync(
+    result.data(), v.data(), v.size() * sizeof(T), cudaMemcpyDeviceToHost, stream.value()));
+  return result;
+}
+}  // namespace
+
 /**
  * @brief Asynchronously construct a `std::vector` containing a copy of data from a
  * `device_span`
@@ -296,10 +310,7 @@ template <typename T>
 std::vector<T> make_std_vector_async(device_span<T const> v,
                                      rmm::cuda_stream_view stream = rmm::cuda_stream_default)
 {
-  std::vector<T> result(v.size());
-  CUDA_TRY(cudaMemcpyAsync(
-    result.data(), v.data(), v.size() * sizeof(T), cudaMemcpyDeviceToHost, stream.value()));
-  return result;
+  return make_vector_async<T, std::vector<T>>(v, stream);
 }
 
 /**
@@ -366,6 +377,90 @@ std::vector<typename Container::value_type> make_std_vector_sync(
   Container const& c, rmm::cuda_stream_view stream = rmm::cuda_stream_default)
 {
   return make_std_vector_sync(device_span<typename Container::value_type const>{c}, stream);
+}
+
+/**
+ * @brief Asynchronously construct a `thrust::host_vector` containing a copy of data from a
+ * `device_span`
+ *
+ * @note This function does not synchronize `stream`.
+ *
+ * @tparam T The type of the data to copy
+ * @param source_data The device data to copy
+ * @param stream The stream on which to perform the copy
+ * @return The data copied to the host
+ */
+template <typename T>
+thrust::host_vector<T> make_host_vector_async(
+  device_span<T const> v, rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+{
+  return make_vector_async<T, thrust::host_vector<T>>(v, stream);
+}
+
+/**
+ * @brief Asynchronously construct a `std::vector` containing a copy of data from a device
+ * container
+ *
+ * @note This function synchronizes `stream`.
+ *
+ * @tparam Container The type of the container to copy from
+ * @tparam T The type of the data to copy
+ * @param c The input device container from which to copy
+ * @param stream The stream on which to perform the copy
+ * @return The data copied to the host
+ */
+template <
+  typename Container,
+  std::enable_if_t<
+    std::is_convertible<Container, device_span<typename Container::value_type const>>::value>* =
+    nullptr>
+thrust::host_vector<typename Container::value_type> make_host_vector_async(
+  Container const& c, rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+{
+  return make_host_vector_async(device_span<typename Container::value_type const>{c}, stream);
+}
+
+/**
+ * @brief Synchronously construct a `std::vector` containing a copy of data from a
+ * `device_span`
+ *
+ * @note This function does a synchronize on `stream`.
+ *
+ * @tparam T The type of the data to copy
+ * @param source_data The device data to copy
+ * @param stream The stream on which to perform the copy
+ * @return The data copied to the host
+ */
+template <typename T>
+thrust::host_vector<T> make_host_vector_sync(
+  device_span<T const> v, rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+{
+  auto result = make_host_vector_async(v, stream);
+  stream.synchronize();
+  return result;
+}
+
+/**
+ * @brief Synchronously construct a `std::vector` containing a copy of data from a device
+ * container
+ *
+ * @note This function synchronizes `stream`.
+ *
+ * @tparam Container The type of the container to copy from
+ * @tparam T The type of the data to copy
+ * @param c The input device container from which to copy
+ * @param stream The stream on which to perform the copy
+ * @return The data copied to the host
+ */
+template <
+  typename Container,
+  std::enable_if_t<
+    std::is_convertible<Container, device_span<typename Container::value_type const>>::value>* =
+    nullptr>
+thrust::host_vector<typename Container::value_type> make_host_vector_sync(
+  Container const& c, rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+{
+  return make_host_vector_sync(device_span<typename Container::value_type const>{c}, stream);
 }
 
 }  // namespace detail
