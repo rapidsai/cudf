@@ -65,7 +65,7 @@ struct reduce_functor {
     using OpType     = cudf::detail::corresponding_operator_t<K>;
     using ResultType = cudf::detail::target_type_t<T, K>;
 
-    auto result_type = is_fixed_point<T>()
+    auto result_type = is_fixed_point<ResultType>()
                          ? data_type{type_to_id<ResultType>(), values.type().scale()}
                          : data_type{type_to_id<ResultType>()};
 
