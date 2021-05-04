@@ -132,9 +132,9 @@ size_type count_descendants(column_view parent)
   return std::accumulate(begin, begin + parent.num_children(), size_type{parent.num_children()});
 }
 
-column_view logical_cast(column_view const& input, data_type type)
+column_view bit_cast(column_view const& input, data_type type)
 {
-  CUDF_EXPECTS(is_logically_castable(input._type, type), "types are not logically castable");
+  CUDF_EXPECTS(is_bit_castable(input._type, type), "types are not bit-castable");
   return column_view{type,
                      input._size,
                      input._data,
@@ -144,9 +144,9 @@ column_view logical_cast(column_view const& input, data_type type)
                      input._children};
 }
 
-mutable_column_view logical_cast(mutable_column_view const& input, data_type type)
+mutable_column_view bit_cast(mutable_column_view const& input, data_type type)
 {
-  CUDF_EXPECTS(is_logically_castable(input._type, type), "types are not logically castable");
+  CUDF_EXPECTS(is_bit_castable(input._type, type), "types are not bit-castable");
   return mutable_column_view{type,
                              input._size,
                              const_cast<void*>(input._data),

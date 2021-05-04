@@ -18,13 +18,14 @@
 
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/groupby.hpp>
+#include <cudf/utilities/span.hpp>
 #include <vector>
 
 namespace cudf {
 namespace groupby {
 namespace detail {
 inline std::vector<aggregation_result> extract_results(
-  std::vector<aggregation_request> const& requests, cudf::detail::result_cache& cache)
+  host_span<aggregation_request const> requests, cudf::detail::result_cache& cache)
 {
   std::vector<aggregation_result> results(requests.size());
 

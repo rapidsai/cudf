@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +16,16 @@
 
 #include <strings/char_types/char_cases.h>
 #include <strings/char_types/char_flags.h>
-#include <strings/utilities.cuh>
 #include <strings/utilities.hpp>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/transform_reduce.h>
@@ -36,35 +36,21 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-// Used to build a temporary string_view object from a single host string.
-std::unique_ptr<string_view, std::function<void(string_view*)>> string_from_host(
-  const char* str, rmm::cuda_stream_view stream)
-{
-  if (!str) return nullptr;
-  auto length = std::strlen(str);
 
-  auto* d_str = new rmm::device_buffer(length, stream);
-  CUDA_TRY(cudaMemcpyAsync(d_str->data(), str, length, cudaMemcpyHostToDevice, stream.value()));
-  stream.synchronize();
-
-  auto deleter = [d_str](string_view* sv) { delete d_str; };
-  return std::unique_ptr<string_view, decltype(deleter)>{
-    new string_view(reinterpret_cast<char*>(d_str->data()), length), deleter};
-}
-
-// build a vector of string_view objects from a strings column
-rmm::device_vector<string_view> create_string_vector_from_column(cudf::strings_column_view strings,
-                                                                 rmm::cuda_stream_view stream)
+/**
+ * @copydoc create_string_vector_from_column
+ */
+rmm::device_uvector<string_view> create_string_vector_from_column(cudf::strings_column_view strings,
+                                                                  rmm::cuda_stream_view stream)
 {
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_column       = *strings_column;
 
-  auto count = strings.size();
-  rmm::device_vector<string_view> strings_vector(count);
-  string_view* d_strings = strings_vector.data().get();
+  rmm::device_uvector<string_view> strings_vector(strings.size(), stream);
+  string_view* d_strings = strings_vector.data();
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
-                     count,
+                     strings.size(),
                      [d_column, d_strings] __device__(size_type idx) {
                        if (d_column.is_null(idx))
                          d_strings[idx] = string_view(nullptr, 0);
@@ -74,35 +60,37 @@ rmm::device_vector<string_view> create_string_vector_from_column(cudf::strings_c
   return strings_vector;
 }
 
-// build a strings offsets column from a vector of string_views
+/**
+ * @copydoc child_offsets_from_string_vector
+ */
 std::unique_ptr<cudf::column> child_offsets_from_string_vector(
-  const rmm::device_vector<string_view>& strings,
+  cudf::device_span<string_view> strings,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
   return child_offsets_from_string_iterator(strings.begin(), strings.size(), stream, mr);
 }
 
-// build a strings chars column from an vector of string_views
-std::unique_ptr<cudf::column> child_chars_from_string_vector(
-  const rmm::device_vector<string_view>& strings,
-  const int32_t* d_offsets,
-  cudf::size_type null_count,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+/**
+ * @copydoc child_chars_from_string_vector
+ */
+std::unique_ptr<cudf::column> child_chars_from_string_vector(cudf::device_span<string_view> strings,
+                                                             column_view const& offsets,
+                                                             rmm::cuda_stream_view stream,
+                                                             rmm::mr::device_memory_resource* mr)
 {
-  size_type count = strings.size();
-  auto d_strings  = strings.data().get();
-  size_type bytes = thrust::device_pointer_cast(d_offsets)[count];
+  auto const d_strings = strings.data();
+  auto const bytes     = cudf::detail::get_value<int32_t>(offsets, strings.size(), stream);
+  auto const d_offsets = offsets.data<int32_t>();
 
   // create column
   auto chars_column =
     make_numeric_column(data_type{type_id::INT8}, bytes, mask_state::UNALLOCATED, stream, mr);
   // get it's view
-  auto d_chars = chars_column->mutable_view().data<int8_t>();
+  auto d_chars = chars_column->mutable_view().data<char>();
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
-                     count,
+                     strings.size(),
                      [d_strings, d_offsets, d_chars] __device__(size_type idx) {
                        string_view const d_str = d_strings[idx];
                        memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes());
@@ -113,12 +101,10 @@ std::unique_ptr<cudf::column> child_chars_from_string_vector(
 
 //
 std::unique_ptr<column> create_chars_child_column(cudf::size_type strings_count,
-                                                  cudf::size_type null_count,
                                                   cudf::size_type total_bytes,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(null_count <= strings_count, "Invalid null count");
   return make_numeric_column(
     data_type{type_id::INT8}, total_bytes, mask_state::UNALLOCATED, stream, mr);
 }

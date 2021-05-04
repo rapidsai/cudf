@@ -357,8 +357,6 @@ static __device__ uint8_t *ext_heap_alloc(uint32_t bytes,
     first_free_block = atomicExch((unsigned int *)heap_ptr, first_free_block);
     if (first_free_block == ~0 || first_free_block >= ext_heap_size) {
       // Some other block is holding the heap or there are no free blocks: try again later
-      // Wait a bit in an attempt to make the spin less resource-hungry
-      nanosleep(100);
       continue;
     }
     if (first_free_block == 0) {
@@ -408,8 +406,7 @@ static __device__ uint8_t *ext_heap_alloc(uint32_t bytes,
       }
     } while (blk_next != 0 && blk_next < ext_heap_size);
     first_free_block = atomicExch((unsigned int *)heap_ptr, first_free_block);
-    // Wait a while since reaching here means the heap is full
-    nanosleep(10000);
+    // Reaching here means the heap is full
     // Just in case we're trying to allocate more than the entire heap
     if (len > ext_heap_size - 4 * sizeof(uint32_t)) { break; }
   }
@@ -429,8 +426,7 @@ static __device__ void ext_heap_free(void *ptr,
   for (;;) {
     first_free_block = atomicExch((unsigned int *)heap_ptr, first_free_block);
     if (first_free_block != ~0) { break; }
-    // Some other block is holding the heap: wait
-    nanosleep(50);
+    // Some other block is holding the heap
   }
   if (first_free_block >= ext_heap_size) {
     // Heap is currently empty

@@ -1,127 +1,133 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf import Series
+from cudf.core._compat import PANDAS_GE_100
 from cudf.tests.utils import assert_eq
 
 
 def test_can_cast_safely_same_kind():
     # 'i' -> 'i'
-    data = Series([1, 2, 3], dtype="int32")._column
+    data = cudf.Series([1, 2, 3], dtype="int32")._column
     to_dtype = np.dtype("int64")
 
     assert data.can_cast_safely(to_dtype)
 
-    data = Series([1, 2, 3], dtype="int64")._column
+    data = cudf.Series([1, 2, 3], dtype="int64")._column
     to_dtype = np.dtype("int32")
 
     assert data.can_cast_safely(to_dtype)
 
-    data = Series([1, 2, 2 ** 31], dtype="int64")._column
+    data = cudf.Series([1, 2, 2 ** 31], dtype="int64")._column
     assert not data.can_cast_safely(to_dtype)
 
     # 'u' -> 'u'
-    data = Series([1, 2, 3], dtype="uint32")._column
+    data = cudf.Series([1, 2, 3], dtype="uint32")._column
     to_dtype = np.dtype("uint64")
 
     assert data.can_cast_safely(to_dtype)
 
-    data = Series([1, 2, 3], dtype="uint64")._column
+    data = cudf.Series([1, 2, 3], dtype="uint64")._column
     to_dtype = np.dtype("uint32")
 
     assert data.can_cast_safely(to_dtype)
 
-    data = Series([1, 2, 2 ** 33], dtype="uint64")._column
+    data = cudf.Series([1, 2, 2 ** 33], dtype="uint64")._column
     assert not data.can_cast_safely(to_dtype)
 
     # 'f' -> 'f'
-    data = Series([np.inf, 1.0], dtype="float64")._column
+    data = cudf.Series([np.inf, 1.0], dtype="float64")._column
     to_dtype = np.dtype("float32")
     assert data.can_cast_safely(to_dtype)
 
-    data = Series([np.finfo("float32").max * 2, 1.0], dtype="float64")._column
+    data = cudf.Series(
+        [np.finfo("float32").max * 2, 1.0], dtype="float64"
+    )._column
     to_dtype = np.dtype("float32")
     assert not data.can_cast_safely(to_dtype)
 
 
 def test_can_cast_safely_mixed_kind():
-    data = Series([1, 2, 3], dtype="int32")._column
+    data = cudf.Series([1, 2, 3], dtype="int32")._column
     to_dtype = np.dtype("float32")
     assert data.can_cast_safely(to_dtype)
 
     # too big to fit into f32 exactly
-    data = Series([1, 2, 2 ** 24 + 1], dtype="int32")._column
+    data = cudf.Series([1, 2, 2 ** 24 + 1], dtype="int32")._column
     assert not data.can_cast_safely(to_dtype)
 
-    data = Series([1, 2, 3], dtype="uint32")._column
+    data = cudf.Series([1, 2, 3], dtype="uint32")._column
     to_dtype = np.dtype("float32")
     assert data.can_cast_safely(to_dtype)
 
     # too big to fit into f32 exactly
-    data = Series([1, 2, 2 ** 24 + 1], dtype="uint32")._column
+    data = cudf.Series([1, 2, 2 ** 24 + 1], dtype="uint32")._column
     assert not data.can_cast_safely(to_dtype)
 
     to_dtype = np.dtype("float64")
     assert data.can_cast_safely(to_dtype)
 
-    data = Series([1.0, 2.0, 3.0], dtype="float32")._column
+    data = cudf.Series([1.0, 2.0, 3.0], dtype="float32")._column
     to_dtype = np.dtype("int32")
     assert data.can_cast_safely(to_dtype)
 
     # not integer float
-    data = Series([1.0, 2.0, 3.5], dtype="float32")._column
+    data = cudf.Series([1.0, 2.0, 3.5], dtype="float32")._column
     assert not data.can_cast_safely(to_dtype)
 
-    data = Series([10.0, 11.0, 2000.0], dtype="float64")._column
+    data = cudf.Series([10.0, 11.0, 2000.0], dtype="float64")._column
     assert data.can_cast_safely(to_dtype)
 
     # float out of int range
-    data = Series([1.0, 2.0, 1.0 * (2 ** 31)], dtype="float32")._column
+    data = cudf.Series([1.0, 2.0, 1.0 * (2 ** 31)], dtype="float32")._column
     assert not data.can_cast_safely(to_dtype)
 
     # negative signed integers casting to unsigned integers
-    data = Series([-1, 0, 1], dtype="int32")._column
+    data = cudf.Series([-1, 0, 1], dtype="int32")._column
     to_dtype = np.dtype("uint32")
     assert not data.can_cast_safely(to_dtype)
 
 
 @pytest.mark.xfail(
-    reason="cuDF null <-> pd.NA compatibility not yet supported"
+    condition=not PANDAS_GE_100,
+    reason="cuDF null <-> pd.NA compatibility not yet supported",
 )
 def test_to_pandas_nullable_integer():
-    gsr_not_null = Series([1, 2, 3])
-    gsr_has_null = Series([1, 2, None])
+    gsr_not_null = cudf.Series([1, 2, 3])
+    gsr_has_null = cudf.Series([1, 2, None])
 
     psr_not_null = pd.Series([1, 2, 3], dtype="int64")
     psr_has_null = pd.Series([1, 2, None], dtype="Int64")
 
     assert_eq(gsr_not_null.to_pandas(), psr_not_null)
-    assert_eq(gsr_has_null.to_pandas(), psr_has_null)
+    assert_eq(gsr_has_null.to_pandas(nullable=True), psr_has_null)
 
 
 @pytest.mark.xfail(
-    reason="cuDF null <-> pd.NA compatibility not yet supported"
+    condition=not PANDAS_GE_100,
+    reason="cuDF null <-> pd.NA compatibility not yet supported",
 )
 def test_to_pandas_nullable_bool():
-    gsr_not_null = Series([True, False, True])
-    gsr_has_null = Series([True, False, None])
+    gsr_not_null = cudf.Series([True, False, True])
+    gsr_has_null = cudf.Series([True, False, None])
 
     psr_not_null = pd.Series([True, False, True], dtype="bool")
     psr_has_null = pd.Series([True, False, None], dtype="boolean")
 
     assert_eq(gsr_not_null.to_pandas(), psr_not_null)
-    assert_eq(gsr_has_null.to_pandas(), psr_has_null)
+    assert_eq(gsr_has_null.to_pandas(nullable=True), psr_has_null)
 
 
 def test_can_cast_safely_has_nulls():
-    data = Series([1, 2, 3, None], dtype="float32")._column
+    data = cudf.Series([1, 2, 3, None], dtype="float32")._column
     to_dtype = np.dtype("int64")
 
     assert data.can_cast_safely(to_dtype)
 
-    data = Series([1, 2, 3.1, None], dtype="float32")._column
+    data = cudf.Series([1, 2, 3.1, None], dtype="float32")._column
     assert not data.can_cast_safely(to_dtype)
 
 

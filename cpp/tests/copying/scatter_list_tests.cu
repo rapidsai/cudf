@@ -314,11 +314,6 @@ TEST_F(ScatterListsTest, EmptyListsOfNullableStrings)
     0,
     {});
 
-  std::cout << "Expected: " << std::endl;
-  print(expected_lists->view());
-  std::cout << "Received: " << std::endl;
-  print(ret->get_column(0));
-
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_lists->view(), ret->get_column(0));
 }
 

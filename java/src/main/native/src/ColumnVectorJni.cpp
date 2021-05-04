@@ -31,6 +31,54 @@
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
 
+namespace cudf {
+namespace jni {
+  /**
+   * @brief Creates an empty column according to the type tree specified
+   * in @p view
+   *
+   * An empty column contains zero elements and no validity mask.
+   *
+   * Unlike the 'cudf::make_empty_column', it takes care of the nested type by
+   * iterating the children columns in the @p view
+   *
+   * @param[in] view The input column view
+   * @return An empty column for the input column view
+   */
+  std::unique_ptr<cudf::column> make_empty_column(JNIEnv *env, cudf::column_view const& view) {
+    auto tid = view.type().id();
+    if (tid == cudf::type_id::LIST) {
+      // List
+      if (view.num_children() != 2) {
+        throw jni_exception("List type requires two children(offset, data).");
+      }
+      // Only needs the second child.
+      auto data_view = view.child(1);
+      // offsets: [0]
+      auto offsets_buffer = rmm::device_buffer(sizeof(cudf::size_type));
+      device_memset_async(env, offsets_buffer, 0);
+      auto offsets = std::make_unique<column>(cudf::data_type{cudf::type_id::INT32}, 1,
+                                              std::move(offsets_buffer),
+                                              rmm::device_buffer(), 0);
+      auto data_col = make_empty_column(env, data_view);
+      return cudf::make_lists_column(0, std::move(offsets), std::move(data_col),
+                                     0, rmm::device_buffer());
+    } else if (tid == cudf::type_id::STRUCT) {
+      // Struct
+      std::vector<std::unique_ptr<column>> children(view.num_children());
+      std::transform(view.child_begin(), view.child_end(), children.begin(),
+          [env](auto const& child_v) {
+            return make_empty_column(env, child_v);
+          });
+      return cudf::make_structs_column(0, std::move(children), 0, rmm::device_buffer());
+    } else {
+      // Non nested types
+      return cudf::make_empty_column(view.type());
+    }
+  }
+
+} // namespace jni
+} // namespace cudf
 
 extern "C" {
 
@@ -86,7 +134,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, 
     auto null_buffer = arrow::Buffer::Wrap(static_cast<const char *>(validity_address), static_cast<int>(validity_length));
     auto offsets_buffer = arrow::Buffer::Wrap(static_cast<const char *>(offsets_address), static_cast<int>(offsets_length));
 
-    cudf::jni::native_jlongArray outcol_handles(env, 1);
     std::shared_ptr<arrow::Array> arrow_array;
     switch (n_type) {
       case cudf::type_id::DECIMAL32:
@@ -147,7 +194,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, j
     if (children.size() == 0) {
       // special case because cudf::interleave_columns does not support no columns
       auto offsets = cudf::make_column_from_scalar(*zero, row_count + 1);
-      cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
       cudf::data_type n_data_type = cudf::jni::make_data_type(j_type, scale);
       auto empty_col = cudf::make_empty_column(n_data_type);
       ret = cudf::make_lists_column(row_count, std::move(offsets), std::move(empty_col),
@@ -171,6 +217,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, j
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env, jclass,
                                                                     jlong j_scalar,
                                                                     jint row_count) {
+  using ScalarType = cudf::scalar_type_t<cudf::size_type>;
   JNI_NULL_CHECK(env, j_scalar, "scalar is null", 0);
   try {
     cudf::jni::auto_set_device(env);
@@ -179,7 +226,34 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
     cudf::mask_state mask_state =
         scalar_val->is_valid() ? cudf::mask_state::UNALLOCATED : cudf::mask_state::ALL_NULL;
     std::unique_ptr<cudf::column> col;
-    if (row_count == 0) {
+    if (dtype.id() == cudf::type_id::LIST) {
+      // Neither 'cudf::make_empty_column' nor 'cudf::make_column_from_scalar' supports
+      // LIST type for now (https://github.com/rapidsai/cudf/issues/8088), so the list
+      // precedes the others and takes care of the empty column itself.
+      auto s_list = reinterpret_cast<cudf::list_scalar const *>(scalar_val);
+      cudf::column_view s_val = s_list->view();
+
+      // Offsets: [0, list_size, list_size*2, ..., list_szie*row_count]
+      auto zero = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
+      auto step = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
+      zero->set_valid(true);
+      step->set_valid(true);
+      static_cast<ScalarType *>(zero.get())->set_value(0);
+      static_cast<ScalarType *>(step.get())->set_value(s_val.size());
+      std::unique_ptr<cudf::column> offsets = cudf::sequence(row_count + 1, *zero, *step);
+      // Data:
+      // Builds the data column by leveraging `cudf::concatenate` to repeat the 's_val'
+      // 'row_count' times, because 'cudf::make_column_from_scalar' does not support list
+      // type.
+      // (Assumes the `row_count` is not big, otherwise there would be a performance issue.)
+      // Checks the `row_count` because `cudf::concatenate` does not support no columns.
+      auto data_col = row_count > 0
+          ? cudf::concatenate(std::vector<cudf::column_view>(row_count, s_val))
+          : cudf::jni::make_empty_column(env, s_val);
+      col = cudf::make_lists_column(row_count, std::move(offsets), std::move(data_col),
+                                    cudf::state_null_count(mask_state, row_count),
+                                    cudf::create_null_mask(row_count, mask_state));
+    } else if (row_count == 0) {
       col = cudf::make_empty_column(dtype);
     } else if (cudf::is_fixed_width(dtype)) {
       col = cudf::make_fixed_width_column(dtype, row_count, mask_state);
@@ -308,100 +382,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeEmptyCudfColumn(JNI
 
   try {
     cudf::jni::auto_set_device(env);
-    cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
     cudf::data_type n_data_type = cudf::jni::make_data_type(j_type, scale);
 
     std::unique_ptr<cudf::column> column(cudf::make_empty_column(n_data_type));
-    return reinterpret_cast<jlong>(column.release());
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeNumericCudfColumn(
-    JNIEnv *env, jobject j_object, jint j_type, jint j_size, jint j_mask_state) {
-
-  JNI_ARG_CHECK(env, (j_size != 0), "size is 0", 0);
-
-  try {
-    cudf::jni::auto_set_device(env);
-    cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
-    cudf::data_type n_data_type(n_type);
-    cudf::size_type n_size = static_cast<cudf::size_type>(j_size);
-    cudf::mask_state n_mask_state = static_cast<cudf::mask_state>(j_mask_state);
-    std::unique_ptr<cudf::column> column(
-        cudf::make_numeric_column(n_data_type, n_size, n_mask_state));
-    return reinterpret_cast<jlong>(column.release());
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeTimestampCudfColumn(
-    JNIEnv *env, jobject j_object, jint j_type, jint j_size, jint j_mask_state) {
-
-  JNI_NULL_CHECK(env, j_type, "type id is null", 0);
-  JNI_NULL_CHECK(env, j_size, "size is null", 0);
-
-  try {
-    cudf::jni::auto_set_device(env);
-    cudf::type_id n_type = static_cast<cudf::type_id>(j_type);
-    std::unique_ptr<cudf::data_type> n_data_type(new cudf::data_type(n_type));
-    cudf::size_type n_size = static_cast<cudf::size_type>(j_size);
-    cudf::mask_state n_mask_state = static_cast<cudf::mask_state>(j_mask_state);
-    std::unique_ptr<cudf::column> column(
-        cudf::make_timestamp_column(*n_data_type.get(), n_size, n_mask_state));
-    return reinterpret_cast<jlong>(column.release());
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeStringCudfColumnHostSide(
-    JNIEnv *env, jobject j_object, jlong j_char_data, jlong j_offset_data, jlong j_valid_data,
-    jint j_null_count, jint size) {
-
-  JNI_ARG_CHECK(env, (size != 0), "size is 0", 0);
-  JNI_NULL_CHECK(env, j_char_data, "char data is null", 0);
-  JNI_NULL_CHECK(env, j_offset_data, "offset is null", 0);
-
-  try {
-    cudf::jni::auto_set_device(env);
-    cudf::size_type *host_offsets = reinterpret_cast<cudf::size_type *>(j_offset_data);
-    char *n_char_data = reinterpret_cast<char *>(j_char_data);
-    cudf::size_type n_data_size = host_offsets[size];
-    cudf::bitmask_type *n_validity = reinterpret_cast<cudf::bitmask_type *>(j_valid_data);
-
-    if (n_validity == nullptr) {
-      j_null_count = 0;
-    }
-
-    std::unique_ptr<cudf::column> offsets = cudf::make_numeric_column(
-        cudf::data_type{cudf::type_id::INT32}, size + 1, cudf::mask_state::UNALLOCATED);
-    auto offsets_view = offsets->mutable_view();
-    JNI_CUDA_TRY(env, 0,
-                 cudaMemcpyAsync(offsets_view.data<int32_t>(), host_offsets,
-                                 (size + 1) * sizeof(int32_t), cudaMemcpyHostToDevice));
-
-    std::unique_ptr<cudf::column> data = cudf::make_numeric_column(
-        cudf::data_type{cudf::type_id::INT8}, n_data_size, cudf::mask_state::UNALLOCATED);
-    auto data_view = data->mutable_view();
-    JNI_CUDA_TRY(env, 0,
-                 cudaMemcpyAsync(data_view.data<int8_t>(), n_char_data, n_data_size,
-                                 cudaMemcpyHostToDevice));
-
-    std::unique_ptr<cudf::column> column;
-    if (j_null_count == 0) {
-      column =
-          cudf::make_strings_column(size, std::move(offsets), std::move(data), j_null_count, {});
-    } else {
-      cudf::size_type bytes = (cudf::word_index(size) + 1) * sizeof(cudf::bitmask_type);
-      rmm::device_buffer dev_validity(bytes);
-      JNI_CUDA_TRY(env, 0,
-                   cudaMemcpyAsync(dev_validity.data(), n_validity, bytes, cudaMemcpyHostToDevice));
-
-      column = cudf::make_strings_column(size, std::move(offsets), std::move(data), j_null_count,
-                                         std::move(dev_validity));
-    }
-
-    JNI_CUDA_TRY(env, 0, cudaStreamSynchronize(0));
     return reinterpret_cast<jlong>(column.release());
   }
   CATCH_STD(env, 0);

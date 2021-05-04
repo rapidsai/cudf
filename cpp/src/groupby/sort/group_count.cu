@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -29,7 +30,7 @@ namespace cudf {
 namespace groupby {
 namespace detail {
 std::unique_ptr<column> group_count_valid(column_view const& values,
-                                          rmm::device_vector<size_type> const& group_labels,
+                                          cudf::device_span<size_type const> group_labels,
                                           size_type num_groups,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
@@ -70,7 +71,7 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
   return result;
 }
 
-std::unique_ptr<column> group_count_all(rmm::device_vector<size_type> const& group_offsets,
+std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group_offsets,
                                         size_type num_groups,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)

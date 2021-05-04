@@ -79,19 +79,25 @@ public final class MemoryCleaner {
 
     public final void addRef() {
       if (REF_COUNT_DEBUG && refCountDebug != null) {
-        refCountDebug.add(new MemoryCleaner.RefCountDebugItem("INC"));
+        synchronized(this)  {
+          refCountDebug.add(new MemoryCleaner.RefCountDebugItem("INC"));
+        }
       }
     }
 
     public final void delRef() {
       if (REF_COUNT_DEBUG && refCountDebug != null) {
-        refCountDebug.add(new MemoryCleaner.RefCountDebugItem("DEC"));
+        synchronized(this) {
+          refCountDebug.add(new MemoryCleaner.RefCountDebugItem("DEC"));
+        }
       }
     }
 
     public final void logRefCountDebug(String message) {
       if (REF_COUNT_DEBUG && refCountDebug != null) {
-        log.error("{} (ID: {}): {}", message, id, MemoryCleaner.stringJoin("\n", refCountDebug));
+        synchronized(this) {
+          log.error("{} (ID: {}): {}", message, id, MemoryCleaner.stringJoin("\n", refCountDebug));
+        }
       }
     }
 
@@ -249,6 +255,21 @@ public final class MemoryCleaner {
   public static void register(BatchedLZ4Decompressor.BatchedMetadata metadata, Cleaner cleaner) {
     // It is now registered...
     all.add(new CleanerWeakReference(metadata, cleaner, collected, false));
+  }
+
+  static void register(CuFileDriver driver, Cleaner cleaner) {
+    // It is now registered...
+    all.add(new CleanerWeakReference(driver, cleaner, collected, false));
+  }
+
+  static void register(CuFileBuffer buffer, Cleaner cleaner) {
+    // It is now registered...
+    all.add(new CleanerWeakReference(buffer, cleaner, collected, false));
+  }
+
+  static void register(CuFileHandle handle, Cleaner cleaner) {
+    // It is now registered...
+    all.add(new CleanerWeakReference(handle, cleaner, collected, false));
   }
 
   /**

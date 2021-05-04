@@ -45,7 +45,8 @@ std::unique_ptr<table> sort_by_key(table_view const& values,
   CUDF_EXPECTS(values.num_rows() == keys.num_rows(),
                "Mismatch in number of rows for values and keys");
 
-  auto sorted_order = detail::sorted_order(keys, column_order, null_precedence, stream, mr);
+  auto sorted_order = detail::sorted_order(
+    keys, column_order, null_precedence, stream, rmm::mr::get_current_device_resource());
 
   return detail::gather(values,
                         sorted_order->view(),
@@ -60,17 +61,10 @@ struct inplace_column_sort_fn {
   void operator()(mutable_column_view& col, bool ascending, rmm::cuda_stream_view stream) const
   {
     CUDF_EXPECTS(!col.has_nulls(), "Nulls not supported for in-place sort");
-    using DeviceT = device_storage_type_t<T>;
     if (ascending) {
-      thrust::sort(rmm::exec_policy(stream),
-                   col.begin<DeviceT>(),
-                   col.end<DeviceT>(),
-                   thrust::less<DeviceT>());
+      thrust::sort(rmm::exec_policy(stream), col.begin<T>(), col.end<T>(), thrust::less<T>());
     } else {
-      thrust::sort(rmm::exec_policy(stream),
-                   col.begin<DeviceT>(),
-                   col.end<DeviceT>(),
-                   thrust::greater<DeviceT>());
+      thrust::sort(rmm::exec_policy(stream), col.begin<T>(), col.end<T>(), thrust::greater<T>());
     }
   }
 
@@ -95,7 +89,8 @@ std::unique_ptr<table> sort(table_view input,
     auto output    = std::make_unique<column>(input.column(0), stream, mr);
     auto view      = output->mutable_view();
     bool ascending = (column_order.empty() ? true : column_order.front() == order::ASCENDING);
-    cudf::type_dispatcher(output->type(), inplace_column_sort_fn{}, view, ascending, stream);
+    cudf::type_dispatcher<dispatch_storage_type>(
+      output->type(), inplace_column_sort_fn{}, view, ascending, stream);
     std::vector<std::unique_ptr<column>> columns;
     columns.emplace_back(std::move(output));
     return std::make_unique<table>(std::move(columns));

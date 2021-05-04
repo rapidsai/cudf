@@ -46,8 +46,8 @@ namespace {
  *        also holding a reference to the list column.
  *
  * Analogous to the list_view, this class is default constructable,
- * and can thus be stored in rmm::device_vector. It is used to represent
- * the results of a `scatter()` operation; a device_vector may hold
+ * and can thus be stored in rmm::device_uvector. It is used to represent
+ * the results of a `scatter()` operation; a device_uvector may hold
  * several instances of unbound_list_view, each with a flag indicating
  * whether it came from the scatter source or target. Each instance
  * may later be "bound" to the appropriate source/target column, to
@@ -131,7 +131,7 @@ struct unbound_list_view {
   }
 
  private:
-  // Note: Cannot store reference to list column, because of storage in device_vector.
+  // Note: Cannot store reference to list column, because of storage in device_uvector.
   // Only keep track of whether this list row came from the source or target of scatter.
 
   label_type _label{
@@ -247,7 +247,7 @@ void print(std::string const& msg,
  * The protocol is as follows:
  *
  * Inputs:
- *  1. list_vector:  A device_vector of unbound_list_view, with each element
+ *  1. list_vector:  A device_uvector of unbound_list_view, with each element
  *                   indicating the position, size, and which column the list
  *                   row came from.
  *  2. list_offsets: The offsets column for the (outer) lists column, each offset
@@ -431,11 +431,11 @@ struct list_child_constructor {
     auto const num_child_rows{
       cudf::detail::get_value<size_type>(list_offsets, list_offsets.size() - 1, stream)};
 
-    auto string_views = rmm::device_vector<string_view>(num_child_rows);
+    auto string_views = rmm::device_uvector<string_view>(num_child_rows, stream);
 
     auto populate_string_views = [d_scattered_lists = list_vector.begin(),  // unbound_list_view*
                                   d_list_offsets    = list_offsets.template data<int32_t>(),
-                                  d_string_views    = string_views.data().get(),
+                                  d_string_views    = string_views.data(),
                                   source_lists,
                                   target_lists] __device__(auto const& row_index) {
       auto unbound_list_view    = d_scattered_lists[row_index];
@@ -483,7 +483,7 @@ struct list_child_constructor {
       string_views.begin(), string_views.size(), stream, mr);
 
     auto string_chars = cudf::strings::detail::child_chars_from_string_vector(
-      string_views, string_offsets->view().template data<cudf::size_type>(), 0, stream, mr);
+      string_views, string_offsets->view(), stream, mr);
     auto child_null_mask =
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
         ? construct_child_nullmask(
@@ -577,15 +577,15 @@ struct list_child_constructor {
     auto child_offsets = cudf::strings::detail::make_offsets_child_column(
       begin, begin + child_list_views.size(), stream, mr);
 
-    auto child_column =
-      cudf::type_dispatcher(source_lists_column_view.child().child(1).type(),
-                            list_child_constructor{},
-                            child_list_views,
-                            child_offsets->view(),
-                            cudf::lists_column_view(source_lists_column_view.child()),
-                            cudf::lists_column_view(target_lists_column_view.child()),
-                            stream,
-                            mr);
+    auto child_column = cudf::type_dispatcher<dispatch_storage_type>(
+      source_lists_column_view.child().child(1).type(),
+      list_child_constructor{},
+      child_list_views,
+      child_offsets->view(),
+      cudf::lists_column_view(source_lists_column_view.child()),
+      cudf::lists_column_view(target_lists_column_view.child()),
+      stream,
+      mr);
 
     auto child_null_mask =
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
@@ -672,7 +672,7 @@ struct list_child_constructor {
       iter_target_member_as_list,
       std::back_inserter(child_columns),
       [&](auto source_struct_member_as_list, auto target_struct_member_as_list) {
-        return cudf::type_dispatcher(
+        return cudf::type_dispatcher<dispatch_storage_type>(
           source_struct_member_as_list->child(cudf::lists_column_view::child_column_index).type(),
           list_child_constructor{},
           list_vector,
@@ -780,14 +780,14 @@ std::unique_ptr<column> scatter(
   auto offsets_column = cudf::strings::detail::make_offsets_child_column(
     list_size_begin, list_size_begin + target.size(), stream, mr);
 
-  auto child_column = cudf::type_dispatcher(child_column_type,
-                                            list_child_constructor{},
-                                            target_vector,
-                                            offsets_column->view(),
-                                            source_lists_column_view,
-                                            target_lists_column_view,
-                                            stream,
-                                            mr);
+  auto child_column = cudf::type_dispatcher<dispatch_storage_type>(child_column_type,
+                                                                   list_child_constructor{},
+                                                                   target_vector,
+                                                                   offsets_column->view(),
+                                                                   source_lists_column_view,
+                                                                   target_lists_column_view,
+                                                                   stream,
+                                                                   mr);
 
   auto null_mask =
     target.has_nulls() ? copy_bitmask(target, stream, mr) : rmm::device_buffer{0, stream, mr};

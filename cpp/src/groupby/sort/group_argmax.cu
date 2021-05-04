@@ -17,6 +17,7 @@
 #include <groupby/sort/group_single_pass_reduction_util.cuh>
 
 #include <cudf/detail/gather.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -27,7 +28,7 @@ namespace groupby {
 namespace detail {
 std::unique_ptr<column> group_argmax(column_view const& values,
                                      size_type num_groups,
-                                     rmm::device_vector<size_type> const& group_labels,
+                                     cudf::device_span<size_type const> group_labels,
                                      column_view const& key_sort_order,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)

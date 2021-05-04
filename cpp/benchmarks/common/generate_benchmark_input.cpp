@@ -18,6 +18,7 @@
 #include "random_distribution_factory.hpp"
 
 #include <cudf/column/column.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/bit.hpp>
 
@@ -26,6 +27,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <future>
 #include <memory>
@@ -411,7 +413,11 @@ std::unique_ptr<cudf::column> create_random_column<cudf::string_view>(data_profi
       row += std::max(run_len - 1, 0);
     }
   }
-  return cudf::make_strings_column(out_col.chars, out_col.offsets, out_col.null_mask);
+
+  auto d_chars     = cudf::detail::make_device_uvector_sync(out_col.chars);
+  auto d_offsets   = cudf::detail::make_device_uvector_sync(out_col.offsets);
+  auto d_null_mask = cudf::detail::make_device_uvector_sync(out_col.null_mask);
+  return cudf::make_strings_column(d_chars, d_offsets, d_null_mask);
 }
 
 template <>

@@ -40,7 +40,7 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
   int strm_id                  = blockIdx.x * 4 + (threadIdx.x / 32);
   int lane_id                  = threadIdx.x % 32;
 
-  if (lane_id == 0) { s->info = strm_info[strm_id]; }
+  if (strm_id < num_streams && lane_id == 0) { s->info = strm_info[strm_id]; }
 
   __syncthreads();
   if (strm_id < num_streams) {
@@ -485,7 +485,7 @@ void __host__ PostDecompressionReassemble(CompressedStreamInfo *strm_info,
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
  * @param[in] num_rowgroups Number of row groups
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void __host__ ParseRowGroupIndex(RowGroup *row_groups,
                                  CompressedStreamInfo *strm_info,

@@ -108,7 +108,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
     }
 
     @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       long origAddress = 0;
       if (section != null) {

@@ -19,6 +19,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -34,9 +35,9 @@ struct nunique_functor {
   template <typename T>
   typename std::enable_if_t<cudf::is_equality_comparable<T, T>(), std::unique_ptr<column>>
   operator()(column_view const& values,
-             rmm::device_vector<size_type> const& group_labels,
+             cudf::device_span<size_type const> group_labels,
              size_type const num_groups,
-             rmm::device_vector<size_type> const& group_offsets,
+             cudf::device_span<size_type const> group_offsets,
              null_policy null_handling,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr)
@@ -54,8 +55,8 @@ struct nunique_functor {
         [v = *values_view,
          equal,
          null_handling,
-         group_offsets = group_offsets.data().get(),
-         group_labels  = group_labels.data().get()] __device__(auto i) -> size_type {
+         group_offsets = group_offsets.data(),
+         group_labels  = group_labels.data()] __device__(auto i) -> size_type {
           bool is_input_countable =
             (null_handling == null_policy::INCLUDE || v.is_valid_nocheck(i));
           bool is_unique = is_input_countable &&
@@ -76,8 +77,8 @@ struct nunique_functor {
         thrust::make_counting_iterator<size_type>(0),
         [v = *values_view,
          equal,
-         group_offsets = group_offsets.data().get(),
-         group_labels  = group_labels.data().get()] __device__(auto i) -> size_type {
+         group_offsets = group_offsets.data(),
+         group_labels  = group_labels.data()] __device__(auto i) -> size_type {
           bool is_unique = group_offsets[group_labels[i]] == i ||  // first element or
                            (not equal.operator()<T>(i, i - 1));    // new unique value in sorted
           return static_cast<size_type>(is_unique);
@@ -95,9 +96,9 @@ struct nunique_functor {
   template <typename T>
   typename std::enable_if_t<!cudf::is_equality_comparable<T, T>(), std::unique_ptr<column>>
   operator()(column_view const& values,
-             rmm::device_vector<size_type> const& group_labels,
+             cudf::device_span<size_type const> group_labels,
              size_type const num_groups,
-             rmm::device_vector<size_type> const& group_offsets,
+             cudf::device_span<size_type const> group_offsets,
              null_policy null_handling,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr)
@@ -107,9 +108,9 @@ struct nunique_functor {
 };
 }  // namespace
 std::unique_ptr<column> group_nunique(column_view const& values,
-                                      rmm::device_vector<size_type> const& group_labels,
+                                      cudf::device_span<size_type const> group_labels,
                                       size_type const num_groups,
-                                      rmm::device_vector<size_type> const& group_offsets,
+                                      cudf::device_span<size_type const> group_offsets,
                                       null_policy null_handling,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)

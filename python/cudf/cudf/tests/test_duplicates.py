@@ -1,4 +1,7 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
+import itertools as it
+import random
 
 import numpy as np
 import pytest
@@ -56,7 +59,7 @@ def test_duplicated_with_misspelled_column_name(subset):
     ],
 )
 def test_drop_duplicates_series(data, keep):
-    pds = Series(data)
+    pds = cudf.utils.utils._create_pandas_series(data)
     gds = cudf.from_pandas(pds)
 
     assert_df(pds.drop_duplicates(keep=keep), gds.drop_duplicates(keep=keep))
@@ -277,9 +280,6 @@ def test_drop_duplicates_empty(df):
 
 @pytest.mark.parametrize("num_columns", [3, 4, 5])
 def test_dataframe_drop_duplicates_numeric_method(num_columns):
-    import itertools as it
-    import random
-
     comb = list(it.permutations(range(num_columns), num_columns))
     shuf = list(comb)
     random.Random(num_columns).shuffle(shuf)

@@ -25,9 +25,9 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
@@ -40,21 +40,24 @@ struct reduce_functor {
   template <typename T>
   static constexpr bool is_supported()
   {
-    if (K == aggregation::SUM)
-      return cudf::is_numeric<T>() || cudf::is_duration<T>() || cudf::is_fixed_point<T>();
-    else if (K == aggregation::MIN or K == aggregation::MAX)
-      return cudf::is_fixed_width<T>() and is_relationally_comparable<T, T>();
-    else if (K == aggregation::ARGMIN or K == aggregation::ARGMAX)
-      return is_relationally_comparable<T, T>();
-    else
-      return false;
+    switch (K) {
+      case aggregation::SUM:
+        return cudf::is_numeric<T>() || cudf::is_duration<T>() || cudf::is_fixed_point<T>();
+      case aggregation::PRODUCT: return cudf::detail::is_product_supported<T>();
+      case aggregation::MIN:
+      case aggregation::MAX:
+        return cudf::is_fixed_width<T>() and is_relationally_comparable<T, T>();
+      case aggregation::ARGMIN:
+      case aggregation::ARGMAX: return is_relationally_comparable<T, T>();
+      default: return false;
+    }
   }
 
   template <typename T>
   std::enable_if_t<is_supported<T>(), std::unique_ptr<column>> operator()(
     column_view const& values,
     size_type num_groups,
-    rmm::device_vector<cudf::size_type> const& group_labels,
+    cudf::device_span<size_type const> group_labels,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr)
   {
@@ -62,7 +65,7 @@ struct reduce_functor {
     using OpType     = cudf::detail::corresponding_operator_t<K>;
     using ResultType = cudf::detail::target_type_t<T, K>;
 
-    auto result_type = is_fixed_point<T>()
+    auto result_type = is_fixed_point<ResultType>()
                          ? data_type{type_to_id<ResultType>(), values.type().scale()}
                          : data_type{type_to_id<ResultType>()};
 
@@ -87,7 +90,7 @@ struct reduce_functor {
                          values.size(),
                          [d_values     = *valuesview,
                           d_result     = *resultview,
-                          dest_indices = group_labels.data().get()] __device__(auto i) {
+                          dest_indices = group_labels.data()] __device__(auto i) {
                            cudf::detail::update_target_element<DeviceType, K, true, true>{}(
                              d_result, dest_indices[i], d_values, i);
                          });
@@ -97,7 +100,7 @@ struct reduce_functor {
                          values.size(),
                          [d_values     = *valuesview,
                           d_result     = *resultview,
-                          dest_indices = group_labels.data().get()] __device__(auto i) {
+                          dest_indices = group_labels.data()] __device__(auto i) {
                            cudf::detail::update_target_element<dictionary32, K, true, true>{}(
                              d_result, dest_indices[i], d_values, i);
                          });
