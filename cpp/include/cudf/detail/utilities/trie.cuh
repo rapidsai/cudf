@@ -44,12 +44,13 @@ struct SerialTrieNode {
 };
 
 /**
- * @brief Create a serialized trie for cache-friendly string search
+ * @brief Creates a serialized trie for cache-friendly string search.
  *
  * The resulting trie is a compact array - children array size is equal to the
- * actual number of children nodes, not the size of the alphabet
+ * actual number of children nodes, not the size of the alphabet.
  *
- * @param[in] keys Array of strings to insert into the trie
+ * @param keys Array of strings to insert into the trie
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return A host vector of nodes representing the serialized trie
  */
