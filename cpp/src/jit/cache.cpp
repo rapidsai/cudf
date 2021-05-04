@@ -133,7 +133,7 @@ jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData prep
 
     if (kernel_limit_disk == 0) {
       // if kernel_limit_disk is zero, jitify will inherit it the value of kernel_limit_proc.
-      // to avoid this, we treat zero as "disable disk caching" by deleting the cache dir.
+      // to avoid this, we treat zero as "disable disk caching" by not providing the cache dir.
       cache_dir = {};
     }
 
