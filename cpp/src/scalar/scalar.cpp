@@ -57,13 +57,4 @@ std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
   return result;
 }
 
-list_scalar::list_scalar(column_view const& col,
-                         size_type row_index,
-                         rmm::cuda_stream_view stream,
-                         rmm::mr::device_memory_resource* mr)
-  : list_scalar(std::move(
-      *static_cast<list_scalar*>(detail::get_element(col, row_index, stream, mr).release())))
-{
-}
-
 }  // namespace cudf

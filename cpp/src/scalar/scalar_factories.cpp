@@ -97,6 +97,13 @@ std::unique_ptr<scalar> make_fixed_width_scalar(data_type type,
   return type_dispatcher(type, scalar_construction_helper{}, stream, mr);
 }
 
+std::unique_ptr<scalar> make_list_scalar(column_view elements,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  return std::make_unique<list_scalar>(elements, true, stream, mr);
+}
+
 namespace {
 struct default_scalar_functor {
   template <typename T>

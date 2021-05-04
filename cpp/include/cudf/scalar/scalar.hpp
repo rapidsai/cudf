@@ -636,19 +636,6 @@ class list_scalar : public scalar {
   }
 
   /**
-   * @brief Retrieve `row_index` row from column `col`
-   *
-   * @param col The column view to retrieve row from
-   * @param row_index Index into `col` to retrieve row from
-   * @param stream CUDA stream used for device memory operations.
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  list_scalar(column_view const& col,
-              size_type row_index,
-              rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-  /**
    * @brief Returns a non-owning, immutable view to underlying device data
    */
   column_view view() const { return _data.view(); }
