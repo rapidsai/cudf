@@ -178,6 +178,14 @@ TYPED_TEST(DictionaryGetValueTest, GetNull)
 
 template <typename T>
 struct ListGetFixedWidthValueTest : public BaseFixture {
+  auto odds_valid()
+  {
+    return cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  }
+  auto nth_valid(size_type x)
+  {
+    return cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return x == i; });
+  }
 };
 
 TYPED_TEST_CASE(ListGetFixedWidthValueTest, FixedWidthTypes);
@@ -186,8 +194,8 @@ TYPED_TEST(ListGetFixedWidthValueTest, NonNestedGetNonNullNonEmpty)
 {
   using LCW = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
 
-  LCW col{LCW{1, 2, 34}, LCW{}, LCW{1}, LCW{}};
-  fixed_width_column_wrapper<TypeParam> expected_data{1, 2, 34};
+  LCW col{LCW({1, 2, 34}, this->odds_valid()), LCW{}, LCW{1}, LCW{}};
+  fixed_width_column_wrapper<TypeParam> expected_data({1, 2, 34}, this->odds_valid());
   size_type index = 0;
 
   auto s       = get_element(col, index);
@@ -215,8 +223,7 @@ TYPED_TEST(ListGetFixedWidthValueTest, NonNestedGetNonNullEmpty)
 TYPED_TEST(ListGetFixedWidthValueTest, NonNestedGetNull)
 {
   using LCW = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
-  std::vector<valid_type> valid{0, 1, 0, 1};
-  LCW col({LCW{1, 2, 34}, LCW{}, LCW{1}, LCW{}}, valid.begin());
+  LCW col({LCW{1, 2, 34}, LCW{}, LCW{1}, LCW{}}, this->odds_valid());
   size_type index = 2;
 
   auto s = get_element(col, index);
@@ -251,16 +258,16 @@ TYPED_TEST(ListGetFixedWidthValueTest, NestedGetNonNullNonEmptyPreserveNull)
 {
   using LCW = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
 
-  std::vector<valid_type> valid{0, 1};
+  std::vector<valid_type> valid{0, 1, 1};
   // clang-format off
   LCW col{
     LCW{LCW{1, 2}, LCW{34}},
     LCW{},
     LCW{LCW{1}},
-    LCW({LCW{42}, LCW{10}}, valid.begin())
+    LCW({LCW{42}, LCW{10}, LCW({1, 3, 2}, this->nth_valid(1))}, valid.begin())
   };
   // clang-format on
-  LCW expected_data({LCW{42}, LCW{10}}, valid.begin());
+  LCW expected_data({LCW{42}, LCW{10}, LCW({1, 3, 2}, this->nth_valid(1))}, valid.begin());
   size_type index = 3;
 
   auto s       = get_element(col, index);
@@ -314,14 +321,22 @@ TYPED_TEST(ListGetFixedWidthValueTest, NestedGetNull)
 }
 
 struct ListGetStringValueTest : public BaseFixture {
+  auto odds_valid()
+  {
+    return cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  }
+  auto nth_valid(size_type x)
+  {
+    return cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return x == i; });
+  }
 };
 
 TEST_F(ListGetStringValueTest, NonNestedGetNonNullNonEmpty)
 {
   using LCW = cudf::test::lists_column_wrapper<string_view>;
 
-  LCW col{LCW{"aaa", "Héllo"}, LCW{}, LCW{""}, LCW{"42"}};
-  strings_column_wrapper expected_data{"aaa", "Héllo"};
+  LCW col{LCW({"aaa", "Héllo"}, this->odds_valid()), LCW{}, LCW{""}, LCW{"42"}};
+  strings_column_wrapper expected_data({"aaa", "Héllo"}, this->odds_valid());
   size_type index = 0;
 
   auto s       = get_element(col, index);
@@ -367,11 +382,11 @@ TEST_F(ListGetStringValueTest, NestedGetNonNullNonEmpty)
   LCW col{
     LCW{LCW{"aaa", "Héllo"}},
     LCW{},
-    LCW{LCW{""}},
+    LCW{LCW{""}, LCW({"string", "str2", "xyz"}, this->nth_valid(0))},
     LCW{LCW{"42"}, LCW{"21"}}
   };
   // clang-format on
-  LCW expected_data{LCW{""}};
+  LCW expected_data{LCW{""}, LCW({"string", "str2", "xyz"}, this->nth_valid(0))};
   size_type index = 2;
 
   auto s       = get_element(col, index);
@@ -385,16 +400,17 @@ TEST_F(ListGetStringValueTest, NestedGetNonNullNonEmptyPreserveNull)
 {
   using LCW = cudf::test::lists_column_wrapper<string_view>;
 
-  std::vector<valid_type> valid{0, 1};
+  std::vector<valid_type> valid{0, 1, 1};
   // clang-format off
   LCW col{
     LCW{LCW{"aaa", "Héllo"}},
     LCW{},
-    LCW({LCW{""}, LCW{"cc"}}, valid.begin()),
+    LCW({LCW{""}, LCW{"cc"}, LCW({"string", "str2", "xyz"}, this->nth_valid(0))}, valid.begin()),
     LCW{LCW{"42"}, LCW{"21"}}
   };
   // clang-format on
-  LCW expected_data({LCW{""}, LCW{"cc"}}, valid.begin());
+  LCW expected_data({LCW{""}, LCW{"cc"}, LCW({"string", "str2", "xyz"}, this->nth_valid(0))},
+                    valid.begin());
   size_type index = 2;
 
   auto s       = get_element(col, index);
