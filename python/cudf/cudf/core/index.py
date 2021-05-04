@@ -795,7 +795,6 @@ class Index(SingleColumnFrame, Serializable):
             return as_index(op())
 
     def _binaryop(self, fn, other):
-        assert False
         if isinstance(other, (cudf.DataFrame, cudf.Series)):
             return NotImplemented
 

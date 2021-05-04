@@ -5,10 +5,14 @@ Test related to Index
 """
 import re
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from hypothesis import given, settings
+from hypothesis.extra.numpy import arrays
+from hypothesis.strategies import floats
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110
@@ -2057,4 +2061,36 @@ def test_index_set_names_error(idx, level, names):
         rfunc=gi.set_names,
         lfunc_args_and_kwargs=([], {"names": names, "level": level}),
         rfunc_args_and_kwargs=([], {"names": names, "level": level}),
+    )
+
+
+@pytest.mark.parametrize(
+    "binop",
+    [
+        "__add__",
+        "__sub__",
+        "__mul__",
+        "__floordiv__",
+        "__truediv__",
+        "__eq__",
+        "__ne__",
+        "__lt__",
+        "__le__",
+        "__gt__",
+        "__ge__",
+    ],
+)
+@given(
+    x=arrays(np.float64, (100,), elements=floats(-10, 10, width=64)),
+    y=arrays(np.float64, (100,), elements=floats(-10, 10, width=64)),
+)
+@settings(deadline=None)
+def test_binops(binop, x, y):
+    """Test binary operations."""
+    x = cudf.Index(x)
+    y = cudf.Index(y)
+    got = (getattr(x, binop)(y)).values
+    expected = getattr(x.values, binop)(y.values)
+    assert cp.all(got == expected) or (
+        cp.all(cp.isnan(got)) and cp.all(cp.isnan(expected))
     )
