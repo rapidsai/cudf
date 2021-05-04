@@ -110,7 +110,7 @@ template <typename reader, typename reader_options>
 std::unique_ptr<reader> make_reader(source_info const& src_info,
                                     reader_options const& options,
                                     rmm::mr::device_memory_resource* mr,
-                  rmm::cuda_stream_view stream)
+                                    rmm::cuda_stream_view stream)
 {
   if (src_info.type == io_type::FILEPATH) {
     return std::make_unique<reader>(src_info.filepaths, options, mr, stream);
@@ -347,7 +347,8 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
 table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<detail_orc::reader>(options.get_source(), options, mr, rmm::cuda_stream_default);
+  auto reader =
+    make_reader<detail_orc::reader>(options.get_source(), options, mr, rmm::cuda_stream_default);
 
   return reader->read(options);
 }
@@ -406,7 +407,8 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<detail_parquet::reader>(options.get_source(), options, mr, rmm::cuda_stream_default);
+  auto reader = make_reader<detail_parquet::reader>(
+    options.get_source(), options, mr, rmm::cuda_stream_default);
 
   return reader->read(options);
 }
