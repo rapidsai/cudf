@@ -794,7 +794,7 @@ class Index(SingleColumnFrame, Serializable):
         else:
             return as_index(op())
 
-    def _binaryop(self, fn, other):
+    def _binaryop(self, fn, other, reflect=False):
         if isinstance(other, (cudf.DataFrame, cudf.Series)):
             return NotImplemented
 
@@ -824,7 +824,7 @@ class Index(SingleColumnFrame, Serializable):
         #     if not is_scalar(rhs) and rhs.nullable:
         #         rhs = rhs.fillna(fill_value)
         #
-        outcol = lhs._column.binary_operator(fn, rhs)
+        outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
 
         # Get the appropriate name for output operations involving two objects
         # that are Series-like objects. The output shares the lhs's name unless
@@ -953,25 +953,25 @@ class Index(SingleColumnFrame, Serializable):
         return self._binaryop("add", other)
 
     def __radd__(self, other):
-        return self._apply_op("__radd__", other)
+        return self._binaryop("add", other, reflect=True)
 
     def __sub__(self, other):
         return self._binaryop("sub", other)
 
     def __rsub__(self, other):
-        return self._apply_op("__rsub__", other)
+        return self._binaryop("sub", other, reflect=True)
 
     def __mul__(self, other):
         return self._binaryop("mul", other)
 
     def __rmul__(self, other):
-        return self._apply_op("__rmul__", other)
+        return self._binaryop("mul", other, reflect=True)
 
     def __mod__(self, other):
         return self._binaryop("mod", other)
 
     def __rmod__(self, other):
-        return self._apply_op("__rmod__", other)
+        return self._binaryop("mod", other, reflect=True)
 
     def __pow__(self, other):
         return self._binaryop("pow", other)
@@ -980,13 +980,13 @@ class Index(SingleColumnFrame, Serializable):
         return self._binaryop("floordiv", other)
 
     def __rfloordiv__(self, other):
-        return self._apply_op("__rfloordiv__", other)
+        return self._binaryop("floordiv", other, reflect=True)
 
     def __truediv__(self, other):
         return self._binaryop("truediv", other)
 
     def __rtruediv__(self, other):
-        return self._apply_op("__rtruediv__", other)
+        return self._binaryop("truediv", other, reflect=True)
 
     __div__ = __truediv__
 

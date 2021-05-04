@@ -24,11 +24,13 @@ class SingleColumnFrameTests:
     @pytest.mark.parametrize(
         "binop",
         [
+            # Arithmetic operations.
             "__add__",
             "__sub__",
             "__mul__",
             "__floordiv__",
             "__truediv__",
+            # Logical operations.
             "__eq__",
             "__ne__",
             "__lt__",
