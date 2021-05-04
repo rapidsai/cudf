@@ -12,6 +12,7 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
+#pragma once
 
 #include <cudf/detail/iterator.cuh>                             // include iterator header
 #include <cudf/detail/utilities/transform_unary_functions.cuh>  //for meanvar
@@ -34,8 +35,11 @@
 #include <thrust/device_vector.h>
 #include <cub/device/device_reduce.cuh>
 
-// Base Typed test fixture for iterator test
+template <typename T>
+struct IteratorTest2222 : public cudf::test::BaseFixture {
+};
 
+// Base Typed test fixture for iterator test
 template <typename T>
 struct IteratorTest : public cudf::test::BaseFixture {
   // iterator test case which uses cub

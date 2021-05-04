@@ -12,8 +12,18 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-#include <tests/iterator/iterator_tests.cuh>
-#include <type_traits>
+#include <tests/iterator/pair_iterator_test.cuh>
+
+using TestingTypes = cudf::test::NumericTypes;
+
+template <typename T>
+struct NumericPairIteratorTest : public IteratorTest<T> {
+};
+
+TYPED_TEST_CASE(NumericPairIteratorTest, TestingTypes);
+TYPED_TEST(NumericPairIteratorTest, nonull_pair_iterator) { nonull_pair_iterator(*this); }
+TYPED_TEST(NumericPairIteratorTest, null_pair_iterator) { null_pair_iterator(*this); }
+
 
 // to print meanvar for debug.
 template <typename T>
@@ -49,17 +59,13 @@ struct sum_if_not_null {
   }
 };
 
-template <typename T>
-struct PairIteratorTest : public cudf::test::BaseFixture {
-};
-TYPED_TEST_CASE(PairIteratorTest, cudf::test::NumericTypes);
 // TODO: enable this test also at __CUDACC_DEBUG__
 // This test causes fatal compilation error only at device debug mode.
 // Workaround: exclude this test only at device debug mode.
 #if !defined(__CUDACC_DEBUG__)
 // This test computes `count`, `sum`, `sum_of_squares` at a single reduction call.
 // It would be useful for `var`, `std` operation
-TYPED_TEST(PairIteratorTest, mean_var_output)
+TYPED_TEST(NumericPairIteratorTest, mean_var_output)
 {
   using T        = TypeParam;
   using T_output = cudf::meanvar<T>;
@@ -117,71 +123,3 @@ TYPED_TEST(PairIteratorTest, mean_var_output)
   }
 }
 #endif
-
-using TestingTypes = cudf::test::AllTypes;
-
-TYPED_TEST_CASE(IteratorTest, TestingTypes);
-
-TYPED_TEST(IteratorTest, nonull_pair_iterator)
-{
-  using T = TypeParam;
-  // data and valid arrays
-  auto host_values_std =
-    cudf::test::make_type_param_vector<T>({0, 6, 0, -14, 13, 64, -13, -20, 45});
-  thrust::host_vector<T> host_values(host_values_std);
-
-  // create a column
-  cudf::test::fixed_width_column_wrapper<T> w_col(host_values.begin(), host_values.end());
-  auto d_col = cudf::column_device_view::create(w_col);
-
-  // calculate the expected value by CPU.
-  thrust::host_vector<thrust::pair<T, bool>> replaced_array(host_values.size());
-  std::transform(host_values.begin(), host_values.end(), replaced_array.begin(), [](auto s) {
-    return thrust::make_pair(s, true);
-  });
-
-  // GPU test
-  auto it_dev = d_col->pair_begin<T, false>();
-  this->iterator_test_thrust(replaced_array, it_dev, host_values.size());
-}
-
-TYPED_TEST(IteratorTest, null_pair_iterator)
-{
-  using T = TypeParam;
-  // data and valid arrays
-  auto host_values = cudf::test::make_type_param_vector<T>({0, 6, 0, -14, 13, 64, -13, -20, 45});
-  thrust::host_vector<bool> host_bools(std::vector<bool>({1, 1, 0, 1, 1, 1, 0, 1, 1}));
-
-  // create a column with bool vector
-  cudf::test::fixed_width_column_wrapper<T> w_col(
-    host_values.begin(), host_values.end(), host_bools.begin());
-  auto d_col = cudf::column_device_view::create(w_col);
-
-  // calculate the expected value by CPU.
-  thrust::host_vector<thrust::pair<T, bool>> value_and_validity(host_values.size());
-  std::transform(host_values.begin(),
-                 host_values.end(),
-                 host_bools.begin(),
-                 value_and_validity.begin(),
-                 [](auto s, auto b) {
-                   return thrust::pair<T, bool>{s, b};
-                 });
-  thrust::host_vector<thrust::pair<T, bool>> value_all_valid(host_values.size());
-  std::transform(host_values.begin(),
-                 host_values.end(),
-                 host_bools.begin(),
-                 value_all_valid.begin(),
-                 [](auto s, auto b) {
-                   return thrust::pair<T, bool>{s, true};
-                 });
-
-  // GPU test
-  auto it_dev = d_col->pair_begin<T, true>();
-  this->iterator_test_thrust(value_and_validity, it_dev, host_values.size());
-
-  auto it_hasnonull_dev = d_col->pair_begin<T, false>();
-  this->iterator_test_thrust(value_all_valid, it_hasnonull_dev, host_values.size());
-
-  auto itb_dev = cudf::detail::make_validity_iterator(*d_col);
-  this->iterator_test_thrust(host_bools, itb_dev, host_values.size());
-}
