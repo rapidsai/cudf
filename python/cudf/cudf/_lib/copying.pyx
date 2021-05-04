@@ -8,6 +8,8 @@ from libcpp.vector cimport vector
 from libcpp.utility cimport move
 from libc.stdint cimport int32_t, int64_t
 
+import cudf
+from rmm._lib.device_buffer cimport DeviceBuffer
 from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_device_scalar
 from cudf._lib.scalar cimport DeviceScalar
@@ -735,3 +737,19 @@ def segmented_gather(Column source_column, Column gather_map):
 
     result = Column.from_unique_ptr(move(c_result))
     return result
+
+
+def test_pack(Table input_table):
+    cdef table_view input_table_view = input_table.data_view()
+    cdef cpp_copying.packed_columns pack_result = move(
+        cpp_copying.pack(input_table_view)
+    )
+    cdef table_view output_table_view = cpp_copying.unpack(pack_result)
+
+    data = DeviceBuffer.c_from_unique_ptr(move(pack_result.gpu_data))
+
+    return cudf.DataFrame._from_table(Table.from_table_view(
+        output_table_view,
+        data,
+        input_table._column_names
+    ))
