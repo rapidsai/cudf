@@ -18,7 +18,7 @@ def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
 
     Returns
     --------
-    (labels, cats) : (Series, Series)
+    (labels, cats) : (cupy.ndarray, cupy.ndarray or Index)
         - *labels* contains the encoded values
         - *cats* contains the categories in order that the N-th
             item corresponds to the (N-1) code.
@@ -29,10 +29,7 @@ def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
     >>> data = cudf.Series(['a', 'c', 'c'])
     >>> codes, uniques = cudf.factorize(data)
     >>> codes
-    0    0
-    1    1
-    2    1
-    dtype: int8
+    array([0, 1, 1], dtype=int8)
     >>> uniques
     0    a
     1    c
