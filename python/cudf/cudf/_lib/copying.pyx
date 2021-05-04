@@ -2,14 +2,16 @@
 
 import pandas as pd
 
+import cudf
+
 from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr, shared_ptr, make_shared
 from libcpp.vector cimport vector
 from libcpp.utility cimport move
 from libc.stdint cimport int32_t, int64_t
 
-import cudf
 from rmm._lib.device_buffer cimport DeviceBuffer
+
 from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_device_scalar
 from cudf._lib.scalar cimport DeviceScalar
