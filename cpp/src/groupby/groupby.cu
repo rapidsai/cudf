@@ -196,7 +196,7 @@ detail::sort::sort_groupby_helper& groupby::helper()
 
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
   table_view const& values,
-  std::vector<size_type> const& offsets,
+  host_span<size_type const> offsets,
   std::vector<std::reference_wrapper<const scalar>> const& fill_values,
   rmm::mr::device_memory_resource* mr)
 {

@@ -41,7 +41,8 @@ void test_groupby_shift_fixed_width_single(fixed_width_column_wrapper<K> const& 
                                            fixed_width_column_wrapper<V> const& expected)
 {
   groupby::groupby gb_obj(table_view({key}));
-  auto got = gb_obj.shift(table_view{{value}}, {offset}, {fill_value});
+  std::vector<size_type> offsets{offset};
+  auto got = gb_obj.shift(table_view{{value}}, offsets, {fill_value});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL((*got.second).view().column(0), expected);
 }
 
@@ -217,7 +218,8 @@ void test_groupby_shift_string_single(fixed_width_column_wrapper<K> const& key,
                                       strings_column_wrapper const& expected)
 {
   groupby::groupby gb_obj(table_view({key}));
-  auto got = gb_obj.shift(table_view{{value}}, {offset}, {fill_value});
+  std::vector<size_type> offsets{offset};
+  auto got = gb_obj.shift(table_view{{value}}, offsets, {fill_value});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL((*got.second).view().column(0), expected);
 }
 
