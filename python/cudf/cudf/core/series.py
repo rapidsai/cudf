@@ -54,6 +54,7 @@ from cudf.utils.dtypes import (
     is_scalar,
     min_scalar_type,
     numeric_normalize_types,
+    _decimal_normalize_types,
 )
 from cudf.utils.utils import (
     get_appropriate_dispatched_func,
@@ -2585,9 +2586,16 @@ class Series(SingleColumnFrame, Serializable):
                     )
 
             if dtype_mismatch:
-                objs = numeric_normalize_types(*objs)
+                if isinstance(objs[0]._column, cudf.core.column.DecimalColumn):
+                    objs = _decimal_normalize_types(*objs)
+                else:
+                    objs = numeric_normalize_types(*objs)
 
         col = ColumnBase._concat([o._column for o in objs])
+
+        if isinstance(col, cudf.core.column.DecimalColumn):
+            col = objs[0]._column._copy_type_metadata(col)
+
         return cls(data=col, index=index, name=name)
 
     @property
