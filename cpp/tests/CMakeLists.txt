@@ -206,8 +206,8 @@ ConfigureTest(COPYING_TEST
     copying/pack_tests.cu
     copying/sample_tests.cpp
     copying/scatter_tests.cpp
-    copying/scatter_list_tests.cu
-    copying/scatter_struct_tests.cu
+    copying/scatter_list_tests.cpp
+    copying/scatter_struct_tests.cpp
     copying/segmented_gather_list_tests.cpp
     copying/shift_tests.cpp
     copying/slice_tests.cpp
