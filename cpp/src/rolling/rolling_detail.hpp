@@ -26,14 +26,6 @@ namespace cudf {
 
 namespace detail {
 
-// return true if this Op is specialized for strings.
-template <typename ColumnType, aggregation::Kind Op>
-static constexpr bool is_rolling_string_specialization()
-{
-  return std::is_same<ColumnType, cudf::string_view>::value and
-         (aggregation::MIN == Op or aggregation::MAX == Op);
-}
-
 // store functor
 template <typename T, bool is_mean = false>
 struct rolling_store_output_functor {
