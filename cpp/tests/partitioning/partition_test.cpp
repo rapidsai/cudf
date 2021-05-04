@@ -294,3 +294,19 @@ TEST_F(PartitionTestNotTyped, ListOfStringsEmpty)
   CUDF_TEST_EXPECT_TABLES_EQUAL(table_to_partition, result.first->view());
   EXPECT_EQ(3, result.second.size());
 }
+
+TEST_F(PartitionTestNotTyped, ListOfListOfIntEmpty)
+{
+  cudf::test::lists_column_wrapper<int32_t> level_2_list;
+
+  fixed_width_column_wrapper<int32_t> level_1_offsets{0, 0, 0};
+  std::unique_ptr<cudf::column> level_1_list =
+    cudf::make_lists_column(2, level_1_offsets.release(), level_2_list.release(), 0, {});
+
+  auto table_to_partition = cudf::table_view{{*level_1_list}};
+  fixed_width_column_wrapper<int32_t> map{0, 0};
+
+  auto result = cudf::partition(table_to_partition, map, 2);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table_to_partition, result.first->view());
+  EXPECT_EQ(3, result.second.size());
+}
