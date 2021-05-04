@@ -18,9 +18,12 @@ from libcpp.utility cimport move
 from libcpp cimport bool
 
 import cudf
-from cudf._lib.types import cudf_to_np_types, duration_unit_map
+from cudf._lib.types import (
+    cudf_to_np_types, 
+    duration_unit_map
+)
 from cudf._lib.types import datetime_unit_map
-from cudf._lib.types cimport underlying_type_t_type_id
+from cudf._lib.types cimport underlying_type_t_type_id, dtype_from_column_view
 
 from cudf._lib.cpp.wrappers.timestamps cimport (
     timestamp_s,
@@ -45,7 +48,7 @@ from cudf._lib.cpp.scalar.scalar cimport (
     list_scalar,
     get_test_list_scalar,
 )
-from cudf.utils.dtypes import _decimal_to_int64
+from cudf.utils.dtypes import _decimal_to_int64, is_list_dtype
 cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -103,6 +106,8 @@ cdef class DeviceScalar:
     def _to_host_scalar(self):
         if isinstance(self.dtype, cudf.Decimal64Dtype):
             result = _get_py_decimal_from_fixed_point(self.c_value)
+        elif is_list_dtype(self.dtype):
+            result = _get_py_list_from_list(self.c_value)
         elif pd.api.types.is_string_dtype(self.dtype):
             result = _get_py_string_from_string(self.c_value)
         elif pd.api.types.is_numeric_dtype(self.dtype):
@@ -164,6 +169,10 @@ cdef class DeviceScalar:
         if cdtype.id() == libcudf_types.DECIMAL64 and dtype is None:
             raise TypeError(
                 "Must pass a dtype when constructing from a fixed-point scalar"
+            )
+        elif cdtype.id() == libcudf_types.LIST:
+            s._dtype = dtype_from_column_view(
+                (<list_scalar*>s.get_raw_ptr())[0].view()
             )
         else:
             if dtype is not None:
@@ -273,6 +282,18 @@ cdef _set_decimal64_from_scalar(unique_ptr[scalar]& s,
             <int64_t>np.int64(value), scale_type(-dtype.scale), valid
         )
     )
+
+cdef _get_py_list_from_list(unique_ptr[scalar]& s):
+
+    if not s.get()[0].is_valid():
+        return cudf.NA
+
+    cdef column_view list_col_view = (<list_scalar*>s.get()).view()
+    cdef Column list_col = Column.from_column_view(list_col_view, None)
+    cdef Table to_arrow_table = Table({"col": list_col})
+
+    arrow_table = to_arrow(to_arrow_table, [["col", []]])
+    return arrow_table['col'].to_pylist()
 
 cdef _get_py_string_from_string(unique_ptr[scalar]& s):
     if not s.get()[0].is_valid():
@@ -449,17 +470,10 @@ def _create_proxy_nat_scalar(dtype):
 
 def test_get_test_list_scalar(Column input_column):
     cdef column_view in_col = input_column.view()
-    cdef unique_ptr[scalar] unique_ptr_to_scalar = get_test_list_scalar(in_col)
 
-    cdef DeviceScalar devslr = DeviceScalar.__new__(DeviceScalar)
-    devslr.c_value = move(unique_ptr_to_scalar)
 
-    cdef list_scalar* raw_ptr = <list_scalar*>(devslr.c_value).get()
-    cdef column_view the_scalars_data = raw_ptr[0].view()
+    cdef DeviceScalar result_slr = DeviceScalar.from_unique_ptr(get_test_list_scalar(in_col))
 
-    cdef Column output_column = Column.from_column_view(the_scalars_data, None)
-    
-    cdef Table to_arrow_table = Table({"col": output_column})
-    arrow_table = to_arrow(to_arrow_table, [["col", []]])
+    print(result_slr._dtype.__repr__())
 
-    return arrow_table['col'].to_pylist()
+    return result_slr._to_host_scalar()
