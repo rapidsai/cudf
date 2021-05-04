@@ -44,6 +44,7 @@ class reader {
    * @param filepaths Paths to the files containing the input dataset
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
+   * @param stream CUDA stream used for device memory operations and kernel launches
    */
   explicit reader(std::vector<std::string> const &filepaths,
                   avro_reader_options const &options,
@@ -56,6 +57,7 @@ class reader {
    * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
+   * @param stream CUDA stream used for device memory operations and kernel launches
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                   avro_reader_options const &options,

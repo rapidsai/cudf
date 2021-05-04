@@ -31,7 +31,7 @@ struct serial_trie_node {
   int16_t children_offset{-1};
   char character{trie_terminating_character};
   bool is_leaf{false};
-  serial_trie_node() = default;  // FIXME This is necessary for a Thrust bug on CentOS7 + CUDA10
+  // serial_trie_node() = default;  // FIXME This is necessary for a Thrust bug on CentOS7 + CUDA10
   explicit serial_trie_node(char c, bool leaf = false) noexcept : character(c), is_leaf(leaf) {}
 };
 

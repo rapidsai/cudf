@@ -75,7 +75,7 @@ class reader::impl {
    * @param filepath Filepath if reading dataset from a file
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
-   * @param stream TODO
+   * @param stream CUDA stream used for device memory operations and kernel launches
    */
   explicit impl(std::unique_ptr<datasource> source,
                 std::string filepath,
