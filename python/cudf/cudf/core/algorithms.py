@@ -31,9 +31,7 @@ def factorize(values, sort=False, na_sentinel=-1, size_hint=None):
     >>> codes
     array([0, 1, 1], dtype=int8)
     >>> uniques
-    0    a
-    1    c
-    dtype: object
+    StringIndex(['a' 'c'], dtype='object')
 
     See Also
     --------
