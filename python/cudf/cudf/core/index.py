@@ -794,7 +794,7 @@ class Index(SingleColumnFrame, Serializable):
         else:
             return as_index(op())
 
-    def _binaryop(self, fn, other, reflect=False):
+    def _binaryop(self, fn, other, fill_value=None, reflect=False):
         if isinstance(other, (cudf.DataFrame, cudf.Series)):
             return NotImplemented
 
@@ -818,12 +818,12 @@ class Index(SingleColumnFrame, Serializable):
                 truediv_type = truediv_int_dtype_corrections[str(lhs.dtype)]
                 lhs = lhs.astype(truediv_type)
 
-        # if fill_value is not None:
-        #     if lhs.nullable:
-        #         lhs = lhs.fillna(fill_value)
-        #     if not is_scalar(rhs) and rhs.nullable:
-        #         rhs = rhs.fillna(fill_value)
-        #
+        if fill_value is not None:
+            if lhs.nullable:
+                lhs = lhs.fillna(fill_value)
+            if not is_scalar(rhs) and rhs.nullable:
+                rhs = rhs.fillna(fill_value)
+
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
 
         # Get the appropriate name for output operations involving two objects
