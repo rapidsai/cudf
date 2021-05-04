@@ -704,27 +704,27 @@ class GroupBy(Serializable):
 
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """
-        Shift each group by `periods` positions.
-
-        Parameter "freq" is unsupported.
+        Shift each group by ``periods`` positions.
 
         Parameters
         ----------
         periods : int, default 1
-        Number of periods to shift.
-
+            Number of periods to shift.
         freq : str, unsupported
-
         axis : 0, axis to shift
-        Shift direction. Only row-wise shift is supported
-
+            Shift direction. Only row-wise shift is supported
         fill_value : optional
-        The scalar value to use for newly introduced missing values. Should
-        match the dtype of columns to fill.
+            The scalar value to use for newly introduced missing values. Should
+            match the dtype of columns to fill.
 
         Returns
+        -------
         Series or DataFrame
-        Object shifted within each group.
+            Object shifted within each group.
+
+        Notes
+        -----
+        Parameter ``freq`` is unsupported.
         """
 
         if freq is not None:
