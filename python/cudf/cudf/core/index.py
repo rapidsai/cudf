@@ -794,7 +794,7 @@ class Index(SingleColumnFrame, Serializable):
         else:
             return as_index(op())
 
-    def _binaryop(self, fn, other, fill_value=None, reflect=False):
+    def _binaryop(self, other, fn, fill_value=None, reflect=False):
         if isinstance(other, (cudf.DataFrame, cudf.Series)):
             return NotImplemented
 
@@ -949,47 +949,6 @@ class Index(SingleColumnFrame, Serializable):
         """
         return as_index(self._values.unique(), name=self.name)
 
-    def __add__(self, other):
-        return self._binaryop("add", other)
-
-    def __radd__(self, other):
-        return self._binaryop("add", other, reflect=True)
-
-    def __sub__(self, other):
-        return self._binaryop("sub", other)
-
-    def __rsub__(self, other):
-        return self._binaryop("sub", other, reflect=True)
-
-    def __mul__(self, other):
-        return self._binaryop("mul", other)
-
-    def __rmul__(self, other):
-        return self._binaryop("mul", other, reflect=True)
-
-    def __mod__(self, other):
-        return self._binaryop("mod", other)
-
-    def __rmod__(self, other):
-        return self._binaryop("mod", other, reflect=True)
-
-    def __pow__(self, other):
-        return self._binaryop("pow", other)
-
-    def __floordiv__(self, other):
-        return self._binaryop("floordiv", other)
-
-    def __rfloordiv__(self, other):
-        return self._binaryop("floordiv", other, reflect=True)
-
-    def __truediv__(self, other):
-        return self._binaryop("truediv", other)
-
-    def __rtruediv__(self, other):
-        return self._binaryop("truediv", other, reflect=True)
-
-    __div__ = __truediv__
-
     def __and__(self, other):
         return self._apply_op("__and__", other)
 
@@ -998,24 +957,6 @@ class Index(SingleColumnFrame, Serializable):
 
     def __xor__(self, other):
         return self._apply_op("__xor__", other)
-
-    def __eq__(self, other):
-        return self._binaryop("eq", other)
-
-    def __ne__(self, other):
-        return self._binaryop("ne", other)
-
-    def __lt__(self, other):
-        return self._binaryop("lt", other)
-
-    def __le__(self, other):
-        return self._binaryop("le", other)
-
-    def __gt__(self, other):
-        return self._binaryop("gt", other)
-
-    def __ge__(self, other):
-        return self._binaryop("ge", other)
 
     def join(
         self, other, how="left", level=None, return_indexers=False, sort=False

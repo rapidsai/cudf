@@ -3515,6 +3515,68 @@ class SingleColumnFrame(Frame):
         """
         return self._column.to_arrow()
 
+    def __add__(self, other):
+        return self._binaryop(other, "add")
+
+    def __radd__(self, other):
+        return self._binaryop(other, "add", reflect=True)
+
+    def __sub__(self, other):
+        return self._binaryop(other, "sub")
+
+    def __rsub__(self, other):
+        return self._binaryop(other, "sub", reflect=True)
+
+    def __mul__(self, other):
+        return self._binaryop(other, "mul")
+
+    def __rmul__(self, other):
+        return self._binaryop(other, "mul", reflect=True)
+
+    def __mod__(self, other):
+        return self._binaryop(other, "mod")
+
+    def __rmod__(self, other):
+        return self._binaryop(other, "mod", reflect=True)
+
+    def __pow__(self, other):
+        return self._binaryop(other, "pow")
+
+    def __rpow__(self, other):
+        return self._binaryop(other, "pow", reflect=True)
+
+    def __floordiv__(self, other):
+        return self._binaryop(other, "floordiv")
+
+    def __rfloordiv__(self, other):
+        return self._binaryop(other, "floordiv", reflect=True)
+
+    def __truediv__(self, other):
+        return self._binaryop(other, "truediv")
+
+    def __rtruediv__(self, other):
+        return self._binaryop(other, "truediv", reflect=True)
+
+    __div__ = __truediv__
+
+    def __eq__(self, other):
+        return self._binaryop(other, "eq")
+
+    def __ne__(self, other):
+        return self._binaryop(other, "ne")
+
+    def __lt__(self, other):
+        return self._binaryop(other, "lt")
+
+    def __le__(self, other):
+        return self._binaryop(other, "le")
+
+    def __gt__(self, other):
+        return self._binaryop(other, "gt")
+
+    def __ge__(self, other):
+        return self._binaryop(other, "ge")
+
 
 def _get_replacement_values_for_columns(
     to_replace: Any, value: Any, columns_dtype_map: Dict[Any, Any]
