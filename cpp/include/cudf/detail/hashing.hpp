@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,17 +29,17 @@ namespace detail {
  */
 std::unique_ptr<column> hash(
   table_view const& input,
-  hash_id hash_function                     = hash_id::HASH_MURMUR3,
-  std::vector<uint32_t> const& initial_hash = {},
-  uint32_t seed                             = 0,
-  rmm::cuda_stream_view stream              = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource());
+  hash_id hash_function                        = hash_id::HASH_MURMUR3,
+  cudf::host_span<uint32_t const> initial_hash = {},
+  uint32_t seed                                = 0,
+  rmm::cuda_stream_view stream                 = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr          = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> murmur_hash3_32(
   table_view const& input,
-  std::vector<uint32_t> const& initial_hash = {},
-  rmm::cuda_stream_view stream              = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr       = rmm::mr::get_current_device_resource());
+  cudf::host_span<uint32_t const> initial_hash = {},
+  rmm::cuda_stream_view stream                 = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr          = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> md5_hash(
   table_view const& input,
