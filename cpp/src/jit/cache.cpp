@@ -104,6 +104,15 @@ std::string get_program_cache_dir()
 #endif
 }
 
+void try_parse_numeric_env_var(size_t& result, char const* const env_name)
+{
+  auto value = std::getenv(env_name);
+
+  if (value != nullptr) {
+    result = std::stoull(value);  // fails if env var contains invalid value.
+  }
+}
+
 jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData preprog)
 {
   static std::mutex caches_mutex{};
@@ -114,14 +123,23 @@ jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData prep
   auto existing_cache = caches.find(preprog.name());
 
   if (existing_cache == caches.end()) {
-    auto max_files = std::getenv("LIBCUDF_KERNEL_CACHE_FILE_LIMIT");
-    auto res       = caches.insert({preprog.name(),
-                              std::make_unique<jitify2::ProgramCache<>>(
-                                100,
+    size_t kernel_limit_proc = std::numeric_limits<size_t>::max();
+    size_t kernel_limit_disk = std::numeric_limits<size_t>::max();
+
+    try_parse_numeric_env_var(kernel_limit_proc, "LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS");
+    try_parse_numeric_env_var(kernel_limit_disk, "LIBCUDF_KERNEL_CACHE_LIMIT_DISK");
+
+    auto cache_dir = get_program_cache_dir();
+
+    if (kernel_limit_disk == 0) { cache_dir = {}; }
+
+    auto res = caches.insert({preprog.name(),
+                              std::make_unique<jitify2::ProgramCache<>>(  //
+                                kernel_limit_proc,
                                 preprog,
                                 nullptr,
-                                get_program_cache_dir(),
-                                max_files == nullptr ? 0 : std::stoul(max_files))});
+                                cache_dir,
+                                kernel_limit_disk)});
 
     existing_cache = res.first;
   }
