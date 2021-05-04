@@ -109,10 +109,11 @@ namespace {
 template <typename reader, typename reader_options>
 std::unique_ptr<reader> make_reader(source_info const& src_info,
                                     reader_options const& options,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::mr::device_memory_resource* mr,
+                  rmm::cuda_stream_view stream)
 {
   if (src_info.type == io_type::FILEPATH) {
-    return std::make_unique<reader>(src_info.filepaths, options, mr);
+    return std::make_unique<reader>(src_info.filepaths, options, mr, stream);
   }
 
   std::vector<std::unique_ptr<datasource>> datasources;
@@ -155,7 +156,7 @@ table_with_metadata read_avro(avro_reader_options const& opts, rmm::mr::device_m
   namespace avro = cudf::io::detail::avro;
 
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<avro::reader>(opts.get_source(), opts, mr);
+  auto reader = make_reader<avro::reader>(opts.get_source(), opts, mr, rmm::cuda_stream_default);
   return reader->read(opts);
 }
 
@@ -164,7 +165,7 @@ table_with_metadata read_json(json_reader_options const& opts, rmm::mr::device_m
   namespace json = cudf::io::detail::json;
 
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<json::reader>(opts.get_source(), opts, mr);
+  auto reader = make_reader<json::reader>(opts.get_source(), opts, mr, rmm::cuda_stream_default);
   return reader->read(opts);
 }
 
@@ -173,7 +174,8 @@ table_with_metadata read_csv(csv_reader_options const& options, rmm::mr::device_
   namespace csv = cudf::io::detail::csv;
 
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<csv::reader>(options.get_source(), options, mr);
+  auto reader =
+    make_reader<csv::reader>(options.get_source(), options, mr, rmm::cuda_stream_default);
 
   return reader->read();
 }
@@ -345,7 +347,7 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
 table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<detail_orc::reader>(options.get_source(), options, mr);
+  auto reader = make_reader<detail_orc::reader>(options.get_source(), options, mr, rmm::cuda_stream_default);
 
   return reader->read(options);
 }
@@ -404,7 +406,7 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<detail_parquet::reader>(options.get_source(), options, mr);
+  auto reader = make_reader<detail_parquet::reader>(options.get_source(), options, mr, rmm::cuda_stream_default);
 
   return reader->read(options);
 }

@@ -622,14 +622,15 @@ table_with_metadata reader::impl::convert_data_to_table(device_span<uint64_t con
 reader::impl::impl(std::unique_ptr<datasource> source,
                    std::string filepath,
                    json_reader_options const &options,
-                   rmm::mr::device_memory_resource *mr)
+                   rmm::mr::device_memory_resource *mr,
+                   rmm::cuda_stream_view stream)
   : options_(options), mr_(mr), source_(std::move(source)), filepath_(filepath)
 {
   CUDF_EXPECTS(options_.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
 
-  opts_.trie_true  = createSerializedTrie({"true"});
-  opts_.trie_false = createSerializedTrie({"false"});
-  opts_.trie_na    = createSerializedTrie({"", "null"});
+  opts_.trie_true  = createSerializedTrie({"true"}, stream);
+  opts_.trie_false = createSerializedTrie({"false"}, stream);
+  opts_.trie_na    = createSerializedTrie({"", "null"}, stream);
 
   opts_.dayfirst = options.is_enabled_dayfirst();
 }
@@ -674,21 +675,23 @@ table_with_metadata reader::impl::read(json_reader_options const &options,
 // Forward to implementation
 reader::reader(std::vector<std::string> const &filepaths,
                json_reader_options const &options,
-               rmm::mr::device_memory_resource *mr)
+               rmm::mr::device_memory_resource *mr,
+               rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
   // Delay actual instantiation of data source until read to allow for
   // partial memory mapping of file using byte ranges
-  _impl = std::make_unique<impl>(nullptr, filepaths[0], options, mr);
+  _impl = std::make_unique<impl>(nullptr, filepaths[0], options, mr, stream);
 }
 
 // Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                json_reader_options const &options,
-               rmm::mr::device_memory_resource *mr)
+               rmm::mr::device_memory_resource *mr,
+               rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
-  _impl = std::make_unique<impl>(std::move(sources[0]), "", options, mr);
+  _impl = std::make_unique<impl>(std::move(sources[0]), "", options, mr, stream);
 }
 
 // Destructor within this translation unit

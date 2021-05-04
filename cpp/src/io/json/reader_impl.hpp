@@ -185,7 +185,8 @@ class reader::impl {
   explicit impl(std::unique_ptr<datasource> source,
                 std::string filepath,
                 json_reader_options const &options,
-                rmm::mr::device_memory_resource *mr);
+                rmm::mr::device_memory_resource *mr,
+                rmm::cuda_stream_view stream);
 
   /**
    * @brief Read an entire set or a subset of data from the source

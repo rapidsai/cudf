@@ -1591,7 +1591,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 // Forward to implementation
 reader::reader(std::vector<std::string> const &filepaths,
                parquet_reader_options const &options,
-               rmm::mr::device_memory_resource *mr)
+               rmm::mr::device_memory_resource *mr,
+               rmm::cuda_stream_view stream)
   : _impl(std::make_unique<impl>(datasource::create(filepaths), options, mr))
 {
 }
@@ -1599,7 +1600,8 @@ reader::reader(std::vector<std::string> const &filepaths,
 // Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                parquet_reader_options const &options,
-               rmm::mr::device_memory_resource *mr)
+               rmm::mr::device_memory_resource *mr,
+               rmm::cuda_stream_view stream)
   : _impl(std::make_unique<impl>(std::move(sources), options, mr))
 {
 }

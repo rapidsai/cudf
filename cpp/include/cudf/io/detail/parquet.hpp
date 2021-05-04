@@ -58,7 +58,8 @@ class reader {
    */
   explicit reader(std::vector<std::string> const& filepaths,
                   parquet_reader_options const& options,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default);
 
   /**
    * @brief Constructor from an array of datasources
@@ -69,7 +70,8 @@ class reader {
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                   parquet_reader_options const& options,
-                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
+                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default);
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header

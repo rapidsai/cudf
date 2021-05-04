@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <deque>
@@ -52,8 +53,8 @@ struct SerialTrieNode {
  *
  * @return A host vector of nodes representing the serialized trie
  */
-inline thrust::host_vector<SerialTrieNode> createSerializedTrie(
-  const std::vector<std::string> &keys)
+inline rmm::device_uvector<SerialTrieNode> createSerializedTrie(
+  const std::vector<std::string> &keys, rmm::cuda_stream_view stream)
 {
   static constexpr int alphabet_size = std::numeric_limits<char>::max() + 1;
   struct TreeTrieNode {
@@ -87,7 +88,7 @@ inline thrust::host_vector<SerialTrieNode> createSerializedTrie(
 
   // Serialize the tree trie
   std::deque<IndexedTrieNode> to_visit;
-  thrust::host_vector<SerialTrieNode> nodes;
+  std::vector<SerialTrieNode> nodes;
 
   // If the Tree trie matches empty strings, the root node is marked as 'end of word'.
   // The first node in the serialized trie is also used to match empty strings, so we're
@@ -120,7 +121,7 @@ inline thrust::host_vector<SerialTrieNode> createSerializedTrie(
     // Only add the terminating character any nodes were added
     if (has_children) { nodes.push_back(SerialTrieNode(trie_terminating_character)); }
   }
-  return nodes;
+  return cudf::detail::make_device_uvector_sync(nodes, stream);
 }
 
 /*
