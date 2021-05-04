@@ -305,23 +305,29 @@ class groupby {
    * @code{.pseudo}
    *
    * //Inputs:
-   * keys:    {2, 1, 2, 1}
-   * values:  {3, 4, NULL, NULL}
+   * keys:    {3 3 1 3 1 3 4}
+   *          {2 2 1 2 1 2 5}
+   * values:  {3 4 7 @ @ @ @}
+   *          {@ @ @ "x" "tt" @ @}
+   * replace_policies:    {FORWARD, BACKWARD}
    *
-   * //(Possible) Outputs:
-   * sorted_keys:     {1, 1, 2, 2}
-   * result:          {4, 4, 3, 3}
+   * //Outputs (group orders may be different):
+   * keys:    {3 3 3 3 1 1 4}
+   *          {2 2 2 2 1 1 5}
+   * result:  {3 4 4 4 7 7 @}
+   *          {"x" "x" "x" @ "tt" "tt" @}
    * @endcode
    *
-   * @param[in] value A column whose null values will be replaced.
-   * @param[in] replace_policy Specify the position of replacement values relative to null values.
+   * @param[in] values A table whose column null values will be replaced.
+   * @param[in] replace_policies Specify the position of replacement values relative to null values,
+   * one for each column
    * @param[in] mr Device memory resource used to allocate device memory of the returned column.
    *
    * @return Pair that contains a table with the sorted keys and the result column
    */
-  std::pair<std::unique_ptr<table>, std::unique_ptr<column>> replace_nulls(
-    column_view const& value,
-    cudf::replace_policy const& replace_policy,
+  std::pair<std::unique_ptr<table>, std::unique_ptr<table>> replace_nulls(
+    table_view const& values,
+    host_span<cudf::replace_policy const> replace_policies,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
  private:

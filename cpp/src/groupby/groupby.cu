@@ -185,9 +185,9 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
   }
 }
 
-std::pair<std::unique_ptr<table>, std::unique_ptr<column>> groupby::replace_nulls(
-  column_view const& value,
-  cudf::replace_policy const& replace_policy,
+std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls(
+  table_view const& values,
+  host_span<cudf::replace_policy const> replace_policy,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -195,7 +195,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> groupby::replace_null
                "Size mismatch between group labels and value.");
 
   if (value.is_empty()) {
-    return std::make_pair(empty_like(_keys), make_empty_column(value.type()));
+    return std::make_pair(empty_like(_keys), empty_like(table_view));
   }
 
   auto sorted_keys    = helper().sorted_keys(rmm::cuda_stream_default, mr);
