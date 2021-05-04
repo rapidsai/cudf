@@ -274,8 +274,6 @@ type `LIST`, which in turn stores a column of type `INT32`.
 `scalar`s can be created using either their respective constructors or using factory functions like 
 `make_numeric_scalar()`, `make_timestamp_scalar()` or `make_string_scalar()`. 
 
-// TODO: add details for `list_scalar`
-
 ### Casting
 All the factory methods return a `unique_ptr<scalar>` which needs to be statically downcasted to 
 its respective scalar class type before accessing its value. Their validity (nullness) can be 
@@ -293,12 +291,15 @@ auto s1 = static_cast<ScalarType *>(s.get());
 ```
 
 ### Passing to device
-Each scalar type has a corresponding non-owning device view class which allows access to the value 
-and its validity from the device. This can be obtained using the function 
+Each scalar type, except `list_scalar`, has a corresponding non-owning device view class which allows
+access to the value and its validity from the device. This can be obtained using the function 
 `get_scalar_device_view(ScalarType s)`. Note that a device view is not provided for a base scalar 
 object, only for the derived typed scalar class objects.
 
-// TODO: add details for `list_scalar`
+The underlying data for `list_scalar` can be accessed via `view()` method. For non-nested data,
+the device view can be obtained via function `column_device_view::create(column_view)`. For nested
+data, a specialized device view for list columns can be constructed via
+`lists_column_device_view(column_device_view)`.
 
 # libcudf++ API and Implementation
 

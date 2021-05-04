@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/copy.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/string_view.hpp>
 
@@ -54,6 +55,15 @@ std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
     &result[0], _data.data(), _data.size(), cudaMemcpyDeviceToHost, stream.value()));
   stream.synchronize();
   return result;
+}
+
+list_scalar::list_scalar(column_view const& col,
+                         size_type row_index,
+                         rmm::cuda_stream_view stream,
+                         rmm::mr::device_memory_resource* mr)
+  : list_scalar(std::move(
+      *static_cast<list_scalar*>(detail::get_element(col, row_index, stream, mr).release())))
+{
 }
 
 }  // namespace cudf
