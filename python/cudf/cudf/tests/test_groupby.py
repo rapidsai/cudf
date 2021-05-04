@@ -1670,9 +1670,9 @@ def test_groupby_mix_agg_scan():
 
 
 @pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
-@pytest.mark.parametrize("shift_perc", [0, 0.1, 0.3, 0.5, 0.7, 1.0, 1.3, 1.5])
+@pytest.mark.parametrize("shift_perc", [0, 0.5, 1.0, 1.5])
 @pytest.mark.parametrize("direction", [1, -1])
-@pytest.mark.parametrize("fill_value", [None, 42])
+@pytest.mark.parametrize("fill_value", [None, np.nan, 42])
 def test_groupby_shift_row(nelem, shift_perc, direction, fill_value):
     pdf = make_frame(pd.DataFrame, nelem=nelem, extra_vals=["val2"])
     gdf = cudf.from_pandas(pdf)
@@ -1687,7 +1687,7 @@ def test_groupby_shift_row(nelem, shift_perc, direction, fill_value):
 
 
 @pytest.mark.parametrize("nelem", [10, 50, 100, 1000])
-@pytest.mark.parametrize("shift_perc", [0, 0.1, 0.3, 0.5, 0.7, 1.0, 1.3, 1.5])
+@pytest.mark.parametrize("shift_perc", [0, 0.5, 1.0, 1.5])
 @pytest.mark.parametrize("direction", [1, -1])
 def test_groupby_shift_row_mixed(nelem, shift_perc, direction):
     t = rand_dataframe(
