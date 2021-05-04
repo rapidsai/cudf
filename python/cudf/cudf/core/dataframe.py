@@ -4716,7 +4716,8 @@ class DataFrame(Frame, Serializable):
             return self._apply_boolean_mask(boolmask)
 
     def apply(self, func):
-        return super()._apply(func)
+        return func(self)
+        #return super()._apply(func)
 
 
     @applyutils.doc_apply()

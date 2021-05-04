@@ -152,3 +152,10 @@ def compile_udf(func):
     return kernel, ptx
 
 NA = _NAType()
+
+def nulludf(func):
+    def wrapper(*args):
+        from cudf import DataFrame
+        to_udf_table = DataFrame({idx: arg for idx, arg in zip(range(len(args)), args)})
+        return to_udf_table._apply(func)
+    return wrapper
