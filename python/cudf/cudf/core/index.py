@@ -809,11 +809,15 @@ class Index(SingleColumnFrame, Serializable):
         # Need to override the parent behavior because pandas allows operations
         # on unsigned types to return signed values, forcing us to choose the
         # right index type here.
-        data = kwargs["data"]
-        if data.dtype != self.dtype:
-            cls = _dtype_to_index[getattr(np, data.dtype.name)]
-        else:
-            cls = self.__class__
+        data = kwargs.get("data")
+        cls = self.__class__
+
+        if data is not None and self.dtype != data.dtype:
+            try:
+                cls = _dtype_to_index[getattr(np, data.dtype.name)]
+            except KeyError:
+                pass
+
         return cls(**{**self._copy_construct_defaults, **kwargs})
 
     def _normalize_binop_value(self, other):
@@ -2939,6 +2943,7 @@ def as_index(arbitrary, **kwargs) -> Index:
 
 
 _dtype_to_index = {
+    bool: Index,
     np.int8: Int8Index,
     np.int16: Int16Index,
     np.int32: Int32Index,
