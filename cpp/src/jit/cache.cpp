@@ -131,7 +131,11 @@ jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData prep
 
     auto cache_dir = get_program_cache_dir();
 
-    if (kernel_limit_disk == 0) { cache_dir = {}; }
+    if (kernel_limit_disk == 0) {
+      // if kernel_limit_disk is zero, jitify will inherit it the value of kernel_limit_proc.
+      // to avoid this, we treat zero as "disable disk caching" by deleting the cache dir.
+      cache_dir = {};
+    }
 
     auto res = caches.insert({preprog.name(),
                               std::make_unique<jitify2::ProgramCache<>>(  //
