@@ -125,7 +125,7 @@ class sum_aggregation final : public rolling_aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
 /**
@@ -144,7 +144,7 @@ class product_aggregation final : public aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
 /**
@@ -163,7 +163,7 @@ class min_aggregation final : public rolling_aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
 /**
@@ -182,7 +182,7 @@ class max_aggregation final : public rolling_aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
 /**
@@ -201,7 +201,7 @@ class count_aggregation final : public rolling_aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
 /**
@@ -220,7 +220,7 @@ class any_aggregation final : public aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
 /**
@@ -239,7 +239,7 @@ class all_aggregation final : public aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
 /**
@@ -258,7 +258,7 @@ class sum_of_squares_aggregation final : public aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
 /**
@@ -277,7 +277,7 @@ class mean_aggregation final : public rolling_aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
 /**
@@ -322,7 +322,7 @@ class var_aggregation final : public std_var_aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
 /**
@@ -341,7 +341,7 @@ class std_aggregation final : public std_var_aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
 /**
@@ -360,7 +360,7 @@ class median_aggregation final : public aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
 /**
@@ -396,7 +396,7 @@ class quantile_aggregation final : public aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 
  private:
   size_t hash_impl() const
@@ -425,7 +425,7 @@ class argmax_aggregation final : public rolling_aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
 /**
@@ -444,7 +444,7 @@ class argmin_aggregation final : public rolling_aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
 /**
@@ -477,7 +477,7 @@ class nunique_aggregation final : public aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 
  private:
   size_t hash_impl() const { return std::hash<int>{}(static_cast<int>(_null_handling)); }
@@ -514,7 +514,7 @@ class nth_element_aggregation final : public aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 
  private:
   size_t hash_impl() const
@@ -539,7 +539,7 @@ class row_number_aggregation final : public rolling_aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
 /**
@@ -572,7 +572,7 @@ class collect_list_aggregation final : public rolling_aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 
  private:
   size_t hash_impl() const { return std::hash<int>{}(static_cast<int>(_null_handling)); }
@@ -617,7 +617,7 @@ class collect_set_aggregation final : public aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 
  protected:
   size_t hash_impl() const
@@ -655,7 +655,7 @@ class lead_lag_aggregation final : public rolling_aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 
   size_type row_offset;
 
@@ -701,7 +701,7 @@ class udf_aggregation final : public rolling_aggregation {
   {
     return collector.visit(col_type, *this);
   }
-  void finalize(aggregation_finalizer& finalizer) override { finalizer.visit(*this); }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 
   std::string const _source;
   std::string const _operator_name;
