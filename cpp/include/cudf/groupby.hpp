@@ -229,7 +229,7 @@ class groupby {
    * element of the group. If `i - offsets[j] < 0 or >= group_size`, the value is determined by
    * @p fill_values[j].
    *
-   * @note The returned table stores the keys passed to the groupby object. Row `i` of the key
+   * @note The first returned table stores the keys passed to the groupby object. Row `i` of the key
    * table corresponds to the group labels of row `i` in the shifted columns. The key order in
    * each group matches the input order. The order of each group is arbitrary. The group order
    * in successive calls to `groupby::shifts` may be different.
