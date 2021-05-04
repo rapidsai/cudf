@@ -164,6 +164,14 @@ typename fixed_point_scalar<T>::rep_type const* fixed_point_scalar<T>::data() co
   return _data.data();
 }
 
+/**
+ * @brief These define the valid fixed-point scalar types.
+ *
+ * See `is_fixed_point` in @see cudf/utilities/traits.hpp
+ *
+ * Adding a new supported type only requires adding the appropriate line here
+ * and does not require updating the scalar.hpp file.
+ */
 template class fixed_point_scalar<numeric::decimal32>;
 template class fixed_point_scalar<numeric::decimal64>;
 
