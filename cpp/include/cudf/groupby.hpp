@@ -229,24 +229,37 @@ class groupby {
    * element of the group. If `i - offsets[j] < 0 or >= group_size`, the value is determined by
    * @p fill_values[j].
    *
+   * @note The returned table stores the keys passed to the groupby object. Row `i` of the key
+   * table corresponds to the group labels of row `i` in the shifted columns. The key order in
+   * each group matches the input order. The order of each group is arbitrary. The group order
+   * in successive calls to `groupby::shifts` may be different.
+   *
    * Example:
    * @code{.pseudo}
-   * keys:   {{1 2 1 1 2 2 1}}
-   * values: {{3 9 1 4 2 5 7}, {"a" "c" "bb" "ee" "z" "x" "d"}}
-   * offset: {2, -1}
+   * keys:    {1 4 1 3 4 4 1}
+   *          {1 2 1 3 2 2 1}
+   * values:  {3 9 1 4 2 5 7}
+   *          {"a" "c" "bb" "ee" "z" "x" "d"}
+   * offset:  {2, -1}
    * fill_value: {@, @}
-   * result:
-   *    keys: {{1 1 1 1 2 2 2}}
-   *    values: {{@ @ 3 1 @ @ 9}, {"bb" "ee" "d" @ "z" "x" @}}
+   * result (group order maybe different):
+   *    keys:   {3 1 1 1 4 4 4}
+   *            {3 1 1 1 2 2 2}
+   *    values: {@ @ @ 3 @ @ 9}
+   *            {@ "bb" "d" @ "z" "x" @}
    *
    * -------------------------------------------------
-   * keys:   {{1 2 1 1 2 2 1}}
-   * values: {{3 9 1 4 2 5 7}, {"a" "c" "bb" "ee" "z" "x" "d"}}
-   * offset: {-2, 1}
+   * keys:    {1 4 1 3 4 4 1}
+   *          {1 2 1 3 2 2 1}
+   * values:  {3 9 1 4 2 5 7}
+   *          {"a" "c" "bb" "ee" "z" "x" "d"}
+   * offset:  {-2, 1}
    * fill_value: {-1, "42"}
-   * result:
-   *    keys: {{1 1 1 1 2 2 2}}
-   *    values: {{4 7 -1 -1 5 -1 -1}, {"42", "a", "bb", "ee", "42", "c", "z"}}
+   * result (group order maybe different):
+   *    keys:   {3 1 1 1 4 4 4}
+   *            {3 1 1 1 2 2 2}
+   *    values: {-1 7 -1 -1 5 -1 -1}
+   *            {"42" "42" "a" "bb" "42" "c" "z"}
    *
    * @endcode
    *
