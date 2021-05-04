@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "lead_lag_nested_detail.cuh"
 #include "rolling_detail.hpp"
 
 #include <cudf/aggregation.hpp>
@@ -744,23 +745,14 @@ struct rolling_window_launcher {
                    std::unique_ptr<column>>
   launch(column_view const& input,
          column_view const& default_outputs,
-         PrecedingWindowIterator preceding_window_begin,
-         FollowingWindowIterator following_window_begin,
+         PrecedingWindowIterator preceding,
+         FollowingWindowIterator following,
          size_type min_periods,
          std::unique_ptr<aggregation> const& agg,
          agg_op const& device_agg_op,
          rmm::cuda_stream_view stream,
          rmm::mr::device_memory_resource* mr)
   {
-    CUDF_EXPECTS(default_outputs.type().id() == input.type().id(),
-                 "Defaults column type must match input column.");  // Because LEAD/LAG.
-
-    // For LEAD(0)/LAG(0), no computation need be performed.
-    // Return copy of input.
-    if (0 == static_cast<cudf::detail::lead_lag_aggregation*>(agg.get())->row_offset) {
-      return std::make_unique<column>(input, stream, mr);
-    }
-
     auto output = make_fixed_width_column(
       target_type(input.type(), op), input.size(), mask_state::UNINITIALIZED, stream, mr);
 
@@ -770,8 +762,8 @@ struct rolling_window_launcher {
         input,
         default_outputs,
         output_view,
-        preceding_window_begin,
-        following_window_begin,
+        preceding,
+        following,
         min_periods,
         agg,
         device_agg_op,
@@ -780,30 +772,6 @@ struct rolling_window_launcher {
     output->set_null_count(output->size() - valid_count);
 
     return output;
-  }
-
-  // Deals with invalid column and/or aggregation options
-  template <typename T,
-            typename agg_op,
-            aggregation::Kind op,
-            typename PrecedingWindowIterator,
-            typename FollowingWindowIterator>
-  std::enable_if_t<!(op == aggregation::LEAD || op == aggregation::LAG) ||
-                     !cudf::is_fixed_width<T>(),
-                   std::unique_ptr<column>>
-  launch(column_view const& input,
-         column_view const& default_outputs,
-         PrecedingWindowIterator preceding_window_begin,
-         FollowingWindowIterator following_window_begin,
-         size_type min_periods,
-         std::unique_ptr<aggregation> const& agg,
-         agg_op device_agg_op,
-         rmm::cuda_stream_view stream,
-         rmm::mr::device_memory_resource* mr)
-  {
-    CUDF_FAIL(
-      "Aggregation operator and/or input type combination is invalid: "
-      "LEAD/LAG supported only on fixed-width types");
   }
 
   template <aggregation::Kind op,
@@ -866,7 +834,9 @@ struct rolling_window_launcher {
   template <aggregation::Kind op,
             typename PrecedingWindowIterator,
             typename FollowingWindowIterator>
-  std::enable_if_t<(op == aggregation::LEAD || op == aggregation::LAG), std::unique_ptr<column>>
+  std::enable_if_t<cudf::is_fixed_width<InputType>() &&
+                     (op == aggregation::LEAD || op == aggregation::LAG),
+                   std::unique_ptr<column>>
   operator()(column_view const& input,
              column_view const& default_outputs,
              PrecedingWindowIterator preceding_window_begin,
@@ -890,6 +860,32 @@ struct rolling_window_launcher {
       cudf::DeviceLeadLag{static_cast<cudf::detail::lead_lag_aggregation*>(agg.get())->row_offset},
       stream,
       mr);
+  }
+
+  template <aggregation::Kind op,
+            typename PrecedingWindowIterator,
+            typename FollowingWindowIterator>
+  std::enable_if_t<!cudf::is_fixed_width<InputType>() &&
+                     (op == aggregation::LEAD || op == aggregation::LAG),
+                   std::unique_ptr<column>>
+  operator()(column_view const& input,
+             column_view const& default_outputs,
+             PrecedingWindowIterator preceding_window_begin,
+             FollowingWindowIterator following_window_begin,
+             size_type min_periods,
+             std::unique_ptr<aggregation> const& agg,
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr)
+  {
+    return cudf::detail::
+      compute_lead_lag_for_nested<op, InputType, PrecedingWindowIterator, FollowingWindowIterator>(
+        input,
+        default_outputs,
+        preceding_window_begin,
+        following_window_begin,
+        static_cast<cudf::detail::lead_lag_aggregation*>(agg.get())->row_offset,
+        stream,
+        mr);
   }
 
   /**
