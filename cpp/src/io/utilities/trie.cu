@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,46 +16,25 @@
 
 /**
  * @brief Serialized trie implementation for C++/CUDA
- * @file trie.cuh
+ * @file trie.cu
  */
 
-#pragma once
+#include "trie.cuh"
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/span.hpp>
+
+#include <cuda_runtime.h>
 
 #include <deque>
 #include <string>
 #include <vector>
 
-#include <cuda_runtime.h>
-#include <thrust/host_vector.h>
+namespace cudf {
+namespace detail {
 
-using cudf::device_span;
-
-static constexpr char trie_terminating_character = '\n';
-
-struct SerialTrieNode {
-  int16_t children_offset{-1};
-  char character{trie_terminating_character};
-  bool is_leaf{false};
-  SerialTrieNode() = default;  // FIXME This is necessary for a Thrust bug on CentOS7 + CUDA10
-  explicit SerialTrieNode(char c, bool leaf = false) noexcept : character(c), is_leaf(leaf) {}
-};
-
-/**
- * @brief Creates a serialized trie for cache-friendly string search.
- *
- * The resulting trie is a compact array - children array size is equal to the
- * actual number of children nodes, not the size of the alphabet.
- *
- * @param keys Array of strings to insert into the trie
- * @param stream CUDA stream used for device memory operations and kernel launches.
- *
- * @return A host vector of nodes representing the serialized trie
- */
-inline rmm::device_uvector<SerialTrieNode> createSerializedTrie(
-  const std::vector<std::string> &keys, rmm::cuda_stream_view stream)
+rmm::device_uvector<serial_trie_node> create_serialized_trie(const std::vector<std::string> &keys,
+                                                             rmm::cuda_stream_view stream)
 {
   static constexpr int alphabet_size = std::numeric_limits<char>::max() + 1;
   struct TreeTrieNode {
@@ -89,12 +68,12 @@ inline rmm::device_uvector<SerialTrieNode> createSerializedTrie(
 
   // Serialize the tree trie
   std::deque<IndexedTrieNode> to_visit;
-  std::vector<SerialTrieNode> nodes;
+  std::vector<serial_trie_node> nodes;
 
   // If the Tree trie matches empty strings, the root node is marked as 'end of word'.
   // The first node in the serialized trie is also used to match empty strings, so we're
   // initializing it using the `is_end_of_word` value from the root node.
-  nodes.push_back(SerialTrieNode(trie_terminating_character, tree_trie.is_end_of_word));
+  nodes.push_back(serial_trie_node(trie_terminating_character, tree_trie.is_end_of_word));
 
   // Add root node to queue. this node is not included to the serialized trie
   to_visit.emplace_back(&tree_trie, -1);
@@ -112,7 +91,7 @@ inline rmm::device_uvector<SerialTrieNode> createSerializedTrie(
           nodes[idx].children_offset = static_cast<uint16_t>(nodes.size() - idx);
         }
         // Add node to the trie
-        nodes.push_back(SerialTrieNode(static_cast<char>(i), node->children[i]->is_end_of_word));
+        nodes.push_back(serial_trie_node(static_cast<char>(i), node->children[i]->is_end_of_word));
         // Add to the queue, with the index within the new trie
         to_visit.emplace_back(node->children[i].get(), static_cast<uint16_t>(nodes.size()) - 1);
 
@@ -120,39 +99,10 @@ inline rmm::device_uvector<SerialTrieNode> createSerializedTrie(
       }
     }
     // Only add the terminating character any nodes were added
-    if (has_children) { nodes.push_back(SerialTrieNode(trie_terminating_character)); }
+    if (has_children) { nodes.push_back(serial_trie_node(trie_terminating_character)); }
   }
   return cudf::detail::make_device_uvector_sync(nodes, stream);
 }
 
-/*
- * @brief Searches for a string in a serialized trie
- *
- * Can be executed on host or device, as long as the data is available
- *
- * @param[in] trie Pointer to the array of nodes that make up the trie
- * @param[in] key Pointer to the start of the string to find
- * @param[in] key_len Length of the string to find
- *
- * @return Boolean value, true if string is found, false otherwise
- */
-__host__ __device__ inline bool serialized_trie_contains(device_span<SerialTrieNode const> trie,
-                                                         device_span<char const> key)
-{
-  if (trie.data() == nullptr || trie.empty()) return false;
-  if (key.empty()) return trie.front().is_leaf;
-  auto curr_node = trie.begin() + 1;
-  for (auto curr_key = key.begin(); curr_key < key.end(); ++curr_key) {
-    // Don't jump away from root node
-    if (curr_key != key.begin()) { curr_node += curr_node->children_offset; }
-    // Search for the next character in the array of children nodes
-    // Nodes are sorted - terminate search if the node is larger or equal
-    while (curr_node->character != trie_terminating_character && curr_node->character < *curr_key) {
-      ++curr_node;
-    }
-    // Could not find the next character, done with the search
-    if (curr_node->character != *curr_key) { return false; }
-  }
-  // Even if the node is present, return true only if that node is at the end of a word
-  return curr_node->is_leaf;
-}
+}  // namespace detail
+}  // namespace cudf

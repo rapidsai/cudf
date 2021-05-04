@@ -16,9 +16,9 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/trie.cuh>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/span.hpp>
+#include <io/utilities/trie.cuh>
 
 #include "column_type_histogram.hpp"
 
@@ -30,16 +30,6 @@ using cudf::device_span;
 
 namespace cudf {
 namespace io {
-
-using trie          = rmm::device_uvector<SerialTrieNode>;
-using optional_trie = std::optional<trie>;
-using trie_view     = device_span<SerialTrieNode const>;
-
-inline trie_view make_trie_view(optional_trie const& t)
-{
-  if (!t) return {};
-  return device_span<SerialTrieNode const>{t->data(), t->size()};
-}
 
 /**
  * @brief Structure for holding various options used when parsing and
@@ -56,9 +46,9 @@ struct parse_options_view {
   bool doublequote;
   bool dayfirst;
   bool skipblanklines;
-  trie_view trie_true;
-  trie_view trie_false;
-  trie_view trie_na;
+  cudf::detail::trie_view trie_true;
+  cudf::detail::trie_view trie_false;
+  cudf::detail::trie_view trie_na;
   bool multi_delimiter;
 };
 
@@ -73,9 +63,9 @@ struct parse_options {
   bool doublequote;
   bool dayfirst;
   bool skipblanklines;
-  optional_trie trie_true;
-  optional_trie trie_false;
-  optional_trie trie_na;
+  cudf::detail::optional_trie trie_true;
+  cudf::detail::optional_trie trie_false;
+  cudf::detail::optional_trie trie_na;
   bool multi_delimiter;
 
   parse_options_view view()
@@ -90,9 +80,9 @@ struct parse_options {
             doublequote,
             dayfirst,
             skipblanklines,
-            make_trie_view(trie_true),
-            make_trie_view(trie_false),
-            make_trie_view(trie_na),
+            cudf::detail::make_trie_view(trie_true),
+            cudf::detail::make_trie_view(trie_false),
+            cudf::detail::make_trie_view(trie_na),
             multi_delimiter};
   }
 };

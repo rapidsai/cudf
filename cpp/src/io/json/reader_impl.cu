@@ -26,7 +26,6 @@
 #include <io/utilities/type_conversion.cuh>
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/utilities/trie.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/sorting.hpp>
@@ -34,6 +33,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
+#include <io/utilities/trie.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
@@ -628,9 +628,9 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 {
   CUDF_EXPECTS(options_.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
 
-  opts_.trie_true  = createSerializedTrie({"true"}, stream);
-  opts_.trie_false = createSerializedTrie({"false"}, stream);
-  opts_.trie_na    = createSerializedTrie({"", "null"}, stream);
+  opts_.trie_true  = cudf::detail::create_serialized_trie({"true"}, stream);
+  opts_.trie_false = cudf::detail::create_serialized_trie({"false"}, stream);
+  opts_.trie_na    = cudf::detail::create_serialized_trie({"", "null"}, stream);
 
   opts_.dayfirst = options.is_enabled_dayfirst();
 }

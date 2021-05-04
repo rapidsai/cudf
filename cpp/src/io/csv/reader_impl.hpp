@@ -19,9 +19,9 @@
 #include "csv_common.h"
 #include "csv_gpu.h"
 
-#include <cudf/detail/utilities/trie.cuh>
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
+#include <io/utilities/trie.cuh>
 
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>

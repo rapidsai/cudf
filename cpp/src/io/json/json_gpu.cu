@@ -21,7 +21,6 @@
 #include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/detail/utilities/hash_functions.cuh>
-#include <cudf/detail/utilities/trie.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.cuh>
@@ -30,6 +29,7 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <io/utilities/trie.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
