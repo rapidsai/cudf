@@ -255,9 +255,9 @@ currently supported by cudf. Each type of value is represented by a separate typ
 which are all derived from `cudf::scalar`. e.g. A `numeric_scalar` holds a single numerical value, 
 a `string_scalar` holds a single string. The data for the stored value resides in device memory.
 
-A `list_scalar` holds the underlying data of a list. This means the underlying data can be any type
-that cudf supports. e.g. A `list_scalar` representing a list of integers stores an `cudf::column`
-of type `INT32`, a `list_scalar` represents a list of list of integers stores an `cudf::column` of
+A `list_scalar` holds the underlying data of a single list. This means the underlying data can be any type
+that cudf supports. For example, a `list_scalar` representing a list of integers stores a `cudf::column`
+of type `INT32`. A `list_scalar` representing a list of lists of integers stores a `cudf::column` of
 type `LIST`, which in turn stores a column of type `INT32`.
 
 |Value type|Scalar class|Notes|

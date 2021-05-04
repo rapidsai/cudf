@@ -26,7 +26,7 @@ namespace detail {
 /**
  * @brief Return validity of a row
  *
- * Retrieves the specified row validity from device memory.
+ * Retrieves the validity (NULL or non-NULL) of the specified row from device memory.
  *
  * @note Synchronizes `stream`.
  *
