@@ -372,7 +372,7 @@ def test_series_tolist(data):
         TypeError,
         match=re.escape(
             r"cuDF does not support conversion to host memory "
-            r"via `tolist()` method. Consider using "
+            r"via the `tolist()` method. Consider using "
             r"`.to_arrow().to_pylist()` to construct a Python list."
         ),
     ):
