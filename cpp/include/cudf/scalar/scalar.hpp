@@ -15,12 +15,11 @@
  */
 #pragma once
 
-#include <cudf/lists/list_view.cuh>
+#include <cudf/column/column.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-
-#include <cudf/fixed_point/fixed_point.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -29,8 +28,6 @@
 #include <memory>
 #include <utility>
 #include <vector>
-
-#include <cudf/column/column.hpp>
 
 /**
  * @file
@@ -614,7 +611,7 @@ class list_scalar : public scalar {
    * @param stream CUDA stream used for device memory operations.
    * @param mr Device memory resource to use for device memory allocation
    */
-  list_scalar(cudf::column_view const& elements,
+  list_scalar(column_view const& elements,
               bool is_valid                       = true,
               rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
@@ -630,7 +627,7 @@ class list_scalar : public scalar {
    * @param stream CUDA stream used for device memory operations.
    * @param mr Device memory resource to use for device memory allocation
    */
-  list_scalar(cudf::column const&& elements,
+  list_scalar(column const&& elements,
               bool is_valid                       = true,
               rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
