@@ -67,6 +67,9 @@ namespace detail {
 
 namespace {  // anonymous
 
+/**
+ * @brief Operator for applying a generic (non-specialized) rolling aggregation on a single window.
+ */
 template <typename InputType, aggregation::Kind op>
 struct DeviceRolling {
   size_type min_periods;
@@ -101,6 +104,7 @@ struct DeviceRolling {
     CUDF_FAIL("Invalid aggregation/type pair");
   }
 
+  // perform the windowing operation
   template <typename OutputType, bool has_nulls, typename T = InputType, aggregation::Kind O = op>
   std::enable_if_t<is_supported<T, O>(), bool> __device__
   operator()(column_device_view const& input,
@@ -148,6 +152,9 @@ struct DeviceRolling {
   }
 };
 
+/**
+ * @brief Operator for applying an ARGMAX/ARGMIN rolling aggregation on a single window.
+ */
 template <typename InputType, aggregation::Kind op>
 struct DeviceRollingArgMinMax {
   size_type min_periods;
@@ -214,6 +221,9 @@ struct DeviceRollingArgMinMax {
   }
 };
 
+/**
+ * @brief Operator for applying a COUNT_VALID rolling aggregation on a single window.
+ */
 template <typename InputType>
 struct DeviceRollingCountValid {
   size_type min_periods;
@@ -257,6 +267,9 @@ struct DeviceRollingCountValid {
   }
 };
 
+/**
+ * @brief Operator for applying a COUNT_ALL rolling aggregation on a single window.
+ */
 template <typename InputType>
 struct DeviceRollingCountAll {
   size_type min_periods;
@@ -287,6 +300,9 @@ struct DeviceRollingCountAll {
   }
 };
 
+/**
+ * @brief Operator for applying a ROW_NUMBER rolling aggregation on a single window.
+ */
 template <typename InputType>
 struct DeviceRollingRowNumber {
   size_type min_periods;
@@ -315,6 +331,9 @@ struct DeviceRollingRowNumber {
   }
 };
 
+/**
+ * @brief Operator for applying a LEAD rolling aggregation on a single window.
+ */
 template <typename InputType>
 struct DeviceRollingLead {
   size_type row_offset;
@@ -381,6 +400,9 @@ struct DeviceRollingLead {
   }
 };
 
+/**
+ * @brief Operator for applying a LAG rolling aggregation on a single window.
+ */
 template <typename InputType>
 struct DeviceRollingLag {
   size_type row_offset;
@@ -447,6 +469,9 @@ struct DeviceRollingLag {
   }
 };
 
+/**
+ * @brief Functor for creating a DeviceRolling operator based on input type and aggregation type.
+ */
 template <typename InputType, aggregation::Kind op>
 struct create_rolling_operator {
   // everything else
@@ -513,6 +538,34 @@ struct create_rolling_operator<InputType, aggregation::Kind::LAG> {
   }
 };
 
+/**
+ * @brief Rolling window specific implementation of simple_aggregations_collector.
+ *
+ * The purpose of this class is to preprocess incoming aggregation/type pairs and
+ * potentially transform them into other aggregation/type pairs. Typically when this
+ * happens, the equivalent aggregation/type implementation of finalize() will perform
+ * some postprocessing step.
+ *
+ * An example of this would be applying a MIN aggregation to strings.  This cannot be done
+ * directly in the rolling operation, so instead the following happens:
+ *
+ * - the rolling_aggregation_preprocessor transforms the incoming MIN/string pair to
+ *   an ARGMIN/int pair.
+ * - The ARGMIN/int has the rolling operation applied to it, generating a list of indices
+ *   that can then be used as a gather map.
+ * - The rolling_aggregation_postprocessor then takes this gather map and performs a final
+ *   gather() on the input string data to generate the final output.
+ *
+ * Another example is COLLECT_LIST.  COLLECT_LIST is odd in that it doesn't go through the
+ * normal gpu rolling kernel at all.  It has a completely custom implementation.  So the
+ * following happens:
+ *
+ * - the rolling_aggregation_preprocessor transforms the COLLECT_LIST aggregation into nothing,
+ *   since no actual rolling window operation will be performed.
+ * - the rolling_aggregation_postprocessor calls the specialized rolling_collect_list()
+ *   function to generate the final output.
+ *
+ */
 class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggregations_collector {
  public:
   using cudf::detail::simple_aggregations_collector::visit;
@@ -555,20 +608,28 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
   }
 };
 
+/**
+ * @brief Rolling window specific implementation of aggregation_finalizer.
+ *
+ * The purpose of this class is to postprocess rolling window data depending on the
+ * aggregation/type pair. See the description of rolling_aggregation_preprocessor for
+ * a detailed description.
+ *
+ */
 template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
-class rolling_aggregation_finalizer final : public cudf::detail::aggregation_finalizer {
+class rolling_aggregation_postprocessor final : public cudf::detail::aggregation_finalizer {
  public:
   using cudf::detail::aggregation_finalizer::visit;
 
-  rolling_aggregation_finalizer(column_view const& _input,
-                                column_view const& _default_outputs,
-                                data_type _result_type,
-                                PrecedingWindowIterator _preceding_window_begin,
-                                FollowingWindowIterator _following_window_begin,
-                                int _min_periods,
-                                std::unique_ptr<column>&& _intermediate,
-                                rmm::cuda_stream_view _stream,
-                                rmm::mr::device_memory_resource* _mr)
+  rolling_aggregation_postprocessor(column_view const& _input,
+                                    column_view const& _default_outputs,
+                                    data_type _result_type,
+                                    PrecedingWindowIterator _preceding_window_begin,
+                                    FollowingWindowIterator _following_window_begin,
+                                    int _min_periods,
+                                    std::unique_ptr<column>&& _intermediate,
+                                    rmm::cuda_stream_view _stream,
+                                    rmm::mr::device_memory_resource* _mr)
     :
 
       input(_input),
@@ -584,8 +645,10 @@ class rolling_aggregation_finalizer final : public cudf::detail::aggregation_fin
   {
   }
 
+  // all non-specialized aggregation types simply pass the intermediate result through.
   void visit(aggregation const& agg) override { result = std::move(intermediate); }
 
+  // perform a final gather on the generated ARGMIN data
   void visit(cudf::detail::min_aggregation const& agg) override
   {
     if (result_type.id() == type_id::STRING) {
@@ -603,6 +666,7 @@ class rolling_aggregation_finalizer final : public cudf::detail::aggregation_fin
     }
   }
 
+  // perform a final gather on the generated ARGMAX data
   void visit(cudf::detail::max_aggregation const& agg) override
   {
     if (result_type.id() == type_id::STRING) {
@@ -620,6 +684,7 @@ class rolling_aggregation_finalizer final : public cudf::detail::aggregation_fin
     }
   }
 
+  // perform the actual COLLECT_LIST operation entirely.
   void visit(cudf::detail::collect_list_aggregation const& agg) override
   {
     result = rolling_collect_list(input,
@@ -634,9 +699,9 @@ class rolling_aggregation_finalizer final : public cudf::detail::aggregation_fin
 
   std::unique_ptr<column> get_result()
   {
-    CUDF_EXPECTS(
-      result != nullptr,
-      "Calling result on aggregation finalizer that has not been visited in rolling_window");
+    CUDF_EXPECTS(result != nullptr,
+                 "Calling result on rolling aggregation postprocessor that has not been visited in "
+                 "rolling_window");
     return std::move(result);
   }
 
@@ -658,21 +723,23 @@ class rolling_aggregation_finalizer final : public cudf::detail::aggregation_fin
  *
  * @tparam InputType  Datatype of `input`
  * @tparam OutputType  Datatype of `output`
- * @tparam agg_op  A functor that defines the aggregation operation
  * @tparam op The aggregation operator (enum value)
  * @tparam block_size CUDA block size for the kernel
  * @tparam has_nulls true if the input column has nulls
+ * @tparam DeviceRollingOperator An operator that performs a single windowing operation
  * @tparam PrecedingWindowIterator iterator type (inferred)
  * @tparam FollowingWindowIterator iterator type (inferred)
  * @param input Input column device view
+ * @param default_outputs A column of per-row default values to be returned instead
+ *                        of nulls for certain aggregation types.
  * @param output Output column device view
+ * @param output_valid_count Output count of valid values
+ * @param device_operator The operator used to perform a single window operation
  * @param preceding_window_begin[in] Rolling window size iterator, accumulates from
  *                in_col[i-preceding_window] to in_col[i] inclusive
  * @param following_window_begin[in] Rolling window size iterator in the forward
  *                direction, accumulates from in_col[i] to
  *                in_col[i+following_window] inclusive
- * @param min_periods[in]  Minimum number of observations in window required to
- *                have a value, otherwise 0 is stored in the valid bit mask
  */
 template <typename InputType,
           typename OutputType,
@@ -737,6 +804,10 @@ __launch_bounds__(block_size) __global__
   if (threadIdx.x == 0) { atomicAdd(output_valid_count, block_valid_count); }
 }
 
+/**
+ * @brief Type/aggregation dispatched functor for launching the gpu rolling window
+ *        kernel.
+ */
 template <typename InputType>
 struct rolling_window_launcher {
   template <aggregation::Kind op,
@@ -805,6 +876,15 @@ struct rolling_window_launcher {
   }
 };
 
+/**
+ * @brief Type dispatched functor for performing the high level rolling logic.
+ *
+ * This functor does 3 basic things:
+ *
+ * - It calls the preprocess step on incoming aggregation/type pairs
+ * - It calls the aggregation-dispatched gpu-rolling operation
+ * - It calls the final postprocess step
+ */
 struct dispatch_rolling {
   template <typename InputType, typename PrecedingWindowIterator, typename FollowingWindowIterator>
   std::unique_ptr<column> operator()(column_view const& input,
@@ -839,17 +919,17 @@ struct dispatch_rolling {
 
     // finalize.
     auto const result_type = target_type(input.type(), agg.kind);
-    rolling_aggregation_finalizer finalizer(input,
-                                            default_outputs,
-                                            result_type,
-                                            preceding_window_begin,
-                                            following_window_begin,
-                                            min_periods,
-                                            std::move(intermediate),
-                                            stream,
-                                            mr);
-    agg.finalize(finalizer);
-    return finalizer.get_result();
+    rolling_aggregation_postprocessor postprocessor(input,
+                                                    default_outputs,
+                                                    result_type,
+                                                    preceding_window_begin,
+                                                    following_window_begin,
+                                                    min_periods,
+                                                    std::move(intermediate),
+                                                    stream,
+                                                    mr);
+    agg.finalize(postprocessor);
+    return postprocessor.get_result();
   }
 };
 
