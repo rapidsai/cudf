@@ -46,6 +46,7 @@ from cudf.core.window import Rolling
 from cudf.utils import cudautils, docutils, ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    _decimal_normalize_types,
     can_convert_to_column,
     is_decimal_dtype,
     is_list_dtype,
@@ -2585,9 +2586,16 @@ class Series(SingleColumnFrame, Serializable):
                     )
 
             if dtype_mismatch:
-                objs = numeric_normalize_types(*objs)
+                if isinstance(objs[0]._column, cudf.core.column.DecimalColumn):
+                    objs = _decimal_normalize_types(*objs)
+                else:
+                    objs = numeric_normalize_types(*objs)
 
         col = ColumnBase._concat([o._column for o in objs])
+
+        if isinstance(col, cudf.core.column.DecimalColumn):
+            col = objs[0]._column._copy_type_metadata(col)
+
         return cls(data=col, index=index, name=name)
 
     @property
@@ -4046,7 +4054,7 @@ class Series(SingleColumnFrame, Serializable):
 
         Returns
         --------
-        (labels, cats) : (Series, Series)
+        (labels, cats) : (cupy.ndarray, cupy.ndarray or Index)
             - *labels* contains the encoded values
             - *cats* contains the categories in order that the N-th
               item corresponds to the (N-1) code.
@@ -4055,16 +4063,10 @@ class Series(SingleColumnFrame, Serializable):
         --------
         >>> import cudf
         >>> s = cudf.Series(['a', 'a', 'c'])
-        >>> codes, uniques = s.factorize()
         >>> codes
-        0    0
-        1    0
-        2    1
-        dtype: int8
+        array([0, 0, 1], dtype=int8)
         >>> uniques
-        0    a
-        1    c
-        dtype: object
+        StringIndex(['a' 'c'], dtype='object')
         """
         return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
 
