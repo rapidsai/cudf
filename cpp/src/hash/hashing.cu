@@ -121,11 +121,12 @@ std::unique_ptr<column> md5_hash(table_view const& input,
                      MD5Hash hasher = MD5Hash{};
                      for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
                        if (device_input.column(col_index).is_valid(row_index)) {
-                         cudf::type_dispatcher(device_input.column(col_index).type(),
-                                               hasher,
-                                               device_input.column(col_index),
-                                               row_index,
-                                               &hash_state);
+                         cudf::type_dispatcher<dispatch_storage_type>(
+                           device_input.column(col_index).type(),
+                           hasher,
+                           device_input.column(col_index),
+                           row_index,
+                           &hash_state);
                        }
                      }
                      hasher.finalize(&hash_state, d_chars + (row_index * 32));
