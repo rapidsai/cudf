@@ -561,8 +561,7 @@ struct ListGetStructValueTest : public BaseFixture {
   auto all_invalid() { return thrust::make_constant_iterator(false); }
 };
 
-// TYPED_TEST_CASE(ListGetStructValueTest, FixedWidthTypes);
-TYPED_TEST_CASE(ListGetStructValueTest, int32_t);
+TYPED_TEST_CASE(ListGetStructValueTest, FixedWidthTypes);
 
 TYPED_TEST(ListGetStructValueTest, NonNestedGetNonNullNonEmpty)
 {
