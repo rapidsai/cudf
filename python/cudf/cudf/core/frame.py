@@ -3515,6 +3515,83 @@ class SingleColumnFrame(Frame):
         """
         return self._column.to_arrow()
 
+    def _binaryop(
+        self,
+        other,
+        fn,
+        fill_value=None,
+        reflect=False,
+        lhs=None,
+        *args,
+        **kwargs,
+    ):
+        """Perform a binary operation between two frames.
+
+        Parameters
+        ----------
+        other : SingleColumnFrame
+            The second operand.
+        fn : str
+            The operation
+        fill_value : Any, default None
+            The value to replace null values with. If ``None``, nulls are not
+            filled before the operation.
+        reflect : bool, default False
+            If ``True`` the operation is reflected (i.e whether to swap the
+            left and right operands).
+        lhs : SingleColumnFrame, default None
+            The left hand operand. If ``None``, self is used. This parameter
+            allows child classes to preprocess the inputs if necessary.
+
+        Returns
+        -------
+        SingleColumnFrame
+            A new instance containing the result of the operation.
+        """
+        if lhs is None:
+            lhs = self
+
+        rhs = self._normalize_binop_value(other)
+
+        truediv_int_dtype_corrections = {
+            "int8": "float32",
+            "int16": "float32",
+            "int32": "float32",
+            "int64": "float64",
+            "uint8": "float32",
+            "uint16": "float32",
+            "uint32": "float64",
+            "uint64": "float64",
+            "bool": "float32",
+            "int": "float",
+        }
+
+        if fn == "truediv":
+            if str(lhs.dtype) in truediv_int_dtype_corrections:
+                truediv_type = truediv_int_dtype_corrections[str(lhs.dtype)]
+                lhs = lhs.astype(truediv_type)
+
+        if fill_value is not None:
+            if lhs.nullable:
+                lhs = lhs.fillna(fill_value)
+            if not is_scalar(rhs) and rhs.nullable:
+                rhs = rhs.fillna(fill_value)
+
+        outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
+
+        # Get the appropriate name for output operations involving two objects
+        # that are Series-like objects. The output shares the lhs's name unless
+        # the rhs is a _differently_ named Series-like object.
+        if (
+            isinstance(other, (cudf.Series, cudf.Index, pd.Series, pd.Index))
+            and self.name != other.name
+        ):
+            result_name = None
+        else:
+            result_name = self.name
+
+        return lhs._copy_construct(data=outcol, name=result_name)
+
     def __add__(self, other):
         return self._binaryop(other, "add")
 

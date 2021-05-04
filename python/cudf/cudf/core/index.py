@@ -795,49 +795,15 @@ class Index(SingleColumnFrame, Serializable):
             return as_index(op())
 
     def _binaryop(self, other, fn, fill_value=None, reflect=False):
+        # TODO: Rather than including an allowlist of acceptable types, we
+        # should instead return NotImplemented for __all__  other types. That
+        # will allow other types to support binops with cudf objects if they so
+        # choose, and just as importantly will allow better error messages if
+        # they don't support it.
         if isinstance(other, (cudf.DataFrame, cudf.Series)):
             return NotImplemented
 
-        lhs, rhs = self, self._normalize_binop_value(other)
-
-        truediv_int_dtype_corrections = {
-            "int8": "float32",
-            "int16": "float32",
-            "int32": "float32",
-            "int64": "float64",
-            "uint8": "float32",
-            "uint16": "float32",
-            "uint32": "float64",
-            "uint64": "float64",
-            "bool": "float32",
-            "int": "float",
-        }
-
-        if fn == "truediv":
-            if str(lhs.dtype) in truediv_int_dtype_corrections:
-                truediv_type = truediv_int_dtype_corrections[str(lhs.dtype)]
-                lhs = lhs.astype(truediv_type)
-
-        if fill_value is not None:
-            if lhs.nullable:
-                lhs = lhs.fillna(fill_value)
-            if not is_scalar(rhs) and rhs.nullable:
-                rhs = rhs.fillna(fill_value)
-
-        outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
-
-        # Get the appropriate name for output operations involving two objects
-        # that are Series-like objects. The output shares the lhs's name unless
-        # the rhs is a _differently_ named Series-like object.
-        if (
-            isinstance(other, (cudf.Series, cudf.Index, pd.Series, pd.Index))
-            and self.name != other.name
-        ):
-            result_name = None
-        else:
-            result_name = self.name
-
-        return lhs._copy_construct(data=outcol, name=result_name)
+        return super()._binaryop(other, fn, fill_value, reflect)
 
     def _normalize_binop_value(self, other):
         """Returns a *column* (not a Series) or scalar for performing

@@ -13,7 +13,6 @@ from uuid import uuid4
 import cupy
 import numpy as np
 import pandas as pd
-from nvtx import annotate
 from pandas._config import get_option
 from pandas.api.types import is_dict_like
 
@@ -1321,57 +1320,26 @@ class Series(SingleColumnFrame, Serializable):
             lines.append(category_memory)
         return "\n".join(lines)
 
-    @annotate("BINARY_OP", color="orange", domain="cudf_python")
     def _binaryop(
         self, other, fn, fill_value=None, reflect=False, can_reindex=False
     ):
-        """
-        Internal util to call a binary operator *fn* on operands *self*
-        and *other*.  Return the output Series.  The output dtype is
-        determined by the input operands.
-
-        If ``reflect`` is ``True``, swap the order of the operands.
-        """
         if isinstance(other, cudf.DataFrame):
             return NotImplemented
 
         if isinstance(other, Series):
-            if not can_reindex and fn in cudf.utils.utils._EQUALITY_OPS:
-                if not self.index.equals(other.index):
-                    raise ValueError(
-                        "Can only compare identically-labeled "
-                        "Series objects"
-                    )
-            lhs, rhs = _align_indices([self, other], allow_non_unique=True)
+            if (
+                not can_reindex
+                and fn in cudf.utils.utils._EQUALITY_OPS
+                and not self.index.equals(other.index)
+            ):
+                raise ValueError(
+                    "Can only compare identically-labeled " "Series objects"
+                )
+            lhs, other = _align_indices([self, other], allow_non_unique=True)
         else:
-            lhs, rhs = self, other
-        rhs = self._normalize_binop_value(rhs)
+            lhs = self
 
-        if fn == "truediv":
-            if str(lhs.dtype) in truediv_int_dtype_corrections:
-                truediv_type = truediv_int_dtype_corrections[str(lhs.dtype)]
-                lhs = lhs.astype(truediv_type)
-
-        if fill_value is not None:
-            if lhs.nullable:
-                lhs = lhs.fillna(fill_value)
-            if not is_scalar(rhs) and rhs.nullable:
-                rhs = rhs.fillna(fill_value)
-
-        outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
-
-        # Get the appropriate name for output operations involving two objects
-        # that are Series-like objects. The output shares the lhs's name unless
-        # the rhs is a _differently_ named Series-like object.
-        if (
-            isinstance(other, (cudf.Series, cudf.Index, pd.Series, pd.Index))
-            and self.name != other.name
-        ):
-            result_name = None
-        else:
-            result_name = self.name
-
-        return lhs._copy_construct(data=outcol, name=result_name)
+        return super()._binaryop(other, fn, fill_value, reflect, lhs)
 
     def add(self, other, fill_value=None, axis=0):
         """
