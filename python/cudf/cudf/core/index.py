@@ -805,6 +805,17 @@ class Index(SingleColumnFrame, Serializable):
 
         return super()._binaryop(other, fn, fill_value, reflect)
 
+    def _copy_construct(self, **kwargs):
+        # Need to override the parent behavior because pandas allows operations
+        # on unsigned types to return signed values, forcing us to choose the
+        # right index type here.
+        data = kwargs["data"]
+        if data.dtype != self.dtype:
+            cls = _dtype_to_index[getattr(np, data.dtype.name)]
+        else:
+            cls = self.__class__
+        return cls(**{**self._copy_construct_defaults, **kwargs})
+
     def _normalize_binop_value(self, other):
         """Returns a *column* (not a Series) or scalar for performing
         binary operations with self._column.
