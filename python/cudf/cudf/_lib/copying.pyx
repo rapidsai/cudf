@@ -741,7 +741,7 @@ def segmented_gather(Column source_column, Column gather_map):
     return result
 
 
-def test_pack(Table input_table):
+def pack_unpack(Table input_table):
     cdef table_view input_table_view = input_table.data_view()
     cdef cpp_copying.packed_columns pack_result = move(
         cpp_copying.pack(input_table_view)
