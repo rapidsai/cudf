@@ -154,8 +154,14 @@ class hostdevice_2dvector {
   operator device_2dspan<T>() { return {_data.device_ptr(), _size}; }
   operator device_2dspan<T const>() const { return {_data.device_ptr(), _size}; }
 
+  device_2dspan<T> device_view() { return static_cast<device_2dspan<T>>(*this); }
+  device_2dspan<T> device_view() const { return static_cast<device_2dspan<T const>>(*this); }
+
   operator host_2dspan<T>() { return {_data.host_ptr(), _size}; }
   operator host_2dspan<T const>() const { return {_data.host_ptr(), _size}; }
+
+  host_2dspan<T> host_view() { return static_cast<host_2dspan<T>>(*this); }
+  host_2dspan<T> host_view() const { return static_cast<host_2dspan<T const>>(*this); }
 
   host_span<T> operator[](size_t row)
   {

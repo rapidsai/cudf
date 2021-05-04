@@ -263,14 +263,16 @@ add_library(cudf
     src/join/join.cu
     src/join/semi_join.cu
     src/lists/contains.cu
+    src/lists/concatenate_rows.cu
     src/lists/copying/concatenate.cu
     src/lists/copying/copying.cu
     src/lists/copying/gather.cu
     src/lists/copying/segmented_gather.cu
     src/lists/count_elements.cu
+    src/lists/drop_list_duplicates.cu
     src/lists/explode.cu
     src/lists/extract.cu
-    src/lists/drop_list_duplicates.cu
+    src/lists/interleave_columns.cu
     src/lists/lists_column_factories.cu
     src/lists/lists_column_view.cu
     src/lists/segmented_sort.cu
