@@ -504,7 +504,6 @@ struct create_rolling_operator<InputType, aggregation::Kind::LEAD> {
       dynamic_cast<cudf::detail::lead_lag_aggregation const&>(agg).row_offset};
   }
 };
-
 template <typename InputType>
 struct create_rolling_operator<InputType, aggregation::Kind::LAG> {
   auto operator()(size_type min_periods, rolling_aggregation const& agg)
@@ -514,6 +513,145 @@ struct create_rolling_operator<InputType, aggregation::Kind::LAG> {
   }
 };
 
+class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggregations_collector {
+ public:
+  using cudf::detail::simple_aggregations_collector::visit;
+
+  // NOTE : all other aggregations are passed through unchanged via the default
+  // visit() function in the simple_aggregations_collector.
+
+  // MIN aggregations with strings are processed in 2 passes. the first pass performs
+  // the rolling operation on a ARGMIN aggregation to generate indices instead of values.
+  // and then a second pass uses those indices to gather the final strings.  this step
+  // translates the the MIN -> ARGMIN aggregation
+  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                  cudf::detail::min_aggregation const& agg) override
+  {
+    std::vector<std::unique_ptr<aggregation>> aggs;
+    aggs.push_back(col_type.id() == type_id::STRING ? make_argmin_aggregation()
+                                                    : make_min_aggregation());
+    return aggs;
+  }
+
+  // MAX aggregations with strings are processed in 2 passes. the first pass performs
+  // the rolling operation on a ARGMAX aggregation to generate indices instead of values.
+  // and then a second pass uses those indices to gather the final strings.  this step
+  // translates the the MAX -> ARGMAX aggregation
+  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                  cudf::detail::max_aggregation const& agg) override
+  {
+    std::vector<std::unique_ptr<aggregation>> aggs;
+    aggs.push_back(col_type.id() == type_id::STRING ? make_argmax_aggregation()
+                                                    : make_max_aggregation());
+    return aggs;
+  }
+
+  // COLLECT_LIST aggregations do not peform a rolling operation at all. They get processed
+  // entirely in the finalize() step.
+  std::vector<std::unique_ptr<aggregation>> visit(
+    data_type col_type, cudf::detail::collect_list_aggregation const& agg) override
+  {
+    return {};
+  }
+};
+
+template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
+class rolling_aggregation_finalizer final : public cudf::detail::aggregation_finalizer {
+ public:
+  using cudf::detail::aggregation_finalizer::visit;
+
+  rolling_aggregation_finalizer(column_view const& _input,
+                                column_view const& _default_outputs,
+                                data_type _result_type,
+                                PrecedingWindowIterator _preceding_window_begin,
+                                FollowingWindowIterator _following_window_begin,
+                                int _min_periods,
+                                std::unique_ptr<column>&& _intermediate,
+                                rmm::cuda_stream_view _stream,
+                                rmm::mr::device_memory_resource* _mr)
+    :
+
+      input(_input),
+      default_outputs(_default_outputs),
+      result_type(_result_type),
+      preceding_window_begin(_preceding_window_begin),
+      following_window_begin(_following_window_begin),
+      min_periods(_min_periods),
+      intermediate(std::move(_intermediate)),
+      result(nullptr),
+      stream(_stream),
+      mr(_mr)
+  {
+  }
+
+  void visit(aggregation const& agg) override { result = std::move(intermediate); }
+
+  void visit(cudf::detail::min_aggregation const& agg) override
+  {
+    if (result_type.id() == type_id::STRING) {
+      // The rows that represent null elements will be having negative values in gather map,
+      // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
+      auto output_table = detail::gather(table_view{{input}},
+                                         intermediate->view(),
+                                         cudf::out_of_bounds_policy::NULLIFY,
+                                         detail::negative_index_policy::NOT_ALLOWED,
+                                         stream,
+                                         mr);
+      result            = std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
+    } else {
+      result = std::move(intermediate);
+    }
+  }
+
+  void visit(cudf::detail::max_aggregation const& agg) override
+  {
+    if (result_type.id() == type_id::STRING) {
+      // The rows that represent null elements will be having negative values in gather map,
+      // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
+      auto output_table = detail::gather(table_view{{input}},
+                                         intermediate->view(),
+                                         cudf::out_of_bounds_policy::NULLIFY,
+                                         detail::negative_index_policy::NOT_ALLOWED,
+                                         stream,
+                                         mr);
+      result            = std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
+    } else {
+      result = std::move(intermediate);
+    }
+  }
+
+  void visit(cudf::detail::collect_list_aggregation const& agg) override
+  {
+    result = rolling_collect_list(input,
+                                  default_outputs,
+                                  preceding_window_begin,
+                                  following_window_begin,
+                                  min_periods,
+                                  agg,
+                                  stream,
+                                  mr);
+  }
+
+  std::unique_ptr<column> get_result()
+  {
+    CUDF_EXPECTS(
+      result != nullptr,
+      "Calling result on aggregation finalizer that has not been visited in rolling_window");
+    return std::move(result);
+  }
+
+ private:
+  column_view input;
+  column_view default_outputs;
+  data_type result_type;
+  PrecedingWindowIterator preceding_window_begin;
+  FollowingWindowIterator following_window_begin;
+  int min_periods;
+  std::unique_ptr<column> intermediate;
+  std::unique_ptr<column> result;
+  rmm::cuda_stream_view stream;
+  rmm::mr::device_memory_resource* mr;
+};
 
 /**
  * @brief Computes the rolling window function
@@ -603,18 +741,19 @@ template <typename InputType>
 struct rolling_window_launcher {
   template <aggregation::Kind op,
             typename PrecedingWindowIterator,
-            typename FollowingWindowIterator,
-            typename DeviceRollingOperator>
-  std::unique_ptr<column> launch(cudf::data_type output_type,
-                                 column_view const& input,
-                                 column_view const& default_outputs,
-                                 PrecedingWindowIterator preceding_window_begin,
-                                 FollowingWindowIterator following_window_begin,
-                                 DeviceRollingOperator device_operator,
-                                 rolling_aggregation const& agg,
-                                 rmm::cuda_stream_view stream,
-                                 rmm::mr::device_memory_resource* mr)
+            typename FollowingWindowIterator>
+  std::unique_ptr<column> operator()(column_view const& input,
+                                     column_view const& default_outputs,
+                                     PrecedingWindowIterator preceding_window_begin,
+                                     FollowingWindowIterator following_window_begin,
+                                     int min_periods,
+                                     rolling_aggregation const& agg,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
+    auto const output_type = target_type(input.type(), op);
+    auto device_operator   = create_rolling_operator<InputType, op>{}(min_periods, agg);
+
     auto output =
       make_fixed_width_column(output_type, input.size(), mask_state::UNINITIALIZED, stream, mr);
 
@@ -664,131 +803,6 @@ struct rolling_window_launcher {
 
     return output;
   }
-
-  // family 1 : operations that can be expressed with a generic rolling_window kernel
-  template <aggregation::Kind op,
-            typename PrecedingWindowIterator,
-            typename FollowingWindowIterator>
-  std::enable_if_t<!is_rolling_string_specialization<InputType, op>() &&
-                     (op != aggregation::COLLECT_LIST),
-                   std::unique_ptr<column>>
-  operator()(column_view const& input,
-             column_view const& default_outputs,
-             PrecedingWindowIterator preceding_window_begin,
-             FollowingWindowIterator following_window_begin,
-             int min_periods,
-             rolling_aggregation const& agg,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr)
-  {
-    auto device_operator = create_rolling_operator<InputType, op>{}(min_periods, agg);
-    return launch<op, PrecedingWindowIterator, FollowingWindowIterator, decltype(device_operator)>(
-      target_type(input.type(), op),
-      input,
-      default_outputs,
-      preceding_window_begin,
-      following_window_begin,
-      device_operator,
-      agg,
-      stream,
-      mr);
-  }
-
-  // family 2 : operations that require the kernel to output indices instead of values, for
-  // subsequent gathering
-  template <aggregation::Kind op,
-            typename PrecedingWindowIterator,
-            typename FollowingWindowIterator>
-  std::enable_if_t<is_rolling_string_specialization<InputType, op>() &&
-                     (op != aggregation::COLLECT_LIST),
-                   std::unique_ptr<column>>
-  operator()(column_view const& input,
-             column_view const& default_outputs,
-             PrecedingWindowIterator preceding_window_begin,
-             FollowingWindowIterator following_window_begin,
-             int min_periods,
-             rolling_aggregation const& agg,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr)
-  {
-    // since we are dealing with strings, we will change the aggregations to ones that
-    // return indices of the MIN or MAX values instead of the values themselves, then do a
-    // gather on the results as a postprocess.
-    if (op == aggregation::MIN) {
-      auto device_operator =
-        create_rolling_operator<InputType, aggregation::ARGMIN>{}(min_periods, agg);
-      auto gather_map = launch<aggregation::ARGMIN,
-                               PrecedingWindowIterator,
-                               FollowingWindowIterator,
-                               decltype(device_operator)>(cudf::data_type{type_id::INT32},
-                                                          input,
-                                                          default_outputs,
-                                                          preceding_window_begin,
-                                                          following_window_begin,
-                                                          device_operator,
-                                                          agg,
-                                                          stream,
-                                                          mr);
-
-      // The rows that represent null elements will be having negative values in gather map,
-      // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
-      auto output_table = detail::gather(table_view{{input}},
-                                         gather_map->view(),
-                                         cudf::out_of_bounds_policy::NULLIFY,
-                                         detail::negative_index_policy::NOT_ALLOWED,
-                                         stream,
-                                         mr);
-      return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
-    } else if (op == aggregation::MAX) {
-      auto device_operator =
-        create_rolling_operator<InputType, aggregation::ARGMAX>{}(min_periods, agg);
-      auto gather_map = launch<aggregation::ARGMAX,
-                               PrecedingWindowIterator,
-                               FollowingWindowIterator,
-                               decltype(device_operator)>(cudf::data_type{type_id::INT32},
-                                                          input,
-                                                          default_outputs,
-                                                          preceding_window_begin,
-                                                          following_window_begin,
-                                                          device_operator,
-                                                          agg,
-                                                          stream,
-                                                          mr);
-
-      // The rows that represent null elements will be having negative values in gather map,
-      // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
-      auto output_table = detail::gather(table_view{{input}},
-                                         gather_map->view(),
-                                         cudf::out_of_bounds_policy::NULLIFY,
-                                         detail::negative_index_policy::NOT_ALLOWED,
-                                         stream,
-                                         mr);
-      return std::make_unique<cudf::column>(std::move(output_table->get_column(0)));
-    }
-    CUDF_FAIL("MIN and MAX are the only supported aggregation types for string columns");
-  }
-
-  // family
-  template <aggregation::Kind op, typename PrecedingIter, typename FollowingIter>
-  std::enable_if_t<op == aggregation::COLLECT_LIST, std::unique_ptr<column>> operator()(
-    column_view const& input,
-    column_view const& default_outputs,
-    PrecedingIter preceding_begin_raw,
-    FollowingIter following_begin_raw,
-    size_type min_periods,
-    rolling_aggregation const& agg,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
-  {
-    return rolling_collect_list(input,
-                                default_outputs,
-                                preceding_begin_raw,
-                                following_begin_raw,
-                                min_periods,
-                                agg,
-                                stream,
-                                mr);
-  }
 };
 
 struct dispatch_rolling {
@@ -802,16 +816,40 @@ struct dispatch_rolling {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return aggregation_dispatcher(agg.kind,
-                                  rolling_window_launcher<InputType>{},
-                                  input,
-                                  default_outputs,
-                                  preceding_window_begin,
-                                  following_window_begin,
-                                  min_periods,
-                                  agg,
-                                  stream,
-                                  mr);
+    // do any preprocessing of aggregations (eg, MIN -> ARGMIN, COLLECT_LIST -> nothing)
+    rolling_aggregation_preprocessor preprocessor;
+    auto preprocessed_aggs = agg.get_simple_aggregations(input.type(), preprocessor);
+    CUDF_EXPECTS(preprocessed_aggs.size() <= 1,
+                 "Encountered a non-trivial rolling aggregation result");
+
+    // perform the rolling window if we produced an aggregation to use
+    auto intermediate = preprocessed_aggs.size() > 0
+                          ? aggregation_dispatcher(
+                              dynamic_cast<rolling_aggregation const&>(*preprocessed_aggs[0]).kind,
+                              rolling_window_launcher<InputType>{},
+                              input,
+                              default_outputs,
+                              preceding_window_begin,
+                              following_window_begin,
+                              min_periods,
+                              dynamic_cast<rolling_aggregation const&>(*preprocessed_aggs[0]),
+                              stream,
+                              mr)
+                          : nullptr;
+
+    // finalize.
+    auto const result_type = target_type(input.type(), agg.kind);
+    rolling_aggregation_finalizer finalizer(input,
+                                            default_outputs,
+                                            result_type,
+                                            preceding_window_begin,
+                                            following_window_begin,
+                                            min_periods,
+                                            std::move(intermediate),
+                                            stream,
+                                            mr);
+    agg.finalize(finalizer);
+    return finalizer.get_result();
   }
 };
 
@@ -852,8 +890,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
                                              {0, 5});  // args 0 and 5 are pointers.
       break;
     case aggregation::Kind::CUDA:
-      cuda_source +=
-        cudf::jit::parse_single_function_cuda(udf_agg._source, udf_agg._function_name);
+      cuda_source += cudf::jit::parse_single_function_cuda(udf_agg._source, udf_agg._function_name);
       break;
     default: CUDF_FAIL("Unsupported UDF type.");
   }

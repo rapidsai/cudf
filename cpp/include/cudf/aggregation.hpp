@@ -96,7 +96,7 @@ class aggregation {
   // override functions for compound aggregations
   virtual std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, cudf::detail::simple_aggregations_collector& collector) const = 0;
-  virtual void finalize(cudf::detail::aggregation_finalizer& finalizer)               = 0;
+  virtual void finalize(cudf::detail::aggregation_finalizer& finalizer) const         = 0;
 };
 
 /**
