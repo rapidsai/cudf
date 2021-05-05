@@ -15,7 +15,7 @@
 #include <tests/iterator/iterator_tests.cuh>
 
 // tests for non-null iterator (pointer of device array)
-template<typename T>
+template <typename T>
 void non_null_iterator(IteratorTest<T>& testFixture)
 {
   auto host_array = cudf::test::make_type_param_vector<T>({0, 6, 0, -14, 13, 64, -13, -20, 45});
@@ -39,10 +39,10 @@ void non_null_iterator(IteratorTest<T>& testFixture)
 // Actually, we can use cub for reduction with nulls without creating custom
 // kernel or multiple steps. We may accelerate the reduction for a column using
 // cub
-template<typename T>
+template <typename T>
 void null_iterator(IteratorTest<T>& testFixture)
 {
-  T init  = cudf::test::make_type_param_scalar<T>(0);
+  T init = cudf::test::make_type_param_scalar<T>(0);
   // data and valid arrays
   auto host_values = cudf::test::make_type_param_vector<T>({0, 6, 0, -14, 13, 64, -13, -20, 45});
   std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1, 1});

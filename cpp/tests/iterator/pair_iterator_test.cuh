@@ -15,7 +15,7 @@
 
 #include <tests/iterator/iterator_tests.cuh>
 
-template<typename T>
+template <typename T>
 void nonull_pair_iterator(IteratorTest<T>& testFixture)
 {
   // data and valid arrays
@@ -38,7 +38,7 @@ void nonull_pair_iterator(IteratorTest<T>& testFixture)
   testFixture.iterator_test_thrust(replaced_array, it_dev, host_values.size());
 }
 
-template<typename T>
+template <typename T>
 void null_pair_iterator(IteratorTest<T>& testFixture)
 {
   // data and valid arrays
