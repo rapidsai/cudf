@@ -19,7 +19,7 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/valid_if.cuh>
-#include <cudf/lists/concatenate_rows.hpp>
+#include <cudf/lists/combine.hpp>
 #include <cudf/lists/detail/interleave_columns.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/detail/utilities.cuh>
@@ -383,55 +383,49 @@ std::unique_ptr<column> concatenate_with_nullifying_rows(table_view const& input
 }  // namespace
 
 /**
- * @copydoc cudf::lists::concatenate_rows
+ * @copydoc cudf::lists::concatenate_by_key
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> concatenate_rows(table_view const& input,
-                                         concatenate_null_policy null_policy,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> concatenate_by_key(column_view const& keys,
+                                           column_view const& values,
+                                           concatenate_null_policy null_policy,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(input.num_columns() > 0, "The input table must have at least one column.");
+  CUDF_EXPECTS(values.type().id() == type_id::LIST,
+               "The input values column must be of lists column type.");
+  CUDF_EXPECTS(not cudf::is_nested(lists_column_view(values).child().type()),
+               "Nested types are not supported.");
+  CUDF_EXPECTS(keys.size() == values.size(), "Keys and values columns must have the same size.");
 
-  auto const entry_type = lists_column_view(*input.begin()).child().type();
-  for (auto const& col : input) {
-    CUDF_EXPECTS(col.type().id() == type_id::LIST,
-                 "All columns of the input table must be of lists column type.");
-
-    auto const child_col = lists_column_view(col).child();
-    CUDF_EXPECTS(not cudf::is_nested(child_col.type()), "Nested types are not supported.");
-    CUDF_EXPECTS(entry_type == child_col.type(),
-                 "The types of entries in the input columns must be the same.");
-  }
-
-  if (input.num_rows() == 0) { return cudf::empty_like(input.column(0)); }
-  if (input.num_columns() == 1) { return std::make_unique<column>(*(input.begin()), stream, mr); }
-
+  if (keys.size() == 0) { return cudf::empty_like(values); }
+  return cudf::empty_like(values);
   // List concatenation can be implemented by simply interleaving the lists columns, then modify the
   // list offsets.
-  auto const has_null_mask = std::any_of(
-    std::cbegin(input), std::cend(input), [](auto const& col) { return col.nullable(); });
-  if (not has_null_mask or null_policy == concatenate_null_policy::IGNORE) {
-    return concatenate_rows_ignore_null(input, has_null_mask, stream, mr);
-  }
+  //  auto const has_null_mask = std::any_of(
+  //    std::cbegin(input), std::cend(input), [](auto const& col) { return col.nullable(); });
+  //  if (not has_null_mask or null_policy == concatenate_null_policy::IGNORE) {
+  //    return concatenate_ignore_null(input, has_null_mask, stream, mr);
+  //  }
 
   // Both conditions satisfied: has_null_mask == true and
   // null_policy == NULLIFY_OUTPUT_ROW.
-  return concatenate_with_nullifying_rows(input, stream, mr);
+  //  return concatenate_with_nullifying_rows(input, stream, mr);
 }
 
 }  // namespace detail
 
 /**
- * @copydoc cudf::lists::concatenate_rows
+ * @copydoc cudf::lists::concatenate_by_key
  */
-std::unique_ptr<column> concatenate_rows(table_view const& lists_columns,
-                                         concatenate_null_policy null_policy,
-                                         rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> concatenate_by_key(column_view const& keys,
+                                           column_view const& values,
+                                           concatenate_null_policy null_policy,
+                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate_rows(lists_columns, null_policy, rmm::cuda_stream_default, mr);
+  return detail::concatenate_by_key(keys, values, null_policy, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace lists
