@@ -2315,11 +2315,7 @@ class Series(SingleColumnFrame, Serializable):
         )
 
     def __invert__(self):
-        """Bitwise invert (~) for each element.
-        Logical NOT if dtype is bool
-
-        Returns a new Series.
-        """
+        """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
         if np.issubdtype(self.dtype, np.integer):
             return self._unaryop("invert")
         elif np.issubdtype(self.dtype, np.bool_):
@@ -2328,13 +2324,6 @@ class Series(SingleColumnFrame, Serializable):
             raise TypeError(
                 f"Operation `~` not supported on {self.dtype.type.__name__}"
             )
-
-    def __neg__(self):
-        """Negated value (-) for each element
-
-        Returns a new Series.
-        """
-        return self.__mul__(-1)
 
     @copy_docstring(CategoricalAccessor.__init__)  # type: ignore
     @property
@@ -5355,9 +5344,6 @@ class Series(SingleColumnFrame, Serializable):
         dtype: float64
         """
         return self._unaryop("abs")
-
-    def __abs__(self):
-        return self.abs()
 
     # Rounding
     def ceil(self):

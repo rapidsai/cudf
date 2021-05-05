@@ -3647,6 +3647,7 @@ class SingleColumnFrame(Frame):
                 f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
             )
 
+    # Binary arithmetic operations.
     def __add__(self, other):
         return self._binaryop(other, "add")
 
@@ -3691,6 +3692,16 @@ class SingleColumnFrame(Frame):
 
     __div__ = __truediv__
 
+    def __and__(self, other):
+        return self._bitwise_binop(other, "and")
+
+    def __or__(self, other):
+        return self._bitwise_binop(other, "or")
+
+    def __xor__(self, other):
+        return self._bitwise_binop(other, "xor")
+
+    # Binary rich comparison operations.
     def __eq__(self, other):
         return self._binaryop(other, "eq")
 
@@ -3709,14 +3720,15 @@ class SingleColumnFrame(Frame):
     def __ge__(self, other):
         return self._binaryop(other, "ge")
 
-    def __and__(self, other):
-        return self._bitwise_binop(other, "and")
+    # Unary logical operators
+    def __neg__(self):
+        return -1 * self
 
-    def __or__(self, other):
-        return self._bitwise_binop(other, "or")
+    def __pos__(self):
+        return self.copy(deep=True)
 
-    def __xor__(self, other):
-        return self._bitwise_binop(other, "xor")
+    def __abs__(self):
+        return self._unaryop("abs")
 
 
 def _get_replacement_values_for_columns(
