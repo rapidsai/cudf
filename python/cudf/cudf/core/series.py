@@ -1266,6 +1266,7 @@ class Series(SingleColumnFrame, Serializable):
                 else get_option("display.min_rows")
             )
             show_dimensions = get_option("display.show_dimensions")
+            breakpoint()
             if preprocess._column.categories.dtype.kind == "f":
                 pd_series = (
                     preprocess.astype("str")

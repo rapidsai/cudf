@@ -536,7 +536,6 @@ class Index(SingleColumnFrame, Serializable):
             col_name = 0
         else:
             col_name = self.name
-
         return cudf.DataFrame(
             {col_name: self._values}, index=self if index else None
         )
@@ -1155,7 +1154,6 @@ class Index(SingleColumnFrame, Serializable):
         Series
             The dtype will be based on the type of the Index values.
         """
-
         return cudf.Series(
             self._values,
             index=self.copy(deep=False) if index is None else index,

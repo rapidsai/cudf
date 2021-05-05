@@ -182,16 +182,14 @@ def cut(
             #when we have duplicate labels and ordered is False, we should allow
             #duplicate categories, even though this is not usually the case
             new_data = [interval_labels[i][0] for i in index_labels.values]
-            return cudf.CategoricalIndex(new_data,categories=sorted(set(labels)),ordered=False)
-    breakpoint()
+            return cudf.CategoricalIndex(new_data,categories=sorted(set(labels)),ordered=False)     
     col = build_categorical_column(
         categories=interval_labels, codes=index_labels, ordered=ordered
     )
-
+    return cudf.Series(col)
     categorical_index = cudf.core.index.as_index(col)
-
     if retbins:
         #if retbins is true we return the bins as well
         return categorical_index, bins
     else:
-        return categorical_index
+        return categorical_index.to_frame()
