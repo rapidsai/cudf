@@ -74,14 +74,14 @@ class reader::impl {
    * @param source Dataset source
    * @param filepath Filepath if reading dataset from a file
    * @param options Settings for controlling reading behavior
-   * @param mr Device memory resource to use for device memory allocation
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<datasource> source,
                 std::string filepath,
                 csv_reader_options const &options,
-                rmm::mr::device_memory_resource *mr,
-                rmm::cuda_stream_view stream);
+                rmm::cuda_stream_view stream,
+                rmm::mr::device_memory_resource *mr);
 
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns.
