@@ -3530,6 +3530,38 @@ class SingleColumnFrame(Frame):
         return self._column.to_arrow()
 
     @property
+    def is_monotonic(self):
+        """Return boolean if values in the object are monotonic_increasing.
+
+        This property is an alias for :attr:`is_monotonic_increasing`.
+
+        Returns
+        -------
+        bool
+        """
+        return self.is_monotonic_increasing
+
+    @property
+    def is_monotonic_increasing(self):
+        """Return boolean if values in the object are monotonic_increasing.
+
+        Returns
+        -------
+        bool
+        """
+        return self._column.is_monotonic_increasing
+
+    @property
+    def is_monotonic_decreasing(self):
+        """Return boolean if values in the object are monotonic_decreasing.
+
+        Returns
+        -------
+        bool
+        """
+        return self._column.is_monotonic_decreasing
+
+    @property
     def _copy_construct_defaults(self):
         """A default dictionary of kwargs to be used for copy construction."""
         raise NotImplementedError

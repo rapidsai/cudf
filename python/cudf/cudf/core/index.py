@@ -1148,30 +1148,7 @@ class Index(SingleColumnFrame, Serializable):
         """
         Return if the index has unique values.
         """
-        raise (NotImplementedError)
-
-    @property
-    def is_monotonic(self):
-        """
-        Alias for is_monotonic_increasing.
-        """
-        return self.is_monotonic_increasing
-
-    @property
-    def is_monotonic_increasing(self):
-        """
-        Return if the index is monotonic increasing
-        (only equal or increasing) values.
-        """
-        return self._values.is_monotonic_increasing
-
-    @property
-    def is_monotonic_decreasing(self):
-        """
-        Return if the index is monotonic decreasing
-        (only equal or decreasing) values.
-        """
-        return self._values.is_monotonic_decreasing
+        raise NotImplementedError
 
     @property
     def empty(self):

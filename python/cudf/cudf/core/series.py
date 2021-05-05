@@ -5946,39 +5946,6 @@ class Series(SingleColumnFrame, Serializable):
         return self._column.is_unique
 
     @property
-    def is_monotonic(self):
-        """
-        Return boolean if values in the object are monotonic_increasing.
-
-        Returns
-        -------
-        out : bool
-        """
-        return self._column.is_monotonic_increasing
-
-    @property
-    def is_monotonic_increasing(self):
-        """
-        Return boolean if values in the object are monotonic_increasing.
-
-        Returns
-        -------
-        out : bool
-        """
-        return self._column.is_monotonic_increasing
-
-    @property
-    def is_monotonic_decreasing(self):
-        """
-        Return boolean if values in the object are monotonic_decreasing.
-
-        Returns
-        -------
-        out : bool
-        """
-        return self._column.is_monotonic_decreasing
-
-    @property
     def __cuda_array_interface__(self):
         return self._column.__cuda_array_interface__
 
