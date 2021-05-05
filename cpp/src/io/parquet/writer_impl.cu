@@ -782,9 +782,9 @@ void writer::impl::build_chunk_dictionaries2(
 
   chunks.host_to_device(stream);
 
-  gpu::InitializeChunkHashMaps(chunks.device_view().flat_view(), stream);
+  gpu::InitializeChunkHashMaps(chunks.device_view().flat_view(), hash_maps_storage[0], stream);
   stream.synchronize();
-  gpu::BuildChunkDictionaries2(chunks, num_rows, stream);
+  gpu::BuildChunkDictionaries2(chunks, num_rows, hash_maps_storage[0], stream);
   stream.synchronize();
 }
 

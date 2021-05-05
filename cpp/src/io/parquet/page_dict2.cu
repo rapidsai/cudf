@@ -34,32 +34,30 @@ __global__ void __launch_bounds__(block_size, 1)
   auto t     = threadIdx.x;
   for (size_t i = 0; i < chunk.dict_map_size; i += block_size) {
     if (t + i < chunk.dict_map_size) {
-      new (&chunk.dict_map_slots[t].first) map_type::atomic_key_type{KEY_SENTINEL};
-      new (&chunk.dict_map_slots[t].second) map_type::atomic_mapped_type{VALUE_SENTINEL};
+      new (&chunk.dict_map_slots[t + i].first) map_type::atomic_key_type{KEY_SENTINEL};
+      new (&chunk.dict_map_slots[t + i].second) map_type::atomic_mapped_type{VALUE_SENTINEL};
     }
   }
 }
 
+template <typename T>
+struct equality_functor {
+  column_device_view &col;
+  __device__ bool operator()(size_type lhs_idx, size_type rhs_idx)
+  {
+    // We don't call this for nulls so this is fine
+    return equality_compare(col.element<T>(lhs_idx), col.element<T>(rhs_idx));
+  }
+};
+
+template <typename T>
+struct hash_functor {
+  column_device_view &col;
+  __device__ auto operator()(size_type idx) { return MurmurHash3_32<T>{}(col.element<T>(idx)); }
+};
+
 struct map_insert_fn {
   map_type::device_mutable_view &map;
-
-  template <typename T>
-  struct equality_functor {
-    column_device_view &col;
-    __device__ bool operator()(size_type lhs_idx, size_type rhs_idx)
-    {
-      // We don't call this for nulls so this is fine
-      // return equality_compare(col.element<T>(lhs_idx), col.element<T>(rhs_idx));
-      return col.element<T>(lhs_idx) == col.element<T>(rhs_idx);
-    }
-  };
-
-  template <typename T>
-  struct hash_functor {
-    column_device_view &col;
-    // __device__ bool operator()(size_type idx) { return 1; }
-    __device__ bool operator()(size_type idx) { return MurmurHash3_32<T>{}(col.element<T>(idx)); }
-  };
 
   template <typename T>
   __device__ bool operator()(column_device_view &col, size_type i)
@@ -72,6 +70,23 @@ struct map_insert_fn {
       cudf_assert(false && "Unsupported type to insert in map");
     }
     return false;
+  }
+};
+
+struct map_find_fn {
+  map_type::device_view &map;
+
+  template <typename T>
+  __device__ auto operator()(column_device_view &col, size_type i)
+  {
+    if constexpr (column_device_view::has_element_accessor<T>()) {
+      auto hash_fn     = hash_functor<T>{col};
+      auto equality_fn = equality_functor<T>{col};
+      return map.find(i, hash_fn, equality_fn);
+    } else {
+      cudf_assert(false && "Unsupported type to insert in map");
+    }
+    return map.end();
   }
 };
 
@@ -91,7 +106,6 @@ __global__ void __launch_bounds__(block_size, 1)
 
   __shared__ EncColumnChunk s_chunk;
   __shared__ size_type *s_chunk_dict_entries_ptr;
-  __shared__ size_type volatile s_chunk_dict_entries;
   __shared__ parquet_column_device_view s_col;
   __shared__ size_type s_start_value_idx;
   __shared__ size_type s_num_values;
@@ -131,7 +145,10 @@ __global__ void __launch_bounds__(block_size, 1)
     }
     s_start_value_idx = current_start_value_idx;
     s_num_values      = end_value_idx - current_start_value_idx;
-    // printf("num_values %d, map_size %lu\n", s_num_values, s_chunk.dict_map_size);
+    // printf("num_values %d, map ptr %p, map_size %lu\n",
+    //        s_num_values,
+    //        s_chunk.dict_map_slots,
+    //        s_chunk.dict_map_size);
   }
   __syncthreads();
 
@@ -141,17 +158,17 @@ __global__ void __launch_bounds__(block_size, 1)
 
   // Make a view of the hash map
   // TODO: try putting a single copy of this in shared memory.
-  auto hash_map = map_type::device_mutable_view(
+  auto hash_map_mutable = map_type::device_mutable_view(
+    s_chunk.dict_map_slots, s_chunk.dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
+  auto hash_map = map_type::device_view(
     s_chunk.dict_map_slots, s_chunk.dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
 
   for (size_type i = 0; i < s_num_values; i += block_size) {
     // Check if the num unique values in chunk has already exceeded max dict size and early exit
-    if (t == 0) { s_chunk_dict_entries = *s_chunk_dict_entries_ptr; }
-    __syncthreads();
-    if (s_chunk_dict_entries > 65535) {
-      __syncthreads();
-      return;
-    }
+    // if (*s_chunk_dict_entries_ptr > 65535) {
+    //   if (t == 0) { printf("early return %d\n", *s_chunk_dict_entries_ptr); }
+    //   return;
+    // }
 
     // add the value to hash map
     size_type val_idx = i + t + s_start_value_idx;
@@ -161,25 +178,18 @@ __global__ void __launch_bounds__(block_size, 1)
     // insert element at val_idx to hash map and count successful insertions
     size_type is_unique = 0;
     if (is_valid) {
-      is_unique = type_dispatcher(data_col.type(), map_insert_fn{hash_map}, data_col, val_idx);
+      auto found_slot = type_dispatcher(data_col.type(), map_find_fn{hash_map}, data_col, val_idx);
+      if (found_slot == hash_map.end()) {
+        is_unique =
+          type_dispatcher(data_col.type(), map_insert_fn{hash_map_mutable}, data_col, val_idx);
+      }
     }
 
     // TODO: Explore using ballot and popc for this reduction as the value to reduce is 1 or 0
-    auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
-    if (t == 0) {
-      s_chunk_dict_entries = atomicAdd(s_chunk_dict_entries_ptr, num_unique);
-      s_chunk_dict_entries += num_unique;
-      // printf("b %d, inserted %d\n", blockIdx.x, s_chunk_dict_entries);
-    }
+    // auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
+    // if (t == 0) { atomicAdd(s_chunk_dict_entries_ptr, num_unique); }
     __syncthreads();
   }
-}
-
-void InitializeChunkHashMaps(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
-{
-  constexpr int block_size = 1024;
-  // TODO: attempt striding like cuco does for its initialize
-  gpuInitializeChunkHashMaps<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
 }
 
 template <typename T>
@@ -221,8 +231,25 @@ void print(column_view const &col, std::string label = "")
   cudf::type_dispatcher(col.type(), printer{}, col, label);
 }
 
+void InitializeChunkHashMaps(device_span<EncColumnChunk> chunks,
+                             rmm::device_uvector<gpu::slot_type> &onemap,
+                             rmm::cuda_stream_view stream)
+{
+  constexpr int block_size = 1024;
+  // TODO: attempt striding like cuco does for its initialize
+  gpuInitializeChunkHashMaps<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
+  // stream.synchronize();
+  // rmm::device_uvector<size_type> temp(1 << 17, stream);
+  // thrust::transform(
+  //   rmm::exec_policy(), onemap.begin(), onemap.end(), temp.begin(), [] __device__(auto &slot) {
+  //     return slot.first.load();
+  //   });
+  // print(temp, "slots");
+}
+
 void BuildChunkDictionaries2(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                              size_type num_rows,
+                             rmm::device_uvector<gpu::slot_type> &onemap,
                              rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 1024;
@@ -240,6 +267,13 @@ void BuildChunkDictionaries2(cudf::detail::device_2dspan<EncColumnChunk> chunks,
   // thrust::copy(
   //   rmm::exec_policy(stream), ck_it, ck_it + chunks.flat_view().size(), dict_sizes.begin());
   // print(dict_sizes, "dict sizes");
+
+  // rmm::device_uvector<size_type> temp(1 << 17, stream);
+  // thrust::transform(
+  //   rmm::exec_policy(), onemap.begin(), onemap.end(), temp.begin(), [] __device__(auto &slot) {
+  //     return slot.first.load();
+  //   });
+  // print(temp, "slots");
 }
 
 }  // namespace gpu

@@ -97,10 +97,10 @@ void BM_parq_write_varying_options(benchmark::State& state)
     ->Unit(benchmark::kMillisecond)                                             \
     ->UseManualTime();
 
-WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, integral, type_group_id::INTEGRAL);
+WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, integral, cudf::type_id::INT32);
 // WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
 // WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
-WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, string, cudf::type_id::STRING);
+// WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, string, cudf::type_id::STRING);
 // WR_BENCHMARK_DEFINE_ALL_SINKS(PARQ_WR_BM_INOUTS_DEFINE, list, cudf::type_id::LIST);
 
 // BENCHMARK_DEFINE_F(ParquetWrite, writer_options)
