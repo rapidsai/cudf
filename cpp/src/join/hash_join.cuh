@@ -69,8 +69,6 @@ std::size_t estimate_join_output_size(table_device_view build_table,
                                       null_equality compare_nulls,
                                       rmm::cuda_stream_view stream)
 {
-  using estimate_size_type = int64_t;  // use 64-bit size so we can detect overflow
-
   const size_type build_table_num_rows{build_table.num_rows()};
   const size_type probe_table_num_rows{probe_table.num_rows()};
 
@@ -101,8 +99,8 @@ std::size_t estimate_join_output_size(table_device_view build_table,
   if (probe_to_build_ratio > MAX_RATIO) { sample_probe_num_rows = build_table_num_rows; }
 
   // Allocate storage for the counter used to get the size of the join output
-  estimate_size_type h_size_estimate{0};
-  rmm::device_scalar<estimate_size_type> size_estimate(0, stream);
+  std::size_t h_size_estimate{0};
+  rmm::device_scalar<std::size_t> size_estimate(0, stream);
 
   CHECK_CUDA(stream.value());
 
