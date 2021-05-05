@@ -2945,9 +2945,9 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testWindowingCollect() {
-    Aggregation aggCollectWithNulls = Aggregation.collect(Aggregation.NullPolicy.INCLUDE);
-    Aggregation aggCollect = Aggregation.collect();
+  void testWindowingCollectList() {
+    Aggregation aggCollectWithNulls = Aggregation.collectList(Aggregation.NullPolicy.INCLUDE);
+    Aggregation aggCollect = Aggregation.collectList();
     WindowOptions winOpts = WindowOptions.builder()
                                          .minPeriods(1)
                                          .window(2, 1).build();
@@ -4400,6 +4400,88 @@ public class TableTest extends CudfTestBase {
         }
       }
 
+    }
+  }
+
+  @Test
+  void testGroupByCollectListIncludeNulls() {
+    try (Table input = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 4)
+        .column(null, 13, null, 12, 14, null, 15, null, null, 0)
+        .build();
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(new ListType(false, new BasicType(true, DType.INT32)),
+                 Arrays.asList(null, 13, null, 12),
+                 Arrays.asList(14, null, 15, null),
+                 Arrays.asList((Integer) null),
+                 Arrays.asList(0))
+             .build();
+         Table found = input.groupBy(0).aggregate(
+             Aggregation.collectList(Aggregation.NullPolicy.INCLUDE).onColumn(1))) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
+
+  @Test
+  void testGroupByCollectSetIncludeNulls() {
+    // test with null unequal and nan unequal
+    Aggregation collectSet = Aggregation.collectSet(Aggregation.NullPolicy.INCLUDE,
+        Aggregation.NullEquality.UNEQUAL, Aggregation.NaNEquality.UNEQUAL);
+    try (Table input = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4)
+        .column(null, 13, null, 13, 14, null, 15, null, 4, 1, 1, 4, 0, 0, 0, 0)
+        .build();
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(new ListType(false, new BasicType(true, DType.INT32)),
+                 Arrays.asList(13, null, null), Arrays.asList(14, 15, null, null),
+                 Arrays.asList(1, 4), Arrays.asList(0))
+             .build();
+         Table found = input.groupBy(0).aggregate(collectSet.onColumn(1))) {
+      assertTablesAreEqual(expected, found);
+    }
+    // test with null equal and nan unequal
+    collectSet = Aggregation.collectSet(Aggregation.NullPolicy.INCLUDE,
+        Aggregation.NullEquality.EQUAL, Aggregation.NaNEquality.UNEQUAL);
+    try (Table input = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4)
+        .column(null, 13.0, null, 13.0,
+            14.1, Double.NaN, 13.9, Double.NaN,
+            Double.NaN, null, 1.0, null,
+            null, null, null, null)
+        .build();
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(new ListType(false, new BasicType(true, DType.FLOAT64)),
+                 Arrays.asList(13.0, null),
+                 Arrays.asList(13.9, 14.1, Double.NaN, Double.NaN),
+                 Arrays.asList(1.0, Double.NaN, null),
+                 Arrays.asList((Integer) null))
+             .build();
+         Table found = input.groupBy(0).aggregate(collectSet.onColumn(1))) {
+      assertTablesAreEqual(expected, found);
+    }
+    // test with null equal and nan equal
+    collectSet = Aggregation.collectSet(Aggregation.NullPolicy.INCLUDE,
+        Aggregation.NullEquality.EQUAL, Aggregation.NaNEquality.ALL_EQUAL);
+    try (Table input = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4)
+        .column(null, 13.0, null, 13.0,
+            14.1, Double.NaN, 13.9, Double.NaN,
+            0.0, 0.0, 0.00, 0.0,
+            Double.NaN, Double.NaN, null, null)
+        .build();
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(new ListType(false, new BasicType(true, DType.FLOAT64)),
+                 Arrays.asList(13.0, null),
+                 Arrays.asList(13.9, 14.1, Double.NaN),
+                 Arrays.asList(0.0),
+                 Arrays.asList(Double.NaN, (Integer) null))
+             .build();
+         Table found = input.groupBy(0).aggregate(collectSet.onColumn(1))) {
+      assertTablesAreEqual(expected, found);
     }
   }
 
