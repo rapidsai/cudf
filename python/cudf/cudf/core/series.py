@@ -3860,32 +3860,6 @@ class Series(SingleColumnFrame, Serializable):
 
         return codes._copy_construct(name=None, index=self.index)
 
-    def factorize(self, na_sentinel=-1):
-        """Encode the input values as integer labels
-
-        Parameters
-        ----------
-        na_sentinel : number
-            Value to indicate missing category.
-
-        Returns
-        --------
-        (labels, cats) : (cupy.ndarray, cupy.ndarray or Index)
-            - *labels* contains the encoded values
-            - *cats* contains the categories in order that the N-th
-              item corresponds to the (N-1) code.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series(['a', 'a', 'c'])
-        >>> codes
-        array([0, 0, 1], dtype=int8)
-        >>> uniques
-        StringIndex(['a' 'c'], dtype='object')
-        """
-        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
-
     # UDF related
 
     def applymap(self, udf, out_dtype=None):

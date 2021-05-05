@@ -3575,6 +3575,33 @@ class SingleColumnFrame(Frame):
     def __cuda_array_interface__(self):
         return self._column.__cuda_array_interface__
 
+    def factorize(self, na_sentinel=-1):
+        """Encode the input values as integer labels
+
+        Parameters
+        ----------
+        na_sentinel : number
+            Value to indicate missing category.
+
+        Returns
+        --------
+        (labels, cats) : (cupy.ndarray, cupy.ndarray or Index)
+            - *labels* contains the encoded values
+            - *cats* contains the categories in order that the N-th
+              item corresponds to the (N-1) code.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['a', 'a', 'c'])
+        >>> codes, uniques = s.factorize()
+        >>> codes
+        array([0, 0, 1], dtype=int8)
+        >>> uniques
+        StringIndex(['a' 'c'], dtype='object')
+        """
+        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
+
     @property
     def _copy_construct_defaults(self):
         """A default dictionary of kwargs to be used for copy construction."""

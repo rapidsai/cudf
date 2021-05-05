@@ -335,17 +335,6 @@ class Index(SingleColumnFrame, Serializable):
         else:
             return self
 
-    def factorize(self, na_sentinel=-1):
-        """
-        Encode the input values as integer labels
-
-        See Also
-        --------
-        cudf.core.series.Series.factorize : Encode the input values of Series.
-
-        """
-        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
-
     @property
     def nlevels(self):
         """
