@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -432,6 +433,96 @@ TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructor)
   auto result = std::make_unique<cudf::column>(sliced);
 
   cudf::test::expect_columns_equal(expect, result->view());
+}
+
+TYPED_TEST(ListsColumnTest, ListsSlicedIncludesEmpty)
+{
+  cudf::test::lists_column_wrapper<TypeParam> list{{1, 2}, {}, {3, 4}, {8, 9}};
+  cudf::test::lists_column_wrapper<TypeParam> expect{{}, {3, 4}};
+
+  auto sliced = cudf::slice(list, {1, 3}).front();
+  auto result = std::make_unique<cudf::column>(sliced);
+
+  cudf::test::expect_columns_equal(expect, result->view());
+}
+
+TYPED_TEST(ListsColumnTest, ListsSlicedNonNestedEmpty)
+{
+  using LCW = cudf::test::lists_column_wrapper<TypeParam>;
+
+  // Column of List<int>
+  LCW list{{1, 2}, {}, {3, 4}, {8, 9}};
+  // Column of 1 row, an empty List<int>
+  LCW expect{LCW{}};
+
+  auto sliced = cudf::slice(list, {1, 2}).front();
+  auto result = std::make_unique<cudf::column>(sliced);
+
+  cudf::test::expect_columns_equal(expect, result->view());
+}
+
+TYPED_TEST(ListsColumnTest, ListsSlicedNestedEmpty)
+{
+  using LCW     = cudf::test::lists_column_wrapper<TypeParam>;
+  using FWCW_SZ = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+
+  // Column of List<List<int>>, with incomplete hierarchy
+  LCW list{{LCW{1}, LCW{2}},
+           {},  // < ----------- empty List<List<int>>, slice this
+           {LCW{3}, LCW{4, 5}}};
+
+  // Make 1-row column of type List<List<int>>, the row data contains 0 element.
+  // Well-formed memory layout:
+  // type: List<List<int>>
+  // Length: 1
+  // Mask: 1
+  // Offsets: 0, 0
+  //    List<int>
+  //    Length: 0
+  //    Offset:
+  //        INT
+  //        Length: 0
+  auto leaf      = std::make_unique<cudf::column>(cudf::column(LCW{}));
+  auto offset    = std::make_unique<cudf::column>(cudf::column(FWCW_SZ{0, 0}));
+  auto null_mask = cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED);
+  auto expect =
+    cudf::make_lists_column(1, std::move(offset), std::move(leaf), 0, std::move(null_mask));
+
+  auto sliced = cudf::slice(list, {1, 2}).front();
+  auto result = std::make_unique<cudf::column>(sliced);
+
+  cudf::test::expect_columns_equal(*expect, result->view());
+}
+
+TYPED_TEST(ListsColumnTest, ListsSlicedZeroSliceLengthNested)
+{
+  using LCW     = cudf::test::lists_column_wrapper<TypeParam>;
+  using FWCW_SZ = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+
+  // Column of List<List<int>>, with incomplete hierarchy
+  LCW list{{LCW{1}, LCW{2}}, {}, {LCW{3}, LCW{4, 5}}};
+
+  auto expect = cudf::empty_like(list);
+
+  auto sliced = cudf::slice(list, {0, 0}).front();
+  auto result = std::make_unique<cudf::column>(sliced);
+
+  cudf::test::expect_columns_equal(*expect, result->view());
+}
+
+TYPED_TEST(ListsColumnTest, ListsSlicedZeroSliceLengthNonNested)
+{
+  using LCW     = cudf::test::lists_column_wrapper<TypeParam>;
+  using FWCW_SZ = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+
+  LCW list{{1, 2}, {}, {3, 4}, {8, 9}};
+
+  auto expect = cudf::empty_like(list);
+
+  auto sliced = cudf::slice(list, {0, 0}).front();
+  auto result = std::make_unique<cudf::column>(sliced);
+
+  cudf::test::expect_columns_equal(*expect, result->view());
 }
 
 TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructorWithNulls)
