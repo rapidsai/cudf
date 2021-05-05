@@ -1326,8 +1326,8 @@ void writer::impl::close()
 writer::writer(std::unique_ptr<data_sink> sink,
                orc_writer_options const &options,
                SingleWriteMode mode,
-               rmm::mr::device_memory_resource *mr,
-               rmm::cuda_stream_view stream)
+               rmm::cuda_stream_view stream,
+               rmm::mr::device_memory_resource *mr)
   : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream, mr))
 {
 }
@@ -1336,8 +1336,8 @@ writer::writer(std::unique_ptr<data_sink> sink,
 writer::writer(std::unique_ptr<data_sink> sink,
                chunked_orc_writer_options const &options,
                SingleWriteMode mode,
-               rmm::mr::device_memory_resource *mr,
-               rmm::cuda_stream_view stream)
+               rmm::cuda_stream_view stream,
+               rmm::mr::device_memory_resource *mr)
   : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream, mr))
 {
 }

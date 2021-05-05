@@ -850,8 +850,8 @@ reader::impl::impl(std::unique_ptr<datasource> source,
 // Forward to implementation
 reader::reader(std::vector<std::string> const &filepaths,
                csv_reader_options const &options,
-               rmm::mr::device_memory_resource *mr,
-               rmm::cuda_stream_view stream)
+               rmm::cuda_stream_view stream,
+               rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
   // Delay actual instantiation of data source until read to allow for
@@ -862,8 +862,8 @@ reader::reader(std::vector<std::string> const &filepaths,
 // Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                csv_reader_options const &options,
-               rmm::mr::device_memory_resource *mr,
-               rmm::cuda_stream_view stream)
+               rmm::cuda_stream_view stream,
+               rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
   _impl = std::make_unique<impl>(std::move(sources[0]), "", options, stream, mr);
