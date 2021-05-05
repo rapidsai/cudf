@@ -339,3 +339,38 @@ TEST(TextSubwordTest, TokenizeWithSpecialTokens)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_attention_mask->view(), expected_attn);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_metadata->view(), expected_metadata);
 }
+
+TEST(TextSubwordTest, ZeroHashBinCoefficient)
+{
+  std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
+  {
+    std::ofstream outfile(hash_file, std::ofstream::out);
+    outfile << "26899\n27424\n2\n";
+    outfile << "6321733446031528966 0\n0 0\n9\n";  // zeroes are here
+    outfile << "6206321707968233475\n3014663\n6205475701751152646\n";
+    outfile << "451412623364\n5214737420442796033\n6173800107753209856\n";
+    outfile << "0\n6356997\n6064762127302393858\n";
+    outfile << "0\n1\n2\n";
+  }
+
+  std::vector<const char*> h_strings{".zzzz"};
+  cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
+  auto vocab  = nvtext::load_vocabulary_file(hash_file);
+  auto result = nvtext::subword_tokenize(cudf::strings_column_view{strings},
+                                         *vocab,
+                                         8,
+                                         8,
+                                         true,  // do_lower_case
+                                         true,  // do_truncate
+                                         MAX_ROWS_TENSOR);
+
+  // clang-format off
+  cudf::test::fixed_width_column_wrapper<uint32_t> expected_tokens({7, 0, 0, 0, 0, 0, 0, 0});
+  cudf::test::fixed_width_column_wrapper<uint32_t> expected_attn(  {1, 1, 0, 0, 0, 0, 0, 0});
+  cudf::test::fixed_width_column_wrapper<uint32_t> expected_metadata({0, 0, 1});
+  // clang-format on
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_token_ids->view(), expected_tokens);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_attention_mask->view(), expected_attn);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tensor_metadata->view(), expected_metadata);
+}

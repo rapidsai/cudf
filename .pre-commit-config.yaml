@@ -41,6 +41,12 @@ repos:
                 entry: mypy --config-file=python/cudf/setup.cfg python/cudf/cudf
                 language: system
                 types: [python]
+      -   repo: https://github.com/pycqa/pydocstyle
+          rev: 6.0.0
+          hooks:
+              - id: pydocstyle
+                args: ["--config=python/.flake8"]
+
 
 default_language_version:
       python: python3
