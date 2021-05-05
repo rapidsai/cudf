@@ -5935,17 +5935,6 @@ class Series(SingleColumnFrame, Serializable):
         return out.copy(deep=copy)
 
     @property
-    def is_unique(self):
-        """
-        Return boolean if values in the object are unique.
-
-        Returns
-        -------
-        out : bool
-        """
-        return self._column.is_unique
-
-    @property
     def __cuda_array_interface__(self):
         return self._column.__cuda_array_interface__
 

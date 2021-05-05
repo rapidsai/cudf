@@ -3530,6 +3530,16 @@ class SingleColumnFrame(Frame):
         return self._column.to_arrow()
 
     @property
+    def is_unique(self):
+        """Return boolean if values in the object are unique.
+
+        Returns
+        -------
+        bool
+        """
+        return self._column.is_unique
+
+    @property
     def is_monotonic(self):
         """Return boolean if values in the object are monotonic_increasing.
 

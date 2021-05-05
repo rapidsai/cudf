@@ -1144,13 +1144,6 @@ class Index(SingleColumnFrame, Serializable):
         )
 
     @property
-    def is_unique(self):
-        """
-        Return if the index has unique values.
-        """
-        raise NotImplementedError
-
-    @property
     def empty(self):
         """
         Indicator whether Index is empty.
@@ -1965,13 +1958,6 @@ class GenericIndex(Index):
             end = col.find_last_value(last, closest=True)
             end += 1
         return begin, end
-
-    @property
-    def is_unique(self):
-        """
-        Return if the index has unique values.
-        """
-        return self._values.is_unique
 
     def get_slice_bound(self, label, side, kind):
         return self._values.get_slice_bound(label, side, kind)
