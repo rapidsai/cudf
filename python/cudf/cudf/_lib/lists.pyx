@@ -16,7 +16,7 @@ from cudf._lib.cpp.lists.drop_list_duplicates cimport (
 from cudf._lib.cpp.lists.sorting cimport (
     sort_lists as cpp_sort_lists
 )
-from cudf._lib.cpp.lists.sorting cimport (
+from cudf._lib.cpp.lists.concatenate_rows cimport (
     concatenate_rows as cpp_concatenate_rows
 )
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
@@ -175,6 +175,9 @@ def concatenate_rows(Table tbl):
     cdef table_view c_table_view = tbl.view()
 
     with nogil:
-        c_result = move(cpp_concatenate_rows(c_table_view))
+        c_result = move(cpp_concatenate_rows(
+            c_table_view,
+        ))
 
-    return Table.from_unique_ptr(move(c_result)
+    result = Column.from_unique_ptr(move(c_result))
+    return result

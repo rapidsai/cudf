@@ -8,6 +8,5 @@ from cudf._lib.cpp.table.table_view cimport table_view
 cdef extern from "cudf/lists/concatenate_rows.hpp" namespace
 "cudf::lists" nogil:
     cdef unique_ptr[column] concatenate_rows(
-        const table_view input_table,
-        #concatenate_null_policy null_policy
+        const table_view input_table
     ) except +
