@@ -787,7 +787,7 @@ class Index(SingleColumnFrame, Serializable):
 
     def _binaryop(self, other, fn, fill_value=None, reflect=False):
         # TODO: Rather than including an allowlist of acceptable types, we
-        # should instead return NotImplemented for __all__  other types. That
+        # should instead return NotImplemented for __all__ other types. That
         # will allow other types to support binops with cudf objects if they so
         # choose, and just as importantly will allow better error messages if
         # they don't support it.
@@ -827,13 +827,15 @@ class Index(SingleColumnFrame, Serializable):
             elif cls is RangeIndex:
                 # RangeIndex must convert to other numerical types for ops
 
-                # TODO: The one exception is that multiplication of a
-                # RangeIndex in pandas results in another RangeIndex.
-                # Propagating that information through cudf with the current
-                # APIs is likely more hacky than it's worth, and it's more a
-                # performance loss than a functional loss to have an Int64Index
-                # instead of a RangeIndex. As Index logic is cleaned up it may
-                # become more feasible to ensure the appropriate type.
+                # TODO: The one exception to the output type selected here is
+                # that scalar multiplication of a RangeIndex in pandas results
+                # in another RangeIndex. Propagating that information through
+                # cudf with the current internals is possible, but requires
+                # significant hackery since we'd need _copy_construct or some
+                # other constructor to be intrinsically capable of processing
+                # operations. We should fix this behavior once we've completed
+                # a more thorough refactoring of the various Index classes that
+                # makes it easier to propagate this logic.
                 try:
                     cls = _dtype_to_index[data.dtype.type]
                 except KeyError:
@@ -2939,7 +2941,7 @@ def as_index(arbitrary, **kwargs) -> Index:
     )
 
 
-_dtype_to_index = {
+_dtype_to_index: Dict[Any, Type[Index]] = {
     bool: Index,
     np.int8: Int8Index,
     np.int16: Int16Index,
@@ -2951,7 +2953,7 @@ _dtype_to_index = {
     np.uint64: UInt64Index,
     np.float32: Float32Index,
     np.float64: Float64Index,
-}  # type: Dict[Any, Type[Index]]
+}
 
 _index_to_dtype = {
     Int8Index: np.int8,

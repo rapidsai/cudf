@@ -3306,6 +3306,20 @@ class Frame(libcudf.table.Table):
         return self._mimic_inplace(result, inplace=inplace)
 
 
+_truediv_int_dtype_corrections = {
+    "int8": "float32",
+    "int16": "float32",
+    "int32": "float32",
+    "int64": "float64",
+    "uint8": "float32",
+    "uint16": "float32",
+    "uint32": "float64",
+    "uint64": "float64",
+    "bool": "float32",
+    "int": "float",
+}
+
+
 class SingleColumnFrame(Frame):
     """A one-dimensional frame.
 
@@ -3558,21 +3572,8 @@ class SingleColumnFrame(Frame):
 
         rhs = self._normalize_binop_value(other)
 
-        truediv_int_dtype_corrections = {
-            "int8": "float32",
-            "int16": "float32",
-            "int32": "float32",
-            "int64": "float64",
-            "uint8": "float32",
-            "uint16": "float32",
-            "uint32": "float64",
-            "uint64": "float64",
-            "bool": "float32",
-            "int": "float",
-        }
-
         if fn == "truediv":
-            truediv_type = truediv_int_dtype_corrections.get(str(lhs.dtype))
+            truediv_type = _truediv_int_dtype_corrections.get(str(lhs.dtype))
             if truediv_type is not None:
                 lhs = lhs.astype(truediv_type)
 
@@ -3601,7 +3602,7 @@ class SingleColumnFrame(Frame):
         # that are Series-like objects. The output shares the lhs's name unless
         # the rhs is a _differently_ named Series-like object.
         if (
-            isinstance(other, (cudf.Series, cudf.Index, pd.Series, pd.Index))
+            isinstance(other, (SingleColumnFrame, pd.Series, pd.Index))
             and self.name != other.name
         ):
             result_name = None
