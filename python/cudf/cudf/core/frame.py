@@ -3630,8 +3630,15 @@ class SingleColumnFrame(Frame):
 
     def _bitwise_binop(self, other, op):
         """Type-coercing wrapper around _binaryop for bitwise operations."""
-        self_is_bool = np.issubdtype(self.dtype, np.bool_)
-        other_is_bool = np.issubdtype(other.dtype, np.bool_)
+        # This will catch attempts at bitwise ops on extension dtypes.
+        try:
+            self_is_bool = np.issubdtype(self.dtype, np.bool_)
+            other_is_bool = np.issubdtype(other.dtype, np.bool_)
+        except TypeError:
+            raise TypeError(
+                f"Operation 'bitwise {op}' not supported between "
+                f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
+            )
 
         if (self_is_bool or np.issubdtype(self.dtype, np.integer)) and (
             other_is_bool or np.issubdtype(other.dtype, np.integer)
