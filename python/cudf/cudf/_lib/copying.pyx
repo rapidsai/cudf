@@ -741,17 +741,14 @@ def segmented_gather(Column source_column, Column gather_map):
     return result
 
 
-def pack_unpack(Table input_table):
-    cdef table_view input_table_view = input_table.data_view()
-    cdef cpp_copying.packed_columns pack_result = move(
-        cpp_copying.pack(input_table_view)
+cdef cpp_copying.packed_columns pack(Table input_table) except +:
+    return move(cpp_copying.pack(input_table.data_view()))
+
+
+cdef Table unpack(cpp_copying.packed_columns input_columns,
+                  object column_names) except +:
+    return Table.from_table_view(
+        cpp_copying.unpack(input_columns),
+        DeviceBuffer.c_from_unique_ptr(move(input_columns.gpu_data)),
+        column_names
     )
-    cdef table_view output_table_view = cpp_copying.unpack(pack_result)
-
-    data = DeviceBuffer.c_from_unique_ptr(move(pack_result.gpu_data))
-
-    return cudf.DataFrame._from_table(Table.from_table_view(
-        output_table_view,
-        data,
-        input_table._column_names
-    ))
