@@ -821,6 +821,10 @@ class Index(SingleColumnFrame, Serializable):
                         cls = _dtype_to_index[data.dtype.type]
                     except KeyError:
                         cls = GenericIndex
+                        # TODO: GenericIndex has a different API for __new__
+                        # than other Index types. Refactoring Index types will
+                        # be necessary to clean this up.
+                        kwargs["values"] = kwargs.pop("data")
                 elif isinstance(data, StringColumn):
                     cls = StringIndex
                 elif isinstance(data, DatetimeColumn):
