@@ -26,6 +26,9 @@ from cudf.utils.utils import pa_mask_buffer_to_mask
 class DecimalColumn(ColumnBase):
     dtype: Decimal64Dtype
 
+    def __truediv__(self, other):
+        return self.binary_operator("div", other)
+
     @classmethod
     def from_arrow(cls, data: pa.Array):
         dtype = Decimal64Dtype.from_arrow(data.type)
@@ -74,8 +77,7 @@ class DecimalColumn(ColumnBase):
 
         # Binary Arithmatics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
-        if op in ("add", "sub", "mul", "truediv"):
-            op = "div" if op == "truediv" else op
+        if op in ("add", "sub", "mul", "div"):
             scale = _binop_scale(self.dtype, other.dtype, op)
             output_type = Decimal64Dtype(
                 scale=scale, precision=Decimal64Dtype.MAX_PRECISION

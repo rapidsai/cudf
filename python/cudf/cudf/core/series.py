@@ -2036,7 +2036,10 @@ class Series(SingleColumnFrame, Serializable):
         return self._binaryop(other, "truediv", fill_value)
 
     def __truediv__(self, other):
-        return self._binaryop(other, "truediv")
+        if is_decimal_dtype(self.dtype):
+            return self._binaryop(other, "div")
+        else:
+            return self._binaryop(other, "truediv")
 
     def rtruediv(self, other, fill_value=None, axis=0):
         """Floating division of series and other, element-wise
@@ -2084,7 +2087,10 @@ class Series(SingleColumnFrame, Serializable):
         return self._binaryop(other, "truediv", fill_value, True)
 
     def __rtruediv__(self, other):
-        return self._binaryop(other, "truediv", reflect=True)
+        if is_decimal_dtype(self.dtype):
+            return self._binaryop(other, "div", reflect=True)
+        else:
+            return self._binaryop(other, "truediv", reflect=True)
 
     __div__ = __truediv__
 
