@@ -60,6 +60,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     def aggregate(self, arg, split_every=None, split_out=1):
         if arg == "size":
             return self.size()
+        arg = _redirect_aggs(arg)
 
         _supported = {"count", "mean", "std", "var", "sum", "min", "max"}
         if (
@@ -106,6 +107,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
     def aggregate(self, arg, split_every=None, split_out=1):
         if arg == "size":
             return self.size()
+        arg = _redirect_aggs(arg)
 
         _supported = {"count", "mean", "std", "var", "sum", "min", "max"}
         if (
@@ -159,7 +161,7 @@ def groupby_agg(
     split_out = split_out or 1
 
     # Standardize `gb_cols` and `columns` lists
-    aggs = aggs_in.copy()
+    aggs = _redirect_aggs(aggs_in.copy())
     if isinstance(gb_cols, str):
         gb_cols = [gb_cols]
     columns = [c for c in ddf.columns if c not in gb_cols]
@@ -277,8 +279,25 @@ def groupby_agg(
     return new_dd_object(graph, gb_agg_name, _meta, divisions)
 
 
+def _redirect_aggs(arg):
+    """ Redirect aggregations to their corresponding name in cuDF
+    """
+    redirects = {sum: "sum", max: "max", min: "min"}
+    if isinstance(arg, dict):
+        new_arg = dict()
+        for col in arg:
+            if isinstance(arg[col], list):
+                new_arg[col] = [redirects.get(agg, agg) for agg in arg[col]]
+            else:
+                new_arg[col] = redirects.get(arg[col], arg[col])
+        return new_arg
+    if isinstance(arg, list):
+        return [redirects.get(agg, agg) for agg in arg]
+    return redirects.get(arg, arg)
+
+
 def _is_supported(arg, supported: set):
-    """ Check that aggregations in `args` is a subset of `supportd`
+    """ Check that aggregations in `arg` are a subset of `supported`
     """
     if isinstance(arg, (list, dict)):
         if isinstance(arg, dict):

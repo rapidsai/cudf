@@ -21,6 +21,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/valid_if.cuh>
+#include <cudf/lists/detail/copying.hpp>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/utilities.cuh>
@@ -46,8 +47,8 @@ namespace {
  *        also holding a reference to the list column.
  *
  * Analogous to the list_view, this class is default constructable,
- * and can thus be stored in rmm::device_vector. It is used to represent
- * the results of a `scatter()` operation; a device_vector may hold
+ * and can thus be stored in rmm::device_uvector. It is used to represent
+ * the results of a `scatter()` operation; a device_uvector may hold
  * several instances of unbound_list_view, each with a flag indicating
  * whether it came from the scatter source or target. Each instance
  * may later be "bound" to the appropriate source/target column, to
@@ -131,7 +132,7 @@ struct unbound_list_view {
   }
 
  private:
-  // Note: Cannot store reference to list column, because of storage in device_vector.
+  // Note: Cannot store reference to list column, because of storage in device_uvector.
   // Only keep track of whether this list row came from the source or target of scatter.
 
   label_type _label{
@@ -247,7 +248,7 @@ void print(std::string const& msg,
  * The protocol is as follows:
  *
  * Inputs:
- *  1. list_vector:  A device_vector of unbound_list_view, with each element
+ *  1. list_vector:  A device_uvector of unbound_list_view, with each element
  *                   indicating the position, size, and which column the list
  *                   row came from.
  *  2. list_offsets: The offsets column for the (outer) lists column, each offset
@@ -431,6 +432,8 @@ struct list_child_constructor {
     auto const num_child_rows{
       cudf::detail::get_value<size_type>(list_offsets, list_offsets.size() - 1, stream)};
 
+    if (num_child_rows == 0) { return make_empty_column(data_type{type_id::STRING}); }
+
     auto string_views = rmm::device_uvector<string_view>(num_child_rows, stream);
 
     auto populate_string_views = [d_scattered_lists = list_vector.begin(),  // unbound_list_view*
@@ -520,6 +523,14 @@ struct list_child_constructor {
 
     auto const num_child_rows{
       cudf::detail::get_value<size_type>(list_offsets, list_offsets.size() - 1, stream)};
+
+    if (num_child_rows == 0) {
+      // make an empty lists column using the input child type
+      return make_empty_lists_column(
+        source_lists_column_view.child().child(lists_column_view::child_column_index).type(),
+        stream,
+        mr);
+    }
 
     auto child_list_views = rmm::device_uvector<unbound_list_view>(num_child_rows, stream, mr);
 
