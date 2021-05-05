@@ -22,7 +22,6 @@
 #include <cudf/detail/rolling.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/rolling/range_window_bounds.hpp>
-#include <cudf/span.hpp>
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 
