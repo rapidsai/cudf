@@ -812,22 +812,37 @@ class Index(SingleColumnFrame, Serializable):
         data = kwargs.get("data")
         cls = self.__class__
 
-        if data is not None and self.dtype != data.dtype:
-            # TODO: This logic is largely copied from `as_index`. The two
-            # should be unified via a centralized type dispatching scheme.
-            if isinstance(data, NumericalColumn):
+        if data is not None:
+            if self.dtype != data.dtype:
+                # TODO: This logic is largely copied from `as_index`. The two
+                # should be unified via a centralized type dispatching scheme.
+                if isinstance(data, NumericalColumn):
+                    try:
+                        cls = _dtype_to_index[data.dtype.type]
+                    except KeyError:
+                        cls = GenericIndex
+                elif isinstance(data, StringColumn):
+                    cls = StringIndex
+                elif isinstance(data, DatetimeColumn):
+                    cls = DatetimeIndex
+                elif isinstance(data, TimeDeltaColumn):
+                    cls = TimedeltaIndex
+                elif isinstance(data, CategoricalColumn):
+                    cls = CategoricalIndex
+            elif cls is RangeIndex:
+                # RangeIndex must convert to other numerical types for ops
+
+                # TODO: The one exception is that multiplication of a
+                # RangeIndex in pandas results in another RangeIndex.
+                # Propagating that information through cudf with the current
+                # APIs is likely more hacky than it's worth, and it's more a
+                # performance loss than a functional loss to have an Int64Index
+                # instead of a RangeIndex. As Index logic is cleaned up it may
+                # become more feasible to ensure the appropriate type.
                 try:
                     cls = _dtype_to_index[data.dtype.type]
                 except KeyError:
                     cls = GenericIndex
-            elif isinstance(data, StringColumn):
-                cls = StringIndex
-            elif isinstance(data, DatetimeColumn):
-                cls = DatetimeIndex
-            elif isinstance(data, TimeDeltaColumn):
-                cls = TimedeltaIndex
-            elif isinstance(data, CategoricalColumn):
-                cls = CategoricalIndex
 
         return cls(**{**self._copy_construct_defaults, **kwargs})
 
