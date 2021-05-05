@@ -2995,15 +2995,15 @@ def test_string_get_json_object(data):
     js = json.loads(data[0])
 
     assert_eq(
-        print(gs.str.get_json_object("$.store").iloc[0]), print(js["store"])
+        json.loads(gs.str.get_json_object("$.store").iloc[0]), js["store"]
     )
     assert_eq(
-        print(gs.str.get_json_object("$.store.book").iloc[0]),
-        print(js["store"]["book"]),
+        json.loads(gs.str.get_json_object("$.store.book").iloc[0]),
+        js["store"]["book"],
     )
     assert_eq(
-        print(gs.str.get_json_object("$.store.book[0].category").iloc[0]),
-        print(js["store"]["book"][0]["category"]),
+        gs.str.get_json_object("$.store.book[0].category").iloc[0],
+        js["store"]["book"][0]["category"],
     )
 
 
