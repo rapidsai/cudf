@@ -125,7 +125,6 @@ jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData prep
   if (existing_cache == caches.end()) {
     std::size_t kernel_limit_proc = std::numeric_limits<std::size_t>::max();
     std::size_t kernel_limit_disk = std::numeric_limits<std::size_t>::max();
-
     try_parse_numeric_env_var(kernel_limit_proc, "LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS");
     try_parse_numeric_env_var(kernel_limit_disk, "LIBCUDF_KERNEL_CACHE_LIMIT_DISK");
 
