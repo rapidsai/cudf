@@ -33,6 +33,7 @@
 
 #include <thrust/sequence.h>
 
+#include <cstddef>
 #include <limits>
 
 namespace cudf {
@@ -62,11 +63,11 @@ namespace detail {
  * @return An estimate of the size of the output of the join operation
  */
 template <join_kind JoinKind, typename multimap_type>
-size_t estimate_join_output_size(table_device_view build_table,
-                                 table_device_view probe_table,
-                                 multimap_type const& hash_table,
-                                 null_equality compare_nulls,
-                                 rmm::cuda_stream_view stream)
+std::size_t estimate_join_output_size(table_device_view build_table,
+                                      table_device_view probe_table,
+                                      multimap_type const& hash_table,
+                                      null_equality compare_nulls,
+                                      rmm::cuda_stream_view stream)
 {
   using estimate_size_type = int64_t;  // use 64-bit size so we can detect overflow
 
