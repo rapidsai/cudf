@@ -98,7 +98,7 @@ rmm::device_uvector<serial_trie_node> create_serialized_trie(const std::vector<s
         has_children = true;
       }
     }
-    // Only add the terminating character any nodes were added
+    // Only add the terminating character if any nodes were added
     if (has_children) { nodes.push_back(serial_trie_node(trie_terminating_character)); }
   }
   return cudf::detail::make_device_uvector_sync(nodes, stream);

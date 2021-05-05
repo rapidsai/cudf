@@ -796,12 +796,13 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
     if (do_set_null_count) {
       rmm::device_uvector<cudf::io::column_type_histogram> d_column_infos(num_columns, stream);
       // Set the null count to the row count (all fields assumes to be null).
-      thrust::generate(rmm::exec_policy(stream),
-                       d_column_infos.begin(),
-                       d_column_infos.end(),
-                       [num_records = row_offsets.size()] __device__() {
-                         return cudf::io::column_type_histogram{num_records};
-                       });
+      thrust::generate(
+        rmm::exec_policy(stream),
+        d_column_infos.begin(),
+        d_column_infos.end(),
+        [num_records = static_cast<cudf::size_type>(row_offsets.size())] __device__() {
+          return cudf::io::column_type_histogram{num_records};
+        });
       return d_column_infos;
     } else {
       return cudf::detail::make_zeroed_device_uvector_async<cudf::io::column_type_histogram>(

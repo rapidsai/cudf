@@ -27,11 +27,20 @@ namespace cudf {
 namespace detail {
 static constexpr char trie_terminating_character = '\n';
 
+/**
+ * @brief Node in the serialized trie.
+ *
+ * A serialized trie is an array of nodes. Each node represents a matching character, except for the
+ * last child node, which denotes the end of the children list. Children of a node are stored
+ * contiguously. The `children_offset` member is the offset between the node and its first child.
+ * Matching is successful if all characters are matched and the final node is the last character of
+ * a word (i.e. `is_leaf` is true).
+ *
+ */
 struct serial_trie_node {
   int16_t children_offset{-1};
   char character{trie_terminating_character};
   bool is_leaf{false};
-  // serial_trie_node() = default;  // FIXME This is necessary for a Thrust bug on CentOS7 + CUDA10
   explicit serial_trie_node(char c, bool leaf = false) noexcept : character(c), is_leaf(leaf) {}
 };
 
