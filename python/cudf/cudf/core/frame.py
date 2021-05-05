@@ -3307,16 +3307,15 @@ class Frame(libcudf.table.Table):
 
 
 _truediv_int_dtype_corrections = {
-    "int8": "float32",
-    "int16": "float32",
-    "int32": "float32",
-    "int64": "float64",
-    "uint8": "float32",
-    "uint16": "float32",
-    "uint32": "float64",
-    "uint64": "float64",
-    "bool": "float32",
-    "int": "float",
+    np.int8: np.float32,
+    np.int16: np.float32,
+    np.int32: np.float32,
+    np.int64: np.float64,
+    np.uint8: np.float32,
+    np.uint16: np.float32,
+    np.uint32: np.float64,
+    np.uint64: np.float64,
+    np.bool_: np.float32,
 }
 
 
@@ -3573,7 +3572,7 @@ class SingleColumnFrame(Frame):
         rhs = self._normalize_binop_value(other)
 
         if fn == "truediv":
-            truediv_type = _truediv_int_dtype_corrections.get(str(lhs.dtype))
+            truediv_type = _truediv_int_dtype_corrections.get(lhs.dtype.type)
             if truediv_type is not None:
                 lhs = lhs.astype(truediv_type)
 

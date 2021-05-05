@@ -2942,7 +2942,6 @@ def as_index(arbitrary, **kwargs) -> Index:
 
 
 _dtype_to_index: Dict[Any, Type[Index]] = {
-    bool: Index,
     np.int8: Int8Index,
     np.int16: Int16Index,
     np.int32: Int32Index,
