@@ -18,8 +18,6 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/detail/scatter.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
