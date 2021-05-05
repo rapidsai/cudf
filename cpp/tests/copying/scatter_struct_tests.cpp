@@ -291,3 +291,24 @@ TYPED_TEST(TypedStructScatterTest, ScatterStructOfListsTest)
   auto const scatter_map = int32s_col{-3, -2, -1, 5, 4, 3, 2}.release();
   test_scatter(structs_src, structs_tgt, structs_expected, scatter_map);
 }
+
+TYPED_TEST(TypedStructScatterTest, ScatterSourceSmallerThanTarget)
+{
+  using namespace cudf;
+  using namespace cudf::test;
+
+  using fixed_width     = fixed_width_column_wrapper<TypeParam, int32_t>;
+  using structs_col     = structs_column_wrapper;
+  using scatter_map_col = fixed_width_column_wrapper<offset_type, int32_t>;
+
+  auto source_child   = fixed_width{22, 55};
+  auto target_child   = fixed_width{0, 1, 2, 3, 4, 5, 6};
+  auto expected_child = fixed_width{0, 1, 22, 3, 4, 55, 6};
+
+  auto const source      = structs_col{{source_child}}.release();
+  auto const target      = structs_col{{target_child}}.release();
+  auto const scatter_map = scatter_map_col{2, 5}.release();
+  auto const expected    = structs_col{{expected_child}}.release();
+
+  test_scatter(source, target, expected, scatter_map);
+}

@@ -206,8 +206,8 @@ ConfigureTest(COPYING_TEST
     copying/pack_tests.cu
     copying/sample_tests.cpp
     copying/scatter_tests.cpp
-    copying/scatter_list_tests.cu
-    copying/scatter_struct_tests.cu
+    copying/scatter_list_tests.cpp
+    copying/scatter_struct_tests.cpp
     copying/segmented_gather_list_tests.cpp
     copying/shift_tests.cpp
     copying/slice_tests.cpp
@@ -397,10 +397,11 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 ###################################################################################################
 # - lists tests ----------------------------------------------------------------------------------
 ConfigureTest(LISTS_TEST
+    lists/concatenate_rows_tests.cpp
     lists/contains_tests.cpp
     lists/count_elements_tests.cpp
-    lists/explode_tests.cpp
     lists/drop_list_duplicates_tests.cpp
+    lists/explode_tests.cpp
     lists/extract_tests.cpp
     lists/sort_lists_tests.cpp)
 
