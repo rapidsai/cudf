@@ -41,7 +41,7 @@ from cudf._lib.nvtext.stemmer import (
     porter_stemmer_measure as cpp_porter_stemmer_measure,
 )
 from cudf._lib.nvtext.subword_tokenize import (
-    subword_tokenize as cpp_subword_tokenize,
+    subword_tokenize_vocab_file as cpp_subword_tokenize_vocab_file,
 )
 from cudf._lib.nvtext.tokenize import (
     _count_tokens_column as cpp_count_tokens_column,
@@ -4684,7 +4684,7 @@ class StringMethods(ColumnMethodsMixin):
         array([[0, 0, 2],
                [1, 0, 1]], dtype=uint32)
         """
-        tokens, masks, metadata = cpp_subword_tokenize(
+        tokens, masks, metadata = cpp_subword_tokenize_vocab_file(
             self._column,
             hash_file,
             max_length,

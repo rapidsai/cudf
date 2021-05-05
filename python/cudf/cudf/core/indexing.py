@@ -2,6 +2,7 @@
 
 from typing import Any, Union
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 from nvtx import annotate
@@ -58,7 +59,9 @@ def get_label_range_or_mask(index, start, stop, step):
         if start is not None and stop is not None:
             if start > stop:
                 return slice(0, 0, None)
-            boolean_mask = (index >= start) and (index <= stop)
+            # TODO: Once Index binary ops are updated to support logical_and,
+            # can use that instead of using cupy.
+            boolean_mask = cp.logical_and((index >= start), (index <= stop))
         elif start is not None:
             boolean_mask = index >= start
         else:
