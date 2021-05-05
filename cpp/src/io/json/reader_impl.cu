@@ -343,6 +343,7 @@ rmm::device_uvector<uint64_t> reader::impl::find_record_starts(rmm::cuda_stream_
                              cudaMemcpyDefault,
                              stream.value()));
     thrust::sort(rmm::exec_policy(stream), rec_starts.begin(), rec_starts.end());
+    stream.synchronize();
   }
 
   // Exclude the ending newline as it does not precede a record start
