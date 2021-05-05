@@ -33,8 +33,6 @@ from cudf.tests.utils import (
 )
 from cudf.utils.utils import search_range
 
-from .single_column_frame_tests import SingleColumnFrameTests
-
 
 def test_df_set_index_from_series():
     df = cudf.DataFrame()
@@ -2060,9 +2058,3 @@ def test_index_set_names_error(idx, level, names):
         lfunc_args_and_kwargs=([], {"names": names, "level": level}),
         rfunc_args_and_kwargs=([], {"names": names, "level": level}),
     )
-
-
-class TestIndex(SingleColumnFrameTests):
-    """Tests that share logic with other single column frames."""
-
-    _cls = cudf.Index

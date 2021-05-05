@@ -17,8 +17,6 @@ from cudf.tests.utils import (
     assert_exceptions_equal,
 )
 
-from .single_column_frame_tests import SingleColumnFrameTests
-
 
 def _series_na_data():
     return [
@@ -1198,9 +1196,3 @@ def test_explode(data, ignore_index, p_index):
             assert_eq(expect, got, check_dtype=False)
     else:
         assert_eq(expect, got, check_dtype=False)
-
-
-class TestSeries(SingleColumnFrameTests):
-    """Tests that share logic with other single column frames."""
-
-    _cls = cudf.Series
