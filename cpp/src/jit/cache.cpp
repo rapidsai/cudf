@@ -104,7 +104,7 @@ std::string get_program_cache_dir()
 #endif
 }
 
-void try_parse_numeric_env_var(size_t& result, char const* const env_name)
+void try_parse_numeric_env_var(std::size_t& result, char const* const env_name)
 {
   auto value = std::getenv(env_name);
 
@@ -123,8 +123,8 @@ jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData prep
   auto existing_cache = caches.find(preprog.name());
 
   if (existing_cache == caches.end()) {
-    size_t kernel_limit_proc = std::numeric_limits<size_t>::max();
-    size_t kernel_limit_disk = std::numeric_limits<size_t>::max();
+    std::size_t kernel_limit_proc = std::numeric_limits<std::size_t>::max();
+    std::size_t kernel_limit_disk = std::numeric_limits<std::size_t>::max();
 
     try_parse_numeric_env_var(kernel_limit_proc, "LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS");
     try_parse_numeric_env_var(kernel_limit_disk, "LIBCUDF_KERNEL_CACHE_LIMIT_DISK");
@@ -132,7 +132,7 @@ jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData prep
     auto cache_dir = get_program_cache_dir();
 
     if (kernel_limit_disk == 0) {
-      // if kernel_limit_disk is zero, jitify will inherit it the value of kernel_limit_proc.
+      // if kernel_limit_disk is zero, jitify will assign it the value of kernel_limit_proc.
       // to avoid this, we treat zero as "disable disk caching" by not providing the cache dir.
       cache_dir = {};
     }
