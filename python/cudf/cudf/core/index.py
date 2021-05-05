@@ -813,10 +813,21 @@ class Index(SingleColumnFrame, Serializable):
         cls = self.__class__
 
         if data is not None and self.dtype != data.dtype:
-            try:
-                cls = _dtype_to_index[getattr(np, data.dtype.name)]
-            except KeyError:
-                pass
+            # TODO: This logic is largely copied from `as_index`. The two
+            # should be unified via a centralized type dispatching scheme.
+            if isinstance(data, NumericalColumn):
+                try:
+                    cls = _dtype_to_index[data.dtype.type]
+                except KeyError:
+                    cls = GenericIndex
+            elif isinstance(data, StringColumn):
+                cls = StringIndex
+            elif isinstance(data, DatetimeColumn):
+                cls = DatetimeIndex
+            elif isinstance(data, TimeDeltaColumn):
+                cls = TimedeltaIndex
+            elif isinstance(data, CategoricalColumn):
+                cls = CategoricalIndex
 
         return cls(**{**self._copy_construct_defaults, **kwargs})
 
