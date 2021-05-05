@@ -17,131 +17,152 @@
 
 #include <tests/groupby/groupby_test_util.hpp>
 
+#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
-#include "cudf/table/table.hpp"
-#include "cudf/utilities/error.hpp"
-#include "cudf_test/table_utilities.hpp"
+namespace cudf {
+namespace test {
+
+using K = int32_t;
 
 template <typename T>
-struct GroupbyReplaceNullsTest : public cudf::test::BaseFixture {
+struct GroupbyReplaceNullsFixedWidthTest : public BaseFixture {
 };
 
-using test_types = cudf::test::NumericTypes;
+TYPED_TEST_CASE(GroupbyReplaceNullsFixedWidthTest, FixedWidthTypes);
 
-TYPED_TEST_CASE(GroupbyReplaceNullsTest, test_types);
-
-template <typename K>
-void TestReplaceNullsGroupby(cudf::test::fixed_width_column_wrapper<K> key,
-                             cudf::test::fixed_width_column_wrapper<int32_t> input,
-                             cudf::test::fixed_width_column_wrapper<K> expected_key,
-                             cudf::test::fixed_width_column_wrapper<int32_t> expected_val,
-                             cudf::replace_policy policy)
+template <typename K, typename V>
+void TestReplaceNullsGroupbySingle(
+  K const& key, V const& input, K const& expected_key, V const& expected_val, replace_policy policy)
 {
-  cudf::groupby::groupby gb_obj(cudf::table_view({key}));
-  auto p = gb_obj.replace_nulls(input, policy);
+  groupby::groupby gb_obj(table_view({key}));
+  std::vector<replace_policy> policies{policy};
+  auto p = gb_obj.replace_nulls(table_view({input}), policies);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(*p.first, cudf::table_view({expected_key}));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*p.second, expected_val);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*p.first, table_view({expected_key}));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*p.second, table_view({expected_val}));
 }
 
-TYPED_TEST(GroupbyReplaceNullsTest, PrecedingFill)
+TYPED_TEST(GroupbyReplaceNullsFixedWidthTest, PrecedingFill)
 {
-  using K = TypeParam;
-  using V = int32_t;
-
   // Group 0 value: {42, 24, null}  --> {42, 24, 24}
   // Group 1 value: {7, null, null} --> {7, 7, 7}
-  std::vector<K> key = cudf::test::make_type_param_vector<K>({0, 1, 0, 1, 0, 1});
-  std::vector<V> val = cudf::test::make_type_param_vector<V>({42, 7, 24, 10, 1, 1000});
-  std::vector<cudf::valid_type> mask =
-    cudf::test::make_type_param_vector<cudf::valid_type>({1, 1, 1, 0, 0, 0});
-  std::vector<K> expect_key = cudf::test::make_type_param_vector<K>({0, 0, 0, 1, 1, 1});
-  std::vector<V> expect_col = cudf::test::make_type_param_vector<V>({42, 24, 24, 7, 7, 7});
+  fixed_width_column_wrapper<K> key{0, 1, 0, 1, 0, 1};
+  fixed_width_column_wrapper<TypeParam> val({42, 7, 24, 10, 1, 1000}, {1, 1, 1, 0, 0, 0});
 
-  TestReplaceNullsGroupby(
-    cudf::test::fixed_width_column_wrapper<K>(key.begin(), key.end()),
-    cudf::test::fixed_width_column_wrapper<V>(val.begin(), val.end(), mask.begin()),
-    cudf::test::fixed_width_column_wrapper<K>(expect_key.begin(), expect_key.end()),
-    cudf::test::fixed_width_column_wrapper<V>(
-      expect_col.begin(), expect_col.end(), cudf::test::all_valid()),
-    cudf::replace_policy::PRECEDING);
+  fixed_width_column_wrapper<K> expect_key{0, 0, 0, 1, 1, 1};
+  fixed_width_column_wrapper<TypeParam> expect_val({42, 24, 24, 7, 7, 7}, all_valid());
+
+  TestReplaceNullsGroupbySingle(key, val, expect_key, expect_val, replace_policy::PRECEDING);
 }
 
-TYPED_TEST(GroupbyReplaceNullsTest, FollowingFill)
+TYPED_TEST(GroupbyReplaceNullsFixedWidthTest, FollowingFill)
 {
-  using K = TypeParam;
-  using V = int32_t;
-
   // Group 0 value: {2, null, 32}               --> {2, 32, 32}
   // Group 1 value: {8, null, null, 128, 256}   --> {8, 128, 128, 128, 256}
-  std::vector<K> key = cudf::test::make_type_param_vector<K>({0, 0, 1, 1, 0, 1, 1, 1});
-  std::vector<V> val = cudf::test::make_type_param_vector<V>({2, 4, 8, 16, 32, 64, 128, 256});
-  std::vector<cudf::valid_type> mask =
-    cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 1, 0, 1, 0, 1, 1});
-  std::vector<K> expect_key = cudf::test::make_type_param_vector<K>({0, 0, 0, 1, 1, 1, 1, 1});
-  std::vector<V> expect_col =
-    cudf::test::make_type_param_vector<V>({2, 32, 32, 8, 128, 128, 128, 256});
+  fixed_width_column_wrapper<K> key{0, 0, 1, 1, 0, 1, 1, 1};
+  fixed_width_column_wrapper<TypeParam> val({2, 4, 8, 16, 32, 64, 128, 256},
+                                            {1, 0, 1, 0, 1, 0, 1, 1});
 
-  TestReplaceNullsGroupby(
-    cudf::test::fixed_width_column_wrapper<K>(key.begin(), key.end()),
-    cudf::test::fixed_width_column_wrapper<V>(val.begin(), val.end(), mask.begin()),
-    cudf::test::fixed_width_column_wrapper<K>(expect_key.begin(), expect_key.end()),
-    cudf::test::fixed_width_column_wrapper<V>(
-      expect_col.begin(), expect_col.end(), cudf::test::all_valid()),
-    cudf::replace_policy::FOLLOWING);
+  fixed_width_column_wrapper<K> expect_key{0, 0, 0, 1, 1, 1, 1, 1};
+  fixed_width_column_wrapper<TypeParam> expect_val({2, 32, 32, 8, 128, 128, 128, 256}, all_valid());
+
+  TestReplaceNullsGroupbySingle(key, val, expect_key, expect_val, replace_policy::FOLLOWING);
 }
 
-TYPED_TEST(GroupbyReplaceNullsTest, PrecedingFillLeadingNulls)
+TYPED_TEST(GroupbyReplaceNullsFixedWidthTest, PrecedingFillLeadingNulls)
 {
-  using K = TypeParam;
-  using V = int32_t;
-
   // Group 0 value: {null, 24, null}    --> {null, 24, 24}
   // Group 1 value: {null, null, null}  --> {null, null, null}
-  std::vector<K> key = cudf::test::make_type_param_vector<K>({0, 1, 0, 1, 0, 1});
-  std::vector<V> val = cudf::test::make_type_param_vector<V>({42, 7, 24, 10, 1, 1000});
-  std::vector<cudf::valid_type> mask =
-    cudf::test::make_type_param_vector<cudf::valid_type>({0, 0, 1, 0, 0, 0});
-  std::vector<K> expect_key = cudf::test::make_type_param_vector<K>({0, 0, 0, 1, 1, 1});
-  std::vector<V> expect_col = cudf::test::make_type_param_vector<V>({-1, 24, 24, -1, -1, -1});
-  std::vector<cudf::valid_type> expect_valid =
-    cudf::test::make_type_param_vector<cudf::valid_type>({0, 1, 1, 0, 0, 0});
+  fixed_width_column_wrapper<K> key{0, 1, 0, 1, 0, 1};
+  fixed_width_column_wrapper<TypeParam> val({42, 7, 24, 10, 1, 1000}, {0, 0, 1, 0, 0, 0});
 
-  TestReplaceNullsGroupby(
-    cudf::test::fixed_width_column_wrapper<K>(key.begin(), key.end()),
-    cudf::test::fixed_width_column_wrapper<V>(val.begin(), val.end(), mask.begin()),
-    cudf::test::fixed_width_column_wrapper<K>(expect_key.begin(), expect_key.end()),
-    cudf::test::fixed_width_column_wrapper<V>(
-      expect_col.begin(), expect_col.end(), expect_valid.begin()),
-    cudf::replace_policy::PRECEDING);
+  fixed_width_column_wrapper<K> expect_key{0, 0, 0, 1, 1, 1};
+  fixed_width_column_wrapper<TypeParam> expect_val({-1, 24, 24, -1, -1, -1}, {0, 1, 1, 0, 0, 0});
+
+  TestReplaceNullsGroupbySingle(key, val, expect_key, expect_val, replace_policy::PRECEDING);
 }
 
-TYPED_TEST(GroupbyReplaceNullsTest, FollowingFillTrailingNulls)
+TYPED_TEST(GroupbyReplaceNullsFixedWidthTest, FollowingFillTrailingNulls)
 {
-  using K = TypeParam;
-  using V = int32_t;
-
   // Group 0 value: {2, null, null}                 --> {2, null, null}
   // Group 1 value: {null, null, 64, null, null}    --> {64, 64, 64, null, null}
-  std::vector<K> key = cudf::test::make_type_param_vector<K>({0, 0, 1, 1, 0, 1, 1, 1});
-  std::vector<V> val = cudf::test::make_type_param_vector<V>({2, 4, 8, 16, 32, 64, 128, 256});
-  std::vector<cudf::valid_type> mask =
-    cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 0, 0, 0, 1, 0, 0});
-  std::vector<K> expect_key = cudf::test::make_type_param_vector<K>({0, 0, 0, 1, 1, 1, 1, 1});
-  std::vector<V> expect_col =
-    cudf::test::make_type_param_vector<V>({2, -1, -1, 64, 64, 64, -1, -1});
-  std::vector<cudf::valid_type> expect_valid =
-    cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 0, 1, 1, 1, 0, 0});
+  fixed_width_column_wrapper<K> key{0, 0, 1, 1, 0, 1, 1, 1};
+  fixed_width_column_wrapper<TypeParam> val({2, 4, 8, 16, 32, 64, 128, 256},
+                                            {1, 0, 0, 0, 0, 1, 0, 0});
 
-  TestReplaceNullsGroupby(
-    cudf::test::fixed_width_column_wrapper<K>(key.begin(), key.end()),
-    cudf::test::fixed_width_column_wrapper<V>(val.begin(), val.end(), mask.begin()),
-    cudf::test::fixed_width_column_wrapper<K>(expect_key.begin(), expect_key.end()),
-    cudf::test::fixed_width_column_wrapper<V>(
-      expect_col.begin(), expect_col.end(), expect_valid.begin()),
-    cudf::replace_policy::FOLLOWING);
+  fixed_width_column_wrapper<K> expect_key{0, 0, 0, 1, 1, 1, 1, 1};
+  fixed_width_column_wrapper<TypeParam> expect_val({2, -1, -1, 64, 64, 64, -1, -1},
+                                                   {1, 0, 0, 1, 1, 1, 0, 0});
+
+  TestReplaceNullsGroupbySingle(key, val, expect_key, expect_val, replace_policy::FOLLOWING);
 }
+
+struct GroupbyReplaceNullsStringsTest : public BaseFixture {
+};
+
+TEST_F(GroupbyReplaceNullsStringsTest, PrecedingFill)
+{
+  // Group 0 value: {"y" "42"}  --> {"y", "42"}
+  // Group 1 value: {"xx" @ "zzz" @ "one"} --> {"xx" "xx" "zzz" "zzz" "one"}
+  fixed_width_column_wrapper<K> key{1, 1, 0, 1, 0, 1, 1};
+  strings_column_wrapper val({"xx", "", "y", "zzz", "42", "", "one"},
+                             {true, false, true, true, true, false, true});
+
+  fixed_width_column_wrapper<K> expect_key{0, 0, 1, 1, 1, 1, 1};
+  strings_column_wrapper expect_val({"y", "42", "xx", "xx", "zzz", "zzz", "one"}, all_valid());
+
+  TestReplaceNullsGroupbySingle(key, val, expect_key, expect_val, replace_policy::PRECEDING);
+}
+
+TEST_F(GroupbyReplaceNullsStringsTest, FollowingFill)
+{
+  // Group 0 value: {@ "42"}  --> {"42", "42"}
+  // Group 1 value: {"xx" @ "zzz" @ "one"} --> {"xx" "zzz" "zzz" "one" "one"}
+  fixed_width_column_wrapper<K> key{1, 1, 0, 1, 0, 1, 1};
+  strings_column_wrapper val({"xx", "", "", "zzz", "42", "", "one"},
+                             {true, false, false, true, true, false, true});
+
+  fixed_width_column_wrapper<K> expect_key{0, 0, 1, 1, 1, 1, 1};
+  strings_column_wrapper expect_val({"42", "42", "xx", "zzz", "zzz", "one", "one"}, all_valid());
+
+  TestReplaceNullsGroupbySingle(key, val, expect_key, expect_val, replace_policy::FOLLOWING);
+}
+
+TEST_F(GroupbyReplaceNullsStringsTest, PrecedingFillPrecedingNull)
+{
+  // Group 0 value: {"y" "42"}  --> {"y", "42"}
+  // Group 1 value: {@ @ "zzz" "zzz" "zzz"} --> {@ @ "zzz" "zzz" "zzz"}
+  fixed_width_column_wrapper<K> key{1, 1, 0, 1, 0, 1, 1};
+  strings_column_wrapper val({"", "", "y", "zzz", "42", "", ""},
+                             {false, false, true, true, true, false, false});
+
+  fixed_width_column_wrapper<K> expect_key{0, 0, 1, 1, 1, 1, 1};
+  strings_column_wrapper expect_val({"y", "42", "", "", "zzz", "zzz", "zzz"},
+                                    {true, true, false, false, true, true, true});
+
+  TestReplaceNullsGroupbySingle(key, val, expect_key, expect_val, replace_policy::PRECEDING);
+}
+
+TEST_F(GroupbyReplaceNullsStringsTest, FollowingFillTrailingNull)
+{
+  // Group 0 value: {@ "y"}  --> {"y", "y"}
+  // Group 1 value: {"xx" @ "zzz" @ @} --> {"xx" "zzz" "zzz" @ @}
+  fixed_width_column_wrapper<K> key{1, 1, 0, 1, 0, 1, 1};
+  strings_column_wrapper val({"xx", "", "", "zzz", "y", "", ""},
+                             {true, false, false, true, true, false, false});
+
+  fixed_width_column_wrapper<K> expect_key{0, 0, 1, 1, 1, 1, 1};
+  strings_column_wrapper expect_val({"y", "y", "xx", "zzz", "zzz", "", ""},
+                                    {true, true, true, true, true, false, false});
+
+  TestReplaceNullsGroupbySingle(key, val, expect_key, expect_val, replace_policy::FOLLOWING);
+}
+
+}  // namespace test
+}  // namespace cudf

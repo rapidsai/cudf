@@ -187,29 +187,31 @@ groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_re
 
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls(
   table_view const& values,
-  host_span<cudf::replace_policy const> replace_policy,
+  host_span<cudf::replace_policy const> replace_policies,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(static_cast<cudf::size_type>(_keys.num_rows()) == value.size(),
+  CUDF_EXPECTS(_keys.num_rows() == values.num_rows(),
                "Size mismatch between group labels and value.");
+  CUDF_EXPECTS(static_cast<cudf::size_type>(replace_policies.size()) == values.num_columns(),
+               "Size mismatch between num_columns and replace_policies.");
 
-  if (value.is_empty()) {
-    return std::make_pair(empty_like(_keys), empty_like(table_view));
-  }
+  if (values.is_empty()) { return std::make_pair(empty_like(_keys), empty_like(values)); }
+  auto stream = rmm::cuda_stream_default;
 
-  auto sorted_keys    = helper().sorted_keys(rmm::cuda_stream_default, mr);
-  auto grouped_values = helper().grouped_values(value, rmm::cuda_stream_default);
+  auto const& group_labels = helper().group_labels(stream);
+  std::vector<std::unique_ptr<column>> results;
+  std::transform(thrust::make_counting_iterator(0),
+                 thrust::make_counting_iterator(values.num_columns()),
+                 std::back_inserter(results),
+                 [&](auto i) {
+                   auto grouped_values = helper().grouped_values(values.column(i), stream);
+                   return detail::group_replace_nulls(
+                     grouped_values->view(), group_labels.begin(), replace_policies[i], stream, mr);
+                 });
 
-  if (not value.has_nulls()) {
-    return std::make_pair(std::move(sorted_keys), std::move(grouped_values));
-  }
-
-  auto group_labels = helper().group_labels(rmm::cuda_stream_default);
-  auto result       = detail::group_replace_nulls(
-    *grouped_values, group_labels.begin(), replace_policy, rmm::cuda_stream_default, mr);
-
-  return std::make_pair(std::move(sorted_keys), std::move(result));
+  return std::make_pair(std::move(helper().sorted_keys(stream, mr)),
+                        std::make_unique<table>(std::move(results)));
 }
 
 // Get the sort helper object

@@ -44,7 +44,7 @@ namespace detail {
  *
  * @tparam LabelIterator Iterator type for group labels
  *
- * @param[in] value A column whose null values will be replaced.
+ * @param[in] grouped_value A column whose null values will be replaced.
  * @param[in] group_labels_begin Iterator to the start of group labels that each row belongs to
  * @param[in] replace_policy Specify the position of replacement values relative to null values.
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -89,7 +89,9 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
   auto output = cudf::detail::gather(cudf::table_view({grouped_value}),
                                      gather_map.begin(),
                                      gather_map.end(),
-                                     cudf::out_of_bounds_policy::DONT_CHECK);
+                                     cudf::out_of_bounds_policy::DONT_CHECK,
+                                     stream,
+                                     mr);
 
   return std::move(output->release()[0]);
 }
