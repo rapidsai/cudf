@@ -27,7 +27,9 @@ from cudf._lib.aggregation cimport Aggregation, make_aggregation
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table, table_view
-from cudf._lib.cpp.replace cimport replace_policy as cpp_replace_policy
+from cudf._lib.cpp.replace cimport replace_policy
+from cudf._lib.cpp.utilities.host_span cimport host_span
+from cudf._lib.cpp.types cimport size_type
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.groupby as libcudf_groupby
 
@@ -205,26 +207,29 @@ cdef class GroupBy:
 
         return Table(data=result_data, index=grouped_keys)
 
-
-    def replace_nulls(self, Column values, object method):
-        cdef column_view val_view = values.view()
-        cdef pair[unique_ptr[table], unique_ptr[column]] c_result
-        cdef cpp_replace_policy policy = (
-            cpp_replace_policy.PRECEDING
-            if method == 'ffill'
-            else cpp_replace_policy.FOLLOWING
+    def replace_nulls(self, Table values, object method):
+        cdef table_view val_view = values.view()
+        cdef pair[unique_ptr[table], unique_ptr[table]] c_result
+        cdef replace_policy policy = (
+            replace_policy.PRECEDING
+            if method == 'ffill' else replace_policy.FOLLOWING
+        )
+        cdef vector[replace_policy] policies = vector[replace_policy](
+            val_view.num_columns(), policy
         )
 
         with nogil:
             c_result = move(
-                self.c_obj.get()[0].replace_nulls(val_view, policy)
+                self.c_obj.get()[0].replace_nulls(val_view, policies)
             )
 
         sorted_keys = Table.from_unique_ptr(
             move(c_result.first),
             column_names=self.keys._column_names
         )
-        grouped_result = Column.from_unique_ptr(move(c_result.second))
+        grouped_result = Table.from_unique_ptr(
+            move(c_result.second), column_names=values._column_names
+        )
 
         result = Table(data=grouped_result, index=sorted_keys)
         return result
