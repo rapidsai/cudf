@@ -2,8 +2,6 @@
 
 import pandas as pd
 
-import cudf
-
 from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr, shared_ptr, make_shared
 from libcpp.vector cimport vector
