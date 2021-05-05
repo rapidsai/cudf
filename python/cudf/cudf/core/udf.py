@@ -30,7 +30,7 @@ class Masked(object):
 
 
 class MaskedType(types.Type):
-    def __init__(self):
+    def __init__(self): # add `value`
         super().__init__(name="Masked")
 
 class NAType(types.Type):
@@ -64,11 +64,15 @@ make_attribute_wrapper(MaskedType, "valid", "valid")
 @register_model(MaskedType)
 class MaskedModel(models.StructModel):
     def __init__(self, dmm, fe_type):
+        # fe_type is a Maskedtype instance
+        # will have a .value attr
+        # value -> fe_type.value 
         members = [("value", types.int64), ("valid", types.bool_)]
         models.StructModel.__init__(self, dmm, fe_type, members)
 
 register_model(NAType)(models.OpaqueModel)
 
+# types.int64 instance, change to typeclass (types.Integer, types.Number, etc)
 @lower_builtin(Masked, types.int64, types.bool_)
 def impl_masked_constructor(context, builder, sig, args):
     typ = sig.return_type
@@ -85,6 +89,8 @@ class MaskedScalarAdd(AbstractTemplate):
     # abstracttemplate vs concretetemplate
     def generic(self, args, kws):
         if isinstance(args[0], MaskedType) and isinstance(args[1], MaskedType):
+            # result type: f(args[0], args[1], op) where f is numba's typing for self.key
+            # self.key -> operator being used
             return nb_signature(numba_masked, numba_masked, numba_masked)
 
 
@@ -113,6 +119,7 @@ def masked_scalar_add_impl(context, builder, sig, args):
     valid = builder.and_(m1.valid, m2.valid)
     result.valid = valid
     with builder.if_then(valid):
+        # result.value = numba_op(m1.value, m2.value)
         result.value = builder.add(m1.value, m2.value)
 
     return result._getvalue()
@@ -130,6 +137,28 @@ def masked_scalar_add_na_impl(context, builder, sig, args):
 def constant_dummy(context, builder, ty, pyval):
     # This handles None, etc.
     return context.get_dummy_value()
+
+@cuda_registry.register_global(operator.add)
+class MaskedScalarAddConstant(AbstractTemplate):
+    def generic(self, args, kws):
+        if isinstance(args[0], MaskedType) and isinstance(args[1], types.Integer):
+            return nb_signature(numba_masked, numba_masked, types.int64)
+
+@cuda_lower(operator.add, MaskedType, types.Integer)
+def masked_scalar_add_constant_impl(context, builder, sig, input_values):
+    masked_type, const_type = sig.args
+
+    indata = cgutils.create_struct_proxy(masked_type)(context, builder, value=input_values[0])
+    result = cgutils.create_struct_proxy(numba_masked)(context, builder)
+    #to_add_const = context.get_constant(const_type, input_values[1])
+
+    result.valid = context.get_constant(types.boolean, 0)
+    with builder.if_then(indata.valid):
+        result.value = builder.add(indata.value, input_values[1])
+        result.valid = context.get_constant(types.boolean, 1)
+
+    return result._getvalue()
+
 
 
 @cuda.jit(numba_masked(numba_masked, numba_masked), device=True)
