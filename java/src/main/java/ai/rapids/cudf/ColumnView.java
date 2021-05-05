@@ -41,7 +41,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Constructs a Column View given a native view address
    * @param address the view handle
    */
-  protected ColumnView(long address) {
+  ColumnView(long address) {
     this.viewHandle = address;
     this.type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
     this.rows = ColumnView.getNativeRowCount(viewHandle);
@@ -129,6 +129,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return viewHandle;
   }
 
+  static int getFixedPointOutputScale(BinaryOp op, DType lhsType, DType rhsType) {
+    assert (lhsType.isDecimalType() && rhsType.isDecimalType());
+    return fixedPointOutputScale(op.nativeId, lhsType.getScale(), rhsType.getScale());
+  }
+
+  private static native int fixedPointOutputScale(int op, int lhsScale, int rhsScale);
+
   public final DType getType() {
     return type;
   }
@@ -204,6 +211,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     viewHandle = 0;
   }
 
+  @Override
+  public String toString() {
+    return "ColumnView{" +
+           "rows=" + rows +
+           ", type=" + type +
+           ", nullCount=" + nullCount +
+           '}';
+  }
+
   /**
    * Used for string strip function.
    * Indicates characters to be stripped from the beginning, end, or both of each string.
@@ -250,6 +266,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Get the number of elements for each list. Null lists will have a value of null.
+   * @return the number of elements in each list as an INT32 value.
+   */
+  public final ColumnVector countElements() {
+    assert DType.LIST.equals(type) : "Only lists are supported";
+    return new ColumnVector(countElements(getNativeView()));
+  }
+
+  /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
    * TRUE for any entry that is not null, and FALSE for any null entry (as per the validity mask)
    *
@@ -272,17 +297,32 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
    * TRUE for any entry that is an integer, and FALSE if its not an integer. A null will be returned
-   * for null entries
+   * for null entries.
    *
    * NOTE: Integer doesn't mean a 32-bit integer. It means a number that is not a fraction.
    * i.e. If this method returns true for a value it could still result in an overflow or underflow
    * if you convert it to a Java integral type
    *
-   * @return - Boolean vector
+   * @return Boolean vector
    */
   public final ColumnVector isInteger() {
     assert type.equals(DType.STRING);
     return new ColumnVector(isInteger(getNativeView()));
+  }
+
+  /**
+   * Returns a Boolean vector with the same number of rows as this instance, that has
+   * TRUE for any entry that is an integer, and FALSE if its not an integer. A null will be returned
+   * for null entries.
+   *
+   * @param intType the data type that should be used for bounds checking. Note that only
+   *                integer types are allowed.
+   * @return Boolean vector
+   */
+  public final ColumnVector isInteger(DType intType) {
+    assert type.equals(DType.STRING);
+    return new ColumnVector(isIntegerWithType(getNativeView(),
+        intType.getTypeId().getNativeId(), intType.getScale()));
   }
 
   /**
@@ -357,7 +397,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return - ColumnVector with nulls replaced by scalar
    */
   public final ColumnVector replaceNulls(Scalar scalar) {
-    return new ColumnVector(replaceNulls(getNativeView(), scalar.getScalarHandle()));
+    return new ColumnVector(replaceNullsScalar(getNativeView(), scalar.getScalarHandle()));
+  }
+
+  /**
+   * Returns a ColumnVector with any null values replaced with the corresponding row in the
+   * specified replacement column.
+   * This column and the replacement column must have the same type and number of rows.
+   *
+   * @param replacements column of replacement values
+   * @return column with nulls replaced by corresponding row of replacements column
+   */
+  public final ColumnVector replaceNulls(ColumnView replacements) {
+    return new ColumnVector(replaceNullsColumn(getNativeView(), replacements.getNativeView()));
   }
 
   /**
@@ -1260,6 +1312,18 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     }
   }
 
+  /**
+   * Compute the cumulative sum/prefix sum of the values in this column.
+   * This is similar to a rolling window SUM with unbounded preceding and none following.
+   * Input values 1, 2, 3
+   * Output values 1, 3, 6
+   * This currently only works for long values that are not nullable as this is currently a
+   * very simple implementation. It may be expanded in the future if needed.
+   */
+  public final ColumnVector prefixSum() {
+    return new ColumnVector(prefixSum(getNativeView()));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // LOGICAL
   /////////////////////////////////////////////////////////////////////////////
@@ -2040,6 +2104,23 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(substringColumn(getNativeView(), start.getNativeView(), end.getNativeView()));
   }
 
+   /**
+   * Apply a JSONPath string to all rows in an input strings column.
+   *
+   * Applies a JSONPath string to an incoming strings column where each row in the column
+   * is a valid json string.  The output is returned by row as a strings column.
+   *
+   * For reference, https://tools.ietf.org/id/draft-goessner-dispatch-jsonpath-00.html
+   * Note: Only implements the operators: $ . [] *
+   *
+   * @param path The JSONPath string to be applied to each row
+   * @return new strings ColumnVector containing the retrieved json object strings
+   */
+  public final ColumnVector getJSONObject(Scalar path) {
+    assert(type.equals(DType.STRING)) : "column type must be a String";
+    return new ColumnVector(getJSONObject(getNativeView(), path.getScalarHandle()));
+  }
+
   /**
    * Returns a new strings column where target string within each string is replaced with the specified
    * replacement string.
@@ -2481,6 +2562,49 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Create a new column view from a raw device buffer. Note that this will NOT copy
+   * the contents of the buffer but only creates a view. The view MUST NOT outlive
+   * the underlying device buffer. The column view will be created without a validity
+   * vector, so it is not possible to create a view containing null elements. Additionally
+   * only fixed-width primitive types are supported.
+   *
+   * @param buffer device memory that will back the column view
+   * @param startOffset byte offset into the device buffer where the column data starts
+   * @param type type of data in the column view
+   * @param rows number of data elements in the column view
+   * @return new column view instance that must not outlive the backing device buffer
+   */
+  public static ColumnView fromDeviceBuffer(BaseDeviceMemoryBuffer buffer,
+                                            long startOffset,
+                                            DType type,
+                                            int rows) {
+    if (buffer == null) {
+      throw new NullPointerException("buffer is null");
+    }
+    int typeSize = type.getSizeInBytes();
+    if (typeSize <= 0) {
+      throw new IllegalArgumentException("Unsupported type: " + type);
+    }
+    if (startOffset < 0) {
+      throw new IllegalArgumentException("Invalid start offset: " + startOffset);
+    }
+    if (rows < 0) {
+      throw new IllegalArgumentException("Invalid row count: " + rows);
+    }
+    long dataSize = typeSize * rows;
+    if (startOffset + dataSize > buffer.length) {
+      throw new IllegalArgumentException("View extends beyond buffer range");
+    }
+    long dataAddress = buffer.getAddress() + startOffset;
+    if (dataAddress % typeSize != 0) {
+      throw new IllegalArgumentException("Data address " + Long.toHexString(dataAddress) +
+          " is misaligned relative to type size of " + typeSize + " bytes");
+    }
+    return new ColumnView(makeCudfColumnView(type.typeId.getNativeId(), type.getScale(),
+        dataAddress, dataSize, 0, 0, 0, rows, null));
+  }
+
+  /**
    * Create a column of bool values indicating whether the specified scalar
    * is an element of each row of a list column.
    * Output `column[i]` is set to null if one or more of the following are true:
@@ -2562,6 +2686,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *         by the timestampToLong method.
    */
   private static native long stringTimestampToTimestamp(long viewHandle, int unit, String format);
+
+  private static native long getJSONObject(long viewHandle, long scalarHandle) throws CudfException;
 
   /**
    * Native method to parse and convert a timestamp column vector to string column vector. A unix
@@ -2742,6 +2868,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long binaryOpVV(long lhs, long rhs, int op, int dtype, int scale);
 
+  private static native long countElements(long viewHandle);
+
   private static native long byteCount(long viewHandle) throws CudfException;
 
   private static native long extractListElement(long nativeView, int index);
@@ -2803,11 +2931,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       long preceding_col,
       long following_col);
 
+  private static native long prefixSum(long viewHandle) throws CudfException;
+
   private static native long nansToNulls(long viewHandle) throws CudfException;
 
   private static native long charLengths(long viewHandle) throws CudfException;
 
-  private static native long replaceNulls(long viewHandle, long scalarHandle) throws CudfException;
+  private static native long replaceNullsScalar(long viewHandle, long scalarHandle) throws CudfException;
+
+  private static native long replaceNullsColumn(long viewHandle, long replaceViewHandle) throws CudfException;
 
   private static native long ifElseVV(long predVec, long trueVec, long falseVec) throws CudfException;
 
@@ -2826,6 +2958,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long isFloat(long viewHandle);
 
   private static native long isInteger(long viewHandle);
+
+  private static native long isIntegerWithType(long viewHandle, int typeId, int typeScale);
 
   private static native long isNotNanNative(long viewHandle);
 

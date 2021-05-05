@@ -17,6 +17,7 @@ from typing import (
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from numba import cuda
 
 import cudf
@@ -750,6 +751,9 @@ class CategoricalAccessor(ColumnMethodsMixin):
             ordered=ordered,
         )
 
+    def _decategorize(self) -> ColumnBase:
+        return self._column._get_decategorized_column()
+
 
 class CategoricalColumn(column.ColumnBase):
     """Implements operations for Columns of Categorical type
@@ -1072,10 +1076,7 @@ class CategoricalColumn(column.ColumnBase):
             " if you need this functionality."
         )
 
-    def to_pandas(
-        self, index: ColumnLike = None, nullable: bool = False, **kwargs
-    ) -> pd.Series:
-
+    def to_pandas(self, index: pd.Index = None, **kwargs) -> pd.Series:
         if self.categories.dtype.kind == "f":
             new_mask = bools_to_mask(self.notnull())
             col = column.build_categorical_column(
@@ -1095,6 +1096,24 @@ class CategoricalColumn(column.ColumnBase):
             codes, categories=categories, ordered=col.ordered
         )
         return pd.Series(data, index=index)
+
+    def to_arrow(self) -> pa.Array:
+        """Convert to PyArrow Array."""
+        # arrow doesn't support unsigned codes
+        signed_type = (
+            min_signed_type(self.codes.max())
+            if self.codes.size > 0
+            else np.int8
+        )
+        codes = self.codes.astype(signed_type)
+        categories = self.categories
+
+        out_indices = codes.to_arrow()
+        out_dictionary = categories.to_arrow()
+
+        return pa.DictionaryArray.from_arrays(
+            out_indices, out_dictionary, ordered=self.ordered,
+        )
 
     @property
     def values_host(self) -> np.ndarray:

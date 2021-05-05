@@ -9,7 +9,7 @@ import pytest
 
 import cudf
 from cudf.tests import utils
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import _decimal_series, assert_eq
 
 
 @pytest.mark.parametrize(
@@ -289,6 +289,44 @@ def test_serialize_list_columns(data):
     assert_eq(recreated, df)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "a": _decimal_series(
+                ["1", "2", "3"], dtype=cudf.Decimal64Dtype(1, 0)
+            )
+        },
+        {
+            "a": _decimal_series(
+                ["1", "2", "3"], dtype=cudf.Decimal64Dtype(1, 0)
+            ),
+            "b": _decimal_series(
+                ["1.0", "2.0", "3.0"], dtype=cudf.Decimal64Dtype(2, 1)
+            ),
+            "c": _decimal_series(
+                ["10.1", "20.2", "30.3"], dtype=cudf.Decimal64Dtype(3, 1)
+            ),
+        },
+        {
+            "a": _decimal_series(
+                ["1", None, "3"], dtype=cudf.Decimal64Dtype(1, 0)
+            ),
+            "b": _decimal_series(
+                ["1.0", "2.0", None], dtype=cudf.Decimal64Dtype(2, 1)
+            ),
+            "c": _decimal_series(
+                [None, "20.2", "30.3"], dtype=cudf.Decimal64Dtype(3, 1)
+            ),
+        },
+    ],
+)
+def test_serialize_decimal_columns(data):
+    df = cudf.DataFrame(data)
+    recreated = df.__class__.deserialize(*df.serialize())
+    assert_eq(recreated, df)
+
+
 def test_deserialize_cudf_0_16(datadir):
     fname = datadir / "pkl" / "stringColumnWithRangeIndex_cudf_0.16.pkl"
 
@@ -296,3 +334,24 @@ def test_deserialize_cudf_0_16(datadir):
     actual = pickle.load(open(fname, "rb"))
 
     assert_eq(expected, actual)
+
+
+def test_serialize_sliced_string():
+    # https://github.com/rapidsai/cudf/issues/7735
+    data = ["hi", "hello", None]
+    pd_series = pd.Series(data, dtype=pd.StringDtype())
+    gd_series = cudf.Series(data, dtype="str")
+    sliced = gd_series[0:3]
+    serialized_gd_series = gd_series.serialize()
+    serialized_sliced = sliced.serialize()
+
+    # validate frames are equal or not
+    # because both should be identical
+    for i in range(3):
+        assert_eq(
+            serialized_gd_series[1][i].to_host_array(),
+            serialized_sliced[1][i].to_host_array(),
+        )
+
+    recreated = cudf.Series.deserialize(*sliced.serialize())
+    assert_eq(recreated.to_pandas(nullable=True), pd_series)

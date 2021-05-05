@@ -3,6 +3,7 @@
 import re
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
+from decimal import Decimal
 
 import cupy
 import numpy as np
@@ -74,6 +75,17 @@ def assert_eq(left, right, **kwargs):
     without switching between assert_frame_equal/assert_series_equal/...
     functions.
     """
+    # dtypes that we support but Pandas doesn't will convert to
+    # `object`. Check equality before that happens:
+    if kwargs.get("check_dtype", True):
+        if hasattr(left, "dtype") and hasattr(right, "dtype"):
+            if isinstance(
+                left.dtype, cudf.core.dtypes._BaseDtype
+            ) and not isinstance(
+                left.dtype, cudf.CategoricalDtype
+            ):  # leave categorical comparison to Pandas
+                assert_eq(left.dtype, right.dtype)
+
     if hasattr(left, "to_pandas"):
         left = left.to_pandas()
     if hasattr(right, "to_pandas"):
@@ -285,6 +297,16 @@ def gen_rand_series(dtype, size, **kwargs):
     return cudf.Series(values)
 
 
+def _decimal_series(input, dtype):
+    return cudf.Series(
+        [x if x is None else Decimal(x) for x in input], dtype=dtype,
+    )
+
+
 @contextmanager
 def does_not_raise():
     yield
+
+
+def xfail_param(param, **kwargs):
+    return pytest.param(param, marks=pytest.mark.xfail(**kwargs))

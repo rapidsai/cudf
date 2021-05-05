@@ -57,27 +57,24 @@ rmm::device_uvector<column_device_view> create_leaf_column_device_views(
   auto leaf_columns = cudf::device_span<column_device_view>{leaf_column_views};
 
   auto iter = thrust::make_counting_iterator<size_type>(0);
-  thrust::for_each(rmm::exec_policy(stream),
-                   iter,
-                   iter + parent_table_device_view.num_columns(),
-                   [col_desc, parent_col_view = parent_table_device_view, leaf_columns] __device__(
-                     size_type index) mutable {
-                     column_device_view col = parent_col_view.column(index);
-
-                     if (col.type().id() == type_id::LIST) {
-                       col_desc[index].parent_column = parent_col_view.begin() + index;
-                     } else {
-                       col_desc[index].parent_column = nullptr;
-                     }
-                     // traverse till leaf column
-                     while (col.type().id() == type_id::LIST) {
-                       col = col.child(lists_column_view::child_column_index);
-                     }
-                     // Store leaf_column to device storage
-                     column_device_view *leaf_col_ptr = leaf_columns.begin() + index;
-                     *leaf_col_ptr                    = col;
-                     col_desc[index].leaf_column      = leaf_col_ptr;
-                   });
+  thrust::for_each(
+    rmm::exec_policy(stream),
+    iter,
+    iter + parent_table_device_view.num_columns(),
+    [col_desc, parent_col_view = parent_table_device_view, leaf_columns] __device__(
+      size_type index) mutable {
+      col_desc[index].parent_column = parent_col_view.begin() + index;
+      column_device_view col        = parent_col_view.column(index);
+      // traverse till leaf column
+      while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
+        col = (col.type().id() == type_id::LIST) ? col.child(lists_column_view::child_column_index)
+                                                 : col.child(0);
+      }
+      // Store leaf_column to device storage
+      column_device_view *leaf_col_ptr = leaf_columns.begin() + index;
+      *leaf_col_ptr                    = col;
+      col_desc[index].leaf_column      = leaf_col_ptr;
+    });
 
   return leaf_column_views;
 }

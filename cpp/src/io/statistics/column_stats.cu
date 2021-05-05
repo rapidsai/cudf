@@ -187,12 +187,6 @@ gatherFloatColumnStats(stats_state_s *s, statistics_dtype dtype, uint32_t t, Sto
   }
 }
 
-// FIXME: Use native libcudf string type
-struct nvstrdesc_s {
-  const char *ptr;
-  size_t count;
-};
-
 /**
  * @brief Gather statistics for string columns
  *

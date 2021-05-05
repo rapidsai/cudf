@@ -17,6 +17,7 @@ from cudf import concat
 from cudf.core._compat import PANDAS_GE_110
 from cudf.core.column.string import StringColumn
 from cudf.core.index import StringIndex, as_index
+from cudf.tests.test_joining import assert_join_results_equal
 from cudf.tests.utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
@@ -806,8 +807,7 @@ def test_string_cat_str_error():
         gs.str.cat(gs.str)
 
 
-@pytest.mark.xfail(raises=(NotImplementedError, AttributeError))
-@pytest.mark.parametrize("sep", [None, "", " ", "|", ",", "|||"])
+@pytest.mark.parametrize("sep", ["", " ", "|", ",", "|||"])
 def test_string_join(ps_gs, sep):
     ps, gs = ps_gs
 
@@ -919,16 +919,12 @@ def test_string_split(data, pat, n, expand):
 
 
 @pytest.mark.parametrize(
-    "str_data,str_data_raise",
-    [
-        ([], 0),
-        (["a", "b", "c", "d", "e"], 0),
-        ([None, None, None, None, None], 1),
-    ],
+    "str_data",
+    [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]],
 )
 @pytest.mark.parametrize("num_keys", [1, 2, 3])
 @pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
-def test_string_join_key(str_data, str_data_raise, num_keys, how):
+def test_string_join_key(str_data, num_keys, how):
     other_data = [1, 2, 3, 4, 5][: len(str_data)]
 
     pdf = pd.DataFrame()
@@ -942,19 +938,17 @@ def test_string_join_key(str_data, str_data_raise, num_keys, how):
     pdf2 = pdf.copy()
     gdf2 = gdf.copy()
 
-    expectation = raise_builder(
-        [0 if how == "right" else str_data_raise], (AssertionError)
-    )
+    expect = pdf.merge(pdf2, on=list(range(num_keys)), how=how)
+    got = gdf.merge(gdf2, on=list(range(num_keys)), how=how)
 
-    with expectation:
-        expect = pdf.merge(pdf2, on=list(range(num_keys)), how=how)
-        got = gdf.merge(gdf2, on=list(range(num_keys)), how=how)
+    if len(expect) == 0 and len(got) == 0:
+        expect = expect.reset_index(drop=True)
+        got = got[expect.columns]  # reorder columns
 
-        if len(expect) == 0 and len(got) == 0:
-            expect = expect.reset_index(drop=True)
-            got = got[expect.columns]
+    if how == "right":
+        got = got[expect.columns]  # reorder columns
 
-        assert_eq(expect, got)
+    assert_join_results_equal(expect, got, how=how)
 
 
 @pytest.mark.parametrize(
@@ -998,7 +992,7 @@ def test_string_join_key_nulls(str_data_nulls):
 
     expect["vals_y"] = expect["vals_y"].fillna(-1).astype("int64")
 
-    assert_eq(expect, got)
+    assert_join_results_equal(expect, got, how="left")
 
 
 @pytest.mark.parametrize(
@@ -1027,7 +1021,10 @@ def test_string_join_non_key(str_data, num_cols, how):
         expect = expect.reset_index(drop=True)
         got = got[expect.columns]
 
-    assert_eq(expect, got)
+    if how == "right":
+        got = got[expect.columns]  # reorder columns
+
+    assert_join_results_equal(expect, got, how=how)
 
 
 @pytest.mark.parametrize(
@@ -1068,7 +1065,7 @@ def test_string_join_non_key_nulls(str_data_nulls):
         expect = expect.reset_index(drop=True)
         got = got[expect.columns]
 
-    assert_eq(expect, got)
+    assert_join_results_equal(expect, got, how="left")
 
 
 def test_string_join_values_nulls():
@@ -1108,7 +1105,7 @@ def test_string_join_values_nulls():
     expect = expect.sort_values(by=["a", "b", "c"]).reset_index(drop=True)
     got = got.sort_values(by=["a", "b", "c"]).reset_index(drop=True)
 
-    assert_eq(expect, got)
+    assert_join_results_equal(expect, got, how="left")
 
 
 @pytest.mark.parametrize(
@@ -2922,3 +2919,133 @@ def test_string_std():
     assert_exceptions_equal(
         lfunc=psr.std, rfunc=sr.std, compare_error_message=False
     )
+
+
+def test_string_slice_with_mask():
+    actual = cudf.Series(["hi", "hello", None])
+    expected = actual[0:3]
+
+    assert actual._column.base_size == 3
+    assert_eq(actual._column.base_size, expected._column.base_size)
+    assert_eq(actual._column.null_count, expected._column.null_count)
+
+    assert_eq(actual, expected)
+
+
+def test_str_join_lists_error():
+    sr = cudf.Series([["a", "a"], ["b"], ["c"]])
+
+    with pytest.raises(
+        ValueError, match="sep_na_rep cannot be defined when `sep` is scalar."
+    ):
+        sr.str.join(sep="-", sep_na_rep="-")
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "string_na_rep should be a string scalar, got [10, 20] of type "
+            ": <class 'list'>"
+        ),
+    ):
+        sr.str.join(string_na_rep=[10, 20])
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "sep should be of similar size to the series, got: 2, expected: 3"
+        ),
+    ):
+        sr.str.join(sep=["=", "-"])
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "sep_na_rep should be a string scalar, got "
+            "['na'] of type: <class 'list'>"
+        ),
+    ):
+        sr.str.join(sep=["-", "+", "."], sep_na_rep=["na"])
+
+    with pytest.raises(
+        TypeError,
+        match=re.escape(
+            "sep should be an str, array-like or Series object, "
+            "found <class 'cudf.core.dataframe.DataFrame'>"
+        ),
+    ):
+        sr.str.join(sep=cudf.DataFrame())
+
+
+@pytest.mark.parametrize(
+    "sr,sep,string_na_rep,sep_na_rep,expected",
+    [
+        (
+            cudf.Series([["a", "a"], ["b"], ["c"]]),
+            "-",
+            None,
+            None,
+            cudf.Series(["a-a", "b", "c"]),
+        ),
+        (
+            cudf.Series([["a", "b"], [None], [None, "hello", None, "world"]]),
+            "__",
+            "=",
+            None,
+            cudf.Series(["a__b", "=", "=__hello__=__world"]),
+        ),
+        (
+            cudf.Series(
+                [
+                    ["a", None, "b"],
+                    [None],
+                    [None, "hello", None, "world"],
+                    None,
+                ]
+            ),
+            ["-", "_", "**", "!"],
+            None,
+            None,
+            cudf.Series(["a--b", "", "**hello****world", None]),
+        ),
+        (
+            cudf.Series(
+                [
+                    ["a", None, "b"],
+                    [None],
+                    [None, "hello", None, "world"],
+                    None,
+                ]
+            ),
+            ["-", "_", "**", None],
+            "rep_str",
+            "sep_str",
+            cudf.Series(
+                [
+                    "a-rep_str-b",
+                    "rep_str",
+                    "rep_str**hello**rep_str**world",
+                    None,
+                ]
+            ),
+        ),
+        (
+            cudf.Series([[None, "a"], [None], None]),
+            ["-", "_", None],
+            "rep_str",
+            None,
+            cudf.Series(["rep_str-a", "rep_str", None]),
+        ),
+        (
+            cudf.Series([[None, "a"], [None], None]),
+            ["-", "_", None],
+            None,
+            "sep_str",
+            cudf.Series(["-a", "", None]),
+        ),
+    ],
+)
+def test_str_join_lists(sr, sep, string_na_rep, sep_na_rep, expected):
+    actual = sr.str.join(
+        sep=sep, string_na_rep=string_na_rep, sep_na_rep=sep_na_rep
+    )
+    assert_eq(actual, expected)

@@ -17,6 +17,10 @@
 
 #include <benchmark/benchmark.h>
 
+#include <cudf/types.hpp>
+
+#include <limits>
+
 /**
  * @brief Generate row count and row length argument ranges for a string benchmark.
  *
@@ -44,7 +48,7 @@ inline void generate_string_bench_args(benchmark::internal::Benchmark* b,
     for (int rowlen = min_rowlen; rowlen <= max_rowlen; rowlen *= rowlen_mult) {
       // avoid generating combinations that exceed the cudf column limit
       size_t total_chars = static_cast<size_t>(row_count) * rowlen;
-      if (total_chars < std::numeric_limits<cudf::size_type>::max()) {
+      if (total_chars < static_cast<size_t>(std::numeric_limits<cudf::size_type>::max())) {
         b->Args({row_count, rowlen});
       }
     }

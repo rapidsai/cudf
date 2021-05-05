@@ -275,6 +275,8 @@ class TimeDeltaColumn(column.ColumnBase):
             return cudf.Scalar(other)
         elif np.isscalar(other):
             return cudf.Scalar(other)
+        elif other is None:
+            return cudf.Scalar(other, dtype=self.dtype)
         else:
             raise TypeError(f"cannot normalize {type(other)}")
 
@@ -304,7 +306,7 @@ class TimeDeltaColumn(column.ColumnBase):
         self, fill_value: Any = None, method: str = None, dtype: Dtype = None
     ) -> TimeDeltaColumn:
         if fill_value is not None:
-            if cudf.utils.utils.isnat(fill_value):
+            if cudf.utils.utils._isnat(fill_value):
                 return _fillna_natwise(self)
             col = self  # type: column.ColumnBase
             if is_scalar(fill_value):

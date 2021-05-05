@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
+#include "parquet_gpu.hpp"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -40,11 +40,13 @@ constexpr bool enable_bool_rle = true;
 constexpr bool enable_bool_rle = false;
 #endif
 
+using ::cudf::detail::device_2dspan;
+
 constexpr int init_hash_bits       = 12;
 constexpr uint32_t rle_buffer_size = (1 << 9);
 
 struct frag_init_state_s {
-  EncColumnDesc col;
+  parquet_column_device_view col;
   PageFragment frag;
   uint32_t total_dupes;
   size_type start_value_idx;
@@ -70,17 +72,19 @@ struct page_enc_state_s {
   volatile uint32_t scratch_red[32];
   EncPage page;
   EncColumnChunk ck;
-  EncColumnDesc col;
+  parquet_column_device_view col;
   gpu_inflate_input_s comp_in;
-  gpu_inflate_status_s comp_out;
+  gpu_inflate_status_s comp_stat;
   uint16_t vals[rle_buffer_size];
 };
 
 /**
  * @brief Return a 12-bit hash from a byte sequence
  */
-inline __device__ uint32_t nvstr_init_hash(const uint8_t *ptr, uint32_t len)
+inline __device__ uint32_t hash_string(const string_view &val)
 {
+  char const *ptr = val.data();
+  uint32_t len    = val.size_bytes();
   if (len != 0) {
     return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << init_hash_bits) - 1);
   } else {
@@ -111,12 +115,11 @@ inline __device__ uint32_t uint64_init_hash(uint64_t v)
  */
 // blockDim {512,1,1}
 template <int block_size>
-__global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment *frag,
-                                                                   const EncColumnDesc *col_desc,
-                                                                   int32_t num_fragments,
-                                                                   int32_t num_columns,
-                                                                   uint32_t fragment_size,
-                                                                   uint32_t max_num_rows)
+__global__ void __launch_bounds__(block_size)
+  gpuInitPageFragments(device_2dspan<PageFragment> frag,
+                       device_span<parquet_column_device_view const> col_desc,
+                       uint32_t fragment_size,
+                       uint32_t max_num_rows)
 {
   __shared__ __align__(16) frag_init_state_s state_g;
 
@@ -158,12 +161,18 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     } else {
       auto col                     = *(s->col.parent_column);
       auto current_start_value_idx = start_row;
-      while (col.type().id() == type_id::LIST) {
-        auto offset_col = col.child(lists_column_view::offsets_column_index);
-        current_start_value_idx =
-          offset_col.element<size_type>(current_start_value_idx + col.offset());
-        end_value_idx = offset_col.element<size_type>(end_value_idx + col.offset());
-        col           = col.child(lists_column_view::child_column_index);
+      while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
+        if (col.type().id() == type_id::STRUCT) {
+          current_start_value_idx += col.offset();
+          end_value_idx += col.offset();
+          col = col.child(0);
+        } else {
+          auto offset_col = col.child(lists_column_view::offsets_column_index);
+          current_start_value_idx =
+            offset_col.element<size_type>(current_start_value_idx + col.offset());
+          end_value_idx = offset_col.element<size_type>(end_value_idx + col.offset());
+          col           = col.child(lists_column_view::child_column_index);
+        }
       }
       s->start_value_idx = current_start_value_idx;
     }
@@ -192,7 +201,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     // dtype_len, which determines how much memory we need to allocate for the fragment.
     dtype_len_in = 8;
   } else {
-    dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len;
+    dtype_len_in = dtype_len;
   }
   __syncthreads();
 
@@ -211,7 +220,7 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
         if (dtype == BYTE_ARRAY) {
           auto str = s->col.leaf_column->element<string_view>(val_idx);
           len += str.size_bytes();
-          hash = nvstr_init_hash(reinterpret_cast<const uint8_t *>(str.data()), str.size_bytes());
+          hash = hash_string(str);
         } else if (dtype_len_in == 8) {
           hash = uint64_init_hash(s->col.leaf_column->element<uint64_t>(val_idx));
         } else {
@@ -368,42 +377,43 @@ __global__ void __launch_bounds__(block_size) gpuInitPageFragments(PageFragment 
     }
   }
   __syncthreads();
-  if (t == 0) frag[blockIdx.x * num_fragments + blockIdx.y] = s->frag;
+  if (t == 0) frag[blockIdx.x][blockIdx.y] = s->frag;
 }
 
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128) gpuInitFragmentStats(statistics_group *groups,
-                                                            const PageFragment *fragments,
-                                                            const EncColumnDesc *col_desc,
-                                                            int32_t num_fragments,
-                                                            int32_t num_columns,
-                                                            uint32_t fragment_size)
+__global__ void __launch_bounds__(128)
+  gpuInitFragmentStats(device_2dspan<statistics_group> groups,
+                       device_2dspan<PageFragment const> fragments,
+                       device_span<parquet_column_device_view const> col_desc)
 {
+  // TODO: why not 1 block per warp?
   __shared__ __align__(8) statistics_group group_g[4];
 
-  uint32_t lane_id          = threadIdx.x & 0x1f;
-  uint32_t frag_id          = blockIdx.y * 4 + (threadIdx.x >> 5);
-  uint32_t column_id        = blockIdx.x;
-  statistics_group *const g = &group_g[threadIdx.x >> 5];
-  if (!lane_id && frag_id < num_fragments) {
+  uint32_t lane_id              = threadIdx.x & 0x1f;
+  uint32_t frag_id              = blockIdx.y * 4 + (threadIdx.x >> 5);
+  uint32_t column_id            = blockIdx.x;
+  auto num_fragments_per_column = fragments.size().second;
+  statistics_group *const g     = &group_g[threadIdx.x >> 5];
+  if (!lane_id && frag_id < num_fragments_per_column) {
     g->col       = &col_desc[column_id];
-    g->start_row = fragments[column_id * num_fragments + frag_id].start_value_idx;
-    g->num_rows  = fragments[column_id * num_fragments + frag_id].num_leaf_values;
+    g->start_row = fragments[column_id][frag_id].start_value_idx;
+    g->num_rows  = fragments[column_id][frag_id].num_leaf_values;
   }
   __syncthreads();
-  if (frag_id < num_fragments and lane_id == 0) groups[column_id * num_fragments + frag_id] = *g;
+  if (frag_id < num_fragments_per_column and lane_id == 0) groups[column_id][frag_id] = *g;
 }
 
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
-                                                    EncPage *pages,
-                                                    const EncColumnDesc *col_desc,
-                                                    statistics_merge_group *page_grstats,
-                                                    statistics_merge_group *chunk_grstats,
-                                                    int32_t num_rowgroups,
-                                                    int32_t num_columns)
+__global__ void __launch_bounds__(128)
+  gpuInitPages(device_2dspan<EncColumnChunk> chunks,
+               device_span<gpu::EncPage> pages,
+               device_span<parquet_column_device_view const> col_desc,
+               statistics_merge_group *page_grstats,
+               statistics_merge_group *chunk_grstats,
+               int32_t num_columns)
 {
-  __shared__ __align__(8) EncColumnDesc col_g;
+  // TODO: All writing seems to be done by thread 0. Could be replaced by thrust foreach
+  __shared__ __align__(8) parquet_column_device_view col_g;
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) PageFragment frag_g;
   __shared__ __align__(8) EncPage page_g;
@@ -412,8 +422,9 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
   uint32_t t = threadIdx.x;
 
   if (t == 0) {
-    col_g = col_desc[blockIdx.x];
-    ck_g  = chunks[blockIdx.y * num_columns + blockIdx.x];
+    col_g  = col_desc[blockIdx.x];
+    ck_g   = chunks[blockIdx.y][blockIdx.x];
+    page_g = {};
   }
   __syncthreads();
   if (t < 32) {
@@ -444,6 +455,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
         page_g.num_fragments   = 0;
         page_g.page_type       = PageType::DICTIONARY_PAGE;
         page_g.dict_bits_plus1 = 0;
+        page_g.chunk           = &chunks[blockIdx.y][blockIdx.x];
         page_g.chunk_id        = blockIdx.y * num_columns + blockIdx.x;
         page_g.hdr_size        = 0;
         page_g.max_hdr_size    = 32;
@@ -457,7 +469,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
       }
       __syncwarp();
       if (t == 0) {
-        if (pages) pages[ck_g.first_page] = page_g;
+        if (not pages.empty()) pages[ck_g.first_page] = page_g;
         if (page_grstats) page_grstats[ck_g.first_page] = pagestats_g;
       }
       num_pages = 1;
@@ -521,6 +533,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
         }
         if (!t) {
           page_g.num_fragments   = fragments_in_chunk - page_start;
+          page_g.chunk           = &chunks[blockIdx.y][blockIdx.x];
           page_g.chunk_id        = blockIdx.y * num_columns + blockIdx.x;
           page_g.page_type       = PageType::DATA_PAGE;
           page_g.dict_bits_plus1 = dict_bits_plus1;
@@ -541,8 +554,8 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
           page_g.num_rows         = rows_in_page;
           page_g.num_leaf_values  = leaf_values_in_page;
           page_g.num_values       = values_in_page;
-          uint32_t def_level_bits = col_g.level_bits & 0xf;
-          uint32_t rep_level_bits = col_g.level_bits >> 4;
+          uint32_t def_level_bits = col_g.num_def_level_bits();
+          uint32_t rep_level_bits = col_g.num_rep_level_bits();
           // Run length = 4, max(rle/bitpack header) = 5, add one byte per 256 values for overhead
           // TODO (dm): Improve readability of these calculations.
           uint32_t def_level_size =
@@ -564,7 +577,7 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
         }
         __syncwarp();
         if (t == 0) {
-          if (pages) { pages[ck_g.first_page + num_pages] = page_g; }
+          if (not pages.empty()) { pages[ck_g.first_page + num_pages] = page_g; }
 
           if (page_grstats) { page_grstats[ck_g.first_page + num_pages] = pagestats_g; }
         }
@@ -603,7 +616,8 @@ __global__ void __launch_bounds__(128) gpuInitPages(EncColumnChunk *chunks,
   }
   __syncthreads();
   if (t == 0) {
-    chunks[blockIdx.y * num_columns + blockIdx.x] = ck_g;
+    if (not pages.empty()) ck_g.pages = &pages[ck_g.first_page];
+    chunks[blockIdx.y][blockIdx.x] = ck_g;
     if (chunk_grstats) chunk_grstats[blockIdx.y * num_columns + blockIdx.x] = pagestats_g;
   }
 }
@@ -912,11 +926,10 @@ convert_nanoseconds(cuda::std::chrono::sys_time<cuda::std::chrono::nanoseconds> 
 
 // blockDim(128, 1, 1)
 template <int block_size>
-__global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
-                                                         const EncColumnChunk *chunks,
-                                                         gpu_inflate_input_s *comp_in,
-                                                         gpu_inflate_status_s *comp_out,
-                                                         uint32_t start_page)
+__global__ void __launch_bounds__(128, 8)
+  gpuEncodePages(device_span<gpu::EncPage> pages,
+                 device_span<gpu_inflate_input_s> comp_in,
+                 device_span<gpu_inflate_status_s> comp_stat)
 {
   __shared__ __align__(8) page_enc_state_s state_g;
   using block_scan = cub::BlockScan<uint32_t, block_size>;
@@ -928,18 +941,20 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   int32_t dict_bits;
 
   if (t == 0) {
-    s->page = pages[start_page + blockIdx.x];
-    s->ck   = chunks[s->page.chunk_id];
+    s->page = pages[blockIdx.x];
+    s->ck   = *s->page.chunk;
     s->col  = *s->ck.col_desc;
     s->cur  = s->page.page_data + s->page.max_hdr_size;
   }
   __syncthreads();
 
   // Encode Repetition and Definition levels
-  if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.level_bits != 0 &&
-      s->col.parent_column == nullptr) {
+  if (s->page.page_type != PageType::DICTIONARY_PAGE &&
+      (s->col.num_def_level_bits()) != 0 &&  // This means max definition level is not 0 (nullable)
+      (s->col.num_rep_level_bits()) == 0     // This means there are no repetition levels (non-list)
+  ) {
     // Calculate definition levels from validity
-    uint32_t def_lvl_bits = s->col.level_bits & 0xf;
+    uint32_t def_lvl_bits = s->col.num_def_level_bits();
     if (def_lvl_bits != 0) {
       if (!t) {
         s->rle_run     = 0;
@@ -954,9 +969,32 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         uint32_t row         = s->page.start_row + rle_numvals + t;
         // Definition level encodes validity. Checks the valid map and if it is valid, then sets the
         // def_lvl accordingly and sets it in s->vals which is then given to RleEncode to encode
-        uint32_t def_lvl = (rle_numvals + t < s->page.num_rows && row < s->col.num_rows)
-                             ? s->col.leaf_column->is_valid(row)
-                             : 0;
+        uint32_t def_lvl = [&]() {
+          bool within_bounds = rle_numvals + t < s->page.num_rows && row < s->col.num_rows;
+          if (not within_bounds) { return 0u; }
+          uint32_t def       = 0;
+          size_type l        = 0;
+          bool is_col_struct = false;
+          auto col           = *s->col.parent_column;
+          do {
+            // If col not nullable then it does not contribute to def levels
+            if (s->col.nullability[l]) {
+              if (col.is_valid(row)) {
+                ++def;
+              } else {
+                // We have found the shallowest level at which this row is null
+                break;
+              }
+            }
+            is_col_struct = (col.type().id() == type_id::STRUCT);
+            if (is_col_struct) {
+              row += col.offset();
+              col = col.child(0);
+              ++l;
+            }
+          } while (is_col_struct);
+          return def;
+        }();
         s->vals[(rle_numvals + t) & (rle_buffer_size - 1)] = def_lvl;
         __syncthreads();
         rle_numvals += nrows;
@@ -974,7 +1012,9 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         if (t == 0) { s->cur = rle_out; }
       }
     }
-  } else if (s->page.page_type != PageType::DICTIONARY_PAGE && s->col.parent_column != nullptr) {
+  } else if (s->page.page_type != PageType::DICTIONARY_PAGE &&
+             s->col.num_rep_level_bits() != 0  // This means there ARE repetition levels (has list)
+  ) {
     auto encode_levels = [&](uint8_t const *lvl_val_data, uint32_t nbits) {
       // For list types, the repetition and definition levels are pre-calculated. We just need to
       // encode and write them now.
@@ -1010,9 +1050,9 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
         if (t == 0) { s->cur = rle_out; }
       }
     };
-    encode_levels(s->col.rep_values, s->col.level_bits >> 4);
+    encode_levels(s->col.rep_values, s->col.num_rep_level_bits());
     __syncthreads();
-    encode_levels(s->col.def_values, s->col.level_bits & 0xf);
+    encode_levels(s->col.def_values, s->col.num_def_level_bits());
   }
   // Encode data values
   __syncthreads();
@@ -1024,7 +1064,7 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
   } else if (dtype == INT96) {
     dtype_len_in = 8;
   } else {
-    dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len_out;
+    dtype_len_in = dtype_len_out;
   }
   dict_bits = (dtype == BOOLEAN) ? 1 : (s->page.dict_bits_plus1 - 1);
   if (t == 0) {
@@ -1041,10 +1081,15 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
     if (s->col.parent_column != nullptr) {
       auto col                    = *(s->col.parent_column);
       auto current_page_start_val = s->page_start_val;
-      while (col.type().id() == type_id::LIST) {
-        current_page_start_val = col.child(lists_column_view::offsets_column_index)
-                                   .element<size_type>(current_page_start_val + col.offset());
-        col = col.child(lists_column_view::child_column_index);
+      while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
+        if (col.type().id() == type_id::STRUCT) {
+          current_page_start_val += col.offset();
+          col = col.child(0);
+        } else {
+          current_page_start_val = col.child(lists_column_view::offsets_column_index)
+                                     .element<size_type>(current_page_start_val + col.offset());
+          col = col.child(lists_column_view::child_column_index);
+        }
       }
       s->page_start_val = current_page_start_val;
     }
@@ -1156,11 +1201,13 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
             auto const ret = convert_nanoseconds([&]() {
               using namespace cuda::std::chrono;
 
-              switch (s->col.converted_type) {
-                case TIMESTAMP_MILLIS: {
+              switch (s->col.leaf_column->type().id()) {
+                case type_id::TIMESTAMP_SECONDS:
+                case type_id::TIMESTAMP_MILLISECONDS: {
                   return sys_time<nanoseconds>{milliseconds{v}};
                 } break;
-                case TIMESTAMP_MICROS: {
+                case type_id::TIMESTAMP_MICROSECONDS:
+                case type_id::TIMESTAMP_NANOSECONDS: {
                   return sys_time<nanoseconds>{microseconds{v}};
                 } break;
               }
@@ -1211,49 +1258,53 @@ __global__ void __launch_bounds__(128, 8) gpuEncodePages(EncPage *pages,
     s->comp_in.srcSize           = actual_data_size;
     s->comp_in.dstDevice         = s->page.compressed_data + s->page.max_hdr_size;
     s->comp_in.dstSize           = compressed_bfr_size;
-    s->comp_out.bytes_written    = 0;
-    s->comp_out.status           = ~0;
-    s->comp_out.reserved         = 0;
+    s->comp_stat.bytes_written   = 0;
+    s->comp_stat.status          = ~0;
+    s->comp_stat.reserved        = 0;
   }
   __syncthreads();
   if (t == 0) {
-    pages[start_page + blockIdx.x] = s->page;
-    if (comp_in) comp_in[blockIdx.x] = s->comp_in;
-    if (comp_out) comp_out[blockIdx.x] = s->comp_out;
+    pages[blockIdx.x] = s->page;
+    if (not comp_in.empty()) comp_in[blockIdx.x] = s->comp_in;
+    if (not comp_stat.empty()) {
+      comp_stat[blockIdx.x]       = s->comp_stat;
+      pages[blockIdx.x].comp_stat = &comp_stat[blockIdx.x];
+    }
   }
 }
 
 // blockDim(128, 1, 1)
-__global__ void __launch_bounds__(128) gpuDecideCompression(EncColumnChunk *chunks,
-                                                            const EncPage *pages,
-                                                            const gpu_inflate_status_s *comp_out,
-                                                            uint32_t start_page)
+__global__ void __launch_bounds__(128) gpuDecideCompression(device_span<EncColumnChunk> chunks)
 {
+  // After changing the way structs are loaded from coop to normal, this kernel has no business
+  // being launched with 128 thread block. It can easily be a single warp.
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(4) unsigned int error_count;
   using warp_reduce = cub::WarpReduce<uint32_t>;
   __shared__ typename warp_reduce::TempStorage temp_storage[2];
+  __shared__ volatile bool has_compression;
 
   uint32_t t                      = threadIdx.x;
   uint32_t uncompressed_data_size = 0;
   uint32_t compressed_data_size   = 0;
-  uint32_t first_page, num_pages;
+  uint32_t num_pages;
 
   if (t == 0) {
     ck_g = chunks[blockIdx.x];
     atomicAnd(&error_count, 0);
+    has_compression = false;
   }
   __syncthreads();
   if (t < 32) {
-    first_page = ck_g.first_page;
-    num_pages  = ck_g.num_pages;
+    num_pages = ck_g.num_pages;
     for (uint32_t page = t; page < num_pages; page += 32) {
-      uint32_t page_data_size = pages[first_page + page].max_data_size;
-      uint32_t comp_idx       = first_page + page - start_page;
+      auto &curr_page         = ck_g.pages[page];
+      uint32_t page_data_size = curr_page.max_data_size;
       uncompressed_data_size += page_data_size;
-      if (comp_out) {
-        compressed_data_size += (uint32_t)comp_out[comp_idx].bytes_written;
-        if (comp_out[comp_idx].status != 0) { atomicAdd(&error_count, 1); }
+      if (auto comp_status = curr_page.comp_stat; comp_status != nullptr) {
+        has_compression = true;
+        compressed_data_size += comp_status->bytes_written;
+        if (comp_status->status != 0) { atomicAdd(&error_count, 1); }
       }
     }
     uncompressed_data_size = warp_reduce(temp_storage[0]).Sum(uncompressed_data_size);
@@ -1262,7 +1313,7 @@ __global__ void __launch_bounds__(128) gpuDecideCompression(EncColumnChunk *chun
   __syncthreads();
   if (t == 0) {
     bool is_compressed;
-    if (comp_out) {
+    if (has_compression) {
       uint32_t compression_error = atomicAdd(&error_count, 0);
       is_compressed = (!compression_error && compressed_data_size < uncompressed_data_size);
     } else {
@@ -1383,11 +1434,10 @@ class header_encoder {
 
 __device__ uint8_t *EncodeStatistics(uint8_t *start,
                                      const statistics_chunk *s,
-                                     const EncColumnDesc *col,
+                                     uint8_t dtype,
                                      float *fp_scratch)
 {
-  uint8_t *end, dtype, dtype_len;
-  dtype = col->stats_dtype;
+  uint8_t *end, dtype_len;
   switch (dtype) {
     case dtype_bool: dtype_len = 1; break;
     case dtype_int8:
@@ -1434,14 +1484,14 @@ __device__ uint8_t *EncodeStatistics(uint8_t *start,
 }
 
 // blockDim(128, 1, 1)
-__global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
-                                                            EncColumnChunk *chunks,
-                                                            const gpu_inflate_status_s *comp_out,
-                                                            const statistics_chunk *page_stats,
-                                                            const statistics_chunk *chunk_stats,
-                                                            uint32_t start_page)
+__global__ void __launch_bounds__(128)
+  gpuEncodePageHeaders(device_span<EncPage> pages,
+                       device_span<gpu_inflate_status_s const> comp_stat,
+                       device_span<statistics_chunk const> page_stats,
+                       const statistics_chunk *chunk_stats)
 {
-  __shared__ __align__(8) EncColumnDesc col_g;
+  // When this whole kernel becomes single thread, the following variables need not be __shared__
+  __shared__ __align__(8) parquet_column_device_view col_g;
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
   __shared__ __align__(8) float fp_scratch[2];
@@ -1452,19 +1502,20 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
     uint8_t *hdr_start, *hdr_end;
     uint32_t compressed_page_size, uncompressed_page_size;
 
-    page_g = pages[start_page + blockIdx.x];
-    ck_g   = chunks[page_g.chunk_id];
+    page_g = pages[blockIdx.x];
+    ck_g   = *page_g.chunk;
     col_g  = *ck_g.col_desc;
 
-    if (chunk_stats && start_page + blockIdx.x == ck_g.first_page) {
+    if (chunk_stats && &pages[blockIdx.x] == ck_g.pages) {  // Is this the first page in a chunk?
       hdr_start = (ck_g.is_compressed) ? ck_g.compressed_bfr : ck_g.uncompressed_bfr;
-      hdr_end   = EncodeStatistics(hdr_start, &chunk_stats[page_g.chunk_id], &col_g, fp_scratch);
-      chunks[page_g.chunk_id].ck_stat_size = static_cast<uint32_t>(hdr_end - hdr_start);
+      hdr_end =
+        EncodeStatistics(hdr_start, &chunk_stats[page_g.chunk_id], col_g.stats_dtype, fp_scratch);
+      page_g.chunk->ck_stat_size = static_cast<uint32_t>(hdr_end - hdr_start);
     }
     uncompressed_page_size = page_g.max_data_size;
     if (ck_g.is_compressed) {
       hdr_start            = page_g.compressed_data;
-      compressed_page_size = (uint32_t)comp_out[blockIdx.x].bytes_written;
+      compressed_page_size = (uint32_t)comp_stat[blockIdx.x].bytes_written;
       page_g.max_data_size = compressed_page_size;
     } else {
       hdr_start            = page_g.page_data;
@@ -1498,10 +1549,10 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
       encoder.field_int32(3, Encoding::RLE);      // definition_level_encoding
       encoder.field_int32(4, Encoding::RLE);      // repetition_level_encoding
       // Optionally encode page-level statistics
-      if (page_stats) {
+      if (not page_stats.empty()) {
         encoder.field_struct_begin(5);
         encoder.set_ptr(EncodeStatistics(
-          encoder.get_ptr(), &page_stats[start_page + blockIdx.x], &col_g, fp_scratch));
+          encoder.get_ptr(), &page_stats[blockIdx.x], col_g.stats_dtype, fp_scratch));
         encoder.field_struct_end(5);
       }
       encoder.field_struct_end(5);
@@ -1516,11 +1567,12 @@ __global__ void __launch_bounds__(128) gpuEncodePageHeaders(EncPage *pages,
     page_g.hdr_size = (uint32_t)(hdr_end - hdr_start);
   }
   __syncthreads();
-  if (t == 0) pages[start_page + blockIdx.x] = page_g;
+  if (t == 0) pages[blockIdx.x] = page_g;
 }
 
 // blockDim(1024, 1, 1)
-__global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, const EncPage *pages)
+__global__ void __launch_bounds__(1024)
+  gpuGatherPages(device_span<EncColumnChunk> chunks, device_span<gpu::EncPage const> pages)
 {
   __shared__ __align__(8) EncColumnChunk ck_g;
   __shared__ __align__(8) EncPage page_g;
@@ -1533,7 +1585,7 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
   if (t == 0) ck_g = chunks[blockIdx.x];
   __syncthreads();
 
-  first_page = &pages[ck_g.first_page];
+  first_page = ck_g.pages;
   num_pages  = ck_g.num_pages;
   dst        = (ck_g.is_compressed) ? ck_g.compressed_bfr : ck_g.uncompressed_bfr;
   dst += ck_g.ck_stat_size;  // Skip over chunk statistics
@@ -1566,6 +1618,42 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
     if (ck_g.has_dictionary) { chunks[blockIdx.x].dictionary_size = ck_g.dictionary_size; }
   }
 }
+
+/**
+ * @brief Functor to get definition level value for a nested struct column until the leaf level or
+ * the first list level.
+ *
+ */
+struct def_level_fn {
+  column_device_view const *parent_col;
+  uint8_t const *d_nullability;
+  uint8_t sub_level_start;
+  uint8_t curr_def_level;
+
+  __device__ uint32_t operator()(size_type i)
+  {
+    uint32_t def       = curr_def_level;
+    uint8_t l          = sub_level_start;
+    bool is_col_struct = false;
+    auto col           = *parent_col;
+    do {
+      // If col not nullable then it does not contribute to def levels
+      if (d_nullability[l]) {
+        if (not col.nullable() or bit_is_set(col.null_mask(), i)) {
+          ++def;
+        } else {  // We have found the shallowest level at which this row is null
+          break;
+        }
+      }
+      is_col_struct = (col.type().id() == type_id::STRUCT);
+      if (is_col_struct) {
+        col = col.child(0);
+        ++l;
+      }
+    } while (is_col_struct);
+    return def;
+  }
+};
 
 /**
  * @brief Get the dremel offsets and repetition and definition levels for a LIST column
@@ -1633,16 +1721,53 @@ __global__ void __launch_bounds__(1024) gpuGatherPages(EncColumnChunk *chunks, c
  * ```
  *
  * Similarly we merge up all the way till level 0 offsets
+ *
+ * STRUCT COLUMNS :
+ * In case of struct columns, we don't have to merge struct levels with their children because a
+ * struct is the same size as its children. e.g. for a column `struct<int, float>`, if the row `i`
+ * is null, then the children columns `int` and `float` are also null at `i`. They also have the
+ * null entry represented in their respective null masks. So for any case of strictly struct based
+ * nesting, we can get the definition levels merely by iterating over the nesting for the same row.
+ *
+ * In case struct and lists are intermixed, the definition levels of all the contiguous struct
+ * levels can be constructed using the aforementioned iterative method. Only when we reach a list
+ * level, we need to do a merge with the subsequent level.
+ *
+ * So, for a column like `struct<list<int>>`, we are going to merge between the levels `struct<list`
+ * and `int`.
+ * For a column like `list<struct<int>>`, we are going to merge between `list` and `struct<int>`.
+ *
+ * In general, one nesting level is the list level and any struct level that precedes it.
+ *
+ * A few more examples to visualize the partitioning of column hierarchy into nesting levels:
+ * (L is list, S is struct, i is integer(leaf data level), angle brackets omitted)
+ * ```
+ * 1. LSi     = L   Si
+ *              - | --
+ *
+ * 2. LLSi    = L   L   Si
+ *              - | - | --
+ *
+ * 3. SSLi    = SSL   i
+ *              --- | -
+ *
+ * 4. LLSLSSi = L   L   SL   SSi
+ *              - | - | -- | ---
+```
  */
 dremel_data get_dremel_data(column_view h_col,
-                            std::vector<bool> const &level_nullability,
+                            // TODO(cp): use device_span once it is converted to a single hd_vec
+                            rmm::device_uvector<uint8_t> const &d_nullability,
+                            std::vector<uint8_t> const &nullability,
                             rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(h_col.type().id() == type_id::LIST,
-               "Can only get rep/def levels for LIST type column");
+  auto get_list_level = [](column_view col) {
+    while (col.type().id() == type_id::STRUCT) { col = col.child(0); }
+    return col;
+  };
 
   auto get_empties = [&](column_view col, size_type start, size_type end) {
-    auto lcv = lists_column_view(col);
+    auto lcv = lists_column_view(get_list_level(col));
     rmm::device_uvector<size_type> empties_idx(lcv.size(), stream);
     rmm::device_uvector<size_type> empties(lcv.size(), stream);
     auto d_off = lcv.offsets().data<size_type>();
@@ -1663,38 +1788,60 @@ dremel_data get_dremel_data(column_view h_col,
     return std::make_tuple(std::move(empties), std::move(empties_idx), empties_size);
   };
 
-  // Reverse the nesting in order to merge the deepest level with the leaf first and merge bottom
-  // up
-  auto curr_col        = h_col;
-  size_t max_vals_size = 0;
+  auto curr_col = h_col;
   std::vector<column_view> nesting_levels;
   std::vector<uint8_t> def_at_level;
-  size_type level       = 0;
-  auto add_def_at_level = [&](size_type level) {
-    auto is_level_nullable =
-      curr_col.nullable() or (not level_nullability.empty() and level_nullability[level]);
-    def_at_level.push_back(is_level_nullable ? 2 : 1);
-  };
-  while (curr_col.type().id() == type_id::LIST) {
-    nesting_levels.push_back(curr_col);
-    add_def_at_level(level);
-    auto lcv = lists_column_view(curr_col);
-    max_vals_size += lcv.offsets().size();
-    curr_col = lcv.child();
-    level++;
-  }
-  // One more entry for leaf col
-  add_def_at_level(level);
-  max_vals_size += curr_col.size();
+  std::vector<uint8_t> start_at_sub_level;
+  uint8_t curr_nesting_level_idx = 0;
 
-  // Add one more value at the end so that we can have the max def level
-  def_at_level.push_back(0);
+  auto add_def_at_level = [&](column_view col) {
+    // Add up all def level contributions in this column all the way till the first list column
+    // appears in the hierarchy or until we get to leaf
+    uint32_t def = 0;
+    start_at_sub_level.push_back(curr_nesting_level_idx);
+    while (col.type().id() == type_id::STRUCT) {
+      def += (nullability[curr_nesting_level_idx]) ? 1 : 0;
+      col = col.child(0);
+      ++curr_nesting_level_idx;
+    }
+    // At the end of all those structs is either a list column or the leaf. Leaf column contributes
+    // at least one def level. It doesn't matter what the leaf contributes because it'll be at the
+    // end of the exclusive scan.
+    def += (nullability[curr_nesting_level_idx]) ? 2 : 1;
+    def_at_level.push_back(def);
+    ++curr_nesting_level_idx;
+  };
+  while (cudf::is_nested(curr_col.type())) {
+    nesting_levels.push_back(curr_col);
+    add_def_at_level(curr_col);
+    while (curr_col.type().id() == type_id::STRUCT) {
+      // Go down the hierarchy until we get to the LIST or the leaf level
+      curr_col = curr_col.child(0);
+    }
+    if (curr_col.type().id() == type_id::LIST) {
+      curr_col = curr_col.child(lists_column_view::child_column_index);
+      if (not is_nested(curr_col.type())) {
+        // Special case: when the leaf data column is the immediate child of the list col then we
+        // want it to be included right away. Otherwise the struct containing it will be included in
+        // the next iteration of this loop.
+        nesting_levels.push_back(curr_col);
+        add_def_at_level(curr_col);
+        break;
+      }
+    }
+  }
+
+  std::unique_ptr<rmm::device_buffer> device_view_owners;
+  column_device_view *d_nesting_levels;
+  std::tie(device_view_owners, d_nesting_levels) =
+    contiguous_copy_column_device_views<column_device_view>(nesting_levels, stream);
+
   thrust::exclusive_scan(
     thrust::host, def_at_level.begin(), def_at_level.end(), def_at_level.begin());
 
   // Sliced list column views only have offsets applied to top level. Get offsets for each level.
-  rmm::device_uvector<size_type> d_column_offsets(nesting_levels.size() + 1, stream);
-  rmm::device_uvector<size_type> d_column_ends(nesting_levels.size() + 1, stream);
+  rmm::device_uvector<size_type> d_column_offsets(nesting_levels.size(), stream);
+  rmm::device_uvector<size_type> d_column_ends(nesting_levels.size(), stream);
 
   auto d_col = column_device_view::create(h_col, stream);
   cudf::detail::device_single_thread(
@@ -1709,24 +1856,29 @@ dremel_data get_dremel_data(column_view h_col,
       end_idx_at_level[level] = end;
       ++level;
       // Apply offset recursively until we get to leaf data
-      while (curr_col.type().id() == type_id::LIST) {
-        off = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(off);
-        end = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(end);
-        offset_at_level[level]  = off;
-        end_idx_at_level[level] = end;
-        ++level;
-        curr_col = curr_col.child(lists_column_view::child_column_index);
+      // Skip doing the following for any structs we encounter in between.
+      while (curr_col.type().id() == type_id::LIST or curr_col.type().id() == type_id::STRUCT) {
+        if (curr_col.type().id() == type_id::LIST) {
+          off = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(off);
+          end = curr_col.child(lists_column_view::offsets_column_index).element<size_type>(end);
+          offset_at_level[level]  = off;
+          end_idx_at_level[level] = end;
+          ++level;
+          curr_col = curr_col.child(lists_column_view::child_column_index);
+        } else {
+          curr_col = curr_col.child(0);
+        }
       }
     },
     stream);
 
-  thrust::host_vector<size_type> column_offsets(nesting_levels.size() + 1);
+  thrust::host_vector<size_type> column_offsets(d_column_offsets.size());
   CUDA_TRY(cudaMemcpyAsync(column_offsets.data(),
                            d_column_offsets.data(),
                            d_column_offsets.size() * sizeof(size_type),
                            cudaMemcpyDeviceToHost,
                            stream.value()));
-  thrust::host_vector<size_type> column_ends(nesting_levels.size() + 1);
+  thrust::host_vector<size_type> column_ends(d_column_ends.size());
   CUDA_TRY(cudaMemcpyAsync(column_ends.data(),
                            d_column_ends.data(),
                            d_column_ends.size() * sizeof(size_type),
@@ -1734,6 +1886,11 @@ dremel_data get_dremel_data(column_view h_col,
                            stream.value()));
 
   stream.synchronize();
+
+  size_t max_vals_size = 0;
+  for (size_t l = 0; l < column_offsets.size(); ++l) {
+    max_vals_size += column_ends[l] - column_offsets[l];
+  }
 
   rmm::device_uvector<uint8_t> rep_level(max_vals_size, stream);
   rmm::device_uvector<uint8_t> def_level(max_vals_size, stream);
@@ -1745,9 +1902,13 @@ dremel_data get_dremel_data(column_view h_col,
   {
     // At this point, curr_col contains the leaf column. Max nesting level is
     // nesting_levels.size().
-    size_t level              = nesting_levels.size() - 1;
+
+    // We are going to start by merging the last column in nesting_levels (the leaf, which is at the
+    // index `nesting_levels.size() - 1`) with the second-to-last (which is at
+    // `nesting_levels.size() - 2`).
+    size_t level              = nesting_levels.size() - 2;
     curr_col                  = nesting_levels[level];
-    auto lcv                  = lists_column_view(curr_col);
+    auto lcv                  = lists_column_view(get_list_level(curr_col));
     auto offset_size_at_level = column_ends[level] - column_offsets[level] + 1;
 
     // Get empties at this level
@@ -1760,25 +1921,21 @@ dremel_data get_dremel_data(column_view h_col,
     // Merge empty at deepest parent level with the rep, def level vals at leaf level
 
     auto input_parent_rep_it = thrust::make_constant_iterator(level);
-    auto input_parent_def_it = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(0),
-      [idx            = empties_idx.data(),
-       mask           = lcv.null_mask(),
-       level_nullable = level_nullability.empty() ? false : level_nullability[level],
-       curr_def_level = def_at_level[level]] __device__(auto i) {
-        return curr_def_level +
-               ((mask && bit_is_set(mask, idx[i]) or (!mask && level_nullable)) ? 1 : 0);
-      });
+    auto input_parent_def_it =
+      thrust::make_transform_iterator(empties_idx.begin(),
+                                      def_level_fn{d_nesting_levels + level,
+                                                   d_nullability.data(),
+                                                   start_at_sub_level[level],
+                                                   def_at_level[level]});
 
-    auto input_child_rep_it = thrust::make_constant_iterator(nesting_levels.size());
-    auto input_child_def_it = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(column_offsets[level + 1]),
-      [mask           = lcv.child().null_mask(),
-       level_nullable = level_nullability.empty() ? false : level_nullability[level + 1],
-       curr_def_level = def_at_level[level + 1]] __device__(auto i) {
-        return curr_def_level +
-               ((mask && bit_is_set(mask, i) or (!mask && level_nullable)) ? 1 : 0);
-      });
+    // `nesting_levels.size()` == no of list levels + leaf. Max repetition level = no of list levels
+    auto input_child_rep_it = thrust::make_constant_iterator(nesting_levels.size() - 1);
+    auto input_child_def_it =
+      thrust::make_transform_iterator(thrust::make_counting_iterator(column_offsets[level + 1]),
+                                      def_level_fn{d_nesting_levels + level + 1,
+                                                   d_nullability.data(),
+                                                   start_at_sub_level[level + 1],
+                                                   def_at_level[level + 1]});
 
     // Zip the input and output value iterators so that merge operation is done only once
     auto input_parent_zip_it =
@@ -1831,9 +1988,11 @@ dremel_data get_dremel_data(column_view h_col,
                     rep_level.begin());
   }
 
-  for (int level = nesting_levels.size() - 2; level >= 0; level--) {
+  // Having already merged the last two levels, we are now going to merge the result with the
+  // third-last level which is at index `nesting_levels.size() - 3`.
+  for (int level = nesting_levels.size() - 3; level >= 0; level--) {
     curr_col                  = nesting_levels[level];
-    auto lcv                  = lists_column_view(curr_col);
+    auto lcv                  = lists_column_view(get_list_level(curr_col));
     auto offset_size_at_level = column_ends[level] - column_offsets[level] + 1;
 
     // Get empties at this level
@@ -1857,15 +2016,12 @@ dremel_data get_dremel_data(column_view h_col,
     auto transformed_empties = thrust::make_transform_iterator(empties.begin(), offset_transformer);
 
     auto input_parent_rep_it = thrust::make_constant_iterator(level);
-    auto input_parent_def_it = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(0),
-      [idx            = empties_idx.data(),
-       mask           = lcv.null_mask(),
-       level_nullable = level_nullability.empty() ? false : level_nullability[level],
-       curr_def_level = def_at_level[level]] __device__(auto i) {
-        return curr_def_level +
-               ((mask && bit_is_set(mask, idx[i]) or (!mask && level_nullable)) ? 1 : 0);
-      });
+    auto input_parent_def_it =
+      thrust::make_transform_iterator(empties_idx.begin(),
+                                      def_level_fn{d_nesting_levels + level,
+                                                   d_nullability.data(),
+                                                   start_at_sub_level[level],
+                                                   def_at_level[level]});
 
     // Zip the input and output value iterators so that merge operation is done only once
     auto input_parent_zip_it =
@@ -1927,16 +2083,10 @@ dremel_data get_dremel_data(column_view h_col,
 
   stream.synchronize();
 
-  size_type leaf_col_offset = column_offsets[column_offsets.size() - 1];
-  size_type leaf_data_size  = column_ends[column_ends.size() - 1] - leaf_col_offset;
-  uint8_t max_def_level     = def_at_level.back() - 1;
+  size_type leaf_data_size = column_ends.back() - column_offsets.back();
 
-  return dremel_data{std::move(new_offsets),
-                     std::move(rep_level),
-                     std::move(def_level),
-                     leaf_col_offset,
-                     leaf_data_size,
-                     max_def_level};
+  return dremel_data{
+    std::move(new_offsets), std::move(rep_level), std::move(def_level), leaf_data_size};
 }
 
 /**
@@ -1948,17 +2098,17 @@ dremel_data get_dremel_data(column_view h_col,
  * @param[in] num_columns Number of columns
  * @param[in] stream CUDA stream to use, default 0
  */
-void InitPageFragments(PageFragment *frag,
-                       const EncColumnDesc *col_desc,
-                       int32_t num_fragments,
-                       int32_t num_columns,
+void InitPageFragments(device_2dspan<PageFragment> frag,
+                       device_span<parquet_column_device_view const> col_desc,
                        uint32_t fragment_size,
                        uint32_t num_rows,
                        rmm::cuda_stream_view stream)
 {
-  dim3 dim_grid(num_columns, num_fragments);  // 1 threadblock per fragment
-  gpuInitPageFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
-    frag, col_desc, num_fragments, num_columns, fragment_size, num_rows);
+  auto num_columns              = frag.size().first;
+  auto num_fragments_per_column = frag.size().second;
+  dim3 dim_grid(num_columns, num_fragments_per_column);  // 1 threadblock per fragment
+  gpuInitPageFragments<512>
+    <<<dim_grid, 512, 0, stream.value()>>>(frag, col_desc, fragment_size, num_rows);
 }
 
 /**
@@ -1967,22 +2117,18 @@ void InitPageFragments(PageFragment *frag,
  * @param[out] groups Statistics groups [num_columns x num_fragments]
  * @param[in] fragments Page fragments [num_columns x num_fragments]
  * @param[in] col_desc Column description [num_columns]
- * @param[in] num_fragments Number of fragments
- * @param[in] num_columns Number of columns
- * @param[in] fragment_size Max size of each fragment in rows
  * @param[in] stream CUDA stream to use, default 0
  */
-void InitFragmentStatistics(statistics_group *groups,
-                            const PageFragment *fragments,
-                            const EncColumnDesc *col_desc,
-                            int32_t num_fragments,
-                            int32_t num_columns,
-                            uint32_t fragment_size,
+void InitFragmentStatistics(device_2dspan<statistics_group> groups,
+                            device_2dspan<PageFragment const> fragments,
+                            device_span<parquet_column_device_view const> col_desc,
                             rmm::cuda_stream_view stream)
 {
-  dim3 dim_grid(num_columns, (num_fragments + 3) >> 2);  // 1 warp per fragment
-  gpuInitFragmentStats<<<dim_grid, 128, 0, stream.value()>>>(
-    groups, fragments, col_desc, num_fragments, num_columns, fragment_size);
+  int const num_columns              = col_desc.size();
+  int const num_fragments_per_column = fragments.size().second;
+  auto grid_y = util::div_rounding_up_safe(num_fragments_per_column, 128 / cudf::detail::warp_size);
+  dim3 dim_grid(num_columns, grid_y);  // 1 warp per fragment
+  gpuInitFragmentStats<<<dim_grid, 128, 0, stream.value()>>>(groups, fragments, col_desc);
 }
 
 /**
@@ -1997,88 +2143,69 @@ void InitFragmentStatistics(statistics_group *groups,
  * @param[out] chunk_grstats Setup for chunk-level stats
  * @param[in] stream CUDA stream to use, default 0
  */
-void InitEncoderPages(EncColumnChunk *chunks,
-                      EncPage *pages,
-                      const EncColumnDesc *col_desc,
-                      int32_t num_rowgroups,
+void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
+                      device_span<gpu::EncPage> pages,
+                      device_span<parquet_column_device_view const> col_desc,
                       int32_t num_columns,
                       statistics_merge_group *page_grstats,
                       statistics_merge_group *chunk_grstats,
                       rmm::cuda_stream_view stream)
 {
+  auto num_rowgroups = chunks.size().first;
   dim3 dim_grid(num_columns, num_rowgroups);  // 1 threadblock per rowgroup
   gpuInitPages<<<dim_grid, 128, 0, stream.value()>>>(
-    chunks, pages, col_desc, page_grstats, chunk_grstats, num_rowgroups, num_columns);
+    chunks, pages, col_desc, page_grstats, chunk_grstats, num_columns);
 }
 
 /**
  * @brief Launches kernel for packing column data into parquet pages
  *
  * @param[in,out] pages Device array of EncPages (unordered)
- * @param[in] chunks Column chunks
- * @param[in] num_pages Number of pages
- * @param[in] start_page First page to encode in page array
  * @param[out] comp_in Optionally initializes compressor input params
- * @param[out] comp_out Optionally initializes compressor output params
+ * @param[out] comp_stat Optionally initializes compressor status
  * @param[in] stream CUDA stream to use, default 0
  */
-void EncodePages(EncPage *pages,
-                 const EncColumnChunk *chunks,
-                 uint32_t num_pages,
-                 uint32_t start_page,
-                 gpu_inflate_input_s *comp_in,
-                 gpu_inflate_status_s *comp_out,
+void EncodePages(device_span<gpu::EncPage> pages,
+                 device_span<gpu_inflate_input_s> comp_in,
+                 device_span<gpu_inflate_status_s> comp_stat,
                  rmm::cuda_stream_view stream)
 {
+  auto num_pages = pages.size();
   // A page is part of one column. This is launching 1 block per page. 1 block will exclusively
   // deal with one datatype.
-  gpuEncodePages<128>
-    <<<num_pages, 128, 0, stream.value()>>>(pages, chunks, comp_in, comp_out, start_page);
+  gpuEncodePages<128><<<num_pages, 128, 0, stream.value()>>>(pages, comp_in, comp_stat);
 }
 
 /**
  * @brief Launches kernel to make the compressed vs uncompressed chunk-level decision
  *
  * @param[in,out] chunks Column chunks
- * @param[in] pages Device array of EncPages (unordered)
- * @param[in] num_chunks Number of column chunks
- * @param[in] start_page First page to encode in page array
- * @param[in] comp_out Compressor status
  * @param[in] stream CUDA stream to use, default 0
  */
-void DecideCompression(EncColumnChunk *chunks,
-                       const EncPage *pages,
-                       uint32_t num_chunks,
-                       uint32_t start_page,
-                       const gpu_inflate_status_s *comp_out,
-                       rmm::cuda_stream_view stream)
+void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
 {
-  gpuDecideCompression<<<num_chunks, 128, 0, stream.value()>>>(chunks, pages, comp_out, start_page);
+  gpuDecideCompression<<<chunks.size(), 128, 0, stream.value()>>>(chunks);
 }
 
 /**
  * @brief Launches kernel to encode page headers
  *
  * @param[in,out] pages Device array of EncPages
- * @param[in,out] chunks Column chunks
- * @param[in] num_pages Number of pages
- * @param[in] start_page First page to encode in page array
- * @param[in] comp_out Compressor status or nullptr if no compression
+ * @param[in] comp_stat Compressor status or nullptr if no compression
  * @param[in] page_stats Optional page-level statistics to be included in page header
  * @param[in] chunk_stats Optional chunk-level statistics to be encoded
  * @param[in] stream CUDA stream to use, default 0
  */
-void EncodePageHeaders(EncPage *pages,
-                       EncColumnChunk *chunks,
-                       uint32_t num_pages,
-                       uint32_t start_page,
-                       const gpu_inflate_status_s *comp_out,
-                       const statistics_chunk *page_stats,
+void EncodePageHeaders(device_span<EncPage> pages,
+                       device_span<gpu_inflate_status_s const> comp_stat,
+                       device_span<statistics_chunk const> page_stats,
                        const statistics_chunk *chunk_stats,
                        rmm::cuda_stream_view stream)
 {
-  gpuEncodePageHeaders<<<num_pages, 128, 0, stream.value()>>>(
-    pages, chunks, comp_out, page_stats, chunk_stats, start_page);
+  // TODO: single thread task. No need for 128 threads/block. Earlier it used to employ rest of the
+  // threads to coop load structs
+  gpuEncodePageHeaders<<<pages.size(), 128, 0, stream.value()>>>(
+    pages, comp_stat, page_stats, chunk_stats);
 }
 
 /**
@@ -2086,15 +2213,13 @@ void EncodePageHeaders(EncPage *pages,
  *
  * @param[in,out] chunks Column chunks
  * @param[in] pages Device array of EncPages
- * @param[in] num_chunks Number of column chunks
  * @param[in] stream CUDA stream to use, default 0
  */
-void GatherPages(EncColumnChunk *chunks,
-                 const EncPage *pages,
-                 uint32_t num_chunks,
+void GatherPages(device_span<EncColumnChunk> chunks,
+                 device_span<gpu::EncPage const> pages,
                  rmm::cuda_stream_view stream)
 {
-  gpuGatherPages<<<num_chunks, 1024, 0, stream.value()>>>(chunks, pages);
+  gpuGatherPages<<<chunks.size(), 1024, 0, stream.value()>>>(chunks, pages);
 }
 
 }  // namespace gpu

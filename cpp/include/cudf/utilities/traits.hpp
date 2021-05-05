@@ -34,6 +34,19 @@ namespace cudf {
 template <typename...>
 using void_t = void;
 
+/**
+ * @brief Convenience macro for SFINAE as an unnamed template parameter.
+ *
+ * Example:
+ * \code{cpp}
+ * // This function will participate in overload resolution only if T is an integral type
+ * template <typename T, CUDF_ENABLE_IF(std::is_integral<T>::value)>
+ * void foo();
+ * \endcode
+ *
+ */
+#define CUDF_ENABLE_IF(...) std::enable_if_t<(__VA_ARGS__)>* = nullptr
+
 template <typename L, typename R, typename = void>
 struct is_relationally_comparable_impl : std::false_type {
 };
@@ -127,7 +140,7 @@ constexpr inline bool is_numeric()
 
 struct is_numeric_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_numeric<T>();
   }
@@ -168,7 +181,7 @@ constexpr inline bool is_index_type()
 
 struct is_index_type_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_index_type<T>();
   }
@@ -205,7 +218,7 @@ constexpr inline bool is_unsigned()
 
 struct is_unsigned_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_unsigned<T>();
   }
@@ -225,6 +238,18 @@ constexpr inline bool is_unsigned(data_type type)
 }
 
 /**
+ * @brief Indicates whether the `Iterator` value type is unsigned.
+ *
+ * @tparam Iterator  The type to verify
+ * @return true if the iterator's value type is unsigned
+ */
+template <typename Iterator>
+constexpr inline bool is_signed_iterator()
+{
+  return std::is_signed<typename std::iterator_traits<Iterator>::value_type>::value;
+}
+
+/**
  * @brief Indicates whether the type `T` is a floating point type.
  *
  * @tparam T  The type to verify
@@ -239,7 +264,7 @@ constexpr inline bool is_floating_point()
 
 struct is_floating_point_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_floating_point<T>();
   }
@@ -307,7 +332,7 @@ constexpr inline bool is_timestamp()
 
 struct is_timestamp_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_timestamp<T>();
   }
@@ -342,7 +367,7 @@ constexpr inline bool is_fixed_point()
 
 struct is_fixed_point_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_fixed_point<T>();
   }
@@ -375,7 +400,7 @@ constexpr inline bool is_duration()
 
 struct is_duration_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_duration<T>();
   }
@@ -410,7 +435,7 @@ constexpr inline bool is_chrono()
 
 struct is_chrono_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_chrono<T>();
   }
@@ -432,6 +457,23 @@ constexpr inline bool is_chrono(data_type type)
 }
 
 /**
+ * @brief Indicates whether `T` is layout compatible with its "representation" type.
+ *
+ * For example, in a column, a `decimal32` is concretely represented by a single `int32_t`, but the
+ * `decimal32` type itself contains both the integer representation and the scale. Therefore,
+ * `decimal32` is _not_ layout compatible with `int32_t`.
+ *
+ * As further example, `duration_ns` is distinct from its concrete `int64_t` representation type,
+ * but they are layout compatible.
+ *
+ */
+template <typename T>
+constexpr bool is_rep_layout_compatible()
+{
+  return cudf::is_numeric<T>() or cudf::is_chrono<T>() or cudf::is_boolean<T>();
+}
+
+/**
  * @brief Indicates whether the type `T` is a dictionary type.
  *
  * @tparam T  The type to verify
@@ -446,7 +488,7 @@ constexpr inline bool is_dictionary()
 
 struct is_dictionary_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_dictionary<T>();
   }
@@ -482,7 +524,7 @@ constexpr inline bool is_fixed_width()
 
 struct is_fixed_width_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_fixed_width<T>();
   }
@@ -525,7 +567,7 @@ constexpr inline bool is_compound()
 
 struct is_compound_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_compound<T>();
   }
@@ -567,7 +609,7 @@ constexpr inline bool is_nested()
 
 struct is_nested_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_nested<T>();
   }

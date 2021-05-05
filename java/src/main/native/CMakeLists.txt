@@ -17,10 +17,7 @@ cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
 # Use GPU_ARCHS if it is defined
 if(DEFINED GPU_ARCHS)
-  unset(CMAKE_CUDA_ARCHITECTURES CACHE)
-  if(NOT "${GPU_ARCHS}" STREQUAL "ALL")
-    set(CMAKE_CUDA_ARCHITECTURES "${GPU_ARCHS}")
-  endif()
+  set(CMAKE_CUDA_ARCHITECTURES "${GPU_ARCHS}")
 endif()
 
 # If `CMAKE_CUDA_ARCHITECTURES` is not defined, build for all supported architectures. If
@@ -29,14 +26,13 @@ endif()
 
 # This needs to be run before enabling the CUDA language due to the default initialization behavior
 # of `CMAKE_CUDA_ARCHITECTURES`, https://gitlab.kitware.com/cmake/cmake/-/issues/21302
-if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-  set(CUDF_BUILD_FOR_ALL_ARCHS TRUE)
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES OR CMAKE_CUDA_ARCHITECTURES STREQUAL "ALL")
+  set(CUDF_JNI_BUILD_FOR_ALL_ARCHS TRUE)
 elseif(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
-  unset(CMAKE_CUDA_ARCHITECTURES CACHE)
-  set(CUDF_BUILD_FOR_DETECTED_ARCHS TRUE)
+  set(CUDF_JNI_BUILD_FOR_DETECTED_ARCHS TRUE)
 endif()
 
-project(CUDF_JNI VERSION 0.19 LANGUAGES C CXX)
+project(CUDF_JNI VERSION 0.20.0 LANGUAGES C CXX)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
@@ -54,7 +50,9 @@ message(VERBOSE "CUDF_JNI: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTI
 message(VERBOSE "CUDF_JNI: Build with GPUDirect Storage support: ${USE_GDS}")
 
 set(CUDF_SOURCE_DIR "${PROJECT_SOURCE_DIR}/../../../../cpp")
-set(CUDF_CPP_BUILD_DIR "${CUDF_SOURCE_DIR}/build")
+if (NOT CUDF_CPP_BUILD_DIR)
+    set(CUDF_CPP_BUILD_DIR "${CUDF_SOURCE_DIR}/build")
+endif()
 
 set(CMAKE_MODULE_PATH
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/"
@@ -129,7 +127,8 @@ find_path(LIBCUDACXX_INCLUDE "cuda"
           "${CUDF_CPP_BUILD_DIR}/_deps/libcudacxx-src/include")
 
 find_path(SPDLOG_INCLUDE "spdlog"
-    HINTS "$ENV{RMM_ROOT}/_deps/spdlog-src/include"
+    HINTS "${CUDF_CPP_BUILD_DIR}/_deps/spdlog-src/include"
+          "$ENV{RMM_ROOT}/_deps/spdlog-src/include"
           "$ENV{RMM_ROOT}/include"
           "$ENV{CONDA_PREFIX}/include")
 
@@ -151,7 +150,8 @@ find_library(CUDF_LIB "cudf" REQUIRED HINTS ${CUDF_LIB_HINTS})
 # - RMM -------------------------------------------------------------------------------------------
 
 find_path(RMM_INCLUDE "rmm"
-          HINTS "$ENV{RMM_ROOT}/include"
+          HINTS "${CUDF_CPP_BUILD_DIR}/_deps/rmm-src/include"
+                "$ENV{RMM_ROOT}/include"
                 "$ENV{RMM_HOME}/include"
                 "$ENV{CONDA_PREFIX}/include/rmm"
                 "$ENV{CONDA_PREFIX}/include")
@@ -250,11 +250,19 @@ set(SOURCE_FILES
     "src/RmmJni.cpp"
     "src/ScalarJni.cpp"
     "src/TableJni.cpp"
+    "src/prefix_sum.cu"
     "src/map_lookup.cu")
 add_library(cudfjni SHARED ${SOURCE_FILES})
 
 #Override RPATH for cudfjni
-SET_TARGET_PROPERTIES(cudfjni PROPERTIES BUILD_RPATH "\$ORIGIN")
+SET_TARGET_PROPERTIES(cudfjni
+    PROPERTIES BUILD_RPATH "\$ORIGIN"
+               # set target compile options
+               CXX_STANDARD                        17
+               CXX_STANDARD_REQUIRED               ON
+               CUDA_STANDARD                       17
+               CUDA_STANDARD_REQUIRED              ON
+)
 
 target_compile_options(cudfjni
             PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
@@ -269,7 +277,7 @@ target_compile_definitions(cudfjni
 if(USE_GDS)
     add_library(cufilejni SHARED "src/CuFileJni.cpp")
     target_include_directories(cufilejni PRIVATE "${cuFile_INCLUDE_DIRS}")
-    target_link_libraries(cufilejni PRIVATE "${cuFile_LIBRARIES}")
+    target_link_libraries(cufilejni PRIVATE cudfjni "${cuFile_LIBRARIES}")
 endif(USE_GDS)
 
 ###################################################################################################
@@ -286,4 +294,4 @@ target_compile_definitions(cudfjni PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni ${CUDF_LIB} ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} cuda nvrtc)
+target_link_libraries(cudfjni ${CUDF_LIB} ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} cuda)

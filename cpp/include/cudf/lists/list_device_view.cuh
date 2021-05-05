@@ -37,12 +37,12 @@ class list_device_view {
     : lists_column(lists_column), _row_index(row_index)
   {
     column_device_view const& offsets = lists_column.offsets();
-    release_assert(row_index >= 0 && row_index < lists_column.size() &&
-                   row_index < offsets.size() && "row_index out of bounds");
+    cudf_assert(row_index >= 0 && row_index < lists_column.size() && row_index < offsets.size() &&
+                "row_index out of bounds");
 
     begin_offset = offsets.element<size_type>(row_index);
-    release_assert(begin_offset >= 0 && begin_offset <= lists_column.child().size() &&
-                   "begin_offset out of bounds.");
+    cudf_assert(begin_offset >= 0 && begin_offset <= lists_column.child().size() &&
+                "begin_offset out of bounds.");
     _size = offsets.element<size_type>(row_index + 1) - begin_offset;
   }
 
@@ -71,7 +71,7 @@ class list_device_view {
    */
   CUDA_DEVICE_CALLABLE size_type element_offset(size_type idx) const
   {
-    release_assert(idx >= 0 && idx < size() && "idx out of bounds");
+    cudf_assert(idx >= 0 && idx < size() && "idx out of bounds");
     return begin_offset + idx;
   }
 
@@ -93,7 +93,7 @@ class list_device_view {
    */
   CUDA_DEVICE_CALLABLE bool is_null(size_type idx) const
   {
-    release_assert(idx >= 0 && idx < size() && "Index out of bounds.");
+    cudf_assert(idx >= 0 && idx < size() && "Index out of bounds.");
     auto element_offset = begin_offset + idx;
     return lists_column.child().is_null(element_offset);
   }
@@ -294,7 +294,7 @@ struct list_size_functor {
   CUDA_HOST_DEVICE_CALLABLE list_size_functor(column_device_view const& d_col) : d_column(d_col)
   {
 #if defined(__CUDA_ARCH__)
-    release_assert(d_col.type().id() == type_id::LIST && "Only list type column is supported");
+    cudf_assert(d_col.type().id() == type_id::LIST && "Only list type column is supported");
 #else
     CUDF_EXPECTS(d_col.type().id() == type_id::LIST, "Only list type column is supported");
 #endif

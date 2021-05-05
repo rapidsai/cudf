@@ -115,6 +115,7 @@ std::unique_ptr<column> set_keys(
                                                   std::vector<size_type>{0},
                                                   duplicate_keep_option::KEEP_FIRST,
                                                   null_equality::EQUAL,
+                                                  null_order::BEFORE,
                                                   stream,
                                                   mr)
                       ->release();

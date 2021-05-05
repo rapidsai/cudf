@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
+#include "parquet_gpu.hpp"
 
 #include <cudf/utilities/error.hpp>
 
@@ -36,7 +36,7 @@ struct dict_state_s {
   uint32_t num_dict_entries;    //!< Dictionary entries in current fragment to add
   uint32_t frag_dict_size;
   EncColumnChunk ck;
-  EncColumnDesc col;
+  parquet_column_device_view col;
   PageFragment frag;
   volatile uint32_t scratch_red[32];
   uint16_t frag_dict[max_page_fragment_size];
@@ -52,8 +52,10 @@ inline __device__ uint32_t uint64_hash16(uint64_t v)
   return uint32_hash16((uint32_t)(v + (v >> 32)));
 }
 
-inline __device__ uint32_t nvstr_hash16(const uint8_t *p, uint32_t len)
+inline __device__ uint32_t hash_string(const string_view &val)
 {
+  const char *p = val.data();
+  uint32_t len  = val.size_bytes();
   uint32_t hash = len;
   if (len > 0) {
     uint32_t align_p    = 3 & reinterpret_cast<uintptr_t>(p);
@@ -148,7 +150,7 @@ __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t)
 // blockDim(1024, 1, 1)
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
-  gpuBuildChunkDictionaries(EncColumnChunk *chunks, uint32_t *dev_scratch)
+  gpuBuildChunkDictionaries(device_span<EncColumnChunk> chunks, uint32_t *dev_scratch)
 {
   __shared__ __align__(8) dict_state_s state_g;
   using block_reduce = cub::BlockReduce<uint32_t, block_size>;
@@ -181,7 +183,7 @@ __global__ void __launch_bounds__(block_size, 1)
   } else if (dtype == INT96) {
     dtype_len_in = 8;
   } else {
-    dtype_len_in = (dtype == BYTE_ARRAY) ? sizeof(nvstrdesc_s) : dtype_len;
+    dtype_len_in = dtype_len;
   }
   __syncthreads();
   while (s->row_cnt < s->ck.num_rows) {
@@ -206,7 +208,7 @@ __global__ void __launch_bounds__(block_size, 1)
         if (dtype == BYTE_ARRAY) {
           auto str1 = s->col.leaf_column->element<string_view>(row);
           len += str1.size_bytes();
-          hash = nvstr_hash16(reinterpret_cast<const uint8_t *>(str1.data()), str1.size_bytes());
+          hash = hash_string(str1);
           // Walk the list of rows with the same hash
           next_addr = &s->hashmap[hash];
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
@@ -319,19 +321,14 @@ __global__ void __launch_bounds__(block_size, 1)
  *
  * @param[in,out] chunks Column chunks
  * @param[in] dev_scratch Device scratch data (kDictScratchSize per dictionary)
- * @param[in] num_chunks Number of column chunks
  * @param[in] stream CUDA stream to use, default 0
  */
-void BuildChunkDictionaries(EncColumnChunk *chunks,
+void BuildChunkDictionaries(device_span<EncColumnChunk> chunks,
                             uint32_t *dev_scratch,
-                            size_t scratch_size,
-                            uint32_t num_chunks,
                             rmm::cuda_stream_view stream)
 {
-  if (num_chunks > 0 && scratch_size > 0) {  // zero scratch size implies no dictionaries
-    CUDA_TRY(cudaMemsetAsync(dev_scratch, 0, scratch_size, stream.value()));
-    gpuBuildChunkDictionaries<1024><<<num_chunks, 1024, 0, stream.value()>>>(chunks, dev_scratch);
-  }
+  auto num_chunks = chunks.size();
+  gpuBuildChunkDictionaries<1024><<<num_chunks, 1024, 0, stream.value()>>>(chunks, dev_scratch);
 }
 
 }  // namespace gpu

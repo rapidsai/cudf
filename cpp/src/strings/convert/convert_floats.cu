@@ -20,12 +20,13 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/detail/converters.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
+#include <cudf/strings/string.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -123,8 +124,7 @@ __device__ inline double stod(string_view const& d_str)
   else if (exp_ten < std::numeric_limits<double>::min_exponent10)
     return double{0};
 
-  // using exp10() since the pow(10.0,exp_ten) function is
-  // very inaccurate in 10.2: http://nvbugs/2971187
+  // exp10() is faster than pow(10.0,exp_ten)
   double const base =
     sign * static_cast<double>(digits) * exp10(static_cast<double>(1 - num_digits));
   double const exponent = exp10(static_cast<double>(exp_ten));
@@ -491,11 +491,10 @@ struct dispatch_from_floats_fn {
     auto d_offsets    = offsets_view.template data<int32_t>();
 
     // build chars column
-    size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
-    auto chars_column =
-      detail::create_chars_child_column(strings_count, floats.null_count(), bytes, stream, mr);
-    auto chars_view = chars_column->mutable_view();
-    auto d_chars    = chars_view.template data<char>();
+    auto const bytes  = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
+    auto chars_column = detail::create_chars_child_column(strings_count, bytes, stream, mr);
+    auto chars_view   = chars_column->mutable_view();
+    auto d_chars      = chars_view.template data<char>();
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        strings_count,
@@ -536,11 +535,49 @@ std::unique_ptr<column> from_floats(column_view const& floats,
 }  // namespace detail
 
 // external API
-
 std::unique_ptr<column> from_floats(column_view const& floats, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::from_floats(floats, rmm::cuda_stream_default, mr);
+}
+
+namespace detail {
+std::unique_ptr<column> is_float(
+  strings_column_view const& strings,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  auto strings_column = column_device_view::create(strings.parent(), stream);
+  auto d_column       = *strings_column;
+  // create output column
+  auto results   = make_numeric_column(data_type{type_id::BOOL8},
+                                     strings.size(),
+                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
+                                     strings.null_count(),
+                                     stream,
+                                     mr);
+  auto d_results = results->mutable_view().data<bool>();
+  // check strings for valid float chars
+  thrust::transform(rmm::exec_policy(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(strings.size()),
+                    d_results,
+                    [d_column] __device__(size_type idx) {
+                      if (d_column.is_null(idx)) return false;
+                      return string::is_float(d_column.element<string_view>(idx));
+                    });
+  results->set_null_count(strings.null_count());
+  return results;
+}
+
+}  // namespace detail
+
+// external API
+std::unique_ptr<column> is_float(strings_column_view const& strings,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::is_float(strings, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

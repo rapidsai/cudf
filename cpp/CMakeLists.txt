@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ elseif(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
   set(CUDF_BUILD_FOR_DETECTED_ARCHS TRUE)
 endif()
 
-project(CUDF VERSION 0.19.0 LANGUAGES C CXX)
+project(CUDF VERSION 0.20.0 LANGUAGES C CXX)
 
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake,
 # causing subsequent runs to have different values for the `Threads::Threads` target.
@@ -117,6 +117,8 @@ include(cmake/Modules/ConfigureCUDA.cmake)
 
 # find zlib
 find_package(ZLIB REQUIRED)
+# find Threads (needed by cudftestutil)
+find_package(Threads REQUIRED)
 # add third party dependencies using CPM
 include(cmake/thirdparty/CUDF_GetCPM.cmake)
 # find boost
@@ -133,8 +135,12 @@ include(cmake/thirdparty/CUDF_GetArrow.cmake)
 include(cmake/thirdparty/CUDF_GetDLPack.cmake)
 # find libcu++
 include(cmake/thirdparty/CUDF_GetLibcudacxx.cmake)
-# Stringify libcudf and libcudacxx headers used in JIT operations
-include(cmake/Modules/StringifyJITHeaders.cmake)
+# find or install GoogleTest
+include(cmake/thirdparty/CUDF_GetGTest.cmake)
+# preprocess jitify-able kernels
+include(cmake/Modules/JitifyPreprocessKernels.cmake)
+# find cuFile
+include(cmake/Modules/FindcuFile.cmake)
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
@@ -147,9 +153,7 @@ add_library(cudf
     src/ast/transform.cu
     src/binaryop/binaryop.cpp
     src/binaryop/compiled/binary_ops.cu
-    src/binaryop/jit/code/kernel.cpp
-    src/binaryop/jit/code/operation.cpp
-    src/binaryop/jit/code/traits.cpp
+    src/labeling/label_bins.cu
     src/bitmask/null_mask.cu
     src/column/column.cu
     src/column/column_device_view.cu
@@ -169,6 +173,7 @@ add_library(cudf
     src/copying/shift.cu
     src/copying/slice.cpp
     src/copying/split.cpp
+    src/copying/segmented_shift.cu
     src/datetime/datetime_ops.cu
     src/dictionary/add_keys.cu
     src/dictionary/decode.cu
@@ -188,21 +193,27 @@ add_library(cudf
     src/groupby/hash/groupby.cu
     src/groupby/sort/group_argmax.cu
     src/groupby/sort/group_argmin.cu
-    src/groupby/sort/groupby.cu
+    src/groupby/sort/aggregate.cpp
     src/groupby/sort/group_collect.cu
     src/groupby/sort/group_count.cu
     src/groupby/sort/group_max.cu
     src/groupby/sort/group_min.cu
     src/groupby/sort/group_nth_element.cu
     src/groupby/sort/group_nunique.cu
+    src/groupby/sort/group_product.cu
     src/groupby/sort/group_quantiles.cu
     src/groupby/sort/group_std.cu
     src/groupby/sort/group_sum.cu
+    src/groupby/sort/scan.cpp
+    src/groupby/sort/group_count_scan.cu
+    src/groupby/sort/group_max_scan.cu
+    src/groupby/sort/group_min_scan.cu
+    src/groupby/sort/group_sum_scan.cu
     src/groupby/sort/sort_helper.cu
     src/hash/hashing.cu
     src/interop/dlpack.cpp
-    src/interop/from_arrow.cpp
-    src/interop/to_arrow.cpp
+    src/interop/from_arrow.cu
+    src/interop/to_arrow.cu
     src/io/avro/avro.cpp
     src/io/avro/avro_gpu.cu
     src/io/avro/reader_impl.cu
@@ -238,12 +249,13 @@ add_library(cudf
     src/io/parquet/reader_impl.cu
     src/io/parquet/writer_impl.cu
     src/io/statistics/column_stats.cu
+    src/io/utilities/column_buffer.cpp
     src/io/utilities/data_sink.cpp
     src/io/utilities/datasource.cpp
+    src/io/utilities/file_io_utilities.cpp
     src/io/utilities/parsing_utils.cu
     src/io/utilities/type_conversion.cpp
     src/jit/cache.cpp
-    src/jit/launcher.cpp
     src/jit/parser.cpp
     src/jit/type.cpp
     src/join/cross_join.cu
@@ -251,13 +263,16 @@ add_library(cudf
     src/join/join.cu
     src/join/semi_join.cu
     src/lists/contains.cu
+    src/lists/concatenate_rows.cu
     src/lists/copying/concatenate.cu
     src/lists/copying/copying.cu
     src/lists/copying/gather.cu
     src/lists/copying/segmented_gather.cu
     src/lists/count_elements.cu
-    src/lists/extract.cu
     src/lists/drop_list_duplicates.cu
+    src/lists/explode.cu
+    src/lists/extract.cu
+    src/lists/interleave_columns.cu
     src/lists/lists_column_factories.cu
     src/lists/lists_column_view.cu
     src/lists/segmented_sort.cu
@@ -285,13 +300,11 @@ add_library(cudf
     src/replace/nulls.cu
     src/replace/replace.cu
     src/reshape/byte_cast.cu
-    src/reshape/explode.cu
     src/reshape/interleave_columns.cu
     src/reshape/tile.cu
     src/rolling/grouped_rolling.cu
-    src/rolling/jit/code/kernel.cpp
-    src/rolling/jit/code/operation.cpp
     src/rolling/rolling.cu
+    src/rolling/range_window_bounds.cpp
     src/round/round.cu
     src/scalar/scalar.cpp
     src/scalar/scalar_factories.cpp
@@ -313,7 +326,9 @@ add_library(cudf
     src/strings/case.cu
     src/strings/char_types/char_cases.cu
     src/strings/char_types/char_types.cu
-    src/strings/combine.cu
+    src/strings/combine/concatenate.cu
+    src/strings/combine/concatenate_list_elements.cu
+    src/strings/combine/join.cu
     src/strings/contains.cu
     src/strings/convert/convert_booleans.cu
     src/strings/convert/convert_datetime.cu
@@ -333,6 +348,7 @@ add_library(cudf
     src/strings/find.cu
     src/strings/find_multiple.cu
     src/strings/padding.cu
+    src/strings/json/json_path.cu
     src/strings/regex/regcomp.cpp
     src/strings/regex/regexec.cu
     src/strings/replace/backref_re.cu
@@ -373,9 +389,9 @@ add_library(cudf
     src/text/tokenize.cu
     src/transform/bools_to_mask.cu
     src/transform/encode.cu
-    src/transform/jit/code/kernel.cpp
     src/transform/mask_to_bools.cu
     src/transform/nans_to_nulls.cu
+    src/transform/row_bit_count.cu
     src/transform/transform.cpp
     src/transpose/transpose.cu
     src/unary/cast_ops.cu
@@ -387,10 +403,11 @@ add_library(cudf
 
 set_target_properties(cudf
     PROPERTIES BUILD_RPATH                         "\$ORIGIN"
+               INSTALL_RPATH                       "\$ORIGIN"
                # set target compile options
-               CXX_STANDARD                        14
+               CXX_STANDARD                        17
                CXX_STANDARD_REQUIRED               ON
-               CUDA_STANDARD                       14
+               CUDA_STANDARD                       17
                CUDA_STANDARD_REQUIRED              ON
                POSITION_INDEPENDENT_CODE           ON
                INTERFACE_POSITION_INDEPENDENT_CODE ON
@@ -403,7 +420,7 @@ target_compile_options(cudf
 
 target_compile_definitions(cudf
             PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
-                   "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>"
+                   "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>>"
 )
 
 # Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
@@ -417,7 +434,9 @@ target_include_directories(cudf
                        "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
                        "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
            PRIVATE     "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
-           INTERFACE   "$<INSTALL_INTERFACE:include>")
+           INTERFACE   "$<INSTALL_INTERFACE:include>"
+                       "$<INSTALL_INTERFACE:include/libcudf/libcudacxx>"
+                       "$<INSTALL_INTERFACE:include/libcudf/Thrust>")
 
 # Add Conda library paths if specified
 if(CONDA_LINK_DIRS)
@@ -448,7 +467,7 @@ endif()
 target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM_LOGGING_LEVEL}")
 
 # Compile stringified JIT sources first
-add_dependencies(cudf stringify_run)
+add_dependencies(cudf jitify_preprocess_run)
 
 # Specify the target module library dependencies
 target_link_libraries(cudf
@@ -459,9 +478,20 @@ target_link_libraries(cudf
                   rmm::rmm)
 
 if(CUDA_STATIC_RUNTIME)
-    target_link_libraries(cudf PUBLIC CUDA::nvrtc CUDA::cudart_static CUDA::cuda_driver)
+    # Tell CMake what CUDA language runtime to use
+    set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Static)
+    # Make sure to export to consumers what runtime we used
+    target_link_libraries(cudf PUBLIC CUDA::cudart_static CUDA::cuda_driver)
 else()
-    target_link_libraries(cudf PUBLIC CUDA::nvrtc CUDA::cudart CUDA::cuda_driver)
+    # Tell CMake what CUDA language runtime to use
+    set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
+    # Make sure to export to consumers what runtime we used
+    target_link_libraries(cudf PUBLIC CUDA::cudart CUDA::cuda_driver)
+endif()
+
+# Add cuFile interface if available
+if(TARGET cuFile::cuFile_interface)
+    target_link_libraries(cudf PRIVATE cuFile::cuFile_interface)
 endif()
 
 file(WRITE "${CUDF_BINARY_DIR}/fatbin.ld"
@@ -480,34 +510,38 @@ add_library(cudf::cudf ALIAS cudf)
 # - tests and benchmarks --------------------------------------------------------------------------
 ###################################################################################################
 
-if (CUDF_BUILD_TESTS OR CUDF_BUILD_BENCHMARKS)
-    # Find or install GoogleTest
-    CPMFindPackage(NAME GTest
-        VERSION         1.10.0
-        GIT_REPOSITORY  https://github.com/google/googletest.git
-        GIT_TAG         release-1.10.0
-        GIT_SHALLOW     TRUE
-        OPTIONS         "INSTALL_GTEST OFF"
-        # googletest >= 1.10.0 provides a cmake config file -- use it if it exists
-        FIND_PACKAGE_ARGUMENTS "CONFIG")
-    # Add GTest aliases if they don't already exist.
-    # Assumes if GTest::gtest doesn't exist, the others don't either.
-    # TODO: Is this always a valid assumption?
-    if(NOT TARGET GTest::gtest)
-        add_library(GTest::gtest ALIAS gtest)
-        add_library(GTest::gmock ALIAS gmock)
-        add_library(GTest::gtest_main ALIAS gtest_main)
-        add_library(GTest::gmock_main ALIAS gmock_main)
-    endif()
-    if(GTest_ADDED)
-        install(TARGETS gmock
-                        gtest
-                        gmock_main
-                        gtest_main
-            DESTINATION lib
-            EXPORT cudf-targets)
-    endif()
-endif()
+###################################################################################################
+# - build cudftestutil ----------------------------------------------------------------------------
+
+add_library(cudftestutil STATIC
+            tests/utilities/base_fixture.cpp
+            tests/utilities/column_utilities.cu
+            tests/utilities/table_utilities.cu
+            tests/strings/utilities.cu)
+
+target_compile_options(cudftestutil
+            PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+                   "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
+)
+
+target_compile_features(cudftestutil
+    PUBLIC cxx_std_17 $<BUILD_INTERFACE:cuda_std_17>)
+
+target_link_libraries(cudftestutil
+               PUBLIC GTest::gmock
+                      GTest::gtest
+                      Threads::Threads
+                      cudf)
+
+target_include_directories(cudftestutil
+    PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
+           "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
+
+install(TARGETS cudftestutil
+        DESTINATION lib
+        EXPORT cudf-testing-targets)
+
+add_library(cudf::cudftestutil ALIAS cudftestutil)
 
 ###################################################################################################
 # - add tests -------------------------------------------------------------------------------------
@@ -530,12 +564,6 @@ if(CUDF_BUILD_BENCHMARKS)
         GIT_SHALLOW     TRUE
         OPTIONS         "BENCHMARK_ENABLE_TESTING OFF"
                         "BENCHMARK_ENABLE_INSTALL OFF")
-    if(benchmark_ADDED)
-        install(TARGETS benchmark
-                        benchmark_main
-            DESTINATION lib
-            EXPORT cudf-targets)
-    endif()
     add_subdirectory(benchmarks)
 endif()
 
@@ -562,6 +590,16 @@ install(DIRECTORY
             ${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf)
 
+install(DIRECTORY ${Thrust_SOURCE_DIR}/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust
+  PATTERN "*.py" EXCLUDE
+  PATTERN "benchmark" EXCLUDE
+  PATTERN "build" EXCLUDE
+  PATTERN "doc" EXCLUDE
+  PATTERN "examples" EXCLUDE
+  PATTERN "test" EXCLUDE
+  PATTERN "testing" EXCLUDE)
+
 include(CMakePackageConfigHelpers)
 
 configure_package_config_file(cmake/cudf-config.cmake.in "${CUDF_BINARY_DIR}/cmake/cudf-config.cmake"
@@ -577,6 +615,11 @@ install(FILES   "${CUDF_BINARY_DIR}/cmake/cudf-config.cmake"
 
 install(EXPORT  cudf-targets
     FILE        cudf-targets.cmake
+    NAMESPACE   cudf::
+    DESTINATION "${INSTALL_CONFIGDIR}")
+
+install(EXPORT  cudf-testing-targets
+    FILE        cudf-testing-targets.cmake
     NAMESPACE   cudf::
     DESTINATION "${INSTALL_CONFIGDIR}")
 
@@ -604,8 +647,21 @@ elseif(TARGET arrow_static)
     endif()
 endif()
 
+if(TARGET gtest)
+    get_target_property(gtest_is_imported gtest IMPORTED)
+    if(NOT gtest_is_imported)
+        export(TARGETS gtest gmock gtest_main gmock_main
+            FILE ${CUDF_BINARY_DIR}/cudf-gtesting-targets.cmake
+            NAMESPACE   GTest::)
+    endif()
+endif()
+
 export(EXPORT cudf-targets
     FILE ${CUDF_BINARY_DIR}/cudf-targets.cmake
+    NAMESPACE   cudf::)
+
+export(EXPORT cudf-testing-targets
+    FILE ${CUDF_BINARY_DIR}/cudf-testing-targets.cmake
     NAMESPACE   cudf::)
 
 

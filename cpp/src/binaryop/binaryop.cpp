@@ -18,19 +18,13 @@
  */
 
 #include "compiled/binary_ops.hpp"
-#include "jit/code/code.h"
 #include "jit/util.hpp"
 
-#include <jit/launcher.h>
-#include <jit/parser.h>
-#include <jit/type.h>
+#include <jit_preprocessed_files/binaryop/jit/kernel.cu.jit.hpp>
 
-#include <jit/bit.hpp.jit>
-#include <jit/common_headers.hpp>
-#include <jit/durations.hpp.jit>
-#include <jit/fixed_point.hpp.jit>
-#include <jit/timestamps.hpp.jit>
-#include <jit/types.hpp.jit>
+#include <jit/cache.hpp>
+#include <jit/parser.hpp>
+#include <jit/type.hpp>
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -56,6 +50,7 @@ namespace cudf {
 
 namespace binops {
 namespace detail {
+
 /**
  * @brief Computes output valid mask for op between a column and a scalar
  */
@@ -78,69 +73,47 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
 
 namespace jit {
 
-const std::string hash = "prog_binop";
-
-const std::vector<std::string> header_names{"operation.h",
-                                            "traits.h",
-                                            cudf_types_hpp,
-                                            cudf_utilities_bit_hpp,
-                                            cudf_wrappers_timestamps_hpp,
-                                            cudf_wrappers_durations_hpp,
-                                            cudf_fixed_point_fixed_point_hpp};
-
-std::istream* headers_code(std::string filename, std::iostream& stream)
-{
-  if (filename == "operation.h") {
-    stream << code::operation;
-    return &stream;
-  }
-  if (filename == "traits.h") {
-    stream << code::traits;
-    return &stream;
-  }
-  auto it = cudf::jit::stringified_headers.find(filename);
-  if (it != cudf::jit::stringified_headers.end()) {
-    return cudf::jit::send_stringified_header(stream, it->second);
-  }
-  return nullptr;
-}
-
 void binary_operation(mutable_column_view& out,
-                      scalar const& lhs,
-                      column_view const& rhs,
+                      column_view const& lhs,
+                      scalar const& rhs,
                       binary_operator op,
+                      OperatorType op_type,
                       rmm::cuda_stream_view stream)
 {
   if (is_null_dependent(op)) {
-    cudf::jit::launcher(
-      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
-      .set_kernel_inst("kernel_v_s_with_validity",             // name of the kernel we are
-                                                               // launching
-                       {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                        cudf::jit::get_type_name(rhs.type()),
-                        cudf::jit::get_type_name(lhs.type()),
-                        get_operator_name(op, OperatorType::Reverse)})
-      .launch(out.size(),
-              cudf::jit::get_data_ptr(out),
-              cudf::jit::get_data_ptr(rhs),
-              cudf::jit::get_data_ptr(lhs),
-              out.null_mask(),
-              rhs.null_mask(),
-              rhs.offset(),
-              lhs.is_valid());
+    std::string kernel_name =
+      jitify2::reflection::Template("cudf::binops::jit::kernel_v_s_with_validity")  //
+        .instantiate(cudf::jit::get_type_name(out.type()),  // list of template arguments
+                     cudf::jit::get_type_name(lhs.type()),
+                     cudf::jit::get_type_name(rhs.type()),
+                     get_operator_name(op, op_type));
+
+    cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+      .get_kernel(kernel_name, {}, {}, {"-arch=sm_."})       //
+      ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
+      ->launch(out.size(),
+               cudf::jit::get_data_ptr(out),
+               cudf::jit::get_data_ptr(lhs),
+               cudf::jit::get_data_ptr(rhs),
+               out.null_mask(),
+               lhs.null_mask(),
+               lhs.offset(),
+               rhs.is_valid());
   } else {
-    cudf::jit::launcher(
-      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
-      .set_kernel_inst("kernel_v_s",                           // name of the kernel we are
-                                                               // launching
-                       {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                        cudf::jit::get_type_name(rhs.type()),
-                        cudf::jit::get_type_name(lhs.type()),
-                        get_operator_name(op, OperatorType::Reverse)})
-      .launch(out.size(),
-              cudf::jit::get_data_ptr(out),
-              cudf::jit::get_data_ptr(rhs),
-              cudf::jit::get_data_ptr(lhs));
+    std::string kernel_name =
+      jitify2::reflection::Template("cudf::binops::jit::kernel_v_s")  //
+        .instantiate(cudf::jit::get_type_name(out.type()),            // list of template arguments
+                     cudf::jit::get_type_name(lhs.type()),
+                     cudf::jit::get_type_name(rhs.type()),
+                     get_operator_name(op, op_type));
+
+    cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+      .get_kernel(kernel_name, {}, {}, {"-arch=sm_."})       //
+      ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
+      ->launch(out.size(),
+               cudf::jit::get_data_ptr(out),
+               cudf::jit::get_data_ptr(lhs),
+               cudf::jit::get_data_ptr(rhs));
   }
 }
 
@@ -150,37 +123,16 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
 {
-  if (is_null_dependent(op)) {
-    cudf::jit::launcher(
-      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
-      .set_kernel_inst("kernel_v_s_with_validity",             // name of the kernel we are
-                                                               // launching
-                       {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                        cudf::jit::get_type_name(lhs.type()),
-                        cudf::jit::get_type_name(rhs.type()),
-                        get_operator_name(op, OperatorType::Direct)})
-      .launch(out.size(),
-              cudf::jit::get_data_ptr(out),
-              cudf::jit::get_data_ptr(lhs),
-              cudf::jit::get_data_ptr(rhs),
-              out.null_mask(),
-              lhs.null_mask(),
-              lhs.offset(),
-              rhs.is_valid());
-  } else {
-    cudf::jit::launcher(
-      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
-      .set_kernel_inst("kernel_v_s",                           // name of the kernel we are
-                                                               // launching
-                       {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                        cudf::jit::get_type_name(lhs.type()),
-                        cudf::jit::get_type_name(rhs.type()),
-                        get_operator_name(op, OperatorType::Direct)})
-      .launch(out.size(),
-              cudf::jit::get_data_ptr(out),
-              cudf::jit::get_data_ptr(lhs),
-              cudf::jit::get_data_ptr(rhs));
-  }
+  return binary_operation(out, lhs, rhs, op, OperatorType::Direct, stream);
+}
+
+void binary_operation(mutable_column_view& out,
+                      scalar const& lhs,
+                      column_view const& rhs,
+                      binary_operator op,
+                      rmm::cuda_stream_view stream)
+{
+  return binary_operation(out, rhs, lhs, op, OperatorType::Reverse, stream);
 }
 
 void binary_operation(mutable_column_view& out,
@@ -190,36 +142,40 @@ void binary_operation(mutable_column_view& out,
                       rmm::cuda_stream_view stream)
 {
   if (is_null_dependent(op)) {
-    cudf::jit::launcher(
-      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
-      .set_kernel_inst("kernel_v_v_with_validity",             // name of the kernel we are
-                                                               // launching
-                       {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                        cudf::jit::get_type_name(lhs.type()),
-                        cudf::jit::get_type_name(rhs.type()),
-                        get_operator_name(op, OperatorType::Direct)})
-      .launch(out.size(),
-              cudf::jit::get_data_ptr(out),
-              cudf::jit::get_data_ptr(lhs),
-              cudf::jit::get_data_ptr(rhs),
-              out.null_mask(),
-              lhs.null_mask(),
-              rhs.offset(),
-              rhs.null_mask(),
-              rhs.offset());
+    std::string kernel_name =
+      jitify2::reflection::Template("cudf::binops::jit::kernel_v_v_with_validity")  //
+        .instantiate(cudf::jit::get_type_name(out.type()),  // list of template arguments
+                     cudf::jit::get_type_name(lhs.type()),
+                     cudf::jit::get_type_name(rhs.type()),
+                     get_operator_name(op, OperatorType::Direct));
+
+    cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+      .get_kernel(kernel_name, {}, {}, {"-arch=sm_."})       //
+      ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
+      ->launch(out.size(),
+               cudf::jit::get_data_ptr(out),
+               cudf::jit::get_data_ptr(lhs),
+               cudf::jit::get_data_ptr(rhs),
+               out.null_mask(),
+               lhs.null_mask(),
+               rhs.offset(),
+               rhs.null_mask(),
+               rhs.offset());
   } else {
-    cudf::jit::launcher(
-      hash, code::kernel, header_names, cudf::jit::compiler_flags, headers_code, stream)
-      .set_kernel_inst("kernel_v_v",                           // name of the kernel we are
-                                                               // launching
-                       {cudf::jit::get_type_name(out.type()),  // list of template arguments
-                        cudf::jit::get_type_name(lhs.type()),
-                        cudf::jit::get_type_name(rhs.type()),
-                        get_operator_name(op, OperatorType::Direct)})
-      .launch(out.size(),
-              cudf::jit::get_data_ptr(out),
-              cudf::jit::get_data_ptr(lhs),
-              cudf::jit::get_data_ptr(rhs));
+    std::string kernel_name =
+      jitify2::reflection::Template("cudf::binops::jit::kernel_v_v")  //
+        .instantiate(cudf::jit::get_type_name(out.type()),            // list of template arguments
+                     cudf::jit::get_type_name(lhs.type()),
+                     cudf::jit::get_type_name(rhs.type()),
+                     get_operator_name(op, OperatorType::Direct));
+
+    cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+      .get_kernel(kernel_name, {}, {}, {"-arch=sm_."})       //
+      ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
+      ->launch(out.size(),
+               cudf::jit::get_data_ptr(out),
+               cudf::jit::get_data_ptr(lhs),
+               cudf::jit::get_data_ptr(rhs));
   }
 }
 
@@ -232,23 +188,25 @@ void binary_operation(mutable_column_view& out,
   std::string const output_type_name = cudf::jit::get_type_name(out.type());
 
   std::string ptx_hash =
-    hash + "." + std::to_string(std::hash<std::string>{}(ptx + output_type_name));
+    "prog_binop." + std::to_string(std::hash<std::string>{}(ptx + output_type_name));
   std::string cuda_source =
-    "\n#include <cudf/types.hpp>\n" +
-    cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type_name) + code::kernel;
+    cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type_name);
 
-  cudf::jit::launcher(
-    ptx_hash, cuda_source, header_names, cudf::jit::compiler_flags, headers_code, stream)
-    .set_kernel_inst("kernel_v_v",       // name of the kernel
-                                         // we are launching
-                     {output_type_name,  // list of template arguments
-                      cudf::jit::get_type_name(lhs.type()),
-                      cudf::jit::get_type_name(rhs.type()),
-                      get_operator_name(binary_operator::GENERIC_BINARY, OperatorType::Direct)})
-    .launch(out.size(),
-            cudf::jit::get_data_ptr(out),
-            cudf::jit::get_data_ptr(lhs),
-            cudf::jit::get_data_ptr(rhs));
+  std::string kernel_name =
+    jitify2::reflection::Template("cudf::binops::jit::kernel_v_v")  //
+      .instantiate(output_type_name,                                // list of template arguments
+                   cudf::jit::get_type_name(lhs.type()),
+                   cudf::jit::get_type_name(rhs.type()),
+                   get_operator_name(binary_operator::GENERIC_BINARY, OperatorType::Direct));
+
+  cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
+    .get_kernel(
+      kernel_name, {}, {{"binaryop/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."})  //
+    ->configure_1d_max_occupancy(0, 0, 0, stream.value())                                  //
+    ->launch(out.size(),
+             cudf::jit::get_data_ptr(out),
+             cudf::jit::get_data_ptr(lhs),
+             cudf::jit::get_data_ptr(rhs));
 }
 
 }  // namespace jit

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,12 +22,15 @@
 #include <cudf/detail/scatter.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/partitioning.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <algorithm>
 
 namespace cudf {
 namespace {
@@ -38,13 +41,29 @@ bool md5_type_check(data_type dt)
   return !is_chrono(dt) && (is_fixed_width(dt) || (dt.id() == type_id::STRING));
 }
 
+template <typename IterType>
+std::vector<column_view> to_leaf_columns(IterType iter_begin, IterType iter_end)
+{
+  std::vector<column_view> leaf_columns;
+  std::for_each(iter_begin, iter_end, [&leaf_columns](column_view const& col) {
+    if (is_nested(col.type())) {
+      CUDF_EXPECTS(col.type().id() == type_id::STRUCT, "unsupported nested type");
+      auto child_columns = to_leaf_columns(col.child_begin(), col.child_end());
+      leaf_columns.insert(leaf_columns.end(), child_columns.begin(), child_columns.end());
+    } else {
+      leaf_columns.emplace_back(col);
+    }
+  });
+  return leaf_columns;
+}
+
 }  // namespace
 
 namespace detail {
 
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
-                             std::vector<uint32_t> const& initial_hash,
+                             cudf::host_span<uint32_t const> initial_hash,
                              uint32_t seed,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
@@ -85,8 +104,8 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   auto offsets_column =
     cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
 
-  auto chars_column = strings::detail::create_chars_child_column(
-    input.num_rows(), 0, input.num_rows() * 32, stream, mr);
+  auto chars_column =
+    strings::detail::create_chars_child_column(input.num_rows(), input.num_rows() * 32, stream, mr);
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.data<char>();
 
@@ -103,11 +122,12 @@ std::unique_ptr<column> md5_hash(table_view const& input,
                      MD5Hash hasher = MD5Hash{};
                      for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
                        if (device_input.column(col_index).is_valid(row_index)) {
-                         cudf::type_dispatcher(device_input.column(col_index).type(),
-                                               hasher,
-                                               device_input.column(col_index),
-                                               row_index,
-                                               &hash_state);
+                         cudf::type_dispatcher<dispatch_storage_type>(
+                           device_input.column(col_index).type(),
+                           hasher,
+                           device_input.column(col_index),
+                           row_index,
+                           &hash_state);
                        }
                      }
                      hasher.finalize(&hash_state, d_chars + (row_index * 32));
@@ -133,10 +153,11 @@ std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
 
   if (input.num_columns() == 0 || input.num_rows() == 0) { return output; }
 
-  auto const device_input = table_device_view::create(input, stream);
+  table_view const leaf_table(to_leaf_columns(input.begin(), input.end()));
+  auto const device_input = table_device_view::create(leaf_table, stream);
   auto output_view        = output->mutable_view();
 
-  if (has_nulls(input)) {
+  if (has_nulls(leaf_table)) {
     thrust::tabulate(rmm::exec_policy(stream),
                      output_view.begin<int32_t>(),
                      output_view.end<int32_t>(),
@@ -178,7 +199,7 @@ std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
 }
 
 std::unique_ptr<column> murmur_hash3_32(table_view const& input,
-                                        std::vector<uint32_t> const& initial_hash,
+                                        cudf::host_span<uint32_t const> initial_hash,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
@@ -197,20 +218,20 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
   if (!initial_hash.empty()) {
     CUDF_EXPECTS(initial_hash.size() == size_t(input.num_columns()),
                  "Expected same size of initial hash values as number of columns");
-    auto device_initial_hash = rmm::device_vector<uint32_t>(initial_hash);
+    auto device_initial_hash = make_device_uvector_async(initial_hash, stream);
 
     if (nullable) {
-      thrust::tabulate(rmm::exec_policy(stream),
-                       output_view.begin<int32_t>(),
-                       output_view.end<int32_t>(),
-                       row_hasher_initial_values<MurmurHash3_32, true>(
-                         *device_input, device_initial_hash.data().get()));
+      thrust::tabulate(
+        rmm::exec_policy(stream),
+        output_view.begin<int32_t>(),
+        output_view.end<int32_t>(),
+        row_hasher_initial_values<MurmurHash3_32, true>(*device_input, device_initial_hash.data()));
     } else {
       thrust::tabulate(rmm::exec_policy(stream),
                        output_view.begin<int32_t>(),
                        output_view.end<int32_t>(),
                        row_hasher_initial_values<MurmurHash3_32, false>(
-                         *device_input, device_initial_hash.data().get()));
+                         *device_input, device_initial_hash.data()));
     }
   } else {
     if (nullable) {
@@ -233,7 +254,7 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
 
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
-                             std::vector<uint32_t> const& initial_hash,
+                             cudf::host_span<uint32_t const> initial_hash,
                              uint32_t seed,
                              rmm::mr::device_memory_resource* mr)
 {
@@ -242,7 +263,7 @@ std::unique_ptr<column> hash(table_view const& input,
 }
 
 std::unique_ptr<column> murmur_hash3_32(table_view const& input,
-                                        std::vector<uint32_t> const& initial_hash,
+                                        cudf::host_span<uint32_t const> initial_hash,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();

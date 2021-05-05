@@ -18,10 +18,58 @@
 
 package ai.rapids.cudf;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
- * Settings for writing Parquet files.
+ * This class represents settings for writing Parquet files. It includes meta data information
+ * that will be used by the Parquet writer to write the file
  */
-public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
+public final class ParquetWriterOptions extends ParquetColumnWriterOptions.ParquetStructColumnWriterOptions {
+  private final CompressionType compressionType;
+  private final Map<String, String> metadata;
+  private final StatisticsFrequency statsGranularity;
+
+  private ParquetWriterOptions(Builder builder) {
+    super(builder);
+    this.statsGranularity = builder.statsGranularity;
+    this.compressionType = builder.compressionType;
+    this.metadata = builder.metadata;
+  }
+
+  @Override
+  boolean[] getFlatIsTimeTypeInt96() {
+    return super.getFlatBooleans(new boolean[]{}, (opt) -> opt.getFlatIsTimeTypeInt96());
+  }
+
+  @Override
+  int[] getFlatPrecision() {
+    return super.getFlatInts(new int[]{}, (opt) -> opt.getFlatPrecision());
+  }
+
+  @Override
+  int[] getFlatNumChildren() {
+    return super.getFlatInts(new int[]{}, (opt) -> opt.getFlatNumChildren());
+  }
+
+  @Override
+  boolean[] getFlatIsNullable() {
+    return super.getFlatBooleans(new boolean[]{}, (opt) -> opt.getFlatIsNullable());
+  }
+
+  @Override
+  String[] getFlatColumnNames() {
+    return super.getFlatColumnNames(new String[]{});
+  }
+
+  String[] getMetadataKeys() {
+    return metadata.keySet().toArray(new String[metadata.size()]);
+  }
+
+  String[] getMetadataValues() {
+    return metadata.values().toArray(new String[metadata.size()]);
+  }
+
   public enum StatisticsFrequency {
     /** Do not generate statistics */
     NONE(0),
@@ -39,45 +87,62 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
     }
   }
 
-  public static class Builder extends CMWriterBuilder<Builder> {
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public StatisticsFrequency getStatisticsFrequency() {
+    return statsGranularity;
+  }
+
+  public CompressionType getCompressionType() {
+    return compressionType;
+  }
+
+  public Map<String, String> getMetadata() {
+    return metadata;
+  }
+
+  public int getTopLevelChildren() {
+    return childColumnOptions.length;
+  }
+
+  public static class Builder extends ParquetColumnWriterOptions.AbstractStructBuilder<Builder,
+      ParquetWriterOptions> {
     private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
-    private boolean isTimestampTypeInt96 = false;
-    private int[] precisionValues = null;
+    final Map<String, String> metadata = new LinkedHashMap<>();
+    CompressionType compressionType = CompressionType.AUTO;
+
+    public Builder() {
+      super();
+    }
+
+    /**
+     * Add a metadata key and a value
+     */
+    public Builder withMetadata(String key, String value) {
+      this.metadata.put(key, value);
+      return this;
+    }
+
+    /**
+     * Add a map of metadata keys and values
+     */
+    public Builder withMetadata(Map<String, String> metadata) {
+      this.metadata.putAll(metadata);
+      return this;
+    }
+
+    /**
+     * Set the compression type to use for writing
+     */
+    public Builder withCompressionType(CompressionType compression) {
+      this.compressionType = compression;
+      return this;
+    }
 
     public Builder withStatisticsFrequency(StatisticsFrequency statsGranularity) {
       this.statsGranularity = statsGranularity;
-      return this;
-    }
-
-    /**
-     * Set whether the timestamps should be written in INT96
-     */
-    public Builder withTimestampInt96(boolean int96) {
-      this.isTimestampTypeInt96 = int96;
-      return this;
-    }
-
-    /**
-     * Overwrite flattened precision values for all decimal columns that are expected to be in
-     * this Table. The list of precisions should be an in-order traversal of all Decimal columns,
-     * including nested columns. Please look at the example below.
-     *
-     * NOTE: The number of `precisionValues` should be equal to the numbers of Decimal columns
-     * otherwise a CudfException will be thrown. Also note that the values will be overwritten
-     * every time this method is called
-     *
-     * Example:
-     *  Table0 : c0[type: INT32]
-     *           c1[type: Decimal32(3, 1)]
-     *           c2[type: Struct[col0[type: Decimal(2, 1)],
-     *                           col1[type: INT64],
-     *                           col2[type: Decimal(8, 6)]]
-     *           c3[type: Decimal64(12, 5)]
-     *
-     *  Flattened list of precision from the above example will be {3, 2, 8, 12}
-     */
-    public Builder withPrecisionValues(int... precisionValues) {
-      this.precisionValues = precisionValues;
       return this;
     }
 
@@ -85,42 +150,4 @@ public class ParquetWriterOptions extends CompressedMetadataWriterOptions {
       return new ParquetWriterOptions(this);
     }
   }
-
-  public static final ParquetWriterOptions DEFAULT = new ParquetWriterOptions(new Builder());
-
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  private final StatisticsFrequency statsGranularity;
-
-  private ParquetWriterOptions(Builder builder) {
-    super(builder);
-    this.statsGranularity = builder.statsGranularity;
-    this.isTimestampTypeInt96 = builder.isTimestampTypeInt96;
-    this.precisions = builder.precisionValues;
-  }
-
-  public StatisticsFrequency getStatisticsFrequency() {
-    return statsGranularity;
-  }
-
-  /**
-   * Return the flattened list of precisions if set otherwise empty array will be returned.
-   * For a definition of what `flattened` means please look at {@link Builder#withPrecisionValues}
-   */
-  public int[] getPrecisions() {
-    return precisions;
-  }
-
-  /**
-   * Returns true if the writer is expected to write timestamps in INT96
-   */
-  public boolean isTimestampTypeInt96() {
-    return isTimestampTypeInt96;
-  }
-
-  private boolean isTimestampTypeInt96;
-
-  private int[] precisions;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -146,7 +146,7 @@ std::unique_ptr<column> replace_nans(column_view const& input,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_nans(input, replacement, 0, mr);
+  return detail::replace_nans(input, replacement, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> replace_nans(column_view const& input,

@@ -25,7 +25,6 @@ import ai.rapids.cudf.HostColumnVector.StructData;
 import ai.rapids.cudf.HostColumnVector.StructType;
 
 import java.io.File;
-import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
@@ -183,8 +182,12 @@ public final class Table implements AutoCloseable {
   
   private static native ContiguousTable[] contiguousSplit(long inputTable, int[] indices);
 
+  private static native long[] partition(long inputTable, long partitionView,
+      int numberOfPartitions, int[] outputOffsets);
+
   private static native long[] hashPartition(long inputTable,
                                              int[] columnsToHash,
+                                             int hashTypeId,
                                              int numberOfPartitions,
                                              int[] outputOffsets) throws CudfException;
 
@@ -241,6 +244,8 @@ public final class Table implements AutoCloseable {
   /**
    * Setup everything to write parquet formatted data to a file.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
+   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
@@ -253,18 +258,22 @@ public final class Table implements AutoCloseable {
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetFileBegin(String[] columnNames,
+                                                   int numChildren,
+                                                   int[] flatNumChildren,
                                                    boolean[] nullable,
                                                    String[] metadataKeys,
                                                    String[] metadataValues,
                                                    int compression,
                                                    int statsFreq,
-                                                   boolean isInt96,
+                                                   boolean[] isInt96,
                                                    int[] precisions,
                                                    String filename) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a buffer.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
+   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
@@ -277,12 +286,14 @@ public final class Table implements AutoCloseable {
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetBufferBegin(String[] columnNames,
+                                                     int numChildren,
+                                                     int[] flatNumChildren,
                                                      boolean[] nullable,
                                                      String[] metadataKeys,
                                                      String[] metadataValues,
                                                      int compression,
                                                      int statsFreq,
-                                                     boolean isInt96,
+                                                     boolean[] isInt96,
                                                      int[] precisions,
                                                      HostBufferConsumer consumer) throws CudfException;
 
@@ -449,7 +460,9 @@ public final class Table implements AutoCloseable {
   private static native void readArrowIPCEnd(long handle);
 
   private static native long[] groupByAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
-                                                long[] aggInstances, boolean ignoreNullKeys) throws CudfException;
+                                                long[] aggInstances, boolean ignoreNullKeys,
+                                                boolean keySorted, boolean[] keysDescending,
+                                                boolean[] keysNullSmallest) throws CudfException;
 
   private static native long[] rollingWindowAggregate(
       long inputTable,
@@ -479,17 +492,32 @@ public final class Table implements AutoCloseable {
   private static native long[] leftJoin(long leftTable, int[] leftJoinCols, long rightTable,
                                         int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
+  private static native long[] leftJoinGatherMaps(long leftKeys, long rightKeys,
+                                                  boolean compareNullsEqual) throws CudfException;
+
   private static native long[] innerJoin(long leftTable, int[] leftJoinCols, long rightTable,
                                          int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
+
+  private static native long[] innerJoinGatherMaps(long leftKeys, long rightKeys,
+                                                   boolean compareNullsEqual) throws CudfException;
 
   private static native long[] fullJoin(long leftTable, int[] leftJoinCols, long rightTable,
                                          int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
+  private static native long[] fullJoinGatherMaps(long leftKeys, long rightKeys,
+                                                  boolean compareNullsEqual) throws CudfException;
+
   private static native long[] leftSemiJoin(long leftTable, int[] leftJoinCols, long rightTable,
       int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
+  private static native long[] leftSemiJoinGatherMap(long leftKeys, long rightKeys,
+                                                     boolean compareNullsEqual) throws CudfException;
+
   private static native long[] leftAntiJoin(long leftTable, int[] leftJoinCols, long rightTable,
       int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
+
+  private static native long[] leftAntiJoinGatherMap(long leftKeys, long rightKeys,
+                                                     boolean compareNullsEqual) throws CudfException;
 
   private static native long[] crossJoin(long leftTable, long rightTable) throws CudfException;
 
@@ -511,13 +539,26 @@ public final class Table implements AutoCloseable {
                                                  long columnHandle,
                                                  boolean checkCount);
 
+  private static native long rowBitCount(long tableHandle) throws CudfException;
+
   private static native long[] explode(long tableHandle, int index);
 
   private static native long[] explodePosition(long tableHandle, int index);
 
+  private static native long[] explodeOuter(long tableHandle, int index);
+
+  private static native long[] explodeOuterPosition(long tableHandle, int index);
+
   private static native long createCudfTableView(long[] nativeColumnViewHandles);
 
   private static native long[] columnViewsFromPacked(ByteBuffer metadata, long dataAddress);
+
+  private static native ContiguousTable[] contiguousSplitGroups(long inputTable,
+                                                                int[] keyIndices,
+                                                                boolean ignoreNullKeys,
+                                                                boolean keySorted,
+                                                                boolean[] keysDescending,
+                                                                boolean[] keysNullSmallest);
 
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
@@ -795,29 +836,45 @@ public final class Table implements AutoCloseable {
     HostBufferConsumer consumer;
 
     private ParquetTableWriter(ParquetWriterOptions options, File outputFile) {
+      String[] columnNames = options.getFlatColumnNames();
+      boolean[] columnNullabilities = options.getFlatIsNullable();
+      boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
+      int[] precisions = options.getFlatPrecision();
+      int[] flatNumChildren = options.getFlatNumChildren();
+
       this.consumer = null;
-      this.handle = writeParquetFileBegin(options.getColumnNames(),
-          options.getColumnNullability(),
+      this.handle = writeParquetFileBegin(columnNames,
+          options.getTopLevelChildren(),
+          flatNumChildren,
+          columnNullabilities,
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
-          options.isTimestampTypeInt96(),
-          options.getPrecisions(),
+          timeInt96Values,
+          precisions,
           outputFile.getAbsolutePath());
     }
 
     private ParquetTableWriter(ParquetWriterOptions options, HostBufferConsumer consumer) {
-      this.handle = writeParquetBufferBegin(options.getColumnNames(),
-          options.getColumnNullability(),
+      String[] columnNames = options.getFlatColumnNames();
+      boolean[] columnNullabilities = options.getFlatIsNullable();
+      boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
+      int[] precisions = options.getFlatPrecision();
+      int[] flatNumChildren = options.getFlatNumChildren();
+
+      this.consumer = consumer;
+      this.handle = writeParquetBufferBegin(columnNames,
+          options.getTopLevelChildren(),
+          flatNumChildren,
+          columnNullabilities,
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
-          options.isTimestampTypeInt96(),
-          options.getPrecisions(),
+          timeInt96Values,
+          precisions,
           consumer);
-      this.consumer = consumer;
     }
 
     @Override
@@ -861,17 +918,6 @@ public final class Table implements AutoCloseable {
   public static TableWriter writeParquetChunked(ParquetWriterOptions options,
                                                 HostBufferConsumer consumer) {
     return new ParquetTableWriter(options, consumer);
-  }
-
-  /**
-   * Writes this table to a Parquet file on the host
-   *
-   * @param outputFile file to write the table to
-   * @deprecated please use writeParquetChunked instead
-   */
-  @Deprecated
-  public void writeParquet(File outputFile) {
-    writeParquet(ParquetWriterOptions.DEFAULT, outputFile);
   }
 
   /**
@@ -1233,7 +1279,7 @@ public final class Table implements AutoCloseable {
    * @return the new Table.
    * @throws CudfException on any error.
    */
-  public Table repeat(ColumnVector counts) {
+  public Table repeat(ColumnView counts) {
     return repeat(counts, true);
   }
 
@@ -1248,8 +1294,26 @@ public final class Table implements AutoCloseable {
    * @return the new Table.
    * @throws CudfException on any error.
    */
-  public Table repeat(ColumnVector counts, boolean checkCount) {
+  public Table repeat(ColumnView counts, boolean checkCount) {
     return new Table(repeatColumnCount(this.nativeHandle, counts.getNativeView(), checkCount));
+  }
+
+  /**
+   * Partition this table using the mapping in partitionMap. partitionMap must be an integer
+   * column. The number of rows in partitionMap must be the same as this table.  Each row
+   * in the map will indicate which partition the rows in the table belong to.
+   * @param partitionMap the partitions for each row.
+   * @param numberOfPartitions number of partitions
+   * @return {@link PartitionedTable} Table that exposes a limited functionality of the
+   * {@link Table} class
+   */
+  public PartitionedTable partition(ColumnView partitionMap, int numberOfPartitions) {
+    int[] partitionOffsets = new int[numberOfPartitions];
+    return new PartitionedTable(new Table(partition(
+        getNativeView(),
+        partitionMap.getNativeView(),
+        partitionOffsets.length,
+        partitionOffsets)), partitionOffsets);
   }
 
   /**
@@ -1423,7 +1487,7 @@ public final class Table implements AutoCloseable {
    * responsible for cleaning up
    * the {@link ColumnVector} returned as part of the output {@link Table}
    * <p>
-   * Example usage: orderBy(true, Table.asc(0), Table.desc(3)...);
+   * Example usage: orderBy(true, OrderByArg.asc(0), OrderByArg.desc(3)...);
    * @param args Suppliers to initialize sortKeys.
    * @return Sorted Table
    */
@@ -1489,22 +1553,6 @@ public final class Table implements AutoCloseable {
    */
   public static Table merge(List<Table> tables, OrderByArg... args) {
     return merge(tables.toArray(new Table[tables.size()]), args);
-  }
-
-  public static OrderByArg asc(final int index) {
-    return new OrderByArg(index, false, false);
-  }
-
-  public static OrderByArg desc(final int index) {
-    return new OrderByArg(index, true, false);
-  }
-
-  public static OrderByArg asc(final int index, final boolean isNullSmallest) {
-    return new OrderByArg(index, false, isNullSmallest);
-  }
-
-  public static OrderByArg desc(final int index, final boolean isNullSmallest) {
-    return new OrderByArg(index, true, isNullSmallest);
   }
 
   /**
@@ -1615,23 +1663,27 @@ public final class Table implements AutoCloseable {
    * @param groupByOptions Options provided in the builder
    * @param indices columns to be considered for groupBy
    */
-  public AggregateOperation groupBy(GroupByOptions groupByOptions, int... indices) {
+  public GroupByOperation groupBy(GroupByOptions groupByOptions, int... indices) {
     return groupByInternal(groupByOptions, indices);
   }
 
   /**
    * Returns aggregate operations grouped by columns provided in indices
-   * null is considered as key while grouping.
-   * @param indices columnns to be considered for groupBy
+   * with default options as below:
+   *  - null is considered as key while grouping.
+   *  - keys are not presorted.
+   *  - empty key order array.
+   *  - empty null order array.
+   * @param indices columns to be considered for groupBy
    */
-  public AggregateOperation groupBy(int... indices) {
+  public GroupByOperation groupBy(int... indices) {
     return groupByInternal(GroupByOptions.builder().withIgnoreNullKeys(false).build(),
         indices);
   }
 
-  private AggregateOperation groupByInternal(GroupByOptions groupByOptions, int[] indices) {
+  private GroupByOperation groupByInternal(GroupByOptions groupByOptions, int[] indices) {
     int[] operationIndicesArray = copyAndValidate(indices);
-    return new AggregateOperation(this, groupByOptions, operationIndicesArray);
+    return new GroupByOperation(this, groupByOptions, operationIndicesArray);
   }
 
   /**
@@ -1685,7 +1737,7 @@ public final class Table implements AutoCloseable {
    * @return table containing copy of all elements of this table passing
    * the filter defined by the boolean mask
    */
-  public Table filter(ColumnVector mask) {
+  public Table filter(ColumnView mask) {
     assert mask.getType().equals(DType.BOOL8) : "Mask column must be of type BOOL8";
     assert getRowCount() == 0 || getRowCount() == mask.getRowCount() : "Mask column has incorrect size";
     return new Table(filter(nativeHandle, mask.getNativeView()));
@@ -1724,7 +1776,7 @@ public final class Table implements AutoCloseable {
    * Example:
    * input:  [[5,10,15], 100],
    *         [[20,25],   200],
-   *         [[30],      300],
+   *         [[30],      300]
    * index: 0
    * output: [5,         100],
    *         [10,        100],
@@ -1736,12 +1788,12 @@ public final class Table implements AutoCloseable {
    *
    * Nulls propagate in different ways depending on what is null.
    * <code>
-   *     [[5,null,15], 100],
-   *     [null,        200]
-   * returns:
-   *     [5,           100],
-   *     [null,        100],
-   *     [15,          100]
+   * input:  [[5,null,15], 100],
+   *         [null,        200]
+   * index: 0
+   * output: [5,           100],
+   *         [null,        100],
+   *         [15,          100]
    * </code>
    * Note that null lists are completely removed from the output
    * and nulls inside lists are pulled out and remain.
@@ -1762,27 +1814,26 @@ public final class Table implements AutoCloseable {
    * in the output. The corresponding rows for other columns in the input are duplicated. A position
    * column is added that has the index inside the original list for each row. Example:
    * <code>
-   * [[5,10,15], 100],
-   * [[20,25],   200],
-   * [[30],      300],
-   * returns
-   * [0,   5,    100],
-   * [1,   10,   100],
-   * [2,   15,    100],
-   * [0,   20,    200],
-   * [1,   25,    200],
-   * [0,   30,    300],
+   * input:  [[5,10,15], 100],
+   *         [[20,25],   200],
+   *         [[30],      300]
+   * index: 0
+   * output: [0,   5,    100],
+   *         [1,   10,   100],
+   *         [2,   15,   100],
+   *         [0,   20,   200],
+   *         [1,   25,   200],
+   *         [0,   30,   300]
    * </code>
    *
    * Nulls and empty lists propagate in different ways depending on what is null or empty.
    * <code>
-   * [[5,null,15], 100],
-   * [null,        200],
-   * [[],          300],
-   * returns
-   * [0,    5,     100],
-   * [1,    null,  100],
-   * [2,    15,    100],
+   * input:  [[5,null,15], 100],
+   *         [null,        200]
+   * index: 0
+   * output: [5,           100],
+   *         [null,        100],
+   *         [15,          100]
    * </code>
    *
    * Note that null lists are not included in the resulting table, but nulls inside
@@ -1799,6 +1850,118 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Explodes a list column's elements.
+   *
+   * Any list is exploded, which means the elements of the list in each row are expanded
+   * into new rows in the output. The corresponding rows for other columns in the input
+   * are duplicated.
+   *
+   * <code>
+   * Example:
+   * input:  [[5,10,15], 100],
+   *         [[20,25],   200],
+   *         [[30],      300],
+   * index: 0
+   * output: [5,         100],
+   *         [10,        100],
+   *         [15,        100],
+   *         [20,        200],
+   *         [25,        200],
+   *         [30,        300]
+   * </code>
+   *
+   * Nulls propagate in different ways depending on what is null.
+   * <code>
+   *  input:  [[5,null,15], 100],
+   *          [null,        200]
+   * index: 0
+   * output:  [5,           100],
+   *          [null,        100],
+   *          [15,          100],
+   *          [null,        200]
+   * </code>
+   * Note that null lists are completely removed from the output
+   * and nulls inside lists are pulled out and remain.
+   *
+   * @param index Column index to explode inside the table.
+   * @return A new table with explode_col exploded.
+   */
+  public Table explodeOuter(int index) {
+    assert 0 <= index && index < columns.length : "Column index is out of range";
+    assert columns[index].getType().equals(DType.LIST) : "Column to explode must be of type LIST";
+    return new Table(explodeOuter(nativeHandle, index));
+  }
+
+  /**
+   * Explodes a list column's elements retaining any null entries or empty lists and includes a
+   * position column.
+   *
+   * Any list is exploded, which means the elements of the list in each row are expanded into new rows
+   * in the output. The corresponding rows for other columns in the input are duplicated. A position
+   * column is added that has the index inside the original list for each row. Example:
+   *
+   * <code>
+   * Example:
+   * input:  [[5,10,15], 100],
+   *         [[20,25],   200],
+   *         [[30],      300],
+   * index: 0
+   * output: [0,   5,    100],
+   *         [1,   10,   100],
+   *         [2,   15,   100],
+   *         [0,   20,   200],
+   *         [1,   25,   200],
+   *         [0,   30,   300]
+   * </code>
+   *
+   * Nulls and empty lists propagate as null entries in the result.
+   * <code>
+   * input:  [[5,null,15], 100],
+   *         [null,        200],
+   *         [[],          300]
+   * index: 0
+   * output: [0,     5,    100],
+   *         [1,  null,    100],
+   *         [2,    15,    100],
+   *         [0,  null,    200],
+   *         [0,  null,    300]
+   * </code>
+   *
+   *    returns
+   *
+   * @param index Column index to explode inside the table.
+   * @return A new table with exploded value and position. The column order of return table is
+   *         [cols before explode_input, explode_position, explode_value, cols after explode_input].
+   */
+  public Table explodeOuterPosition(int index) {
+    assert 0 <= index && index < columns.length : "Column index is out of range";
+    assert columns[index].getType().equals(DType.LIST) : "Column to explode must be of type LIST";
+    return new Table(explodeOuterPosition(nativeHandle, index));
+  }
+
+  /**
+   * Returns an approximate cumulative size in bits of all columns in the `table_view` for each row.
+   * This function counts bits instead of bytes to account for the null mask which only has one
+   * bit per row. Each row in the returned column is the sum of the per-row bit size for each column
+   * in the table.
+   *
+   * In some cases, this is an inexact approximation. Specifically, columns of lists and strings
+   * require N+1 offsets to represent N rows. It is up to the caller to calculate the small
+   * additional overhead of the terminating offset for any group of rows being considered.
+   *
+   * This function returns the per-row bit sizes as the columns are currently formed. This can
+   * end up being larger than the number you would get by gathering the rows. Specifically,
+   * the push-down of struct column validity masks can nullify rows that contain data for
+   * string or list columns. In these cases, the size returned is conservative such that:
+   * row_bit_count(column(x)) >= row_bit_count(gather(column(x)))
+   *
+   * @return INT32 column of bit size per row of the table
+   */
+  public ColumnVector rowBitCount() {
+    return new ColumnVector(rowBitCount(getNativeView()));
+  }
+
+  /**
    * Gathers the rows of this table according to `gatherMap` such that row "i"
    * in the resulting table's columns will contain row "gatherMap[i]" from this table.
    * The number of rows in the result table will be equal to the number of elements in
@@ -1810,7 +1973,7 @@ public final class Table implements AutoCloseable {
    * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
    * @return the resulting Table.
    */
-  public Table gather(ColumnVector gatherMap) {
+  public Table gather(ColumnView gatherMap) {
     return gather(gatherMap, true);
   }
 
@@ -1828,8 +1991,132 @@ public final class Table implements AutoCloseable {
    *                    when setting this to false.
    * @return the resulting Table.
    */
-  public Table gather(ColumnVector gatherMap, boolean checkBounds) {
+  public Table gather(ColumnView gatherMap, boolean checkBounds) {
     return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
+  }
+
+  private GatherMap[] buildJoinGatherMaps(long[] gatherMapData) {
+    long bufferSize = gatherMapData[0];
+    long leftAddr = gatherMapData[1];
+    long leftHandle = gatherMapData[2];
+    long rightAddr = gatherMapData[3];
+    long rightHandle = gatherMapData[4];
+    GatherMap[] maps = new GatherMap[2];
+    maps[0] = new GatherMap(DeviceMemoryBuffer.fromRmm(leftAddr, bufferSize, leftHandle));
+    maps[1] = new GatherMap(DeviceMemoryBuffer.fromRmm(rightAddr, bufferSize, rightHandle));
+    return maps;
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a left equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the table argument represents the key columns from the right table. Two {@link GatherMap}
+   * instances will be returned that can be used to gather the left and right tables,
+   * respectively, to produce the result of the left join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left and right table gather maps
+   */
+  public GatherMap[] leftJoinGatherMaps(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        leftJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an inner equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the table argument represents the key columns from the right table. Two {@link GatherMap}
+   * instances will be returned that can be used to gather the left and right tables,
+   * respectively, to produce the result of the inner join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left and right table gather maps
+   */
+  public GatherMap[] innerJoinGatherMaps(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        innerJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an full equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the table argument represents the key columns from the right table. Two {@link GatherMap}
+   * instances will be returned that can be used to gather the left and right tables,
+   * respectively, to produce the result of the full join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left and right table gather maps
+   */
+  public GatherMap[] fullJoinGatherMaps(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        fullJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  private GatherMap buildSemiJoinGatherMap(long[] gatherMapData) {
+    long bufferSize = gatherMapData[0];
+    long leftAddr = gatherMapData[1];
+    long leftHandle = gatherMapData[2];
+    return new GatherMap(DeviceMemoryBuffer.fromRmm(leftAddr, bufferSize, leftHandle));
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left semi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the table argument represents the key columns from the right table. The {@link GatherMap}
+   * instance returned can be used to gather the left table to produce the result of the
+   * left semi-join.
+   * It is the responsibility of the caller to close the resulting gather map instance.
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left table gather map
+   */
+  public GatherMap leftSemiJoinGatherMap(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        leftSemiJoinGatherMap(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left anti-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the table argument represents the key columns from the right table. The {@link GatherMap}
+   * instance returned can be used to gather the left table to produce the result of the
+   * left anti-join.
+   * It is the responsibility of the caller to close the resulting gather map instance.
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left table gather map
+   */
+  public GatherMap leftAntiJoinGatherMap(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        leftAntiJoinGatherMap(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildSemiJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -1922,7 +2209,7 @@ public final class Table implements AutoCloseable {
    * @param schema the types of each column.
    * @return the parsed table.
    */
-  public static Table convertFromRows(ColumnVector vec, DType ... schema) {
+  public static Table convertFromRows(ColumnView vec, DType ... schema) {
     // TODO at some point we need a schema that support nesting so we can support nested types
     // TODO we will need scale at some point very soon too
     int[] types = new int[schema.length];
@@ -1982,25 +2269,6 @@ public final class Table implements AutoCloseable {
   /////////////////////////////////////////////////////////////////////////////
   // HELPER CLASSES
   /////////////////////////////////////////////////////////////////////////////
-
-  public static final class OrderByArg implements Serializable {
-    final int index;
-    final boolean isDescending;
-    final boolean isNullSmallest;
-
-    OrderByArg(int index, boolean isDescending, boolean isNullSmallest) {
-      this.index = index;
-      this.isDescending = isDescending;
-      this.isNullSmallest = isNullSmallest;
-    }
-
-    @Override
-    public String toString() {
-      return "ORDER BY " + index +
-          (isDescending ? " DESC " : " ASC ") +
-          (isNullSmallest ? "NULL SMALLEST" : "NULL LARGEST");
-    }
-  }
 
   /**
    * class to encapsulate indices and table
@@ -2078,14 +2346,14 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Class representing aggregate operations
+   * Class representing groupby operations
    */
-  public static final class AggregateOperation {
+  public static final class GroupByOperation {
 
     private final Operation operation;
     private final GroupByOptions groupByOptions;
 
-    AggregateOperation(final Table table, GroupByOptions groupByOptions, final int... indices) {
+    GroupByOperation(final Table table, GroupByOptions groupByOptions, final int... indices) {
       operation = new Operation(table, indices);
       this.groupByOptions = groupByOptions;
     }
@@ -2142,7 +2410,10 @@ public final class Table implements AutoCloseable {
             operation.indices,
             aggColumnIndexes,
             aggOperationInstances,
-            groupByOptions.getIgnoreNullKeys()))) {
+            groupByOptions.getIgnoreNullKeys(),
+            groupByOptions.getKeySorted(),
+            groupByOptions.getKeysDescending(),
+            groupByOptions.getKeysNullSmallest()))) {
           // prepare the final table
           ColumnVector[] finalCols = new ColumnVector[keysLength + aggregates.length];
 
@@ -2421,6 +2692,47 @@ public final class Table implements AutoCloseable {
         Aggregation.close(aggInstances);
       }
     }
+
+    /**
+     * Splits the groups in a single table into separate tables according to the grouping keys.
+     * Each split table represents a single group.
+     *
+     * This API will be used by some grouping related operators to process the data
+     * group by group.
+     *
+     * Example:
+     *   Grouping column index: 0
+     *   Input: A table of 3 rows (two groups)
+     *             a    1
+     *             b    2
+     *             b    3
+     *
+     * Result:
+     *   Two tables, one group one table.
+     *   Result[0]:
+     *              a    1
+     *
+     *   Result[1]:
+     *              b    2
+     *              b    3
+     *
+     * Note, the order of the groups returned is NOT always the same with that in the input table.
+     * The split is done in native to avoid copying the offset array to JVM.
+     *
+     * @return The tables split according to the groups in the table. NOTE: It is the
+     * responsibility of the caller to close the result. Each table and column holds a
+     * reference to the original buffer. But both the buffer and the table must be closed
+     * for the memory to be released.
+     */
+    public ContiguousTable[] contiguousSplitGroups() {
+      return Table.contiguousSplitGroups(
+          operation.table.nativeHandle,
+          operation.indices,
+          groupByOptions.getIgnoreNullKeys(),
+          groupByOptions.getKeySorted(),
+          groupByOptions.getKeysDescending(),
+          groupByOptions.getKeysNullSmallest());
+    }
   }
 
   public static final class TableOperation {
@@ -2587,15 +2899,31 @@ public final class Table implements AutoCloseable {
     }
 
     /**
-     * Hash partition a table into the specified number of partitions.
+     * Hash partition a table into the specified number of partitions. Uses the default MURMUR3
+     * hashing.
      * @param numberOfPartitions - number of partitions to use
      * @return - {@link PartitionedTable} - Table that exposes a limited functionality of the
      * {@link Table} class
      */
     public PartitionedTable hashPartition(int numberOfPartitions) {
+      return hashPartition(HashType.MURMUR3, numberOfPartitions);
+    }
+
+    /**
+     * Hash partition a table into the specified number of partitions.
+     * @param type the type of hash to use. Depending on the type of hash different restrictions
+     *             on the hash column(s) may exist. Not all hash functions are guaranteed to work
+     *             besides IDENTITY and MURMUR3.
+     * @param numberOfPartitions - number of partitions to use
+     * @return {@link PartitionedTable} - Table that exposes a limited functionality of the
+     * {@link Table} class
+     */
+    public PartitionedTable hashPartition(HashType type, int numberOfPartitions) {
       int[] partitionOffsets = new int[numberOfPartitions];
-      return new PartitionedTable(new Table(Table.hashPartition(operation.table.nativeHandle,
+      return new PartitionedTable(new Table(Table.hashPartition(
+          operation.table.nativeHandle,
           operation.indices,
+          type.nativeId,
           partitionOffsets.length,
           partitionOffsets)), partitionOffsets);
     }

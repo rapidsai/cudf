@@ -33,7 +33,7 @@ build:
 
 requirements:
   build:
-    - cmake >=3.17.0
+    - cmake >=3.18
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
@@ -58,6 +58,7 @@ test:
     - test -f $PREFIX/include/cudf/ast/linearizer.hpp
     - test -f $PREFIX/include/cudf/ast/operators.hpp
     - test -f $PREFIX/include/cudf/binaryop.hpp
+    - test -f $PREFIX/include/cudf/labeling/label_bins.hpp
     - test -f $PREFIX/include/cudf/column/column_factories.hpp
     - test -f $PREFIX/include/cudf/column/column.hpp
     - test -f $PREFIX/include/cudf/column/column_view.hpp
@@ -66,6 +67,7 @@ test:
     - test -f $PREFIX/include/cudf/datetime.hpp
     - test -f $PREFIX/include/cudf/detail/aggregation/aggregation.hpp
     - test -f $PREFIX/include/cudf/detail/aggregation/result_cache.hpp
+    - test -f $PREFIX/include/cudf/detail/label_bins.hpp
     - test -f $PREFIX/include/cudf/detail/binaryop.hpp
     - test -f $PREFIX/include/cudf/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/detail/copy.hpp
@@ -84,6 +86,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/repeat.hpp
     - test -f $PREFIX/include/cudf/detail/replace.hpp
     - test -f $PREFIX/include/cudf/detail/reshape.hpp
+    - test -f $PREFIX/include/cudf/detail/rolling.hpp
     - test -f $PREFIX/include/cudf/detail/round.hpp
     - test -f $PREFIX/include/cudf/detail/scatter.hpp
     - test -f $PREFIX/include/cudf/detail/search.hpp
@@ -132,8 +135,12 @@ test:
     - test -f $PREFIX/include/cudf/join.hpp
     - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
+    - test -f $PREFIX/include/cudf/lists/detail/drop_list_duplicates.hpp
+    - test -f $PREFIX/include/cudf/lists/detail/interleave_columns.hpp
     - test -f $PREFIX/include/cudf/lists/detail/sorting.hpp
+    - test -f $PREFIX/include/cudf/lists/concatenate_rows.hpp
     - test -f $PREFIX/include/cudf/lists/count_elements.hpp
+    - test -f $PREFIX/include/cudf/lists/explode.hpp
     - test -f $PREFIX/include/cudf/lists/drop_list_duplicates.hpp
     - test -f $PREFIX/include/cudf/lists/extract.hpp
     - test -f $PREFIX/include/cudf/lists/contains.hpp
@@ -148,6 +155,7 @@ test:
     - test -f $PREFIX/include/cudf/replace.hpp
     - test -f $PREFIX/include/cudf/reshape.hpp
     - test -f $PREFIX/include/cudf/rolling.hpp
+    - test -f $PREFIX/include/cudf/rolling/range_window_bounds.hpp
     - test -f $PREFIX/include/cudf/round.hpp
     - test -f $PREFIX/include/cudf/scalar/scalar_factories.hpp
     - test -f $PREFIX/include/cudf/scalar/scalar.hpp
@@ -174,12 +182,14 @@ test:
     - test -f $PREFIX/include/cudf/strings/detail/converters.hpp
     - test -f $PREFIX/include/cudf/strings/detail/copying.hpp
     - test -f $PREFIX/include/cudf/strings/detail/fill.hpp
+    - test -f $PREFIX/include/cudf/strings/detail/json.hpp
     - test -f $PREFIX/include/cudf/strings/detail/replace.hpp
     - test -f $PREFIX/include/cudf/strings/detail/utilities.hpp
     - test -f $PREFIX/include/cudf/strings/extract.hpp
     - test -f $PREFIX/include/cudf/strings/findall.hpp
     - test -f $PREFIX/include/cudf/strings/find.hpp
     - test -f $PREFIX/include/cudf/strings/find_multiple.hpp
+    - test -f $PREFIX/include/cudf/strings/json.hpp
     - test -f $PREFIX/include/cudf/strings/padding.hpp
     - test -f $PREFIX/include/cudf/strings/replace.hpp
     - test -f $PREFIX/include/cudf/strings/replace_re.hpp

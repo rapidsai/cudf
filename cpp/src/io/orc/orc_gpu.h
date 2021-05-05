@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,12 @@
 #include "timezone.cuh"
 
 #include <io/comp/gpuinflate.h>
-#include <io/orc/orc_common.h>
 #include <io/statistics/column_stats.h>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
+#include <io/utilities/column_buffer.hpp>
+#include "orc_common.h"
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -29,12 +32,15 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
+
+using cudf::detail::device_2dspan;
+
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
   explicit constexpr CompressedStreamInfo(const uint8_t *compressed_data_, size_t compressed_size_)
     : compressed_data(compressed_data_),
-      compressed_data_size(compressed_size_),
       uncompressed_data(nullptr),
+      compressed_data_size(compressed_size_),
       decctl(nullptr),
       decstatus(nullptr),
       copyctl(nullptr),
@@ -67,25 +73,12 @@ enum StreamIndexType {
 };
 
 /**
- * @brief Struct to describe the output of a string datatype
- */
-struct nvstrdesc_s {
-  const char *ptr;
-  size_t count;
-};
-
-/**
  * @brief Struct to describe a single entry in the global dictionary
  */
 struct DictionaryEntry {
   uint32_t pos;  // Position in data stream
   uint32_t len;  // Length in data stream
 };
-
-/**
- * @brief Mask to indicate conversion from decimals to float64
- */
-constexpr int orc_decimal2float64_scale = 0x80;
 
 /**
  * @brief Struct to describe per stripe's column information
@@ -124,16 +117,15 @@ struct RowGroup {
  * @brief Struct to describe an encoder data chunk
  */
 struct EncChunk {
-  const uint32_t *valid_map_base;  // base ptr of input valid bit map
-  size_type column_offset;         // index of the first element relative to the base memory
-  const void *column_data_base;    // base ptr of input column data
-  uint32_t start_row;              // start row of this chunk
-  uint32_t num_rows;               // number of rows in this chunk
-  uint32_t valid_rows;             // max number of valid rows
-  uint8_t encoding_kind;           // column encoding kind (orc::ColumnEncodingKind)
-  uint8_t type_kind;               // column data type (orc::TypeKind)
-  uint8_t dtype_len;               // data type length
-  uint8_t scale;                   // scale for decimals or timestamps
+  uint32_t start_row;     // start row of this chunk
+  uint32_t num_rows;      // number of rows in this chunk
+  uint8_t encoding_kind;  // column encoding kind (orc::ColumnEncodingKind)
+  uint8_t type_kind;      // column data type (orc::TypeKind)
+  uint8_t dtype_len;      // data type length
+  uint8_t scale;          // scale for decimals or timestamps
+
+  uint32_t *dict_index;  // dictionary index from row index
+  column_device_view *leaf_column;
 };
 
 /**
@@ -163,10 +155,7 @@ struct StripeStream {
  * @brief Struct to describe a dictionary chunk
  */
 struct DictionaryChunk {
-  const uint32_t *valid_map_base;  // base ptr of input valid bit map
-  size_type column_offset;         // index of the first element relative to the base memory
-  const void *column_data_base;    // base ptr of column data (ptr,len pair)
-  uint32_t *dict_data;             // dictionary data (index of non-null rows)
+  uint32_t *dict_data;   // dictionary data (index of non-null rows)
   uint32_t *dict_index;  // row indices of corresponding string (row from dictionary index)
   uint32_t start_row;    // start row of this chunk
   uint32_t num_rows;     // num rows in this chunk
@@ -175,20 +164,23 @@ struct DictionaryChunk {
     string_char_count;  // total size of string data (NOTE: assumes less than 4G bytes per chunk)
   uint32_t num_dict_strings;  // number of strings in dictionary
   uint32_t dict_char_count;   // size of dictionary string data for this chunk
+
+  column_device_view *leaf_column;  //!< Pointer to string column
 };
 
 /**
  * @brief Struct to describe a dictionary
  */
 struct StripeDictionary {
-  const void *column_data_base;  // base ptr of column data (ptr,len pair)
-  uint32_t *dict_data;           // row indices of corresponding string (row from dictionary index)
-  uint32_t *dict_index;          // dictionary index from row index
-  uint32_t column_id;            // real column id
-  uint32_t start_chunk;          // first chunk in stripe
-  uint32_t num_chunks;           // number of chunks in the stripe
-  uint32_t num_strings;          // number of unique strings in the dictionary
-  uint32_t dict_char_count;      // total size of dictionary string data
+  uint32_t *dict_data;       // row indices of corresponding string (row from dictionary index)
+  uint32_t *dict_index;      // dictionary index from row index
+  uint32_t column_id;        // real column id
+  uint32_t start_chunk;      // first chunk in stripe
+  uint32_t num_chunks;       // number of chunks in the stripe
+  uint32_t num_strings;      // number of unique strings in the dictionary
+  uint32_t dict_char_count;  // total size of dictionary string data
+
+  column_device_view *leaf_column;  //!< Pointer to string column
 };
 
 /**
@@ -292,8 +284,8 @@ void DecodeOrcColumnData(ColumnDesc const *chunks,
  * @param[in, out] streams chunk streams device array [column][rowgroup]
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void EncodeOrcColumnData(detail::device_2dspan<EncChunk const> chunks,
-                         detail::device_2dspan<encoder_chunk_streams> streams,
+void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
+                         device_2dspan<encoder_chunk_streams> streams,
                          rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
@@ -307,11 +299,22 @@ void EncodeOrcColumnData(detail::device_2dspan<EncChunk const> chunks,
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
 void EncodeStripeDictionaries(StripeDictionary *stripes,
-                              detail::device_2dspan<EncChunk const> chunks,
+                              device_2dspan<EncChunk const> chunks,
                               uint32_t num_string_columns,
                               uint32_t num_stripes,
-                              detail::device_2dspan<encoder_chunk_streams> enc_streams,
+                              device_2dspan<encoder_chunk_streams> enc_streams,
                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+
+/**
+ * @brief Set leaf column element of EncChunk
+ *
+ * @param[in] view table device view representing input table
+ * @param[in,out] chunks encoder chunk device array [column][rowgroup]
+ * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
+ */
+void set_chunk_columns(const table_device_view &view,
+                       device_2dspan<EncChunk> chunks,
+                       rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for compacting chunked column data prior to compression
@@ -320,8 +323,8 @@ void EncodeStripeDictionaries(StripeDictionary *stripes,
  * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void CompactOrcDataStreams(detail::device_2dspan<StripeStream> strm_desc,
-                           detail::device_2dspan<encoder_chunk_streams> enc_streams,
+void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
+                           device_2dspan<encoder_chunk_streams> enc_streams,
                            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
@@ -341,8 +344,8 @@ void CompressOrcDataStreams(uint8_t *compressed_data,
                             uint32_t num_compressed_blocks,
                             CompressionKind compression,
                             uint32_t comp_blk_size,
-                            detail::device_2dspan<StripeStream> strm_desc,
-                            detail::device_2dspan<encoder_chunk_streams> enc_streams,
+                            device_2dspan<StripeStream> strm_desc,
+                            device_2dspan<encoder_chunk_streams> enc_streams,
                             gpu_inflate_input_s *comp_in,
                             gpu_inflate_status_s *comp_out,
                             rmm::cuda_stream_view stream = rmm::cuda_stream_default);
@@ -350,15 +353,25 @@ void CompressOrcDataStreams(uint8_t *compressed_data,
 /**
  * @brief Launches kernel for initializing dictionary chunks
  *
+ * @param[in] view table device view representing input table
  * @param[in,out] chunks DictionaryChunk device array [rowgroup][column]
+ * @param[in] dict_data dictionary data (index of non-null rows)
+ * @param[in] dict_index row indices of corresponding string (row from dictionary index)
+ * @param[in] row_index_stride Rowgroup size in rows
+ * @param[in] str_col_ids List of columns that are strings type
  * @param[in] num_columns Number of columns
  * @param[in] num_rowgroups Number of row groups
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void InitDictionaryIndices(DictionaryChunk *chunks,
+void InitDictionaryIndices(const table_device_view &view,
+                           DictionaryChunk *chunks,
+                           uint32_t *dict_data,
+                           uint32_t *dict_index,
+                           size_t row_index_stride,
+                           size_type *str_col_ids,
                            uint32_t num_columns,
                            uint32_t num_rowgroups,
-                           rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                           rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for building stripe dictionaries

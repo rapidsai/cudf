@@ -227,8 +227,9 @@ enum class duplicate_keep_option {
  * @param[in] input           input table_view to copy only unique rows
  * @param[in] keys            vector of indices representing key columns from `input`
  * @param[in] keep            keep first entry, last entry, or no entries if duplicates found
- * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL,
- * nulls are not equal if null_equality::UNEQUAL
+ * @param[in] nulls_equal     flag to denote nulls are equal if null_equality::EQUAL, nulls are not
+ *                            equal if null_equality::UNEQUAL
+ * @param[in] null_precedence flag to denote nulls should appear before or after non-null items
  * @param[in] mr              Device memory resource used to allocate the returned table's device
  * memory
  *
@@ -239,6 +240,7 @@ std::unique_ptr<table> drop_duplicates(
   std::vector<size_type> const& keys,
   duplicate_keep_option keep,
   null_equality nulls_equal           = null_equality::EQUAL,
+  null_order null_precedence          = null_order::BEFORE,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

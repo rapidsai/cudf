@@ -17,13 +17,21 @@
 #include <tests/strings/utilities.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+
+#include <rmm/device_uvector.hpp>
+
+#include <thrust/execution_policy.h>
+#include <thrust/transform.h>
 
 #include <cstring>
 #include <vector>
@@ -84,9 +92,9 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
   EXPECT_EQ(strings_view.chars().size(), memsize);
 
   // check string data
-  auto strings_data = cudf::strings::create_offsets(strings_view);
-  thrust::host_vector<char> h_chars_data(strings_data.first);
-  thrust::host_vector<cudf::size_type> h_offsets_data(strings_data.second);
+  auto strings_data   = cudf::strings::create_offsets(strings_view);
+  auto h_chars_data   = cudf::detail::make_std_vector_sync(strings_data.first);
+  auto h_offsets_data = cudf::detail::make_std_vector_sync(strings_data.second);
   EXPECT_EQ(memcmp(h_buffer.data(), h_chars_data.data(), h_buffer.size()), 0);
   EXPECT_EQ(
     memcmp(h_offsets.data(), h_offsets_data.data(), h_offsets.size() * sizeof(cudf::size_type)), 0);
@@ -140,9 +148,9 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
   EXPECT_EQ(strings_view.chars().size(), memsize);
 
   // check string data
-  auto strings_data = cudf::strings::create_offsets(strings_view);
-  thrust::host_vector<char> h_chars_data(strings_data.first);
-  thrust::host_vector<cudf::size_type> h_offsets_data(strings_data.second);
+  auto strings_data   = cudf::strings::create_offsets(strings_view);
+  auto h_chars_data   = cudf::detail::make_std_vector_sync(strings_data.first);
+  auto h_offsets_data = cudf::detail::make_std_vector_sync(strings_data.second);
   EXPECT_EQ(memcmp(h_buffer.data(), h_chars_data.data(), h_buffer.size()), 0);
   EXPECT_EQ(
     memcmp(h_offsets.data(), h_offsets_data.data(), h_offsets.size() * sizeof(cudf::size_type)), 0);
@@ -186,9 +194,9 @@ TEST_F(StringsFactoriesTest, CreateOffsets)
     std::vector<std::string>{"column", "of", "strings"}  // [3,6)
   };
   for (size_t idx = 0; idx < result.size(); idx++) {
-    auto strings_data = cudf::strings::create_offsets(cudf::strings_column_view(result[idx]));
-    thrust::host_vector<char> h_chars(strings_data.first);
-    thrust::host_vector<cudf::size_type> h_offsets(strings_data.second);
+    auto strings_data     = cudf::strings::create_offsets(cudf::strings_column_view(result[idx]));
+    auto h_chars          = cudf::detail::make_std_vector_sync(strings_data.first);
+    auto h_offsets        = cudf::detail::make_std_vector_sync(strings_data.second);
     auto expected_strings = expecteds[idx];
     for (size_t jdx = 0; jdx < h_offsets.size() - 1; ++jdx) {
       auto offset = h_offsets[jdx];
@@ -197,4 +205,32 @@ TEST_F(StringsFactoriesTest, CreateOffsets)
       EXPECT_EQ(str, expected_strings[jdx]);
     }
   }
+}
+
+namespace {
+using string_pair = thrust::pair<char const*, cudf::size_type>;
+struct string_view_to_pair {
+  __device__ string_pair operator()(thrust::pair<cudf::string_view, bool> const& p)
+  {
+    return (p.second) ? string_pair{p.first.data(), p.first.size_bytes()} : string_pair{nullptr, 0};
+  }
+};
+}  // namespace
+
+TEST_F(StringsFactoriesTest, StringPairWithNullsAndEmpty)
+{
+  cudf::test::strings_column_wrapper data(
+    {"", "this", "is", "", "a", "", "column", "of", "strings", "", ""},
+    {0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1});
+
+  auto d_column = cudf::column_device_view::create(data);
+  rmm::device_vector<string_pair> pairs(d_column->size());
+  thrust::transform(thrust::device,
+                    d_column->pair_begin<cudf::string_view, true>(),
+                    d_column->pair_end<cudf::string_view, true>(),
+                    pairs.data(),
+                    string_view_to_pair{});
+
+  auto result = cudf::make_strings_column(pairs);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), data);
 }

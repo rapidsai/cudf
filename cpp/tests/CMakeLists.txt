@@ -15,38 +15,6 @@
 #=============================================================================
 
 ###################################################################################################
-# - common test utils -----------------------------------------------------------------------------
-
-find_package(Threads REQUIRED)
-
-add_library(cudftestutil STATIC
-            utilities/base_fixture.cpp
-            utilities/column_utilities.cu
-            utilities/table_utilities.cu
-            strings/utilities.cu)
-
-target_compile_options(cudftestutil
-            PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
-                   "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
-)
-
-target_compile_features(cudftestutil PUBLIC cxx_std_14 cuda_std_14)
-
-target_link_libraries(cudftestutil
-               PUBLIC GTest::gmock
-                      GTest::gtest
-                      Threads::Threads
-                      cudf)
-
-target_include_directories(cudftestutil
-    PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
-           "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
-
-install(TARGETS cudftestutil
-        DESTINATION lib
-        EXPORT cudf-targets)
-
-###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
 function(ConfigureTest CMAKE_TEST_NAME )
@@ -86,6 +54,7 @@ ConfigureTest(ERROR_TEST error/error_handling_test.cu)
 ###################################################################################################
 # - groupby tests ---------------------------------------------------------------------------------
 ConfigureTest(GROUPBY_TEST
+    groupby/collect_set_test.cpp
     groupby/groupby_groups_test.cpp
     groupby/group_argmin_test.cpp
     groupby/group_argmax_test.cpp
@@ -94,6 +63,7 @@ ConfigureTest(GROUPBY_TEST
     groupby/group_sum_test.cpp
     groupby/group_min_test.cpp
     groupby/group_max_test.cpp
+    groupby/group_product_test.cpp
     groupby/group_sum_of_squares_test.cpp
     groupby/group_mean_test.cpp
     groupby/group_var_test.cpp
@@ -102,7 +72,12 @@ ConfigureTest(GROUPBY_TEST
     groupby/group_quantile_test.cpp
     groupby/group_nunique_test.cpp
     groupby/group_nth_element_test.cpp
-    groupby/group_collect_test.cpp)
+    groupby/group_collect_test.cpp
+    groupby/group_sum_scan_test.cpp
+    groupby/group_min_scan_test.cpp
+    groupby/group_max_scan_test.cpp
+    groupby/group_count_scan_test.cpp
+    groupby/group_shift_test.cpp)
 
 ###################################################################################################
 # - join tests ------------------------------------------------------------------------------------
@@ -181,7 +156,8 @@ ConfigureTest(BINARY_TEST
     binaryop/binop-verify-input-test.cpp
     binaryop/binop-null-test.cpp
     binaryop/binop-integration-test.cpp
-    binaryop/binop-generic-ptx-test.cpp)
+    binaryop/binop-generic-ptx-test.cpp
+    )
 
 ###################################################################################################
 # - unary transform tests -------------------------------------------------------------------------
@@ -189,7 +165,8 @@ ConfigureTest(TRANSFORM_TEST
     transform/integration/unary-transform-test.cpp
     transform/nans_to_null_test.cpp
     transform/mask_to_bools_test.cpp
-    transform/bools_to_mask_test.cpp)
+    transform/bools_to_mask_test.cpp
+    transform/row_bit_count_test.cu)
 
 ###################################################################################################
 # - interop tests -------------------------------------------------------------------------
@@ -197,16 +174,6 @@ ConfigureTest(INTEROP_TEST
     interop/to_arrow_test.cpp
     interop/from_arrow_test.cpp
     interop/dlpack_test.cpp)
-
-###################################################################################################
-# - jit cache tests -------------------------------------------------------------------------------
-ConfigureTest(JITCACHE_TEST
-    "${CUDF_SOURCE_DIR}/src/jit/cache.cpp"
-    jit/jit-cache-test.cpp)
-
-ConfigureTest(JITCACHE_MULTIPROC_TEST
-    "${CUDF_SOURCE_DIR}/src/jit/cache.cpp"
-    jit/jit-cache-multiprocess-test.cpp)
 
 ###################################################################################################
 # - io tests --------------------------------------------------------------------------------------
@@ -227,24 +194,25 @@ ConfigureTest(SORT_TEST
 ###################################################################################################
 # - copying tests ---------------------------------------------------------------------------------
 ConfigureTest(COPYING_TEST
-    copying/utility_tests.cpp
+    copying/concatenate_tests.cu
+    copying/copy_range_tests.cpp
+    copying/copy_tests.cu    
+    copying/detail_gather_tests.cu
+    copying/gather_struct_tests.cu        
     copying/gather_tests.cu
     copying/gather_str_tests.cu
     copying/gather_list_tests.cu
-    copying/segmented_gather_list_tests.cpp
-    copying/gather_struct_tests.cu
-    copying/detail_gather_tests.cu
+    copying/get_value_tests.cpp
+    copying/pack_tests.cu
+    copying/sample_tests.cpp
     copying/scatter_tests.cpp
-    copying/scatter_list_tests.cu
-    copying/copy_range_tests.cpp
+    copying/scatter_list_tests.cpp
+    copying/scatter_struct_tests.cpp
+    copying/segmented_gather_list_tests.cpp
+    copying/shift_tests.cpp
     copying/slice_tests.cpp
     copying/split_tests.cpp
-    copying/copy_tests.cu
-    copying/shift_tests.cpp
-    copying/get_value_tests.cpp
-    copying/sample_tests.cpp
-    copying/concatenate_tests.cu
-    copying/pack_tests.cu)
+    copying/utility_tests.cpp)
 
 ###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------
@@ -264,7 +232,9 @@ ConfigureTest(SPAN_TEST utilities_tests/span_tests.cu)
 ConfigureTest(ITERATOR_TEST
     iterator/value_iterator_test.cu
     iterator/pair_iterator_test.cu
-    iterator/scalar_iterator_test.cu)
+    iterator/scalar_iterator_test.cu
+    iterator/optional_iterator_test.cu
+    )
 
 ###################################################################################################
 # - device atomics tests --------------------------------------------------------------------------
@@ -302,6 +272,8 @@ ConfigureTest(ROLLING_TEST
     rolling/rolling_test.cpp 
     rolling/grouped_rolling_test.cpp
     rolling/lead_lag_test.cpp
+    rolling/range_window_bounds_test.cpp
+    rolling/range_rolling_window_test.cpp
     rolling/collect_list_test.cpp)
 
 ###################################################################################################
@@ -313,13 +285,15 @@ ConfigureTest(FILLING_TEST
 
 ###################################################################################################
 # - search test -----------------------------------------------------------------------------------
-ConfigureTest(SEARCH_TEST search/search_test.cpp)
+ConfigureTest(SEARCH_TEST
+    search/search_dictionary_test.cpp
+    search/search_struct_test.cpp
+    search/search_test.cpp)
 
 ###################################################################################################
 # - reshape test ----------------------------------------------------------------------------------
 ConfigureTest(RESHAPE_TEST
     reshape/byte_cast_tests.cpp
-    reshape/explode_tests.cpp
     reshape/interleave_columns_tests.cpp
     reshape/tile_tests.cpp)
 
@@ -340,18 +314,20 @@ ConfigureTest(DISPATCHER_TEST types/type_dispatcher_test.cu)
 ###################################################################################################
 # - strings test ----------------------------------------------------------------------------------
 ConfigureTest(STRINGS_TEST
-    strings/factories_test.cu
     strings/array_tests.cu
     strings/attrs_tests.cpp
     strings/booleans_tests.cpp
     strings/case_tests.cpp
     strings/chars_types_tests.cpp
-    strings/combine_tests.cpp
+    strings/combine/concatenate_list_elements_tests.cpp
+    strings/combine/concatenate_tests.cpp
+    strings/combine/join_strings_tests
     strings/concatenate_tests.cpp
     strings/contains_tests.cpp
     strings/datetime_tests.cpp
     strings/durations_tests.cpp
     strings/extract_tests.cpp
+    strings/factories_test.cu
     strings/fill_tests.cpp
     strings/findall_tests.cpp
     strings/find_tests.cpp
@@ -361,6 +337,7 @@ ConfigureTest(STRINGS_TEST
     strings/hash_string.cu
     strings/integers_tests.cu
     strings/ipv4_tests.cpp
+    strings/json_tests.cpp
     strings/pad_tests.cpp
     strings/replace_regex_tests.cpp
     strings/replace_tests.cpp
@@ -420,11 +397,18 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 ###################################################################################################
 # - lists tests ----------------------------------------------------------------------------------
 ConfigureTest(LISTS_TEST
+    lists/concatenate_rows_tests.cpp
     lists/contains_tests.cpp
     lists/count_elements_tests.cpp
     lists/drop_list_duplicates_tests.cpp
+    lists/explode_tests.cpp
     lists/extract_tests.cpp
     lists/sort_lists_tests.cpp)
+
+###################################################################################################
+# - bin tests ----------------------------------------------------------------------------------
+ConfigureTest(LABEL_BINS_TEST
+    labeling/label_bins_tests.cpp)
 
 ###################################################################################################
 ### enable testing ################################################################################

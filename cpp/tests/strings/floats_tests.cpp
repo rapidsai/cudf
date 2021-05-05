@@ -27,6 +27,41 @@
 struct StringsConvertTest : public cudf::test::BaseFixture {
 };
 
+TEST_F(StringsConvertTest, IsFloat)
+{
+  cudf::test::strings_column_wrapper strings;
+  auto strings_view = cudf::strings_column_view(strings);
+  auto results      = cudf::strings::is_float(strings_view);
+  EXPECT_EQ(cudf::type_id::BOOL8, results->view().type().id());
+  EXPECT_EQ(0, results->view().size());
+
+  cudf::test::strings_column_wrapper strings1({"+175",
+                                               "-9.8",
+                                               "7+2",
+                                               "+-4",
+                                               "6.7e17",
+                                               "-1.2e-5",
+                                               "e",
+                                               ".e",
+                                               "1.e+-2",
+                                               "00.00",
+                                               "1.0e+1.0",
+                                               "1.2.3",
+                                               "+",
+                                               "--",
+                                               ""});
+  results = cudf::strings::is_float(cudf::strings_column_view(strings1));
+  cudf::test::fixed_width_column_wrapper<bool> expected1(
+    {1, 1, 0, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected1);
+
+  cudf::test::strings_column_wrapper strings2(
+    {"+175", "-34", "9.8", "1234567890", "6.7e17", "-917.2e5"});
+  results = cudf::strings::is_float(cudf::strings_column_view(strings2));
+  cudf::test::fixed_width_column_wrapper<bool> expected2({1, 1, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected2);
+}
+
 TEST_F(StringsConvertTest, ToFloats32)
 {
   std::vector<const char*> h_strings{"1234",

@@ -157,6 +157,20 @@ struct SegmentedSortColumn {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr)
   {
+    // the average list size at which to prefer radixsort:
+    constexpr cudf::size_type MIN_AVG_LIST_SIZE_FOR_RADIXSORT{100};
+
+    if ((child.size() / offsets.size()) < MIN_AVG_LIST_SIZE_FOR_RADIXSORT) {
+      auto child_table = segmented_sort_by_key(table_view{{child}},
+                                               table_view{{child}},
+                                               offsets,
+                                               {column_order},
+                                               {null_precedence},
+                                               stream,
+                                               mr);
+      return std::move(child_table->release().front());
+    }
+
     auto output =
       cudf::detail::allocate_like(child, child.size(), mask_allocation_policy::NEVER, stream, mr);
     mutable_column_view mutable_output_view = output->mutable_view();
