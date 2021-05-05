@@ -658,7 +658,7 @@ public abstract class Aggregation {
     }
 
     /**
-     * Collect the values into a list. nulls will be skipped.
+     * Collect the values into a list. Nulls will be skipped.
      * @deprecated please use collectList as instead.
      */
     @Deprecated
@@ -694,7 +694,7 @@ public abstract class Aggregation {
     }
 
     /**
-     * Collect the values into a set. All null values will be excluded, qnd all nan values are regarded as
+     * Collect the values into a set. All null values will be excluded, and all nan values are regarded as
      * unique instances.
      */
     public static Aggregation collectSet() {

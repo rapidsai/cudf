@@ -81,11 +81,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createNoParamAgg(JNIEnv 
       case 17: // ROW_NUMBER
         ret = cudf::make_row_number_aggregation();
         break;
-      // case 18: COLLECT
-      // case 19: LEAD
-      // case 20: LAG
-      // case 21: PTX
-      // case 22: CUDA
+      // case 18: COLLECT_LIST
+      // case 19: COLLECT_SET
+      // case 20: LEAD
+      // case 21: LAG
+      // case 22: PTX
+      // case 23: CUDA
       default: throw std::logic_error("Unsupported No Parameter Aggregation Operation");
     }
 
