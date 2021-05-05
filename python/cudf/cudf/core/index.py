@@ -1281,10 +1281,6 @@ class Index(SingleColumnFrame, Serializable):
         """
         return super().where(cond=cond, other=other)
 
-    @property
-    def __cuda_array_interface__(self):
-        raise (NotImplementedError)
-
     def memory_usage(self, deep=False):
         """
         Memory usage of the values.
@@ -1742,10 +1738,6 @@ class RangeIndex(Index):
         pos = search_range(start, stop, label, step, side=side)
         return pos
 
-    @property
-    def __cuda_array_interface__(self):
-        return self._values.__cuda_array_interface__
-
     def memory_usage(self, **kwargs):
         return 0
 
@@ -1807,7 +1799,7 @@ class GenericIndex(Index):
 
     @property
     def _values(self):
-        return next(iter(self._data.columns))
+        return self._column
 
     def copy(self, name=None, deep=False, dtype=None, names=None):
         """
@@ -1961,10 +1953,6 @@ class GenericIndex(Index):
 
     def get_slice_bound(self, label, side, kind):
         return self._values.get_slice_bound(label, side, kind)
-
-    @property
-    def __cuda_array_interface__(self):
-        return self._values.__cuda_array_interface__
 
 
 class NumericIndex(GenericIndex):

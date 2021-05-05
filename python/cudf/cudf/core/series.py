@@ -5934,10 +5934,6 @@ class Series(SingleColumnFrame, Serializable):
 
         return out.copy(deep=copy)
 
-    @property
-    def __cuda_array_interface__(self):
-        return self._column.__cuda_array_interface__
-
     def _align_to_index(
         self, index, how="outer", sort=True, allow_non_unique=False
     ):

@@ -3572,6 +3572,10 @@ class SingleColumnFrame(Frame):
         return self._column.is_monotonic_decreasing
 
     @property
+    def __cuda_array_interface__(self):
+        return self._column.__cuda_array_interface__
+
+    @property
     def _copy_construct_defaults(self):
         """A default dictionary of kwargs to be used for copy construction."""
         raise NotImplementedError
