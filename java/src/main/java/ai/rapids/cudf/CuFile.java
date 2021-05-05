@@ -55,7 +55,8 @@ public class CuFile {
         }));
         initialized = true;
       } catch (Throwable t) {
-        throw new RuntimeException(t);
+        // Cannot throw an exception here as the CI/CD machine may not have GDS installed.
+        log.error("Could not load cuFile jni library...", t);
       }
     }
   }

@@ -97,7 +97,7 @@ ConfigureBench(ITERATOR_BENCH iterator/iterator_benchmark.cu)
 
 ###################################################################################################
 # - search benchmark ------------------------------------------------------------------------------
-ConfigureBench(SEARCH_BENCH search/search_benchmark.cu)
+ConfigureBench(SEARCH_BENCH search/search_benchmark.cpp)
 
 ###################################################################################################
 # - sort benchmark --------------------------------------------------------------------------------
@@ -123,6 +123,11 @@ ConfigureBench(REDUCTION_BENCH
   reduction/reduce_benchmark.cpp
   reduction/scan_benchmark.cpp
   reduction/minmax_benchmark.cpp)
+
+###################################################################################################
+# - reduction benchmark ---------------------------------------------------------------------------
+ConfigureBench(REPLACE_BENCH
+  replace/clamp_benchmark.cpp)
 
 ###################################################################################################
 # - filling benchmark -----------------------------------------------------------------------------
@@ -182,7 +187,9 @@ ConfigureBench(AST_BENCH ast/transform_benchmark.cpp)
 
 ###################################################################################################
 # - binaryop benchmark ----------------------------------------------------------------------------
-ConfigureBench(BINARYOP_BENCH binaryop/binaryop_benchmark.cu)
+ConfigureBench(BINARYOP_BENCH
+  binaryop/binaryop_benchmark.cpp
+  binaryop/jit_binaryop_benchmark.cpp)
 
 ###################################################################################################
 # - nvtext benchmark -------------------------------------------------------------------
