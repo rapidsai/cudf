@@ -93,7 +93,9 @@ class writer {
   writer(std::unique_ptr<cudf::io::data_sink> sinkp,
          csv_writer_options const &options,
          rmm::cuda_stream_view stream,
-         rmm::mr::device_memory_resource *mr);  // cannot provide definition here (because _impl is incomplete, hence unique_ptr has not enough sizeof() info)
+         rmm::mr::device_memory_resource *mr);  // cannot provide definition here (because
+                                                // _impl is incomplete hence unique_ptr has
+                                                // not enough sizeof() info)
 
   /**
    * @brief Destructor explicitly-declared to avoid inlined in header
