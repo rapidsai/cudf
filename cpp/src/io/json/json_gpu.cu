@@ -792,18 +792,22 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
   CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, detect_data_types_kernel));
 
-  auto d_column_infos =
-    cudf::detail::make_zeroed_device_uvector_async<cudf::io::column_type_histogram>(num_columns,
-                                                                                    stream);
-
-  if (do_set_null_count) {
-    // Set the null count to the row count (all fields assumes to be null).
-    thrust::for_each(
-      rmm::exec_policy(stream),
-      d_column_infos.begin(),
-      d_column_infos.end(),
-      [num_records = row_offsets.size()] __device__(auto &info) { info.null_count = num_records; });
-  }
+  auto d_column_infos = [&]() {
+    if (do_set_null_count) {
+      rmm::device_uvector<cudf::io::column_type_histogram> d_column_infos(num_columns, stream);
+      // Set the null count to the row count (all fields assumes to be null).
+      thrust::generate(rmm::exec_policy(stream),
+                       d_column_infos.begin(),
+                       d_column_infos.end(),
+                       [num_records = row_offsets.size()] __device__() {
+                         return cudf::io::column_type_histogram{num_records};
+                       });
+      return d_column_infos;
+    } else {
+      return cudf::detail::make_zeroed_device_uvector_async<cudf::io::column_type_histogram>(
+        num_columns, stream);
+    }
+  }();
 
   // Calculate actual block count to use based on records count
   const int grid_size = (row_offsets.size() + block_size - 1) / block_size;
