@@ -197,7 +197,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls
                "Size mismatch between num_columns and replace_policies.");
 
   if (values.is_empty()) { return std::make_pair(empty_like(_keys), empty_like(values)); }
-  auto stream = rmm::cuda_stream_default;
+  auto const stream = rmm::cuda_stream_default;
 
   auto const& group_labels = helper().group_labels(stream);
   std::vector<std::unique_ptr<column>> results;

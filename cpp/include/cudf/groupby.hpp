@@ -299,7 +299,7 @@ class groupby {
    *
    * The returned pair contains a column of the sorted keys and the result column. In result column,
    * values of the same group are in contiguous memory. In each group, the order of values maintain
-   * their original order. The order of groups are not gaurenteed.
+   * their original order. The order of groups are not guaranteed.
    *
    * Example:
    * @code{.pseudo}
