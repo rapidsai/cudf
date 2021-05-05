@@ -1,5 +1,6 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
+import json
 import re
 import urllib.parse
 from contextlib import ExitStack as does_not_raise
@@ -2989,12 +2990,21 @@ def test_string_slice_with_mask():
         ],
     ],
 )
-@pytest.mark.parametrize(
-    "json_path", ["$.store", "$.store.book", "$.store.book[*].category", " "],
-)
-def test_string_get_json_object(data, json_path):
+def test_string_get_json_object(data):
     gs = cudf.Series(data)
-    gs.str.get_json_object(json_path)
+    js = json.loads(data[0])
+
+    assert_eq(
+        print(gs.str.get_json_object("$.store").iloc[0]), print(js["store"])
+    )
+    assert_eq(
+        print(gs.str.get_json_object("$.store.book").iloc[0]),
+        print(js["store"]["book"]),
+    )
+    assert_eq(
+        print(gs.str.get_json_object("$.store.book[0].category").iloc[0]),
+        print(js["store"]["book"][0]["category"]),
+    )
 
 
 @pytest.mark.parametrize(
@@ -3024,7 +3034,10 @@ def test_string_get_json_object_empty_json_strings(json_path):
         ]
     )
 
-    gs.str.get_json_object(json_path)
+    got = gs.str.get_json_object("$.store")
+    expect = cudf.Series([None], dtype="object")
+
+    assert_eq(got, expect)
 
 
 @pytest.mark.parametrize("json_path", ["a", ".", "/.store"])

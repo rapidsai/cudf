@@ -2237,10 +2237,11 @@ class StringMethods(ColumnMethodsMixin):
                 )
             )
         except RuntimeError as e:
-            if (
-                "Unrecognized JSONPath operator"
-                or "Invalid empty name in JSONPath query string" in str(e)
-            ):
+            matches = [
+                "Unrecognized JSONPath operator",
+                "Invalid empty name in JSONPath query string",
+            ]
+            if any(match in str(e) for match in matches):
                 raise ValueError("JSONPath value not found") from e
             raise
         else:
