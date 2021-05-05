@@ -3586,9 +3586,10 @@ class SingleColumnFrame(Frame):
                 # If both columns are nullable, pandas semantics dictate that
                 # nulls that are present in both lhs and rhs are not filled.
                 if lhs.nullable and rhs.nullable:
-                    # Note: using bitwise and rather than logical, but these
-                    # are boolean outputs so should be fine.
-                    output_mask = lhs.isnull() & rhs.isnull()
+                    # Note: lhs is a Frame, while rhs is already a column.
+                    lmask = as_column(lhs._column.nullmask)
+                    rmask = as_column(rhs.nullmask)
+                    output_mask = (lmask | rmask).data
                     lhs = lhs.fillna(fill_value)
                     rhs = rhs.fillna(fill_value)
                 elif lhs.nullable:
@@ -3612,7 +3613,7 @@ class SingleColumnFrame(Frame):
         output = lhs._copy_construct(data=outcol, name=result_name)
 
         if output_mask is not None:
-            output._column[output_mask._column] = None
+            output._column = output._column.set_mask(output_mask)
         return output
 
     def _normalize_binop_value(self, other):
