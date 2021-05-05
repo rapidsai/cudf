@@ -785,15 +785,6 @@ class Index(SingleColumnFrame, Serializable):
 
         return difference
 
-    def _apply_op(self, fn, other=None):
-
-        idx_series = cudf.Series(self, name=self.name)
-        op = getattr(idx_series, fn)
-        if other is not None:
-            return as_index(op(other))
-        else:
-            return as_index(op())
-
     def _binaryop(self, other, fn, fill_value=None, reflect=False):
         # TODO: Rather than including an allowlist of acceptable types, we
         # should instead return NotImplemented for __all__  other types. That
