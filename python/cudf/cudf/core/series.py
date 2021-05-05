@@ -2045,19 +2045,6 @@ class Series(SingleColumnFrame, Serializable):
     def logical_not(self):
         return self._unaryop("not")
 
-    def _normalize_binop_value(self, other):
-        """Returns a *column* (not a Series) or scalar for performing
-        binary operations with self._column.
-        """
-        if isinstance(other, ColumnBase):
-            return other
-        if isinstance(other, (Series, Index)):
-            return other._column
-        elif other is cudf.NA:
-            return cudf.Scalar(other, dtype=self.dtype)
-        else:
-            return self._column.normalize_binop_value(other)
-
     def eq(self, other, fill_value=None, axis=0):
         """Equal to of series and other, element-wise
         (binary operator eq).
@@ -6213,20 +6200,6 @@ class Series(SingleColumnFrame, Serializable):
             return self.__class__._from_data(data, index=idx)
 
         return super()._explode(self._column_names[0], ignore_index)
-
-
-truediv_int_dtype_corrections = {
-    "int8": "float32",
-    "int16": "float32",
-    "int32": "float32",
-    "int64": "float64",
-    "uint8": "float32",
-    "uint16": "float32",
-    "uint32": "float64",
-    "uint64": "float64",
-    "bool": "float32",
-    "int": "float",
-}
 
 
 class DatetimeProperties(object):

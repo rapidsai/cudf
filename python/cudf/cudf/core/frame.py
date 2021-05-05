@@ -18,7 +18,12 @@ from pandas.api.types import is_dict_like, is_dtype_equal
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
-from cudf.core.column import as_column, build_categorical_column, column_empty
+from cudf.core.column import (
+    ColumnBase,
+    as_column,
+    build_categorical_column,
+    column_empty,
+)
 from cudf.core.join import merge
 from cudf.utils.dtypes import (
     is_categorical_dtype,
@@ -3608,6 +3613,19 @@ class SingleColumnFrame(Frame):
         if output_mask is not None:
             output._column[output_mask._column] = None
         return output
+
+    def _normalize_binop_value(self, other):
+        """Returns a *column* (not a Series) or scalar for performing
+        binary operations with self._column.
+        """
+        if isinstance(other, ColumnBase):
+            return other
+        if isinstance(other, self.__class__):
+            return other._column
+        if other is cudf.NA:
+            return cudf.Scalar(other, dtype=self.dtype)
+        else:
+            return self._column.normalize_binop_value(other)
 
     def __add__(self, other):
         return self._binaryop(other, "add")

@@ -850,21 +850,6 @@ class Index(SingleColumnFrame, Serializable):
 
         return cls(**{**self._copy_construct_defaults, **kwargs})
 
-    def _normalize_binop_value(self, other):
-        """Returns a *column* (not a Series) or scalar for performing
-        binary operations with self._column.
-        """
-        # TODO: Fix some of this, it may not make sense to have something
-        # general for multiple frame types.
-        if isinstance(other, ColumnBase):
-            return other
-        if isinstance(other, (cudf.Series, cudf.Index)):
-            return other._column
-        elif other is cudf.NA:
-            return cudf.Scalar(other, dtype=self.dtype)
-        else:
-            return self._column.normalize_binop_value(other)
-
     def sort_values(self, return_indexer=False, ascending=True, key=None):
         """
         Return a sorted copy of the index, and optionally return the indices
