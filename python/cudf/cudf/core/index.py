@@ -945,15 +945,6 @@ class Index(SingleColumnFrame, Serializable):
         """
         return as_index(self._values.unique(), name=self.name)
 
-    def __and__(self, other):
-        return self._apply_op("__and__", other)
-
-    def __or__(self, other):
-        return self._apply_op("__or__", other)
-
-    def __xor__(self, other):
-        return self._apply_op("__xor__", other)
-
     def join(
         self, other, how="left", level=None, return_indexers=False, sort=False
     ):

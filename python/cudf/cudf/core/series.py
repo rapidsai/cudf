@@ -1990,57 +1990,14 @@ class Series(SingleColumnFrame, Serializable):
             raise NotImplementedError("Only axis=0 supported at this time.")
         return self._binaryop(other, "truediv", fill_value, True)
 
-    def _bitwise_binop(self, other, op):
-        if (
-            np.issubdtype(self.dtype, np.bool_)
-            or np.issubdtype(self.dtype, np.integer)
-        ) and (
-            np.issubdtype(other.dtype, np.bool_)
-            or np.issubdtype(other.dtype, np.integer)
-        ):
-            # TODO: This doesn't work on Series (op) DataFrame
-            # because dataframe doesn't have dtype
-            ser = self._binaryop(other, op)
-            if np.issubdtype(self.dtype, np.bool_) or np.issubdtype(
-                other.dtype, np.bool_
-            ):
-                ser = ser.astype(np.bool_)
-            return ser
-        else:
-            raise TypeError(
-                f"Operation 'bitwise {op}' not supported between "
-                f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
-            )
-
-    def __and__(self, other):
-        """Performs vectorized bitwise and (&) on corresponding elements of two
-        series.
-        """
-        return self._bitwise_binop(other, "and")
-
-    def __or__(self, other):
-        """Performs vectorized bitwise or (|) on corresponding elements of two
-        series.
-        """
-        return self._bitwise_binop(other, "or")
-
-    def __xor__(self, other):
-        """Performs vectorized bitwise xor (^) on corresponding elements of two
-        series.
-        """
-        return self._bitwise_binop(other, "xor")
-
     def logical_and(self, other):
-        ser = self._binaryop(other, "l_and")
-        return ser.astype(np.bool_)
+        return self._binaryop(other, "l_and").astype(np.bool_)
 
     def remainder(self, other):
-        ser = self._binaryop(other, "mod")
-        return ser
+        return self._binaryop(other, "mod")
 
     def logical_or(self, other):
-        ser = self._binaryop(other, "l_or")
-        return ser.astype(np.bool_)
+        return self._binaryop(other, "l_or").astype(np.bool_)
 
     def logical_not(self):
         return self._unaryop("not")

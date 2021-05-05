@@ -3530,7 +3530,7 @@ class SingleColumnFrame(Frame):
         *args,
         **kwargs,
     ):
-        """Perform a binary operation between two frames.
+        """Perform a binary operation between two single column frames.
 
         Parameters
         ----------
@@ -3620,12 +3620,32 @@ class SingleColumnFrame(Frame):
         """
         if isinstance(other, ColumnBase):
             return other
-        if isinstance(other, self.__class__):
+        if isinstance(other, SingleColumnFrame):
             return other._column
         if other is cudf.NA:
             return cudf.Scalar(other, dtype=self.dtype)
         else:
             return self._column.normalize_binop_value(other)
+
+    def _bitwise_binop(self, other, op):
+        """Type-coercing wrapper around _binaryop for bitwise operations."""
+        self_is_bool = np.issubdtype(self.dtype, np.bool_)
+        other_is_bool = np.issubdtype(other.dtype, np.bool_)
+
+        if (self_is_bool or np.issubdtype(self.dtype, np.integer)) and (
+            other_is_bool or np.issubdtype(other.dtype, np.integer)
+        ):
+            # TODO: This doesn't work on Series (op) DataFrame
+            # because dataframe doesn't have dtype
+            ser = self._binaryop(other, op)
+            if self_is_bool or other_is_bool:
+                ser = ser.astype(np.bool_)
+            return ser
+        else:
+            raise TypeError(
+                f"Operation 'bitwise {op}' not supported between "
+                f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
+            )
 
     def __add__(self, other):
         return self._binaryop(other, "add")
@@ -3688,6 +3708,15 @@ class SingleColumnFrame(Frame):
 
     def __ge__(self, other):
         return self._binaryop(other, "ge")
+
+    def __and__(self, other):
+        return self._bitwise_binop(other, "and")
+
+    def __or__(self, other):
+        return self._bitwise_binop(other, "or")
+
+    def __xor__(self, other):
+        return self._bitwise_binop(other, "xor")
 
 
 def _get_replacement_values_for_columns(
