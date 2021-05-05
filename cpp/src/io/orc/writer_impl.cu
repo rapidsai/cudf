@@ -101,8 +101,7 @@ orc::TypeKind to_orc_type(cudf::type_id id)
 /**
  * @brief Function that translates time unit to nanoscale multiple
  */
-template <typename T>
-constexpr T to_clockscale(cudf::type_id timestamp_id)
+constexpr int32_t to_clockscale(cudf::type_id timestamp_id)
 {
   switch (timestamp_id) {
     case cudf::type_id::TIMESTAMP_SECONDS: return 9;
@@ -136,9 +135,9 @@ class orc_column_view {
       _data_count(col.size()),
       _null_count(col.null_count()),
       _nulls(col.null_mask()),
-      _clockscale(to_clockscale<uint8_t>(col.type().id())),
-      _scale{col.type().scale()},
-      _type_kind(to_orc_type(col.type().id()))
+      _type_kind(to_orc_type(col.type().id())),
+      _scale{(_type_kind == TypeKind::DECIMAL) ? col.type().scale()
+                                               : to_clockscale(col.type().id())}
   {
     // Generating default name if name isn't present in metadata
     if (metadata && _index < metadata->column_names.size()) {
@@ -194,7 +193,6 @@ class orc_column_view {
   size_t null_count() const noexcept { return _null_count; }
   bool nullable() const noexcept { return (_nulls != nullptr); }
   uint32_t const *nulls() const noexcept { return _nulls; }
-  uint8_t clockscale() const noexcept { return _clockscale; }
   auto scale() const noexcept { return _scale; }
 
   void set_orc_encoding(ColumnEncodingKind e) { _encoding_kind = e; }
@@ -212,13 +210,13 @@ class orc_column_view {
   size_type _data_count  = 0;
   size_t _null_count     = 0;
   uint32_t const *_nulls = nullptr;
-  uint8_t _clockscale    = 0;
-  numeric::scale_type _scale;
 
   // ORC-related members
   std::string _name{};
   TypeKind _type_kind;
   ColumnEncodingKind _encoding_kind;
+
+  int32_t _scale = 0;
 
   // String dictionary-related members
   size_t dict_stride                       = 0;
@@ -600,7 +598,7 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
         } else {
           ck.dtype_len = column.type_width();
         }
-        ck.scale = column.clockscale();
+        ck.scale = column.scale();
       }
     }
   }
@@ -794,7 +792,7 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
     desc->num_values = column.data_count();
     if (desc->stats_dtype == dtype_timestamp64) {
       // Timestamp statistics are in milliseconds
-      switch (column.clockscale()) {
+      switch (column.scale()) {
         case 9: desc->ts_scale = 1000; break;
         case 6: desc->ts_scale = 0; break;
         case 3: desc->ts_scale = -1000; break;

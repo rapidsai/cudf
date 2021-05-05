@@ -643,7 +643,6 @@ __global__ void __launch_bounds__(block_size)
     s->chunk  = chunks[col_id][group_id];
     s->stream = streams[col_id][group_id];
   }
-  // DECIMAL: only encode PRESENT and scale (TMP) streams
   if (t < CI_NUM_STREAMS) { s->strm_pos[t] = 0; }
   __syncthreads();
   if (!t) {
@@ -782,6 +781,7 @@ __global__ void __launch_bounds__(block_size)
               s->lengths.u32[nz_idx]                  = value.size_bytes();
             }
             break;
+          case DECIMAL: /* TODO */ break;
           default: break;
         }
       }

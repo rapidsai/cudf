@@ -122,7 +122,7 @@ struct EncChunk {
   uint8_t encoding_kind;  // column encoding kind (orc::ColumnEncodingKind)
   uint8_t type_kind;      // column data type (orc::TypeKind)
   uint8_t dtype_len;      // data type length
-  uint8_t scale;          // scale for decimals or timestamps
+  int32_t scale;          // scale for decimals or timestamps
 
   uint32_t *dict_index;  // dictionary index from row index
   column_device_view *leaf_column;
