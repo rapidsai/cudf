@@ -18,12 +18,7 @@ from pandas.api.types import is_dict_like, is_dtype_equal
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
-from cudf.core.column import (
-    as_column,
-    build_categorical_column,
-    build_column,
-    column_empty,
-)
+from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.core.join import merge
 from cudf.utils.dtypes import (
     is_categorical_dtype,
@@ -3572,30 +3567,24 @@ class SingleColumnFrame(Frame):
         }
 
         if fn == "truediv":
-            if str(lhs.dtype) in truediv_int_dtype_corrections:
-                truediv_type = truediv_int_dtype_corrections[str(lhs.dtype)]
+            truediv_type = truediv_int_dtype_corrections.get(str(lhs.dtype))
+            if truediv_type is not None:
                 lhs = lhs.astype(truediv_type)
 
+        output_mask = None
         if fill_value is not None:
-            # if lhs.nullable:
-            #     lhs = lhs.fillna(fill_value)
-            # if not is_scalar(rhs) and rhs.nullable:
-            #     rhs = rhs.fillna(fill_value)
-
             if is_scalar(rhs):
-                lhs = lhs.fillna(fill_value)
+                if lhs.nullable:
+                    lhs = lhs.fillna(fill_value)
             else:
+                # If both columns are nullable, pandas semantics dictate that
+                # nulls that are present in both lhs and rhs are not filled.
                 if lhs.nullable and rhs.nullable:
-                    lmask = self.__class__(data=lhs.nullmask)
-                    rmask = self.__class__(data=rhs.nullmask)
-                    mask = (lmask | rmask).data
+                    # Note: using bitwise and rather than logical, but these
+                    # are boolean outputs so should be fine.
+                    output_mask = lhs.isnull() & rhs.isnull()
                     lhs = lhs.fillna(fill_value)
                     rhs = rhs.fillna(fill_value)
-                    result = lhs._binaryop(rhs, fn=fn, reflect=reflect)
-                    data = build_column(
-                        data=result.data, dtype=result.dtype, mask=mask
-                    )
-                    return lhs._copy_construct(data=data)
                 elif lhs.nullable:
                     lhs = lhs.fillna(fill_value)
                 elif rhs.nullable:
@@ -3614,7 +3603,11 @@ class SingleColumnFrame(Frame):
         else:
             result_name = self.name
 
-        return lhs._copy_construct(data=outcol, name=result_name)
+        output = lhs._copy_construct(data=outcol, name=result_name)
+
+        if output_mask is not None:
+            output._column[output_mask._column] = None
+        return output
 
     def __add__(self, other):
         return self._binaryop(other, "add")
