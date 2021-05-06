@@ -23,6 +23,7 @@
 #include <cudf/datetime.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/hashing.hpp>
+#include <cudf/lists/concatenate_rows.hpp>
 #include <cudf/lists/count_elements.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/extract.hpp>
@@ -1044,6 +1045,28 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringConcatenation(
 
     std::unique_ptr<cudf::column> result =
         cudf::strings::concatenate(*string_columns, *separator_scalar, *narep_scalar);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listConcatenationByRow(JNIEnv *env,
+                                                                              jobject j_object,
+                                                                              jlongArray column_handles,
+                                                                              jboolean ignore_null) {
+  JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto null_policy = ignore_null ? cudf::lists::concatenate_null_policy::IGNORE
+                                   : cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW;
+    cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
+    std::vector<cudf::column_view> column_views;
+    std::transform(n_cudf_columns.data(), n_cudf_columns.data() + n_cudf_columns.size(),
+                   std::back_inserter(column_views),
+                   [](auto const &p_column) { return *p_column; });
+
+    std::unique_ptr<cudf::column> result =
+        cudf::lists::concatenate_rows(cudf::table_view(column_views), null_policy);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

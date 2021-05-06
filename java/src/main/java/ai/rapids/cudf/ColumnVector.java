@@ -528,6 +528,47 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
+   * Concatenate columns of lists horizontally (row by row), combining a corresponding row
+   * from each column into a single list row of a new column. Null list element of input columns
+   * will be ignored (skipped) during the concatenation.
+   *
+   * @param columns array of columns containing lists, must be more than 2 columns
+   * @return A new java column vector containing the concatenated lists.
+   */
+  public static ColumnVector listConcatenateByRow(ColumnView[] columns) {
+    return listConcatenateByRow(columns, false);
+  }
+
+  /**
+   * Concatenate columns of lists horizontally (row by row), combining a corresponding row
+   * from each column into a single list row of a new column.
+   *
+   * @param columns    array of columns containing lists, must be more than 2 columns
+   * @param ignoreNull whether to ignore null list element of input columns: If true, null list
+   *                   will be ignored from concatenation; Otherwise, any concatenation involving
+   *                   a null list element will result in a null list
+   * @return A new java column vector containing the concatenated lists.
+   */
+  public static ColumnVector listConcatenateByRow(ColumnView[] columns, boolean ignoreNull) {
+    assert columns.length >= 2 : "listConcatenateByRow requires at least 2 columns";
+    long size = columns[0].getRowCount();
+    long[] columnViews = new long[columns.length];
+    DType childType = columns[0].getChildColumnView(0).getType();
+    assert !childType.isNestedType() : "listConcatenateByRow only supports lists with depth 1";
+
+    for(int i = 0; i < columns.length; i++) {
+      assert columns[i] != null : "Column vectors passed may not be null";
+      assert columns[i].getType().equals(DType.LIST) : "All columns must be of type list";
+      assert columns[i].getRowCount() == size : "Row count mismatch";
+      assert childType.equals(columns[i].getChildColumnView(0).getType()) : "Element type mismatch";
+
+      columnViews[i] = columns[i].getNativeView();
+    }
+
+    return new ColumnVector(listConcatenationByRow(columnViews, ignoreNull));
+  }
+
+  /**
    * Create a new vector containing the MD5 hash of each row in the table.
    *
    * @param columns array of columns to hash, must have identical number of rows.

@@ -2837,7 +2837,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Native method to concatenate columns of strings together, combining a row from
-   * each colunm into a single string.
+   * each column into a single string.
    * @param columnViews array of longs holding the native handles of the column_views to combine.
    * @param separator string scalar inserted between each string being merged, may not be null.
    * @param narep string scalar indicating null behavior. If set to null and any string in the row is null
@@ -2848,6 +2848,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *         by the stringConcatenate method.
    */
   protected static native long stringConcatenation(long[] columnViews, long separator, long narep);
+
+
+  /**
+   * Native method to concatenate columns of lists together, combining a row from
+   * each column into a single list.
+   * @param columnViews array of longs holding the native handles of the column_views to combine.
+   * @return native handle of the resulting cudf column, used to construct the Java column
+   *         by the listConcatenateByRow method.
+   */
+  protected static native long listConcatenationByRow(long[] columnViews, boolean ignoreNull);
 
   /**
    * Native method for map lookup over a column of List<Struct<String,String>>
