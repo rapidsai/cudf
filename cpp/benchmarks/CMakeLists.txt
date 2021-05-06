@@ -125,6 +125,11 @@ ConfigureBench(REDUCTION_BENCH
   reduction/minmax_benchmark.cpp)
 
 ###################################################################################################
+# - reduction benchmark ---------------------------------------------------------------------------
+ConfigureBench(REPLACE_BENCH
+  replace/clamp_benchmark.cpp)
+
+###################################################################################################
 # - filling benchmark -----------------------------------------------------------------------------
 ConfigureBench(FILL_BENCH
   filling/repeat_benchmark.cpp)

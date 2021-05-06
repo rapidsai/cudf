@@ -167,6 +167,18 @@ TEST_F(ListScalarTest, ConstructNull)
   EXPECT_FALSE(s.is_valid());
 }
 
+TEST_F(ListScalarTest, MoveColumnConstructor)
+{
+  auto data = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3};
+  auto col  = cudf::column(data);
+  auto ptr  = col.view().data<int32_t>();
+  auto s    = cudf::list_scalar(std::move(col));
+
+  EXPECT_TRUE(s.is_valid());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(data, s.view());
+  EXPECT_EQ(ptr, s.view().data<int32_t>());
+}
+
 TEST_F(ListScalarTest, CopyConstructorNonNested)
 {
   auto data = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3};
