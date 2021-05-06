@@ -211,6 +211,8 @@ add_library(cudf
     src/groupby/sort/group_sum_scan.cu
     src/groupby/sort/sort_helper.cu
     src/hash/hashing.cu
+    src/hash/md5_hash.cu
+    src/hash/murmur_hash.cu
     src/interop/dlpack.cpp
     src/interop/from_arrow.cu
     src/interop/to_arrow.cu
@@ -289,7 +291,11 @@ add_library(cudf
     src/reductions/nth_element.cu
     src/reductions/product.cu
     src/reductions/reductions.cpp
-    src/reductions/scan.cu
+    src/reductions/scan/scan.cu
+    src/reductions/scan/max.cu
+    src/reductions/scan/min.cu
+    src/reductions/scan/product.cu
+    src/reductions/scan/sum.cu
     src/reductions/std.cu
     src/reductions/sum.cu
     src/reductions/sum_of_squares.cu
