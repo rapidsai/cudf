@@ -125,6 +125,11 @@ ConfigureBench(REDUCTION_BENCH
   reduction/minmax_benchmark.cpp)
 
 ###################################################################################################
+# - reduction benchmark ---------------------------------------------------------------------------
+ConfigureBench(REPLACE_BENCH
+  replace/clamp_benchmark.cpp)
+
+###################################################################################################
 # - filling benchmark -----------------------------------------------------------------------------
 ConfigureBench(FILL_BENCH
   filling/repeat_benchmark.cpp)
@@ -138,7 +143,7 @@ ConfigureBench(GROUPBY_BENCH
 
 ###################################################################################################
 # - hashing benchmark -----------------------------------------------------------------------------
-ConfigureBench(HASHING_BENCH 
+ConfigureBench(HASHING_BENCH
   hashing/hash_benchmark.cpp
   hashing/partition_benchmark.cpp)
 
@@ -184,7 +189,9 @@ ConfigureBench(AST_BENCH ast/transform_benchmark.cpp)
 
 ###################################################################################################
 # - binaryop benchmark ----------------------------------------------------------------------------
-ConfigureBench(BINARYOP_BENCH binaryop/binaryop_benchmark.cu)
+ConfigureBench(BINARYOP_BENCH
+  binaryop/binaryop_benchmark.cpp
+  binaryop/jit_binaryop_benchmark.cpp)
 
 ###################################################################################################
 # - nvtext benchmark -------------------------------------------------------------------

@@ -86,6 +86,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/repeat.hpp
     - test -f $PREFIX/include/cudf/detail/replace.hpp
     - test -f $PREFIX/include/cudf/detail/reshape.hpp
+    - test -f $PREFIX/include/cudf/detail/rolling.hpp
     - test -f $PREFIX/include/cudf/detail/round.hpp
     - test -f $PREFIX/include/cudf/detail/scatter.hpp
     - test -f $PREFIX/include/cudf/detail/search.hpp
@@ -137,6 +138,7 @@ test:
     - test -f $PREFIX/include/cudf/lists/detail/drop_list_duplicates.hpp
     - test -f $PREFIX/include/cudf/lists/detail/interleave_columns.hpp
     - test -f $PREFIX/include/cudf/lists/detail/sorting.hpp
+    - test -f $PREFIX/include/cudf/lists/concatenate_rows.hpp
     - test -f $PREFIX/include/cudf/lists/count_elements.hpp
     - test -f $PREFIX/include/cudf/lists/explode.hpp
     - test -f $PREFIX/include/cudf/lists/drop_list_duplicates.hpp

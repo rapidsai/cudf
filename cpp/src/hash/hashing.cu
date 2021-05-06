@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 #include <cudf/column/column_factories.hpp>
-#include <cudf/column/column_view.hpp>
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>

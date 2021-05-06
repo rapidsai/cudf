@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 #include <cudf/column/column_factories.hpp>
-#include <cudf/column/column_view.hpp>
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/table/table_device_view.cuh>
-#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
+#include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
 
 namespace cudf {
@@ -82,11 +82,20 @@ std::unique_ptr<column> md5_hash(table_view const& input,
                      MD5Hash hasher = MD5Hash{};
                      for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
                        if (device_input.column(col_index).is_valid(row_index)) {
+<<<<<<< HEAD
                          cudf::type_dispatcher(device_input.column(col_index).type(),
                                                hasher,
                                                device_input.column(col_index),
                                                row_index,
                                                &hash_state);
+=======
+                         cudf::type_dispatcher<dispatch_storage_type>(
+                           device_input.column(col_index).type(),
+                           hasher,
+                           device_input.column(col_index),
+                           row_index,
+                           &hash_state);
+>>>>>>> branch-0.20
                        }
                      }
                      hasher.finalize(&hash_state, d_chars + (row_index * 32));
