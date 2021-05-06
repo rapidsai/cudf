@@ -781,7 +781,7 @@ __global__ void __launch_bounds__(block_size)
               s->lengths.u32[nz_idx]                  = value.size_bytes();
             }
             break;
-          case DECIMAL: /* TODO */ break;
+          case DECIMAL: s->lengths.u32[nz_idx] = s->chunk.scale; break;
           default: break;
         }
       }
@@ -815,7 +815,7 @@ __global__ void __launch_bounds__(block_size)
         uint32_t nz = s->buf.u32[511];
         s->nnz += nz;
         s->numvals += nz;
-        s->numlengths += (s->chunk.type_kind == TIMESTAMP ||
+        s->numlengths += (s->chunk.type_kind == TIMESTAMP || s->chunk.type_kind == DECIMAL ||
                           (s->chunk.type_kind == STRING && s->chunk.encoding_kind != DICTIONARY_V2))
                            ? nz
                            : 0;
@@ -879,6 +879,7 @@ __global__ void __launch_bounds__(block_size)
             n = IntegerRLE<CI_DATA2, uint64_t, false, 0x3ff, block_size>(
               s, s->lengths.u64, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u64);
             break;
+          case DECIMAL:
           case STRING:
             n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
               s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u32);
