@@ -21,5 +21,8 @@ struct ChronoOptionalIteratorTest : public IteratorTest<T> {
 };
 
 TYPED_TEST_CASE(ChronoOptionalIteratorTest, TestingTypes);
-TYPED_TEST(ChronoOptionalIteratorTest, nonull_optional_iterator) { nonull_optional_iterator(*this); }
+TYPED_TEST(ChronoOptionalIteratorTest, nonull_optional_iterator)
+{
+  nonull_optional_iterator(*this);
+}
 TYPED_TEST(ChronoOptionalIteratorTest, null_optional_iterator) { null_optional_iterator(*this); }

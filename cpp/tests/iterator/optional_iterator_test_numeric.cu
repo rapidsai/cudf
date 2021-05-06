@@ -21,9 +21,11 @@ struct NumericOptionalIteratorTest : public IteratorTest<T> {
 };
 
 TYPED_TEST_CASE(NumericOptionalIteratorTest, TestingTypes);
-TYPED_TEST(NumericOptionalIteratorTest, nonull_optional_iterator) { nonull_optional_iterator(*this); }
+TYPED_TEST(NumericOptionalIteratorTest, nonull_optional_iterator)
+{
+  nonull_optional_iterator(*this);
+}
 TYPED_TEST(NumericOptionalIteratorTest, null_optional_iterator) { null_optional_iterator(*this); }
-
 
 // to print meanvar for debug.
 template <typename T>

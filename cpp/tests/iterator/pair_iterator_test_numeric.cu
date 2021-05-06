@@ -24,7 +24,6 @@ TYPED_TEST_CASE(NumericPairIteratorTest, TestingTypes);
 TYPED_TEST(NumericPairIteratorTest, nonull_pair_iterator) { nonull_pair_iterator(*this); }
 TYPED_TEST(NumericPairIteratorTest, null_pair_iterator) { null_pair_iterator(*this); }
 
-
 // to print meanvar for debug.
 template <typename T>
 std::ostream& operator<<(std::ostream& os, cudf::meanvar<T> const& rhs)
