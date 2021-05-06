@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -177,22 +177,28 @@ TYPED_TEST(IteratorTest, null_optional_iterator)
                  [](auto s, bool b) { return thrust::optional<T>{s}; });
 
   // GPU test for correct null mapping
-  this->iterator_test_thrust(optional_values,
-                             d_col->optional_begin<T>(cudf::contains_nulls::DYNAMIC{}, true),
-                             host_values.size());
+  this->iterator_test_thrust(
+    optional_values,
+    d_col->template optional_begin<T>(cudf::contains_nulls::DYNAMIC{}, true),
+    host_values.size());
 
-  this->iterator_test_thrust(
-    optional_values, d_col->optional_begin<T>(cudf::contains_nulls::YES{}), host_values.size());
-  this->iterator_test_thrust(
-    optional_values, d_col->optional_begin<T>(cudf::contains_nulls::YES{}), host_values.size());
+  this->iterator_test_thrust(optional_values,
+                             d_col->template optional_begin<T>(cudf::contains_nulls::YES{}),
+                             host_values.size());
+  this->iterator_test_thrust(optional_values,
+                             d_col->template optional_begin<T>(cudf::contains_nulls::YES{}),
+                             host_values.size());
 
   // GPU test for ignoring null mapping
-  this->iterator_test_thrust(value_all_valid,
-                             d_col->optional_begin<T>(cudf::contains_nulls::DYNAMIC{}, false),
-                             host_values.size());
+  this->iterator_test_thrust(
+    value_all_valid,
+    d_col->template optional_begin<T>(cudf::contains_nulls::DYNAMIC{}, false),
+    host_values.size());
 
-  this->iterator_test_thrust(
-    value_all_valid, d_col->optional_begin<T>(cudf::contains_nulls::NO{}), host_values.size());
-  this->iterator_test_thrust(
-    value_all_valid, d_col->optional_begin<T>(cudf::contains_nulls::NO{}), host_values.size());
+  this->iterator_test_thrust(value_all_valid,
+                             d_col->template optional_begin<T>(cudf::contains_nulls::NO{}),
+                             host_values.size());
+  this->iterator_test_thrust(value_all_valid,
+                             d_col->template optional_begin<T>(cudf::contains_nulls::NO{}),
+                             host_values.size());
 }
