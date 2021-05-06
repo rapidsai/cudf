@@ -184,7 +184,7 @@ struct ListGetFixedWidthValueTest : public BaseFixture {
   }
   auto nth_valid(size_type x)
   {
-    return cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return x == i; });
+    return cudf::detail::make_counting_transform_iterator(0, [=](auto i) { return x == i; });
   }
 };
 
