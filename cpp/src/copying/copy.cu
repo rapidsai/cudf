@@ -223,10 +223,10 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
                                                      rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource* mr)
 {
-  auto null = size + 1;  // Out of bounds index, for gather() to nullify.
+  auto null_map_entry = size + 1;  // Out of bounds index, for gather() to nullify.
 
-  auto gather_lhs =
-    make_counting_transform_iterator(size_type{0}, lhs_gather_map_functor<Filter>{is_left, null});
+  auto gather_lhs = make_counting_transform_iterator(
+    size_type{0}, lhs_gather_map_functor<Filter>{is_left, null_map_entry});
 
   auto lhs_gathered_columns = cudf::detail::gather(table_view{std::vector<cudf::column_view>{lhs}},
                                                    gather_lhs,
