@@ -497,18 +497,14 @@ void compute_single_pass_aggs(table_view const& keys,
                               rmm::cuda_stream_view stream)
 {
   // flatten the aggs to a table that can be operated on by aggregate_row
-  table_view flattened_values;
-  std::vector<std::unique_ptr<aggregation>> aggs;
-  std::vector<aggregation::Kind> agg_kinds;
-  std::vector<size_t> col_ids;
-  std::tie(flattened_values, agg_kinds, aggs, col_ids) = flatten_single_pass_aggs(requests);
+  auto const [flattened_values, agg_kinds, aggs, col_ids] = flatten_single_pass_aggs(requests);
 
   // make table that will hold sparse results
   table sparse_table = create_sparse_results_table(flattened_values, agg_kinds, stream);
   // prepare to launch kernel to do the actual aggregation
   auto d_sparse_table = mutable_table_device_view::create(sparse_table, stream);
   auto d_values       = table_device_view::create(flattened_values, stream);
-  rmm::device_vector<aggregation::Kind> d_aggs(agg_kinds);
+  auto const d_aggs   = cudf::detail::make_device_uvector_async(agg_kinds, stream);
 
   bool skip_key_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
@@ -522,12 +518,13 @@ void compute_single_pass_aggs(table_view const& keys,
                                            keys.num_rows(),
                                            *d_values,
                                            *d_sparse_table,
-                                           d_aggs.data().get(),
+                                           d_aggs.data(),
                                            static_cast<bitmask_type*>(row_bitmask.data()),
                                            skip_key_rows_with_nulls});
   // Add results back to sparse_results cache
   auto sparse_result_cols = sparse_table.release();
   for (size_t i = 0; i < aggs.size(); i++) {
+    // Note that the cache will make a copy of this temporary aggregation
     sparse_results->add_result(col_ids[i], *aggs[i], std::move(sparse_result_cols[i]));
   }
 }
