@@ -25,11 +25,10 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/encode.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/replace.hpp>
-#include "cudf/fixed_point/fixed_point.hpp"
 
-#include <thrust/device_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <gtest/gtest.h>
