@@ -2232,11 +2232,9 @@ def full(size: int, fill_value: ScalarLike, dtype: Dtype = None) -> ColumnBase:
 
 def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     """Concatenate a sequence of columns."""
-    # TODO: This function currently assumes that len(objs) > 0. Concatenation
-    # is only accessible via cudf.concat (which calls through to this from
-    # methods like Index._concat or Series._concat), and that method
-    # pre-filters on zero objects being provided. We may need to add logic for
-    # handling an empty input sequence as more Frame logic becomes centralized.
+    if len(objs) == 0:
+        dtype = pd.api.types.pandas_dtype(None)
+        return column_empty(0, dtype=dtype, masked=True)
 
     # If all columns are `NumericalColumn` with different dtypes,
     # we cast them to a common dtype.
