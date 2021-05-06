@@ -306,11 +306,10 @@ __device__ void evaluate_row_expression(
   device_span<const detail::device_data_reference> data_references,
   device_span<const ast_operator> operators,
   device_span<const cudf::size_type> operator_source_indices,
-  cudf::size_type num_operators,
   cudf::size_type row_index)
 {
   auto operator_source_index = static_cast<cudf::size_type>(0);
-  for (cudf::size_type operator_index = 0; operator_index < num_operators; operator_index++) {
+  for (cudf::size_type operator_index = 0; operator_index < operators.size(); operator_index++) {
     // Execute operator
     auto const op    = operators[operator_index];
     auto const arity = ast_operator_arity(op);
@@ -365,8 +364,9 @@ struct ast_plan {
     thrust::exclusive_scan(_sizes.cbegin(), _sizes.cend(), buffer_offsets.begin(), 0);
 
     auto h_data_buffer = std::make_unique<char[]>(buffer_size);
-    for (unsigned int i = 0; i < _data_pointers.size(); ++i)
+    for (unsigned int i = 0; i < _data_pointers.size(); ++i) {
       std::memcpy(h_data_buffer.get() + buffer_offsets[i], _data_pointers[i], _sizes[i]);
+    }
 
     _device_data_buffer = rmm::device_buffer(h_data_buffer.get(), buffer_size, stream, mr);
 
@@ -377,16 +377,17 @@ struct ast_plan {
     _device_data_references     = device_span<const detail::device_data_reference>(
       reinterpret_cast<const detail::device_data_reference*>(device_data_buffer_ptr +
                                                              buffer_offsets[0]),
-      _sizes[0]);
+      expr_linearizer.data_references().size());
     _device_literals = device_span<const cudf::detail::fixed_width_scalar_device_view_base>(
       reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
         device_data_buffer_ptr + buffer_offsets[1]),
-      _sizes[1]);
+      expr_linearizer.literals().size());
     _device_operators = device_span<const ast_operator>(
-      reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]), _sizes[2]);
+      reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]),
+      expr_linearizer.operators().size());
     _device_operator_source_indices = device_span<const cudf::size_type>(
       reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]),
-      _sizes[3]);
+      expr_linearizer.operator_source_indices().size());
   }
 
   /**

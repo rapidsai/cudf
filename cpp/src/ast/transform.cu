@@ -68,7 +68,6 @@ __launch_bounds__(max_block_size) __global__ void compute_column_kernel(
   device_span<const detail::device_data_reference> data_references,
   device_span<const ast_operator> operators,
   device_span<const cudf::size_type> operator_source_indices,
-  cudf::size_type num_operators,
   cudf::size_type num_intermediates)
 {
   extern __shared__ std::int64_t intermediate_storage[];
@@ -80,7 +79,7 @@ __launch_bounds__(max_block_size) __global__ void compute_column_kernel(
 
   for (cudf::size_type row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
     evaluate_row_expression(
-      evaluator, data_references, operators, operator_source_indices, num_operators, row_index);
+      evaluator, data_references, operators, operator_source_indices, row_index);
   }
 }
 
@@ -117,7 +116,6 @@ std::unique_ptr<column> compute_column(table_view const table,
       : MAX_BLOCK_SIZE;
   auto const config               = cudf::detail::grid_1d{table_num_rows, block_size};
   auto const shmem_size_per_block = shmem_size_per_thread * config.num_threads_per_block;
-  auto const num_operators = static_cast<cudf::size_type>(expr_linearizer.operators().size());
 
   // Execute the kernel
   cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE>
@@ -128,7 +126,6 @@ std::unique_ptr<column> compute_column(table_view const table,
       plan._device_data_references,
       plan._device_operators,
       plan._device_operator_source_indices,
-      num_operators,
       num_intermediates);
   CHECK_CUDA(stream.value());
   return output_column;
