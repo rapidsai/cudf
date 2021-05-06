@@ -225,7 +225,7 @@ class DecimalColumn(ColumnBase):
         Returns a copy with null filled.
         """
         if isinstance(value, (int, Decimal)):
-            value = pa.scalar(value, type=self.dtype.to_arrow()).as_py()
+            value = cudf.Scalar(value, dtype=self.dtype)
         elif (
             isinstance(value, DecimalColumn)
             or isinstance(value, NumericalColumn)
