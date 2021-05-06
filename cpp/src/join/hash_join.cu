@@ -25,6 +25,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cstddef>
 #include <iostream>
 #include <numeric>
 
@@ -176,7 +177,7 @@ std::unique_ptr<multimap_type, std::function<void(multimap_type *)>> build_join_
   CUDF_EXPECTS(0 != build_device_table->num_rows(), "Build side table has no rows");
 
   size_type const build_table_num_rows{build_device_table->num_rows()};
-  size_t const hash_table_size = compute_hash_table_size(build_table_num_rows);
+  std::size_t const hash_table_size = compute_hash_table_size(build_table_num_rows);
 
   auto hash_table = multimap_type::create(hash_table_size,
                                           stream,
@@ -228,7 +229,7 @@ probe_join_hash_table(cudf::table_device_view build_table,
                       rmm::cuda_stream_view stream,
                       rmm::mr::device_memory_resource *mr)
 {
-  size_type estimated_size = estimate_join_output_size<JoinKind, multimap_type>(
+  std::size_t estimated_size = estimate_join_output_size<JoinKind, multimap_type>(
     build_table, probe_table, hash_table, compare_nulls, stream);
 
   // If the estimated output size is zero, return immediately
@@ -242,7 +243,7 @@ probe_join_hash_table(cudf::table_device_view build_table,
   // As such we will need to de-allocate memory and re-allocate memory to ensure
   // that the final output is correct.
   rmm::device_scalar<size_type> write_index(0, stream);
-  size_type join_size{0};
+  std::size_t join_size{0};
 
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);

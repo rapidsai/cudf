@@ -4,7 +4,7 @@ from __future__ import annotations, division, print_function
 
 import pickle
 from numbers import Number
-from typing import Any, Dict, Set, Type
+from typing import Any, Dict, Type
 
 import cupy
 import numpy as np
@@ -30,7 +30,7 @@ from cudf.core.column import (
 from cudf.core.column.column import _concat_columns
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
-from cudf.core.frame import Frame
+from cudf.core.frame import SingleColumnFrame
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -46,35 +46,7 @@ from cudf.utils.dtypes import (
 from cudf.utils.utils import cached_property, search_range
 
 
-def _to_frame(this_index, index=True, name=None):
-    """Create a DataFrame with a column containing this Index
-
-    Parameters
-    ----------
-    index : boolean, default True
-        Set the index of the returned DataFrame as the original Index
-    name : str, default None
-        Name to be used for the column
-
-    Returns
-    -------
-    DataFrame
-        cudf DataFrame
-    """
-
-    if name is not None:
-        col_name = name
-    elif this_index.name is None:
-        col_name = 0
-    else:
-        col_name = this_index.name
-
-    return cudf.DataFrame(
-        {col_name: this_index._values}, index=this_index if index else None
-    )
-
-
-class Index(Frame, Serializable):
+class Index(SingleColumnFrame, Serializable):
 
     dtype: DtypeObj
 
@@ -181,12 +153,6 @@ class Index(Frame, Serializable):
         """  # noqa: E501
         return super().drop_duplicates(keep=keep)
 
-    @property
-    def shape(self):
-        """Returns a tuple representing the dimensionality of the Index.
-        """
-        return (len(self),)
-
     def serialize(self):
         header = {}
         header["index_column"] = {}
@@ -278,81 +244,6 @@ class Index(Frame, Serializable):
         else:
             raise KeyError(f"Requested level with name {level} " "not found")
 
-    def __iter__(self):
-        cudf.utils.utils.raise_iteration_error(obj=self)
-
-    @classmethod
-    def from_arrow(cls, array):
-        """Convert PyArrow Array/ChunkedArray to Index
-
-        Parameters
-        ----------
-        array : PyArrow Array/ChunkedArray
-            PyArrow Object which has to be converted to Index
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Returns
-        -------
-        cudf Index
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pyarrow as pa
-        >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
-        StringIndex(['a' 'b' None], dtype='object')
-        """
-
-        return cls(cudf.core.column.column.ColumnBase.from_arrow(array))
-
-    def to_arrow(self):
-        """Convert Index to PyArrow Array
-
-        Returns
-        -------
-        PyArrow Array
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ind = cudf.Index(["a", "b", None])
-        >>> ind.to_arrow()
-        <pyarrow.lib.StringArray object at 0x7f796b0e7750>
-        [
-          "a",
-          "b",
-          null
-        ]
-        """
-
-        return self._data.columns[0].to_arrow()
-
-    @property
-    def values_host(self):
-        """
-        Return a numpy representation of the Index.
-
-        Only the values in the Index will be returned.
-
-        Returns
-        -------
-        out : numpy.ndarray
-            The values of the Index.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> index = cudf.Index([1, -10, 100, 20])
-        >>> index.values_host
-        array([  1, -10, 100,  20])
-        >>> type(index.values_host)
-        <class 'numpy.ndarray'>
-        """
-        return self._values.values_host
-
     @classmethod
     def deserialize(cls, header, frames):
         h = header["index_column"]
@@ -362,12 +253,6 @@ class Index(Frame, Serializable):
         col_typ = pickle.loads(h["type-serialized"])
         index = col_typ.deserialize(h, frames[: header["frame_count"]])
         return idx_typ(index, name=name)
-
-    @property
-    def ndim(self):
-        """Dimension of the data. Apart from MultiIndex ndim is always 1.
-        """
-        return 1
 
     @property
     def names(self):
@@ -388,18 +273,6 @@ class Index(Frame, Serializable):
             )
 
         self.name = values[0]
-
-    @property
-    def name(self):
-        """
-        Returns the name of the Index.
-        """
-        return next(iter(self._data.names))
-
-    @name.setter
-    def name(self, value):
-        col = self._data.pop(self.name)
-        self._data[value] = col
 
     def dropna(self, how="any"):
         """
@@ -642,25 +515,32 @@ class Index(Frame, Serializable):
         indices = self._values.argsort(ascending=ascending, **kwargs)
         return cupy.asarray(indices)
 
-    @property
-    def values(self):
-        """
-        Return an array representing the data in the Index.
+    def to_frame(self, index=True, name=None):
+        """Create a DataFrame with a column containing this Index
+
+        Parameters
+        ----------
+        index : boolean, default True
+            Set the index of the returned DataFrame as the original Index
+        name : str, default None
+            Name to be used for the column
 
         Returns
         -------
-        array : A cupy array of data in the Index.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> index = cudf.Index([1, -10, 100, 20])
-        >>> index.values
-        array([  1, -10, 100,  20])
-        >>> type(index.values)
-        <class 'cupy.core.core.ndarray'>
+        DataFrame
+            cudf DataFrame
         """
-        return self._values.values
+
+        if name is not None:
+            col_name = name
+        elif self.name is None:
+            col_name = 0
+        else:
+            col_name = self.name
+
+        return cudf.DataFrame(
+            {col_name: self._values}, index=self if index else None
+        )
 
     def any(self):
         """
@@ -686,16 +566,6 @@ class Index(Frame, Serializable):
         <class 'cudf.core.index.GenericIndex'>
         """
         return pd.Index(self._values.to_pandas(), name=self.name)
-
-    def tolist(self):
-
-        raise TypeError(
-            "cuDF does not support conversion to host memory "
-            "via `tolist()` method. Consider using "
-            "`.to_arrow().to_pylist()` to construct a Python list."
-        )
-
-    to_list = tolist
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
@@ -1558,9 +1428,7 @@ class Index(Frame, Serializable):
 
     @classmethod
     def _from_data(cls, data, index=None):
-        return cls._from_table(Frame(data=data))
-
-    _accessors = set()  # type: Set[Any]
+        return cls._from_table(SingleColumnFrame(data=data))
 
     @property
     def _constructor_expanddim(self):
@@ -1607,7 +1475,7 @@ class RangeIndex(Index):
         if step == 0:
             raise ValueError("Step must not be zero.")
 
-        out = Frame.__new__(cls)
+        out = SingleColumnFrame.__new__(cls)
         if isinstance(start, range):
             therange = start
             start = therange.start
@@ -1816,7 +1684,7 @@ class RangeIndex(Index):
 
     @property
     def size(self):
-        return self.__len__()
+        return len(self)
 
     def find_label_range(self, first=None, last=None):
         """Find subrange in the ``RangeIndex``, marked by their positions, that
@@ -1856,25 +1724,6 @@ class RangeIndex(Index):
         end = search_range(start, stop, last, step, side="right")
 
         return begin, end
-
-    @copy_docstring(_to_frame)  # type: ignore
-    def to_frame(self, index=True, name=None):
-        return _to_frame(self, index, name)
-
-    def to_gpu_array(self, fillna=None):
-        """Get a dense numba device array for the data.
-
-        Parameters
-        ----------
-        fillna : str or None
-            Replacement value to fill in place of nulls.
-
-        Notes
-        -----
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-        """
-        return self._values.to_gpu_array(fillna=fillna)
 
     def to_pandas(self):
         return pd.RangeIndex(
@@ -1979,7 +1828,7 @@ class GenericIndex(Index):
             Column's name. Otherwise if this name is different from the value
             Column's, the values Column will be cloned to adopt this name.
         """
-        out = Frame.__new__(cls)
+        out = SingleColumnFrame.__new__(cls)
         out._initialize(values, **kwargs)
 
         return out
@@ -2043,9 +1892,6 @@ class GenericIndex(Index):
 
     def __sizeof__(self):
         return self._values.__sizeof__()
-
-    def __len__(self):
-        return len(self._values)
 
     def __repr__(self):
         max_seq_items = get_option("max_seq_items") or len(self)
@@ -2136,10 +1982,6 @@ class GenericIndex(Index):
         else:
             return res
 
-    @copy_docstring(_to_frame)  # type: ignore
-    def to_frame(self, index=True, name=None):
-        return _to_frame(self, index, name)
-
     @property
     def dtype(self):
         """
@@ -2202,7 +2044,7 @@ class NumericIndex(GenericIndex):
 
     def __new__(cls, data=None, dtype=None, copy=False, name=None):
 
-        out = Frame.__new__(cls)
+        out = SingleColumnFrame.__new__(cls)
         dtype = _index_to_dtype[cls]
         if copy:
             data = column.as_column(data, dtype=dtype).copy()
@@ -2324,7 +2166,7 @@ class DatetimeIndex(GenericIndex):
         # pandas dtindex creation first which.  For now
         # just make sure we handle np.datetime64 arrays
         # and then just dispatch upstream
-        out = Frame.__new__(cls)
+        out = SingleColumnFrame.__new__(cls)
 
         if freq is not None:
             raise NotImplementedError("Freq is not yet supported")
@@ -2579,7 +2421,7 @@ class TimedeltaIndex(GenericIndex):
         name=None,
     ) -> "TimedeltaIndex":
 
-        out = Frame.__new__(cls)
+        out = SingleColumnFrame.__new__(cls)
 
         if freq is not None:
             raise NotImplementedError("freq is not yet supported")
@@ -2711,7 +2553,7 @@ class CategoricalIndex(GenericIndex):
                 )
         if copy:
             data = column.as_column(data, dtype=dtype).copy(deep=True)
-        out = Frame.__new__(cls)
+        out = SingleColumnFrame.__new__(cls)
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, CategoricalColumn):
             data = data
@@ -2937,7 +2779,7 @@ class IntervalIndex(GenericIndex):
     ) -> "IntervalIndex":
         if copy:
             data = column.as_column(data, dtype=dtype).copy()
-        out = Frame.__new__(cls)
+        out = SingleColumnFrame.__new__(cls)
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, IntervalColumn):
             data = data
@@ -3010,7 +2852,7 @@ class StringIndex(GenericIndex):
     """
 
     def __new__(cls, values, copy=False, **kwargs):
-        out = Frame.__new__(cls)
+        out = SingleColumnFrame.__new__(cls)
         kwargs = _setdefault_name(values, **kwargs)
         if isinstance(values, StringColumn):
             values = values.copy(deep=copy)

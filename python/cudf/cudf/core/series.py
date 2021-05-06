@@ -7,7 +7,7 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
-from typing import Any, Optional, Set
+from typing import Any, Optional
 from uuid import uuid4
 
 import cupy
@@ -39,7 +39,7 @@ from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame, _drop_rows_by_labels
+from cudf.core.frame import SingleColumnFrame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
@@ -47,6 +47,7 @@ from cudf.core.window import Rolling
 from cudf.utils import cudautils, docutils, ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    _decimal_normalize_types,
     can_convert_to_column,
     is_decimal_dtype,
     is_list_dtype,
@@ -62,7 +63,8 @@ from cudf.utils.utils import (
 )
 
 
-class Series(Frame, Serializable):
+class Series(SingleColumnFrame, Serializable):
+    # The `constructor*` properties are used by `dask` (and `dask_cudf`)
     @property
     def _constructor(self):
         return Series
@@ -266,8 +268,7 @@ class Series(Frame, Serializable):
 
     @classmethod
     def _from_table(cls, table, index=None):
-        name = next(iter(table._data.keys()))
-        data = next(iter(table._data.values()))
+        name, data = next(iter(table._data.items()))
         if index is None:
             if table._index is not None:
                 index = Index._from_table(table._index)
@@ -289,14 +290,6 @@ class Series(Frame, Serializable):
         if name is not None:
             out.name = name
         return out
-
-    @property
-    def _column(self):
-        return self._data[self.name]
-
-    @_column.setter
-    def _column(self, value):
-        self._data[self.name] = value
 
     def __contains__(self, item):
         return item in self._index
@@ -342,52 +335,6 @@ class Series(Frame, Serializable):
         """
         return cls(s, nan_as_null=nan_as_null)
 
-    @property
-    def values(self):
-        """
-        Return a CuPy representation of the Series.
-
-        Only the values in the Series will be returned.
-
-        Returns
-        -------
-        out : cupy.ndarray
-            The values of the Series.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, -10, 100, 20])
-        >>> ser.values
-        array([  1, -10, 100,  20])
-        >>> type(ser.values)
-        <class 'cupy.core.core.ndarray'>
-        """
-        return self._column.values
-
-    @property
-    def values_host(self):
-        """
-        Return a numpy representation of the Series.
-
-        Only the values in the Series will be returned.
-
-        Returns
-        -------
-        out : numpy.ndarray
-            The values of the Series.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, -10, 100, 20])
-        >>> ser.values_host
-        array([  1, -10, 100,  20])
-        >>> type(ser.values_host)
-        <class 'numpy.ndarray'>
-        """
-        return self._column.values_host
-
     def serialize(self):
         header = {}
         frames = []
@@ -401,12 +348,6 @@ class Series(Frame, Serializable):
         header["column_frame_count"] = len(column_frames)
 
         return header, frames
-
-    @property
-    def shape(self):
-        """Returns a tuple representing the dimensionality of the Series.
-        """
-        return (len(self),)
 
     @property
     def dt(self):
@@ -435,23 +376,6 @@ class Series(Frame, Serializable):
             raise AttributeError(
                 "Can only use .dt accessor with datetimelike values"
             )
-
-    @property
-    def ndim(self):
-        """Dimension of the data. Series ndim is always 1.
-        """
-        return 1
-
-    @property
-    def name(self):
-        """Returns name of the Series.
-        """
-        return self._data.names[0]
-
-    @name.setter
-    def name(self, value):
-        col = self._data.pop(self.name)
-        self._data[value] = col
 
     @classmethod
     def deserialize(cls, header, frames):
@@ -488,63 +412,10 @@ class Series(Frame, Serializable):
         new_data = super()._get_columns_by_label(labels, downcast)
 
         return (
-            self._constructor(data=new_data, index=self.index)
+            self.__class__(data=new_data, index=self.index)
             if len(new_data) > 0
-            else self._constructor(dtype=self.dtype, name=self.name)
+            else self.__class__(dtype=self.dtype, name=self.name)
         )
-
-    @classmethod
-    def from_arrow(cls, array):
-        """
-        Convert from PyArrow Array/ChunkedArray to Series.
-
-        Parameters
-        ----------
-        array : PyArrow Array/ChunkedArray
-            PyArrow Object which has to be converted to cudf Series.
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Returns
-        -------
-        cudf Series
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pyarrow as pa
-        >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
-        0       a
-        1       b
-        2    <NA>
-        dtype: object
-        """
-
-        return cls(cudf.core.column.ColumnBase.from_arrow(array))
-
-    def to_arrow(self):
-        """
-        Convert Series to a PyArrow Array.
-
-        Returns
-        -------
-        PyArrow Array
-
-        Examples
-        --------
-        >>> import cudf
-        >>> sr = cudf.Series(["a", "b", None])
-        >>> sr.to_arrow()
-        <pyarrow.lib.StringArray object at 0x7f796b0e7600>
-        [
-          "a",
-          "b",
-          null
-        ]
-        """
-        return self._column.to_arrow()
 
     def drop(
         self,
@@ -667,14 +538,6 @@ class Series(Frame, Serializable):
 
         if not inplace:
             return out
-
-    def __copy__(self, deep=True):
-        return self.copy(deep)
-
-    def __deepcopy__(self, memo=None):
-        if memo is None:
-            memo = {}
-        return self.copy()
 
     def append(self, to_append, ignore_index=False, verify_integrity=False):
         """Append values from another ``Series`` or array-like object.
@@ -1048,11 +911,6 @@ class Series(Frame, Serializable):
             n += self._index.memory_usage(deep=deep)
         return n
 
-    def __len__(self):
-        """Returns the size of the ``Series`` including null values.
-        """
-        return len(self._column)
-
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         if method == "__call__":
             return get_appropriate_dispatched_func(
@@ -1187,12 +1045,9 @@ class Series(Frame, Serializable):
         else:
             return self.loc[arg]
 
-    def __iter__(self):
-        cudf.utils.utils.raise_iteration_error(obj=self)
+    iteritems = SingleColumnFrame.__iter__
 
-    iteritems = __iter__
-
-    items = __iter__
+    items = SingleColumnFrame.__iter__
 
     def to_dict(self, into=dict):
         raise TypeError(
@@ -1251,22 +1106,6 @@ class Series(Frame, Serializable):
             col_inds = as_column(indices)
             data = self._column.take(col_inds, keep_index=False)
             return self._copy_construct(data=data, index=None)
-
-    def __bool__(self):
-        """Always raise TypeError when converting a Series
-        into a boolean.
-        """
-        raise TypeError(f"can't compute boolean for {type(self)}")
-
-    def tolist(self):
-
-        raise TypeError(
-            "cuDF does not support conversion to host memory "
-            "via `tolist()` method. Consider using "
-            "`.to_arrow().to_pylist()` to construct a Python list."
-        )
-
-    to_list = tolist
 
     def head(self, n=5):
         """
@@ -2748,9 +2587,16 @@ class Series(Frame, Serializable):
                     )
 
             if dtype_mismatch:
-                objs = numeric_normalize_types(*objs)
+                if isinstance(objs[0]._column, cudf.core.column.DecimalColumn):
+                    objs = _decimal_normalize_types(*objs)
+                else:
+                    objs = numeric_normalize_types(*objs)
 
         col = _concat_columns([o._column for o in objs])
+
+        if isinstance(col, cudf.core.column.DecimalColumn):
+            col = objs[0]._column._copy_type_metadata(col)
+
         return cls(data=col, index=index, name=name)
 
     @property
@@ -3149,40 +2995,6 @@ class Series(Frame, Serializable):
             result_series = self
 
         return result_series._column.any()
-
-    def to_gpu_array(self, fillna=None):
-        """Get a dense numba device array for the data.
-
-        Parameters
-        ----------
-        fillna : str or None
-            See *fillna* in ``.to_array``.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-
-        Returns
-        -------
-        numba DeviceNDArray
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([10, 20, 30, 40, 50])
-        >>> s
-        0    10
-        1    20
-        2    30
-        3    40
-        4    50
-        dtype: int64
-        >>> s.to_gpu_array()
-        <numba.cuda.cudadrv.devicearray.DeviceNDArray object at 0x7f1840858890>
-        """
-        return self._column.to_gpu_array(fillna=fillna)
 
     def to_pandas(self, index=True, nullable=False, **kwargs):
         """
@@ -4243,7 +4055,7 @@ class Series(Frame, Serializable):
 
         Returns
         --------
-        (labels, cats) : (Series, Series)
+        (labels, cats) : (cupy.ndarray, cupy.ndarray or Index)
             - *labels* contains the encoded values
             - *cats* contains the categories in order that the N-th
               item corresponds to the (N-1) code.
@@ -4252,16 +4064,10 @@ class Series(Frame, Serializable):
         --------
         >>> import cudf
         >>> s = cudf.Series(['a', 'a', 'c'])
-        >>> codes, uniques = s.factorize()
         >>> codes
-        0    0
-        1    0
-        2    1
-        dtype: int8
+        array([0, 0, 1], dtype=int8)
         >>> uniques
-        0    a
-        1    c
-        dtype: object
+        StringIndex(['a' 'c'], dtype='object')
         """
         return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
 
@@ -6527,8 +6333,6 @@ class Series(Frame, Serializable):
             return self.__class__._from_data(data, index=idx)
 
         return super()._explode(self._column_names[0], ignore_index)
-
-    _accessors = set()  # type: Set[Any]
 
 
 truediv_int_dtype_corrections = {
