@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+
 #include <hash/concurrent_unordered_map.cuh>
 
 #include <cudf/types.hpp>
-#include <cudf_test/base_fixture.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <thrust/logical.h>
-
-#include <gtest/gtest.h>
 
 #include <cstdlib>
 #include <iostream>
@@ -53,13 +53,13 @@ struct InsertTest : public cudf::test::BaseFixture {
     // prevent overflow of small types
     const size_t input_size =
       std::min(static_cast<key_type>(size), std::numeric_limits<key_type>::max());
-    pairs.resize(input_size);
+    pairs.resize(input_size, rmm::cuda_stream_default);
     map = std::move(map_type::create(compute_hash_table_size(size)));
     rmm::cuda_stream_default.synchronize();
   }
 
   const cudf::size_type size{10000};
-  rmm::device_vector<pair_type> pairs;
+  rmm::device_uvector<pair_type> pairs{static_cast<std::size_t>(size), rmm::cuda_stream_default};
   std::unique_ptr<map_type, std::function<void(map_type*)>> map;
 };
 
