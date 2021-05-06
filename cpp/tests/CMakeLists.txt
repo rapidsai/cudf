@@ -72,13 +72,13 @@ ConfigureTest(GROUPBY_TEST
     groupby/nunique_tests.cpp
     groupby/product_tests.cpp
     groupby/quantile_tests.cpp
+    groupby/replace_nulls_tests.cpp
     groupby/shift_tests.cpp
     groupby/std_tests.cpp
     groupby/sum_of_squares_tests.cpp
     groupby/sum_scan_tests.cpp
     groupby/sum_tests.cpp
-    groupby/var_tests.cpp
-    groupby/replace_nulls_tests.cpp)
+    groupby/var_tests.cpp)
 
 ###################################################################################################
 # - join tests ------------------------------------------------------------------------------------
