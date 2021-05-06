@@ -87,7 +87,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case DECIMAL64:
       return new Scalar(type, makeDecimal64Scalar(0L, type.getScale(), false));
     case LIST:
-      return new Scalar(type, makeListScalar(0L, false));
+      throw new IllegalArgumentException("Please call 'listFromNull' to create a null list scalar.");
     default:
       throw new IllegalArgumentException("Unexpected type: " + type);
     }
@@ -336,6 +336,21 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Creates a null scalar of list type.
+   *
+   * Having this special API is because the element type is required to build an empty
+   * nested column as the underlying column of the list scalar.
+   *
+   * @param elementType the data type of the element in the list.
+   * @return a null scalar of list type
+   */
+  public static Scalar listFromNull(HostColumnVector.DataType elementType) {
+    try (ColumnVector col = ColumnVector.empty(elementType)) {
+      return new Scalar(DType.LIST, makeListScalar(col.getNativeView(), false));
+    }
+  }
+
+  /**
    * Creates a scalar of list from a ColumnView.
    *
    * All the rows in the ColumnView will be copied into the Scalar. So the ColumnView
@@ -343,7 +358,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
    */
   public static Scalar listFromColumnView(ColumnView list) {
     if (list == null) {
-      return Scalar.fromNull(DType.LIST);
+      throw new IllegalArgumentException("'list' should NOT be null." +
+          " Please call 'listFromNull' to create a null list scalar.");
     }
     return new Scalar(DType.LIST, makeListScalar(list.getNativeView(), true));
   }
