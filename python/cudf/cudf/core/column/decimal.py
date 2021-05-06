@@ -224,6 +224,13 @@ class DecimalColumn(ColumnBase):
 
         Returns a copy with null filled.
         """
+        if isinstance(value, (int, Decimal)):
+            value = pa.scalar(
+                value,
+                type=pa.decimal128(self.dtype.precision, self.dtype.scale),
+            ).as_py()
+        elif isinstance(value, ColumnBase):
+            value = value.astype(self.dtype)
         result = libcudf.replace.replace_nulls(
             input_col=self, replacement=value, method=method, dtype=dtype
         )
