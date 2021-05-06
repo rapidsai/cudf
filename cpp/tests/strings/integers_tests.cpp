@@ -292,8 +292,7 @@ TYPED_TEST_CASE(StringsIntegerConvertTest, cudf::test::IntegralTypesNotBool);
 TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
 {
   thrust::host_vector<TypeParam> h_integers(255);
-  thrust::sequence(
-    thrust::seq, h_integers.begin(), h_integers.end(), -(TypeParam)(h_integers.size() / 2));
+  std::iota(h_integers.begin(), h_integers.end(), -(TypeParam)(h_integers.size() / 2));
   h_integers.push_back(std::numeric_limits<TypeParam>::min());
   h_integers.push_back(std::numeric_limits<TypeParam>::max());
   auto d_integers    = cudf::detail::make_device_uvector_sync(h_integers);

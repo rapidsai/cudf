@@ -335,7 +335,7 @@ ConfigureTest(STRINGS_TEST
     strings/fixed_point_tests.cpp
     strings/floats_tests.cpp
     strings/hash_string.cu
-    strings/integers_tests.cu
+    strings/integers_tests.cpp
     strings/ipv4_tests.cpp
     strings/json_tests.cpp
     strings/pad_tests.cpp
