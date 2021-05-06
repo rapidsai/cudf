@@ -74,7 +74,9 @@ class IntervalColumn(StructColumn):
     def from_struct_column(self, closed="right"):
         return IntervalColumn(
             size=self.size,
-            dtype=IntervalDtype(self.dtype.fields["left"], closed),
+            dtype=IntervalDtype(
+                self.dtype.fields["left" if "left" else "0"], closed
+            ),
             mask=self.base_mask,
             offset=self.offset,
             null_count=self.null_count,
@@ -87,7 +89,9 @@ class IntervalColumn(StructColumn):
         struct_copy = super().copy(deep=deep)
         return IntervalColumn(
             size=struct_copy.size,
-            dtype=IntervalDtype(struct_copy.dtype.fields["left"], closed),
+            dtype=IntervalDtype(
+                struct_copy.dtype.fields["left" if "left" else "0"], closed
+            ),
             mask=struct_copy.base_mask,
             offset=struct_copy.offset,
             null_count=struct_copy.null_count,
@@ -100,7 +104,9 @@ class IntervalColumn(StructColumn):
             # a user can directly input the string `interval` as the dtype
             # when creating an interval series or interval dataframe
             if dtype == "interval":
-                dtype = IntervalDtype(self.dtype.fields["left"], self.closed)
+                dtype = IntervalDtype(
+                    self.dtype.fields["left" if "left" else "0"], self.closed
+                )
             return IntervalColumn(
                 size=self.size,
                 dtype=dtype,

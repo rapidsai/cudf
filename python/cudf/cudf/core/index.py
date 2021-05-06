@@ -21,6 +21,7 @@ from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
     IntervalColumn,
+    StructColumn,
     NumericalColumn,
     StringColumn,
     TimeDeltaColumn,
@@ -2943,6 +2944,8 @@ def as_index(arbitrary, **kwargs) -> Index:
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, IntervalColumn):
+        return IntervalIndex(arbitrary, **kwargs)
+    elif isinstance(arbitrary, StructColumn):
         return IntervalIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, cudf.Series):
         return as_index(arbitrary._column, **kwargs)

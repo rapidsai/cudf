@@ -1225,6 +1225,7 @@ class Series(SingleColumnFrame, Serializable):
         return self.to_string()
 
     def __repr__(self):
+        breakpoint()
         _, height = get_terminal_size()
         max_rows = (
             height
@@ -1239,7 +1240,6 @@ class Series(SingleColumnFrame, Serializable):
             preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self.copy()
-
         preprocess.index = preprocess.index._clean_nulls_from_index()
         if (
             preprocess.nullable
@@ -1266,7 +1266,6 @@ class Series(SingleColumnFrame, Serializable):
                 else get_option("display.min_rows")
             )
             show_dimensions = get_option("display.show_dimensions")
-            breakpoint()
             if preprocess._column.categories.dtype.kind == "f":
                 pd_series = (
                     preprocess.astype("str")

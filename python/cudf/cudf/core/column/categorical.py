@@ -35,6 +35,7 @@ from cudf.utils.dtypes import (
     min_signed_type,
     min_unsigned_type,
     is_interval_dtype,
+    is_struct_dtype,
 )
 
 if TYPE_CHECKING:
@@ -1092,7 +1093,9 @@ class CategoricalColumn(column.ColumnBase):
 
         signed_dtype = min_signed_type(len(col.categories))
         codes = col.cat().codes.astype(signed_dtype).fillna(-1).to_array()
-        if is_interval_dtype(col.categories.dtype):
+        if is_interval_dtype(col.categories.dtype) or is_struct_dtype(
+            col.categories.dtype
+        ):
             categories = col.categories.to_pandas()
         else:
             categories = col.categories.dropna(drop_nan=True).to_pandas()
