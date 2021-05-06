@@ -90,8 +90,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
       thrust::make_zip_iterator(thrust::make_tuple(d_in, dev_expected.begin())),
       thrust::make_zip_iterator(thrust::make_tuple(d_in_last, dev_expected.end())),
       [] __device__(auto it) {
-        return static_cast<typename InputIterator::value_type>(thrust::get<0>(it)) ==
-               T_output(thrust::get<1>(it));
+        return static_cast<T_output>(thrust::get<0>(it)) == T_output(thrust::get<1>(it));
       },
       true,
       thrust::logical_and<bool>());
