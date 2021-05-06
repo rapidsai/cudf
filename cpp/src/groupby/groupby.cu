@@ -207,7 +207,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls
                  [&](auto i) {
                    auto grouped_values = helper().grouped_values(values.column(i), stream);
                    return detail::group_replace_nulls(
-                     grouped_values->view(), group_labels.begin(), replace_policies[i], stream, mr);
+                     grouped_values->view(), group_labels, replace_policies[i], stream, mr);
                  });
 
   return std::make_pair(std::move(helper().sorted_keys(stream, mr)),
