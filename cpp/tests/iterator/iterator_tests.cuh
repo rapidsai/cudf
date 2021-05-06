@@ -35,10 +35,6 @@
 #include <thrust/device_vector.h>
 #include <cub/device/device_reduce.cuh>
 
-template <typename T>
-struct IteratorTest2222 : public cudf::test::BaseFixture {
-};
-
 // Base Typed test fixture for iterator test
 template <typename T>
 struct IteratorTest : public cudf::test::BaseFixture {
