@@ -315,3 +315,23 @@ def test_contains_null_search_key(data, expect):
     expect = cudf.Series(expect, dtype="bool")
     got = sr.list.contains(cudf.Scalar(cudf.NA, sr.dtype.element_type))
     assert_eq(expect, got)
+
+
+def test_concatenate_rows_of_lists_ex1():
+    pdf = pd.DataFrame({"val": [["a", "a"], ["b"], ["c"]]})
+    gdf = cudf.from_pandas(pdf)
+
+    expect = pdf["val"] + pdf["val"]
+    got = gdf["val"] + gdf["val"]
+
+    assert_eq(expect, got)
+
+
+def test_concatenate_rows_of_lists_ex2():
+    pdf = pd.DataFrame({"A": ["a", "b", "c"], "B": ["a", "b", "c"]})
+    gdf = cudf.from_pandas(pdf)
+
+    expect = pdf["A"] + pdf["B"]
+    got = gdf["A"] + gdf["B"]
+
+    assert_eq(expect, got)

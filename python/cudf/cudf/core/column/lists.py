@@ -78,14 +78,52 @@ class ListColumn(ColumnBase):
         return len(self.base_children[0]) - 1
 
     def binary_operator(
-        self, binop: str, rhs: BinaryOperand, reflect: bool = False
+        self, binop: str, other: BinaryOperand, reflect: bool = False
     ) -> ColumnBase:
         """
+        Calls a binary operator *binop* on operands *self*
+        and *other*.
+
+        Parameters
+        ----------
+        self, other : list columns
+
+        binop :  binary operator
+            Only "add" operator is currently being supported
+            for lists concatenation functions
+
+        reflect : boolean, default False
+            If ``reflect`` is ``True``, swap the order of
+            the operands.
+
+        Returns
+        -------
+        Series : the output dtype is determined by the
+            input operands.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame({'val': [['a', 'a'], ['b'], ['c']]})
+        >>> gdf
+            val
+        0  [a, a]
+        1     [b]
+        2     [c]
+        >>> gdf['val'] + gdf['val']
+        0    [a, a, a, a]
+        1          [b, b]
+        2          [c, c]
+        Name: val, dtype: list
+
         """
+
         if binop == "add":
-            return concatenate_rows(Table({0: self, 1: rhs}))
+            return concatenate_rows(Table({0: self, 1: other}))
         else:
-            raise TypeError
+            raise NotImplementedError(
+                "Lists concatenation for this operation is not yet supported"
+            )
 
     @property
     def elements(self):
