@@ -20,10 +20,26 @@ from libcpp.utility cimport move
 from cudf._lib.copying import pack, unpack
 
 
-def test_equality():
-    expect = cudf.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]})
-    result = cudf.DataFrame._from_table(
-        unpack(move(pack(expect)), expect._column_names)
+def test_unpacked_equality():
+    gdf = cudf.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]})
+    pdf = gdf.to_pandas()
+
+    packed = pack(gdf)
+    del gdf
+    unpacked = cudf.DataFrame._from_table(
+        unpack(packed), pdf._column_names
     )
 
-    assert_eq(result, expect)
+    assert_eq(unpacked, pdf)
+
+
+def test_unpacked_unique_pointers():
+    gdf = cudf.DataFrame({'a': [1, 2, 3, None], 'b': [4, 5, 6, None]})
+    unpacked = cudf.DataFrame._from_table(
+        unpack(pack(gdf), gdf._column_names)
+    )
+
+    assert all([
+        gdf._data[col].data.ptr != unpacked._data[col].data.ptr
+        for col in gdf
+    ])
