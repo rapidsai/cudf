@@ -16,9 +16,11 @@
 
 #pragma once
 
+#include "lead_lag_nested_detail.cuh"
 #include "rolling/rolling_collect_list.cuh"
 #include "rolling/rolling_detail.hpp"
 #include "rolling/rolling_jit_detail.hpp"
+#include "rolling_detail.hpp"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -606,6 +608,18 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
   {
     return {};
   }
+
+  // LEAD and LAG have custom behaviors for non fixed-width types.
+  std::vector<std::unique_ptr<aggregation>> visit(
+    data_type col_type, cudf::detail::lead_lag_aggregation const& agg) override
+  {
+    // no rolling operation for non-fixed width.  just a postprocess step at the end
+    if (!cudf::is_fixed_width(col_type)) { return {}; }
+    // otherwise, pass through
+    std::vector<std::unique_ptr<aggregation>> aggs;
+    aggs.push_back(agg.clone());
+    return aggs;
+  }
 };
 
 /**
@@ -703,6 +717,28 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
                  "Calling result on rolling aggregation postprocessor that has not been visited in "
                  "rolling_window");
     return std::move(result);
+  }
+
+  // LEAD and LAG have custom behaviors for non fixed-width types.
+  void visit(cudf::detail::lead_lag_aggregation const& agg) override
+  {
+    // if this is non-fixed width, run the custom lead-lag code
+    if (!cudf::is_fixed_width(result_type)) {
+      result =
+        cudf::detail::compute_lead_lag_for_nested<PrecedingWindowIterator, FollowingWindowIterator>(
+          agg.kind,
+          input,
+          default_outputs,
+          preceding_window_begin,
+          following_window_begin,
+          agg.row_offset,
+          stream,
+          mr);
+    }
+    // otherwise just pass through the intermediate
+    else {
+      result = std::move(intermediate);
+    }
   }
 
  private:
@@ -877,9 +913,9 @@ struct rolling_window_launcher {
 };
 
 /**
- * @brief Type dispatched functor for performing the high level rolling logic.
+ * @brief Functor for performing the high level rolling logic.
  *
- * This functor does 3 basic things:
+ * This does 3 basic things:
  *
  * - It calls the preprocess step on incoming aggregation/type pairs
  * - It calls the aggregation-dispatched gpu-rolling operation
