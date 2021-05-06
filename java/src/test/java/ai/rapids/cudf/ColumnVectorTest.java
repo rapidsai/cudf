@@ -2067,7 +2067,7 @@ public class ColumnVectorTest extends CudfTestBase {
                  new HostColumnVector.BasicType(true, DType.INT32)),
              Arrays.asList(1, 2, 3), Arrays.asList((Integer) null), Arrays.asList(10, 12), Arrays.asList(100, 200, 300),
              Arrays.asList());
-         ColumnVector result = ColumnVector.listConcatenateByRow(new ColumnVector[]{cv1, cv2});
+         ColumnVector result = ColumnVector.listConcatenateByRow(cv1, cv2);
          ColumnVector expect = ColumnVector.fromLists(new HostColumnVector.ListType(true,
                  new HostColumnVector.BasicType(true, DType.INT32)),
              Arrays.asList(0, 1, 2, 3), Arrays.asList(1, 2, 3, null), null, Arrays.asList(100, 200, 300),
@@ -2081,24 +2081,24 @@ public class ColumnVectorTest extends CudfTestBase {
         Arrays.asList());
          ColumnVector cv2 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
                  new HostColumnVector.BasicType(true, DType.STRING)),
-             Arrays.asList(), Arrays.asList("bbb", "ccc"), null, Arrays.asList("Y", null),
+             Arrays.asList(), Arrays.asList("bbb", "ccc"), null, Arrays.asList((String) null),
              Arrays.asList());
          ColumnVector cv3 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
                  new HostColumnVector.BasicType(true, DType.STRING)),
              Arrays.asList("CCC"), Arrays.asList(), Arrays.asList("222", "333"), Arrays.asList("Z"),
              Arrays.asList());
-         ColumnVector result = ColumnVector.listConcatenateByRow(new ColumnVector[]{cv1, cv2, cv3});
+         ColumnVector result = ColumnVector.listConcatenateByRow(cv1, cv2, cv3);
          ColumnVector expect = ColumnVector.fromLists(new HostColumnVector.ListType(true,
                  new HostColumnVector.BasicType(true, DType.STRING)),
              Arrays.asList("AAA", "BBB", "CCC"), Arrays.asList("aaa", "bbb", "ccc"), null,
-             Arrays.asList("X", "Y", null, "Z"), Arrays.asList())) {
+             Arrays.asList("X", null, "Z"), Arrays.asList())) {
       assertColumnsAreEqual(expect, result);
     }
 
     try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
             new HostColumnVector.BasicType(true, DType.FLOAT64)),
         Arrays.asList(1.23, 0.0, Double.NaN), Arrays.asList(), null, Arrays.asList(-1.23e10, null));
-         ColumnVector result = ColumnVector.listConcatenateByRow(new ColumnVector[]{cv, cv, cv});
+         ColumnVector result = ColumnVector.listConcatenateByRow(cv, cv, cv);
          ColumnVector expect = ColumnVector.fromLists(new HostColumnVector.ListType(true,
                  new HostColumnVector.BasicType(true, DType.FLOAT64)),
              Arrays.asList(1.23, 0.0, Double.NaN, 1.23, 0.0, Double.NaN, 1.23, 0.0, Double.NaN),
@@ -2108,14 +2108,14 @@ public class ColumnVectorTest extends CudfTestBase {
 
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector cv = ColumnVector.fromInts(1, 2, 3);
-           ColumnVector result = ColumnVector.listConcatenateByRow(new ColumnVector[]{cv, cv})) {
+           ColumnVector result = ColumnVector.listConcatenateByRow(cv, cv)) {
       }
     }, "All columns must be of type list");
 
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
           new HostColumnVector.BasicType(true, DType.INT32)), Arrays.asList(1, 2, 3));
-           ColumnVector result = ColumnVector.listConcatenateByRow(new ColumnVector[]{cv})) {
+           ColumnVector result = ColumnVector.listConcatenateByRow(cv)) {
       }
     }, "listConcatenateByRow requires at least 2 columns");
 
@@ -2123,7 +2123,7 @@ public class ColumnVectorTest extends CudfTestBase {
       try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
           new HostColumnVector.ListType(true,
               new HostColumnVector.BasicType(true, DType.INT32))), Arrays.asList(Arrays.asList(1)));
-           ColumnVector result = ColumnVector.listConcatenateByRow(new ColumnVector[]{cv, cv})) {
+           ColumnVector result = ColumnVector.listConcatenateByRow(cv, cv)) {
       }
     }, "listConcatenateByRow only supports lists with depth 1");
 
@@ -2132,7 +2132,7 @@ public class ColumnVectorTest extends CudfTestBase {
           new HostColumnVector.BasicType(true, DType.INT32)), Arrays.asList(1, 2, 3));
            ColumnVector cv2 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
                new HostColumnVector.BasicType(true, DType.INT32)), Arrays.asList(1, 2), Arrays.asList(3));
-           ColumnVector result = ColumnVector.listConcatenateByRow(new ColumnVector[]{cv1, cv2})) {
+           ColumnVector result = ColumnVector.listConcatenateByRow(cv1, cv2)) {
       }
     }, "Row count mismatch");
 
@@ -2141,7 +2141,7 @@ public class ColumnVectorTest extends CudfTestBase {
           new HostColumnVector.BasicType(true, DType.INT32)), Arrays.asList(1, 2, 3));
            ColumnVector cv2 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
                new HostColumnVector.BasicType(true, DType.INT64)), Arrays.asList(1L));
-           ColumnVector result = ColumnVector.listConcatenateByRow(new ColumnVector[]{cv1, cv2})) {
+           ColumnVector result = ColumnVector.listConcatenateByRow(cv1, cv2)) {
       }
     }, "Element type mismatch");
   }
@@ -2154,7 +2154,7 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector cv2 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
                  new HostColumnVector.BasicType(true, DType.INT32)),
              Arrays.asList(1, 2, 3), null, Arrays.asList(10, 12), Arrays.asList(100, 200, 300), null);
-         ColumnVector result = ColumnVector.listConcatenateByRow(new ColumnVector[]{cv1, cv2}, true);
+         ColumnVector result = ColumnVector.listConcatenateByRow(true, cv1, cv2);
          ColumnVector expect = ColumnVector.fromLists(new HostColumnVector.ListType(true,
                  new HostColumnVector.BasicType(true, DType.INT32)),
              Arrays.asList(null, 1, 2, 3), Arrays.asList(1, 2, 3), Arrays.asList(10, 12),
@@ -2171,7 +2171,7 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector cv3 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
                  new HostColumnVector.BasicType(true, DType.STRING)),
              Arrays.asList("CCC"), Arrays.asList(), Arrays.asList("222", "333"), null, null);
-         ColumnVector result = ColumnVector.listConcatenateByRow(new ColumnVector[]{cv1, cv2, cv3}, true);
+         ColumnVector result = ColumnVector.listConcatenateByRow(true, cv1, cv2, cv3);
          ColumnVector expect = ColumnVector.fromLists(new HostColumnVector.ListType(true,
                  new HostColumnVector.BasicType(true, DType.STRING)),
              Arrays.asList("AAA", "BBB", "CCC"), Arrays.asList("aaa", "bbb", "ccc"),
@@ -2182,7 +2182,7 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
             new HostColumnVector.BasicType(true, DType.FLOAT64)),
         Arrays.asList(1.23, 0.0, Double.NaN), Arrays.asList(), null, Arrays.asList(-1.23e10, null));
-         ColumnVector result = ColumnVector.listConcatenateByRow(new ColumnVector[]{cv, cv, cv}, true);
+         ColumnVector result = ColumnVector.listConcatenateByRow(true, cv, cv, cv);
          ColumnVector expect = ColumnVector.fromLists(new HostColumnVector.ListType(true,
                  new HostColumnVector.BasicType(true, DType.FLOAT64)),
              Arrays.asList(1.23, 0.0, Double.NaN, 1.23, 0.0, Double.NaN, 1.23, 0.0, Double.NaN),

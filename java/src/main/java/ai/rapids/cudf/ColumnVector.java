@@ -535,21 +535,22 @@ public final class ColumnVector extends ColumnView {
    * @param columns array of columns containing lists, must be more than 2 columns
    * @return A new java column vector containing the concatenated lists.
    */
-  public static ColumnVector listConcatenateByRow(ColumnView[] columns) {
-    return listConcatenateByRow(columns, false);
+  public static ColumnVector listConcatenateByRow(ColumnView... columns) {
+    return listConcatenateByRow(false, columns);
   }
 
   /**
    * Concatenate columns of lists horizontally (row by row), combining a corresponding row
    * from each column into a single list row of a new column.
    *
-   * @param columns    array of columns containing lists, must be more than 2 columns
    * @param ignoreNull whether to ignore null list element of input columns: If true, null list
    *                   will be ignored from concatenation; Otherwise, any concatenation involving
    *                   a null list element will result in a null list
+   * @param columns    array of columns containing lists, must be more than 2 columns
    * @return A new java column vector containing the concatenated lists.
    */
-  public static ColumnVector listConcatenateByRow(ColumnView[] columns, boolean ignoreNull) {
+  public static ColumnVector listConcatenateByRow(boolean ignoreNull, ColumnView... columns) {
+    assert columns != null : "input columns should not be null";
     assert columns.length >= 2 : "listConcatenateByRow requires at least 2 columns";
     long size = columns[0].getRowCount();
     long[] columnViews = new long[columns.length];
