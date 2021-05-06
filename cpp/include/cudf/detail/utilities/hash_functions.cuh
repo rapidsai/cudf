@@ -91,21 +91,21 @@ void CUDA_DEVICE_CALLABLE md5_process(TKey const& key, md5_intermediate_data* ha
   // 64 bytes for the number of byt es processed in a given step
   constexpr int md5_chunk_size = 64;
   if (hash_state->buffer_length + len < md5_chunk_size) {
-    thrust::copy_n(thrust::seq, data, len, hash_state->buffer + hash_state->buffer_length);
+    std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
     hash_state->buffer_length += len;
   } else {
     uint32_t copylen = md5_chunk_size - hash_state->buffer_length;
 
-    thrust::copy_n(thrust::seq, data, copylen, hash_state->buffer + hash_state->buffer_length);
+    std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
     md5_hash_step(hash_state);
 
     while (len > md5_chunk_size + copylen) {
-      thrust::copy_n(thrust::seq, data + copylen, md5_chunk_size, hash_state->buffer);
+      std::memcpy(hash_state->buffer, data + copylen, md5_chunk_size);
       md5_hash_step(hash_state);
       copylen += md5_chunk_size;
     }
 
-    thrust::copy_n(thrust::seq, data + copylen, len - copylen, hash_state->buffer);
+    std::memcpy(hash_state->buffer, data + copylen, len - copylen);
     hash_state->buffer_length = len - copylen;
   }
 }
@@ -146,7 +146,7 @@ void CUDA_DEVICE_CALLABLE uint32ToLowercaseHexString(uint32_t num, char* destina
 
   x |= 0x3030303030303030;
   x += offsets;
-  thrust::copy_n(thrust::seq, reinterpret_cast<uint8_t*>(&x), 8, destination);
+  std::memcpy(destination, reinterpret_cast<uint8_t*>(&x), 8);
 }
 
 struct MD5ListHasher {
@@ -211,20 +211,20 @@ MD5ListHasher::operator()<string_view>(column_device_view data_col,
       hash_state->message_length += len;
 
       if (hash_state->buffer_length + len < 64) {
-        thrust::copy_n(thrust::seq, data, len, hash_state->buffer + hash_state->buffer_length);
+        std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
         hash_state->buffer_length += len;
       } else {
         uint32_t copylen = 64 - hash_state->buffer_length;
-        thrust::copy_n(thrust::seq, data, copylen, hash_state->buffer + hash_state->buffer_length);
+        std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
         md5_hash_step(hash_state);
 
         while (len > 64 + copylen) {
-          thrust::copy_n(thrust::seq, data + copylen, 64, hash_state->buffer);
+          std::memcpy(hash_state->buffer, data + copylen, 64);
           md5_hash_step(hash_state);
           copylen += 64;
         }
 
-        thrust::copy_n(thrust::seq, data + copylen, len - copylen, hash_state->buffer);
+        std::memcpy(hash_state->buffer, data + copylen, len - copylen);
         hash_state->buffer_length = len - copylen;
       }
     }
@@ -262,10 +262,9 @@ struct MD5Hash {
       thrust::fill_n(thrust::seq, hash_state->buffer, md5_chunk_size - message_length_size, 0x00);
     }
 
-    thrust::copy_n(thrust::seq,
-                   reinterpret_cast<uint8_t const*>(&full_length),
-                   message_length_size,
-                   hash_state->buffer + md5_chunk_size - message_length_size);
+    std::memcpy(hash_state->buffer + md5_chunk_size - message_length_size,
+                reinterpret_cast<uint8_t const*>(&full_length),
+                message_length_size);
     md5_hash_step(hash_state);
 
 #pragma unroll
@@ -323,20 +322,20 @@ void CUDA_DEVICE_CALLABLE MD5Hash::operator()<string_view>(column_device_view co
   hash_state->message_length += len;
 
   if (hash_state->buffer_length + len < 64) {
-    thrust::copy_n(thrust::seq, data, len, hash_state->buffer + hash_state->buffer_length);
+    std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
     hash_state->buffer_length += len;
   } else {
     uint32_t copylen = 64 - hash_state->buffer_length;
-    thrust::copy_n(thrust::seq, data, copylen, hash_state->buffer + hash_state->buffer_length);
+    std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
     md5_hash_step(hash_state);
 
     while (len > 64 + copylen) {
-      thrust::copy_n(thrust::seq, data + copylen, 64, hash_state->buffer);
+      std::memcpy(hash_state->buffer, data + copylen, 64);
       md5_hash_step(hash_state);
       copylen += 64;
     }
 
-    thrust::copy_n(thrust::seq, data + copylen, len - copylen, hash_state->buffer);
+    std::memcpy(hash_state->buffer, data + copylen, len - copylen);
     hash_state->buffer_length = len - copylen;
   }
 }
@@ -547,6 +546,20 @@ template <>
 hash_value_type CUDA_DEVICE_CALLABLE MurmurHash3_32<double>::operator()(double const& key) const
 {
   return this->compute_floating_point(key);
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+MurmurHash3_32<numeric::decimal32>::operator()(numeric::decimal32 const& key) const
+{
+  return this->compute(key.value());
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+MurmurHash3_32<numeric::decimal64>::operator()(numeric::decimal64 const& key) const
+{
+  return this->compute(key.value());
 }
 
 template <>

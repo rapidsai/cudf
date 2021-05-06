@@ -50,6 +50,8 @@ import java.util.stream.Collectors;
 import static ai.rapids.cudf.Aggregate.max;
 import static ai.rapids.cudf.Aggregate.first;
 import static ai.rapids.cudf.Aggregate.last;
+import static ai.rapids.cudf.ParquetWriterOptions.listBuilder;
+import static ai.rapids.cudf.ParquetWriterOptions.structBuilder;
 import static ai.rapids.cudf.Table.TestBuilder;
 import static ai.rapids.cudf.Table.count;
 import static ai.rapids.cudf.Table.mean;
@@ -2945,9 +2947,9 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testWindowingCollect() {
-    Aggregation aggCollectWithNulls = Aggregation.collect(Aggregation.NullPolicy.INCLUDE);
-    Aggregation aggCollect = Aggregation.collect();
+  void testWindowingCollectList() {
+    Aggregation aggCollectWithNulls = Aggregation.collectList(Aggregation.NullPolicy.INCLUDE);
+    Aggregation aggCollect = Aggregation.collectList();
     WindowOptions winOpts = WindowOptions.builder()
                                          .minPeriods(1)
                                          .window(2, 1).build();
@@ -4404,6 +4406,88 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByCollectListIncludeNulls() {
+    try (Table input = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 4)
+        .column(null, 13, null, 12, 14, null, 15, null, null, 0)
+        .build();
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(new ListType(false, new BasicType(true, DType.INT32)),
+                 Arrays.asList(null, 13, null, 12),
+                 Arrays.asList(14, null, 15, null),
+                 Arrays.asList((Integer) null),
+                 Arrays.asList(0))
+             .build();
+         Table found = input.groupBy(0).aggregate(
+             Aggregation.collectList(Aggregation.NullPolicy.INCLUDE).onColumn(1))) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
+
+  @Test
+  void testGroupByCollectSetIncludeNulls() {
+    // test with null unequal and nan unequal
+    Aggregation collectSet = Aggregation.collectSet(Aggregation.NullPolicy.INCLUDE,
+        Aggregation.NullEquality.UNEQUAL, Aggregation.NaNEquality.UNEQUAL);
+    try (Table input = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4)
+        .column(null, 13, null, 13, 14, null, 15, null, 4, 1, 1, 4, 0, 0, 0, 0)
+        .build();
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(new ListType(false, new BasicType(true, DType.INT32)),
+                 Arrays.asList(13, null, null), Arrays.asList(14, 15, null, null),
+                 Arrays.asList(1, 4), Arrays.asList(0))
+             .build();
+         Table found = input.groupBy(0).aggregate(collectSet.onColumn(1))) {
+      assertTablesAreEqual(expected, found);
+    }
+    // test with null equal and nan unequal
+    collectSet = Aggregation.collectSet(Aggregation.NullPolicy.INCLUDE,
+        Aggregation.NullEquality.EQUAL, Aggregation.NaNEquality.UNEQUAL);
+    try (Table input = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4)
+        .column(null, 13.0, null, 13.0,
+            14.1, Double.NaN, 13.9, Double.NaN,
+            Double.NaN, null, 1.0, null,
+            null, null, null, null)
+        .build();
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(new ListType(false, new BasicType(true, DType.FLOAT64)),
+                 Arrays.asList(13.0, null),
+                 Arrays.asList(13.9, 14.1, Double.NaN, Double.NaN),
+                 Arrays.asList(1.0, Double.NaN, null),
+                 Arrays.asList((Integer) null))
+             .build();
+         Table found = input.groupBy(0).aggregate(collectSet.onColumn(1))) {
+      assertTablesAreEqual(expected, found);
+    }
+    // test with null equal and nan equal
+    collectSet = Aggregation.collectSet(Aggregation.NullPolicy.INCLUDE,
+        Aggregation.NullEquality.EQUAL, Aggregation.NaNEquality.ALL_EQUAL);
+    try (Table input = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4)
+        .column(null, 13.0, null, 13.0,
+            14.1, Double.NaN, 13.9, Double.NaN,
+            0.0, 0.0, 0.00, 0.0,
+            Double.NaN, Double.NaN, null, null)
+        .build();
+         Table expected = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(new ListType(false, new BasicType(true, DType.FLOAT64)),
+                 Arrays.asList(13.0, null),
+                 Arrays.asList(13.9, 14.1, Double.NaN),
+                 Arrays.asList(0.0),
+                 Arrays.asList(Double.NaN, (Integer) null))
+             .build();
+         Table found = input.groupBy(0).aggregate(collectSet.onColumn(1))) {
+      assertTablesAreEqual(expected, found);
+    }
+  }
+
+  @Test
   void testRowBitCount() {
     try (Table t = new Table.TestBuilder()
         .column(0, 1, null, 3)                 // 33 bits per row (4 bytes + valid bit)
@@ -4604,36 +4688,42 @@ public class TableTest extends CudfTestBase {
   }
 
   private Table getExpectedFileTable() {
-    return getExpectedFileTable(false);
+    return getExpectedFileTable(false, false);
   }
 
   private Table getExpectedFileTable(boolean withNestedColumns) {
+    return getExpectedFileTable(true, true);
+  }
+
+  private Table getExpectedFileTable(boolean withStructColumns, boolean withListColumn) {
     TestBuilder tb = new TestBuilder()
-            .column(true, false, false, true, false)
-            .column(5, 1, 0, 2, 7)
-            .column(new Byte[]{2, 3, 4, 5, 9})
-            .column(3l, 9l, 4l, 2l, 20l)
-            .column("this", "is", "a", "test", "string")
-            .column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f)
-            .column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d);
-    if (withNestedColumns) {
-      StructType nestedType = new StructType(true,
-              new BasicType(false, DType.INT32), new BasicType(false, DType.STRING));
+        .column(true, false, false, true, false)
+        .column(5, 1, 0, 2, 7)
+        .column(new Byte[]{2, 3, 4, 5, 9})
+        .column(3l, 9l, 4l, 2l, 20l)
+        .column("this", "is", "a", "test", "string")
+        .column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f)
+        .column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d);
+    StructType nestedType = new StructType(true,
+        new BasicType(false, DType.INT32), new BasicType(false, DType.STRING));
+    if (withStructColumns) {
       tb.column(nestedType,
-            struct(1, "k1"), struct(2, "k2"), struct(3, "k3"),
-            struct(4, "k4"), new HostColumnVector.StructData((List) null))
-        .column(new ListType(false, new BasicType(false, DType.INT32)),
-                Arrays.asList(1, 2),
-                Arrays.asList(3, 4),
-                Arrays.asList(5),
-                Arrays.asList(6, 7),
-                Arrays.asList(8, 9, 10))
-        .column(new ListType(false, nestedType),
-            Arrays.asList(struct(1, "k1"), struct(2, "k2"), struct(3, "k3")),
-            Arrays.asList(struct(4, "k4"), struct(5, "k5")),
-            Arrays.asList(struct(6, "k6")),
-            Arrays.asList(new HostColumnVector.StructData((List) null)),
-            Arrays.asList());
+          struct(1, "k1"), struct(2, "k2"), struct(3, "k3"),
+          struct(4, "k4"), new HostColumnVector.StructData((List) null));
+    }
+    if (withListColumn) {
+      tb.column(new ListType(false, new BasicType(false, DType.INT32)),
+          Arrays.asList(1, 2),
+          Arrays.asList(3, 4),
+          Arrays.asList(5),
+          Arrays.asList(6, 7),
+          Arrays.asList(8, 9, 10))
+          .column(new ListType(false, nestedType),
+              Arrays.asList(struct(1, "k1"), struct(2, "k2"), struct(3, "k3")),
+              Arrays.asList(struct(4, "k4"), struct(5, "k5")),
+              Arrays.asList(struct(6, "k6")),
+              Arrays.asList(new HostColumnVector.StructData((List) null)),
+              Arrays.asList());
     }
     return tb.build();
   }
@@ -4701,9 +4791,9 @@ public class TableTest extends CudfTestBase {
     try (Table table0 = getExpectedFileTableWithDecimals();
          MyBufferConsumer consumer = new MyBufferConsumer()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumnNames("_c1", "_c2", "_c3", "_c4", "_c5", "_c6", "_c7", "_c8", "_c9")
-          .withTimestampInt96(true)
-          .withDecimalPrecisions(0, 0, 0, 0, 0, 0, 0, 5, 5)
+          .withNonNullableColumns("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
+          .withDecimalColumn("_c7", 5)
+          .withDecimalColumn("_c8", 5)
           .build();
 
       try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
@@ -4719,12 +4809,46 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testParquetWriteToBufferChunkedWithNested() {
+    ParquetWriterOptions options = ParquetWriterOptions.builder()
+        .withNullableColumns("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
+        .withStructColumn(structBuilder("_c7")
+            .withNullableColumns("_c7-1")
+            .withNullableColumns("_c7-2")
+            .build())
+      .withListColumn(listBuilder("_c8")
+            .withNullableColumns("c8-1").build())
+        .withListColumn(listBuilder("c9")
+            .withStructColumn(structBuilder("c9-1")
+                .withNullableColumns("c9-1-1")
+                .withNullableColumns("c9-1-2").build())
+            .build())
+        .build();
+    try (Table table0 = getExpectedFileTable(true);
+         MyBufferConsumer consumer = new MyBufferConsumer()) {
+      try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
+        writer.write(table0);
+        writer.write(table0);
+        writer.write(table0);
+      }
+      try (Table table1 = Table.readParquet(ParquetOptions.DEFAULT, consumer.buffer, 0,
+          consumer.offset);
+           Table concat = Table.concatenate(table0, table0, table0)) {
+        assertTablesAreEqual(concat, table1);
+      }
+    }
+  }
+
+  @Test
   void testParquetWriteToBufferChunked() {
     ParquetWriterOptions options = ParquetWriterOptions.builder()
-        .withColumnNames("_c1", "_c2", "_c3", "_c4", "_c5", "_c6", "_c7")
-        .withTimestampInt96(true)
+        .withNullableColumns("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
+        .withStructColumn(structBuilder("_c7")
+            .withNullableColumns("_c7-1")
+            .withNullableColumns("_c7-2")
+            .build())
         .build();
-    try (Table table0 = getExpectedFileTable();
+    try (Table table0 = getExpectedFileTable(true, false);
          MyBufferConsumer consumer = new MyBufferConsumer()) {
          try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
            writer.write(table0);
@@ -4743,11 +4867,11 @@ public class TableTest extends CudfTestBase {
     File tempFile = File.createTempFile("test-names", ".parquet");
     try (Table table0 = getExpectedFileTableWithDecimals()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh",
-              "eighth", "nineth")
+          .withNonNullableColumns("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+          .withDecimalColumn("eighth", 5)
+          .withDecimalColumn("ninth", 6)
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
-          .withDecimalPrecisions(0, 0, 0, 0, 0, 0, 0, 5, 6)
           .build();
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);
@@ -4765,12 +4889,12 @@ public class TableTest extends CudfTestBase {
     File tempFile = File.createTempFile("test-names-metadata", ".parquet");
     try (Table table0 = getExpectedFileTableWithDecimals()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh",
-            "eighth", "nineth")
+          .withNonNullableColumns("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+          .withDecimalColumn("eighth", 6)
+          .withDecimalColumn("ninth", 8)
           .withMetadata("somekey", "somevalue")
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
-          .withDecimalPrecisions(0, 0, 0, 0, 0, 0, 0, 6, 8)
           .build();
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);
@@ -4788,10 +4912,11 @@ public class TableTest extends CudfTestBase {
     File tempFile = File.createTempFile("test-uncompressed", ".parquet");
     try (Table table0 = getExpectedFileTableWithDecimals()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
-          .withColumnNames("_c1", "_c2", "_c3", "_c4", "_c5", "_c6", "_c7", "_c8", "_c9")
+          .withNonNullableColumns("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
+          .withDecimalColumn("_c7", 4)
+          .withDecimalColumn("_c8", 6)
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
-          .withDecimalPrecisions(0, 0, 0, 0, 0, 0, 0, 4, 6)
           .build();
       try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);

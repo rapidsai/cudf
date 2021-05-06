@@ -42,6 +42,11 @@ gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
 
+# Remove rapidsai-nightly channel if we are building main branch
+if [ "$SOURCE_BRANCH" = "main" ]; then
+  conda config --system --remove channels rapidsai-nightly
+fi
+
 gpuci_logger "Check compiler versions"
 python --version
 $CC --version
