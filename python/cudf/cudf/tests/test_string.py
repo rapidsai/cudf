@@ -3034,7 +3034,7 @@ def test_string_get_json_object_empty_json_strings(json_path):
         ]
     )
 
-    got = gs.str.get_json_object("$.store")
+    got = gs.str.get_json_object(json_path)
     expect = cudf.Series([None], dtype="object")
 
     assert_eq(got, expect)
