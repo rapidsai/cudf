@@ -47,7 +47,13 @@ function sed_runner() {
 }
 
 # cpp update
-sed_runner 's/'"CUDA_DATAFRAME VERSION .* LANGUAGES"'/'"CUDA_DATAFRAME VERSION ${NEXT_FULL_TAG} LANGUAGES"'/g' cpp/CMakeLists.txt
+sed_runner 's/'"CUDF VERSION .* LANGUAGES"'/'"CUDF VERSION ${NEXT_FULL_TAG} LANGUAGES"'/g' cpp/CMakeLists.txt
+
+# cpp libcudf_kafka update
+sed_runner 's/'"CUDA_KAFKA VERSION .* LANGUAGES"'/'"CUDA_KAFKA VERSION ${NEXT_FULL_TAG} LANGUAGES"'/g' cpp/libcudf_kafka/CMakeLists.txt
+
+# cpp cudf_jni update
+sed_runner 's/'"CUDF_JNI VERSION .* LANGUAGES"'/'"CUDF_JNI VERSION ${NEXT_FULL_TAG} LANGUAGES"'/g' java/src/main/native/CMakeLists.txt
 
 # doxyfile update
 sed_runner 's/PROJECT_NUMBER         = .*/PROJECT_NUMBER         = '${NEXT_FULL_TAG}'/g' cpp/doxygen/Doxyfile
@@ -63,3 +69,7 @@ done
 
 # Doxyfile update
 sed_runner "s|\(TAGFILES.*librmm/\).*|\1${NEXT_SHORT_TAG}|" cpp/doxygen/Doxyfile
+
+# README.md update
+sed_runner "s/version == ${CURRENT_SHORT_TAG}/version == ${NEXT_SHORT_TAG}/g" README.md
+sed_runner "s/cudf=${CURRENT_SHORT_TAG}/cudf=${NEXT_SHORT_TAG}/g" README.md

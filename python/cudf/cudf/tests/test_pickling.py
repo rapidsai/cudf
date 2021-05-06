@@ -90,7 +90,9 @@ def test_pickle_index():
     idx = GenericIndex(np.arange(nelem), name="a")
     pickled = pickle.dumps(idx)
     out = pickle.loads(pickled)
-    assert idx == out
+    # TODO: Once operations like `all` are supported on Index objects, we can
+    # just use that without calling values first.
+    assert (idx == out).values.all()
 
 
 def test_pickle_buffer():

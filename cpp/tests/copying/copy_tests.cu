@@ -26,6 +26,7 @@
 #include <cudf/detail/copy_if_else.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -66,7 +67,7 @@ TYPED_TEST(CopyTest, CopyIfElseTestManyNulls)
 }
 
 struct copy_if_else_tiny_grid_functor {
-  template <typename T, typename Filter, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+  template <typename T, typename Filter, CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<T>())>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& lhs,
                                            cudf::column_view const& rhs,
                                            Filter filter,
@@ -91,7 +92,7 @@ struct copy_if_else_tiny_grid_functor {
     return out;
   }
 
-  template <typename T, typename Filter, std::enable_if_t<not cudf::is_fixed_width<T>()>* = nullptr>
+  template <typename T, typename Filter, CUDF_ENABLE_IF(not cudf::is_rep_layout_compatible<T>())>
   std::unique_ptr<cudf::column> operator()(cudf::column_view const& lhs,
                                            cudf::column_view const& rhs,
                                            Filter filter,
@@ -455,7 +456,7 @@ struct StringsCopyIfElseTest : public cudf::test::BaseFixture {
 
 TEST_F(StringsCopyIfElseTest, CopyIfElse)
 {
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
   std::vector<const char*> h_strings1{"eee", "bb", "", "aa", "bbb", "ééé"};
@@ -482,7 +483,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElse)
 
 TEST_F(StringsCopyIfElseTest, CopyIfElseScalarColumn)
 {
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
   std::vector<const char*> h_string1{"eee"};
@@ -510,7 +511,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseScalarColumn)
 
 TEST_F(StringsCopyIfElseTest, CopyIfElseColumnScalar)
 {
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
   std::vector<const char*> h_string1{"eee"};
@@ -537,7 +538,7 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseColumnScalar)
 
 TEST_F(StringsCopyIfElseTest, CopyIfElseScalarScalar)
 {
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
 
   std::vector<const char*> h_string1{"eee"};
@@ -595,8 +596,9 @@ TYPED_TEST(FixedPointTypes, FixedPointLarge)
 
   auto a = thrust::make_counting_iterator(-1000);
   auto b = thrust::make_constant_iterator(0);
-  auto m = make_counting_transform_iterator(-1000, [](int i) { return i > 0; });
-  auto e = make_counting_transform_iterator(-1000, [](int i) { return std::max(0, i); });
+  auto m = cudf::detail::make_counting_transform_iterator(-1000, [](int i) { return i > 0; });
+  auto e =
+    cudf::detail::make_counting_transform_iterator(-1000, [](int i) { return std::max(0, i); });
 
   auto const mask     = cudf::test::fixed_width_column_wrapper<bool>(m, m + 2000);
   auto const A        = fp_wrapper{a, a + 2000, scale_type{-3}};

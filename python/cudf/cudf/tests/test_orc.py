@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.orc
+import pyorc
 import pytest
 
 import cudf
@@ -87,33 +88,6 @@ def test_orc_reader_basic(datadir, inputfile, columns, use_index, engine):
     )
 
     assert_eq(expect, got, check_categorical=False)
-
-
-def test_orc_reader_decimal(datadir):
-    path = datadir / "TestOrcFile.decimal.orc"
-    try:
-        orcfile = pa.orc.ORCFile(path)
-    except pa.ArrowIOError as e:
-        pytest.skip(".orc file is not found: %s" % e)
-
-    pdf = orcfile.read().to_pandas()
-    gdf = cudf.read_orc(path, engine="cudf").to_pandas()
-
-    # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
-    # This is because cuDF returns as float64 as it lacks an equivalent dtype
-    pdf = pdf.apply(pd.to_numeric)
-
-    np.testing.assert_allclose(pdf, gdf)
-
-
-def test_orc_reader_decimal_as_int(datadir):
-    path = datadir / "TestOrcFile.decimal.orc"
-
-    gdf = cudf.read_orc(
-        path, engine="cudf", decimals_as_float=False, force_decimal_scale=2
-    ).to_pandas()
-
-    assert gdf["_col0"][0] == -100050  # -1000.5
 
 
 def test_orc_reader_filenotfound(tmpdir):
@@ -305,17 +279,38 @@ def test_orc_read_rows(datadir, skiprows, num_rows):
     pdf = orcfile.read().to_pandas()
     gdf = cudf.read_orc(
         path, engine="cudf", skiprows=skiprows, num_rows=num_rows
-    ).to_pandas()
-
-    # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
-    # This is because cuDF returns as float64 as it lacks an equivalent dtype
-    pdf = pdf.apply(pd.to_numeric)
+    )
 
     # Slice rows out of the whole dataframe for comparison as PyArrow doesn't
     # have an API to read a subsection of rows from the file
     pdf = pdf[skiprows : skiprows + num_rows]
+    pdf = pdf.reset_index(drop=True)
 
-    np.testing.assert_allclose(pdf, gdf)
+    assert_eq(pdf, gdf)
+
+
+def test_orc_read_skiprows(tmpdir):
+    buff = BytesIO()
+    df = pd.DataFrame(
+        {"a": [1, 0, 1, 0, None, 1, 1, 1, 0, None, 0, 0, 1, 1, 1, 1]},
+        dtype=pd.BooleanDtype(),
+    )
+    writer = pyorc.Writer(buff, pyorc.Struct(a=pyorc.Boolean()))
+    tuples = list(
+        map(
+            lambda x: (None,) if x[0] is pd.NA else x,
+            list(df.itertuples(index=False, name=None)),
+        )
+    )
+    writer.writerows(tuples)
+    writer.close()
+
+    skiprows = 10
+
+    expected = cudf.read_orc(buff)[skiprows::].reset_index(drop=True)
+    got = cudf.read_orc(buff, skiprows=skiprows)
+
+    assert_eq(expected, got)
 
 
 def test_orc_reader_uncompressed_block(datadir):
@@ -492,6 +487,7 @@ def test_orc_writer_sliced(tmpdir):
 @pytest.mark.parametrize(
     "orc_file",
     [
+        "TestOrcFile.decimal.orc",
         "TestOrcFile.decimal.same.values.orc",
         "TestOrcFile.decimal.multiple.values.orc",
         # For addional information take look at PR 7034
@@ -500,13 +496,37 @@ def test_orc_writer_sliced(tmpdir):
 )
 def test_orc_reader_decimal_type(datadir, orc_file):
     file_path = datadir / orc_file
-    pdf = pd.read_orc(file_path)
+
+    try:
+        orcfile = pa.orc.ORCFile(file_path)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
+
+    pdf = orcfile.read().to_pandas()
     df = cudf.read_orc(file_path).to_pandas()
-    # Converting to strings since pandas keeps it in decimal
-    pdf["col8"] = pdf["col8"].astype("str")
-    df["col8"] = df["col8"].astype("str")
 
     assert_eq(pdf, df)
+
+
+def test_orc_decimal_precision_fail(datadir):
+    file_path = datadir / "TestOrcFile.int_decimal.precision_19.orc"
+
+    try:
+        orcfile = pa.orc.ORCFile(file_path)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
+
+    # Max precision supported is 18 (Decimal64Dtype limit)
+    # and the data has the precision 19. This test should be removed
+    # once Decimal128Dtype is introduced.
+    with pytest.raises(RuntimeError):
+        cudf.read_orc(file_path)
+
+    # Shouldn't cause failure if decimal column is not chosen to be read.
+    pdf = orcfile.read(columns=["int"]).to_pandas()
+    gdf = cudf.read_orc(file_path, columns=["int"])
+
+    assert_eq(pdf, gdf)
 
 
 # For addional information take look at PR 6636 and 6702
@@ -677,6 +697,7 @@ def test_orc_reader_gmt_timestamps(datadir):
 
 def test_orc_bool_encode_fail():
     np.random.seed(0)
+    buffer = BytesIO()
 
     # Generate a boolean column longer than a single stripe
     fail_df = cudf.DataFrame({"col": gen_rand_series("bool", 600000)})
@@ -686,16 +707,61 @@ def test_orc_bool_encode_fail():
     # Should throw instead of generating a file that is incompatible
     # with other readers (see issue #6763)
     with pytest.raises(RuntimeError):
-        fail_df.to_orc("should_throw.orc")
+        fail_df.to_orc(buffer)
 
     # Generate a boolean column that fits into a single stripe
     okay_df = cudf.DataFrame({"col": gen_rand_series("bool", 500000)})
     okay_df["col"][500000 - 1] = None
-    fname = "single_stripe.orc"
     # Invalid row is in the last row group of the stripe;
     # encoding is assumed to be correct
-    okay_df.to_orc(fname)
+    okay_df.to_orc(buffer)
 
     # Also validate data
-    pdf = pa.orc.ORCFile(fname).read().to_pandas()
+    pdf = pa.orc.ORCFile(buffer).read().to_pandas()
     assert_eq(okay_df, pdf)
+
+
+def test_nanoseconds_overflow():
+    buffer = BytesIO()
+    # Use nanosecond values that take more than 32 bits to encode
+    s = cudf.Series([710424008, -1338482640], dtype="datetime64[ns]")
+    expected = cudf.DataFrame({"s": s})
+    expected.to_orc(buffer)
+
+    cudf_got = cudf.read_orc(buffer)
+    assert_eq(expected, cudf_got)
+
+    pyarrow_got = pa.orc.ORCFile(buffer).read()
+    assert_eq(expected.to_pandas(), pyarrow_got.to_pandas())
+
+
+def test_empty_dataframe():
+    buffer = BytesIO()
+    expected = cudf.DataFrame()
+    expected.to_orc(buffer)
+
+    # Raise error if column name is mentioned, but it doesn't exist.
+    with pytest.raises(RuntimeError):
+        cudf.read_orc(buffer, columns=["a"])
+
+    got_df = cudf.read_orc(buffer)
+    expected_pdf = pd.read_orc(buffer)
+
+    assert_eq(expected, got_df)
+    assert_eq(expected_pdf, got_df)
+
+
+@pytest.mark.parametrize(
+    "data", [[None, ""], ["", None], [None, None], ["", ""]]
+)
+def test_empty_string_columns(data):
+    buffer = BytesIO()
+
+    expected = cudf.DataFrame({"string": data}, dtype="str")
+    expected.to_orc(buffer)
+
+    expected_pdf = pd.read_orc(buffer)
+    got_df = cudf.read_orc(buffer)
+
+    assert_eq(expected, got_df)
+    assert_eq(expected_pdf, got_df)

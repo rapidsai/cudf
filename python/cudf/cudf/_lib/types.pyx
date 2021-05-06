@@ -15,6 +15,7 @@ from cudf._lib.types cimport (
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf.core.dtypes import ListDtype, StructDtype, Decimal64Dtype
+from cudf.utils.dtypes import is_decimal_dtype, is_list_dtype, is_struct_dtype
 
 cimport cudf._lib.cpp.types as libcudf_types
 
@@ -192,8 +193,7 @@ cdef dtype_from_structs_column_view(column_view cv):
 
 cdef dtype_from_decimal_column_view(column_view cv):
     scale = -cv.type().scale()
-    precision = 18  # max of 64 bit integer
-    return Decimal64Dtype(precision=precision, scale=scale)
+    return Decimal64Dtype(precision=Decimal64Dtype.MAX_PRECISION, scale=scale)
 
 cdef dtype_from_column_view(column_view cv):
     cdef libcudf_types.type_id tid = cv.type().id()
@@ -208,3 +208,20 @@ cdef dtype_from_column_view(column_view cv):
                                   "Use decimal64 instead")
     else:
         return cudf_to_np_types[<underlying_type_t_type_id>(tid)]
+
+cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
+    if is_list_dtype(dtype):
+        tid = libcudf_types.type_id.LIST
+    elif is_struct_dtype(dtype):
+        tid = libcudf_types.type_id.STRUCT
+    elif is_decimal_dtype(dtype):
+        tid = libcudf_types.type_id.DECIMAL64
+    else:
+        tid = <libcudf_types.type_id> (
+            <underlying_type_t_type_id> (
+                np_to_cudf_types[np.dtype(dtype)]))
+
+    if tid == libcudf_types.type_id.DECIMAL64:
+        return libcudf_types.data_type(tid, -dtype.scale)
+    else:
+        return libcudf_types.data_type(tid)

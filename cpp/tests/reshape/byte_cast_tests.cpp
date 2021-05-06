@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
-#include <cudf/reshape.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/detail/iterator.cuh>
+#include <cudf/reshape.hpp>
 
 using namespace cudf::test;
 
@@ -48,8 +50,9 @@ TEST_F(ByteCastTest, int16ValuesWithSplit)
 
 TEST_F(ByteCastTest, int16ValuesWithNulls)
 {
-  using limits      = std::numeric_limits<int16_t>;
-  auto odd_validity = make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  using limits = std::numeric_limits<int16_t>;
+  auto odd_validity =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
 
   fixed_width_column_wrapper<int16_t> const int16_col(
     {short(0), short(100), short(-100), limits::min(), limits::max()}, {0, 1, 0, 1, 0});
@@ -96,8 +99,9 @@ TEST_F(ByteCastTest, int32Values)
 
 TEST_F(ByteCastTest, int32ValuesWithNulls)
 {
-  using limits       = std::numeric_limits<int32_t>;
-  auto even_validity = make_counting_transform_iterator(0, [](auto i) { return (i + 1) % 2; });
+  using limits = std::numeric_limits<int32_t>;
+  auto even_validity =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i + 1) % 2; });
 
   fixed_width_column_wrapper<int32_t> const int32_col({0, 100, -100, limits::min(), limits::max()},
                                                       {1, 0, 1, 0, 1});
@@ -153,8 +157,9 @@ TEST_F(ByteCastTest, int64ValuesWithSplit)
 
 TEST_F(ByteCastTest, int64ValuesWithNulls)
 {
-  using limits      = std::numeric_limits<int64_t>;
-  auto odd_validity = make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  using limits = std::numeric_limits<int64_t>;
+  auto odd_validity =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
 
   fixed_width_column_wrapper<int64_t> const int64_col(
     {long(0), long(100), long(-100), limits::min(), limits::max()}, {0, 1, 0, 1, 0});
@@ -217,8 +222,9 @@ TEST_F(ByteCastTest, fp32ValuesWithSplit)
 
 TEST_F(ByteCastTest, fp32ValuesWithNulls)
 {
-  using limits       = std::numeric_limits<float>;
-  auto even_validity = make_counting_transform_iterator(0, [](auto i) { return (i + 1) % 2; });
+  using limits = std::numeric_limits<float>;
+  auto even_validity =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i + 1) % 2; });
 
   fixed_width_column_wrapper<float> const fp32_col(
     {float(0.0), float(100.0), float(-100.0), limits::min(), limits::max()}, {1, 0, 1, 0, 1});
@@ -291,8 +297,9 @@ TEST_F(ByteCastTest, fp64ValuesWithSplit)
 
 TEST_F(ByteCastTest, fp64ValuesWithNulls)
 {
-  using limits      = std::numeric_limits<double>;
-  auto odd_validity = make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  using limits = std::numeric_limits<double>;
+  auto odd_validity =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
 
   fixed_width_column_wrapper<double> const fp64_col(
     {double(0.0), double(100.0), double(-100.0), limits::min(), limits::max()}, {0, 1, 0, 1, 0});

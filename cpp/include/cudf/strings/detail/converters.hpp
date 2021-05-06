@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -131,6 +131,25 @@ std::unique_ptr<column> from_durations(column_view const& durations,
                                        std::string const& format,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr);
+
+/**
+ * @copydoc to_fixed_point(strings_column_view const&,data_type,rmm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> to_fixed_point(strings_column_view const& strings,
+                                       data_type output_type,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr);
+
+/**
+ * @copydoc from_fixed_point(strings_column_view const&,rmm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> from_fixed_point(column_view const& integers,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace strings

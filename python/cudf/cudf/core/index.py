@@ -1,9 +1,10 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations, division, print_function
 
 import pickle
 from numbers import Number
-from typing import Any, Dict, Set, Type
+from typing import Any, Dict, Type
 
 import cupy
 import numpy as np
@@ -12,59 +13,42 @@ from nvtx import annotate
 from pandas._config import get_option
 
 import cudf
+from cudf._lib.filling import sequence
+from cudf._typing import DtypeObj
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
     DatetimeColumn,
+    IntervalColumn,
     NumericalColumn,
     StringColumn,
     TimeDeltaColumn,
+    arange,
     column,
 )
 from cudf.core.column.string import StringMethods as StringMethods
-from cudf.core.frame import Frame
-from cudf.utils import ioutils, utils
+from cudf.core.dtypes import IntervalDtype
+from cudf.core.frame import SingleColumnFrame
+from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    find_common_type,
     is_categorical_dtype,
+    is_interval_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
+    is_numerical_dtype,
     is_scalar,
     numeric_normalize_types,
 )
 from cudf.utils.utils import cached_property, search_range
 
 
-def _to_frame(this_index, index=True, name=None):
-    """Create a DataFrame with a column containing this Index
+class Index(SingleColumnFrame, Serializable):
 
-    Parameters
-    ----------
-    index : boolean, default True
-        Set the index of the returned DataFrame as the original Index
-    name : str, default None
-        Name to be used for the column
+    dtype: DtypeObj
 
-    Returns
-    -------
-    DataFrame
-        cudf DataFrame
-    """
-
-    if name is not None:
-        col_name = name
-    elif this_index.name is None:
-        col_name = 0
-    else:
-        col_name = this_index.name
-
-    return cudf.DataFrame(
-        {col_name: this_index._values}, index=this_index if index else None
-    )
-
-
-class Index(Frame, Serializable):
     def __new__(
         cls,
         data=None,
@@ -156,14 +140,17 @@ class Index(Frame, Serializable):
         Returns
         -------
         deduplicated : Index
-        """
-        return super().drop_duplicates(keep=keep)
 
-    @property
-    def shape(self):
-        """Returns a tuple representing the dimensionality of the Index.
-        """
-        return (len(self),)
+        Examples
+        --------
+        >>> import cudf
+        >>> idx = cudf.Index(['lama', 'cow', 'lama', 'beetle', 'lama', 'hippo'])
+        >>> idx
+        StringIndex(['lama' 'cow' 'lama' 'beetle' 'lama' 'hippo'], dtype='object')
+        >>> idx.drop_duplicates()
+        StringIndex(['beetle' 'cow' 'hippo' 'lama'], dtype='object')
+        """  # noqa: E501
+        return super().drop_duplicates(keep=keep)
 
     def serialize(self):
         header = {}
@@ -256,81 +243,6 @@ class Index(Frame, Serializable):
         else:
             raise KeyError(f"Requested level with name {level} " "not found")
 
-    def __iter__(self):
-        cudf.utils.utils.raise_iteration_error(obj=self)
-
-    @classmethod
-    def from_arrow(cls, array):
-        """Convert PyArrow Array/ChunkedArray to Index
-
-        Parameters
-        ----------
-        array : PyArrow Array/ChunkedArray
-            PyArrow Object which has to be converted to Index
-
-        Raises
-        ------
-        TypeError for invalid input type.
-
-        Returns
-        -------
-        cudf Index
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pyarrow as pa
-        >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
-        StringIndex(['a' 'b' None], dtype='object')
-        """
-
-        return cls(cudf.core.column.column.ColumnBase.from_arrow(array))
-
-    def to_arrow(self):
-        """Convert Index to PyArrow Array
-
-        Returns
-        -------
-        PyArrow Array
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ind = cudf.Index(["a", "b", None])
-        >>> ind.to_arrow()
-        <pyarrow.lib.StringArray object at 0x7f796b0e7750>
-        [
-          "a",
-          "b",
-          null
-        ]
-        """
-
-        return self._data.columns[0].to_arrow()
-
-    @property
-    def values_host(self):
-        """
-        Return a numpy representation of the Index.
-
-        Only the values in the Index will be returned.
-
-        Returns
-        -------
-        out : numpy.ndarray
-            The values of the Index.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> index = cudf.Index([1, -10, 100, 20])
-        >>> index.values_host
-        array([  1, -10, 100,  20])
-        >>> type(index.values_host)
-        <class 'numpy.ndarray'>
-        """
-        return self._values.values_host
-
     @classmethod
     def deserialize(cls, header, frames):
         h = header["index_column"]
@@ -340,12 +252,6 @@ class Index(Frame, Serializable):
         col_typ = pickle.loads(h["type-serialized"])
         index = col_typ.deserialize(h, frames[: header["frame_count"]])
         return idx_typ(index, name=name)
-
-    @property
-    def ndim(self):
-        """Dimension of the data. Apart from MultiIndex ndim is always 1.
-        """
-        return 1
 
     @property
     def names(self):
@@ -366,18 +272,6 @@ class Index(Frame, Serializable):
             )
 
         self.name = values[0]
-
-    @property
-    def name(self):
-        """
-        Returns the name of the Index.
-        """
-        return next(iter(self._data.names))
-
-    @name.setter
-    def name(self, value):
-        col = self._data.pop(self.name)
-        self._data[value] = col
 
     def dropna(self, how="any"):
         """
@@ -620,25 +514,32 @@ class Index(Frame, Serializable):
         indices = self._values.argsort(ascending=ascending, **kwargs)
         return cupy.asarray(indices)
 
-    @property
-    def values(self):
-        """
-        Return an array representing the data in the Index.
+    def to_frame(self, index=True, name=None):
+        """Create a DataFrame with a column containing this Index
+
+        Parameters
+        ----------
+        index : boolean, default True
+            Set the index of the returned DataFrame as the original Index
+        name : str, default None
+            Name to be used for the column
 
         Returns
         -------
-        array : A cupy array of data in the Index.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> index = cudf.Index([1, -10, 100, 20])
-        >>> index.values
-        array([  1, -10, 100,  20])
-        >>> type(index.values)
-        <class 'cupy.core.core.ndarray'>
+        DataFrame
+            cudf DataFrame
         """
-        return self._values.values
+
+        if name is not None:
+            col_name = name
+        elif self.name is None:
+            col_name = 0
+        else:
+            col_name = self.name
+
+        return cudf.DataFrame(
+            {col_name: self._values}, index=self if index else None
+        )
 
     def any(self):
         """
@@ -664,16 +565,6 @@ class Index(Frame, Serializable):
         <class 'cudf.core.index.GenericIndex'>
         """
         return pd.Index(self._values.to_pandas(), name=self.name)
-
-    def tolist(self):
-
-        raise TypeError(
-            "cuDF does not support conversion to host memory "
-            "via `tolist()` method. Consider using "
-            "`.to_arrow().to_pylist()` to construct a Python list."
-        )
-
-    to_list = tolist
 
     @ioutils.doc_to_dlpack()
     def to_dlpack(self):
@@ -894,14 +785,63 @@ class Index(Frame, Serializable):
 
         return difference
 
-    def _apply_op(self, fn, other=None):
+    def _binaryop(self, other, fn, fill_value=None, reflect=False):
+        # TODO: Rather than including an allowlist of acceptable types, we
+        # should instead return NotImplemented for __all__ other types. That
+        # will allow other types to support binops with cudf objects if they so
+        # choose, and just as importantly will allow better error messages if
+        # they don't support it.
+        if isinstance(other, (cudf.DataFrame, cudf.Series)):
+            return NotImplemented
 
-        idx_series = cudf.Series(self, name=self.name)
-        op = getattr(idx_series, fn)
-        if other is not None:
-            return as_index(op(other))
-        else:
-            return as_index(op())
+        return super()._binaryop(other, fn, fill_value, reflect)
+
+    def _copy_construct(self, **kwargs):
+        # Need to override the parent behavior because pandas allows operations
+        # on unsigned types to return signed values, forcing us to choose the
+        # right index type here.
+        data = kwargs.get("data")
+        cls = self.__class__
+
+        if data is not None:
+            if self.dtype != data.dtype:
+                # TODO: This logic is largely copied from `as_index`. The two
+                # should be unified via a centralized type dispatching scheme.
+                if isinstance(data, NumericalColumn):
+                    try:
+                        cls = _dtype_to_index[data.dtype.type]
+                    except KeyError:
+                        cls = GenericIndex
+                        # TODO: GenericIndex has a different API for __new__
+                        # than other Index types. Refactoring Index types will
+                        # be necessary to clean this up.
+                        kwargs["values"] = kwargs.pop("data")
+                elif isinstance(data, StringColumn):
+                    cls = StringIndex
+                elif isinstance(data, DatetimeColumn):
+                    cls = DatetimeIndex
+                elif isinstance(data, TimeDeltaColumn):
+                    cls = TimedeltaIndex
+                elif isinstance(data, CategoricalColumn):
+                    cls = CategoricalIndex
+            elif cls is RangeIndex:
+                # RangeIndex must convert to other numerical types for ops
+
+                # TODO: The one exception to the output type selected here is
+                # that scalar multiplication of a RangeIndex in pandas results
+                # in another RangeIndex. Propagating that information through
+                # cudf with the current internals is possible, but requires
+                # significant hackery since we'd need _copy_construct or some
+                # other constructor to be intrinsically capable of processing
+                # operations. We should fix this behavior once we've completed
+                # a more thorough refactoring of the various Index classes that
+                # makes it easier to propagate this logic.
+                try:
+                    cls = _dtype_to_index[data.dtype.type]
+                except KeyError:
+                    cls = GenericIndex
+
+        return cls(**{**self._copy_construct_defaults, **kwargs})
 
     def sort_values(self, return_indexer=False, ascending=True, key=None):
         """
@@ -997,74 +937,6 @@ class Index(Frame, Serializable):
         Index without duplicates
         """
         return as_index(self._values.unique(), name=self.name)
-
-    def __add__(self, other):
-        return self._apply_op("__add__", other)
-
-    def __radd__(self, other):
-        return self._apply_op("__radd__", other)
-
-    def __sub__(self, other):
-        return self._apply_op("__sub__", other)
-
-    def __rsub__(self, other):
-        return self._apply_op("__rsub__", other)
-
-    def __mul__(self, other):
-        return self._apply_op("__mul__", other)
-
-    def __rmul__(self, other):
-        return self._apply_op("__rmul__", other)
-
-    def __mod__(self, other):
-        return self._apply_op("__mod__", other)
-
-    def __rmod__(self, other):
-        return self._apply_op("__rmod__", other)
-
-    def __pow__(self, other):
-        return self._apply_op("__pow__", other)
-
-    def __floordiv__(self, other):
-        return self._apply_op("__floordiv__", other)
-
-    def __rfloordiv__(self, other):
-        return self._apply_op("__rfloordiv__", other)
-
-    def __truediv__(self, other):
-        return self._apply_op("__truediv__", other)
-
-    def __rtruediv__(self, other):
-        return self._apply_op("__rtruediv__", other)
-
-    __div__ = __truediv__
-
-    def __and__(self, other):
-        return self._apply_op("__and__", other)
-
-    def __or__(self, other):
-        return self._apply_op("__or__", other)
-
-    def __xor__(self, other):
-        return self._apply_op("__xor__", other)
-
-    def __eq__(self, other):
-        return self._apply_op("__eq__", other)
-
-    def __ne__(self, other):
-        return self._apply_op("__ne__", other)
-
-    def __lt__(self, other):
-        return self._apply_op("__lt__", other)
-
-    def __le__(self, other):
-        return self._apply_op("__le__", other)
-
-    def __gt__(self, other):
-        return self._apply_op("__gt__", other)
-
-    def __ge__(self, other):
-        return self._apply_op("__ge__", other)
 
     def join(
         self, other, how="left", level=None, return_indexers=False, sort=False
@@ -1169,6 +1041,19 @@ class Index(Frame, Serializable):
         -------
         Index
 
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([1, 2, 3], name='one')
+        >>> index
+        Int64Index([1, 2, 3], dtype='int64', name='one')
+        >>> index.name
+        'one'
+        >>> renamed_index = index.rename('two')
+        >>> renamed_index
+        Int64Index([1, 2, 3], dtype='int64', name='two')
+        >>> renamed_index.name
+        'two'
         """
         if inplace is True:
             self.name = name
@@ -1198,6 +1083,15 @@ class Index(Frame, Serializable):
         -------
         Index
             Index with values cast to specified dtype.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([1, 2, 3])
+        >>> index
+        Int64Index([1, 2, 3], dtype='int64')
+        >>> index.astype('float64')
+        Float64Index([1.0, 2.0, 3.0], dtype='float64')
         """
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self.copy(deep=copy)
@@ -1290,6 +1184,15 @@ class Index(Frame, Serializable):
         -------
         out : bool
             If Index is empty, return True, if not return False.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> index = cudf.Index([])
+        >>> index
+        Float64Index([], dtype='float64')
+        >>> index.empty
+        True
         """
         return not self.size
 
@@ -1362,6 +1265,16 @@ class Index(Frame, Serializable):
         is_contained : cupy array
             CuPy array of boolean values.
 
+        Examples
+        --------
+        >>> idx = cudf.Index([1,2,3])
+        >>> idx
+        Int64Index([1, 2, 3], dtype='int64')
+
+        Check whether each index value in a list of values.
+
+        >>> idx.isin([1, 4])
+        array([ True, False, False])
         """
 
         result = self.to_series().isin(values).values
@@ -1493,7 +1406,13 @@ class Index(Frame, Serializable):
         else:
             return as_index(table)
 
-    _accessors = set()  # type: Set[Any]
+    @property
+    def _copy_construct_defaults(self):
+        return {"data": self._column, "name": self.name}
+
+    @classmethod
+    def _from_data(cls, data, index=None):
+        return cls._from_table(SingleColumnFrame(data=data))
 
     @property
     def _constructor_expanddim(self):
@@ -1540,7 +1459,7 @@ class RangeIndex(Index):
         if step == 0:
             raise ValueError("Step must not be zero.")
 
-        out = Frame.__new__(cls)
+        out = SingleColumnFrame.__new__(cls)
         if isinstance(start, range):
             therange = start
             start = therange.start
@@ -1668,8 +1587,9 @@ class RangeIndex(Index):
         return len(range(self._start, self._stop, self._step))
 
     def __getitem__(self, index):
+        len_self = len(self)
         if isinstance(index, slice):
-            sl_start, sl_stop, sl_step = index.indices(len(self))
+            sl_start, sl_stop, sl_step = index.indices(len_self)
 
             lo = self._start + sl_start * self._step
             hi = self._start + sl_stop * self._step
@@ -1677,7 +1597,11 @@ class RangeIndex(Index):
             return RangeIndex(start=lo, stop=hi, step=st, name=self._name)
 
         elif isinstance(index, Number):
-            index = utils.normalize_index(index, len(self))
+            if index < 0:
+                index = len_self + index
+            if not (0 <= index < len_self):
+                raise IndexError("out-of-bound")
+            index = min(index, len_self)
             index = self._start + index * self._step
             return index
         else:
@@ -1686,9 +1610,6 @@ class RangeIndex(Index):
             index = column.as_column(index)
 
         return as_index(self._values[index], name=self.name)
-
-    def __eq__(self, other):
-        return super(type(self), self).__eq__(other)
 
     def equals(self, other):
         if isinstance(other, RangeIndex):
@@ -1744,7 +1665,7 @@ class RangeIndex(Index):
 
     @property
     def size(self):
-        return self.__len__()
+        return len(self)
 
     def find_label_range(self, first=None, last=None):
         """Find subrange in the ``RangeIndex``, marked by their positions, that
@@ -1784,25 +1705,6 @@ class RangeIndex(Index):
         end = search_range(start, stop, last, step, side="right")
 
         return begin, end
-
-    @copy_docstring(_to_frame)  # type: ignore
-    def to_frame(self, index=True, name=None):
-        return _to_frame(self, index, name)
-
-    def to_gpu_array(self, fillna=None):
-        """Get a dense numba device array for the data.
-
-        Parameters
-        ----------
-        fillna : str or None
-            Replacement value to fill in place of nulls.
-
-        Notes
-        -----
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-        """
-        return self._values.to_gpu_array(fillna=fillna)
 
     def to_pandas(self):
         return pd.RangeIndex(
@@ -1907,7 +1809,7 @@ class GenericIndex(Index):
             Column's name. Otherwise if this name is different from the value
             Column's, the values Column will be cloned to adopt this name.
         """
-        out = Frame.__new__(cls)
+        out = SingleColumnFrame.__new__(cls)
         out._initialize(values, **kwargs)
 
         return out
@@ -1972,9 +1874,6 @@ class GenericIndex(Index):
     def __sizeof__(self):
         return self._values.__sizeof__()
 
-    def __len__(self):
-        return len(self._values)
-
     def __repr__(self):
         max_seq_items = get_option("max_seq_items") or len(self)
         mr = 0
@@ -1993,7 +1892,27 @@ class GenericIndex(Index):
         # utilize `Index.to_string` once it is implemented
         # related issue : https://github.com/pandas-dev/pandas/issues/35389
         if isinstance(preprocess, CategoricalIndex):
-            output = preprocess.to_pandas().__repr__()
+            if preprocess.categories.dtype.kind == "f":
+                output = (
+                    preprocess.astype("str")
+                    .to_pandas()
+                    .astype(
+                        dtype=pd.CategoricalDtype(
+                            categories=preprocess.dtype.categories.astype(
+                                "str"
+                            ).to_pandas(),
+                            ordered=preprocess.dtype.ordered,
+                        )
+                    )
+                    .__repr__()
+                )
+                break_idx = output.find("ordered=")
+                output = (
+                    output[:break_idx].replace("'", "") + output[break_idx:]
+                )
+            else:
+                output = preprocess.to_pandas().__repr__()
+
             output = output.replace("nan", cudf._NA_REP)
         elif preprocess._values.nullable:
             output = self._clean_nulls_from_index().to_pandas().__repr__()
@@ -2032,6 +1951,10 @@ class GenericIndex(Index):
         return "\n".join(lines)
 
     def __getitem__(self, index):
+        if type(self) == IntervalIndex:
+            raise NotImplementedError(
+                "Getting a scalar from an IntervalIndex is not yet supported"
+            )
         res = self._values[index]
         if not isinstance(index, int):
             res = as_index(res)
@@ -2039,10 +1962,6 @@ class GenericIndex(Index):
             return res
         else:
             return res
-
-    @copy_docstring(_to_frame)  # type: ignore
-    def to_frame(self, index=True, name=None):
-        return _to_frame(self, index, name)
 
     @property
     def dtype(self):
@@ -2106,7 +2025,7 @@ class NumericIndex(GenericIndex):
 
     def __new__(cls, data=None, dtype=None, copy=False, name=None):
 
-        out = Frame.__new__(cls)
+        out = SingleColumnFrame.__new__(cls)
         dtype = _index_to_dtype[cls]
         if copy:
             data = column.as_column(data, dtype=dtype).copy()
@@ -2228,7 +2147,7 @@ class DatetimeIndex(GenericIndex):
         # pandas dtindex creation first which.  For now
         # just make sure we handle np.datetime64 arrays
         # and then just dispatch upstream
-        out = Frame.__new__(cls)
+        out = SingleColumnFrame.__new__(cls)
 
         if freq is not None:
             raise NotImplementedError("Freq is not yet supported")
@@ -2483,7 +2402,7 @@ class TimedeltaIndex(GenericIndex):
         name=None,
     ) -> "TimedeltaIndex":
 
-        out = Frame.__new__(cls)
+        out = SingleColumnFrame.__new__(cls)
 
         if freq is not None:
             raise NotImplementedError("freq is not yet supported")
@@ -2556,7 +2475,8 @@ class TimedeltaIndex(GenericIndex):
 
 
 class CategoricalIndex(GenericIndex):
-    """An categorical of orderable values that represent the indices of another
+    """
+    A categorical of orderable values that represent the indices of another
     Column
 
     Parameters
@@ -2614,7 +2534,7 @@ class CategoricalIndex(GenericIndex):
                 )
         if copy:
             data = column.as_column(data, dtype=dtype).copy(deep=True)
-        out = Frame.__new__(cls)
+        out = SingleColumnFrame.__new__(cls)
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, CategoricalColumn):
             data = data
@@ -2673,6 +2593,236 @@ class CategoricalIndex(GenericIndex):
         return self._values.cat().categories
 
 
+def interval_range(
+    start=None, end=None, periods=None, freq=None, name=None, closed="right",
+) -> "IntervalIndex":
+    """
+    Returns a fixed frequency IntervalIndex.
+
+    Parameters
+    ----------
+    start : numeric, default None
+        Left bound for generating intervals.
+    end : numeric , default None
+        Right bound for generating intervals.
+    periods : int, default None
+        Number of periods to generate
+    freq : numeric, default None
+        The length of each interval. Must be consistent
+        with the type of start and end
+    name : str, default None
+        Name of the resulting IntervalIndex.
+    closed : {"left", "right", "both", "neither"}, default "right"
+        Whether the intervals are closed on the left-side, right-side,
+        both or neither.
+
+    Returns
+    -------
+    IntervalIndex
+
+    Examples
+    --------
+    >>> import cudf
+    >>> import pandas as pd
+    >>> cudf.interval_range(start=0,end=5)
+    IntervalIndex([(0, 0], (1, 1], (2, 2], (3, 3], (4, 4], (5, 5]],
+    ...closed='right',dtype='interval')
+    >>> cudf.interval_range(start=0,end=10, freq=2,closed='left')
+    IntervalIndex([[0, 2), [2, 4), [4, 6), [6, 8), [8, 10)],
+    ...closed='left',dtype='interval')
+    >>> cudf.interval_range(start=0,end=10, periods=3,closed='left')
+    ...IntervalIndex([[0.0, 3.3333333333333335),
+            [3.3333333333333335, 6.666666666666667),
+            [6.666666666666667, 10.0)],
+            closed='left',
+            dtype='interval')
+    """
+    if freq and periods and start and end:
+        raise ValueError(
+            "Of the four parameters: start, end, periods, and "
+            "freq, exactly three must be specified"
+        )
+    args = [
+        cudf.Scalar(x) if x is not None else None
+        for x in (start, end, freq, periods)
+    ]
+    if any(
+        not is_numerical_dtype(x.dtype) if x is not None else False
+        for x in args
+    ):
+        raise ValueError("start, end, periods, freq must be numeric values.")
+    *rargs, periods = args
+    common_dtype = find_common_type([x.dtype for x in rargs if x])
+    start, end, freq = rargs
+    periods = periods.astype("int64") if periods is not None else None
+
+    if periods and not freq:
+        # if statement for mypy to pass
+        if end is not None and start is not None:
+            # divmod only supported on host side scalars
+            quotient, remainder = divmod((end - start).value, periods.value)
+            if remainder:
+                freq_step = cudf.Scalar((end - start) / periods)
+            else:
+                freq_step = cudf.Scalar(quotient)
+            if start.dtype != freq_step.dtype:
+                start = start.astype(freq_step.dtype)
+            bin_edges = sequence(
+                size=periods + 1,
+                init=start.device_value,
+                step=freq_step.device_value,
+            )
+            left_col = bin_edges[:-1]
+            right_col = bin_edges[1:]
+    elif freq and periods:
+        if end:
+            start = end - (freq * periods)
+        if start:
+            end = freq * periods + start
+        if end is not None and start is not None:
+            left_col = arange(
+                start.value, end.value, freq.value, dtype=common_dtype
+            )
+            end = end + 1
+            start = start + freq
+            right_col = arange(
+                start.value, end.value, freq.value, dtype=common_dtype
+            )
+    elif freq and not periods:
+        if end is not None and start is not None:
+            end = end - freq + 1
+            left_col = arange(
+                start.value, end.value, freq.value, dtype=common_dtype
+            )
+            end = end + freq + 1
+            start = start + freq
+            right_col = arange(
+                start.value, end.value, freq.value, dtype=common_dtype
+            )
+    elif start is not None and end is not None:
+        # if statements for mypy to pass
+        if freq:
+            left_col = arange(
+                start.value, end.value, freq.value, dtype=common_dtype
+            )
+        else:
+            left_col = arange(start.value, end.value, dtype=common_dtype)
+        start = start + 1
+        end = end + 1
+        if freq:
+            right_col = arange(
+                start.value, end.value, freq.value, dtype=common_dtype
+            )
+        else:
+            right_col = arange(start.value, end.value, dtype=common_dtype)
+    else:
+        raise ValueError(
+            "Of the four parameters: start, end, periods, and "
+            "freq, at least two must be specified"
+        )
+    if len(right_col) == 0 or len(left_col) == 0:
+        dtype = IntervalDtype("int64", closed)
+        data = column.column_empty_like_same_mask(left_col, dtype)
+        return cudf.IntervalIndex(data, closed=closed)
+
+    interval_col = column.build_interval_column(
+        left_col, right_col, closed=closed
+    )
+    return IntervalIndex(interval_col)
+
+
+class IntervalIndex(GenericIndex):
+    """
+    Immutable index of intervals that are closed on the same side.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)
+        Array-like containing Interval objects from which to build the
+        IntervalIndex.
+    closed : {"left", "right", "both", "neither"}, default "right"
+        Whether the intervals are closed on the left-side, right-side,
+        both or neither.
+    dtype : dtype or None, default None
+        If None, dtype will be inferred.
+    copy : bool, default False
+        Copy the input data.
+    name : object, optional
+        Name to be stored in the index.
+
+    Returns
+    -------
+    IntervalIndex
+    """
+
+    def __new__(
+        cls, data, closed=None, dtype=None, copy=False, name=None,
+    ) -> "IntervalIndex":
+        if copy:
+            data = column.as_column(data, dtype=dtype).copy()
+        out = SingleColumnFrame.__new__(cls)
+        kwargs = _setdefault_name(data, name=name)
+        if isinstance(data, IntervalColumn):
+            data = data
+        elif isinstance(data, pd.Series) and (is_interval_dtype(data.dtype)):
+            data = column.as_column(data, data.dtype)
+        elif isinstance(data, (pd._libs.interval.Interval, pd.IntervalIndex)):
+            data = column.as_column(data, dtype=dtype,)
+        elif not data:
+            dtype = IntervalDtype("int64", closed)
+            data = column.column_empty_like_same_mask(
+                column.as_column(data), dtype
+            )
+        else:
+            data = column.as_column(data)
+            data.dtype.closed = closed
+
+        out._initialize(data, **kwargs)
+        return out
+
+    def from_breaks(breaks, closed="right", name=None, copy=False, dtype=None):
+        """
+        Construct an IntervalIndex from an array of splits.
+
+        Parameters
+        ---------
+        breaks : array-like (1-dimensional)
+            Left and right bounds for each interval.
+        closed : {"left", "right", "both", "neither"}, default "right"
+            Whether the intervals are closed on the left-side, right-side,
+            both or neither.
+        copy : bool, default False
+            Copy the input data.
+        name : object, optional
+            Name to be stored in the index.
+        dtype : dtype or None, default None
+            If None, dtype will be inferred.
+
+        Returns
+        -------
+        IntervalIndex
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> cudf.IntervalIndex.from_breaks([0, 1, 2, 3])
+        IntervalIndex([(0, 1], (1, 2], (2, 3]],
+                    closed='right',
+                    dtype='interval[int64]')
+        """
+        if copy:
+            breaks = column.as_column(breaks, dtype=dtype).copy()
+        left_col = breaks[:-1:]
+        right_col = breaks[+1::]
+
+        interval_col = column.build_interval_column(
+            left_col, right_col, closed=closed
+        )
+
+        return IntervalIndex(interval_col, name=name)
+
+
 class StringIndex(GenericIndex):
     """String defined indices into another Column
 
@@ -2683,7 +2833,7 @@ class StringIndex(GenericIndex):
     """
 
     def __new__(cls, values, copy=False, **kwargs):
-        out = Frame.__new__(cls)
+        out = SingleColumnFrame.__new__(cls)
         kwargs = _setdefault_name(values, **kwargs)
         if isinstance(values, StringColumn):
             values = values.copy(deep=copy)
@@ -2791,7 +2941,7 @@ def as_index(arbitrary, **kwargs) -> Index:
     )
 
 
-_dtype_to_index = {
+_dtype_to_index: Dict[Any, Type[Index]] = {
     np.int8: Int8Index,
     np.int16: Int16Index,
     np.int32: Int32Index,
@@ -2802,7 +2952,7 @@ _dtype_to_index = {
     np.uint64: UInt64Index,
     np.float32: Float32Index,
     np.float64: Float64Index,
-}  # type: Dict[Any, Type[Index]]
+}
 
 _index_to_dtype = {
     Int8Index: np.int8,

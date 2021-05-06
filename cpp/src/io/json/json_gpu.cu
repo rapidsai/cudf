@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,15 +38,13 @@
 #include <thrust/detail/copy.h>
 #include <thrust/find.h>
 
-using cudf::detail::device_span;
+using cudf::device_span;
 
 namespace cudf {
 namespace io {
 namespace json {
 namespace gpu {
 using namespace ::cudf;
-
-using string_pair = std::pair<const char *, size_t>;
 
 namespace {
 /**
@@ -114,7 +112,7 @@ __inline__ __device__ T decode_value(const char *begin,
                                      uint64_t end,
                                      parse_options_view const &opts)
 {
-  return cudf::io::gpu::parse_numeric<T, base>(begin, end, opts);
+  return cudf::io::parse_numeric<T, base>(begin, end, opts);
 }
 
 /**
@@ -131,7 +129,7 @@ __inline__ __device__ T decode_value(const char *begin,
                                      const char *end,
                                      parse_options_view const &opts)
 {
-  return cudf::io::gpu::parse_numeric<T>(begin, end, opts);
+  return cudf::io::parse_numeric<T>(begin, end, opts);
 }
 
 /**
@@ -516,7 +514,7 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
     if (!serialized_trie_contains(opts.trie_na, {desc.value_begin, value_len})) {
       // Type dispatcher does not handle strings
       if (column_types[desc.column].id() == type_id::STRING) {
-        auto str_list           = static_cast<string_pair *>(output_columns[desc.column]);
+        auto str_list           = static_cast<string_index_pair *>(output_columns[desc.column]);
         str_list[rec_id].first  = desc.value_begin;
         str_list[rec_id].second = value_len;
 
@@ -537,7 +535,7 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
         }
       }
     } else if (column_types[desc.column].id() == type_id::STRING) {
-      auto str_list           = static_cast<string_pair *>(output_columns[desc.column]);
+      auto str_list           = static_cast<string_index_pair *>(output_columns[desc.column]);
       str_list[rec_id].first  = nullptr;
       str_list[rec_id].second = 0;
     }

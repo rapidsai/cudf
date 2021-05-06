@@ -1,10 +1,13 @@
 # Copyright (c) 2019-2021, NVIDIA CORPORATION.
+
 from __future__ import annotations
 
+import builtins
 import datetime as dt
 import re
 from numbers import Number
-from typing import Any, Sequence, Union, cast
+from types import SimpleNamespace
+from typing import Any, Mapping, Sequence, Union, cast
 
 import numpy as np
 import pandas as pd
@@ -13,10 +16,22 @@ from nvtx import annotate
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import DatetimeLikeScalar, Dtype, DtypeObj, ScalarLike
+from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer import Buffer
-from cudf.core.column import ColumnBase, column, string
+from cudf.core.column import (
+    ColumnBase,
+    as_column,
+    column,
+    column_empty_like,
+    string,
+)
 from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import _fillna_natwise
+
+if PANDAS_GE_120:
+    _guess_datetime_format = pd.core.tools.datetimes.guess_datetime_format
+else:
+    _guess_datetime_format = pd.core.tools.datetimes._guess_datetime_format
 
 # nanoseconds per time_unit
 _numpy_to_pandas_conversion = {
@@ -120,20 +135,17 @@ class DatetimeColumn(column.ColumnBase):
         return self.get_dt_field("weekday")
 
     def to_pandas(
-        self, index: "cudf.Index" = None, nullable: bool = False, **kwargs
+        self, index: pd.Index = None, nullable: bool = False, **kwargs
     ) -> "cudf.Series":
         # Workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
 
         # Pandas supports only `datetime64[ns]`, hence the cast.
-        pd_series = pd.Series(
-            self.astype("datetime64[ns]").to_array("NAT"), copy=False
+        return pd.Series(
+            self.astype("datetime64[ns]").to_array("NAT"),
+            copy=False,
+            index=index,
         )
-
-        if index is not None:
-            pd_series.index = index
-
-        return pd_series
 
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
@@ -171,6 +183,8 @@ class DatetimeColumn(column.ColumnBase):
                 return cudf.Scalar(None, dtype=other.dtype)
 
             return cudf.Scalar(other)
+        elif other is None:
+            return cudf.Scalar(other, dtype=self.dtype)
         else:
             raise TypeError(f"cannot normalize {type(other)}")
 
@@ -186,6 +200,33 @@ class DatetimeColumn(column.ColumnBase):
                 size=self.size,
             ),
         )
+
+    @property
+    def __cuda_array_interface__(self) -> Mapping[builtins.str, Any]:
+        output = {
+            "shape": (len(self),),
+            "strides": (self.dtype.itemsize,),
+            "typestr": self.dtype.str,
+            "data": (self.data_ptr, False),
+            "version": 1,
+        }
+
+        if self.nullable and self.has_nulls:
+
+            # Create a simple Python object that exposes the
+            # `__cuda_array_interface__` attribute here since we need to modify
+            # some of the attributes from the numba device array
+            mask = SimpleNamespace(
+                __cuda_array_interface__={
+                    "shape": (len(self),),
+                    "typestr": "<t1",
+                    "data": (self.mask_ptr, True),
+                    "version": 1,
+                }
+            )
+            output["mask"] = mask
+
+        return output
 
     def as_datetime_column(self, dtype: Dtype, **kwargs) -> DatetimeColumn:
         dtype = np.dtype(dtype)
@@ -235,6 +276,19 @@ class DatetimeColumn(column.ColumnBase):
             unit=self.time_unit,
         )
 
+    def std(
+        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
+    ) -> pd.Timedelta:
+        return pd.Timedelta(
+            self.as_numerical.std(skipna=skipna, ddof=ddof, dtype=dtype)
+            * _numpy_to_pandas_conversion[self.time_unit],
+        )
+
+    def median(self, skipna: bool = None) -> pd.Timestamp:
+        return pd.Timestamp(
+            self.as_numerical.median(skipna=skipna), unit=self.time_unit
+        )
+
     def quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
     ) -> ColumnBase:
@@ -252,9 +306,9 @@ class DatetimeColumn(column.ColumnBase):
         reflect: bool = False,
     ) -> ColumnBase:
         if isinstance(rhs, cudf.DateOffset):
-            return binop_offset(self, rhs, op)
+            return rhs._datetime_binop(self, op, reflect=reflect)
         lhs, rhs = self, rhs
-        if op in ("eq", "ne", "lt", "gt", "le", "ge"):
+        if op in ("eq", "ne", "lt", "gt", "le", "ge", "NULL_EQUALS"):
             out_dtype = np.dtype(np.bool_)  # type: Dtype
         elif op == "add" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
             out_dtype = cudf.core.column.timedelta._timedelta_add_result_dtype(
@@ -284,7 +338,7 @@ class DatetimeColumn(column.ColumnBase):
         self, fill_value: Any = None, method: str = None, dtype: Dtype = None
     ) -> DatetimeColumn:
         if fill_value is not None:
-            if cudf.utils.utils.isnat(fill_value):
+            if cudf.utils.utils._isnat(fill_value):
                 return _fillna_natwise(self)
             if is_scalar(fill_value):
                 if not isinstance(fill_value, cudf.Scalar):
@@ -315,6 +369,9 @@ class DatetimeColumn(column.ColumnBase):
     @property
     def is_unique(self) -> bool:
         return self.as_numerical.is_unique
+
+    def isin(self, values: Sequence) -> ColumnBase:
+        return cudf.core.tools.datetimes._isin_datetimelike(self, values)
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
         if np.issubdtype(to_dtype, np.datetime64):
@@ -347,6 +404,23 @@ class DatetimeColumn(column.ColumnBase):
         else:
             return False
 
+    def _make_copy_with_na_as_null(self):
+        """Return a copy with NaN values replaced with nulls."""
+        null = column_empty_like(self, masked=True, newsize=1)
+        out_col = cudf._lib.replace.replace(
+            self,
+            as_column(
+                Buffer(
+                    np.array([self.default_na_value()], dtype=self.dtype).view(
+                        "|u1"
+                    )
+                ),
+                dtype=self.dtype,
+            ),
+            null,
+        )
+        return out_col
+
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")
 def binop(
@@ -375,7 +449,7 @@ def infer_format(element: str, **kwargs) -> str:
     """
     Infers datetime format from a string, also takes cares for `ms` and `ns`
     """
-    fmt = pd.core.tools.datetimes._guess_datetime_format(element, **kwargs)
+    fmt = _guess_datetime_format(element, **kwargs)
 
     if fmt is not None:
         return fmt
@@ -389,15 +463,11 @@ def infer_format(element: str, **kwargs) -> str:
     second_parts = re.split(r"(\D+)", element_parts[1], maxsplit=1)
     subsecond_fmt = ".%" + str(len(second_parts[0])) + "f"
 
-    first_part = pd.core.tools.datetimes._guess_datetime_format(
-        element_parts[0], **kwargs
-    )
+    first_part = _guess_datetime_format(element_parts[0], **kwargs)
     # For the case where first_part is '00:00:03'
     if first_part is None:
         tmp = "1970-01-01 " + element_parts[0]
-        first_part = pd.core.tools.datetimes._guess_datetime_format(
-            tmp, **kwargs
-        ).split(" ", 1)[1]
+        first_part = _guess_datetime_format(tmp, **kwargs).split(" ", 1)[1]
     if first_part is None:
         raise ValueError("Unable to infer the timestamp format from the data")
 
@@ -411,9 +481,7 @@ def infer_format(element: str, **kwargs) -> str:
 
         if len(second_part) > 1:
             # Only infer if second_parts is not an empty string.
-            second_part = pd.core.tools.datetimes._guess_datetime_format(
-                second_part, **kwargs
-            )
+            second_part = _guess_datetime_format(second_part, **kwargs)
     else:
         second_part = ""
 

@@ -40,7 +40,7 @@ void BM_convert_from_durations(benchmark::State& state)
   const cudf::size_type source_size = state.range(0);
 
   // Every element is valid
-  auto data = cudf::test::make_counting_transform_iterator(
+  auto data = cudf::detail::make_counting_transform_iterator(
     0, [source_size](auto i) { return TypeParam{i - source_size / 2}; });
 
   cudf::test::fixed_width_column_wrapper<TypeParam> source_durations(data, data + source_size);
@@ -61,7 +61,7 @@ void BM_convert_to_durations(benchmark::State& state)
   const cudf::size_type source_size = state.range(0);
 
   // Every element is valid
-  auto data = cudf::test::make_counting_transform_iterator(
+  auto data = cudf::detail::make_counting_transform_iterator(
     0, [source_size](auto i) { return TypeParam{i - source_size / 2}; });
 
   cudf::test::fixed_width_column_wrapper<TypeParam> source_durations(data, data + source_size);

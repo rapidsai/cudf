@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -54,15 +54,52 @@ public abstract class Aggregation {
         NUNIQUE(15),
         NTH_ELEMENT(16),
         ROW_NUMBER(17),
-        COLLECT(18),
-        LEAD(19),
-        LAG(20),
-        PTX(21),
-        CUDA(22);
+        COLLECT_LIST(18),
+        COLLECT_SET(19),
+        LEAD(20),
+        LAG(21),
+        PTX(22),
+        CUDA(23);
 
         final int nativeId;
 
         Kind(int nativeId) {this.nativeId = nativeId;}
+    }
+
+    /*
+     * This is analogous to the native 'null_policy'.
+     */
+    public enum NullPolicy {
+        EXCLUDE(false),
+        INCLUDE(true);
+
+        NullPolicy(boolean includeNulls) { this.includeNulls = includeNulls; }
+
+        final boolean includeNulls;
+    }
+
+    /*
+     * This is analogous to the native 'null_equality'.
+     */
+    public enum NullEquality {
+        UNEQUAL(false),
+        EQUAL(true);
+
+        NullEquality(boolean nullsEqual) { this.nullsEqual = nullsEqual; }
+
+        final boolean nullsEqual;
+    }
+
+    /*
+     * This is analogous to the native 'nan_equality'.
+     */
+    public enum NaNEquality {
+        UNEQUAL(false),
+        ALL_EQUAL(true);
+
+        NaNEquality(boolean nansEqual) { this.nansEqual = nansEqual; }
+
+        final boolean nansEqual;
     }
 
     /**
@@ -97,22 +134,22 @@ public abstract class Aggregation {
 
     private static final class NthAggregation extends Aggregation {
         private final int offset;
-        private final boolean includeNulls;
+        private final NullPolicy nullPolicy;
 
-        public NthAggregation(int offset, boolean includeNulls) {
+        public NthAggregation(int offset, NullPolicy nullPolicy) {
             super(Kind.NTH_ELEMENT);
             this.offset = offset;
-            this.includeNulls = includeNulls;
+            this.nullPolicy = nullPolicy;
         }
 
         @Override
         long createNativeInstance() {
-            return Aggregation.createNthAgg(offset, includeNulls);
+            return Aggregation.createNthAgg(offset, nullPolicy.includeNulls);
         }
 
         @Override
         public int hashCode() {
-            return 31 * offset + Boolean.hashCode(includeNulls);
+            return 31 * offset + nullPolicy.hashCode();
         }
 
         @Override
@@ -121,7 +158,7 @@ public abstract class Aggregation {
                 return true;
             } else if (other instanceof NthAggregation) {
                 NthAggregation o = (NthAggregation) other;
-                return o.offset == this.offset && o.includeNulls == this.includeNulls;
+                return o.offset == this.offset && o.nullPolicy == this.nullPolicy;
             }
             return false;
         }
@@ -158,21 +195,21 @@ public abstract class Aggregation {
     }
 
     private static final class CountLikeAggregation extends Aggregation {
-        private final boolean includeNulls;
+        private final NullPolicy nullPolicy;
 
-        public CountLikeAggregation(Kind kind, boolean includeNulls) {
+        public CountLikeAggregation(Kind kind, NullPolicy nullPolicy) {
             super(kind);
-            this.includeNulls = includeNulls;
+            this.nullPolicy = nullPolicy;
         }
 
         @Override
         long createNativeInstance() {
-            return Aggregation.createCountLikeAgg(kind.nativeId, includeNulls);
+            return Aggregation.createCountLikeAgg(kind.nativeId, nullPolicy.includeNulls);
         }
 
         @Override
         public int hashCode() {
-            return 31 * kind.hashCode() + Boolean.hashCode(includeNulls);
+            return 31 * kind.hashCode() + nullPolicy.hashCode();
         }
 
         @Override
@@ -181,7 +218,7 @@ public abstract class Aggregation {
                 return true;
             } else if (other instanceof CountLikeAggregation) {
                 CountLikeAggregation o = (CountLikeAggregation) other;
-                return o.includeNulls == this.includeNulls;
+                return o.nullPolicy == this.nullPolicy;
             }
             return false;
         }
@@ -268,6 +305,77 @@ public abstract class Aggregation {
         }
     }
 
+    private static final class CollectListAggregation extends Aggregation {
+        private final NullPolicy nullPolicy;
+
+        public CollectListAggregation(NullPolicy nullPolicy) {
+            super(Kind.COLLECT_LIST);
+            this.nullPolicy = nullPolicy;
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createCollectListAgg(nullPolicy.includeNulls);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + nullPolicy.hashCode();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            } else if (other instanceof CollectListAggregation) {
+                CollectListAggregation o = (CollectListAggregation) other;
+                return o.nullPolicy == this.nullPolicy;
+            }
+            return false;
+        }
+    }
+
+    private static final class CollectSetAggregation extends Aggregation {
+        private final NullPolicy nullPolicy;
+        private final NullEquality nullEquality;
+        private final NaNEquality nanEquality;
+
+        public CollectSetAggregation(NullPolicy nullPolicy, NullEquality nullEquality, NaNEquality nanEquality) {
+            super(Kind.COLLECT_SET);
+            this.nullPolicy = nullPolicy;
+            this.nullEquality = nullEquality;
+            this.nanEquality = nanEquality;
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createCollectSetAgg(nullPolicy.includeNulls,
+                nullEquality.nullsEqual,
+                nanEquality.nansEqual);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode()
+                + Boolean.hashCode(nullPolicy.includeNulls)
+                + Boolean.hashCode(nullEquality.nullsEqual)
+                + Boolean.hashCode(nanEquality.nansEqual);
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            } else if (other instanceof CollectSetAggregation) {
+                CollectSetAggregation o = (CollectSetAggregation) other;
+                return o.nullPolicy == this.nullPolicy &&
+                    o.nullEquality == this.nullEquality &&
+                    o.nanEquality == this.nanEquality;
+            }
+            return false;
+        }
+    }
+
     protected final Kind kind;
 
     protected Aggregation(Kind kind) {
@@ -351,16 +459,27 @@ public abstract class Aggregation {
      * Count number of valid, a.k.a. non-null, elements.
      */
     public static Aggregation count() {
-        return count(false);
+        return count(NullPolicy.EXCLUDE);
     }
 
     /**
      * Count number of elements.
+     * (This is deprecated, use {@link Aggregation#count(NullPolicy nullPolicy)} instead)
      * @param includeNulls true if nulls should be counted. false if only non-null values should be
      *                     counted.
      */
+    @Deprecated
     public static Aggregation count(boolean includeNulls) {
-        return new CountLikeAggregation(Kind.COUNT, includeNulls);
+        return count(includeNulls ? NullPolicy.INCLUDE : NullPolicy.EXCLUDE);
+    }
+
+    /**
+     * Count number of elements.
+     * @param nullPolicy INCLUDE if nulls should be counted. EXCLUDE if only non-null values
+     *                   should be counted.
+     */
+    public static Aggregation count(NullPolicy nullPolicy) {
+        return new CountLikeAggregation(Kind.COUNT, nullPolicy);
     }
 
     /**
@@ -473,17 +592,29 @@ public abstract class Aggregation {
      * Number of unique, non-null, elements.
      */
     public static Aggregation nunique() {
-        return nunique(false);
+        return nunique(NullPolicy.EXCLUDE);
     }
 
     /**
      * Number of unique elements.
+     * (This is deprecated, use {@link Aggregation#nunique(NullPolicy nullPolicy)} instead)
      * @param includeNulls true if nulls should be counted else false. If nulls are counted they
      *                     compare as equal so multiple null values in a range would all only
      *                     increase the count by 1.
      */
+    @Deprecated
     public static Aggregation nunique(boolean includeNulls) {
-        return new CountLikeAggregation(Kind.NUNIQUE, includeNulls);
+        return nunique(includeNulls ? NullPolicy.INCLUDE : NullPolicy.EXCLUDE);
+    }
+
+    /**
+     * Number of unique elements.
+     * @param nullPolicy INCLUDE if nulls should be counted else EXCLUDE. If nulls are counted they
+     *                   compare as equal so multiple null values in a range would all only
+     *                   increase the count by 1.
+     */
+    public static Aggregation nunique(NullPolicy nullPolicy) {
+        return new CountLikeAggregation(Kind.NUNIQUE, nullPolicy);
     }
 
     /**
@@ -492,18 +623,31 @@ public abstract class Aggregation {
      *               value outside of the group range results in a null.
      */
     public static Aggregation nth(int offset) {
-        return nth(offset, true);
+        return nth(offset, NullPolicy.INCLUDE);
+    }
+
+    /**
+     * Get the nth element in a group.
+     * (This is deprecated, use {@link Aggregation#nth(int offset, NullPolicy nullPolicy)} instead)
+     * @param offset the offset to look at. Negative numbers go from the end of the group. Any
+     *               value outside of the group range results in a null.
+     * @param includeNulls true if nulls should be included in the aggregation or false if they
+     *                     should be skipped.
+     */
+    @Deprecated
+    public static Aggregation nth(int offset, boolean includeNulls) {
+        return nth(offset, includeNulls ? NullPolicy.INCLUDE : NullPolicy.EXCLUDE);
     }
 
     /**
      * Get the nth element in a group.
      * @param offset the offset to look at. Negative numbers go from the end of the group. Any
      *               value outside of the group range results in a null.
-     * @param includeNulls true if nulls should be included in the aggregation or false if they
-     *                     should be skipped.
+     * @param nullPolicy INCLUDE if nulls should be included in the aggregation or EXCLUDE if they
+     *                   should be skipped.
      */
-    public static Aggregation nth(int offset, boolean includeNulls) {
-        return new NthAggregation(offset, includeNulls);
+    public static Aggregation nth(int offset, NullPolicy nullPolicy) {
+        return new NthAggregation(offset, nullPolicy);
     }
 
     /**
@@ -514,10 +658,58 @@ public abstract class Aggregation {
     }
 
     /**
-     * Collect the values into a list.
+     * Collect the values into a list. Nulls will be skipped.
+     * @deprecated please use collectList as instead.
      */
+    @Deprecated
     public static Aggregation collect() {
-        return new NoParamAggregation(Kind.COLLECT);
+        return collectList();
+    }
+
+    /**
+     * Collect the values into a list.
+     * @deprecated please use collectList as instead.
+     *
+     * @param nullPolicy Indicates whether to include/exclude nulls during collection.
+     */
+    @Deprecated
+    public static Aggregation collect(NullPolicy nullPolicy) {
+        return collectList(nullPolicy);
+    }
+
+    /**
+     * Collect the values into a list. Nulls will be skipped.
+     */
+    public static Aggregation collectList() {
+        return collectList(NullPolicy.EXCLUDE);
+    }
+
+    /**
+     * Collect the values into a list.
+     *
+     * @param nullPolicy Indicates whether to include/exclude nulls during collection.
+     */
+    public static Aggregation collectList(NullPolicy nullPolicy) {
+        return new CollectListAggregation(nullPolicy);
+    }
+
+    /**
+     * Collect the values into a set. All null values will be excluded, and all nan values are regarded as
+     * unique instances.
+     */
+    public static Aggregation collectSet() {
+        return new CollectSetAggregation(NullPolicy.EXCLUDE, NullEquality.UNEQUAL, NaNEquality.UNEQUAL);
+    }
+
+    /**
+     * Collect the values into a set.
+     *
+     * @param nullPolicy   Indicates whether to include/exclude nulls during collection.
+     * @param nullEquality Flag to specify whether null entries within each list should be considered equal.
+     * @param nanEquality  Flag to specify whether NaN values in floating point column should be considered equal.
+     */
+    public static Aggregation collectSet(NullPolicy nullPolicy, NullEquality nullEquality, NaNEquality nanEquality) {
+        return new CollectSetAggregation(nullPolicy, nullEquality, nanEquality);
     }
 
     /**
@@ -586,4 +778,14 @@ public abstract class Aggregation {
      * Create a lead or lag aggregation.
      */
     private static native long createLeadLagAgg(int kind, int offset);
+
+    /**
+     * Create a collect list aggregation including nulls or not.
+     */
+    private static native long createCollectListAgg(boolean includeNulls);
+
+    /**
+     * Create a collect set aggregation.
+     */
+    private static native long createCollectSetAgg(boolean includeNulls, boolean nullsEqual, boolean nansEqual);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -5236,10 +5236,10 @@ constexpr special_case_mapping g_special_case_mappings[] = {
 };
 // the special case mapping table is a perfect hash table with no collisions, allowing us
 // to 'hash' by simply modding by the incoming codepoint
-inline __device__ uint16_t get_special_case_hash_index(uint32_t code_point)
+constexpr uint16_t get_special_case_hash_index(uint32_t code_point)
 {
   constexpr uint16_t special_case_prime = 499;
-  return code_point % special_case_prime;
+  return static_cast<uint16_t>(code_point % special_case_prime);
 }
 
 }  // namespace detail

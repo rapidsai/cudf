@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -171,7 +171,7 @@ struct column_from_scalar_dispatch {
     auto output_column =
       make_fixed_width_column(value.type(), size, mask_state::UNALLOCATED, stream, mr);
     auto view = output_column->mutable_view();
-    detail::fill_in_place(view, 0, size, value, stream.value());
+    detail::fill_in_place(view, 0, size, value, stream);
     return output_column;
   }
 };

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -140,6 +140,35 @@ std::unique_ptr<column> mask_to_bools(
   bitmask_type const* bitmask,
   size_type begin_bit,
   size_type end_bit,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns an approximate cumulative size in bits of all columns in the `table_view` for
+ * each row.
+ *
+ * This function counts bits instead of bytes to account for the null mask which only has one
+ * bit per row.
+ *
+ * Each row in the returned column is the sum of the per-row size for each column in
+ * the table.
+ *
+ * In some cases, this is an inexact approximation. Specifically, columns of lists and strings
+ * require N+1 offsets to represent N rows. It is up to the caller to calculate the small
+ * additional overhead of the terminating offset for any group of rows being considered.
+ *
+ * This function returns the per-row sizes as the columns are currently formed. This can
+ * end up being larger than the number you would get by gathering the rows. Specifically,
+ * the push-down of struct column validity masks can nullify rows that contain data for
+ * string or list columns. In these cases, the size returned is conservative:
+ *
+ * row_bit_count(column(x)) >= row_bit_count(gather(column(x)))
+ *
+ * @param t The table view to perform the computation on.
+ * @param mr Device memory resource used to allocate the returned columns's device memory
+ * @return A 32-bit integer column containing the per-row bit counts.
+ */
+std::unique_ptr<column> row_bit_count(
+  table_view const& t,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

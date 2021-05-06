@@ -16,6 +16,8 @@
 #pragma once
 #include <stdint.h>
 
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/strings/string_view.hpp>
 #include <cudf/types.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
@@ -43,15 +45,30 @@ struct stats_column_desc {
   uint32_t num_rows;             //!< number of rows in column
   uint32_t num_values;  //!< Number of data values in column. Different from num_rows in case of
                         //!< nested columns
-  const uint32_t *valid_map_base;  //!< base of valid bit map for this column (null if not present)
-  size_type column_offset;         //! < index of the first element relative to the base memory
-  const void *column_data_base;    //!< base ptr to column data
-  int32_t ts_scale;  //!< timestamp scale (>0: multiply by scale, <0: divide by -scale)
+  int32_t ts_scale;     //!< timestamp scale (>0: multiply by scale, <0: divide by -scale)
+
+  column_device_view *leaf_column;    //!< Pointer to leaf column
+  column_device_view *parent_column;  //!< Pointer to parent column. Is nullptr if not list type.
 };
 
 struct string_stats {
   const char *ptr;  //!< ptr to character data
   uint32_t length;  //!< length of string
+  __host__ __device__ __forceinline__ volatile string_stats &operator=(
+    const string_view &val) volatile
+  {
+    ptr    = val.data();
+    length = val.size_bytes();
+    return *this;
+  }
+  __host__ __device__ __forceinline__ operator string_view() volatile
+  {
+    return string_view(ptr, static_cast<size_type>(length));
+  }
+  __host__ __device__ __forceinline__ operator string_view() const
+  {
+    return string_view(ptr, static_cast<size_type>(length));
+  }
 };
 
 union statistics_val {

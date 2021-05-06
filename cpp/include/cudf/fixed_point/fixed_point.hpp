@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/types.hpp>
 
 // Note: The <cuda/std/*> versions are used in order for Jitify to work with our fixed_point type.
@@ -25,25 +25,14 @@
 #include <cuda/std/type_traits>  // add cuda namespace
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <string>
 
 //! `fixed_point` and supporting types
 namespace numeric {
-/** \cond HIDDEN_SYMBOLS */
-// This is a wrapper struct that enforces "strong typing"
-// at the construction site of the type. No implicit
-// conversions will be allowed and you will need to use the
-// name of the type alias (i.e. scale_type{0})
-template <typename T>
-struct strong_typedef {
-  T _t;
-  CUDA_HOST_DEVICE_CALLABLE explicit constexpr strong_typedef(T t) : _t(t) {}
-  CUDA_HOST_DEVICE_CALLABLE operator T() const { return _t; }
-};
-/** \endcond */
 
-using scale_type = strong_typedef<int32_t>;
+enum scale_type : int32_t {};
 
 /**
  * @brief Scoped enumerator to use when constructing `fixed_point`
@@ -75,8 +64,7 @@ namespace detail {
  *
  * https://simple.wikipedia.org/wiki/Exponentiation_by_squaring <br>
  * Note: this is the iterative equivalent of the recursive definition (faster) <br>
- * Quick-bench: http://quick-bench.com/Wg7o7HYQC9FW5M0CO0wQAjSwP_Y <br>
- * `exponent` comes from `using scale_type = strong_typedef<int32_t>` <br>
+ * Quick-bench: http://quick-bench.com/Wg7o7HYQC9FW5M0CO0wQAjSwP_Y
  *
  * @tparam Rep Representation type for return type
  * @tparam Base The base to be exponentiated
@@ -90,7 +78,7 @@ template <typename Rep,
                                            is_supported_representation_type<Rep>())>* = nullptr>
 CUDA_HOST_DEVICE_CALLABLE Rep ipow(T exponent)
 {
-  release_assert(exponent >= 0 && "integer exponentiation with negative exponent is not possible.");
+  cudf_assert(exponent >= 0 && "integer exponentiation with negative exponent is not possible.");
   if (exponent == 0) return static_cast<Rep>(1);
   auto extra  = static_cast<Rep>(1);
   auto square = static_cast<Rep>(Base);
@@ -104,14 +92,6 @@ CUDA_HOST_DEVICE_CALLABLE Rep ipow(T exponent)
   }
   return square * extra;
 }
-
-/** @brief Helper function to negate strongly typed scale_type
- *
- * @param scale The scale to be negated
- * @return The negated scale
- */
-CUDA_HOST_DEVICE_CALLABLE
-auto negate(scale_type const& scale) { return scale_type{-scale}; }
 
 /** @brief Function that performs a `right shift` scale "times" on the `val`
  *
@@ -127,7 +107,7 @@ auto negate(scale_type const& scale) { return scale_type{-scale}; }
 template <typename Rep, Radix Rad, typename T>
 CUDA_HOST_DEVICE_CALLABLE constexpr T right_shift(T const& val, scale_type const& scale)
 {
-  return val / ipow<Rep, Rad>(scale._t);
+  return val / ipow<Rep, Rad>(static_cast<int32_t>(scale));
 }
 
 /** @brief Function that performs a `left shift` scale "times" on the `val`
@@ -144,7 +124,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr T right_shift(T const& val, scale_type const
 template <typename Rep, Radix Rad, typename T>
 CUDA_HOST_DEVICE_CALLABLE constexpr T left_shift(T const& val, scale_type const& scale)
 {
-  return val * ipow<Rep, Rad>(-scale._t);
+  return val * ipow<Rep, Rad>(static_cast<int32_t>(-scale));
 }
 
 /** @brief Function that performs a `right` or `left shift`
@@ -196,7 +176,7 @@ template <typename Rep,
 struct scaled_integer {
   Rep value;
   scale_type scale;
-  CUDA_HOST_DEVICE_CALLABLE explicit scaled_integer(Rep v, scale_type s) : value(v), scale(s) {}
+  CUDA_HOST_DEVICE_CALLABLE explicit scaled_integer(Rep v, scale_type s) : value{v}, scale{s} {}
 };
 
 /**
@@ -217,14 +197,15 @@ class fixed_point {
   using rep = Rep;
 
   /**
-   * @brief Constructor that will perform shifting to store value appropriately
+   * @brief Constructor that will perform shifting to store value appropriately (from floating point
+   * types)
    *
-   * @tparam T The type that you are constructing from (integral or floating)
+   * @tparam T The floating point type that you are constructing from
    * @param value The value that will be constructed from
    * @param scale The exponent that is applied to Rad to perform shifting
    */
   template <typename T,
-            typename cuda::std::enable_if_t<is_supported_construction_value_type<T>() &&
+            typename cuda::std::enable_if_t<cuda::std::is_floating_point<T>() &&
                                             is_supported_representation_type<Rep>()>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE explicit fixed_point(T const& value, scale_type const& scale)
     : _value{static_cast<Rep>(detail::shift<Rep, Rad>(value, scale))}, _scale{scale}
@@ -232,8 +213,25 @@ class fixed_point {
   }
 
   /**
-   * @brief Constructor that will not perform shifting (assumes value already
-   * shifted)
+   * @brief Constructor that will perform shifting to store value appropriately (from integral
+   * types)
+   *
+   * @tparam T The integral type that you are constructing from
+   * @param value The value that will be constructed from
+   * @param scale The exponent that is applied to Rad to perform shifting
+   */
+  template <typename T,
+            typename cuda::std::enable_if_t<cuda::std::is_integral<T>() &&
+                                            is_supported_representation_type<Rep>()>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE explicit fixed_point(T const& value, scale_type const& scale)
+    // `value` is cast to `Rep` to avoid overflow in cases where
+    // constructing to `Rep` that is wider than `T`
+    : _value{detail::shift<Rep, Rad>(static_cast<Rep>(value), scale)}, _scale{scale}
+  {
+  }
+
+  /**
+   * @brief Constructor that will not perform shifting (assumes value already shifted)
    *
    * @param s scaled_integer that contains scale and already shifted value
    */
@@ -259,16 +257,31 @@ class fixed_point {
   fixed_point() : _value{0}, _scale{scale_type{0}} {}
 
   /**
-   * @brief Explicit conversion operator
+   * @brief Explicit conversion operator for casting to floating point types
    *
-   * @tparam U The type that is being explicitly converted to (integral or floating)
+   * @tparam U The floating point type that is being explicitly converted to
    * @return The `fixed_point` number in base 10 (aka human readable format)
    */
   template <typename U,
-            typename cuda::std::enable_if_t<is_supported_construction_value_type<U>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE explicit constexpr operator U() const
+            typename cuda::std::enable_if_t<cuda::std::is_floating_point<U>::value>* = nullptr>
+  explicit constexpr operator U() const
   {
-    return detail::shift<Rep, Rad>(static_cast<U>(_value), detail::negate(_scale));
+    return detail::shift<Rep, Rad>(static_cast<U>(_value), scale_type{-_scale});
+  }
+
+  /**
+   * @brief Explicit conversion operator for casting to integral types
+   *
+   * @tparam U The integral type that is being explicitly converted to
+   * @return The `fixed_point` number in base 10 (aka human readable format)
+   */
+  template <typename U,
+            typename cuda::std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
+  explicit constexpr operator U() const
+  {
+    // Don't cast to U until converting to Rep because in certain cases casting to U before shifting
+    // will result in integer overflow (i.e. if U = int32_t, Rep = int64_t and _value > 2 billion)
+    return static_cast<U>(detail::shift<Rep, Rad>(_value, scale_type{-_scale}));
   }
 
   CUDA_HOST_DEVICE_CALLABLE operator scaled_integer<Rep>() const
@@ -536,37 +549,23 @@ class fixed_point {
   explicit operator std::string() const
   {
     if (_scale < 0) {
-      int const n = std::pow(10, -_scale);
-      int const f = _value % n;
+      auto const av   = std::abs(_value);
+      int64_t const n = std::pow(10, -_scale);
+      int64_t const f = av % n;
       auto const num_zeros =
         std::max(0, (-_scale - static_cast<int32_t>(std::to_string(f).size())));
       auto const zeros = std::string(num_zeros, '0');
-      return std::to_string(_value / n) + std::string(".") + zeros +
-             std::to_string(std::abs(_value) % n);
+      auto const sign  = _value < 0 ? std::string("-") : std::string();
+      return sign + std::to_string(av / n) + std::string(".") + zeros + std::to_string(av % n);
     } else {
       auto const zeros = std::string(_scale, '0');
       return std::to_string(_value) + zeros;
     }
   }
-};  // namespace numeric
+};
 
-/** @brief Function that converts Rep to `std::string`
- *
- * @tparam Rep Representation type
- * @return String-ified Rep
- */
-template <typename Rep>
-std::string print_rep()
-{
-  if (cuda::std::is_same<Rep, int32_t>::value)
-    return "int32_t";
-  else if (cuda::std::is_same<Rep, int64_t>::value)
-    return "int64_t";
-  else
-    return "unknown type";
-}
-
-/** @brief Function for identifying integer overflow when adding
+/**
+ *  @brief Function for identifying integer overflow when adding
  *
  * @tparam Rep Type of integer to check for overflow on
  * @tparam T Types of lhs and rhs (ensures they are the same type)
@@ -641,8 +640,8 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator+(fixed_point<Rep1, Ra
 
 #if defined(__CUDACC_DEBUG__)
 
-  release_assert(!addition_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value) &&
-                 "fixed_point overflow of underlying representation type " + print_rep<Rep1>());
+  assert(!addition_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value) &&
+         "fixed_point overflow");
 
 #endif
 
@@ -659,9 +658,8 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator-(fixed_point<Rep1, Ra
 
 #if defined(__CUDACC_DEBUG__)
 
-  release_assert(
-    !subtraction_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value) &&
-    "fixed_point overflow of underlying representation type " + print_rep<Rep1>());
+  assert(!subtraction_overflow<Rep1>(lhs.rescaled(scale)._value, rhs.rescaled(scale)._value) &&
+         "fixed_point overflow");
 
 #endif
 
@@ -675,8 +673,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator*(fixed_point<Rep1, Ra
 {
 #if defined(__CUDACC_DEBUG__)
 
-  release_assert(!multiplication_overflow<Rep1>(lhs._value, rhs._value) &&
-                 "fixed_point overflow of underlying representation type " + print_rep<Rep1>());
+  assert(!multiplication_overflow<Rep1>(lhs._value, rhs._value) && "fixed_point overflow");
 
 #endif
 
@@ -691,8 +688,7 @@ CUDA_HOST_DEVICE_CALLABLE fixed_point<Rep1, Rad1> operator/(fixed_point<Rep1, Ra
 {
 #if defined(__CUDACC_DEBUG__)
 
-  release_assert(!division_overflow<Rep1>(lhs._value, rhs._value) &&
-                 "fixed_point overflow of underlying representation type " + print_rep<Rep1>());
+  assert(!division_overflow<Rep1>(lhs._value, rhs._value) && "fixed_point overflow");
 
 #endif
 

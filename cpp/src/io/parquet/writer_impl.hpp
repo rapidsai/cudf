@@ -21,8 +21,8 @@
 
 #pragma once
 
-#include <io/parquet/parquet.hpp>
-#include <io/parquet/parquet_gpu.hpp>
+#include "parquet.hpp"
+#include "parquet_gpu.hpp"
 
 #include <cudf/io/data_sink.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
@@ -44,10 +44,13 @@ namespace io {
 namespace detail {
 namespace parquet {
 // Forward internal classes
-class parquet_column_view;
+struct parquet_column_view;
 
 using namespace cudf::io::parquet;
 using namespace cudf::io;
+using cudf::detail::device_2dspan;
+using cudf::detail::host_2dspan;
+using cudf::detail::hostdevice_2dvector;
 
 /**
  * @brief Implementation for parquet writer
@@ -124,29 +127,13 @@ class writer::impl {
    *
    * @param frag Destination page fragments
    * @param col_desc column description array
-   * @param num_columns Total number of columns
-   * @param num_fragments Total number of fragments per column
    * @param num_rows Total number of rows
    * @param fragment_size Number of rows per fragment
    */
-  void init_page_fragments(hostdevice_vector<gpu::PageFragment>& frag,
-                           hostdevice_vector<gpu::EncColumnDesc>& col_desc,
-                           uint32_t num_columns,
-                           uint32_t num_fragments,
+  void init_page_fragments(hostdevice_2dvector<gpu::PageFragment>& frag,
+                           device_span<gpu::parquet_column_device_view const> col_desc,
                            uint32_t num_rows,
                            uint32_t fragment_size);
-
-  /**
-   * @brief Create column_device_view pointers from leaf columns
-   *
-   * @param col_desc Column description array
-   * @param parent_table_device_view Table device view containing parent columns
-   *
-   * @return Device array containing leaf column device views
-   */
-  rmm::device_uvector<column_device_view> create_leaf_column_device_views(
-    hostdevice_vector<gpu::EncColumnDesc>& col_desc,
-    const table_device_view& parent_table_device_view);
 
   /**
    * @brief Gather per-fragment statistics
@@ -154,28 +141,22 @@ class writer::impl {
    * @param dst_stats output statistics
    * @param frag Input page fragments
    * @param col_desc column description array
-   * @param num_columns Total number of columns
    * @param num_fragments Total number of fragments per column
-   * @param fragment_size Number of rows per fragment
    */
-  void gather_fragment_statistics(statistics_chunk* dst_stats,
-                                  hostdevice_vector<gpu::PageFragment>& frag,
-                                  hostdevice_vector<gpu::EncColumnDesc>& col_desc,
-                                  uint32_t num_columns,
-                                  uint32_t num_fragments,
-                                  uint32_t fragment_size);
+  void gather_fragment_statistics(device_2dspan<statistics_chunk> dst_stats,
+                                  device_2dspan<gpu::PageFragment const> frag,
+                                  device_span<gpu::parquet_column_device_view const> col_desc,
+                                  uint32_t num_fragments);
   /**
    * @brief Build per-chunk dictionaries and count data pages
    *
    * @param chunks column chunk array
    * @param col_desc column description array
-   * @param num_rowgroups Total number of rowgroups
    * @param num_columns Total number of columns
    * @param num_dictionaries Total number of dictionaries
    */
-  void build_chunk_dictionaries(hostdevice_vector<gpu::EncColumnChunk>& chunks,
-                                hostdevice_vector<gpu::EncColumnDesc>& col_desc,
-                                uint32_t num_rowgroups,
+  void build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
+                                device_span<gpu::parquet_column_device_view const> col_desc,
                                 uint32_t num_columns,
                                 uint32_t num_dictionaries);
   /**
@@ -184,17 +165,15 @@ class writer::impl {
    * @param chunks column chunk array
    * @param col_desc column description array
    * @param pages encoder pages array
-   * @param num_rowgroups Total number of rowgroups
    * @param num_columns Total number of columns
    * @param num_pages Total number of pages
    * @param num_stats_bfr Number of statistics buffers
    */
-  void init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk>& chunks,
-                          hostdevice_vector<gpu::EncColumnDesc>& col_desc,
-                          gpu::EncPage* pages,
+  void init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
+                          device_span<gpu::parquet_column_device_view const> col_desc,
+                          device_span<gpu::EncPage> pages,
                           statistics_chunk* page_stats,
                           statistics_chunk* frag_stats,
-                          uint32_t num_rowgroups,
                           uint32_t num_columns,
                           uint32_t num_pages,
                           uint32_t num_stats_bfr);
@@ -203,25 +182,19 @@ class writer::impl {
    *
    * @param chunks column chunk array
    * @param pages encoder pages array
-   * @param num_columns Total number of columns
    * @param pages_in_batch number of pages in this batch
    * @param first_page_in_batch first page in batch
    * @param rowgroups_in_batch number of rowgroups in this batch
    * @param first_rowgroup first rowgroup in batch
-   * @param comp_in compressor input array
-   * @param comp_out compressor status array
    * @param page_stats optional page-level statistics (nullptr if none)
    * @param chunk_stats optional chunk-level statistics (nullptr if none)
    */
-  void encode_pages(hostdevice_vector<gpu::EncColumnChunk>& chunks,
-                    gpu::EncPage* pages,
-                    uint32_t num_columns,
+  void encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
+                    device_span<gpu::EncPage> pages,
                     uint32_t pages_in_batch,
                     uint32_t first_page_in_batch,
                     uint32_t rowgroups_in_batch,
                     uint32_t first_rowgroup,
-                    gpu_inflate_input_s* comp_in,
-                    gpu_inflate_status_s* comp_out,
                     const statistics_chunk* page_stats,
                     const statistics_chunk* chunk_stats);
 
@@ -240,15 +213,9 @@ class writer::impl {
   // Overall file metadata.  Filled in during the process and written during write_chunked_end()
   cudf::io::parquet::FileMetaData md;
   // optional user metadata
-  table_metadata_with_nullability user_metadata_with_nullability;
-  // only used in the write_chunked() case. copied from the (optionally) user supplied
-  // argument to write()
-  table_metadata const* user_metadata = nullptr;
+  std::unique_ptr<table_input_metadata> table_meta;
   // to track if the output has been written to sink
   bool closed = false;
-  // vector of precision values for decimal writing. Exactly one entry
-  // per decimal column.
-  std::vector<uint8_t> decimal_precision;
   // current write position for rowgroups/chunks
   std::size_t current_chunk_offset;
   // special parameter only used by detail::write() to indicate that we are guaranteeing

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 """
 Test related to Index
@@ -11,12 +11,13 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core import DataFrame
+from cudf.core._compat import PANDAS_GE_110
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
     GenericIndex,
     Int64Index,
+    IntervalIndex,
     RangeIndex,
     as_index,
 )
@@ -34,7 +35,7 @@ from cudf.utils.utils import search_range
 
 
 def test_df_set_index_from_series():
-    df = DataFrame()
+    df = cudf.DataFrame()
     df["a"] = list(range(10))
     df["b"] = list(range(0, 20, 2))
 
@@ -48,7 +49,7 @@ def test_df_set_index_from_series():
 
 
 def test_df_set_index_from_name():
-    df = DataFrame()
+    df = cudf.DataFrame()
     df["a"] = list(range(10))
     df["b"] = list(range(0, 20, 2))
 
@@ -64,7 +65,7 @@ def test_df_set_index_from_name():
 
 
 def test_df_slice_empty_index():
-    df = DataFrame()
+    df = cudf.DataFrame()
     assert isinstance(df.index, RangeIndex)
     assert isinstance(df.index[:1], RangeIndex)
     with pytest.raises(IndexError):
@@ -152,10 +153,10 @@ def test_categorical_index():
     pdf = pd.DataFrame()
     pdf["a"] = [1, 2, 3]
     pdf["index"] = pd.Categorical(["a", "b", "c"])
-    initial_df = DataFrame.from_pandas(pdf)
+    initial_df = cudf.from_pandas(pdf)
     pdf = pdf.set_index("index")
-    gdf1 = DataFrame.from_pandas(pdf)
-    gdf2 = DataFrame()
+    gdf1 = cudf.from_pandas(pdf)
+    gdf2 = cudf.DataFrame()
     gdf2["a"] = [1, 2, 3]
     gdf2["index"] = pd.Categorical(["a", "b", "c"])
     assert_eq(initial_df.index, gdf2.index)
@@ -272,7 +273,7 @@ def test_index_rename_preserves_arg():
 
 
 def test_set_index_as_property():
-    cdf = DataFrame()
+    cdf = cudf.DataFrame()
     col1 = np.arange(10)
     col2 = np.arange(0, 20, 2)
     cdf["a"] = col1
@@ -565,7 +566,7 @@ def test_empty_df_head_tail_index(n):
         (
             pd.CategoricalIndex(["a", "b", "c", "a", "b", "c"]),
             pd.CategoricalIndex(["a", "b", "c", "a", "b", "c"]) != "a",
-            "h",
+            "a",
             None,
         ),
         (
@@ -803,9 +804,12 @@ def test_index_difference(data, other, sort):
         and gd_other.dtype.kind != "f"
         or (gd_data.dtype.kind != "f" and gd_other.dtype.kind == "f")
     ):
-        pytest.xfail(
-            "Bug in Pandas: https://github.com/pandas-dev/pandas/issues/35217"
+        pytest.mark.xfail(
+            condition=not PANDAS_GE_110,
+            reason="Bug in Pandas: "
+            "https://github.com/pandas-dev/pandas/issues/35217",
         )
+
     expected = pd_data.difference(pd_other, sort=sort)
     actual = gd_data.difference(gd_other, sort=sort)
     assert_eq(expected, actual)
@@ -867,9 +871,12 @@ def test_index_equals(data, other):
     if (
         gd_data.dtype.kind == "f" or gd_other.dtype.kind == "f"
     ) and cudf.utils.dtypes.is_mixed_with_object_dtype(gd_data, gd_other):
-        pytest.xfail(
-            "Bug in Pandas: https://github.com/pandas-dev/pandas/issues/35217"
+        pytest.mark.xfail(
+            condition=not PANDAS_GE_110,
+            reason="Bug in Pandas: "
+            "https://github.com/pandas-dev/pandas/issues/35217",
         )
+
     expected = pd_data.equals(pd_other)
     actual = gd_data.equals(gd_other)
     assert_eq(expected, actual)
@@ -921,8 +928,10 @@ def test_index_categories_equal(data, other):
         and gd_other.dtype.kind != "f"
         or (gd_data.dtype.kind != "f" and gd_other.dtype.kind == "f")
     ):
-        pytest.xfail(
-            "Bug in Pandas: https://github.com/pandas-dev/pandas/issues/35217"
+        pytest.mark.xfail(
+            condition=not PANDAS_GE_110,
+            reason="Bug in Pandas: "
+            "https://github.com/pandas-dev/pandas/issues/35217",
         )
 
     expected = pd_data.equals(pd_other)
@@ -983,7 +992,9 @@ def test_index_equal_misc(data, other):
     actual = gd_data.equals(np.array(gd_other))
     assert_eq(expected, actual)
 
-    expected = pd_data.equals(pd.Series(pd_other))
+    expected = pd_data.equals(
+        cudf.utils.utils._create_pandas_series(data=pd_other)
+    )
     actual = gd_data.equals(cudf.Series(gd_other))
     assert_eq(expected, actual)
 
@@ -1350,6 +1361,256 @@ def test_categorical_index_basic(data, categories, dtype, ordered, name):
     assert_eq(pindex, gindex)
 
 
+INTERVAL_BOUNDARY_TYPES = [
+    int,
+    np.int8,
+    np.int16,
+    np.int32,
+    np.int64,
+    np.float32,
+    np.float64,
+    cudf.Scalar,
+]
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+@pytest.mark.parametrize("start", [0, 1, 2, 3])
+@pytest.mark.parametrize("end", [4, 5, 6, 7])
+def test_interval_range_basic(start, end, closed):
+    pindex = pd.interval_range(start=start, end=end, closed=closed)
+    gindex = cudf.interval_range(start=start, end=end, closed=closed)
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("start_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("end_t", INTERVAL_BOUNDARY_TYPES)
+def test_interval_range_dtype_basic(start_t, end_t):
+    start, end = start_t(24), end_t(42)
+    start_val = start.value if isinstance(start, cudf.Scalar) else start
+    end_val = end.value if isinstance(end, cudf.Scalar) else end
+    pindex = pd.interval_range(start=start_val, end=end_val, closed="left")
+    gindex = cudf.interval_range(start=start, end=end, closed="left")
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+@pytest.mark.parametrize("start", [0])
+@pytest.mark.parametrize("end", [0])
+def test_interval_range_empty(start, end, closed):
+    pindex = pd.interval_range(start=start, end=end, closed=closed)
+    gindex = cudf.interval_range(start=start, end=end, closed=closed)
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+@pytest.mark.parametrize("freq", [1, 2, 3])
+@pytest.mark.parametrize("start", [0, 1, 2, 3, 5])
+@pytest.mark.parametrize("end", [6, 8, 10, 43, 70])
+def test_interval_range_freq_basic(start, end, freq, closed):
+    pindex = pd.interval_range(start=start, end=end, freq=freq, closed=closed)
+    gindex = cudf.interval_range(
+        start=start, end=end, freq=freq, closed=closed
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("start_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("end_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("freq_t", INTERVAL_BOUNDARY_TYPES)
+def test_interval_range_freq_basic_dtype(start_t, end_t, freq_t):
+    start, end, freq = start_t(5), end_t(70), freq_t(3)
+    start_val = start.value if isinstance(start, cudf.Scalar) else start
+    end_val = end.value if isinstance(end, cudf.Scalar) else end
+    freq_val = freq.value if isinstance(freq, cudf.Scalar) else freq
+    pindex = pd.interval_range(
+        start=start_val, end=end_val, freq=freq_val, closed="left"
+    )
+    gindex = cudf.interval_range(
+        start=start, end=end, freq=freq, closed="left"
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+@pytest.mark.parametrize("periods", [1, 1.0, 2, 2.0, 3.0, 3])
+@pytest.mark.parametrize("start", [0, 0.0, 1.0, 1, 2, 2.0, 3.0, 3])
+@pytest.mark.parametrize("end", [4, 4.0, 5.0, 5, 6, 6.0, 7.0, 7])
+def test_interval_range_periods_basic(start, end, periods, closed):
+    pindex = pd.interval_range(
+        start=start, end=end, periods=periods, closed=closed
+    )
+    gindex = cudf.interval_range(
+        start=start, end=end, periods=periods, closed=closed
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("start_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("end_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("periods_t", INTERVAL_BOUNDARY_TYPES)
+def test_interval_range_periods_basic_dtype(start_t, end_t, periods_t):
+    start, end, periods = start_t(0), end_t(4), periods_t(1.0)
+    start_val = start.value if isinstance(start, cudf.Scalar) else start
+    end_val = end.value if isinstance(end, cudf.Scalar) else end
+    periods_val = (
+        periods.value if isinstance(periods, cudf.Scalar) else periods
+    )
+    pindex = pd.interval_range(
+        start=start_val, end=end_val, periods=periods_val, closed="left"
+    )
+    gindex = cudf.interval_range(
+        start=start, end=end, periods=periods, closed="left"
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+@pytest.mark.parametrize("periods", [1, 2, 3])
+@pytest.mark.parametrize("freq", [1, 2, 3, 4])
+@pytest.mark.parametrize("end", [4, 8, 9, 10])
+def test_interval_range_periods_freq_end(end, freq, periods, closed):
+    pindex = pd.interval_range(
+        end=end, freq=freq, periods=periods, closed=closed
+    )
+    gindex = cudf.interval_range(
+        end=end, freq=freq, periods=periods, closed=closed
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("periods_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("freq_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("end_t", INTERVAL_BOUNDARY_TYPES)
+def test_interval_range_periods_freq_end_dtype(periods_t, freq_t, end_t):
+    periods, freq, end = periods_t(2), freq_t(3), end_t(10)
+    freq_val = freq.value if isinstance(freq, cudf.Scalar) else freq
+    end_val = end.value if isinstance(end, cudf.Scalar) else end
+    periods_val = (
+        periods.value if isinstance(periods, cudf.Scalar) else periods
+    )
+    pindex = pd.interval_range(
+        end=end_val, freq=freq_val, periods=periods_val, closed="left"
+    )
+    gindex = cudf.interval_range(
+        end=end, freq=freq, periods=periods, closed="left"
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+@pytest.mark.parametrize("periods", [1, 2, 3])
+@pytest.mark.parametrize("freq", [1, 2, 3, 4])
+@pytest.mark.parametrize("start", [1, 4, 9, 12])
+def test_interval_range_periods_freq_start(start, freq, periods, closed):
+    pindex = pd.interval_range(
+        start=start, freq=freq, periods=periods, closed=closed
+    )
+    gindex = cudf.interval_range(
+        start=start, freq=freq, periods=periods, closed=closed
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("periods_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("freq_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("start_t", INTERVAL_BOUNDARY_TYPES)
+def test_interval_range_periods_freq_start_dtype(periods_t, freq_t, start_t):
+    periods, freq, start = periods_t(2), freq_t(3), start_t(9)
+    freq_val = freq.value if isinstance(freq, cudf.Scalar) else freq
+    start_val = start.value if isinstance(start, cudf.Scalar) else start
+    periods_val = (
+        periods.value if isinstance(periods, cudf.Scalar) else periods
+    )
+    pindex = pd.interval_range(
+        start=start_val, freq=freq_val, periods=periods_val, closed="left"
+    )
+    gindex = cudf.interval_range(
+        start=start, freq=freq, periods=periods, closed="left"
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["right", "left", "both", "neither"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        ([pd.Interval(30, 50)]),
+        ([pd.Interval(0, 3), pd.Interval(1, 7)]),
+        ([pd.Interval(0.2, 60.3), pd.Interval(1, 7), pd.Interval(0, 0)]),
+        ([]),
+    ],
+)
+def test_interval_index_basic(data, closed):
+    pindex = pd.IntervalIndex(data, closed=closed)
+    gindex = IntervalIndex(data, closed=closed)
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["right", "left", "both", "neither"])
+def test_interval_index_empty(closed):
+    pindex = pd.IntervalIndex([], closed=closed)
+    gindex = IntervalIndex([], closed=closed)
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["right", "left", "both", "neither"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        ([pd.Interval(1, 6), pd.Interval(1, 10), pd.Interval(1, 3)]),
+        (
+            [
+                pd.Interval(3.5, 6.0),
+                pd.Interval(1.0, 7.0),
+                pd.Interval(0.0, 10.0),
+            ]
+        ),
+        (
+            [
+                pd.Interval(50, 100, closed="left"),
+                pd.Interval(1.0, 7.0, closed="left"),
+                pd.Interval(16, 322, closed="left"),
+            ]
+        ),
+        (
+            [
+                pd.Interval(50, 100, closed="right"),
+                pd.Interval(1.0, 7.0, closed="right"),
+                pd.Interval(16, 322, closed="right"),
+            ]
+        ),
+    ],
+)
+def test_interval_index_many_params(data, closed):
+
+    pindex = pd.IntervalIndex(data, closed=closed)
+    gindex = IntervalIndex(data, closed=closed)
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
+def test_interval_index_from_breaks(closed):
+    breaks = [0, 3, 6, 10]
+    pindex = pd.IntervalIndex.from_breaks(breaks, closed=closed)
+    gindex = IntervalIndex.from_breaks(breaks, closed=closed)
+
+    assert_eq(pindex, gindex)
+
+
 @pytest.mark.parametrize("n", [0, 2, 5, 10, None])
 @pytest.mark.parametrize("frac", [0.1, 0.5, 1, 2, None])
 @pytest.mark.parametrize("replace", [True, False])
@@ -1408,7 +1669,7 @@ def test_multiindex_sample_basic(n, frac, replace, axis):
             "int": [1, 3, 5, 4, 2],
         },
     )
-    mul_index = cudf.Index(DataFrame.from_pandas(pdf))
+    mul_index = cudf.Index(cudf.from_pandas(pdf))
     random_state = 0
 
     try:
@@ -1538,7 +1799,7 @@ def test_index_tolist(data, dtype):
         TypeError,
         match=re.escape(
             r"cuDF does not support conversion to host memory "
-            r"via `tolist()` method. Consider using "
+            r"via the `tolist()` method. Consider using "
             r"`.to_arrow().to_pylist()` to construct a Python list."
         ),
     ):

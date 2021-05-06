@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <io/json/json_common.h>
 #include <io/utilities/parsing_utils.cuh>
+#include "json_common.h"
 
 #include <hash/concurrent_unordered_map.cuh>
 
@@ -29,7 +29,7 @@
 
 #include <thrust/optional.h>
 
-using cudf::detail::device_span;
+using cudf::device_span;
 
 namespace cudf {
 namespace io {

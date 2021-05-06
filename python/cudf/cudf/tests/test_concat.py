@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 import re
 
@@ -9,6 +9,7 @@ import pytest
 import cudf as gd
 from cudf.tests.utils import assert_eq, assert_exceptions_equal
 from cudf.utils.dtypes import is_categorical_dtype
+from cudf.core.dtypes import Decimal64Dtype
 
 
 def make_frames(index=None, nulls="none"):
@@ -372,8 +373,8 @@ def test_concat_mixed_input():
     [
         [pd.Series([1, 2, 3]), pd.DataFrame({"a": [1, 2]})],
         [pd.Series([1, 2, 3]), pd.DataFrame({"a": []})],
-        [pd.Series([]), pd.DataFrame({"a": []})],
-        [pd.Series([]), pd.DataFrame({"a": [1, 2]})],
+        [pd.Series([], dtype="float64"), pd.DataFrame({"a": []})],
+        [pd.Series([], dtype="float64"), pd.DataFrame({"a": [1, 2]})],
         [pd.Series([1, 2, 3.0, 1.2], name="abc"), pd.DataFrame({"a": [1, 2]})],
         [
             pd.Series(
@@ -1203,3 +1204,61 @@ def test_concat_join_empty_dataframes_axis_1(
     assert_eq(
         expected, actual, check_index_type=False, check_column_type=False
     )
+
+
+def test_concat_preserve_order():
+    """Ensure that order is preserved on 'inner' concatenations."""
+    df = pd.DataFrame([["d", 3, 4.0], ["c", 4, 5.0]], columns=["c", "b", "a"])
+    dfs = [df, df]
+
+    assert_eq(
+        pd.concat(dfs, join="inner"),
+        gd.concat([gd.DataFrame(df) for df in dfs], join="inner"),
+    )
+
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("typ", [gd.DataFrame, gd.Series])
+def test_concat_single_object(ignore_index, typ):
+    """Ensure that concat on a single object does not change it."""
+    obj = typ([1, 2, 3])
+    assert_eq(gd.concat([obj], ignore_index=ignore_index, axis=0), obj)
+
+
+@pytest.mark.parametrize("ltype", [Decimal64Dtype(3, 1), Decimal64Dtype(7, 2)])
+@pytest.mark.parametrize("rtype", [Decimal64Dtype(3, 2), Decimal64Dtype(8, 4)])
+def test_concat_decimal_dataframe(ltype, rtype):
+    gdf1 = gd.DataFrame(
+        {"id": np.random.randint(0, 10, 3), "val": ["22.3", "59.5", "81.1"]}
+    )
+    gdf2 = gd.DataFrame(
+        {"id": np.random.randint(0, 10, 3), "val": ["2.35", "5.59", "8.14"]}
+    )
+
+    gdf1["val"] = gdf1["val"].astype(ltype)
+    gdf2["val"] = gdf2["val"].astype(rtype)
+
+    pdf1 = gdf1.to_pandas()
+    pdf2 = gdf2.to_pandas()
+
+    got = gd.concat([gdf1, gdf2])
+    expected = pd.concat([pdf1, pdf2])
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("ltype", [Decimal64Dtype(4, 1), Decimal64Dtype(8, 2)])
+@pytest.mark.parametrize(
+    "rtype", [Decimal64Dtype(4, 3), Decimal64Dtype(10, 4)]
+)
+def test_concat_decimal_series(ltype, rtype):
+    gs1 = gd.Series(["228.3", "559.5", "281.1"]).astype(ltype)
+    gs2 = gd.Series(["2.345", "5.259", "8.154"]).astype(rtype)
+
+    ps1 = gs1.to_pandas()
+    ps2 = gs2.to_pandas()
+
+    got = gd.concat([gs1, gs2])
+    expected = pd.concat([ps1, ps2])
+
+    assert_eq(expected, got)

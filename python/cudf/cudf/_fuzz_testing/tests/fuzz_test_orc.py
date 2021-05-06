@@ -12,7 +12,6 @@ from cudf._fuzz_testing.utils import (
     orc_to_pandas,
     run_test,
 )
-from cudf.tests.utils import assert_eq
 
 
 @pythonfuzz(
@@ -24,19 +23,16 @@ from cudf.tests.utils import assert_eq
         "use_index": ALL_POSSIBLE_VALUES,
     },
 )
-def orc_reader_test(input_tuple, skiprows, columns, num_rows, use_index):
-    # TODO: Remove skiprows=0 after
-    # following issue is fixed:
-    # https://github.com/rapidsai/cudf/issues/6563
-    skiprows = 0
-
+def orc_reader_test(input_tuple, columns, skiprows, num_rows, use_index):
     pdf, file_buffer = input_tuple
     expected_pdf = pdf.iloc[skiprows:]
     if num_rows is not None:
         expected_pdf = expected_pdf.head(num_rows)
     if skiprows is not None or num_rows is not None:
         expected_pdf.reset_index(drop=True, inplace=True)
-    if columns is not None:
+    if columns is not None and len(columns) > 0:
+        # ORC reader picks columns if only
+        # there are any elements in `columns`
         expected_pdf = expected_pdf[columns]
     if use_index is False:
         expected_pdf.reset_index(drop=True, inplace=True)
@@ -48,6 +44,7 @@ def orc_reader_test(input_tuple, skiprows, columns, num_rows, use_index):
         num_rows=num_rows,
         use_index=use_index,
     )
+
     compare_dataframe(expected_pdf, gdf)
 
 
@@ -61,14 +58,16 @@ def orc_reader_stripes_test(input_tuple, columns, stripes):
         file_io_obj=io.BytesIO(file_buffer), stripes=stripes
     )
 
-    if columns is not None:
+    if columns is not None and len(columns) > 0:
+        # ORC reader picks columns if only
+        # there are any elements in `columns`
         expected_pdf = expected_pdf[columns]
 
     gdf = cudf.read_orc(
         io.BytesIO(file_buffer), columns=columns, stripes=stripes
     )
 
-    assert_eq(expected_pdf, gdf, check_dtype=False)
+    compare_dataframe(expected_pdf, gdf)
 
 
 @pythonfuzz(
@@ -91,6 +90,7 @@ def orc_writer_test(pdf, compression, enable_statistics):
     file_to_strore.seek(0)
 
     actual_df = cudf.read_orc(file_to_strore)
+
     compare_dataframe(pdf, actual_df)
 
 

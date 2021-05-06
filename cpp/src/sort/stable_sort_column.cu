@@ -35,11 +35,8 @@ struct column_stable_sorted_order_fn {
   {
     auto temp_col = column(input, stream);
     auto d_col    = temp_col.mutable_view();
-    using DeviceT = device_storage_type_t<T>;
-    thrust::stable_sort_by_key(rmm::exec_policy(stream),
-                               d_col.begin<DeviceT>(),
-                               d_col.end<DeviceT>(),
-                               indices.begin<size_type>());
+    thrust::stable_sort_by_key(
+      rmm::exec_policy(stream), d_col.begin<T>(), d_col.end<T>(), indices.begin<size_type>());
   }
   template <typename T, typename std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
   void faster_stable_sort(column_view const&, mutable_column_view&, rmm::cuda_stream_view)
@@ -103,13 +100,13 @@ std::unique_ptr<column> sorted_order<true>(column_view const& input,
   mutable_column_view indices_view = sorted_indices->mutable_view();
   thrust::sequence(
     rmm::exec_policy(stream), indices_view.begin<size_type>(), indices_view.end<size_type>(), 0);
-  cudf::type_dispatcher(input.type(),
-                        column_stable_sorted_order_fn{},
-                        input,
-                        indices_view,
-                        column_order == order::ASCENDING,
-                        null_precedence,
-                        stream);
+  cudf::type_dispatcher<dispatch_storage_type>(input.type(),
+                                               column_stable_sorted_order_fn{},
+                                               input,
+                                               indices_view,
+                                               column_order == order::ASCENDING,
+                                               null_precedence,
+                                               stream);
   return sorted_indices;
 }
 

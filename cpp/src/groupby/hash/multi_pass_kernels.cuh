@@ -20,8 +20,8 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/detail/utilities/device_atomics.cuh>
-#include <cudf/detail/utilities/release_assert.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -65,7 +65,7 @@ struct var_hash_functor {
                                                                   size_type source_index,
                                                                   size_type target_index) noexcept
   {
-    release_assert(false and "Invalid source type for std, var aggregation combination.");
+    cudf_assert(false and "Invalid source type for std, var aggregation combination.");
   }
 
   template <typename Source>

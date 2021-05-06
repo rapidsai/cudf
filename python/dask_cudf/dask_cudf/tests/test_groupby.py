@@ -1,3 +1,5 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -5,9 +7,11 @@ import pytest
 import dask
 from dask import dataframe as dd
 
-import dask_cudf
-
 import cudf
+from cudf.core._compat import PANDAS_GE_120
+
+import dask_cudf
+from dask_cudf.groupby import _is_supported
 
 
 @pytest.mark.parametrize("aggregation", ["sum", "mean", "count", "min", "max"])
@@ -126,10 +130,16 @@ def test_groupby_std(func):
     "func",
     [
         pytest.param(
-            lambda df: df.groupby(["a", "b"]).x.sum(), marks=pytest.mark.xfail
+            lambda df: df.groupby(["a", "b"]).x.sum(),
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_120, reason="pandas bug"
+            ),
         ),
         pytest.param(
-            lambda df: df.groupby(["a", "b"]).sum(), marks=pytest.mark.xfail
+            lambda df: df.groupby(["a", "b"]).sum(),
+            marks=pytest.mark.xfail(
+                condition=not PANDAS_GE_120, reason="pandas bug"
+            ),
         ),
         pytest.param(
             lambda df: df.groupby(["a", "b"]).agg({"x", "sum"}),
@@ -524,3 +534,32 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
     )
 
     dd.assert_eq(gf, pf)
+
+
+@pytest.mark.parametrize(
+    "aggregations", [(sum, "sum"), (max, "max"), (min, "min")]
+)
+def test_groupby_agg_redirect(aggregations):
+    pdf = pd.DataFrame(
+        {
+            "x": np.random.randint(0, 5, size=10000),
+            "y": np.random.normal(size=10000),
+        }
+    )
+
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    ddf = dask_cudf.from_cudf(gdf, npartitions=5)
+
+    a = ddf.groupby("x").agg({"x": aggregations[0]}).compute()
+    b = ddf.groupby("x").agg({"x": aggregations[1]}).compute()
+
+    dd.assert_eq(a, b)
+
+
+@pytest.mark.parametrize(
+    "arg",
+    [["not_supported"], {"a": "not_supported"}, {"a": ["not_supported"]}],
+)
+def test_is_supported(arg):
+    assert _is_supported(arg, {"supported"}) is False

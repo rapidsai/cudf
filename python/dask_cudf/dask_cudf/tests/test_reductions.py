@@ -1,12 +1,14 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
 import numpy as np
 import pandas as pd
 import pytest
 
-import dask.dataframe as dd
-
-import cudf as gd
+from dask import dataframe as dd
 
 import dask_cudf as dgd
+
+import cudf
 
 
 def _make_random_frame(nelem, npartitions=2):
@@ -16,7 +18,7 @@ def _make_random_frame(nelem, npartitions=2):
             "y": np.random.normal(size=nelem) + 1,
         }
     )
-    gdf = gd.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame.from_pandas(df)
     dgf = dgd.from_cudf(gdf, npartitions=npartitions)
     return df, dgf
 
@@ -47,15 +49,15 @@ def test_series_reduce(reducer):
 @pytest.mark.parametrize(
     "data",
     [
-        gd.datasets.randomdata(
+        cudf.datasets.randomdata(
             nrows=10000,
             dtypes={"a": "category", "b": int, "c": float, "d": int},
         ),
-        gd.datasets.randomdata(
+        cudf.datasets.randomdata(
             nrows=10000,
             dtypes={"a": "category", "b": int, "c": float, "d": str},
         ),
-        gd.datasets.randomdata(
+        cudf.datasets.randomdata(
             nrows=10000, dtypes={"a": bool, "b": int, "c": float, "d": str}
         ),
     ],
@@ -75,4 +77,4 @@ def test_rowwise_reductions(data, op):
         expected = getattr(pddf, op)(axis=1)
         got = getattr(pddf, op)(axis=1)
 
-    dd.assert_eq(expected.compute(), got.compute(), check_less_precise=7)
+    dd.assert_eq(expected.compute(), got.compute(), check_exact=False)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/search.hpp>
@@ -65,19 +66,20 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_cha
 
   auto d_offsets = offsets_column->view().template data<size_type>();
   // build chars column
-  size_type bytes = thrust::device_pointer_cast(d_offsets)[strings_count];
+  auto const bytes =
+    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column =
-    cudf::strings::detail::create_chars_child_column(strings_count, null_count, bytes, stream, mr);
+    cudf::strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
 
   return std::make_pair(std::move(offsets_column), std::move(chars_column));
 }
 
-template <typename ScalarIterator>
+template <typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& input,
-                                                  ScalarIterator const& lo_itr,
-                                                  ScalarIterator const& lo_replace_itr,
-                                                  ScalarIterator const& hi_itr,
-                                                  ScalarIterator const& hi_replace_itr,
+                                                  OptionalScalarIterator const& lo_itr,
+                                                  ReplaceScalarIterator const& lo_replace_itr,
+                                                  OptionalScalarIterator const& hi_itr,
+                                                  ReplaceScalarIterator const& hi_replace_itr,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
@@ -88,18 +90,16 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
   // build offset column
   auto offsets_transformer = [lo_itr, hi_itr, lo_replace_itr, hi_replace_itr] __device__(
                                string_view element, bool is_valid = true) {
-    const auto d_lo         = (*lo_itr).first;
-    const auto d_hi         = (*hi_itr).first;
-    const auto d_lo_replace = (*lo_replace_itr).first;
-    const auto d_hi_replace = (*hi_replace_itr).first;
-    const auto lo_valid     = (*lo_itr).second;
-    const auto hi_valid     = (*hi_itr).second;
+    const auto d_lo         = (*lo_itr).value_or(element);
+    const auto d_hi         = (*hi_itr).value_or(element);
+    const auto d_lo_replace = *(*lo_replace_itr);
+    const auto d_hi_replace = *(*hi_replace_itr);
     size_type bytes         = 0;
 
     if (is_valid) {
-      if (lo_valid and element < d_lo) {
+      if (element < d_lo) {
         bytes = d_lo_replace.size_bytes();
-      } else if (hi_valid and d_hi < element) {
+      } else if (d_hi < element) {
         bytes = d_hi_replace.size_bytes();
       } else {
         bytes = element.size_bytes();
@@ -121,16 +121,14 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
       size_type idx) {
       if (d_input.is_null(idx)) { return; }
       auto input_element      = d_input.element<string_view>(idx);
-      const auto d_lo         = (*lo_itr).first;
-      const auto d_hi         = (*hi_itr).first;
-      const auto d_lo_replace = (*lo_replace_itr).first;
-      const auto d_hi_replace = (*hi_replace_itr).first;
-      const auto lo_valid     = (*lo_itr).second;
-      const auto hi_valid     = (*hi_itr).second;
+      const auto d_lo         = (*lo_itr).value_or(input_element);
+      const auto d_hi         = (*hi_itr).value_or(input_element);
+      const auto d_lo_replace = *(*lo_replace_itr);
+      const auto d_hi_replace = *(*hi_replace_itr);
 
-      if (lo_valid and input_element < d_lo) {
+      if (input_element < d_lo) {
         memcpy(d_chars + d_offsets[idx], d_lo_replace.data(), d_lo_replace.size_bytes());
-      } else if (hi_valid and d_hi < input_element) {
+      } else if (d_hi < input_element) {
         memcpy(d_chars + d_offsets[idx], d_hi_replace.data(), d_hi_replace.size_bytes());
       } else {
         memcpy(d_chars + d_offsets[idx], input_element.data(), input_element.size_bytes());
@@ -151,13 +149,13 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
                              mr);
 }
 
-template <typename T, typename ScalarIterator>
+template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamper(
   column_view const& input,
-  ScalarIterator const& lo_itr,
-  ScalarIterator const& lo_replace_itr,
-  ScalarIterator const& hi_itr,
-  ScalarIterator const& hi_replace_itr,
+  OptionalScalarIterator const& lo_itr,
+  ReplaceScalarIterator const& lo_replace_itr,
+  OptionalScalarIterator const& hi_itr,
+  ReplaceScalarIterator const& hi_replace_itr,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -172,49 +170,39 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
   auto scalar_zip_itr =
     thrust::make_zip_iterator(thrust::make_tuple(lo_itr, lo_replace_itr, hi_itr, hi_replace_itr));
 
-  auto trans = [] __device__(auto element_validity_pair, auto scalar_tuple) {
-    if (element_validity_pair.second) {
-      auto lo_validity_pair = thrust::get<0>(scalar_tuple);
-      auto hi_validity_pair = thrust::get<2>(scalar_tuple);
-      if (lo_validity_pair.second and (element_validity_pair.first < lo_validity_pair.first)) {
-        return thrust::get<1>(scalar_tuple).first;
-      } else if (hi_validity_pair.second and
-                 (element_validity_pair.first > hi_validity_pair.first)) {
-        return thrust::get<3>(scalar_tuple).first;
+  auto trans = [] __device__(auto element_optional, auto scalar_tuple) {
+    if (element_optional.has_value()) {
+      auto lo_optional = thrust::get<0>(scalar_tuple);
+      auto hi_optional = thrust::get<2>(scalar_tuple);
+      if (lo_optional.has_value() and (*element_optional < *lo_optional)) {
+        return *(thrust::get<1>(scalar_tuple));
+      } else if (hi_optional.has_value() and (*element_optional > *hi_optional)) {
+        return *(thrust::get<3>(scalar_tuple));
       }
     }
 
-    return element_validity_pair.first;
+    return *element_optional;
   };
 
-  if (input.has_nulls()) {
-    auto input_pair_iterator = make_pair_iterator<T, true>(*input_device_view);
-    thrust::transform(rmm::exec_policy(stream),
-                      input_pair_iterator,
-                      input_pair_iterator + input.size(),
-                      scalar_zip_itr,
-                      output_device_view->begin<T>(),
-                      trans);
-  } else {
-    auto input_pair_iterator = make_pair_iterator<T, false>(*input_device_view);
-    thrust::transform(rmm::exec_policy(stream),
-                      input_pair_iterator,
-                      input_pair_iterator + input.size(),
-                      scalar_zip_itr,
-                      output_device_view->begin<T>(),
-                      trans);
-  }
+  auto input_pair_iterator =
+    make_optional_iterator<T>(*input_device_view, contains_nulls::DYNAMIC{}, input.has_nulls());
+  thrust::transform(rmm::exec_policy(stream),
+                    input_pair_iterator,
+                    input_pair_iterator + input.size(),
+                    scalar_zip_itr,
+                    output_device_view->begin<T>(),
+                    trans);
 
   return output;
 }
 
-template <typename T, typename ScalarIterator>
+template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::enable_if_t<std::is_same<T, string_view>::value, std::unique_ptr<cudf::column>> clamper(
   column_view const& input,
-  ScalarIterator const& lo_itr,
-  ScalarIterator const& lo_replace_itr,
-  ScalarIterator const& hi_itr,
-  ScalarIterator const& hi_replace_itr,
+  OptionalScalarIterator const& lo_itr,
+  ReplaceScalarIterator const& lo_replace_itr,
+  OptionalScalarIterator const& hi_itr,
+  ReplaceScalarIterator const& hi_replace_itr,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -223,13 +211,13 @@ std::enable_if_t<std::is_same<T, string_view>::value, std::unique_ptr<cudf::colu
 
 }  // namespace
 
-template <typename T, typename ScalarIterator>
+template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
 std::unique_ptr<column> clamp(
   column_view const& input,
-  ScalarIterator const& lo_itr,
-  ScalarIterator const& lo_replace_itr,
-  ScalarIterator const& hi_itr,
-  ScalarIterator const& hi_replace_itr,
+  OptionalScalarIterator const& lo_itr,
+  ReplaceScalarIterator const& lo_replace_itr,
+  OptionalScalarIterator const& hi_itr,
+  ReplaceScalarIterator const& hi_replace_itr,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -249,14 +237,12 @@ struct dispatch_clamp {
   {
     CUDF_EXPECTS(lo.type() == input.type(), "mismatching types of scalar and input");
 
-    using Type = device_storage_type_t<T>;
+    auto lo_itr         = make_optional_iterator<T>(lo, contains_nulls::YES{});
+    auto hi_itr         = make_optional_iterator<T>(hi, contains_nulls::YES{});
+    auto lo_replace_itr = make_optional_iterator<T>(lo_replace, contains_nulls::NO{});
+    auto hi_replace_itr = make_optional_iterator<T>(hi_replace, contains_nulls::NO{});
 
-    auto lo_itr         = make_pair_iterator<Type>(lo);
-    auto hi_itr         = make_pair_iterator<Type>(hi);
-    auto lo_replace_itr = make_pair_iterator<Type>(lo_replace);
-    auto hi_replace_itr = make_pair_iterator<Type>(hi_replace);
-
-    return clamp<Type>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, stream, mr);
+    return clamp<T>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, stream, mr);
   }
 };
 
@@ -322,15 +308,15 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
 
   // call clamp with the scalar indexes and the matched indices
   auto matched_indices = matched_view.get_indices_annotated();
-  auto new_indices     = cudf::type_dispatcher(matched_indices.type(),
-                                           dispatch_clamp{},
-                                           matched_indices,
-                                           *lo_index,
-                                           *lo_replace_index,
-                                           *hi_index,
-                                           *hi_replace_index,
-                                           stream,
-                                           mr);
+  auto new_indices     = cudf::type_dispatcher<dispatch_storage_type>(matched_indices.type(),
+                                                                  dispatch_clamp{},
+                                                                  matched_indices,
+                                                                  *lo_index,
+                                                                  *lo_replace_index,
+                                                                  *hi_index,
+                                                                  *hi_replace_index,
+                                                                  stream,
+                                                                  mr);
 
   auto const indices_type = new_indices->type();
   auto const output_size  = new_indices->size();
@@ -387,7 +373,7 @@ std::unique_ptr<column> clamp(
     CUDF_EXPECTS(hi_replace.is_valid(stream), "hi_replace can't be null if hi is not null");
   }
 
-  return cudf::type_dispatcher(
+  return cudf::type_dispatcher<dispatch_storage_type>(
     input.type(), dispatch_clamp{}, input, lo, lo_replace, hi, hi_replace, stream, mr);
 }
 

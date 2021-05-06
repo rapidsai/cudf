@@ -62,6 +62,7 @@ find_path(cuFile_INCLUDE_DIR
     cufile.h
   HINTS
     ${PKG_cuFile_INCLUDE_DIRS}
+    /usr/local/cuda/include
     /usr/local/cuda/lib64
 )
 
@@ -93,6 +94,12 @@ find_package_handle_standard_args(cuFile
     cuFile_VERSION
 )
 
+if (cuFile_INCLUDE_DIR AND NOT TARGET cuFile::cuFile_interface)
+  add_library(cuFile::cuFile_interface IMPORTED INTERFACE)
+  target_include_directories(cuFile::cuFile_interface INTERFACE "$<BUILD_INTERFACE:${cuFile_INCLUDE_DIR}>")
+  target_compile_options(cuFile::cuFile_interface INTERFACE "${cuFile_COMPILE_OPTIONS}")
+  target_compile_definitions(cuFile::cuFile_interface INTERFACE CUFILE_FOUND)
+endif ()
 
 if (cuFile_FOUND AND NOT TARGET cuFile::cuFile)
   add_library(cuFile::cuFile UNKNOWN IMPORTED)

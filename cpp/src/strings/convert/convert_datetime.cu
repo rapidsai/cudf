@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,12 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/detail/converters.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -27,12 +29,12 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/logical.h>
+#include <thrust/optional.h>
 
 #include <map>
 #include <vector>
@@ -949,22 +951,20 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
   // directly from the format string.
   auto d_str_bytes = compiler.template_bytes();  // size in bytes of each string
   // build offsets column
-  auto offsets_transformer_itr =
-    thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                    [d_column, d_str_bytes] __device__(size_type idx) {
-                                      return (d_column.is_null(idx) ? 0 : d_str_bytes);
-                                    });
+  auto offsets_transformer_itr = cudf::detail::make_counting_transform_iterator(
+    0, [d_column, d_str_bytes] __device__(size_type idx) {
+      return d_column.is_null(idx) ? 0 : d_str_bytes;
+    });
   auto offsets_column = make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto offsets_view  = offsets_column->view();
   auto d_new_offsets = offsets_view.template data<int32_t>();
 
   // build chars column
-  size_type bytes = thrust::device_pointer_cast(d_new_offsets)[strings_count];
-  auto chars_column =
-    create_chars_child_column(strings_count, timestamps.null_count(), bytes, stream, mr);
-  auto chars_view = chars_column->mutable_view();
-  auto d_chars    = chars_view.template data<char>();
+  auto const bytes =
+    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
+  auto chars_column = create_chars_child_column(strings_count, bytes, stream, mr);
+  auto d_chars      = chars_column->mutable_view().template data<char>();
   // fill in chars column with timestamps
   // dispatcher is called to handle the different timestamp types
   cudf::type_dispatcher(timestamps.type(),

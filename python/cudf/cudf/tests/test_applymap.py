@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 from itertools import product
 from math import floor
@@ -22,7 +22,7 @@ def test_applymap_round(nelem, masked):
         # Make mask
         bitmask = utils.random_bitmask(nelem)
         boolmask = np.asarray(
-            utils.expand_bits_to_bytes(bitmask), dtype=np.bool
+            utils.expand_bits_to_bytes(bitmask), dtype=np.bool_
         )[:nelem]
         data[~boolmask] = np.nan
 

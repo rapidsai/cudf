@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -139,17 +139,11 @@ std::unique_ptr<scalar> dictionary_reduction(column_view const& col,
   auto simple_op = Op{};
 
   auto result = [&] {
-    if (col.has_nulls()) {
-      auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
-      auto p  = cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType, true>(*dcol);
-      auto it = thrust::make_transform_iterator(p, f);
-      return detail::reduce(it, col.size(), simple_op, stream, mr);
-    } else {
-      auto f  = simple_op.template get_element_transformer<ResultType>();
-      auto p  = cudf::dictionary::detail::make_dictionary_iterator<ElementType>(*dcol);
-      auto it = thrust::make_transform_iterator(p, f);
-      return detail::reduce(it, col.size(), simple_op, stream, mr);
-    }
+    auto f = simple_op.template get_null_replacing_element_transformer<ResultType>();
+    auto p =
+      cudf::dictionary::detail::make_dictionary_pair_iterator<ElementType>(*dcol, col.has_nulls());
+    auto it = thrust::make_transform_iterator(p, f);
+    return detail::reduce(it, col.size(), simple_op, stream, mr);
   }();
 
   // set scalar is valid
@@ -204,7 +198,7 @@ struct cast_numeric_scalar_fn {
     auto result   = std::make_unique<numeric_scalar<ResultType>>(ResultType{}, true, stream, mr);
     auto d_output = cudf::get_scalar_device_view(*result);
     cudf::detail::device_single_thread(assign_scalar_fn<InputType, ResultType>{d_input, d_output},
-                                       stream.value());
+                                       stream);
     return result;
   }
 
@@ -232,9 +226,7 @@ struct bool_result_element_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return cudf::is_dictionary(col.type())
-             ? dictionary_reduction<ElementType, bool, Op>(col, stream, mr)
-             : simple_reduction<ElementType, bool, Op>(col, stream, mr);
+    return simple_reduction<ElementType, bool, Op>(col, stream, mr);
   }
 
   template <typename ElementType,

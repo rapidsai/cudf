@@ -21,13 +21,20 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/unary.hpp>
 
 #include <arrow/io/api.h>
+
+#include <thrust/execution_policy.h>
+#include <thrust/find.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
 #include <fstream>
@@ -38,12 +45,6 @@
 #include <sstream>
 #include <string>
 #include <vector>
-
-#include <thrust/execution_policy.h>
-#include <thrust/find.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <cudf/strings/convert/convert_datetime.hpp>
-#include <cudf/unary.hpp>
 
 namespace cudf_io = cudf::io;
 
@@ -288,7 +289,7 @@ std::vector<std::string> prepend_zeros(const std::vector<T>& input,
 TYPED_TEST(CsvReaderNumericTypeTest, SingleColumn)
 {
   constexpr auto num_rows = 10;
-  auto sequence           = cudf::test::make_counting_transform_iterator(
+  auto sequence           = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return static_cast<TypeParam>(i + 1000.50f); });
 
   auto filepath = temp_env->get_temp_filepath("SingleColumn.csv");
@@ -1240,7 +1241,7 @@ TEST_F(CsvReaderTest, HexTest)
 TYPED_TEST(CsvReaderNumericTypeTest, SingleColumnWithWriter)
 {
   constexpr auto num_rows = 10;
-  auto sequence           = cudf::test::make_counting_transform_iterator(
+  auto sequence           = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return static_cast<TypeParam>(i + 1000.50f); });
   auto input_column = column_wrapper<TypeParam>(sequence, sequence + num_rows);
   auto input_table  = cudf::table_view{std::vector<cudf::column_view>{input_column}};
@@ -1349,7 +1350,7 @@ TEST_F(CsvReaderTest, MultiColumnWithWriter)
   const auto result_sliced_view = result_table.select(non_float64s);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_sliced_view, result_sliced_view);
 
-  auto validity = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
   double tol{1.0e-6};
   auto float64_col_idx = non_float64s.size();
   check_float_column(
@@ -1857,7 +1858,7 @@ TEST_F(CsvReaderTest, ParseOutOfRangeIntegers)
 TEST_F(CsvReaderTest, ReadMaxNumericValue)
 {
   constexpr auto num_rows = 10;
-  auto sequence           = cudf::test::make_counting_transform_iterator(
+  auto sequence           = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return std::numeric_limits<uint64_t>::max() - i; });
 
   auto filepath = temp_env->get_temp_filepath("ReadMaxNumericValue.csv");
@@ -1878,7 +1879,7 @@ TEST_F(CsvReaderTest, ReadMaxNumericValue)
 TEST_F(CsvReaderTest, DefaultWriteChunkSize)
 {
   for (auto num_rows : {1, 20, 100, 1000}) {
-    auto sequence = cudf::test::make_counting_transform_iterator(
+    auto sequence = cudf::detail::make_counting_transform_iterator(
       0, [](auto i) { return static_cast<int32_t>(i + 1000.50f); });
     auto input_column = column_wrapper<int32_t>(sequence, sequence + num_rows);
     auto input_table  = cudf::table_view{std::vector<cudf::column_view>{input_column}};

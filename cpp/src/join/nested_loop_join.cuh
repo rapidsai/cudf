@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,7 +89,7 @@ size_type estimate_nested_loop_join_output_size(table_device_view left,
   int num_sms{-1};
   CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev_id));
 
-  size_estimate.set_value(0, stream);
+  size_estimate.set_value_zero(stream);
 
   row_equality equality{left, right, compare_nulls == null_equality::EQUAL};
   // Determine number of output rows without actually building the output to simply
@@ -118,7 +118,7 @@ size_type estimate_nested_loop_join_output_size(table_device_view left,
  *
  * @return Join output indices vector pair
  */
-std::pair<rmm::device_vector<size_type>, rmm::device_vector<size_type>>
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
 get_base_nested_loop_join_indices(table_view const& left,
                                   table_view const& right,
                                   bool flip_join_indices,
@@ -144,7 +144,8 @@ get_base_nested_loop_join_indices(table_view const& left,
 
   // If the estimated output size is zero, return immediately
   if (estimated_size == 0) {
-    return std::make_pair(rmm::device_vector<size_type>{}, rmm::device_vector<size_type>{});
+    return std::make_pair(rmm::device_uvector<size_type>{0, stream},
+                          rmm::device_uvector<size_type>{0, stream});
   }
 
   // Because we are approximating the number of joined elements, our approximation
@@ -154,22 +155,20 @@ get_base_nested_loop_join_indices(table_view const& left,
   rmm::device_scalar<size_type> write_index(0, stream);
   size_type join_size{0};
 
-  rmm::device_vector<size_type> left_indices;
-  rmm::device_vector<size_type> right_indices;
+  rmm::device_uvector<size_type> left_indices{0, stream};
+  rmm::device_uvector<size_type> right_indices{0, stream};
   auto current_estimated_size = estimated_size;
   do {
-    left_indices.resize(estimated_size);
-    right_indices.resize(estimated_size);
+    left_indices.resize(estimated_size, stream);
+    right_indices.resize(estimated_size, stream);
 
     constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
     detail::grid_1d config(left_table->num_rows(), block_size);
-    write_index.set_value(0);
+    write_index.set_value_zero(stream);
 
     row_equality equality{*left_table, *right_table, compare_nulls == null_equality::EQUAL};
-    const auto& join_output_l =
-      flip_join_indices ? right_indices.data().get() : left_indices.data().get();
-    const auto& join_output_r =
-      flip_join_indices ? left_indices.data().get() : right_indices.data().get();
+    const auto& join_output_l = flip_join_indices ? right_indices.data() : left_indices.data();
+    const auto& join_output_r = flip_join_indices ? left_indices.data() : right_indices.data();
     nested_loop_join<block_size, DEFAULT_JOIN_CACHE_SIZE>
       <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(*left_table,
                                                                                *right_table,
@@ -182,13 +181,13 @@ get_base_nested_loop_join_indices(table_view const& left,
 
     CHECK_CUDA(stream.value());
 
-    join_size              = write_index.value();
+    join_size              = write_index.value(stream);
     current_estimated_size = estimated_size;
     estimated_size *= 2;
   } while ((current_estimated_size < join_size));
 
-  left_indices.resize(join_size);
-  right_indices.resize(join_size);
+  left_indices.resize(join_size, stream);
+  right_indices.resize(join_size, stream);
   return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
 
