@@ -18,10 +18,14 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <tests/strings/utilities.h>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <string>
 #include <vector>
@@ -287,16 +291,17 @@ TYPED_TEST_CASE(StringsIntegerConvertTest, cudf::test::IntegralTypesNotBool);
 
 TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
 {
-  thrust::device_vector<TypeParam> d_integers(255);
+  thrust::host_vector<TypeParam> h_integers(255);
   thrust::sequence(
-    thrust::device, d_integers.begin(), d_integers.end(), -(TypeParam)(d_integers.size() / 2));
-  d_integers.push_back(std::numeric_limits<TypeParam>::min());
-  d_integers.push_back(std::numeric_limits<TypeParam>::max());
+    thrust::seq, h_integers.begin(), h_integers.end(), -(TypeParam)(h_integers.size() / 2));
+  h_integers.push_back(std::numeric_limits<TypeParam>::min());
+  h_integers.push_back(std::numeric_limits<TypeParam>::max());
+  auto d_integers    = cudf::detail::make_device_uvector_sync(h_integers);
   auto integers      = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                             (cudf::size_type)d_integers.size());
   auto integers_view = integers->mutable_view();
   CUDA_TRY(cudaMemcpy(integers_view.data<TypeParam>(),
-                      d_integers.data().get(),
+                      d_integers.data(),
                       d_integers.size() * sizeof(TypeParam),
                       cudaMemcpyDeviceToDevice));
   integers_view.set_null_count(0);
@@ -304,7 +309,8 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
   // convert to strings
   auto results_strings = cudf::strings::from_integers(integers->view());
 
-  thrust::host_vector<TypeParam> h_integers(d_integers);
+  // copy back to host
+  h_integers = cudf::detail::make_host_vector_sync(d_integers);
   std::vector<std::string> h_strings;
   for (auto itr = h_integers.begin(); itr != h_integers.end(); ++itr)
     h_strings.push_back(std::to_string(*itr));
