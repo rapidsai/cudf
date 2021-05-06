@@ -131,15 +131,17 @@ def _generate_column(column_params, num_rows):
         else:
             arrow_type = None
 
+        if not isinstance(arrow_type, pa.lib.Decimal128Type):
+            vals = pa.array(
+                column_params.generator,
+                size=column_params.cardinality,
+                safe=False,
+                type=arrow_type,
+            )
         vals = pa.array(
-            column_params.generator,
-            size=column_params.cardinality,
-            safe=False,
-            type=arrow_type,
-        )
-        # Generate data for current column
-        return pa.array(
-            np.random.choice(vals, size=num_rows),
+            np.random.choice(column_params.generator, size=num_rows)
+            if isinstance(arrow_type, pa.lib.Decimal128Type)
+            else np.random.choice(vals, size=num_rows),
             mask=np.random.choice(
                 [True, False],
                 size=num_rows,
@@ -152,9 +154,13 @@ def _generate_column(column_params, num_rows):
             else None,
             size=num_rows,
             safe=False,
-            type=arrow_type,
+            type=None
+            if isinstance(arrow_type, pa.lib.Decimal128Type)
+            else arrow_type,
         )
-
+        if isinstance(arrow_type, pa.lib.Decimal128Type):
+            vals = vals.cast(arrow_type, safe=False)
+        return vals
     else:
         # Generate data for current column
         return pa.array(
@@ -344,6 +350,22 @@ def rand_dataframe(
                     dtype=dtype,
                 )
             )
+        elif dtype == "decimal64":
+            max_precision = meta.get(
+                "max_precision", cudf.Decimal64Dtype.MAX_PRECISION
+            )
+            precision = np.random.randint(1, max_precision)
+            scale = np.random.randint(0, precision)
+            dtype = cudf.Decimal64Dtype(precision=precision, scale=scale)
+            column_params.append(
+                ColumnParameters(
+                    cardinality=cardinality,
+                    null_frequency=null_frequency,
+                    generator=decimal_generator(dtype=dtype, size=cardinality),
+                    is_sorted=False,
+                    dtype=dtype,
+                )
+            )
         elif dtype == "category":
             column_params.append(
                 ColumnParameters(
@@ -497,6 +519,18 @@ def boolean_generator(size):
     Generator for bool data
     """
     return lambda: np.random.choice(a=[False, True], size=size)
+
+
+def decimal_generator(dtype, size):
+    max_integral = 10 ** (dtype.precision - dtype.scale) - 1
+    max_float = (10 ** dtype.scale - 1) if dtype.scale != 0 else 0
+    return lambda: (
+        np.random.uniform(
+            low=-max_integral,
+            high=max_integral + (max_float / 10 ** dtype.scale),
+            size=size,
+        )
+    )
 
 
 def get_values_for_nested_data(dtype, lists_max_length):

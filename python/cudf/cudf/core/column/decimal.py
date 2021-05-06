@@ -83,7 +83,7 @@ class DecimalColumn(ColumnBase):
             result.dtype.precision = _binop_precision(
                 self.dtype, other.dtype, op
             )
-        elif op in ("eq", "lt", "gt", "le", "ge"):
+        elif op in ("eq", "ne", "lt", "gt", "le", "ge"):
             if not isinstance(
                 other,
                 (DecimalColumn, cudf.core.column.NumericalColumn, cudf.Scalar),

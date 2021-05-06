@@ -54,30 +54,30 @@ ConfigureTest(ERROR_TEST error/error_handling_test.cu)
 ###################################################################################################
 # - groupby tests ---------------------------------------------------------------------------------
 ConfigureTest(GROUPBY_TEST
-    groupby/collect_set_test.cpp
-    groupby/groupby_groups_test.cpp
-    groupby/group_argmin_test.cpp
-    groupby/group_argmax_test.cpp
-    groupby/groupby_keys_test.cpp
-    groupby/group_count_test.cpp
-    groupby/group_sum_test.cpp
-    groupby/group_min_test.cpp
-    groupby/group_max_test.cpp
-    groupby/group_product_test.cpp
-    groupby/group_sum_of_squares_test.cpp
-    groupby/group_mean_test.cpp
-    groupby/group_var_test.cpp
-    groupby/group_std_test.cpp
-    groupby/group_median_test.cpp
-    groupby/group_quantile_test.cpp
-    groupby/group_nunique_test.cpp
-    groupby/group_nth_element_test.cpp
-    groupby/group_collect_test.cpp
-    groupby/group_sum_scan_test.cpp
-    groupby/group_min_scan_test.cpp
-    groupby/group_max_scan_test.cpp
-    groupby/group_count_scan_test.cpp
-    groupby/group_shift_test.cpp)
+    groupby/argmin_tests.cpp
+    groupby/argmax_tests.cpp
+    groupby/collect_list_tests.cpp
+    groupby/collect_set_tests.cpp
+    groupby/count_scan_tests.cpp
+    groupby/count_tests.cpp
+    groupby/groups_tests.cpp
+    groupby/keys_tests.cpp    
+    groupby/min_tests.cpp    
+    groupby/max_scan_tests.cpp
+    groupby/max_tests.cpp
+    groupby/mean_tests.cpp
+    groupby/median_tests.cpp
+    groupby/min_scan_tests.cpp
+    groupby/nth_element_tests.cpp
+    groupby/nunique_tests.cpp
+    groupby/product_tests.cpp
+    groupby/quantile_tests.cpp
+    groupby/shift_tests.cpp
+    groupby/std_tests.cpp
+    groupby/sum_of_squares_tests.cpp
+    groupby/sum_scan_tests.cpp
+    groupby/sum_tests.cpp
+    groupby/var_tests.cpp)
 
 ###################################################################################################
 # - join tests ------------------------------------------------------------------------------------
@@ -206,8 +206,8 @@ ConfigureTest(COPYING_TEST
     copying/pack_tests.cu
     copying/sample_tests.cpp
     copying/scatter_tests.cpp
-    copying/scatter_list_tests.cu
-    copying/scatter_struct_tests.cu
+    copying/scatter_list_tests.cpp
+    copying/scatter_struct_tests.cpp
     copying/segmented_gather_list_tests.cpp
     copying/shift_tests.cpp
     copying/slice_tests.cpp
@@ -397,10 +397,11 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 ###################################################################################################
 # - lists tests ----------------------------------------------------------------------------------
 ConfigureTest(LISTS_TEST
+    lists/concatenate_rows_tests.cpp
     lists/contains_tests.cpp
     lists/count_elements_tests.cpp
-    lists/explode_tests.cpp
     lists/drop_list_duplicates_tests.cpp
+    lists/explode_tests.cpp
     lists/extract_tests.cpp
     lists/sort_lists_tests.cpp)
 
