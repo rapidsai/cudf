@@ -440,7 +440,7 @@ list_scalar::list_scalar(cudf::column&& data,
                          bool is_valid,
                          rmm::cuda_stream_view stream,
                          rmm::mr::device_memory_resource* mr)
-  : scalar(data_type(type_id::LIST), is_valid, stream, mr), _data(data)
+  : scalar(data_type(type_id::LIST), is_valid, stream, mr), _data(std::move(data))
 {
 }
 
