@@ -4342,17 +4342,9 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testMakeListEmpty() {
-
     final int numRows = 4;
-    List<List<Integer>> mainList1 = new ArrayList<>();
-    mainList1.add(Arrays.asList());
-    List<List<Integer>> mainList2 = new ArrayList<>();
-    mainList2.add(Arrays.asList());
-    List<List<Integer>> mainList3 = new ArrayList<>();
-    mainList3.add(Arrays.asList());
-    List<List<Integer>> mainList4 = new ArrayList<>();
-    mainList4.add(Arrays.asList());
-
+    List<List<String>> emptyListOfList = new ArrayList<>();
+    emptyListOfList.add(Arrays.asList());
     try (
         ColumnVector expectedList =
              ColumnVector.fromLists(
@@ -4364,7 +4356,7 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector expectedListOfList = ColumnVector.fromLists(new HostColumnVector.ListType(false,
                  new HostColumnVector.ListType(false,
                      new HostColumnVector.BasicType(false, DType.STRING))),
-             mainList1, mainList2, mainList3, mainList4);
+             emptyListOfList, emptyListOfList, emptyListOfList, emptyListOfList);
 
          ColumnVector createdList = ColumnVector.makeList(numRows, DType.STRING);
          ColumnVector createdListOfList = ColumnVector.makeList(createdList)) {
@@ -4379,14 +4371,8 @@ public class ColumnVectorTest extends CudfTestBase {
     List<Integer> list2 = Arrays.asList(2, 4);
     List<Integer> list3 = Arrays.asList(5, 7, 9);
     List<Integer> list4 = Arrays.asList(6, 8, 10);
-
-    List<List<Integer>> mainList1 = new ArrayList<>();
-    mainList1.add(list1);
-    mainList1.add(list3);
-    List<List<Integer>> mainList2 = new ArrayList<>();
-    mainList2.add(list2);
-    mainList2.add(list4);
-
+    List<List<Integer>> mainList1 = new ArrayList<>(Arrays.asList(list1, list3));
+    List<List<Integer>> mainList2 = new ArrayList<>(Arrays.asList(list2, list4));
     try (ColumnVector expectedList1 =
              ColumnVector.fromLists(new ListType(false,
                  new BasicType(false, DType.INT32)), list1, list2);
