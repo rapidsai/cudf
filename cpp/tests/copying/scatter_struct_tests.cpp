@@ -47,15 +47,14 @@ using TestTypes = cudf::test::Concat<cudf::test::IntegralTypes,
 TYPED_TEST_CASE(TypedStructScatterTest, TestTypes);
 
 namespace {
-void test_scatter(std::unique_ptr<cudf::column> const& structs_src,
-                  std::unique_ptr<cudf::column> const& structs_tgt,
-                  std::unique_ptr<cudf::column> const& structs_expected,
-                  std::unique_ptr<cudf::column> const& scatter_map)
+auto scatter_structs(std::unique_ptr<cudf::column> const& structs_src,
+                     std::unique_ptr<cudf::column> const& structs_tgt,
+                     std::unique_ptr<cudf::column> const& scatter_map)
 {
   auto const source = cudf::table_view{std::vector<cudf::column_view>{structs_src->view()}};
   auto const target = cudf::table_view{std::vector<cudf::column_view>{structs_tgt->view()}};
   auto const result = cudf::scatter(source, scatter_map->view(), target);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(structs_expected->view(), result->get_column(0));
+  return result->get_column(0);
 }
 }  // namespace
 
@@ -71,8 +70,8 @@ TYPED_TEST(TypedStructScatterTest, EmptyInputTest)
   auto const structs_tgt = structs_col{{child_col_tgt}, std::vector<bool>{}}.release();
 
   auto const scatter_map = int32s_col{}.release();
-  test_scatter(structs_src, structs_tgt, structs_src, scatter_map);
-  test_scatter(structs_src, structs_tgt, structs_tgt, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*structs_src,
+                                 scatter_structs(structs_src, structs_tgt, scatter_map));
 }
 
 // Test case when only the scatter map is empty
@@ -97,7 +96,8 @@ TYPED_TEST(TypedStructScatterTest, EmptyScatterMapTest)
     })}.release();
 
   auto const scatter_map = int32s_col{}.release();
-  test_scatter(structs_src, structs_tgt, structs_tgt, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*structs_tgt,
+                                 scatter_structs(structs_src, structs_tgt, scatter_map));
 }
 
 TYPED_TEST(TypedStructScatterTest, ScatterAsCopyTest)
@@ -122,7 +122,8 @@ TYPED_TEST(TypedStructScatterTest, ScatterAsCopyTest)
 
   // Scatter as copy: the target should be the same as source
   auto const scatter_map = int32s_col{0, 1, 2, 3, 4, 5}.release();
-  test_scatter(structs_src, structs_tgt, structs_src, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*structs_src,
+                                 scatter_structs(structs_src, structs_tgt, scatter_map));
 }
 
 TYPED_TEST(TypedStructScatterTest, ScatterAsLeftShiftTest)
@@ -154,7 +155,8 @@ TYPED_TEST(TypedStructScatterTest, ScatterAsLeftShiftTest)
     })}.release();
 
   auto const scatter_map = int32s_col{-2, -1, 0, 1, 2, 3}.release();
-  test_scatter(structs_src, structs_tgt, structs_expected, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*structs_expected,
+                                 scatter_structs(structs_src, structs_tgt, scatter_map));
 }
 
 TYPED_TEST(TypedStructScatterTest, SimpleScatterTests)
@@ -188,7 +190,8 @@ TYPED_TEST(TypedStructScatterTest, SimpleScatterTests)
       return i != 3;
     })}.release();
   auto const scatter_map1 = int32s_col{-2, 0, 5}.release();
-  test_scatter(structs_src, structs_tgt, structs_expected1, scatter_map1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*structs_expected1,
+                                 scatter_structs(structs_src, structs_tgt, scatter_map1));
 
   // Expected data
   auto child_col_expected2 =
@@ -199,7 +202,8 @@ TYPED_TEST(TypedStructScatterTest, SimpleScatterTests)
       return true;
     })}.release();
   auto const scatter_map2 = int32s_col{-2, 0, 5, 3}.release();
-  test_scatter(structs_src, structs_tgt, structs_expected2, scatter_map2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*structs_expected2,
+                                 scatter_structs(structs_src, structs_tgt, scatter_map2));
 }
 
 TYPED_TEST(TypedStructScatterTest, ComplexDataScatterTest)
@@ -258,12 +262,13 @@ TYPED_TEST(TypedStructScatterTest, ComplexDataScatterTest)
 
   // The first element of the target is not overwritten
   auto const scatter_map = int32s_col{-1, 4, 3, 2, 1}.release();
-  test_scatter(structs_src, structs_tgt, structs_expected, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*structs_expected,
+                                 scatter_structs(structs_src, structs_tgt, scatter_map));
 }
 
 TYPED_TEST(TypedStructScatterTest, ScatterStructOfListsTest)
 {
-  // Testing gather() on struct<list<numeric>>
+  // Testing scatter() on struct<list<numeric>>
   using lists_col = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
 
   // Source data
@@ -289,26 +294,24 @@ TYPED_TEST(TypedStructScatterTest, ScatterStructOfListsTest)
 
   // The first 2 elements of the target is not overwritten
   auto const scatter_map = int32s_col{-3, -2, -1, 5, 4, 3, 2}.release();
-  test_scatter(structs_src, structs_tgt, structs_expected, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*structs_expected,
+                                 scatter_structs(structs_src, structs_tgt, scatter_map));
 }
 
 TYPED_TEST(TypedStructScatterTest, ScatterSourceSmallerThanTarget)
 {
-  using namespace cudf;
-  using namespace cudf::test;
+  using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
 
-  using fixed_width     = fixed_width_column_wrapper<TypeParam, int32_t>;
-  using structs_col     = structs_column_wrapper;
-  using scatter_map_col = fixed_width_column_wrapper<offset_type, int32_t>;
+  auto child_col_src      = col_wrapper{22, 55};
+  auto const structs_src      = structs_col{{child_col_src}}.release();
 
-  auto source_child   = fixed_width{22, 55};
-  auto target_child   = fixed_width{0, 1, 2, 3, 4, 5, 6};
-  auto expected_child = fixed_width{0, 1, 22, 3, 4, 55, 6};
+  auto child_col_tgt      = col_wrapper{0, 1, 2, 3, 4, 5, 6};
+  auto const structs_tgt      = structs_col{{child_col_tgt}}.release();
 
-  auto const source      = structs_col{{source_child}}.release();
-  auto const target      = structs_col{{target_child}}.release();
-  auto const scatter_map = scatter_map_col{2, 5}.release();
-  auto const expected    = structs_col{{expected_child}}.release();
+  auto child_col_expected = col_wrapper{0, 1, 22, 3, 4, 55, 6};
+  auto const structs_expected = structs_col{{child_col_expected}}.release();
 
-  test_scatter(source, target, expected, scatter_map);
+  auto const scatter_map = int32s_col{2, 5}.release();
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*structs_expected,
+                                 scatter_structs(structs_src, structs_tgt, scatter_map));
 }
