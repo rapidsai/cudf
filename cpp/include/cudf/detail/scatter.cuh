@@ -442,6 +442,8 @@ std::unique_ptr<table> scatter(
         auto const num_rows   = col_view.size();
         auto const null_count = col_view.null_count();
         auto contents         = col->release();
+
+        // Children null_mask will be superimposed during structs column construction.
         col                   = cudf::make_structs_column(num_rows,
                                         std::move(contents.children),
                                         null_count,
