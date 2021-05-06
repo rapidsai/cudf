@@ -2990,20 +2990,21 @@ def test_string_slice_with_mask():
         ],
     ],
 )
-def test_string_get_json_object(data):
+def test_string_get_json_object_n(data):
     gs = cudf.Series(data)
-    js = json.loads(data[0])
+    ps = pd.Series(data)
 
     assert_eq(
-        json.loads(gs.str.get_json_object("$.store").iloc[0]), js["store"]
+        json.loads(gs.str.get_json_object("$.store")[0]),
+        ps.apply(lambda x: json.loads(x)["store"])[0],
     )
     assert_eq(
-        json.loads(gs.str.get_json_object("$.store.book").iloc[0]),
-        js["store"]["book"],
+        json.loads(gs.str.get_json_object("$.store.book")[0]),
+        ps.apply(lambda x: json.loads(x)["store"]["book"])[0],
     )
     assert_eq(
-        gs.str.get_json_object("$.store.book[0].category").iloc[0],
-        js["store"]["book"][0]["category"],
+        gs.str.get_json_object("$.store.book[0].category"),
+        ps.apply(lambda x: json.loads(x)["store"]["book"][0]["category"]),
     )
 
 
