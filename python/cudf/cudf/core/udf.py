@@ -109,8 +109,10 @@ class MaskedScalarAdd(AbstractTemplate):
 class MaskedScalarAddNull(AbstractTemplate):
     def generic(self, args, kws):
         if isinstance(args[0], MaskedType) and isinstance(args[1], NAType):
-            # in the case
-            return nb_signature(MaskedType(args[0].value_type), MaskedType(args[0].value_type), numba_na)
+            # In the case of op(Masked, NA), the result has the same 
+            # dtype as the original regardless of what it is
+            return_type = args[0].value_type
+            return nb_signature(MaskedType(return_type), MaskedType(args[0].value_type), numba_na)
 
 @cuda_lower(operator.add, MaskedType, MaskedType)
 def masked_scalar_add_impl(context, builder, sig, args):
@@ -154,8 +156,17 @@ def constant_dummy(context, builder, ty, pyval):
 class MaskedScalarAddConstant(AbstractTemplate):
     def generic(self, args, kws):
         if isinstance(args[0], MaskedType) and isinstance(args[1], types.Integer):
-            # TODO - need to get the result type of args[0].value and args[1]
-            return nb_signature(MaskedType(args[0].value_type), MaskedType(args[0].value_type), types.int64)
+            # In the case of op(Masked, constant), we resolve the type between
+            # the Masked value_type and the constant's type directly
+            return_type = self.context.resolve_function_type(
+                self.key,
+                (
+                    args[0].value_type,
+                    args[1]
+                ),
+                kws
+            ).return_type
+            return nb_signature(MaskedType(return_type), MaskedType(args[0].value_type), args[1])
 
 @cuda_lower(operator.add, MaskedType, types.Integer)
 def masked_scalar_add_constant_impl(context, builder, sig, input_values):
