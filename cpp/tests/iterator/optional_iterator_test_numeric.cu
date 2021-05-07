@@ -104,7 +104,7 @@ TYPED_TEST(NumericOptionalIteratorTest, mean_var_output)
   expected_value.value_squared = std::accumulate(
     replaced_array.begin(), replaced_array.end(), T{0}, [](T acc, T i) { return acc + i * i; });
 
-  std::cout << "expected <mixed_output> = " << expected_value << std::endl;
+  // std::cout << "expected <mixed_output> = " << expected_value << std::endl;
 
   // GPU test
   auto it_dev         = d_col->optional_begin<T>(cudf::contains_nulls::YES{});

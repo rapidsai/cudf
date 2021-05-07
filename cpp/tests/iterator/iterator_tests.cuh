@@ -115,10 +115,10 @@ struct IteratorTest : public cudf::test::BaseFixture {
     thrust::host_vector<T_output> hos_result(dev_result);
 
     EXPECT_EQ(expected, hos_result[0]) << msg;
-    std::cout << "Done: expected <" << msg
-              << "> = "
-              //<< hos_result[0] //TODO uncomment after time_point ostream operator<<
-              << std::endl;
+    // std::cout << "Done: expected <" << msg
+    //           << "> = "
+    //           //<< hos_result[0] //TODO uncomment after time_point ostream operator<<
+    //           << std::endl;
   }
 
   template <typename T_output>
