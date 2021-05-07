@@ -19,6 +19,7 @@
 #include "join_common_utils.hpp"
 #include "join_kernels.cuh"
 
+#include <cudf/ast/detail/transform.cuh>
 #include <cudf/ast/nodes.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
@@ -215,7 +216,7 @@ get_base_nested_loop_predicate_join_indices(table_view const& left,
                                             table_view const& right,
                                             bool flip_join_indices,
                                             join_kind JoinKind,
-                                            ast::expression expression,
+                                            ast::expression binary_pred,
                                             null_equality compare_nulls,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
@@ -224,7 +225,7 @@ get_base_nested_loop_predicate_join_indices(table_view const& left,
   // for the inner loop. Thus, if `left` is smaller than `right`, swap `left/right`.
   if ((JoinKind == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
     return get_base_nested_loop_predicate_join_indices(
-      right, left, true, JoinKind, expression, compare_nulls, stream, mr);
+      right, left, true, JoinKind, binary_pred, compare_nulls, stream, mr);
   }
   // Trivial left join case - exit early
   if ((JoinKind == join_kind::LEFT_JOIN) && (right.num_rows() == 0)) {
@@ -242,6 +243,14 @@ get_base_nested_loop_predicate_join_indices(table_view const& left,
     return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
                           std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
+
+  // TODO: The AST code's linearizer data path_only uses the table of the
+  // expression for determining the data type of a column reference, so for now
+  // we can reuse the same linearizer for convenience and assume that the left
+  // and right tables have all the same data types. We may eventually have to
+  // relax this assumption to provide reasonable error checking.
+  auto const expr_linearizer = ast::detail::linearizer(binary_pred, left);  // Linearize the AST
+  auto const plan = ast::detail::ast_plan{expr_linearizer, stream, mr};     // Create ast_plan
 
   // Because we are approximating the number of joined elements, our approximation
   // might be incorrect and we might have underestimated the number of joined elements.
@@ -264,15 +273,20 @@ get_base_nested_loop_predicate_join_indices(table_view const& left,
     row_equality equality{*left_table, *right_table, compare_nulls == null_equality::EQUAL};
     const auto& join_output_l = flip_join_indices ? right_indices->data() : left_indices->data();
     const auto& join_output_r = flip_join_indices ? left_indices->data() : right_indices->data();
-    nested_loop_join<block_size, DEFAULT_JOIN_CACHE_SIZE>
-      <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(*left_table,
-                                                                               *right_table,
-                                                                               JoinKind,
-                                                                               equality,
-                                                                               join_output_l,
-                                                                               join_output_r,
-                                                                               write_index.data(),
-                                                                               estimated_size);
+    nested_loop_predicate_join<block_size, DEFAULT_JOIN_CACHE_SIZE>
+      <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
+        *left_table,
+        *right_table,
+        JoinKind,
+        equality,
+        join_output_l,
+        join_output_r,
+        write_index.data(),
+        plan._device_literals,
+        plan._device_data_references,
+        plan._device_operators,
+        plan._device_operator_source_indices,
+        estimated_size);
 
     CHECK_CUDA(stream.value());
 

@@ -301,7 +301,7 @@ __device__ void row_output::resolve_output(detail::device_data_reference device_
  * @param num_operators Number of operators.
  * @param row_index Row index of data column(s).
  */
-__device__ void evaluate_row_expression(
+__device__ inline void evaluate_row_expression(
   detail::row_evaluator const& evaluator,
   device_span<const detail::device_data_reference> data_references,
   device_span<const ast_operator> operators,
