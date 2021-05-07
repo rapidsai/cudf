@@ -21,7 +21,6 @@ from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 
 import cudf
 from cudf import _lib as libcudf
-
 from dask_cudf import sorting
 
 DASK_VERSION = LooseVersion(dask.__version__)
@@ -414,6 +413,43 @@ class Series(_Frame, dd.core.Series):
 
         return CudfSeriesGroupBy(self, *args, **kwargs)
 
+    @property
+    def list(self):
+        return ListMethod(self)
+
+class ListMethod():
+    #TODO: Maybe use inheritance instead?
+    def __init__(self, d_series):
+        self.d_series = d_series
+    
+    def len(self):
+        return self.d_series.map_partitions(lambda s: s.list.len(), meta=self.d_series._meta)
+
+    def contains(self, search_key):
+        return self.d_series.map_partitions(lambda s: s.list.contains(search_key), meta=self.d_series._meta)
+
+    def get(self, index):
+        return self.d_series.map_partitions(lambda s: s.list.get(index), meta=self.d_series._meta)
+
+    @property
+    def leaves(self):
+        return self.d_series.map_partitions(lambda s: s.list.leaves, meta=self.d_series._meta)
+
+    def take(self, lists_indices):
+        return self.d_series.map_partitions(lambda s: s.list.take(lists_indices), meta=self.d_series._meta)
+
+    def unique(self):
+        return self.d_series.map_partitions(lambda s: s.list.unique(), meta=self.d_series._meta)
+
+    def sort_values(
+        self,
+        ascending=True,
+        inplace=False,
+        kind="quicksort",
+        na_position="last",
+        ignore_index=False,
+    ):
+        return self.d_series.map_partitions(lambda s: s.list.sort_values(ascending, inplace, kind, na_position, ignore_index), meta=self.d_series._meta)
 
 class Index(Series, dd.core.Index):
     _partition_type = cudf.Index
@@ -692,7 +728,6 @@ def from_cudf(data, npartitions=None, chunksize=None, sort=True, name=None):
         sort=sort,
         name=name,
     )
-
 
 from_cudf.__doc__ = (
     "Wraps main-line Dask from_pandas...\n" + dd.from_pandas.__doc__
