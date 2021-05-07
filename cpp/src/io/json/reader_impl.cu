@@ -623,8 +623,8 @@ table_with_metadata reader::impl::convert_data_to_table(device_span<uint64_t con
 reader::impl::impl(std::unique_ptr<datasource> source,
                    std::string filepath,
                    json_reader_options const &options,
-                   rmm::mr::device_memory_resource *mr,
-                   rmm::cuda_stream_view stream)
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource *mr)
   : options_(options), mr_(mr), source_(std::move(source)), filepath_(filepath)
 {
   CUDF_EXPECTS(options_.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
@@ -682,7 +682,7 @@ reader::reader(std::vector<std::string> const &filepaths,
   CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
   // Delay actual instantiation of data source until read to allow for
   // partial memory mapping of file using byte ranges
-  _impl = std::make_unique<impl>(nullptr, filepaths[0], options, mr, stream);
+  _impl = std::make_unique<impl>(nullptr, filepaths[0], options, stream, mr);
 }
 
 // Forward to implementation
@@ -692,7 +692,7 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
-  _impl = std::make_unique<impl>(std::move(sources[0]), "", options, mr, stream);
+  _impl = std::make_unique<impl>(std::move(sources[0]), "", options, stream, mr);
 }
 
 // Destructor within this translation unit

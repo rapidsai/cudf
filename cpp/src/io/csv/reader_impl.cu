@@ -809,7 +809,7 @@ parse_options make_parse_options(csv_reader_options const &reader_opts,
   CUDF_EXPECTS(parse_opts.thousands != parse_opts.delimiter,
                "Thousands separator cannot be the same as the delimiter");
 
-  // Handle user-defined false values, whereby field data is substituted with a
+  // Handle user-defined true values, whereby field data is substituted with a
   // boolean true or numeric `1` value
   if (reader_opts.get_true_values().size() != 0) {
     parse_opts.trie_true =
