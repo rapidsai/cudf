@@ -1519,12 +1519,32 @@ def test_scalar_power_invalid(dtype_l, dtype_r):
     ],
 )
 @pytest.mark.parametrize("n_periods", [0, 1, -1, 12, -12])
-@pytest.mark.parametrize("frequency", ["months"])
+@pytest.mark.parametrize(
+    "frequency",
+    [
+        "months",
+        "years",
+        "days",
+        "hours",
+        "minutes",
+        "seconds",
+        "microseconds",
+        pytest.param(
+            "nanoseconds",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/36589"
+            ),
+        ),
+    ],
+)
 @pytest.mark.parametrize(
     "dtype",
     ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
 )
-def test_datetime_dateoffset_binaryop(date_col, n_periods, frequency, dtype):
+@pytest.mark.parametrize("op", [operator.add, operator.sub])
+def test_datetime_dateoffset_binaryop(
+    date_col, n_periods, frequency, dtype, op
+):
     gsr = cudf.Series(date_col, dtype=dtype)
     psr = gsr.to_pandas()  # converts to nanos
 
@@ -1533,15 +1553,122 @@ def test_datetime_dateoffset_binaryop(date_col, n_periods, frequency, dtype):
     goffset = cudf.DateOffset(**kwargs)
     poffset = pd.DateOffset(**kwargs)
 
-    expect = psr + poffset
-    got = gsr + goffset
+    expect = op(psr, poffset)
+    got = op(gsr, goffset)
 
     utils.assert_eq(expect, got)
 
-    expect = psr - poffset
-    got = gsr - goffset
+    expect = op(psr, -poffset)
+    got = op(gsr, -goffset)
 
     utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "date_col",
+    [
+        [
+            "2000-01-01 00:00:00.012345678",
+            "2000-01-31 00:00:00.012345678",
+            "2000-02-29 00:00:00.012345678",
+        ]
+    ],
+)
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"months": 2, "years": 5},
+        {"microseconds": 1, "seconds": 1},
+        {"months": 2, "years": 5, "seconds": 923, "microseconds": 481},
+        pytest.param(
+            {"milliseconds": 4},
+            marks=pytest.mark.xfail(
+                reason="Pandas gets the wrong answer for milliseconds"
+            ),
+        ),
+        pytest.param(
+            {"milliseconds": 4, "years": 2},
+            marks=pytest.mark.xfail(
+                reason="Pandas construction fails with these keywords"
+            ),
+        ),
+        pytest.param(
+            {"nanoseconds": 12},
+            marks=pytest.mark.xfail(
+                reason="Pandas gets the wrong answer for nanoseconds"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("op", [operator.add, operator.sub])
+def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
+
+    gsr = cudf.Series(date_col, dtype="datetime64[ns]")
+    psr = gsr.to_pandas()
+
+    poffset = pd.DateOffset(**kwargs)
+    goffset = cudf.DateOffset(**kwargs)
+
+    expect = op(psr, poffset)
+    got = op(gsr, goffset)
+
+    utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "date_col",
+    [
+        [
+            "2000-01-01 00:00:00.012345678",
+            "2000-01-31 00:00:00.012345678",
+            "2000-02-29 00:00:00.012345678",
+        ]
+    ],
+)
+@pytest.mark.parametrize("n_periods", [0, 1, -1, 12, -12])
+@pytest.mark.parametrize(
+    "frequency",
+    [
+        "months",
+        "years",
+        "days",
+        "hours",
+        "minutes",
+        "seconds",
+        "microseconds",
+        pytest.param(
+            "nanoseconds",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/36589"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "dtype",
+    ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
+)
+def test_datetime_dateoffset_binaryop_reflected(
+    date_col, n_periods, frequency, dtype
+):
+    gsr = cudf.Series(date_col, dtype=dtype)
+    psr = gsr.to_pandas()  # converts to nanos
+
+    kwargs = {frequency: n_periods}
+
+    goffset = cudf.DateOffset(**kwargs)
+    poffset = pd.DateOffset(**kwargs)
+
+    expect = poffset + psr
+    got = goffset + gsr
+
+    utils.assert_eq(expect, got)
+
+    with pytest.raises(TypeError):
+        poffset - psr
+
+    with pytest.raises(TypeError):
+        goffset - gsr
 
 
 @pytest.mark.parametrize("frame", [cudf.Series, cudf.Index, cudf.DataFrame])
@@ -1787,6 +1914,33 @@ def _decimal_series(input, dtype):
             bool,
         ),
         (
+            operator.ne,
+            ["0.06", "0.42"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            ["0.18", "0.42"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            [True, False],
+            bool,
+        ),
+        (
+            operator.ne,
+            ["1.33", "1.21"],
+            cudf.Decimal64Dtype(scale=2, precision=3),
+            ["0.1899", "1.21"],
+            cudf.Decimal64Dtype(scale=4, precision=5),
+            [True, False],
+            bool,
+        ),
+        (
+            operator.ne,
+            ["300", None],
+            cudf.Decimal64Dtype(scale=-2, precision=3),
+            ["110", "5500"],
+            cudf.Decimal64Dtype(scale=-1, precision=4),
+            [True, None],
+            bool,
+        ),
+        (
             operator.lt,
             ["0.18", "0.42", "1.00"],
             cudf.Decimal64Dtype(scale=2, precision=3),
@@ -1938,6 +2092,30 @@ def test_binops_decimal(args):
             [100, 42, 12],
             cudf.Series([True, False, None], dtype=bool),
             cudf.Series([True, False, None], dtype=bool),
+        ),
+        (
+            operator.ne,
+            ["100", "42", "24", None],
+            cudf.Decimal64Dtype(scale=0, precision=3),
+            [100, 40, 24, 12],
+            cudf.Series([False, True, False, None], dtype=bool),
+            cudf.Series([False, True, False, None], dtype=bool),
+        ),
+        (
+            operator.ne,
+            ["10.1", "88", "11", None],
+            cudf.Decimal64Dtype(scale=1, precision=3),
+            [10, 42, 11, 12],
+            cudf.Series([True, True, False, None], dtype=bool),
+            cudf.Series([True, True, False, None], dtype=bool),
+        ),
+        (
+            operator.ne,
+            ["100.000", "42", "23.999", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            [100, 42, 24, 12],
+            cudf.Series([False, False, True, None], dtype=bool),
+            cudf.Series([False, False, True, None], dtype=bool),
         ),
         (
             operator.lt,
@@ -2331,6 +2509,30 @@ def test_binops_decimal_scalar(args):
             cudf.Scalar(decimal.Decimal("100.123")),
             cudf.Series([True, False, None], dtype=bool),
             cudf.Series([True, False, None], dtype=bool),
+        ),
+        (
+            operator.ne,
+            ["100.00", "41", None],
+            cudf.Decimal64Dtype(scale=2, precision=5),
+            100,
+            cudf.Series([False, True, None], dtype=bool),
+            cudf.Series([False, True, None], dtype=bool),
+        ),
+        (
+            operator.ne,
+            ["100.123", "120.21", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            decimal.Decimal("100.123"),
+            cudf.Series([False, True, None], dtype=bool),
+            cudf.Series([False, True, None], dtype=bool),
+        ),
+        (
+            operator.ne,
+            ["100.123", "41", "120.21", None],
+            cudf.Decimal64Dtype(scale=3, precision=6),
+            cudf.Scalar(decimal.Decimal("100.123")),
+            cudf.Series([False, True, True, None], dtype=bool),
+            cudf.Series([False, True, True, None], dtype=bool),
         ),
         (
             operator.gt,

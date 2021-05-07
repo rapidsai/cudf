@@ -19,12 +19,7 @@ from cudf._lib.types cimport (
 )
 from cudf._lib.types import Interpolation
 
-try:
-    # Numba >= 0.49
-    from numba.np import numpy_support
-except ImportError:
-    # Numba <= 0.49
-    from numba import numpy_support
+from numba.np import numpy_support
 
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.aggregation as libcudf_aggregation
@@ -254,6 +249,20 @@ cdef class Aggregation:
         ))
         return agg
 
+    # scan aggregations
+    # TODO: update this after adding per algorithm aggregation derived types
+    # https://github.com/rapidsai/cudf/issues/7106
+    cumsum = sum
+    cummin = min
+    cummax = max
+
+    @classmethod
+    def cumcount(cls):
+        cdef Aggregation agg = cls()
+        agg.c_obj = move(libcudf_aggregation.make_count_aggregation(
+            libcudf_types.null_policy.INCLUDE
+        ))
+        return agg
 
 cdef Aggregation make_aggregation(op, kwargs=None):
     r"""

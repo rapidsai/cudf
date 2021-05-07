@@ -154,6 +154,20 @@ def is_numerical_dtype(obj):
     return dtype.kind in "biuf"
 
 
+def is_integer_dtype(obj):
+    try:
+        dtype = np.dtype(obj)
+    except TypeError:
+        return pd.api.types.is_integer_dtype(obj)
+    return dtype.kind in "iu"
+
+
+def is_integer(obj):
+    if isinstance(obj, cudf.Scalar):
+        return is_integer_dtype(obj.dtype)
+    return pd.api.types.is_integer(obj)
+
+
 def is_string_dtype(obj):
     return (
         pd.api.types.is_string_dtype(obj)
@@ -274,6 +288,15 @@ def is_decimal_dtype(obj):
         )
         or (hasattr(obj, "dtype") and is_decimal_dtype(obj.dtype))
     )
+
+
+def _decimal_normalize_types(*args):
+    s = max([a.dtype.scale for a in args])
+    lhs = max([a.dtype.precision - a.dtype.scale for a in args])
+    p = min(cudf.Decimal64Dtype.MAX_PRECISION, s + lhs)
+    dtype = cudf.Decimal64Dtype(p, s)
+
+    return [a.astype(dtype) for a in args]
 
 
 def cudf_dtype_from_pydata_dtype(dtype):

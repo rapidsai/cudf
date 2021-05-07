@@ -607,29 +607,6 @@ TEST_F(JoinTest, LeftJoinOnNulls)
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
 }
 
-TEST_F(JoinTest, InnerJoinSizeOverflow)
-{
-  auto zero = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  zero->set_valid(true);
-  static_cast<cudf::scalar_type_t<int32_t> *>(zero.get())->set_value(0);
-
-  // Should cause size overflow, raise exception
-  int32_t left  = 4;
-  int32_t right = 1073741825;
-
-  auto col0_0 = cudf::make_column_from_scalar(*zero, left);
-  auto col1_0 = cudf::make_column_from_scalar(*zero, right);
-
-  CVector cols0, cols1;
-  cols0.push_back(std::move(col0_0));
-  cols1.push_back(std::move(col1_0));
-
-  Table t0(std::move(cols0));
-  Table t1(std::move(cols1));
-
-  EXPECT_THROW(cudf::inner_join(t0, t1, {0}, {0}), cudf::logic_error);
-}
-
 TEST_F(JoinTest, InnerJoinNoNulls)
 {
   column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
@@ -1551,8 +1528,8 @@ TEST_F(JoinTest, FullJoinWithStructsAndNulls)
 
   auto col0_is_human_col = column_wrapper<bool>{{true, true, false, false, false}, {1, 1, 0, 1, 1}};
 
-  auto col0_3 =
-    cudf::test::structs_column_wrapper{{col0_names_col, col0_ages_col, col0_is_human_col}};
+  auto col0_3 = cudf::test::structs_column_wrapper{
+    {col0_names_col, col0_ages_col, col0_is_human_col}, {1, 1, 1, 1, 1}};
 
   column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}, {1, 1, 1, 0, 1}};
   strcol_wrapper col1_1{{"s1", "s0", "s1", "s2", "s1"}};

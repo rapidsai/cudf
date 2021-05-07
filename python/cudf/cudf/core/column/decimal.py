@@ -1,23 +1,23 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 from decimal import Decimal
-from typing import cast, Any, Sequence, Union
+from numbers import Number
+from typing import Any, Sequence, Tuple, Union, cast
 
 import cupy as cp
 import numpy as np
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
-from numbers import Number
 
 import cudf
 from cudf import _lib as libcudf
+from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
-from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._typing import Dtype
 from cudf.core.buffer import Buffer
-from cudf.core.column import ColumnBase, as_column
+from cudf.core.column import ColumnBase, NumericalColumn, as_column
 from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import pa_mask_buffer_to_mask
@@ -83,7 +83,7 @@ class DecimalColumn(ColumnBase):
             result.dtype.precision = _binop_precision(
                 self.dtype, other.dtype, op
             )
-        elif op in ("eq", "lt", "gt", "le", "ge"):
+        elif op in ("eq", "ne", "lt", "gt", "le", "ge"):
             if not isinstance(
                 other,
                 (DecimalColumn, cudf.core.column.NumericalColumn, cudf.Scalar),
@@ -224,10 +224,42 @@ class DecimalColumn(ColumnBase):
 
         Returns a copy with null filled.
         """
+        if isinstance(value, (int, Decimal)):
+            value = cudf.Scalar(value, dtype=self.dtype)
+        elif (
+            isinstance(value, DecimalColumn)
+            or isinstance(value, NumericalColumn)
+            and is_integer_dtype(value.dtype)
+        ):
+            value = value.astype(self.dtype)
+        else:
+            raise TypeError(
+                "Decimal columns only support using fillna with decimal and "
+                "integer values"
+            )
+
         result = libcudf.replace.replace_nulls(
             input_col=self, replacement=value, method=method, dtype=dtype
         )
         return self._copy_type_metadata(result)
+
+    def serialize(self) -> Tuple[dict, list]:
+        header, frames = super().serialize()
+        header["dtype"] = self.dtype.serialize()
+        header["size"] = self.size
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header: dict, frames: list) -> ColumnBase:
+        dtype = cudf.Decimal64Dtype.deserialize(*header["dtype"])
+        header["dtype"] = dtype
+        return super().deserialize(header, frames)
+
+    @property
+    def __cuda_array_interface__(self):
+        raise NotImplementedError(
+            "Decimals are not yet supported via `__cuda_array_interface__`"
+        )
 
 
 def _binop_scale(l_dtype, r_dtype, op):

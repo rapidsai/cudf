@@ -10,7 +10,7 @@ import sys
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from typing import Any, Optional, Set, TypeVar
+from typing import Any, Optional, TypeVar
 
 import cupy
 import numpy as np
@@ -233,7 +233,14 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             else:
                 self._data = data._data
                 self.columns = data.columns
+        elif isinstance(data, (cudf.Series, pd.Series)):
+            if isinstance(data, pd.Series):
+                data = cudf.Series.from_pandas(data)
 
+            name = data.name or 0
+            self._init_from_dict_like(
+                {name: data}, index=index, columns=columns
+            )
         elif data is None:
             if index is None:
                 self._index = RangeIndex(0)
@@ -394,7 +401,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         # If `columns` is passed, the result dataframe
         # contain a dataframe with only the
         # specified `columns` in the same order.
-        if columns:
+        if columns is not None:
             for col_name in columns:
                 if col_name not in self._data:
                     self._data[col_name] = column.column_empty(
@@ -428,38 +435,46 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
             for col_name, col in enumerate(data):
                 self._data[col_name] = column.as_column(col)
-        if columns:
+
+        if columns is not None:
+            if len(columns) != len(data):
+                raise ValueError(
+                    f"Shape of passed values is ({len(index)}, {len(data)}), "
+                    f"indices imply ({len(index)}, {len(columns)})."
+                )
+
             self.columns = columns
 
     def _init_from_dict_like(self, data, index=None, columns=None):
-        data = data.copy()
-        num_rows = 0
-
         if columns is not None:
             # remove all entries in `data` that are
             # not in `columns`
             keys = [key for key in data.keys() if key in columns]
-            data = {key: data[key] for key in keys}
-            extra_cols = [col for col in columns if col not in data.keys()]
+            extra_cols = [col for col in columns if col not in keys]
             if keys:
                 # if keys is non-empty,
                 # add null columns for all values
                 # in `columns` that don't exist in `keys`:
+                data = {key: data[key] for key in keys}
                 data.update({key: None for key in extra_cols})
             else:
-                # if keys is empty,
-                # it means that none of the actual keys in `data`
-                # matches with `columns`.
-                # Hence only assign `data` with `columns` as keys
-                # and their values as empty columns.
+                # If keys is empty, none of the data keys match the columns, so
+                # we need to create an empty DataFrame. To match pandas, the
+                # size of the dataframe must match the provided index, so we
+                # need to return a masked array of nulls if an index is given.
+                row_count = 0 if index is None else len(index)
+                masked = index is not None
                 data = {
-                    key: cudf.core.column.column_empty(row_count=0, dtype=None)
+                    key: cudf.core.column.column_empty(
+                        row_count=row_count, dtype=None, masked=masked,
+                    )
                     for key in extra_cols
                 }
 
         data, index = self._align_input_series_indices(data, index=index)
 
         if index is None:
+            num_rows = 0
             if data:
                 col_name = next(iter(data))
                 if is_scalar(data[col_name]):
@@ -539,6 +554,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         return data, index
 
+    # The `constructor*` properties are used by `dask` (and `dask_cudf`)
     @property
     def _constructor(self):
         return DataFrame
@@ -1441,7 +1457,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     new_data, index=self.index, name=labels
                 )
                 return out
-        out = self._constructor()._from_data(
+        out = self.__class__()._from_data(
             new_data, index=self.index, columns=new_data.to_pandas_index()
         )
         return out
@@ -1466,7 +1482,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 result[col] = getattr(self[col], fn)(other[k])
         elif isinstance(other, DataFrame):
             if fn in cudf.utils.utils._EQUALITY_OPS:
-                if not self.index.equals(other.index):
+                if not self.columns.equals(
+                    other.columns
+                ) or not self.index.equals(other.index):
                     raise ValueError(
                         "Can only compare identically-labeled "
                         "DataFrame objects"
@@ -3140,20 +3158,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         out = self._gather(positions, keep_index=keep_index)
         out.columns = self.columns
         return out
-
-    def __copy__(self):
-        return self.copy(deep=True)
-
-    def __deepcopy__(self, memo=None):
-        """
-        Parameters
-        ----------
-        memo, default None
-            Standard signature. Unused
-        """
-        if memo is None:
-            memo = {}
-        return self.copy(deep=True)
 
     @annotate("INSERT", color="green", domain="cudf_python")
     def insert(self, loc, name, value):
@@ -7752,8 +7756,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         return super()._explode(column, ignore_index)
 
-    _accessors = set()  # type: Set[Any]
-
 
 def from_pandas(obj, nan_as_null=None):
     """
@@ -7945,7 +7947,7 @@ def _setitem_with_dataframe(
             "Number of Input Columns must be same replacement Dataframe"
         )
 
-    if not input_df.index.equals(replace_df.index):
+    if len(input_df) != 0 and not input_df.index.equals(replace_df.index):
         replace_df = replace_df.reindex(input_df.index)
 
     for col_1, col_2 in zip(input_cols, replace_df.columns):
