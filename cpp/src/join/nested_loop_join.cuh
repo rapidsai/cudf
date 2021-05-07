@@ -28,6 +28,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <iostream>
 
@@ -47,11 +48,13 @@ namespace detail {
  *
  * @return An estimate of the size of the output of the join operation
  */
-size_type estimate_nested_loop_join_output_size(table_device_view left,
-                                                table_device_view right,
-                                                join_kind JoinKind,
-                                                null_equality compare_nulls,
-                                                rmm::cuda_stream_view stream)
+size_type estimate_nested_loop_join_output_size(
+  table_device_view left,
+  table_device_view right,
+  join_kind JoinKind,
+  null_equality compare_nulls,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   const size_type left_num_rows{left.num_rows()};
   const size_type right_num_rows{right.num_rows()};
@@ -73,7 +76,7 @@ size_type estimate_nested_loop_join_output_size(table_device_view left,
 
   // Allocate storage for the counter used to get the size of the join output
   size_type h_size_estimate{0};
-  rmm::device_scalar<size_type> size_estimate(0, stream);
+  rmm::device_scalar<size_type> size_estimate(0, stream, mr);
 
   CHECK_CUDA(stream.value());
 
@@ -214,15 +217,14 @@ get_base_nested_loop_predicate_join_indices(table_view const& left,
                                             join_kind JoinKind,
                                             ast::expression expression,
                                             null_equality compare_nulls,
-                                            rmm::cuda_stream_view stream  //,
-                                            // rmm::mr::device_memory_resource* mr
-)
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr)
 {
   // The `right` table is always used for the inner loop. We want to use the smaller table
   // for the inner loop. Thus, if `left` is smaller than `right`, swap `left/right`.
   if ((JoinKind == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
     return get_base_nested_loop_predicate_join_indices(
-      right, left, true, JoinKind, expression, compare_nulls, stream);
+      right, left, true, JoinKind, expression, compare_nulls, stream, mr);
   }
   // Trivial left join case - exit early
   if ((JoinKind == join_kind::LEFT_JOIN) && (right.num_rows() == 0)) {
@@ -233,12 +235,12 @@ get_base_nested_loop_predicate_join_indices(table_view const& left,
   auto right_table = table_device_view::create(right, stream);
 
   size_type estimated_size = estimate_nested_loop_join_output_size(
-    *left_table, *right_table, JoinKind, compare_nulls, stream);
+    *left_table, *right_table, JoinKind, compare_nulls, stream, mr);
 
   // If the estimated output size is zero, return immediately
   if (estimated_size == 0) {
-    return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream),
-                          std::make_unique<rmm::device_uvector<size_type>>(0, stream));
+    return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
+                          std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
   // Because we are approximating the number of joined elements, our approximation
@@ -248,8 +250,8 @@ get_base_nested_loop_predicate_join_indices(table_view const& left,
   rmm::device_scalar<size_type> write_index(0, stream);
   size_type join_size{0};
 
-  auto left_indices           = std::make_unique<rmm::device_uvector<size_type>>(0, stream);
-  auto right_indices          = std::make_unique<rmm::device_uvector<size_type>>(0, stream);
+  auto left_indices           = std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
+  auto right_indices          = std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
   auto current_estimated_size = estimated_size;
   do {
     left_indices->resize(estimated_size, stream);
