@@ -2,6 +2,8 @@
 
 import pandas as pd
 
+import cudf
+
 from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr, shared_ptr, make_shared
 from libcpp.vector cimport vector
@@ -739,14 +741,38 @@ def segmented_gather(Column source_column, Column gather_map):
     return result
 
 
-cdef cpp_copying.packed_columns pack(Table input_table) except +:
-    return move(cpp_copying.pack(input_table.data_view()))
+cdef class PackedColumns:
+
+    @staticmethod
+    cdef PackedColumns from_table(Table input_table, keep_index=False):
+        """
+        Construct a PackedColumns object from a cudf::Table.
+        """
+        cdef PackedColumns p = PackedColumns.__new__(PackedColumns)
+
+        if keep_index:
+            input_table_view = input_table.view()
+            p.index_names = input_table._index_names
+        else:
+            input_table_view = input_table.data_view()
+
+        p.data = move(cpp_copying.pack(input_table_view))
+        p.column_names = input_table._column_names
+
+        return p
+
+    cdef Table unpack(self):
+        return Table.from_table_view(
+            cpp_copying.unpack(self.data),
+            self,
+            self.column_names,
+            self.index_names
+        )
 
 
-cdef Table unpack(cpp_copying.packed_columns input_columns,
-                  object column_names) except +:
-    return Table.from_table_view(
-        cpp_copying.unpack(input_columns),
-        DeviceBuffer.c_from_unique_ptr(move(input_columns.gpu_data)),
-        column_names
-    )
+def pack(Table input_table, keep_index=False):
+    return PackedColumns.from_table(input_table, keep_index)
+
+
+def unpack(PackedColumns packed):
+    return cudf.DataFrame._from_table(packed.unpack())
