@@ -144,32 +144,6 @@ struct copy_if_else_functor_impl<string_view> {
 };
 
 /**
- * @brief Failure-case for scatter_gather_based_if_else(), for scalar input
- *
- * For nested types types, scatter/gather based copy_if_else() is not currently supported
- * if either `lhs` or `rhs` is a scalar, partially because:
- *   1. Struct scalars are not yet available.
- *   2. List scalars do not yet support explosion to a full column.
- *
- * TODO: Using `if constexpr` to collapse this with its other overload
- *       causes `missing return statement` warnings. Find way around this.
- */
-template <typename Left,
-          typename Right,
-          typename Filter,
-          CUDF_ENABLE_IF(std::is_same<Left, cudf::scalar>::value ||
-                         std::is_same<Right, cudf::scalar>::value)>
-std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
-                                                     Right const& rhs,
-                                                     size_type size,
-                                                     Filter is_left,
-                                                     rmm::cuda_stream_view stream,
-                                                     rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FAIL("Scalars of nested types are not currently supported!");
-}
-
-/**
  * @brief Functor to generate gather-map for LHS column
  *
  * If specified `Predicate` evaluates to `true` for index `i`,
@@ -211,11 +185,7 @@ class logical_not {
  *
  * Currently supports only nested-type column_views. Scalars are not supported.
  */
-template <typename Left,
-          typename Right,
-          typename Filter,
-          CUDF_ENABLE_IF(not std::is_same<Left, cudf::scalar>::value &&
-                         not std::is_same<Right, cudf::scalar>::value)>
+template <typename Left, typename Right, typename Filter>
 std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
                                                      Right const& rhs,
                                                      size_type size,
@@ -223,43 +193,54 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
                                                      rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource* mr)
 {
-  auto null_map_entry = size + 1;  // Out of bounds index, for gather() to nullify.
+  if constexpr (std::is_same<Left, cudf::column_view>::value &&
+                std::is_same<Right, cudf::column_view>::value) {
+    auto null_map_entry = size + 1;  // Out of bounds index, for gather() to nullify.
 
-  auto gather_lhs = make_counting_transform_iterator(
-    size_type{0}, lhs_gather_map_functor<Filter>{is_left, null_map_entry});
+    auto gather_lhs = make_counting_transform_iterator(
+      size_type{0}, lhs_gather_map_functor<Filter>{is_left, null_map_entry});
 
-  auto lhs_gathered_columns = cudf::detail::gather(table_view{std::vector<cudf::column_view>{lhs}},
-                                                   gather_lhs,
-                                                   gather_lhs + size,
-                                                   out_of_bounds_policy::NULLIFY,
-                                                   stream,
-                                                   mr)
-                                ->release();
-  auto& lhs_partial_output = lhs_gathered_columns[0];
+    auto lhs_gathered_columns =
+      cudf::detail::gather(table_view{std::vector<cudf::column_view>{lhs}},
+                           gather_lhs,
+                           gather_lhs + size,
+                           out_of_bounds_policy::NULLIFY,
+                           stream,
+                           mr)
+        ->release();
+    auto& lhs_partial_output = lhs_gathered_columns[0];
 
-  auto scatter_map_rhs = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
-  auto scatter_map_end = thrust::copy_if(rmm::exec_policy(stream),
-                                         thrust::make_counting_iterator(size_type{0}),
-                                         thrust::make_counting_iterator(size_type{size}),
-                                         scatter_map_rhs.begin(),
-                                         logical_not{is_left});
+    auto scatter_map_rhs = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
+    auto scatter_map_end = thrust::copy_if(rmm::exec_policy(stream),
+                                           thrust::make_counting_iterator(size_type{0}),
+                                           thrust::make_counting_iterator(size_type{size}),
+                                           scatter_map_rhs.begin(),
+                                           logical_not{is_left});
 
-  auto scatter_src_rhs = cudf::detail::gather(table_view{std::vector<column_view>{rhs}},
-                                              scatter_map_rhs.begin(),
-                                              scatter_map_end,
-                                              out_of_bounds_policy::DONT_CHECK,
-                                              stream);
+    auto scatter_src_rhs = cudf::detail::gather(table_view{std::vector<column_view>{rhs}},
+                                                scatter_map_rhs.begin(),
+                                                scatter_map_end,
+                                                out_of_bounds_policy::DONT_CHECK,
+                                                stream);
 
-  auto result = cudf::detail::scatter(
-    table_view{std::vector<column_view>{scatter_src_rhs->release()[0]->view()}},
-    scatter_map_rhs.begin(),
-    scatter_map_end,
-    table_view{std::vector<column_view>{lhs_partial_output->view()}},
-    false,
-    stream,
-    mr);
+    auto result = cudf::detail::scatter(
+      table_view{std::vector<column_view>{scatter_src_rhs->release()[0]->view()}},
+      scatter_map_rhs.begin(),
+      scatter_map_end,
+      table_view{std::vector<column_view>{lhs_partial_output->view()}},
+      false,
+      stream,
+      mr);
 
-  return std::move(result->release()[0]);
+    return std::move(result->release()[0]);
+  }
+
+  // Bail out for Scalars.
+  // For nested types types, scatter/gather based copy_if_else() is not currently supported
+  // if either `lhs` or `rhs` is a scalar, partially because:
+  //   1. Struct scalars are not yet available.
+  //   2. List scalars do not yet support explosion to a full column.
+  CUDF_FAIL("Scalars of nested types are not currently supported!");
 }
 
 /**
