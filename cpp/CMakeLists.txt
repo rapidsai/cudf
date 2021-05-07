@@ -278,6 +278,7 @@ add_library(cudf
     src/lists/lists_column_factories.cu
     src/lists/lists_column_view.cu
     src/lists/segmented_sort.cu
+    src/lists/column_factories.cu
     src/merge/merge.cu
     src/partitioning/partitioning.cu
     src/partitioning/round_robin.cu
