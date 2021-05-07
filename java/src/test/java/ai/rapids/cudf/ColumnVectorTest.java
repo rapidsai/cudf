@@ -1965,81 +1965,80 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testStringConcat() {
     try (ColumnVector v = ColumnVector.fromStrings("a", "B", "cd", "\u0480\u0481", "E\tf",
-                                                   "g\nH", "IJ\"\u0100\u0101\u0500\u0501",
-                                                   "kl m", "Nop1", "\\qRs2", "3tuV\'",
-                                                   "wX4Yz", "\ud720\ud721");
+        "g\nH", "IJ\"\u0100\u0101\u0500\u0501",
+        "kl m", "Nop1", "\\qRs2", "3tuV\'",
+        "wX4Yz", "\ud720\ud721");
          ColumnVector e_concat = ColumnVector.fromStrings("aa", "BB", "cdcd",
-                                                   "\u0480\u0481\u0480\u0481", "E\tfE\tf", "g\nHg\nH",
-                                                   "IJ\"\u0100\u0101\u0500\u0501IJ\"\u0100\u0101\u0500\u0501",
-                                                   "kl mkl m", "Nop1Nop1", "\\qRs2\\qRs2", "3tuV\'3tuV\'",
-                                                   "wX4YzwX4Yz", "\ud720\ud721\ud720\ud721");
+             "\u0480\u0481\u0480\u0481", "E\tfE\tf", "g\nHg\nH",
+             "IJ\"\u0100\u0101\u0500\u0501IJ\"\u0100\u0101\u0500\u0501",
+             "kl mkl m", "Nop1Nop1", "\\qRs2\\qRs2", "3tuV\'3tuV\'",
+             "wX4YzwX4Yz", "\ud720\ud721\ud720\ud721");
          Scalar emptyString = Scalar.fromString("");
-         ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString,
-                                                              new ColumnVector[]{v, v})) {
+         ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString, v, v)) {
       assertColumnsAreEqual(concat, e_concat);
     }
-    assertThrows(AssertionError.class, () -> {
+    assertThrows(CudfException.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("B", "cd", "\u0480\u0481", "E\tf");
            ColumnVector cv = ColumnVector.fromInts(1, 2, 3, 4);
            Scalar emptyString = Scalar.fromString("");
-           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString,
-                                                                new ColumnVector[]{sv, cv})) {}
+           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString, sv, cv)) {
+      }
     });
-    assertThrows(AssertionError.class, () -> {
+    assertThrows(CudfException.class, () -> {
       try (ColumnVector sv1 = ColumnVector.fromStrings("a", "B", "cd");
            ColumnVector sv2 = ColumnVector.fromStrings("a", "B");
            Scalar emptyString = Scalar.fromString("");
            ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString,
-                                                                new ColumnVector[]{sv1, sv2})) {}
+               new ColumnVector[]{sv1, sv2})) {
+      }
     });
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
            Scalar emptyString = Scalar.fromString("");
-           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString,
-                                                                new ColumnVector[]{sv})) {}
+           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString, sv)) {
+      }
     });
     assertThrows(CudfException.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
            Scalar emptyString = Scalar.fromString("");
            Scalar nullString = Scalar.fromString(null);
-           ColumnVector concat = ColumnVector.stringConcatenate(nullString, emptyString,
-                                                                new ColumnVector[]{sv, sv})) {}
+           ColumnVector concat = ColumnVector.stringConcatenate(nullString, emptyString, sv, sv)) {
+      }
     });
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
            Scalar emptyString = Scalar.fromString("");
-           ColumnVector concat = ColumnVector.stringConcatenate(null, emptyString,
-                                                                new ColumnVector[]{sv, sv})) {}
+           ColumnVector concat = ColumnVector.stringConcatenate(null, emptyString, sv, sv)) {
+      }
     });
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
            Scalar emptyString = Scalar.fromString("");
-           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, null,
-                                                                new ColumnVector[]{sv, sv})) {}
+           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, null, sv, sv)) {
+      }
     });
     assertThrows(AssertionError.class, () -> {
       try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
            Scalar emptyString = Scalar.fromString("");
-           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString,
-                                                                new ColumnVector[]{sv, null})) {}
+           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString, sv, null)) {
+      }
     });
   }
 
   @Test
   void testStringConcatWithNulls() {
     try (ColumnVector v = ColumnVector.fromStrings("a", "B", "cd", "\u0480\u0481", "E\tf",
-                                                   "g\nH", "IJ\"\u0100\u0101\u0500\u0501",
-                                                   "kl m", "Nop1", "\\qRs2", null,
-                                                   "3tuV\'", "wX4Yz", "\ud720\ud721");
+        "g\nH", "IJ\"\u0100\u0101\u0500\u0501",
+        "kl m", "Nop1", "\\qRs2", null,
+        "3tuV\'", "wX4Yz", "\ud720\ud721");
          ColumnVector e_concat = ColumnVector.fromStrings("aa", "BB", "cdcd",
-                                                   "\u0480\u0481\u0480\u0481", "E\tfE\tf", "g\nHg\nH",
-                                                   "IJ\"\u0100\u0101\u0500\u0501IJ\"\u0100\u0101\u0500\u0501",
-                                                   "kl mkl m", "Nop1Nop1", "\\qRs2\\qRs2", "NULLNULL",
-                                                   "3tuV\'3tuV\'", "wX4YzwX4Yz", "\ud720\ud721\ud720\ud721");
-          Scalar emptyString = Scalar.fromString("");
-          Scalar nullSubstitute = Scalar.fromString("NULL");
-         ColumnVector concat = ColumnVector.stringConcatenate(emptyString, nullSubstitute,
-                                                              new ColumnVector[]{v, v})) {
+             "\u0480\u0481\u0480\u0481", "E\tfE\tf", "g\nHg\nH",
+             "IJ\"\u0100\u0101\u0500\u0501IJ\"\u0100\u0101\u0500\u0501",
+             "kl mkl m", "Nop1Nop1", "\\qRs2\\qRs2", "NULLNULL",
+             "3tuV\'3tuV\'", "wX4YzwX4Yz", "\ud720\ud721\ud720\ud721");
+         Scalar emptyString = Scalar.fromString("");
+         Scalar nullSubstitute = Scalar.fromString("NULL");
+         ColumnVector concat = ColumnVector.stringConcatenate(emptyString, nullSubstitute, v, v)) {
       assertColumnsAreEqual(concat, e_concat);
     }
   }
@@ -2049,11 +2048,10 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector sv1 = ColumnVector.fromStrings("a", "B", "cd", "\u0480\u0481", "E\tf", null, null, "\\G\u0100");
          ColumnVector sv2 = ColumnVector.fromStrings("b", "C", "\u0500\u0501", "x\nYz", null, null, "", null);
          ColumnVector e_concat = ColumnVector.fromStrings("aA1\t\ud721b", "BA1\t\ud721C", "cdA1\t\ud721\u0500\u0501",
-                                                          "\u0480\u0481A1\t\ud721x\nYz", null, null, null, null);
+             "\u0480\u0481A1\t\ud721x\nYz", null, null, null, null);
          Scalar separatorString = Scalar.fromString("A1\t\ud721");
          Scalar nullString = Scalar.fromString(null);
-         ColumnVector concat = ColumnVector.stringConcatenate(separatorString, nullString,
-                                                              new ColumnVector[]{sv1, sv2})) {
+         ColumnVector concat = ColumnVector.stringConcatenate(separatorString, nullString, sv1, sv2)) {
       assertColumnsAreEqual(concat, e_concat);
     }
   }
@@ -2107,43 +2105,43 @@ public class ColumnVectorTest extends CudfTestBase {
     }
 
     assertThrows(AssertionError.class, () -> {
-      try (ColumnVector cv = ColumnVector.fromInts(1, 2, 3);
-           ColumnVector result = ColumnVector.listConcatenateByRow(cv, cv)) {
-      }
-    }, "All columns must be of type list");
-
-    assertThrows(AssertionError.class, () -> {
       try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
           new HostColumnVector.BasicType(true, DType.INT32)), Arrays.asList(1, 2, 3));
            ColumnVector result = ColumnVector.listConcatenateByRow(cv)) {
       }
-    }, "listConcatenateByRow requires at least 2 columns");
+    });
 
-    assertThrows(AssertionError.class, () -> {
+    assertThrows(CudfException.class, () -> {
+      try (ColumnVector cv = ColumnVector.fromInts(1, 2, 3);
+           ColumnVector result = ColumnVector.listConcatenateByRow(cv, cv)) {
+      }
+    });
+
+    assertThrows(CudfException.class, () -> {
       try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
           new HostColumnVector.ListType(true,
               new HostColumnVector.BasicType(true, DType.INT32))), Arrays.asList(Arrays.asList(1)));
            ColumnVector result = ColumnVector.listConcatenateByRow(cv, cv)) {
       }
-    }, "listConcatenateByRow only supports lists with depth 1");
+    });
 
-    assertThrows(AssertionError.class, () -> {
+    assertThrows(CudfException.class, () -> {
       try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
           new HostColumnVector.BasicType(true, DType.INT32)), Arrays.asList(1, 2, 3));
            ColumnVector cv2 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
                new HostColumnVector.BasicType(true, DType.INT32)), Arrays.asList(1, 2), Arrays.asList(3));
            ColumnVector result = ColumnVector.listConcatenateByRow(cv1, cv2)) {
       }
-    }, "Row count mismatch");
+    });
 
-    assertThrows(AssertionError.class, () -> {
+    assertThrows(CudfException.class, () -> {
       try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
           new HostColumnVector.BasicType(true, DType.INT32)), Arrays.asList(1, 2, 3));
            ColumnVector cv2 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
                new HostColumnVector.BasicType(true, DType.INT64)), Arrays.asList(1L));
            ColumnVector result = ColumnVector.listConcatenateByRow(cv1, cv2)) {
       }
-    }, "Element type mismatch");
+    });
   }
 
   @Test
