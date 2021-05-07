@@ -16,22 +16,26 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/gather.cuh>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/sorting.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/detail/interleave_columns.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/detail/utilities.cuh>
+#include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/logical.h>
 #include <thrust/transform.h>
-#include <thrust/transform_reduce.h>
+#include <thrust/unique.h>
 
 namespace cudf {
 namespace lists {
@@ -387,20 +391,66 @@ std::unique_ptr<column> concatenate_with_nullifying_rows(table_view const& input
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> concatenate_by_key(column_view const& keys,
-                                           column_view const& values,
-                                           concatenate_null_policy null_policy,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> concatenate_by_key(
+  column_view const& keys,
+  column_view const& lists_column,
+  concatenate_null_policy null_policy,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(values.type().id() == type_id::LIST,
-               "The input values column must be of lists column type.");
-  CUDF_EXPECTS(not cudf::is_nested(lists_column_view(values).child().type()),
+  CUDF_EXPECTS(lists_column.type().id() == type_id::LIST,
+               "The input lists_column column must be of lists column type.");
+  CUDF_EXPECTS(not cudf::is_nested(lists_column_view(lists_column).child().type()),
                "Nested types are not supported.");
-  CUDF_EXPECTS(keys.size() == values.size(), "Keys and values columns must have the same size.");
+  CUDF_EXPECTS(keys.size() == lists_column.size(),
+               "Keys and lists_column must have the same size.");
 
-  if (keys.size() == 0) { return cudf::empty_like(values); }
-  return cudf::empty_like(values);
+  auto const num_rows = keys.size();
+  if (num_rows == 0) { return {cudf::empty_like(keys), cudf::empty_like(lists_column)}; }
+
+  // Firstly, generate a sort order when calling sort_by_key the lists using keys column as keys.
+  auto const sorted_order = cudf::detail::sorted_order(table_view{{keys}},
+                                                       {order::ASCENDING},
+                                                       {null_order::BEFORE},
+                                                       stream,
+                                                       rmm::mr::get_current_device_resource());
+  auto const order_begin  = sorted_order->view().template begin<size_type>();
+  auto const nullable     = lists_column.nullable();
+
+  merge_lists_by_key();
+
+  // Vector to copy the sorted order of the keys without duplicates.
+  rmm::device_uvector<size_type> unique_key_orders(num_rows, stream);
+  auto const unique_key_end = [&] {
+    auto const d_keys = column_device_view::create(keys);
+    if (nullable) {
+      auto const comp = element_equality_comparator<true>{*d_keys, *d_keys};
+      return thrust::unique_copy(rmm::exec_policy(stream),
+                                 order_begin,
+                                 order_begin + num_rows,
+                                 unique_key_orders.begin(),
+                                 comp);
+    } else {
+      auto const comp = element_equality_comparator<false>{*d_keys, *d_keys};
+      return thrust::unique_copy(rmm::exec_policy(stream),
+                                 order_begin,
+                                 order_begin + num_rows,
+                                 unique_key_orders.begin(),
+                                 comp);
+    }
+  }();
+  auto const num_unique_keys =
+    static_cast<size_type>(thrust::distance(unique_key_orders.begin(), unique_key_end));
+
+  // Copy the unique keys for output.
+  auto output_keys = cudf::detail::gather(table_view{{keys}},
+                                          unique_key_orders.begin(),
+                                          unique_key_orders.begin() + num_unique_keys,
+                                          cudf::out_of_bounds_policy::DONT_CHECK,
+                                          stream,
+                                          mr);
+
+  return {std::move(output_keys, output_lists)};
   // List concatenation can be implemented by simply interleaving the lists columns, then modify the
   // list offsets.
   //  auto const has_null_mask = std::any_of(
@@ -416,16 +466,14 @@ std::unique_ptr<column> concatenate_by_key(column_view const& keys,
 
 }  // namespace detail
 
-/**
- * @copydoc cudf::lists::concatenate_by_key
- */
-std::unique_ptr<column> concatenate_by_key(column_view const& keys,
-                                           column_view const& values,
-                                           concatenate_null_policy null_policy,
-                                           rmm::mr::device_memory_resource* mr)
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> concatenate_by_key(
+  column_view const& keys,
+  column_view const& lists_column,
+  concatenate_null_policy null_policy,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate_by_key(keys, values, null_policy, rmm::cuda_stream_default, mr);
+  return detail::concatenate_by_key(keys, lists_column, null_policy, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace lists
