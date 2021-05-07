@@ -30,19 +30,23 @@ class Masked(object):
 
 
 class MaskedType(types.Type):
-    def __init__(self): # add `value`
+    def __init__(self, value): # add `value`
+        self.value = value
         super().__init__(name="Masked")
+    
+    def __repr__(self):
+        return f"MaskedType({self.value})"
 
 class NAType(types.Type):
     def __init__(self):
         super().__init__(name="NA")
 
-numba_masked = MaskedType()  # name this something more natural - GM
+numba_masked = MaskedType(types.int64)  # name this something more natural - GM
 numba_na = NAType()
 
 @typeof_impl.register(Masked)
 def typeof_masked(val, c):
-    return numba_masked
+    return Masked(val.value)
 
 @typeof_impl.register(_NAType)
 def typeof_na(val, c):
@@ -54,7 +58,7 @@ def type_masked(context):
         if isinstance(value, types.Integer) and isinstance(
             valid, types.Boolean
         ):
-            return numba_masked
+            return  Masked(value)
 
     return typer
 
@@ -91,14 +95,14 @@ class MaskedScalarAdd(AbstractTemplate):
         if isinstance(args[0], MaskedType) and isinstance(args[1], MaskedType):
             # result type: f(args[0], args[1], op) where f is numba's typing for self.key
             # self.key -> operator being used
-            return nb_signature(numba_masked, numba_masked, numba_masked)
+            return nb_signature(numba_masked, MaskedType(args[0].value), MaskedType(args[1].value))
 
 
 @cuda_registry.register_global(operator.add)
 class MaskedScalarAddNull(AbstractTemplate):
     def generic(self, args, kws):
         if isinstance(args[0], MaskedType) and isinstance(args[1], NAType):
-            return nb_signature(numba_masked, numba_masked, numba_na)
+            return nb_signature(MaskedType(args[0].value), MaskedType(args[0].value), numba_na)
 
 @cuda_lower(operator.add, MaskedType, MaskedType)
 def masked_scalar_add_impl(context, builder, sig, args):
@@ -127,9 +131,9 @@ def masked_scalar_add_impl(context, builder, sig, args):
 
 @cuda_lower(operator.add, MaskedType, NAType)
 def masked_scalar_add_na_impl(context, builder, sig, args):
-#    return_type = sig.return_type
+    return_type = sig.return_type
     # use context to get llvm type for a bool
-    result = cgutils.create_struct_proxy(numba_masked)(context, builder)
+    result = cgutils.create_struct_proxy(MaskedType(return_type.value))(context, builder)
     result.valid = context.get_constant(types.boolean, 0)
     return result._getvalue()
 
@@ -142,14 +146,15 @@ def constant_dummy(context, builder, ty, pyval):
 class MaskedScalarAddConstant(AbstractTemplate):
     def generic(self, args, kws):
         if isinstance(args[0], MaskedType) and isinstance(args[1], types.Integer):
-            return nb_signature(numba_masked, numba_masked, types.int64)
+            # TODO - need to get the result type of args[0].value and args[1]
+            return nb_signature(MaskedType(args[0].value), MaskedType(args[0].value), types.int64)
 
 @cuda_lower(operator.add, MaskedType, types.Integer)
 def masked_scalar_add_constant_impl(context, builder, sig, input_values):
     masked_type, const_type = sig.args
 
-    indata = cgutils.create_struct_proxy(masked_type)(context, builder, value=input_values[0])
-    result = cgutils.create_struct_proxy(numba_masked)(context, builder)
+    indata = cgutils.create_struct_proxy(MaskedType(masked_type.value))(context, builder, value=input_values[0])
+    result = cgutils.create_struct_proxy(MaskedType(masked_type.value))(context, builder)
     #to_add_const = context.get_constant(const_type, input_values[1])
 
     result.valid = context.get_constant(types.boolean, 0)
@@ -159,15 +164,6 @@ def masked_scalar_add_constant_impl(context, builder, sig, input_values):
 
     return result._getvalue()
 
-
-
-@cuda.jit(numba_masked(numba_masked, numba_masked), device=True)
-def masked_add_py(m1, m2):
-    return m1 + m2
-
-
-def masked_add_py_2(m1, m2):
-    return m1 + m2
 
 def compile_udf(func):
     n_params = len(py_signature(func).parameters)
