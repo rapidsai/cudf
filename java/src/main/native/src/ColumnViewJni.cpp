@@ -38,7 +38,6 @@
 #include <cudf/strings/attributes.hpp>
 #include <cudf/strings/capitalize.hpp>
 #include <cudf/strings/case.hpp>
-#include <cudf/strings/combine.hpp>
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/convert/convert_booleans.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
@@ -1021,29 +1020,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_containsRe(JNIEnv *env, j
 
     std::unique_ptr<cudf::column> result =
         cudf::strings::contains_re(strings_column, pattern.get());
-    return reinterpret_cast<jlong>(result.release());
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringConcatenation(
-    JNIEnv *env, jobject j_object, jlongArray column_handles, jlong separator, jlong narep) {
-  JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
-  JNI_NULL_CHECK(env, separator, "separator string scalar object is null", 0);
-  JNI_NULL_CHECK(env, narep, "narep string scalar object is null", 0);
-  try {
-    cudf::jni::auto_set_device(env);
-    cudf::string_scalar *separator_scalar = reinterpret_cast<cudf::string_scalar *>(separator);
-    cudf::string_scalar *narep_scalar = reinterpret_cast<cudf::string_scalar *>(narep);
-    cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
-    std::vector<cudf::column_view> column_views;
-    std::transform(n_cudf_columns.data(), n_cudf_columns.data() + n_cudf_columns.size(),
-                   std::back_inserter(column_views),
-                   [](auto const &p_column) { return *p_column; });
-    cudf::table_view *string_columns = new cudf::table_view(column_views);
-
-    std::unique_ptr<cudf::column> result =
-        cudf::strings::concatenate(*string_columns, *separator_scalar, *narep_scalar);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

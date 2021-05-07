@@ -1052,7 +1052,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
  *                               PrecedingWindowIterator preceding_window_begin,
  *                               FollowingWindowIterator following_window_begin,
  *                               size_type min_periods,
- *                               aggregation const& agg,
+ *                               rolling_aggregation const& agg,
  *                               rmm::mr::device_memory_resource* mr)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
