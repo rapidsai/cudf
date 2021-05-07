@@ -597,6 +597,10 @@ class GroupBy(Serializable):
 
         return self.agg(func)
 
+    def describe(self):
+        """Return descriptive stats of the values in each group"""
+        pass
+
     def sum(self):
         """Compute the column-wise sum of the values in each group."""
         return self.agg("sum")
