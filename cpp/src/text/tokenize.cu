@@ -181,7 +181,6 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   // To minimize memory, count the number of characters so we can
   // build the output offsets without an intermediate buffer.
   // In the worst case each byte is a character so the output is 4x the input.
-  auto strings_view = cudf::column_device_view::create(strings_column.parent(), stream);
   cudf::size_type num_characters = thrust::count_if(
     rmm::exec_policy(stream), d_chars, d_chars + chars_bytes, [] __device__(uint8_t byte) {
       return cudf::strings::detail::is_begin_utf8_char(byte);
