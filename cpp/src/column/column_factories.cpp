@@ -223,7 +223,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::list
   rmm::mr::device_memory_resource* mr) const
 {
   auto lv = static_cast<list_scalar const*>(&value);
-  return lists::make_lists_column_from_scalar(*lv, size, stream, mr);
+  return lists::detail::make_lists_column_from_scalar(*lv, size, stream, mr);
 }
 
 template <>
