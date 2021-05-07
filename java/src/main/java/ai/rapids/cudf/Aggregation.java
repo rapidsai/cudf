@@ -66,30 +66,6 @@ public abstract class Aggregation {
         Kind(int nativeId) {this.nativeId = nativeId;}
     }
 
-    /*
-     * This is analogous to the native 'null_equality'.
-     */
-    public enum NullEquality {
-        UNEQUAL(false),
-        EQUAL(true);
-
-        NullEquality(boolean nullsEqual) { this.nullsEqual = nullsEqual; }
-
-        final boolean nullsEqual;
-    }
-
-    /*
-     * This is analogous to the native 'nan_equality'.
-     */
-    public enum NaNEquality {
-        UNEQUAL(false),
-        ALL_EQUAL(true);
-
-        NaNEquality(boolean nansEqual) { this.nansEqual = nansEqual; }
-
-        final boolean nansEqual;
-    }
-
     /**
      * An Aggregation that only needs a kind and nothing else.
      */
@@ -673,18 +649,6 @@ public abstract class Aggregation {
 
     /**
      * Number of unique elements.
-     * (This is deprecated, use {@link Aggregation#nunique(NullPolicy nullPolicy)} instead)
-     * @param includeNulls true if nulls should be counted else false. If nulls are counted they
-     *                     compare as equal so multiple null values in a range would all only
-     *                     increase the count by 1.
-     */
-    @Deprecated
-    public static NuniqueAggregation nunique(boolean includeNulls) {
-        return nunique(includeNulls ? NullPolicy.INCLUDE : NullPolicy.EXCLUDE);
-    }
-
-    /**
-     * Number of unique elements.
      * @param nullPolicy INCLUDE if nulls should be counted else EXCLUDE. If nulls are counted they
      *                   compare as equal so multiple null values in a range would all only
      *                   increase the count by 1.
@@ -700,19 +664,6 @@ public abstract class Aggregation {
      */
     public static NthAggregation nth(int offset) {
         return nth(offset, NullPolicy.INCLUDE);
-    }
-
-    /**
-     * Get the nth element in a group.
-     * (This is deprecated, use {@link Aggregation#nth(int offset, NullPolicy nullPolicy)} instead)
-     * @param offset the offset to look at. Negative numbers go from the end of the group. Any
-     *               value outside of the group range results in a null.
-     * @param includeNulls true if nulls should be included in the aggregation or false if they
-     *                     should be skipped.
-     */
-    @Deprecated
-    public static NthAggregation nth(int offset, boolean includeNulls) {
-        return nth(offset, includeNulls ? NullPolicy.INCLUDE : NullPolicy.EXCLUDE);
     }
 
     /**
@@ -738,26 +689,6 @@ public abstract class Aggregation {
      */
     public static RowNumberAggregation rowNumber() {
         return new RowNumberAggregation();
-    }
-
-    /**
-     * Collect the values into a list. Nulls will be skipped.
-     * @deprecated please use collectList as instead.
-     */
-    @Deprecated
-    public static CollectListAggregation collect() {
-        return collect(NullPolicy.EXCLUDE);
-    }
-
-    /**
-     * Collect the values into a list.
-     * @deprecated please use collectList as instead.
-     *
-     * @param nullPolicy Indicates whether to include/exclude nulls during collection.
-     */
-    @Deprecated
-    public static CollectListAggregation collect(NullPolicy nullPolicy) {
-        return collectList(nullPolicy);
     }
 
     /**
