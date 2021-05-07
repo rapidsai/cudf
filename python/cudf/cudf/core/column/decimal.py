@@ -17,7 +17,7 @@ from cudf._lib.strings.convert.convert_fixed_point import (
 )
 from cudf._typing import Dtype
 from cudf.core.buffer import Buffer
-from cudf.core.column import ColumnBase, as_column
+from cudf.core.column import ColumnBase, NumericalColumn, as_column
 from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import pa_mask_buffer_to_mask
@@ -224,6 +224,20 @@ class DecimalColumn(ColumnBase):
 
         Returns a copy with null filled.
         """
+        if isinstance(value, (int, Decimal)):
+            value = cudf.Scalar(value, dtype=self.dtype)
+        elif (
+            isinstance(value, DecimalColumn)
+            or isinstance(value, NumericalColumn)
+            and is_integer_dtype(value.dtype)
+        ):
+            value = value.astype(self.dtype)
+        else:
+            raise TypeError(
+                "Decimal columns only support using fillna with decimal and "
+                "integer values"
+            )
+
         result = libcudf.replace.replace_nulls(
             input_col=self, replacement=value, method=method, dtype=dtype
         )

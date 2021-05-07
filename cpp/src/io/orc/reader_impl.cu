@@ -621,6 +621,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 // Forward to implementation
 reader::reader(std::vector<std::string> const &filepaths,
                orc_reader_options const &options,
+               rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
@@ -630,6 +631,7 @@ reader::reader(std::vector<std::string> const &filepaths,
 // Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                orc_reader_options const &options,
+               rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
