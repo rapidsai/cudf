@@ -22,6 +22,7 @@
 #include "writer_impl.hpp"
 
 #include <io/utilities/column_utils.cuh>
+#include <io/statistics/column_stats.cuh>
 
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -794,14 +795,14 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
                                   row_index_stride_,
                                   stream);
 
-  GatherColumnStatistics(stat_chunks.data(), stat_groups.data(), num_chunks, stream);
-  MergeColumnStatistics(stat_chunks.data() + num_chunks,
+  detail::GatherColumnStatistics<detail::io_type::ORC>(stat_chunks.data(), stat_groups.data(), num_chunks, stream);
+  detail::MergeColumnStatistics<detail::io_type::ORC>(stat_chunks.data() + num_chunks,
                         stat_chunks.data(),
                         stat_merge.device_ptr(),
                         stripe_bounds.size() * columns.size(),
                         stream);
 
-  MergeColumnStatistics(stat_chunks.data() + num_chunks + stripe_bounds.size() * columns.size(),
+  detail::MergeColumnStatistics<detail::io_type::ORC>(stat_chunks.data() + num_chunks + stripe_bounds.size() * columns.size(),
                         stat_chunks.data() + num_chunks,
                         stat_merge.device_ptr(stripe_bounds.size() * columns.size()),
                         columns.size(),

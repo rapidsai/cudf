@@ -14,6 +14,12 @@
  * limitations under the License.
  */
 
+//#include "gather_stats_util.cuh"
+
+#include "column_stats.cuh"
+
+#include "temp_storage_wrapper.cuh"
+
 #include "column_stats.h"
 
 #include <cudf/strings/string_view.cuh>
@@ -24,35 +30,13 @@
 
 #include <math_constants.h>
 
+#include <variant>
+
 constexpr int block_size = 1024;
 
 namespace cudf {
 namespace io {
-/**
- * @brief shared state for statistics gather kernel
- */
-struct stats_state_s {
-  stats_column_desc col;                 ///< Column information
-  statistics_group group;                ///< Group description
-  statistics_chunk ck;                   ///< Output statistics chunk
-  volatile statistics_val warp_min[32];  ///< Min reduction scratch
-  volatile statistics_val warp_max[32];  ///< Max reduction scratch
-};
 
-/**
- * @brief shared state for statistics merge kernel
- */
-struct merge_state_s {
-  stats_column_desc col;                 ///< Column information
-  statistics_merge_group group;          ///< Group description
-  statistics_chunk ck;                   ///< Resulting statistics chunk
-  volatile statistics_val warp_min[32];  ///< Min reduction scratch
-  volatile statistics_val warp_max[32];  ///< Max reduction scratch
-};
-
-/**
- * Custom addition functor to ignore NaN inputs
- */
 struct IgnoreNaNSum {
   __device__ __forceinline__ double operator()(const double &a, const double &b)
   {
@@ -249,12 +233,37 @@ void __device__ gatherStringColumnStats(stats_state_s *s, uint32_t t, Storage &s
  * @param chunks Destination statistics results
  * @param groups Statistics source information
  */
+#if 0
+//template <int block_size, detail::io_type IO>
+//__global__ void __launch_bounds__(block_size, 1)
+//  gpuGatherColumnStatistics(statistics_chunk *chunks, const statistics_group *groups)
+//{
+//  __shared__ __align__(8) stats_state_s state;
+//  __shared__ block_reduce_storage<block_size> storage;
+//
+//  //Load state members
+//  cooperative_load(state.group, groups[blockIdx.x]);
+//  cooperative_load(state.ck);
+//  __syncthreads();
+//  cooperative_load(state.col, state.group.col);
+//  __syncthreads();
+//
+//  //Calculate statistics
+//  type_dispatcher(state.col.leaf_column->type(), gather_statistics<block_size, IO>(storage), state, threadIdx.x);
+//  __syncthreads();
+//
+//  cooperative_load(chunks[blockIdx.x], state.ck);
+//}
+
+#else
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
   gpuGatherColumnStatistics(statistics_chunk *chunks, const statistics_group *groups)
 {
   __shared__ __align__(8) stats_state_s state_g;
   __shared__ union {
+    typename cub::BlockReduce<int32_t, block_size>::TempStorage int32_stats;
+    typename cub::BlockReduce<uint32_t, block_size>::TempStorage uint32_stats;
     typename cub::BlockReduce<int64_t, block_size>::TempStorage integer_stats;
     typename cub::BlockReduce<double, block_size>::TempStorage float_stats;
     typename cub::BlockReduce<uint32_t, block_size>::TempStorage string_stats;
@@ -278,6 +287,7 @@ __global__ void __launch_bounds__(block_size, 1)
   }
   __syncthreads();
   dtype = s->col.stats_dtype;
+
   if (dtype >= dtype_bool && dtype <= dtype_decimal64) {
     gatherIntColumnStats(s, dtype, t, temp_storage);
   } else if (dtype >= dtype_float32 && dtype <= dtype_float64) {
@@ -290,7 +300,7 @@ __global__ void __launch_bounds__(block_size, 1)
     reinterpret_cast<uint32_t *>(&chunks[blockIdx.x])[t] = reinterpret_cast<uint32_t *>(&s->ck)[t];
   }
 }
-
+#endif
 /**
  * @brief Merge statistics for integer-like columns
  *
@@ -481,6 +491,33 @@ void __device__ mergeStringColumnStats(merge_state_s *s,
  * @param chunks_in Source statistic chunks
  * @param groups Statistic chunk grouping information
  */
+#if 0
+//template <int block_size, detail::io_type IO>
+//__global__ void __launch_bounds__(block_size, 1)
+//  gpuMergeColumnStatistics(statistics_chunk *chunks_out,
+//                           const statistics_chunk *chunks_in,
+//                           const statistics_merge_group *groups)
+//{
+//  __shared__ __align__(8) merge_state_s state;
+//  __shared__ block_reduce_storage<block_size> storage;
+//
+//  cooperative_load(state.group, groups[blockIdx.x]);
+//  __syncthreads();
+//  cooperative_load(state.col, state.group.col);
+//  __syncthreads();
+//
+//  type_dispatcher(
+//      state.col.leaf_column->type(),
+//      merge_statistics<block_size, IO>(storage),
+//      state, chunks_in + state.group.start_chunk,
+//      state.group.num_chunks,
+//      threadIdx.x);
+//  __syncthreads();
+//
+//  cooperative_load(chunks_out[blockIdx.x], state.ck);
+//}
+
+#else
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
   gpuMergeColumnStatistics(statistics_chunk *chunks_out,
@@ -524,7 +561,9 @@ __global__ void __launch_bounds__(block_size, 1)
     reinterpret_cast<uint32_t *>(&chunks_out[blockIdx.x])[t] =
       reinterpret_cast<uint32_t *>(&s->ck)[t];
   }
+
 }
+#endif
 
 /**
  * @brief Launches kernel to gather column statistics

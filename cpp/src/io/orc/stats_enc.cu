@@ -311,7 +311,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         // }
         if (s->chunk.has_sum) {  // Sum is equal to the number of 'true' values
           cur[0]       = 5 * 8 + PB_TYPE_FIXEDLEN;
-          cur          = pb_put_packed_uint(cur + 2, 1, s->chunk.sum.i_val);
+          cur          = pb_put_packed_uint(cur + 2, 1, s->chunk.sum.u_val);
           fld_start[1] = cur - (fld_start + 2);
         }
         break;

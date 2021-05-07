@@ -20,6 +20,7 @@
  */
 
 #include "writer_impl.hpp"
+#include <io/statistics/column_stats.cuh>
 
 #include <io/parquet/compact_protocol_writer.hpp>
 #include <io/utilities/column_utils.cuh>
@@ -748,7 +749,7 @@ void writer::impl::gather_fragment_statistics(
                               num_columns,
                               fragment_size,
                               stream);
-  GatherColumnStatistics(
+  detail::GatherColumnStatistics<detail::io_type::PARQUET>(
     frag_stats_chunk, frag_stats_group.data().get(), num_fragments * num_columns, stream);
   stream.synchronize();
 }
@@ -800,9 +801,9 @@ void writer::impl::init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk> &ch
                    (num_stats_bfr > num_pages) ? page_stats_mrg.data().get() + num_pages : nullptr,
                    stream);
   if (num_stats_bfr > 0) {
-    MergeColumnStatistics(page_stats, frag_stats, page_stats_mrg.data().get(), num_pages, stream);
+    detail::MergeColumnStatistics<detail::io_type::PARQUET>(page_stats, frag_stats, page_stats_mrg.data().get(), num_pages, stream);
     if (num_stats_bfr > num_pages) {
-      MergeColumnStatistics(page_stats + num_pages,
+      detail::MergeColumnStatistics<detail::io_type::PARQUET>(page_stats + num_pages,
                             page_stats,
                             page_stats_mrg.data().get() + num_pages,
                             num_stats_bfr - num_pages,
