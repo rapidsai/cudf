@@ -136,7 +136,7 @@ class orc_column_view {
       _null_count(col.null_count()),
       _nulls(col.null_mask()),
       _type_kind(to_orc_type(col.type().id())),
-      _scale{(_type_kind == TypeKind::DECIMAL) ? col.type().scale()
+      _scale{(_type_kind == TypeKind::DECIMAL) ? -col.type().scale()
                                                : to_clockscale(col.type().id())}
   {
     // Generating default name if name isn't present in metadata
@@ -485,6 +485,7 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
         data_stream_size = decimal_column_sizes.at(column.index());
         // scale stream TODO: compute exact size since all elems are equal
         data2_stream_size = div_rowgroups_by<int64_t>(512) * (512 * 4 + 2);
+        encoding_kind     = DIRECT_V2;
         break;
       default: CUDF_FAIL("Unsupported ORC type kind");
     }
@@ -962,7 +963,7 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
 {
   const auto length                                        = strm_desc.stream_size;
   (*streams)[enc_stream.ids[strm_desc.stream_type]].length = length;
-  // std::cout << (int)strm_desc.stream_type << ' ' << length << std::endl;
+  std::cout << (int)strm_desc.stream_type << ' ' << length << std::endl;
   if (length == 0) { return; }
 
   const auto *stream_in = (compression_kind_ == NONE) ? enc_stream.data_ptrs[strm_desc.stream_type]
@@ -976,8 +977,9 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
     stream.synchronize();
 
     out_sink_->host_write(stream_out, length);
-    // for (auto it = stream_out; it < stream_out + length; ++it) std::cout << (int)*it << ' ';
-    // std::cout << std::endl;
+    for (auto it = stream_out; it < stream_out + length; ++it)
+      std::cout << std::hex << (int)*it << ' ';
+    std::cout << std::endl;
   }
   stripe->dataLength += length;
 }
@@ -1417,7 +1419,9 @@ void writer::impl::write(table_view const &table)
     ff.types[0].fieldNames.resize(num_columns);
     for (auto const &column : orc_columns) {
       ff.types[column.id()].kind = column.orc_kind();
-      if (column.orc_kind() == DECIMAL) { ff.types[column.id()].scale = -column.scale(); }
+      if (column.orc_kind() == DECIMAL) {
+        ff.types[column.id()].scale = static_cast<uint32_t>(column.scale());
+      }
       ff.types[0].subtypes[column.index()]   = column.id();
       ff.types[0].fieldNames[column.index()] = column.orc_name();
     }

@@ -781,7 +781,7 @@ __global__ void __launch_bounds__(block_size)
               s->lengths.u32[nz_idx]                  = value.size_bytes();
             }
             break;
-          case DECIMAL: s->lengths.u32[nz_idx] = zigzag(-s->chunk.scale); break;
+          case DECIMAL: s->lengths.u32[nz_idx] = zigzag(s->chunk.scale); break;
           default: break;
         }
       }
