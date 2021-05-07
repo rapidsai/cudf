@@ -100,11 +100,18 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   // It will return any new dictionary columns created as well as updated table_views.
   auto const matched = dictionary::detail::match_dictionaries({t, values}, stream);
 
+  // Prepare to flatten the structs column
+  auto const nullable =
+    std::any_of(t.begin(), t.end(), [](auto const& col) { return col.nullable(); }) or
+    std::any_of(values.begin(), values.end(), [](auto const& col) { return col.nullable(); });
+  auto const flatten_nullability = nullable ? structs::detail::column_nullability::FORCE
+                                            : structs::detail::column_nullability::MATCH_INCOMING;
+
   // 0-table_view, 1-column_order, 2-null_precedence, 3-validity_columns
-  auto const t_flattened =
-    structs::detail::flatten_nested_columns(matched.second.front(), column_order, null_precedence);
+  auto const t_flattened = structs::detail::flatten_nested_columns(
+    matched.second.front(), column_order, null_precedence, flatten_nullability);
   auto const values_flattened =
-    structs::detail::flatten_nested_columns(matched.second.back(), {}, {});
+    structs::detail::flatten_nested_columns(matched.second.back(), {}, {}, flatten_nullability);
 
   auto const t_d      = table_device_view::create(std::get<0>(t_flattened), stream);
   auto const values_d = table_device_view::create(std::get<0>(values_flattened), stream);
