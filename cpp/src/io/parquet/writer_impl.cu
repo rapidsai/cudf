@@ -36,6 +36,8 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <nvcomp/snappy.h>
+
 #include <algorithm>
 #include <cstring>
 #include <numeric>
@@ -792,6 +794,136 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &
   stream.synchronize();
 }
 
+template <typename T>
+void print(rmm::device_uvector<T> const &d_vec, std::string label = "")
+{
+  std::vector<T> h_vec(d_vec.size());
+  cudaMemcpy(h_vec.data(), d_vec.data(), d_vec.size() * sizeof(T), cudaMemcpyDeviceToHost);
+  printf("%s (%lu)\t", label.c_str(), h_vec.size());
+  for (auto &&i : h_vec) std::cout << (int)i << " ";
+  printf("\n");
+}
+
+template <typename T>
+void print(rmm::device_vector<T> const &d_vec, std::string label = "")
+{
+  thrust::host_vector<T> h_vec = d_vec;
+  printf("%s \t", label.c_str());
+  for (auto &&i : h_vec) std::cout << i << " ";
+  printf("\n");
+}
+
+struct printer {
+  template <typename T>
+  std::enable_if_t<cudf::is_numeric<T>(), void> operator()(column_view const &col,
+                                                           std::string label = "")
+  {
+    auto d_vec = rmm::device_vector<T>(col.begin<T>(), col.end<T>());
+    print(d_vec, label);
+  }
+  template <typename T>
+  std::enable_if_t<!cudf::is_numeric<T>(), void> operator()(column_view const &col,
+                                                            std::string label = "")
+  {
+    CUDF_FAIL("no strings");
+  }
+};
+void print(column_view const &col, std::string label = "")
+{
+  cudf::type_dispatcher(col.type(), printer{}, col, label);
+}
+
+void snappy_compress(device_span<gpu_inflate_input_s> comp_in,
+                     device_span<gpu_inflate_status_s> comp_stat,
+                     rmm::cuda_stream_view stream)
+{
+  size_t num_comp_pages = comp_in.size();
+  size_t temp_size;
+  nvcompError_t nvcomp_error =
+    nvcompBatchedSnappyCompressGetTempSize(num_comp_pages, 1 << 20, &temp_size);
+  // TODO: Continue with uncompressed if nvcomp fails at any step
+  CUDF_EXPECTS(nvcomp_error == nvcompError_t::nvcompSuccess, "Unable to get temporary size");
+
+  // Not needed now but nvcomp API makes no promises about future
+  rmm::device_buffer scratch(temp_size, stream);
+  // Analogous to comp_in.srcDevice
+  rmm::device_uvector<void const *> uncompressed_data_ptrs(num_comp_pages, stream);
+  // Analogous to comp_in.srcSize
+  rmm::device_uvector<size_t> uncompressed_data_sizes(num_comp_pages, stream);
+  // Analogous to comp_in.dstDevice
+  rmm::device_uvector<void *> compressed_data_ptrs(num_comp_pages, stream);
+  // Analogous to comp_stat.bytes_written
+  rmm::device_vector<size_t> compressed_bytes_written(num_comp_pages);
+
+  rmm::device_uvector<size_t> dstSizes(num_comp_pages, stream);
+  // nvcomp does not currently use comp_in.dstSize. Cannot assume that the output will fit in
+  // the space allocated unless one uses the API nvcompBatchedSnappyCompressGetOutputSize()
+  // TODO: Replace our allocation size computation with value obtained from aforementioned API
+
+  // Prepare the vectors
+  auto comp_it = thrust::make_zip_iterator(uncompressed_data_ptrs.begin(),
+                                           uncompressed_data_sizes.begin(),
+                                           compressed_data_ptrs.begin(),
+                                           dstSizes.begin());
+  thrust::transform(rmm::exec_policy(stream),
+                    comp_in.begin(),
+                    comp_in.end(),
+                    comp_it,
+                    [] __device__(gpu_inflate_input_s in) {
+                      return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice, in.dstSize);
+                    });
+  nvcomp_error = nvcompBatchedSnappyCompressAsync(uncompressed_data_ptrs.data(),
+                                                  uncompressed_data_sizes.data(),
+                                                  num_comp_pages,
+                                                  scratch.data(),  // Not needed rn but future
+                                                  scratch.size(),
+                                                  compressed_data_ptrs.data(),
+                                                  compressed_bytes_written.data().get(),
+                                                  stream.value());
+
+  // rmm::device_uvector<gpu_inflate_input_s> new_comp_in(num_comp_pages, stream);
+  // thrust::transform(rmm::exec_policy(),
+  //                   comp_it,
+  //                   comp_it + num_comp_pages,
+  //                   new_comp_in.begin(),
+  //                   [] __device__(auto zip) {
+  //                     gpu_inflate_input_s status{};
+  //                     status.srcDevice = thrust::get<0>(zip);
+  //                     status.srcSize   = thrust::get<1>(zip);
+  //                     status.dstDevice = thrust::get<2>(zip);
+  //                     status.dstSize   = thrust::get<3>(zip);
+  //                     return status;
+  //                   });
+  // gpu_snap(comp_in.data(), comp_stat.data(), num_comp_pages, stream);
+
+  // thrust::transform(rmm::exec_policy(stream),
+  //                   comp_stat.begin(),
+  //                   comp_stat.end(),
+  //                   compressed_bytes_written.begin(),
+  //                   [] __device__(gpu_inflate_status_s status) { return status.bytes_written; });
+
+  print(uncompressed_data_sizes, "uncomp size");
+  print(dstSizes, "dstSizes from cuIO");
+  print(compressed_bytes_written, "written by nvcomp");
+  CUDF_EXPECTS(nvcomp_error == nvcompError_t::nvcompSuccess,
+               "Unable to perform snappy compression");
+
+  // nvcomp also doesn't use comp_out.status . Even though it has it in the kernel, it doesn't
+  // expose it from the API and ignores it internally. Need to rely on nvcompError and the
+  // compression will be all or nothing rather than per page.
+  // TODO: Get to it or file a request with the nvcomp team to expose per page status output
+  // The other comp_out field is reserved which is for internal cuIO debugging and can be 0.
+  thrust::transform(rmm::exec_policy(stream),
+                    compressed_bytes_written.begin(),
+                    compressed_bytes_written.end(),
+                    comp_stat.begin(),
+                    [] __device__(size_t size) {
+                      gpu_inflate_status_s status{};
+                      status.bytes_written = size;
+                      return status;
+                    });
+}
+
 void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
                                 device_span<gpu::EncPage> pages,
                                 uint32_t pages_in_batch,
@@ -820,7 +952,8 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks
   gpu::EncodePages(batch_pages, comp_in, comp_stat, stream);
   switch (compression_) {
     case parquet::Compression::SNAPPY:
-      CUDA_TRY(gpu_snap(comp_in.data(), comp_stat.data(), pages_in_batch, stream));
+      // CUDA_TRY(gpu_snap(comp_in.data(), comp_stat.data(), pages_in_batch, stream));
+      snappy_compress(comp_in, comp_stat, stream);
       break;
     default: break;
   }
