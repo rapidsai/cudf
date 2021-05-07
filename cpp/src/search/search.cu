@@ -101,11 +101,10 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   auto const matched = dictionary::detail::match_dictionaries({t, values}, stream);
 
   // Prepare to flatten the structs column
-  auto const nullable =
-    std::any_of(t.begin(), t.end(), [](auto const& col) { return col.nullable(); }) or
-    std::any_of(values.begin(), values.end(), [](auto const& col) { return col.nullable(); });
-  auto const flatten_nullability = nullable ? structs::detail::column_nullability::FORCE
-                                            : structs::detail::column_nullability::MATCH_INCOMING;
+  auto const has_null_elements   = has_nulls(t) or has_nulls(values);
+  auto const flatten_nullability = has_null_elements
+                                     ? structs::detail::column_nullability::FORCE
+                                     : structs::detail::column_nullability::MATCH_INCOMING;
 
   // 0-table_view, 1-column_order, 2-null_precedence, 3-validity_columns
   auto const t_flattened = structs::detail::flatten_nested_columns(
@@ -125,7 +124,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
     detail::make_device_uvector_async(null_precedence_flattened, stream);
 
   auto const count_it = thrust::make_counting_iterator<size_type>(0);
-  if (has_nulls(t) or has_nulls(values)) {
+  if (has_null_elements) {
     auto const comp = row_lexicographic_comparator<true>(
       lhs, rhs, column_order_dv.data(), null_precedence_dv.data());
     launch_search(
