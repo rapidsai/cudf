@@ -1217,7 +1217,6 @@ class Series(SingleColumnFrame, Serializable):
         return self.to_string()
 
     def __repr__(self):
-        breakpoint()
         _, height = get_terminal_size()
         max_rows = (
             height
