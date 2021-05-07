@@ -15,6 +15,7 @@
  */
 #include <join/hash_join.cuh>
 #include <join/join_common_utils.hpp>
+#include <join/nested_loop_join.cuh>
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
@@ -219,6 +220,19 @@ std::unique_ptr<table> full_join(table_view const& left_input,
   return combine_table_pair(std::move(left_result), std::move(right_result));
 }
 
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+predicate_join(table_view left,
+               table_view right,
+               ast::expression binary_pred,
+               rmm::cuda_stream_view stream,
+               rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return get_base_nested_loop_predicate_join_indices(
+    left, right, false, join_kind::INNER_JOIN, binary_pred, null_equality::EQUAL, stream);
+}
+
 }  // namespace detail
 
 hash_join::~hash_join() = default;
@@ -354,6 +368,16 @@ std::unique_ptr<table> full_join(table_view const& left,
   CUDF_FUNC_RANGE();
   return detail::full_join(
     left, right, left_on, right_on, compare_nulls, rmm::cuda_stream_default, mr);
+}
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+predicate_join(table_view left,
+               table_view right,
+               ast::expression binary_pred,
+               rmm::mr::device_memory_resource* mr)
+{
+  return detail::predicate_join(left, right, binary_pred, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

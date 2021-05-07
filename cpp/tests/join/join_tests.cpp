@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <cudf/ast/nodes.hpp>
+#include <cudf/ast/operators.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
@@ -1651,6 +1653,25 @@ TEST_F(JoinTest, FullJoinWithStructsAndNulls)
   auto gold_sort_order = cudf::sorted_order(gold.view());
   auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_result);
+}
+
+TEST_F(JoinTest, PredicateJoin)
+{
+  auto const left_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{0};
+  auto const left_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{0};
+
+  auto const right_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{0};
+  auto const right_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{0};
+
+  cudf::table_view left({left_first_col, left_second_col});
+  cudf::table_view right({right_first_col, right_second_col});
+
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, col_ref_1);
+  auto result     = cudf::predicate_join(left, right, expression);
+
+  EXPECT_EQ(result.first->size(), 1);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

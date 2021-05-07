@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/ast/nodes.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
@@ -23,6 +24,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <optional>
+#include <utility>
 #include <vector>
 
 namespace cudf {
@@ -646,6 +648,33 @@ class hash_join {
   struct hash_join_impl;
   const std::unique_ptr<const hash_join_impl> impl;
 };
+
+/**
+ * @brief Performs a join predicated on an expression.
+ *
+ * The predicate join returns rows from each table where the expression evaluates to true.
+ *
+ * @code{.pseudo}
+ * Left a: {0, 1, 2}
+ * Right b: {3, 4, 5}
+ * Result: { a: {0, 0, 0, 1, 1, 1, 2, 2, 2}, b: {3, 4, 5, 3, 4, 5, 3, 4, 5} }
+ * @endcode
+
+ * @throw cudf::logic_error if the number of columns in either `left` or `right` table is 0
+ *
+ * @param left           The left table
+ * @param right          The right table
+ * @param binary_pred    The expression on which the join is conditioned.
+ * @param mr             Device memory resource used to allocate the returned table's device memory
+ *
+ * @return     Result of the predicated join of the `left` and `right` tables
+ */
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+predicate_join(table_view left,
+               table_view right,
+               ast::expression binary_pred,
+               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf
