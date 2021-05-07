@@ -20,7 +20,7 @@
 
 #include "typed_statistics_chunk.cuh"
 
-#include "column_stats.h"
+#include "statistics.cuh"
 
 namespace cudf {
 namespace io {

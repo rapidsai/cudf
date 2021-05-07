@@ -24,7 +24,7 @@
 
 #include <cudf/wrappers/timestamps.hpp>
 
-#include "column_stats.h"
+#include "statistics.cuh"
 
 #include <cub/cub.cuh>
 

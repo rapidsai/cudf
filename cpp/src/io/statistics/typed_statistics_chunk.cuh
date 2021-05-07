@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "column_stats.h"
+#include "statistics.cuh"
 
 #include "statistics_type_identification.cuh"
 
