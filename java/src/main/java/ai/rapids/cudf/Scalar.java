@@ -338,7 +338,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   /**
    * Creates a null scalar of list type.
    *
-   * Having this special API is because the element type is required to build an empty
+   * Having this special API because the element type is required to build an empty
    * nested column as the underlying column of the list scalar.
    *
    * @param elementType the data type of the element in the list.

@@ -466,7 +466,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeListScalar(JNIEnv *env, j
     cudf::jni::auto_set_device(env);
     auto col_view = reinterpret_cast<cudf::column_view *>(view_handle);
 
-    // Instead of calling the `cudf::empyt_like` to create an empty column when `is_valid`
+    // Instead of calling the `cudf::empty_like` to create an empty column when `is_valid`
     // is false, always passes the input view to the scalar, to avoid copying the column
     // twice.
     // Let the Java layer make sure the view is empty when `is_valid` is false.
