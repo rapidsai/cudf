@@ -157,7 +157,7 @@ std::unique_ptr<scalar> make_fixed_point_scalar(
 }
 
 /**
- * @brief Construct scalar using the given value of fixed_point type
+ * @brief Construct scalar using the given column of elements
  *
  * @param elements Elements of the list
  * @param stream CUDA stream used for device memory operations.
