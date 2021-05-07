@@ -41,7 +41,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Constructs a Column View given a native view address
    * @param address the view handle
    */
-  protected ColumnView(long address) {
+  ColumnView(long address) {
     this.viewHandle = address;
     this.type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
     this.rows = ColumnView.getNativeRowCount(viewHandle);
@@ -209,6 +209,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public void close() {
     ColumnView.deleteColumnView(viewHandle);
     viewHandle = 0;
+  }
+
+  @Override
+  public String toString() {
+    return "ColumnView{" +
+           "rows=" + rows +
+           ", type=" + type +
+           ", nullCount=" + nullCount +
+           '}';
   }
 
   /**
@@ -1302,6 +1311,18 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     } finally {
       Aggregation.close(nativePtr);
     }
+  }
+
+  /**
+   * Compute the cumulative sum/prefix sum of the values in this column.
+   * This is similar to a rolling window SUM with unbounded preceding and none following.
+   * Input values 1, 2, 3
+   * Output values 1, 3, 6
+   * This currently only works for long values that are not nullable as this is currently a
+   * very simple implementation. It may be expanded in the future if needed.
+   */
+  public final ColumnVector prefixSum() {
+    return new ColumnVector(prefixSum(getNativeView()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -2910,6 +2931,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       int following,
       long preceding_col,
       long following_col);
+
+  private static native long prefixSum(long viewHandle) throws CudfException;
 
   private static native long nansToNulls(long viewHandle) throws CudfException;
 

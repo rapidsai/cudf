@@ -244,6 +244,8 @@ public final class Table implements AutoCloseable {
   /**
    * Setup everything to write parquet formatted data to a file.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
+   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
@@ -256,18 +258,22 @@ public final class Table implements AutoCloseable {
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetFileBegin(String[] columnNames,
+                                                   int numChildren,
+                                                   int[] flatNumChildren,
                                                    boolean[] nullable,
                                                    String[] metadataKeys,
                                                    String[] metadataValues,
                                                    int compression,
                                                    int statsFreq,
-                                                   boolean isInt96,
+                                                   boolean[] isInt96,
                                                    int[] precisions,
                                                    String filename) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a buffer.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
+   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
@@ -280,12 +286,14 @@ public final class Table implements AutoCloseable {
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetBufferBegin(String[] columnNames,
+                                                     int numChildren,
+                                                     int[] flatNumChildren,
                                                      boolean[] nullable,
                                                      String[] metadataKeys,
                                                      String[] metadataValues,
                                                      int compression,
                                                      int statsFreq,
-                                                     boolean isInt96,
+                                                     boolean[] isInt96,
                                                      int[] precisions,
                                                      HostBufferConsumer consumer) throws CudfException;
 
@@ -828,35 +836,45 @@ public final class Table implements AutoCloseable {
     HostBufferConsumer consumer;
 
     private ParquetTableWriter(ParquetWriterOptions options, File outputFile) {
-      int numColumns = options.getColumnNames().length;
-      assert (numColumns == options.getColumnNullability().length);
-      int[] precisions = options.getPrecisions();
-      if (precisions != null) {
-        assert (numColumns >= options.getPrecisions().length);
-      }
+      String[] columnNames = options.getFlatColumnNames();
+      boolean[] columnNullabilities = options.getFlatIsNullable();
+      boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
+      int[] precisions = options.getFlatPrecision();
+      int[] flatNumChildren = options.getFlatNumChildren();
+
       this.consumer = null;
-      this.handle = writeParquetFileBegin(options.getColumnNames(),
-          options.getColumnNullability(),
+      this.handle = writeParquetFileBegin(columnNames,
+          options.getTopLevelChildren(),
+          flatNumChildren,
+          columnNullabilities,
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
-          options.isTimestampTypeInt96(),
-          options.getPrecisions(),
+          timeInt96Values,
+          precisions,
           outputFile.getAbsolutePath());
     }
 
     private ParquetTableWriter(ParquetWriterOptions options, HostBufferConsumer consumer) {
-      this.handle = writeParquetBufferBegin(options.getColumnNames(),
-          options.getColumnNullability(),
+      String[] columnNames = options.getFlatColumnNames();
+      boolean[] columnNullabilities = options.getFlatIsNullable();
+      boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
+      int[] precisions = options.getFlatPrecision();
+      int[] flatNumChildren = options.getFlatNumChildren();
+
+      this.consumer = consumer;
+      this.handle = writeParquetBufferBegin(columnNames,
+          options.getTopLevelChildren(),
+          flatNumChildren,
+          columnNullabilities,
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
-          options.isTimestampTypeInt96(),
-          options.getPrecisions(),
+          timeInt96Values,
+          precisions,
           consumer);
-      this.consumer = consumer;
     }
 
     @Override
@@ -1261,7 +1279,7 @@ public final class Table implements AutoCloseable {
    * @return the new Table.
    * @throws CudfException on any error.
    */
-  public Table repeat(ColumnVector counts) {
+  public Table repeat(ColumnView counts) {
     return repeat(counts, true);
   }
 
@@ -1276,7 +1294,7 @@ public final class Table implements AutoCloseable {
    * @return the new Table.
    * @throws CudfException on any error.
    */
-  public Table repeat(ColumnVector counts, boolean checkCount) {
+  public Table repeat(ColumnView counts, boolean checkCount) {
     return new Table(repeatColumnCount(this.nativeHandle, counts.getNativeView(), checkCount));
   }
 
@@ -1616,7 +1634,7 @@ public final class Table implements AutoCloseable {
    * @return table containing copy of all elements of this table passing
    * the filter defined by the boolean mask
    */
-  public Table filter(ColumnVector mask) {
+  public Table filter(ColumnView mask) {
     assert mask.getType().equals(DType.BOOL8) : "Mask column must be of type BOOL8";
     assert getRowCount() == 0 || getRowCount() == mask.getRowCount() : "Mask column has incorrect size";
     return new Table(filter(nativeHandle, mask.getNativeView()));
@@ -1852,7 +1870,7 @@ public final class Table implements AutoCloseable {
    * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
    * @return the resulting Table.
    */
-  public Table gather(ColumnVector gatherMap) {
+  public Table gather(ColumnView gatherMap) {
     return gather(gatherMap, true);
   }
 
@@ -1870,7 +1888,7 @@ public final class Table implements AutoCloseable {
    *                    when setting this to false.
    * @return the resulting Table.
    */
-  public Table gather(ColumnVector gatherMap, boolean checkBounds) {
+  public Table gather(ColumnView gatherMap, boolean checkBounds) {
     return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
   }
 
@@ -2088,7 +2106,7 @@ public final class Table implements AutoCloseable {
    * @param schema the types of each column.
    * @return the parsed table.
    */
-  public static Table convertFromRows(ColumnVector vec, DType ... schema) {
+  public static Table convertFromRows(ColumnView vec, DType ... schema) {
     // TODO at some point we need a schema that support nesting so we can support nested types
     // TODO we will need scale at some point very soon too
     int[] types = new int[schema.length];

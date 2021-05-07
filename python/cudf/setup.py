@@ -40,6 +40,7 @@ extras_require = {
         "hypothesis" "mimesis",
         "pyorc",
         "msgpack",
+        "transformers",
     ]
 }
 

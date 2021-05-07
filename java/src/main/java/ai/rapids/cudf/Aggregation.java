@@ -54,15 +54,40 @@ public abstract class Aggregation {
         NUNIQUE(15),
         NTH_ELEMENT(16),
         ROW_NUMBER(17),
-        COLLECT(18),
-        LEAD(19),
-        LAG(20),
-        PTX(21),
-        CUDA(22);
+        COLLECT_LIST(18),
+        COLLECT_SET(19),
+        LEAD(20),
+        LAG(21),
+        PTX(22),
+        CUDA(23);
 
         final int nativeId;
 
         Kind(int nativeId) {this.nativeId = nativeId;}
+    }
+
+    /*
+     * This is analogous to the native 'null_equality'.
+     */
+    public enum NullEquality {
+        UNEQUAL(false),
+        EQUAL(true);
+
+        NullEquality(boolean nullsEqual) { this.nullsEqual = nullsEqual; }
+
+        final boolean nullsEqual;
+    }
+
+    /*
+     * This is analogous to the native 'nan_equality'.
+     */
+    public enum NaNEquality {
+        UNEQUAL(false),
+        ALL_EQUAL(true);
+
+        NaNEquality(boolean nansEqual) { this.nansEqual = nansEqual; }
+
+        final boolean nansEqual;
     }
 
     /**
@@ -273,13 +298,13 @@ public abstract class Aggregation {
         private final NullPolicy nullPolicy;
 
         private CollectListAggregation(NullPolicy nullPolicy) {
-            super(Kind.COLLECT);
+            super(Kind.COLLECT_LIST);
             this.nullPolicy = nullPolicy;
         }
 
         @Override
         long createNativeInstance() {
-            return Aggregation.createCollectAgg(nullPolicy.includeNulls);
+            return Aggregation.createCollectListAgg(nullPolicy.includeNulls);
         }
 
         @Override
@@ -294,6 +319,47 @@ public abstract class Aggregation {
             } else if (other instanceof CollectListAggregation) {
                 CollectListAggregation o = (CollectListAggregation) other;
                 return o.nullPolicy == this.nullPolicy;
+            }
+            return false;
+        }
+    }
+
+    private static final class CollectSetAggregation extends Aggregation {
+        private final NullPolicy nullPolicy;
+        private final NullEquality nullEquality;
+        private final NaNEquality nanEquality;
+
+        public CollectSetAggregation(NullPolicy nullPolicy, NullEquality nullEquality, NaNEquality nanEquality) {
+            super(Kind.COLLECT_SET);
+            this.nullPolicy = nullPolicy;
+            this.nullEquality = nullEquality;
+            this.nanEquality = nanEquality;
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createCollectSetAgg(nullPolicy.includeNulls,
+                nullEquality.nullsEqual,
+                nanEquality.nansEqual);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode()
+                + Boolean.hashCode(nullPolicy.includeNulls)
+                + Boolean.hashCode(nullEquality.nullsEqual)
+                + Boolean.hashCode(nanEquality.nansEqual);
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            } else if (other instanceof CollectSetAggregation) {
+                CollectSetAggregation o = (CollectSetAggregation) other;
+                return o.nullPolicy == this.nullPolicy &&
+                    o.nullEquality == this.nullEquality &&
+                    o.nanEquality == this.nanEquality;
             }
             return false;
         }
@@ -675,19 +741,58 @@ public abstract class Aggregation {
     }
 
     /**
-     * Collect the values into a list. nulls will be skipped.
+     * Collect the values into a list. Nulls will be skipped.
+     * @deprecated please use collectList as instead.
      */
+    @Deprecated
     public static CollectListAggregation collect() {
         return collect(NullPolicy.EXCLUDE);
     }
 
     /**
      * Collect the values into a list.
-     * @param nullPolicy INCLUDE if nulls should be included in the aggregation or EXCLUDE if they
-     *                     should be skipped.
+     * @deprecated please use collectList as instead.
+     *
+     * @param nullPolicy Indicates whether to include/exclude nulls during collection.
      */
+    @Deprecated
     public static CollectListAggregation collect(NullPolicy nullPolicy) {
+        return collectList(nullPolicy);
+    }
+
+    /**
+     * Collect the values into a list. Nulls will be skipped.
+     */
+    public static CollectListAggregation collectList() {
+        return collectList(NullPolicy.EXCLUDE);
+    }
+
+    /**
+     * Collect the values into a list.
+     *
+     * @param nullPolicy Indicates whether to include/exclude nulls during collection.
+     */
+    public static CollectListAggregation collectList(NullPolicy nullPolicy) {
         return new CollectListAggregation(nullPolicy);
+    }
+
+    /**
+     * Collect the values into a set. All null values will be excluded, and all nan values are regarded as
+     * unique instances.
+     */
+    public static CollectSetAggregation collectSet() {
+        return new CollectSetAggregation(NullPolicy.EXCLUDE, NullEquality.UNEQUAL, NaNEquality.UNEQUAL);
+    }
+
+    /**
+     * Collect the values into a set.
+     *
+     * @param nullPolicy   Indicates whether to include/exclude nulls during collection.
+     * @param nullEquality Flag to specify whether null entries within each list should be considered equal.
+     * @param nanEquality  Flag to specify whether NaN values in floating point column should be considered equal.
+     */
+    public static CollectSetAggregation collectSet(NullPolicy nullPolicy, NullEquality nullEquality, NaNEquality nanEquality) {
+        return new CollectSetAggregation(nullPolicy, nullEquality, nanEquality);
     }
 
     public static class LeadAggregation extends LeadLagAggregation
@@ -773,7 +878,12 @@ public abstract class Aggregation {
     private static native long createLeadLagAgg(int kind, int offset);
 
     /**
-     * Create a collect aggregation including nulls or not.
+     * Create a collect list aggregation including nulls or not.
      */
-    private static native long createCollectAgg(boolean includeNulls);
+    private static native long createCollectListAgg(boolean includeNulls);
+
+    /**
+     * Create a collect set aggregation.
+     */
+    private static native long createCollectSetAgg(boolean includeNulls, boolean nullsEqual, boolean nansEqual);
 }

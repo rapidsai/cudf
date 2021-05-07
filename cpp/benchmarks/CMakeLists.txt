@@ -97,7 +97,7 @@ ConfigureBench(ITERATOR_BENCH iterator/iterator_benchmark.cu)
 
 ###################################################################################################
 # - search benchmark ------------------------------------------------------------------------------
-ConfigureBench(SEARCH_BENCH search/search_benchmark.cu)
+ConfigureBench(SEARCH_BENCH search/search_benchmark.cpp)
 
 ###################################################################################################
 # - sort benchmark --------------------------------------------------------------------------------
@@ -125,6 +125,16 @@ ConfigureBench(REDUCTION_BENCH
   reduction/minmax_benchmark.cpp)
 
 ###################################################################################################
+# - reduction benchmark ---------------------------------------------------------------------------
+ConfigureBench(REPLACE_BENCH
+  replace/clamp_benchmark.cpp)
+
+###################################################################################################
+# - filling benchmark -----------------------------------------------------------------------------
+ConfigureBench(FILL_BENCH
+  filling/repeat_benchmark.cpp)
+
+###################################################################################################
 # - groupby benchmark -----------------------------------------------------------------------------
 ConfigureBench(GROUPBY_BENCH
   groupby/group_sum_benchmark.cu
@@ -133,7 +143,9 @@ ConfigureBench(GROUPBY_BENCH
 
 ###################################################################################################
 # - hashing benchmark -----------------------------------------------------------------------------
-ConfigureBench(HASHING_BENCH hashing/hashing_benchmark.cpp)
+ConfigureBench(HASHING_BENCH
+  hashing/hash_benchmark.cpp
+  hashing/partition_benchmark.cpp)
 
 ###################################################################################################
 # - merge benchmark -------------------------------------------------------------------------------
@@ -177,7 +189,9 @@ ConfigureBench(AST_BENCH ast/transform_benchmark.cpp)
 
 ###################################################################################################
 # - binaryop benchmark ----------------------------------------------------------------------------
-ConfigureBench(BINARYOP_BENCH binaryop/binaryop_benchmark.cu)
+ConfigureBench(BINARYOP_BENCH
+  binaryop/binaryop_benchmark.cpp
+  binaryop/jit_binaryop_benchmark.cpp)
 
 ###################################################################################################
 # - nvtext benchmark -------------------------------------------------------------------

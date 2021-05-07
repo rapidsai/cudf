@@ -64,6 +64,7 @@
 #include <map_lookup.hpp>
 #include "cudf/types.hpp"
 
+#include "prefix_sum.hpp"
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
 #include "jni.h"
@@ -1756,6 +1757,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeStructView(JNIEnv *en
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_prefixSum(JNIEnv *env, jobject j_object,
+                                                                 jlong handle) {
+
+  JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *view = reinterpret_cast<cudf::column_view *>(handle);
+    std::unique_ptr<cudf::column> result = cudf::jni::prefix_sum(*view);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0)
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_nansToNulls(JNIEnv *env, jobject j_object,
                                                                    jlong handle) {
 
@@ -1779,6 +1794,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_nansToNulls(JNIEnv *env, 
   }
   CATCH_STD(env, 0)
 }
+
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isFloat(JNIEnv *env, jobject j_object,
                                                                jlong handle) {
