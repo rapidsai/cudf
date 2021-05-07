@@ -43,7 +43,49 @@ def test_apply_null():
 
     expect = pdf.apply(lambda row: func_pdf(row['a'], row['b']), axis=1)
     obtain = gdf.apply(lambda row: func_gdf(row['a'], row['b']), axis=1)
+    assert_eq(expect, obtain)
 
+
+def test_apply_add_null():
+    def func_pdf(x, y):
+        return x + y + pd.NA
+
+    @nulludf
+    def func_gdf(x, y):
+        return x + y + cudf.NA
+
+
+    gdf = cudf.DataFrame({
+        'a':[1,None,3, None],
+        'b':[4,5,None, None]
+    })
+
+    pdf = gdf.to_pandas()
+
+    expect = pdf.apply(lambda row: func_pdf(row['a'], row['b']), axis=1)
+    obtain = gdf.apply(lambda row: func_gdf(row['a'], row['b']), axis=1)
+    # TODO: dtype mismatch here
+    assert_eq(expect, obtain, check_dtype=False)
+
+
+def test_apply_add_constant():
+    def func_pdf(x, y):
+        return x + y + 1
+
+    @nulludf
+    def func_gdf(x, y):
+        return x + y + 1
+
+
+    gdf = cudf.DataFrame({
+        'a':[1,None,3, None],
+        'b':[4,5,None, None]
+    })
+
+    pdf = gdf.to_pandas()
+
+    expect = pdf.apply(lambda row: func_pdf(row['a'], row['b']), axis=1)
+    obtain = gdf.apply(lambda row: func_gdf(row['a'], row['b']), axis=1)
     assert_eq(expect, obtain)
 
 def test_apply_NA_conditional():
