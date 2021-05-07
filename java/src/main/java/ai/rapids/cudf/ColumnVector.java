@@ -491,7 +491,7 @@ public final class ColumnVector extends ColumnView {
    * @param columns array of columns containing strings.
    * @return A new java column vector containing the concatenated strings.
    */
-  public static ColumnVector stringConcatenate(ColumnView... columns) {
+  public static ColumnVector stringConcatenate(ColumnView[] columns) {
     try (Scalar emptyString = Scalar.fromString("");
          Scalar nullString = Scalar.fromString(null)) {
       return stringConcatenate(emptyString, nullString, columns);
@@ -508,7 +508,7 @@ public final class ColumnVector extends ColumnView {
    * @param columns array of columns containing strings, must be more than 2 columns
    * @return A new java column vector containing the concatenated strings.
    */
-  public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnView... columns) {
+  public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnView[] columns) {
     assert columns.length >= 2 : ".stringConcatenate() operation requires at least 2 columns";
     assert separator != null : "separator scalar provided may not be null";
     assert separator.getType().equals(DType.STRING) : "separator scalar must be a string scalar";
