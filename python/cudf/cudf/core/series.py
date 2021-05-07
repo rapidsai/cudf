@@ -1944,11 +1944,7 @@ class Series(SingleColumnFrame, Serializable):
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-
-        if is_decimal_dtype(self.dtype):
-            return self._binaryop(other, "div", fill_value)
-        else:
-            return self._binaryop(other, "truediv", fill_value)
+        return self._binaryop(other, "truediv", fill_value)
 
     def rtruediv(self, other, fill_value=None, axis=0):
         """Floating division of series and other, element-wise
@@ -1993,11 +1989,7 @@ class Series(SingleColumnFrame, Serializable):
         """
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
-
-        if is_decimal_dtype(self.dtype):
-            return self._binaryop(other, "div", fill_value, True)
-        else:
-            return self._binaryop(other, "truediv", fill_value, True)
+        return self._binaryop(other, "truediv", fill_value, True)
 
     def logical_and(self, other):
         return self._binaryop(other, "l_and").astype(np.bool_)
