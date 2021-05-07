@@ -166,7 +166,8 @@ class orc_column_view {
   }
   auto device_dict_chunk() const { return d_dict; }
 
-  void attach_decimal_sizes(uint32_t *sizes_ptr) { d_decimal_sizes = sizes_ptr; }
+  auto const &decimal_offsets() const { return d_decimal_offsets; }
+  void attach_decimal_offsets(uint32_t *sizes_ptr) { d_decimal_offsets = sizes_ptr; }
 
   /**
    * @brief Function that associates an existing stripe dictionary allocation
@@ -225,7 +226,7 @@ class orc_column_view {
   gpu::DictionaryChunk *d_dict             = nullptr;
   gpu::StripeDictionary *d_stripe_dict     = nullptr;
 
-  uint32_t *d_decimal_sizes = nullptr;
+  uint32_t *d_decimal_offsets = nullptr;
 };
 
 std::vector<stripe_rowgroups> writer::impl::gather_stripe_info(
@@ -599,6 +600,9 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
           ck.dtype_len = column.type_width();
         }
         ck.scale = column.scale();
+        if (ck.type_kind == TypeKind::DECIMAL) {
+          ck.decimal_offsets = device_span<uint32_t>{column.decimal_offsets(), ck.num_rows};
+        }
       }
     }
   }
@@ -958,6 +962,7 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
 {
   const auto length                                        = strm_desc.stream_size;
   (*streams)[enc_stream.ids[strm_desc.stream_type]].length = length;
+  // std::cout << (int)strm_desc.stream_type << ' ' << length << std::endl;
   if (length == 0) { return; }
 
   const auto *stream_in = (compression_kind_ == NONE) ? enc_stream.data_ptrs[strm_desc.stream_type]
@@ -971,6 +976,8 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
     stream.synchronize();
 
     out_sink_->host_write(stream_out, length);
+    // for (auto it = stream_out; it < stream_out + length; ++it) std::cout << (int)*it << ' ';
+    // std::cout << std::endl;
   }
   stripe->dataLength += length;
 }
@@ -1111,10 +1118,13 @@ encoder_decimal_info decimal_chunk_sizes(table_view const &table,
                         curr_sizes.begin(),
                         [d_col = *d_column] __device__(auto idx) {
                           if (!d_col.is_valid(idx)) return 0u;
-                          uint32_t len  = 1;
-                          uint64_t elem = d_col.element<uint64_t>(idx);
-                          while (elem > 127) {
-                            elem >>= 7u;
+                          int64_t v     = d_col.element<int64_t>(idx);
+                          int64_t s     = (v < 0) ? 1 : 0;
+                          uint64_t zz_v = ((v ^ -s) * 2) + s;
+
+                          uint32_t len = 1;
+                          while (zz_v > 127) {
+                            zz_v >>= 7u;
                             ++len;
                           }
                           return len;
@@ -1126,7 +1136,7 @@ encoder_decimal_info decimal_chunk_sizes(table_view const &table,
                                     curr_sizes.begin(),
                                     curr_sizes.begin());
 
-      orc_col.attach_decimal_sizes(curr_sizes.data());
+      orc_col.attach_decimal_offsets(curr_sizes.data());
     }
   }
   if (elem_sizes.empty()) return {};

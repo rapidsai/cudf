@@ -781,7 +781,7 @@ __global__ void __launch_bounds__(block_size)
               s->lengths.u32[nz_idx]                  = value.size_bytes();
             }
             break;
-          case DECIMAL: s->lengths.u32[nz_idx] = s->chunk.scale; break;
+          case DECIMAL: s->lengths.u32[nz_idx] = zigzag(-s->chunk.scale); break;
           default: break;
         }
       }
@@ -866,6 +866,15 @@ __global__ void __launch_bounds__(block_size)
               n = s->numvals;
             }
             break;
+          case DECIMAL: {
+            if (valid) {
+              auto zzv    = zigzag(s->chunk.leaf_column->element<int64_t>(row));
+              auto offset = (row == 0) ? 0 : s->chunk.decimal_offsets[row - 1];
+              StoreVarint(s->stream.data_ptrs[CI_DATA] + offset, zzv);
+              // can verify the len against the offsets
+            }
+            n = s->numvals;
+          } break;
           default: n = s->numvals; break;
         }
         __syncthreads();
@@ -895,7 +904,9 @@ __global__ void __launch_bounds__(block_size)
   __syncthreads();
   if (t <= CI_PRESENT && s->stream.ids[t] >= 0) {
     // Update actual compressed length
-    streams[col_id][group_id].lengths[t] = s->strm_pos[t];
+    // (not needed for decimal data, whose exact size is known before encode)
+    if (!(t == CI_DATA && s->chunk.type_kind == DECIMAL))
+      streams[col_id][group_id].lengths[t] = s->strm_pos[t];
     if (!s->stream.data_ptrs[t]) {
       streams[col_id][group_id].data_ptrs[t] =
         static_cast<uint8_t *>(const_cast<void *>(s->chunk.leaf_column->head())) +
