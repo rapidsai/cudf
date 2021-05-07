@@ -30,12 +30,14 @@ class Masked(object):
 
 
 class MaskedType(types.Type):
-    def __init__(self, value): # add `value`
-        self.value = value
+    def __init__(self, value):
+        # MaskedType in numba shall be parameterized
+        # with a value type
+        self.value_type = value
         super().__init__(name="Masked")
     
     def __repr__(self):
-        return f"MaskedType({self.value})"
+        return f"MaskedType({self.value_type})"
 
 class NAType(types.Type):
     def __init__(self):
@@ -68,10 +70,7 @@ make_attribute_wrapper(MaskedType, "valid", "valid")
 @register_model(MaskedType)
 class MaskedModel(models.StructModel):
     def __init__(self, dmm, fe_type):
-        # fe_type is a Maskedtype instance
-        # will have a .value attr
-        # value -> fe_type.value 
-        members = [("value", types.int64), ("valid", types.bool_)]
+        members = [("value", fe_type.value_type), ("valid", types.bool_)]
         models.StructModel.__init__(self, dmm, fe_type, members)
 
 register_model(NAType)(models.OpaqueModel)
@@ -93,16 +92,25 @@ class MaskedScalarAdd(AbstractTemplate):
     # abstracttemplate vs concretetemplate
     def generic(self, args, kws):
         if isinstance(args[0], MaskedType) and isinstance(args[1], MaskedType):
-            # result type: f(args[0], args[1], op) where f is numba's typing for self.key
-            # self.key -> operator being used
-            return nb_signature(numba_masked, MaskedType(args[0].value), MaskedType(args[1].value))
+            # In the case of op(Masked, Masked), the return type is a Masked
+            # such that Masked.value 
+            return_type = self.context.resolve_function_type(
+                self.key,
+                (
+                    args[0].value_type,
+                    args[1].value_type
+                ),
+                kws
+            ).return_type
+            return nb_signature(MaskedType(return_type), MaskedType(args[0].value_type), MaskedType(args[1].value_type))
 
 
 @cuda_registry.register_global(operator.add)
 class MaskedScalarAddNull(AbstractTemplate):
     def generic(self, args, kws):
         if isinstance(args[0], MaskedType) and isinstance(args[1], NAType):
-            return nb_signature(MaskedType(args[0].value), MaskedType(args[0].value), numba_na)
+            # in the case
+            return nb_signature(MaskedType(args[0].value_type), MaskedType(args[0].value_type), numba_na)
 
 @cuda_lower(operator.add, MaskedType, MaskedType)
 def masked_scalar_add_impl(context, builder, sig, args):
@@ -133,7 +141,7 @@ def masked_scalar_add_impl(context, builder, sig, args):
 def masked_scalar_add_na_impl(context, builder, sig, args):
     return_type = sig.return_type
     # use context to get llvm type for a bool
-    result = cgutils.create_struct_proxy(MaskedType(return_type.value))(context, builder)
+    result = cgutils.create_struct_proxy(MaskedType(return_type.value_type))(context, builder)
     result.valid = context.get_constant(types.boolean, 0)
     return result._getvalue()
 
@@ -147,14 +155,14 @@ class MaskedScalarAddConstant(AbstractTemplate):
     def generic(self, args, kws):
         if isinstance(args[0], MaskedType) and isinstance(args[1], types.Integer):
             # TODO - need to get the result type of args[0].value and args[1]
-            return nb_signature(MaskedType(args[0].value), MaskedType(args[0].value), types.int64)
+            return nb_signature(MaskedType(args[0].value_type), MaskedType(args[0].value_type), types.int64)
 
 @cuda_lower(operator.add, MaskedType, types.Integer)
 def masked_scalar_add_constant_impl(context, builder, sig, input_values):
     masked_type, const_type = sig.args
 
-    indata = cgutils.create_struct_proxy(MaskedType(masked_type.value))(context, builder, value=input_values[0])
-    result = cgutils.create_struct_proxy(MaskedType(masked_type.value))(context, builder)
+    indata = cgutils.create_struct_proxy(MaskedType(masked_type.value_type))(context, builder, value=input_values[0])
+    result = cgutils.create_struct_proxy(MaskedType(masked_type.value_type))(context, builder)
     #to_add_const = context.get_constant(const_type, input_values[1])
 
     result.valid = context.get_constant(types.boolean, 0)
