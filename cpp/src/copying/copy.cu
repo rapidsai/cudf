@@ -274,10 +274,7 @@ struct copy_if_else_functor_impl<struct_view> {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-#if 0   // TODO: Enable after #8162 is resolved.
     return scatter_gather_based_if_else(lhs, rhs, size, filter, stream, mr);
-#endif  // #if 0;
-    CUDF_FAIL("copy_if_else not supported for struct_view yet");
   }
 };
 

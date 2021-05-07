@@ -31,7 +31,6 @@ struct TypedCopyIfElseNestedTest : CopyIfElseNestedTest {
 
 TYPED_TEST_CASE(TypedCopyIfElseNestedTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
-#if 0  // TODO: Enable tests after #8162 is resolved.
 TYPED_TEST(TypedCopyIfElseNestedTest, Structs)
 {
   using T = TypeParam;
@@ -93,8 +92,8 @@ TYPED_TEST(TypedCopyIfElseNestedTest, StructsWithNulls)
   auto result_column =
     copy_if_else(lhs_structs_column->view(), rhs_structs_column->view(), selector_column->view());
 
-  auto null_at_0_3 = iterator_with_null_at(std::vector<size_type>{0,3});
-  auto null_at_3_5 = iterator_with_null_at(std::vector<size_type>{3,5});
+  auto null_at_0_3 = iterator_with_null_at(std::vector<size_type>{0, 3});
+  auto null_at_3_5 = iterator_with_null_at(std::vector<size_type>{3, 5});
 
   auto expected_ints    = ints{{-1, 1, 22, 3, 4, 55, 6}, null_at_0_3};
   auto expected_strings = strings{{"0", "1", "22", "", "4", "", "6"}, null_at_3_5};
@@ -102,8 +101,6 @@ TYPED_TEST(TypedCopyIfElseNestedTest, StructsWithNulls)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result_column->view(), expected_result->view());
 }
-
-#endif  // #if 0 // TODO: Enable tests after #8162 is resolved.
 
 TYPED_TEST(TypedCopyIfElseNestedTest, Lists)
 {
