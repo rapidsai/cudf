@@ -18,6 +18,8 @@ from numba.cuda.cudaimpl import lower as cuda_lower, registry as cuda_lowering_r
 from numba.extending import types
 import inspect
 
+from numba.np import numpy_support
+
 from llvmlite import ir
 from cudf.core.scalar import _NAType
 
@@ -76,6 +78,7 @@ class MaskedModel(models.StructModel):
 register_model(NAType)(models.OpaqueModel)
 
 # types.int64 instance, change to typeclass (types.Integer, types.Number, etc)
+'''
 @lower_builtin(Masked, types.int64, types.bool_)
 def impl_masked_constructor(context, builder, sig, args):
     typ = sig.return_type
@@ -85,7 +88,7 @@ def impl_masked_constructor(context, builder, sig, args):
     masked.value = value
     masked.valid = valid
     return masked._getvalue()  # return a pointer to the struct I created
-
+'''
 
 @cuda_registry.register_global(operator.add)
 class MaskedScalarAdd(AbstractTemplate):
@@ -184,10 +187,11 @@ def masked_scalar_add_constant_impl(context, builder, sig, input_values):
     return result._getvalue()
 
 
-def compile_udf(func):
+def compile_udf(func, dtypes):
     n_params = len(py_signature(func).parameters)
-    to_compiler_sig = tuple(numba_masked for arg in range(n_params))
+    
 
+    to_compiler_sig = tuple(MaskedType(arg) for arg in (numpy_support.from_dtype(np_type) for np_type in dtypes))
     # Get the inlineable PTX function
     ptx, _ = cuda.compile_ptx_for_current_device(func, to_compiler_sig, device=True)
 

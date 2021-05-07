@@ -1421,10 +1421,7 @@ class Frame(libcudf.table.Table):
     def _apply(self, func):
         from cudf.core.udf import compile_udf
 
-        if not all(np.dtype('int64') == dtype for dtype in self.dtypes):
-            raise TypeError("Currently only int64 is supported")
-
-        kernel, ptx = compile_udf(func)
+        kernel, ptx = compile_udf(func, self.dtypes)
 
         output_column = cudf.core.column.column_empty(row_count=len(self), dtype='int64')
         output_mask = cudf.core.column.column_empty(row_count=len(self), dtype='bool')
