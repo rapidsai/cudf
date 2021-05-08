@@ -1391,7 +1391,7 @@ public class ColumnVectorTest extends CudfTestBase {
   void testFromScalarNull() {
     final int rowCount = 4;
     for (DType.DTypeEnum typeEnum : DType.DTypeEnum.values()) {
-      if (typeEnum == DType.DTypeEnum.EMPTY || typeEnum == DType.DTypeEnum.STRUCT) {
+      if (typeEnum == DType.DTypeEnum.EMPTY || typeEnum == DType.DTypeEnum.LIST || typeEnum == DType.DTypeEnum.STRUCT) {
         continue;
       }
       DType dType;
@@ -1424,6 +1424,50 @@ public class ColumnVectorTest extends CudfTestBase {
       assertEquals(input.getNullCount(), numNulls);
       for (int i = 0; i < numNulls; i++){
         assertTrue(input.isNull(i));
+      }
+    }
+  }
+
+  @Test
+  void testFromScalarNullList() {
+    final int rowCount = 4;
+    for (DType.DTypeEnum typeEnum : DType.DTypeEnum.values()) {
+      DType dType = typeEnum.isDecimalType() ? DType.create(typeEnum, -8): DType.create(typeEnum);
+      DataType hDataType;
+      if (DType.EMPTY.equals(dType)) {
+        continue;
+      } else if (DType.LIST.equals(dType)) {
+        // list of list of int32
+        hDataType = new ListType(true, new BasicType(true, DType.INT32));
+      } else if (DType.STRUCT.equals(dType)) {
+        // list of struct of int32
+        hDataType = new StructType(true, new BasicType(true, DType.INT32));
+      } else {
+        // list of non nested type
+        hDataType = new BasicType(true, dType);
+      }
+      try (Scalar s = Scalar.listFromNull(hDataType);
+           ColumnVector c = ColumnVector.fromScalar(s, rowCount);
+           HostColumnVector hc = c.copyToHost()) {
+        assertEquals(DType.LIST, c.getType());
+        assertEquals(rowCount, c.getRowCount());
+        assertEquals(rowCount, c.getNullCount());
+        for (int i = 0; i < rowCount; ++i) {
+          assertTrue(hc.isNull(i));
+        }
+
+        try (ColumnView child = c.getChildColumnView(0)) {
+          assertEquals(dType, child.getType());
+          assertEquals(0L, child.getRowCount());
+          assertEquals(0L, child.getNullCount());
+          if (child.getType().isNestedType()) {
+            try (ColumnView grandson = child.getChildColumnView(0)) {
+              assertEquals(DType.INT32, grandson.getType());
+              assertEquals(0L, grandson.getRowCount());
+              assertEquals(0L, grandson.getNullCount());
+            }
+          }
+        }
       }
     }
   }
