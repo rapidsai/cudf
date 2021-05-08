@@ -39,19 +39,20 @@ class MaskedType(types.Type):
     def __init__(self, value):
         # MaskedType in numba shall be parameterized
         # with a value type
-        self.value_type = value
         super().__init__(name="Masked")
+        self.value_type = value
 
     def __repr__(self):
         return f"MaskedType({self.value_type})"
 
+    def __hash__(self):
+        return self.__repr__().__hash__()
 
 class NAType(types.Type):
     def __init__(self):
         super().__init__(name="NA")
 
 
-numba_masked = MaskedType(types.int64)  # name this something more natural - GM
 numba_na = NAType()
 
 
@@ -216,7 +217,7 @@ def masked_scalar_add_constant_impl(context, builder, sig, input_values):
 
 def compile_udf(func, dtypes):
     n_params = len(py_signature(func).parameters)
-
+    breakpoint()
     to_compiler_sig = tuple(
         MaskedType(arg)
         for arg in (numpy_support.from_dtype(np_type) for np_type in dtypes)
