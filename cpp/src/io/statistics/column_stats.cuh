@@ -65,14 +65,17 @@ struct gather_statistics {
     using extrema_reduce = cub::BlockReduce<E, block_size>;
     detail::temp_storage_wrapper<E, block_size> extrema_storage(temp_storage);
 
-    typed_statistics_chunk<T> chunk(s.group.num_rows);
+    using type_convert = detail::type_conversion<detail::conversion_map<IO>>;
+    using CT = typename type_convert::template type<T>;
+    typed_statistics_chunk<CT> chunk(s.group.num_rows);
 
     for (uint32_t i = 0; i < s.group.num_rows; i += block_size) {
       uint32_t r        = i + t;
       uint32_t row      = r + s.group.start_row;
       uint32_t is_valid = (r < s.group.num_rows) ? s.col.leaf_column->is_valid(row) : 0;
       if (is_valid) {
-        chunk.reduce(s.col.leaf_column->element<T>(row));
+        auto converted_value = type_convert::convert(s.col.leaf_column->element<T>(row));
+        chunk.reduce(converted_value);
       }
     }
     chunk.minimum_value =
@@ -83,9 +86,9 @@ struct gather_statistics {
     __syncthreads();
     chunk.has_minmax = __syncthreads_or(chunk.has_minmax);
 
-    if constexpr (detail::aggregation_type<T>::is_supported) {
+    if constexpr (detail::aggregation_type<CT>::is_supported) {
       if (chunk.has_minmax) {
-        using A = typename detail::aggregation_type<T>::type;
+        using A = typename detail::aggregation_type<CT>::type;
         using aggregate_reduce = cub::BlockReduce<A, block_size>;
         detail::temp_storage_wrapper<A, block_size> aggregate_storage(temp_storage);
         chunk.aggregate = aggregate_reduce(aggregate_storage.get()).Sum(chunk.aggregate);
@@ -94,15 +97,6 @@ struct gather_statistics {
 
     if (threadIdx.x == 0) {
       s.ck = get_untyped_chunk(chunk);
-      if (s.col.stats_dtype == dtype_timestamp64) {
-        if (s.col.ts_scale < -1) {
-          s.ck.min_value.i_val /= -s.col.ts_scale;
-          s.ck.max_value.i_val /= -s.col.ts_scale;
-        } else if (s.col.ts_scale > 1) {
-          s.ck.min_value.i_val *= s.col.ts_scale;
-          s.ck.max_value.i_val *= s.col.ts_scale;
-        }
-      }
     }
   }
 };
@@ -125,6 +119,7 @@ struct merge_statistics {
     using E = typename detail::extrema_type<T>::type;
     using extrema_reduce = cub::BlockReduce<E, block_size>;
     using count_reduce = cub::BlockReduce<uint32_t, block_size>;
+    //TODO : Decide which better wrapper style
     //detail::temp_storage_wrapper<E, block_size> extrema_storage(temp_storage);
     //detail::temp_storage_wrapper<uint32_t, block_size> count_storage(temp_storage);
 

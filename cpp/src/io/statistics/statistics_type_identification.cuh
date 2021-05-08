@@ -26,6 +26,8 @@
 
 #include <cudf/utilities/traits.hpp>
 
+#include "conversion_type_select.cuh"
+
 #include <tuple>
 
 namespace cudf {
@@ -35,6 +37,53 @@ namespace detail {
 enum class io_type {
   ORC,
   PARQUET
+};
+
+template <io_type IO>
+struct conversion_map;
+
+template <>
+struct conversion_map<io_type::ORC> {
+using types = std::tuple<
+std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
+std::pair<cudf::timestamp_us, cudf::timestamp_ms>,
+std::pair<cudf::timestamp_ns, cudf::timestamp_ms>,
+std::pair<cudf::duration_s, cudf::duration_ms>,
+std::pair<cudf::duration_us, cudf::duration_ms>,
+std::pair<cudf::duration_ns, cudf::duration_ms>>;
+};
+
+template <>
+struct conversion_map<io_type::PARQUET> {
+using types = std::tuple<
+std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
+std::pair<cudf::timestamp_ns, cudf::timestamp_us>,
+std::pair<cudf::duration_s, cudf::duration_ms>,
+std::pair<cudf::duration_ns, cudf::duration_us>>;
+};
+
+template <typename conversion>
+class type_conversion {
+  using type_selector = ConversionTypeSelect<typename conversion::types>;
+
+  public:
+  template <typename T>
+  using type = typename type_selector::template type<T>;
+
+  template <typename T>
+  static constexpr __device__
+  typename type_selector::template type<T> convert(const T& elem) {
+    using Type = typename type_selector::template type<T>;
+    if constexpr (cudf::is_duration<T>()) {
+      return cuda::std::chrono::duration_cast<Type>(elem);
+    } else if constexpr (cudf::is_timestamp<T>()) {
+      using Duration = typename Type::duration;
+      return cuda::std::chrono::time_point_cast<Duration>(elem);
+    } else {
+      return elem;
+    }
+    return Type{};
+  }
 };
 
 template<class T> struct dependent_false : std::false_type {};
