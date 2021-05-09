@@ -20,6 +20,7 @@ from cudf._typing import BinaryOperand
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.dtypes import ListDtype
 from cudf.utils.dtypes import is_list_dtype, is_numerical_dtype
 
 
@@ -117,13 +118,16 @@ class ListColumn(ColumnBase):
         Name: val, dtype: list
 
         """
-
-        if binop == "add":
-            return concatenate_rows(Table({0: self, 1: other}))
+        if isinstance(other.dtype, ListDtype):
+            if binop == "add":
+                return concatenate_rows(Table({0: self, 1: other}))
+            else:
+                raise NotImplementedError(
+                    "Lists concatenation for this operation is not yet"
+                    "supported"
+                )
         else:
-            raise NotImplementedError(
-                "Lists concatenation for this operation is not yet supported"
-            )
+            return ValueError
 
     @property
     def elements(self):
