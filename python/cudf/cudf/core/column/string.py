@@ -601,10 +601,6 @@ class StringMethods(ColumnMethodsMixin):
         else:
             # If self._column is not a ListColumn, we will have to
             # split each row by character and create a ListColumn out of it.
-
-            # TODO: Remove this workaround after the following
-            # feature request is resolved
-            # FEA: https://github.com/rapidsai/cudf/issues/8094
             strings_column = self._split_by_character()
 
         if is_scalar(sep):
@@ -641,13 +637,7 @@ class StringMethods(ColumnMethodsMixin):
     def _split_by_character(self):
         result_col = cpp_character_tokenize(self._column)
 
-        bytes_count = cpp_count_bytes(self._column)
-        offset_col = cudf.core.column.column_empty(
-            row_count=len(bytes_count) + 1, dtype="int32"
-        )
-        offset_col[0] = 0
-        offset_col[1:] = bytes_count
-        offset_col = offset_col._apply_scan_op("sum")
+        offset_col = self._column.children[0]
 
         res = cudf.core.column.ListColumn(
             size=len(self._column),
