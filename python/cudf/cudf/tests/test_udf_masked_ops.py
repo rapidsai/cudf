@@ -1,8 +1,9 @@
 import cudf
 from cudf.core.udf import nulludf
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, NUMERIC_TYPES
 import pandas as pd
-
+import itertools
+import pytest
 
 def test_apply_basic():
     def func_pdf(x, y):
@@ -113,6 +114,33 @@ def test_apply_NA_conditional():
     expect = pdf.apply(lambda row: func_pdf(row['a'], row['b']), axis=1)
     obtain = gdf.apply(lambda row: func_gdf(row['a'], row['b']), axis=1)
 
+    assert_eq(expect, obtain)
+
+
+@pytest.mark.parametrize('dtype_a', list(NUMERIC_TYPES))
+@pytest.mark.parametrize('dtype_b', list(NUMERIC_TYPES))
+def test_apply_mixed_dtypes(dtype_a, dtype_b):
+    def func_pdf(x, y):
+        return x + y
+    
+    @nulludf
+    def func_gdf(x, y):
+        return x + y
+
+    gdf = cudf.DataFrame({
+        'a':[1.5,None,3, None],
+        'b':[4,5,None, None]
+    })
+    gdf['a'] = gdf['a'].astype(dtype_a)
+    gdf['b'] = gdf['b'].astype(dtype_b)
+
+    pdf = gdf.to_pandas()
+
+    expect = pdf.apply(lambda row: func_pdf(row['a'], row['b']), axis=1)
+    obtain = gdf.apply(lambda row: func_gdf(row['a'], row['b']), axis=1)
+
+    # currently, cases where one side is float32 fail, pandas doing some
+    # weird casting here and getting float64 always
     assert_eq(expect, obtain)
 
 
