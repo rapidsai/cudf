@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,10 +18,18 @@
 
 package ai.rapids.cudf;
 
+import ai.rapids.cudf.HostColumnVector.BasicType;
+import ai.rapids.cudf.HostColumnVector.DataType;
+import ai.rapids.cudf.HostColumnVector.ListType;
+import ai.rapids.cudf.HostColumnVector.StructData;
+import ai.rapids.cudf.HostColumnVector.StructType;
+
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 
+import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class ScalarTest extends CudfTestBase {
@@ -58,6 +66,36 @@ public class ScalarTest extends CudfTestBase {
         try (Scalar s = Scalar.fromNull(type)) {
           assertEquals(type, s.getType());
           assertFalse(s.isValid(), "null validity for " + type);
+        }
+      }
+
+      // list scalar
+      HostColumnVector.DataType hDataType;
+      if (DType.EMPTY.equals(type)) {
+        continue;
+      } else if (DType.LIST.equals(type)) {
+        // list of list of int32
+        hDataType = new ListType(true, new BasicType(true, DType.INT32));
+      } else if (DType.STRUCT.equals(type)) {
+        // list of struct of int32
+        hDataType = new StructType(true, new BasicType(true, DType.INT32));
+      } else {
+        // list of non nested type
+        hDataType = new BasicType(true, type);
+      }
+      try (Scalar s = Scalar.listFromNull(hDataType);
+           ColumnView listCv = s.getListAsColumnView()) {
+        assertFalse(s.isValid(), "null validity for " + type);
+        assertEquals(DType.LIST, s.getType());
+        assertEquals(type, listCv.getType());
+        assertEquals(0L, listCv.getRowCount());
+        assertEquals(0L, listCv.getNullCount());
+        if (type.isNestedType()) {
+          try (ColumnView child = listCv.getChildColumnView(0)) {
+            assertEquals(DType.INT32, child.getType());
+            assertEquals(0L, child.getRowCount());
+            assertEquals(0L, child.getNullCount());
+          }
         }
       }
     }
@@ -203,6 +241,33 @@ public class ScalarTest extends CudfTestBase {
       assertTrue(s.isValid());
       assertEquals("TEST", s.getJavaString());
       assertArrayEquals(new byte[]{'T', 'E', 'S', 'T'}, s.getUTF8());
+    }
+  }
+
+  @Test
+  public void testList() {
+    // list of int
+    try (ColumnVector listInt = ColumnVector.fromInts(1, 2, 3, 4);
+         Scalar s = Scalar.listFromColumnView(listInt)) {
+      assertEquals(DType.LIST, s.getType());
+      assertTrue(s.isValid());
+      try (ColumnView v = s.getListAsColumnView()) {
+        assertColumnsAreEqual(listInt, v);
+      }
+    }
+
+    // list of list
+    HostColumnVector.DataType listDT = new HostColumnVector.ListType(true,
+            new HostColumnVector.BasicType(true, DType.INT32));
+    try (ColumnVector listList = ColumnVector.fromLists(listDT,
+            Arrays.asList(1, 2, 3),
+            Arrays.asList(4, 5, 6));
+         Scalar s = Scalar.listFromColumnView(listList)) {
+      assertEquals(DType.LIST, s.getType());
+      assertTrue(s.isValid());
+      try (ColumnView v = s.getListAsColumnView()) {
+        assertColumnsAreEqual(listList, v);
+      }
     }
   }
 }

@@ -29,12 +29,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 
-try:
-    # Numba >= 0.49
-    from numba.np import numpy_support
-except ImportError:
-    # Numba <= 0.49
-    from numba import numpy_support
+from numba.np import numpy_support
 
 cimport cudf._lib.cpp.transform as libcudf_transform
 

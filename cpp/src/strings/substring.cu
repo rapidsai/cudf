@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <strings/utilities.cuh>
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -25,6 +23,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -169,7 +168,7 @@ struct substring_from_fn {
     }
     auto const d_str  = d_column.template element<string_view>(idx);
     auto const length = d_str.length();
-    auto const start  = starts[idx];
+    auto const start  = std::max(starts[idx], 0);
     if (start >= length) {
       if (!d_chars) d_offsets[idx] = 0;
       return;
