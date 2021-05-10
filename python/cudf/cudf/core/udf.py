@@ -51,7 +51,53 @@ class MaskedType(types.Type):
         return self.__repr__().__hash__()
 
     def unify(self, context, other):
-        breakpoint()
+        '''
+        Logic for sorting out what to do when the UDF conditionally
+        returns a `MaskedType`, an `NAType`, or a literal based off 
+        the data at runtime.
+
+        In this framework, every input column is treated as having
+        type `MaskedType`. Operations like `x + y` are understood 
+        as translating to:
+
+        `Masked(value=x, valid=True) + Masked(value=y, valid=True)`
+
+        This means if the user writes a function such as 
+        def f(x, y):
+            return x + y
+            
+        numba sees this function as:
+        f(x: MaskedType, y: MaskedType) -> MaskedType
+        
+        However if the user writes something like:
+        def f(x, y):
+            if x > 5:
+                return 42
+            else:
+                return x + y
+        
+        numba now sees this as
+        f(x: MaskedType, y: MaskedType) -> MaskedType OR literal 
+
+        In general, when numba sees a function that could return
+        more than a single type, it invokes unification to find a
+        common type that can hold all possible results, eg given 
+        a function that could return an int8 or an int16, numba 
+        will resolve the type to int16. However it does not know
+        how to unify MaskedType with primitive types. We need to 
+        actually define the common type between MaskedType and
+        literals, as well as between a Masked and an NA. For full
+        generality, we'd need to unify NA and literal as well. 
+        '''
+        
+        # If we have Masked and NA, the output should be a 
+        # MaskedType with the original type as its value_type
+        if isinstance(other, NAType):
+            return MaskedType(self.value_type)
+
+        # if we have MaskedType and Literal, the output should be
+        # determined from the MaskedType.value_type (which is a 
+        # primitive type) and other
         unified = context.unify_pairs(self.value_type, other)
         if unified is None:
             return None
@@ -232,7 +278,7 @@ def masked_scalar_add_constant_impl(context, builder, sig, input_values):
 # extension type. The cast implementation takes the value passed in and returns
 # an extension struct wrapping that value.
 @cuda_impl_registry.lower_cast(types.Any, MaskedType)
-def cast_primitive_to_extension(context, builder, fromty, toty, val):
+def cast_primitive_to_masked(context, builder, fromty, toty, val):
     casted = context.cast(builder, val, fromty, toty.value_type)
     ext = cgutils.create_struct_proxy(toty)(context, builder)
     ext.value = casted
