@@ -267,7 +267,7 @@ add_library(cudf
     src/join/join.cu
     src/join/semi_join.cu
     src/lists/contains.cu
-    src/lists/combining/concatenate_by_key.cu
+    src/lists/combining/concatenate_list_elements.cu
     src/lists/combining/concatenate_rows.cu
     src/lists/copying/concatenate.cu
     src/lists/copying/copying.cu
