@@ -15,8 +15,6 @@
 import cudf
 from cudf.tests.utils import assert_eq
 
-from libcpp.utility cimport move
-
 from cudf._lib.copying import pack, unpack
 
 
@@ -26,18 +24,14 @@ def test_unpacked_equality():
 
     packed = pack(gdf)
     del gdf
-    unpacked = cudf.DataFrame._from_table(
-        unpack(packed), pdf._column_names
-    )
+    unpacked = unpack(packed)
 
     assert_eq(unpacked, pdf)
 
 
 def test_unpacked_unique_pointers():
     gdf = cudf.DataFrame({'a': [1, 2, 3, None], 'b': [4, 5, 6, None]})
-    unpacked = cudf.DataFrame._from_table(
-        unpack(pack(gdf), gdf._column_names)
-    )
+    unpacked = unpack(pack(gdf))
 
     assert all([
         gdf._data[col].data.ptr != unpacked._data[col].data.ptr
