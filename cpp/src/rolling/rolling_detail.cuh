@@ -890,6 +890,58 @@ struct rolling_window_launcher {
         mr);
   }
 
+  template <aggregation::Kind op,
+            typename PrecedingWindowIterator,
+            typename FollowingWindowIterator>
+  std::enable_if_t<(op == aggregation::COLLECT_LIST), std::unique_ptr<column>> operator()(
+    column_view const& input,
+    column_view const& default_outputs,
+    PrecedingWindowIterator preceding_begin_raw,
+    FollowingWindowIterator following_begin_raw,
+    size_type min_periods,
+    rolling_aggregation const& agg,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
+  {
+    return collect_list(input,
+                        default_outputs,
+                        preceding_begin_raw,
+                        following_begin_raw,
+                        min_periods,
+                        agg,
+                        stream,
+                        mr);
+  }
+
+  template <aggregation::Kind op,
+            typename PrecedingWindowIterator,
+            typename FollowingWindowIterator>
+  std::enable_if_t<(op == aggregation::COLLECT_SET), std::unique_ptr<column>> operator()(
+    column_view const& input,
+    column_view const& default_outputs,
+    PrecedingWindowIterator preceding_begin_raw,
+    FollowingWindowIterator following_begin_raw,
+    size_type min_periods,
+    rolling_aggregation const& agg,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
+  {
+    auto collect_result = collect_list(input,
+                                       default_outputs,
+                                       preceding_begin_raw,
+                                       following_begin_raw,
+                                       min_periods,
+                                       agg,
+                                       stream,
+                                       mr);
+
+    return lists::detail::drop_list_duplicates(lists_column_view(collect_result->view()),
+                                               null_equality::EQUAL,
+                                               nan_equality::UNEQUAL,
+                                               stream,
+                                               mr);
+  }
+
   /**
    * @brief Creates the offsets child of the result of the `COLLECT_LIST` window aggregation
    *
@@ -1132,16 +1184,15 @@ struct rolling_window_launcher {
       std::move(new_gather_map), std::move(new_offsets));
   }
 
-  template <aggregation::Kind op, typename PrecedingIter, typename FollowingIter>
-  std::enable_if_t<(op == aggregation::COLLECT_LIST), std::unique_ptr<column>> operator()(
-    column_view const& input,
-    column_view const& default_outputs,
-    PrecedingIter preceding_begin_raw,
-    FollowingIter following_begin_raw,
-    size_type min_periods,
-    rolling_aggregation const& agg,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+  template <typename PrecedingIter, typename FollowingIter>
+  std::unique_ptr<column> collect_list(column_view const& input,
+                                       column_view const& default_outputs,
+                                       PrecedingIter preceding_begin_raw,
+                                       FollowingIter following_begin_raw,
+                                       size_type min_periods,
+                                       rolling_aggregation const& agg,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
   {
     CUDF_EXPECTS(default_outputs.is_empty(),
                  "COLLECT_LIST window function does not support default values.");
@@ -1208,54 +1259,6 @@ struct rolling_window_launcher {
                              std::move(null_mask),
                              stream,
                              mr);
-  }
-
-  template <aggregation::Kind op, typename PrecedingIter, typename FollowingIter>
-  std::enable_if_t<(op == aggregation::COLLECT_LIST), std::unique_ptr<column>> operator()(
-    column_view const& input,
-    column_view const& default_outputs,
-    PrecedingIter preceding_begin_raw,
-    FollowingIter following_begin_raw,
-    size_type min_periods,
-    std::unique_ptr<aggregation> const& agg,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
-  {
-    return collect_list(input,
-                        default_outputs,
-                        preceding_begin_raw,
-                        following_begin_raw,
-                        min_periods,
-                        agg,
-                        stream,
-                        mr);
-  }
-
-  template <aggregation::Kind op, typename PrecedingIter, typename FollowingIter>
-  std::enable_if_t<(op == aggregation::COLLECT_SET), std::unique_ptr<column>> operator()(
-    column_view const& input,
-    column_view const& default_outputs,
-    PrecedingIter preceding_begin_raw,
-    FollowingIter following_begin_raw,
-    size_type min_periods,
-    std::unique_ptr<aggregation> const& agg,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
-  {
-    auto collect_result = collect_list(input,
-                                       default_outputs,
-                                       preceding_begin_raw,
-                                       following_begin_raw,
-                                       min_periods,
-                                       agg,
-                                       stream,
-                                       mr);
-
-    return lists::detail::drop_list_duplicates(lists_column_view(collect_result->view()),
-                                               null_equality::EQUAL,
-                                               nan_equality::UNEQUAL,
-                                               stream,
-                                               mr);
   }
 };
 
