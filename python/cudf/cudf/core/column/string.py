@@ -41,7 +41,7 @@ from cudf._lib.nvtext.stemmer import (
     porter_stemmer_measure as cpp_porter_stemmer_measure,
 )
 from cudf._lib.nvtext.subword_tokenize import (
-    subword_tokenize as cpp_subword_tokenize,
+    subword_tokenize_vocab_file as cpp_subword_tokenize_vocab_file,
 )
 from cudf._lib.nvtext.tokenize import (
     _count_tokens_column as cpp_count_tokens_column,
@@ -110,6 +110,7 @@ from cudf._lib.strings.find import (
     startswith_multiple as cpp_startswith_multiple,
 )
 from cudf._lib.strings.findall import findall as cpp_findall
+from cudf._lib.strings.json import get_json_object as cpp_get_json_object
 from cudf._lib.strings.padding import (
     PadSide,
     center as cpp_center,
@@ -2179,6 +2180,72 @@ class StringMethods(ColumnMethodsMixin):
         """
 
         return self._return_or_inplace(cpp_string_get(self._column, i))
+
+    def get_json_object(self, json_path):
+        """
+        Applies a JSONPath string to an input strings column
+        where each row in the column is a valid json string
+
+        Parameters
+        ----------
+        json_path: str
+            The JSONPath string to be applied to each row
+            of the input column
+
+        Returns
+        -------
+        Column: New strings column containing the retrieved json object strings
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(
+            [
+                \"\"\"
+                {
+                    "store":{
+                        "book":[
+                            {
+                                "category":"reference",
+                                "author":"Nigel Rees",
+                                "title":"Sayings of the Century",
+                                "price":8.95
+                            },
+                            {
+                                "category":"fiction",
+                                "author":"Evelyn Waugh",
+                                "title":"Sword of Honour",
+                                "price":12.99
+                            }
+                        ]
+                    }
+                }
+                \"\"\"
+            ])
+        >>> s
+            0    {"store": {\n        "book": [\n        { "cat...
+            dtype: object
+        >>> s.str.get_json_object("$.store.book")
+            0    [\n        { "category": "reference",\n       ...
+            dtype: object
+        """
+
+        try:
+            res = self._return_or_inplace(
+                cpp_get_json_object(
+                    self._column, cudf.Scalar(json_path, "str")
+                )
+            )
+        except RuntimeError as e:
+            matches = (
+                "Unrecognized JSONPath operator",
+                "Invalid empty name in JSONPath query string",
+            )
+            if any(match in str(e) for match in matches):
+                raise ValueError("JSONPath value not found") from e
+            raise
+        else:
+            return res
 
     def split(
         self, pat: str = None, n: int = -1, expand: bool = None
@@ -4617,7 +4684,7 @@ class StringMethods(ColumnMethodsMixin):
         array([[0, 0, 2],
                [1, 0, 1]], dtype=uint32)
         """
-        tokens, masks, metadata = cpp_subword_tokenize(
+        tokens, masks, metadata = cpp_subword_tokenize_vocab_file(
             self._column,
             hash_file,
             max_length,

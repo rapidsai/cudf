@@ -1289,18 +1289,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return Column containing aggregate function result.
    * @throws IllegalArgumentException if unsupported window specification * (i.e. other than {@link WindowOptions.FrameType#ROWS} is used.
    */
-  public final ColumnVector rollingWindow(Aggregation op, WindowOptions options) {
+  public final ColumnVector rollingWindow(RollingAggregation op, WindowOptions options) {
+    Aggregation agg = op.getBaseAggregation();
     // Check that only row-based windows are used.
     if (!options.getFrameType().equals(WindowOptions.FrameType.ROWS)) {
       throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: "
           + options.getFrameType());
     }
 
-    long nativePtr = op.createNativeInstance();
+    long nativePtr = agg.createNativeInstance();
     try {
       return new ColumnVector(
           rollingWindow(this.getNativeView(),
-              op.getDefaultOutput(),
+              agg.getDefaultOutput(),
               options.getMinPeriods(),
               nativePtr,
               options.getPreceding(),
@@ -1310,6 +1311,18 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     } finally {
       Aggregation.close(nativePtr);
     }
+  }
+
+  /**
+   * Compute the cumulative sum/prefix sum of the values in this column.
+   * This is similar to a rolling window SUM with unbounded preceding and none following.
+   * Input values 1, 2, 3
+   * Output values 1, 3, 6
+   * This currently only works for long values that are not nullable as this is currently a
+   * very simple implementation. It may be expanded in the future if needed.
+   */
+  public final ColumnVector prefixSum() {
+    return new ColumnVector(prefixSum(getNativeView()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -2824,20 +2837,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long urlEncode(long cudfViewHandle);
 
   /**
-   * Native method to concatenate columns of strings together, combining a row from
-   * each colunm into a single string.
-   * @param columnViews array of longs holding the native handles of the column_views to combine.
-   * @param separator string scalar inserted between each string being merged, may not be null.
-   * @param narep string scalar indicating null behavior. If set to null and any string in the row is null
-   *              the resulting string will be null. If not null, null values in any column will be
-   *              replaced by the specified string. The underlying value in the string scalar may be null,
-   *              but the object passed in may not.
-   * @return native handle of the resulting cudf column, used to construct the Java column
-   *         by the stringConcatenate method.
-   */
-  protected static native long stringConcatenation(long[] columnViews, long separator, long narep);
-
-  /**
    * Native method for map lookup over a column of List<Struct<String,String>>
    * @param columnView the column view handle of the map
    * @param key the string scalar that is the key for lookup
@@ -2918,6 +2917,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       int following,
       long preceding_col,
       long following_col);
+
+  private static native long prefixSum(long viewHandle) throws CudfException;
 
   private static native long nansToNulls(long viewHandle) throws CudfException;
 

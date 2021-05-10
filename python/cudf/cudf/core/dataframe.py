@@ -10,7 +10,7 @@ import sys
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from typing import Any, Optional, Set, TypeVar
+from typing import Any, Optional, TypeVar
 
 import cupy
 import numpy as np
@@ -554,6 +554,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         return data, index
 
+    # The `constructor*` properties are used by `dask` (and `dask_cudf`)
     @property
     def _constructor(self):
         return DataFrame
@@ -1456,7 +1457,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     new_data, index=self.index, name=labels
                 )
                 return out
-        out = self._constructor()._from_data(
+        out = self.__class__()._from_data(
             new_data, index=self.index, columns=new_data.to_pandas_index()
         )
         return out
@@ -3157,20 +3158,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         out = self._gather(positions, keep_index=keep_index)
         out.columns = self.columns
         return out
-
-    def __copy__(self):
-        return self.copy(deep=True)
-
-    def __deepcopy__(self, memo=None):
-        """
-        Parameters
-        ----------
-        memo, default None
-            Standard signature. Unused
-        """
-        if memo is None:
-            memo = {}
-        return self.copy(deep=True)
 
     @annotate("INSERT", color="green", domain="cudf_python")
     def insert(self, loc, name, value):
@@ -7774,8 +7761,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             return self.__class__._from_data(data, index=idx)
 
         return super()._explode(column, ignore_index)
-
-    _accessors = set()  # type: Set[Any]
 
 
 def from_pandas(obj, nan_as_null=None):
