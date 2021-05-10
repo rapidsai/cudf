@@ -244,6 +244,8 @@ public final class Table implements AutoCloseable {
   /**
    * Setup everything to write parquet formatted data to a file.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
+   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
@@ -256,18 +258,22 @@ public final class Table implements AutoCloseable {
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetFileBegin(String[] columnNames,
+                                                   int numChildren,
+                                                   int[] flatNumChildren,
                                                    boolean[] nullable,
                                                    String[] metadataKeys,
                                                    String[] metadataValues,
                                                    int compression,
                                                    int statsFreq,
-                                                   boolean isInt96,
+                                                   boolean[] isInt96,
                                                    int[] precisions,
                                                    String filename) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a buffer.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
+   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
@@ -280,12 +286,14 @@ public final class Table implements AutoCloseable {
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetBufferBegin(String[] columnNames,
+                                                     int numChildren,
+                                                     int[] flatNumChildren,
                                                      boolean[] nullable,
                                                      String[] metadataKeys,
                                                      String[] metadataValues,
                                                      int compression,
                                                      int statsFreq,
-                                                     boolean isInt96,
+                                                     boolean[] isInt96,
                                                      int[] precisions,
                                                      HostBufferConsumer consumer) throws CudfException;
 
@@ -828,35 +836,45 @@ public final class Table implements AutoCloseable {
     HostBufferConsumer consumer;
 
     private ParquetTableWriter(ParquetWriterOptions options, File outputFile) {
-      int numColumns = options.getColumnNames().length;
-      assert (numColumns == options.getColumnNullability().length);
-      int[] precisions = options.getPrecisions();
-      if (precisions != null) {
-        assert (numColumns >= options.getPrecisions().length);
-      }
+      String[] columnNames = options.getFlatColumnNames();
+      boolean[] columnNullabilities = options.getFlatIsNullable();
+      boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
+      int[] precisions = options.getFlatPrecision();
+      int[] flatNumChildren = options.getFlatNumChildren();
+
       this.consumer = null;
-      this.handle = writeParquetFileBegin(options.getColumnNames(),
-          options.getColumnNullability(),
+      this.handle = writeParquetFileBegin(columnNames,
+          options.getTopLevelChildren(),
+          flatNumChildren,
+          columnNullabilities,
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
-          options.isTimestampTypeInt96(),
-          options.getPrecisions(),
+          timeInt96Values,
+          precisions,
           outputFile.getAbsolutePath());
     }
 
     private ParquetTableWriter(ParquetWriterOptions options, HostBufferConsumer consumer) {
-      this.handle = writeParquetBufferBegin(options.getColumnNames(),
-          options.getColumnNullability(),
+      String[] columnNames = options.getFlatColumnNames();
+      boolean[] columnNullabilities = options.getFlatIsNullable();
+      boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
+      int[] precisions = options.getFlatPrecision();
+      int[] flatNumChildren = options.getFlatNumChildren();
+
+      this.consumer = consumer;
+      this.handle = writeParquetBufferBegin(columnNames,
+          options.getTopLevelChildren(),
+          flatNumChildren,
+          columnNullabilities,
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
-          options.isTimestampTypeInt96(),
-          options.getPrecisions(),
+          timeInt96Values,
+          precisions,
           consumer);
-      this.consumer = consumer;
     }
 
     @Override
@@ -1535,109 +1553,6 @@ public final class Table implements AutoCloseable {
    */
   public static Table merge(List<Table> tables, OrderByArg... args) {
     return merge(tables.toArray(new Table[tables.size()]), args);
-  }
-
-  /**
-   * Returns count aggregation with only valid values.
-   * Null values are skipped.
-   * @param index Column on which aggregation is to be performed
-   * @return count aggregation of column `index` with null values skipped.
-   * @deprecated please use Aggregation.count.onColumn
-   */
-  @Deprecated
-  public static Aggregate count(int index) {
-    return Aggregate.count(index, false);
-  }
-
-  /**
-   * Returns count aggregation
-   * @param index Column on which aggregation is to be performed.
-   * @param include_nulls Include nulls if set to true
-   * @return count aggregation of column `index`
-   * @deprecated please use Aggregation.count.onColumn
-   */
-  @Deprecated
-  public static Aggregate count(int index, boolean include_nulls) {
-    return Aggregate.count(index, include_nulls);
-  }
-
-  /**
-   * Returns max aggregation. Null values are skipped.
-   * @param index Column on which max aggregation is to be performed.
-   * @return max aggregation of column `index`
-   * @deprecated please use Aggregation.max.onColumn
-   */
-  @Deprecated
-  public static Aggregate max(int index) {
-    return Aggregate.max(index);
-  }
-
-  /**
-   * Returns min aggregation. Null values are skipped.
-   * @param index Column on which min aggregation is to be performed.
-   * @return min aggregation of column `index`
-   * @deprecated please use Aggregation.min.onColumn
-   */
-  @Deprecated
-  public static Aggregate min(int index) {
-    return Aggregate.min(index);
-  }
-
-  /**
-   * Returns sum aggregation. Null values are skipped.
-   * @param index Column on which sum aggregation is to be performed.
-   * @return sum aggregation of column `index`
-   * @deprecated please use Aggregation.sum.onColumn
-   */
-  @Deprecated
-  public static Aggregate sum(int index) {
-    return Aggregate.sum(index);
-  }
-
-  /**
-   * Returns mean aggregation. Null values are skipped.
-   * @param index Column on which mean aggregation is to be performed.
-   * @return mean aggregation of column `index`
-   * @deprecated please use Aggregation.mean.onColumn
-   */
-  @Deprecated
-  public static Aggregate mean(int index) {
-    return Aggregate.mean(index);
-  }
-
-  /**
-   * Returns median aggregation. Null values are skipped.
-   * @param index Column on which median aggregation is to be performed.
-   * @return median aggregation of column `index`
-   * @deprecated please use Aggregation.median.onColumn
-   */
-  @Deprecated
-  public static Aggregate median(int index) {
-    return Aggregate.median(index);
-  }
-
-  /**
-   * Returns first aggregation.
-   * @param index Column on which first aggregation is to be performed.
-   * @param includeNulls Specifies whether null values are included in the aggregate operation.
-   * @return first aggregation of column `index`
-   * @deprecated please use Aggregation.nth.onColumn
-   */
-  @Deprecated
-  public static Aggregate first(int index, boolean includeNulls) {
-    return Aggregate.first(index, includeNulls);
-  }
-
-  /**
-   * Returns last aggregation.
-   * @param index Column on which last aggregation is to be performed.
-   * @param includeNulls Specifies whether null values are included in the aggregate operation.
-   * @return last aggregation of column `index`
-   * @deprecated please use Aggregation.nth.onColumn
-   */
-  @Deprecated
-  public static Aggregate last(int index, boolean includeNulls) {
-    return Aggregate.last(index, includeNulls);
   }
 
   /**
@@ -2432,7 +2347,7 @@ public final class Table implements AutoCloseable {
      *                             ROWS BETWEEN 1 PRECEDING and 1 FOLLOWING)
      *  FROM my_sales_table WHERE ...
      * 
-     * Each window-aggregation is represented by a different {@link WindowAggregate} argument,
+     * Each window-aggregation is represented by a different {@link AggregationOverWindow} argument,
      * indicating:
      *  1. the {@link Aggregation.Kind},
      *  2. the number of rows preceding and following the current row, within a window,
@@ -2552,7 +2467,7 @@ public final class Table implements AutoCloseable {
      *                             RANGE BETWEEN INTERVAL 1 DAY PRECEDING and CURRENT ROW)
      *  FROM my_sales_table WHERE ...
      * 
-     * Each window-aggregation is represented by a different {@link WindowAggregate} argument,
+     * Each window-aggregation is represented by a different {@link AggregationOverWindow} argument,
      * indicating:
      *  1. the {@link Aggregation.Kind},
      *  2. the index for the timestamp column to base the window definitions on
