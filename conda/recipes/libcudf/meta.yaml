@@ -76,6 +76,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/groupby/sort_helper.hpp
     - test -f $PREFIX/include/cudf/detail/hashing.hpp
     - test -f $PREFIX/include/cudf/detail/interop.hpp
+    - test -f $PREFIX/include/cudf/detail/is_element_valid.hpp
     - test -f $PREFIX/include/cudf/detail/null_mask.hpp
     - test -f $PREFIX/include/cudf/detail/nvtx/nvtx3.hpp
     - test -f $PREFIX/include/cudf/detail/nvtx/ranges.hpp
@@ -84,6 +85,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/repeat.hpp
     - test -f $PREFIX/include/cudf/detail/replace.hpp
     - test -f $PREFIX/include/cudf/detail/reshape.hpp
+    - test -f $PREFIX/include/cudf/detail/rolling.hpp
     - test -f $PREFIX/include/cudf/detail/round.hpp
     - test -f $PREFIX/include/cudf/detail/scatter.hpp
     - test -f $PREFIX/include/cudf/detail/search.hpp
@@ -133,7 +135,9 @@ test:
     - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
     - test -f $PREFIX/include/cudf/lists/detail/drop_list_duplicates.hpp
+    - test -f $PREFIX/include/cudf/lists/detail/interleave_columns.hpp
     - test -f $PREFIX/include/cudf/lists/detail/sorting.hpp
+    - test -f $PREFIX/include/cudf/lists/concatenate_rows.hpp
     - test -f $PREFIX/include/cudf/lists/count_elements.hpp
     - test -f $PREFIX/include/cudf/lists/explode.hpp
     - test -f $PREFIX/include/cudf/lists/drop_list_duplicates.hpp
@@ -150,6 +154,7 @@ test:
     - test -f $PREFIX/include/cudf/replace.hpp
     - test -f $PREFIX/include/cudf/reshape.hpp
     - test -f $PREFIX/include/cudf/rolling.hpp
+    - test -f $PREFIX/include/cudf/rolling/range_window_bounds.hpp
     - test -f $PREFIX/include/cudf/round.hpp
     - test -f $PREFIX/include/cudf/scalar/scalar_factories.hpp
     - test -f $PREFIX/include/cudf/scalar/scalar.hpp

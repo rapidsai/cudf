@@ -6,7 +6,6 @@ channels:
   - nvidia
   - rapidsai-nightly
   - conda-forge
-  - defaults
 dependencies:
   - clang=8.0.1
   - clang-tools=8.0.1
@@ -59,6 +58,7 @@ dependencies:
   - protobuf
   - nvtx>=0.2.1
   - cachetools
+  - transformers
   - pip:
       - git+https://github.com/dask/dask.git@main
       - git+https://github.com/dask/distributed.git@main

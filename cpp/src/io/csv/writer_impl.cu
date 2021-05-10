@@ -250,6 +250,7 @@ struct column_to_strings_fn {
 // Forward to implementation
 writer::writer(std::unique_ptr<data_sink> sink,
                csv_writer_options const& options,
+               rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
   : _impl(std::make_unique<impl>(std::move(sink), options, mr))
 {

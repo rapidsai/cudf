@@ -19,6 +19,7 @@
 #include <cuda.h>
 #include <jitify2.hpp>
 
+#include <cstddef>
 #include <filesystem>
 
 namespace cudf {
@@ -103,6 +104,15 @@ std::string get_program_cache_dir()
 #endif
 }
 
+void try_parse_numeric_env_var(std::size_t& result, char const* const env_name)
+{
+  auto value = std::getenv(env_name);
+
+  if (value != nullptr) {
+    result = std::stoull(value);  // fails if env var contains invalid value.
+  }
+}
+
 jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData preprog)
 {
   static std::mutex caches_mutex{};
@@ -113,9 +123,26 @@ jitify2::ProgramCache<>& get_program_cache(jitify2::PreprocessedProgramData prep
   auto existing_cache = caches.find(preprog.name());
 
   if (existing_cache == caches.end()) {
-    auto res = caches.insert(
-      {preprog.name(),
-       std::make_unique<jitify2::ProgramCache<>>(100, preprog, nullptr, get_program_cache_dir())});
+    std::size_t kernel_limit_proc = std::numeric_limits<std::size_t>::max();
+    std::size_t kernel_limit_disk = std::numeric_limits<std::size_t>::max();
+    try_parse_numeric_env_var(kernel_limit_proc, "LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS");
+    try_parse_numeric_env_var(kernel_limit_disk, "LIBCUDF_KERNEL_CACHE_LIMIT_DISK");
+
+    auto cache_dir = get_program_cache_dir();
+
+    if (kernel_limit_disk == 0) {
+      // if kernel_limit_disk is zero, jitify will assign it the value of kernel_limit_proc.
+      // to avoid this, we treat zero as "disable disk caching" by not providing the cache dir.
+      cache_dir = {};
+    }
+
+    auto res = caches.insert({preprog.name(),
+                              std::make_unique<jitify2::ProgramCache<>>(  //
+                                kernel_limit_proc,
+                                preprog,
+                                nullptr,
+                                cache_dir,
+                                kernel_limit_disk)});
 
     existing_cache = res.first;
   }
