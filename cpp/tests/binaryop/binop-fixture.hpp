@@ -35,13 +35,13 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
   static constexpr int r_max = 10;
 
   template <typename T>
-  auto make_data_iter(cudf::test::UniformRandomGenerator<T>& rand_gen)
+  static auto make_data_iter(cudf::test::UniformRandomGenerator<T>& rand_gen)
   {
     return cudf::detail::make_counting_transform_iterator(
       0, [&](auto row) { return rand_gen.generate(); });
   }
 
-  auto make_validity_iter()
+  static auto make_validity_iter()
   {
     cudf::test::UniformRandomGenerator<uint8_t> rand_gen(r_min, r_max);
     uint8_t mod_base = rand_gen.generate();
@@ -50,7 +50,7 @@ struct BinaryOperationTest : public cudf::test::BaseFixture {
   }
 
   template <typename T>
-  auto make_random_wrapped_column(size_type size)
+  static auto make_random_wrapped_column(size_type size)
   {
     cudf::test::UniformRandomGenerator<T> rand_gen(r_min, r_max);
     auto data_iter     = make_data_iter(rand_gen);
