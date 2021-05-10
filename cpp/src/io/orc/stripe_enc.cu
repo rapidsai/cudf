@@ -869,7 +869,7 @@ __global__ void __launch_bounds__(block_size)
           case DECIMAL: {
             if (valid) {
               auto zzv    = zigzag(s->chunk.leaf_column->element<int64_t>(row));
-              auto offset = (row == 0) ? 0 : s->chunk.decimal_offsets[row - 1];
+              auto offset = (row == s->chunk.start_row) ? 0 : s->chunk.decimal_offsets[row - 1];
               StoreVarint(s->stream.data_ptrs[CI_DATA] + offset, zzv);
               // can verify the len against the offsets
             }

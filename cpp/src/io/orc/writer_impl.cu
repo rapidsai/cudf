@@ -485,6 +485,7 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
         data_stream_size = decimal_column_sizes.at(column.index());
         // scale stream TODO: compute exact size since all elems are equal
         data2_stream_size = div_rowgroups_by<int64_t>(512) * (512 * 4 + 2);
+        data2_kind        = SECONDARY;
         encoding_kind     = DIRECT_V2;
         break;
       default: CUDF_FAIL("Unsupported ORC type kind");
@@ -963,7 +964,6 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
 {
   const auto length                                        = strm_desc.stream_size;
   (*streams)[enc_stream.ids[strm_desc.stream_type]].length = length;
-  std::cout << (int)strm_desc.stream_type << ' ' << length << std::endl;
   if (length == 0) { return; }
 
   const auto *stream_in = (compression_kind_ == NONE) ? enc_stream.data_ptrs[strm_desc.stream_type]
@@ -977,9 +977,6 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
     stream.synchronize();
 
     out_sink_->host_write(stream_out, length);
-    for (auto it = stream_out; it < stream_out + length; ++it)
-      std::cout << std::hex << (int)*it << ' ';
-    std::cout << std::endl;
   }
   stripe->dataLength += length;
 }
