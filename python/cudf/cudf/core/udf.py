@@ -108,6 +108,13 @@ class NAType(types.Type):
     def __init__(self):
         super().__init__(name="NA")
 
+    def unify(self, context, other):
+        '''
+        Masked  <-> NA works from above
+        Literal <-> NA -> Masked
+        '''
+        if isinstance(other, types.abstract.Literal):
+            return MaskedType(other.literal_type)
 
 numba_na = NAType()
 
@@ -283,6 +290,13 @@ def cast_primitive_to_masked(context, builder, fromty, toty, val):
     ext = cgutils.create_struct_proxy(toty)(context, builder)
     ext.value = casted
     return ext._getvalue()
+
+@cuda_impl_registry.lower_cast(NAType, MaskedType)
+def cast_na_to_masked(context, builder, fromty, toty, val):
+    result = cgutils.create_struct_proxy(toty)(context, builder)
+    result.valid = context.get_constant(types.boolean, 0)
+
+    return result._getvalue()
 
 def compile_udf(func, dtypes):
     n_params = len(py_signature(func).parameters)
