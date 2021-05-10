@@ -1289,18 +1289,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return Column containing aggregate function result.
    * @throws IllegalArgumentException if unsupported window specification * (i.e. other than {@link WindowOptions.FrameType#ROWS} is used.
    */
-  public final ColumnVector rollingWindow(Aggregation op, WindowOptions options) {
+  public final ColumnVector rollingWindow(RollingAggregation op, WindowOptions options) {
+    Aggregation agg = op.getBaseAggregation();
     // Check that only row-based windows are used.
     if (!options.getFrameType().equals(WindowOptions.FrameType.ROWS)) {
       throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: "
           + options.getFrameType());
     }
 
-    long nativePtr = op.createNativeInstance();
+    long nativePtr = agg.createNativeInstance();
     try {
       return new ColumnVector(
           rollingWindow(this.getNativeView(),
-              op.getDefaultOutput(),
+              agg.getDefaultOutput(),
               options.getMinPeriods(),
               nativePtr,
               options.getPreceding(),
