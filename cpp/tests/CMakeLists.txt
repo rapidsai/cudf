@@ -61,8 +61,8 @@ ConfigureTest(GROUPBY_TEST
     groupby/count_scan_tests.cpp
     groupby/count_tests.cpp
     groupby/groups_tests.cpp
-    groupby/keys_tests.cpp    
-    groupby/min_tests.cpp    
+    groupby/keys_tests.cpp
+    groupby/min_tests.cpp
     groupby/max_scan_tests.cpp
     groupby/max_tests.cpp
     groupby/mean_tests.cpp
@@ -156,6 +156,7 @@ ConfigureTest(BINARY_TEST
     binaryop/binop-verify-input-test.cpp
     binaryop/binop-null-test.cpp
     binaryop/binop-integration-test.cpp
+    binaryop/binop-compiled-test.cpp
     binaryop/binop-generic-ptx-test.cpp
     )
 
@@ -196,9 +197,9 @@ ConfigureTest(SORT_TEST
 ConfigureTest(COPYING_TEST
     copying/concatenate_tests.cu
     copying/copy_range_tests.cpp
-    copying/copy_tests.cu    
+    copying/copy_tests.cu
     copying/detail_gather_tests.cu
-    copying/gather_struct_tests.cu        
+    copying/gather_struct_tests.cu
     copying/gather_tests.cu
     copying/gather_str_tests.cu
     copying/gather_list_tests.cu
@@ -268,8 +269,8 @@ ConfigureTest(STREAM_COMPACTION_TEST
 
 ###################################################################################################
 # - rolling tests ---------------------------------------------------------------------------------
-ConfigureTest(ROLLING_TEST 
-    rolling/rolling_test.cpp 
+ConfigureTest(ROLLING_TEST
+    rolling/rolling_test.cpp
     rolling/grouped_rolling_test.cpp
     rolling/lead_lag_test.cpp
     rolling/range_window_bounds_test.cpp
