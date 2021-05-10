@@ -55,40 +55,6 @@ union block_reduce_storage {
   DECLARE_MEMBER(string_view)
 };
 
-template <typename T, int block_size>
-struct temp_storage_wrapper {
-  block_reduce_storage<block_size>& storage;
-  __device__ temp_storage_wrapper(block_reduce_storage<block_size>& _temp_storage)
-    : storage(_temp_storage)
-  {
-  }
-  __device__ cub_temp_storage<T, block_size>& get() = delete;
-};
-
-#define TEMP_STORAGE_WRAPPER(TYPE)                                                             \
-  template <int block_size>                                                                    \
-  struct temp_storage_wrapper<TYPE, block_size> {                                              \
-    block_reduce_storage<block_size>& storage;                                                 \
-    __device__ temp_storage_wrapper(block_reduce_storage<block_size>& _temp_storage)           \
-      : storage(_temp_storage)                                                                 \
-    {                                                                                          \
-    }                                                                                          \
-    __device__ cub_temp_storage<TYPE, block_size>& get() { return storage.MEMBER_NAME(TYPE); } \
-  };
-
-TEMP_STORAGE_WRAPPER(bool);
-TEMP_STORAGE_WRAPPER(int8_t);
-TEMP_STORAGE_WRAPPER(int16_t);
-TEMP_STORAGE_WRAPPER(int32_t);
-TEMP_STORAGE_WRAPPER(int64_t);
-TEMP_STORAGE_WRAPPER(uint8_t);
-TEMP_STORAGE_WRAPPER(uint16_t);
-TEMP_STORAGE_WRAPPER(uint32_t);
-TEMP_STORAGE_WRAPPER(uint64_t);
-TEMP_STORAGE_WRAPPER(float);
-TEMP_STORAGE_WRAPPER(double);
-TEMP_STORAGE_WRAPPER(string_view);
-
 #define STORAGE_WRAPPER_GET(TYPE)                                                                 \
   template <typename T>                                                                           \
   __device__ std::enable_if_t<std::is_same_v<T, TYPE>, cub_temp_storage<TYPE, block_size>&> get() \
@@ -118,7 +84,6 @@ struct storage_wrapper {
   STORAGE_WRAPPER_GET(string_view);
 };
 
-#undef TEMP_STORAGE_WRAPPER
 #undef DECLARE_MEMBER
 #undef MEMBER_NAME
 

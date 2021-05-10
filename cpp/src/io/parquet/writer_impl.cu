@@ -784,12 +784,11 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &
     detail::MergeColumnStatistics<detail::io_type::PARQUET>(
       page_stats, frag_stats, page_stats_mrg.data(), num_pages, stream);
     if (num_stats_bfr > num_pages) {
-      detail::MergeColumnStatistics<detail::io_type::PARQUET>(
-        page_stats + num_pages,
-        page_stats,
-        page_stats_mrg.data() + num_pages,
-        num_stats_bfr - num_pages,
-        stream);
+      detail::MergeColumnStatistics<detail::io_type::PARQUET>(page_stats + num_pages,
+                                                              page_stats,
+                                                              page_stats_mrg.data() + num_pages,
+                                                              num_stats_bfr - num_pages,
+                                                              stream);
     }
   }
   stream.synchronize();

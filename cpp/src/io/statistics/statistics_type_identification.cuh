@@ -39,6 +39,7 @@ enum class io_type { ORC, PARQUET };
 template <io_type IO>
 struct conversion_map;
 
+// Every timestamp or duration type is converted to milliseconds in ORC statistics
 template <>
 struct conversion_map<io_type::ORC> {
   using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
@@ -49,6 +50,9 @@ struct conversion_map<io_type::ORC> {
                            std::pair<cudf::duration_ns, cudf::duration_ms>>;
 };
 
+// In Parquet timestamps and durations with second resoluion are converted to
+// milliseconds. Timestamps and durations with nanosecond resoluion are
+// converted to microseconds.
 template <>
 struct conversion_map<io_type::PARQUET> {
   using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
@@ -57,6 +61,7 @@ struct conversion_map<io_type::PARQUET> {
                            std::pair<cudf::duration_ns, cudf::duration_us>>;
 };
 
+// Functor to convert timestamp and duration types to their representation type
 template <typename conversion>
 class type_conversion {
   using type_selector = ConversionTypeSelect<typename conversion::types>;
