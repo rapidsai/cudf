@@ -19,7 +19,7 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/valid_if.cuh>
-#include <cudf/lists/concatenate_rows.hpp>
+#include <cudf/lists/combine.hpp>
 #include <cudf/lists/detail/interleave_columns.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/detail/utilities.cuh>
