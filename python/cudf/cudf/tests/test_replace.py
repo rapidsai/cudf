@@ -1,12 +1,14 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import re
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
+from cudf.core.dtypes import Decimal64Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
     NUMERIC_TYPES,
@@ -330,6 +332,58 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
         actual = gdata
 
     assert_eq(expected, actual, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "gsr_data",
+    [
+        cudf.Series(["2.34", "5.2", "7.47", None, "92.29", None]).astype(
+            Decimal64Dtype(7, 2)
+        ),
+        cudf.Series(["-74.56", None, "-23.73", "34.55", "2.89", None]).astype(
+            Decimal64Dtype(7, 2)
+        ),
+        cudf.Series(
+            ["85.955", np.nan, "-3.243", np.nan, "29.492", np.nan]
+        ).astype(Decimal64Dtype(8, 3)),
+        cudf.Series(
+            ["2.964", None, "57.432", "-989.330", None, "56.444"]
+        ).astype(Decimal64Dtype(8, 3)),
+        cudf.Series(
+            [np.nan, "55.2498", np.nan, "-5.2965", "-28.9423", np.nan]
+        ).astype(Decimal64Dtype(10, 4)),
+    ],
+)
+@pytest.mark.parametrize(
+    "fill_value",
+    [
+        42,
+        -123,
+        Decimal("8.2"),
+        Decimal("-12.87"),
+        cudf.Series([None, -854, 9533, -274, -845, 7924], dtype="int32"),
+        cudf.Series(["-53.5", "13.4", "-64.3", None, "42.42", None]).astype(
+            Decimal64Dtype(7, 2)
+        ),
+        cudf.Series(
+            ["57.45", np.nan, np.nan, "686.49", "-55.5", "73.24"],
+        ).astype(Decimal64Dtype(7, 2)),
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_fillna_decimal(gsr_data, fill_value, inplace):
+    gsr = gsr_data.copy(deep=True)
+    psr = gsr.to_pandas()
+
+    if isinstance(fill_value, cudf.Series):
+        p_fill_value = fill_value.to_pandas()
+    else:
+        p_fill_value = fill_value
+
+    expected = psr.fillna(p_fill_value, inplace=inplace)
+    got = gsr.fillna(fill_value, inplace=inplace)
+
+    assert_eq(expected, got, check_dtype=False)
 
 
 @pytest.mark.parametrize(

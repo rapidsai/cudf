@@ -156,5 +156,17 @@ std::unique_ptr<scalar> make_fixed_point_scalar(
   return std::make_unique<scalar_type_t<T>>(value, scale, true, stream, mr);
 }
 
+/**
+ * @brief Construct scalar using the given column of elements
+ *
+ * @param elements Elements of the list
+ * @param stream CUDA stream used for device memory operations.
+ * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
+ */
+std::unique_ptr<scalar> make_list_scalar(
+  column_view elements,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of group
 }  // namespace cudf

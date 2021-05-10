@@ -155,6 +155,7 @@ add_library(cudf
     src/binaryop/compiled/binary_ops.cu
     src/labeling/label_bins.cu
     src/bitmask/null_mask.cu
+    src/bitmask/is_element_valid.cpp
     src/column/column.cu
     src/column/column_device_view.cu
     src/column/column_factories.cpp
@@ -211,6 +212,8 @@ add_library(cudf
     src/groupby/sort/group_sum_scan.cu
     src/groupby/sort/sort_helper.cu
     src/hash/hashing.cu
+    src/hash/md5_hash.cu
+    src/hash/murmur_hash.cu
     src/interop/dlpack.cpp
     src/interop/from_arrow.cu
     src/interop/to_arrow.cu
@@ -254,6 +257,7 @@ add_library(cudf
     src/io/utilities/datasource.cpp
     src/io/utilities/file_io_utilities.cpp
     src/io/utilities/parsing_utils.cu
+    src/io/utilities/trie.cu
     src/io/utilities/type_conversion.cpp
     src/jit/cache.cpp
     src/jit/parser.cpp

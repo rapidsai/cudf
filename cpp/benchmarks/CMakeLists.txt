@@ -143,7 +143,9 @@ ConfigureBench(GROUPBY_BENCH
 
 ###################################################################################################
 # - hashing benchmark -----------------------------------------------------------------------------
-ConfigureBench(HASHING_BENCH hashing/hashing_benchmark.cpp)
+ConfigureBench(HASHING_BENCH
+  hashing/hash_benchmark.cpp
+  hashing/partition_benchmark.cpp)
 
 ###################################################################################################
 # - merge benchmark -------------------------------------------------------------------------------
