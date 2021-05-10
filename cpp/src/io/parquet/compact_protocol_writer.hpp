@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <io/parquet/parquet.hpp>
-#include <io/parquet/parquet_common.hpp>
+#include "parquet.hpp"
+#include "parquet_common.hpp"
 
 #include <stddef.h>
 #include <stdint.h>

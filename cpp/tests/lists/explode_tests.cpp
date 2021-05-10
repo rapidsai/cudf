@@ -370,6 +370,91 @@ TEST_F(ExplodeTest, NestedStructs)
   CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
 }
 
+TEST_F(ExplodeTest, ListOfStructsWithEmpties)
+{
+  //  a           b
+  //  [{1}}]      "a"
+  //  [{null}]    "b"
+  //  [null]      "c"
+  //  []          "d"
+  //  null        "e"
+
+  constexpr auto null = 0;
+
+  // row 0.  1 struct that contains a single int
+  cudf::test::fixed_width_column_wrapper<int32_t> i0{1};
+  std::vector<std::unique_ptr<cudf::column>> s0_cols;
+  s0_cols.push_back(i0.release());
+  cudf::test::structs_column_wrapper s0(std::move(s0_cols));
+  cudf::test::fixed_width_column_wrapper<int32_t> off0{0, 1};
+  auto row0 = cudf::make_lists_column(1, off0.release(), s0.release(), 0, rmm::device_buffer{});
+
+  // row 1.  1 struct that contains a null value
+  cudf::test::fixed_width_column_wrapper<int32_t> i1{{1}, {false}};
+  std::vector<std::unique_ptr<cudf::column>> s1_cols;
+  s1_cols.push_back(i1.release());
+  cudf::test::structs_column_wrapper s1(std::move(s1_cols));
+  cudf::test::fixed_width_column_wrapper<int32_t> off1{0, 1};
+  auto row1 = cudf::make_lists_column(1, off1.release(), s1.release(), 0, rmm::device_buffer{});
+
+  // row 2.  1 null struct
+  cudf::test::fixed_width_column_wrapper<int32_t> i2{0};
+  std::vector<std::unique_ptr<cudf::column>> s2_cols;
+  s2_cols.push_back(i2.release());
+  std::vector<bool> r2_valids{false};
+  auto s2 = cudf::make_structs_column(
+    1,
+    std::move(s2_cols),
+    1,
+    cudf::test::detail::make_null_mask(r2_valids.begin(), r2_valids.end()));
+  cudf::test::fixed_width_column_wrapper<int32_t> off2{0, 1};
+  auto row2 = cudf::make_lists_column(1, off2.release(), std::move(s2), 0, rmm::device_buffer{});
+
+  // row 3.  empty list.
+  cudf::test::fixed_width_column_wrapper<int32_t> i3{};
+  std::vector<std::unique_ptr<cudf::column>> s3_cols;
+  s3_cols.push_back(i3.release());
+  auto s3 = cudf::make_structs_column(0, std::move(s3_cols), 0, rmm::device_buffer{});
+  cudf::test::fixed_width_column_wrapper<int32_t> off3{0, 0};
+  auto row3 = cudf::make_lists_column(1, off3.release(), std::move(s3), 0, rmm::device_buffer{});
+
+  // row 4.  null list
+  cudf::test::fixed_width_column_wrapper<int32_t> i4{};
+  std::vector<std::unique_ptr<cudf::column>> s4_cols;
+  s4_cols.push_back(i4.release());
+  auto s4 = cudf::make_structs_column(0, std::move(s4_cols), 0, rmm::device_buffer{});
+  cudf::test::fixed_width_column_wrapper<int32_t> off4{0, 0};
+  std::vector<bool> r4_valids{false};
+  auto row4 =
+    cudf::make_lists_column(1,
+                            off4.release(),
+                            std::move(s4),
+                            1,
+                            cudf::test::detail::make_null_mask(r4_valids.begin(), r4_valids.end()));
+
+  // concatenated
+  auto final_col =
+    cudf::concatenate(std::vector<cudf::column_view>({*row0, *row1, *row2, *row3, *row4}));
+  auto s = strings_column_wrapper({"a", "b", "c", "d", "e"}).release();
+
+  cudf::table_view t({final_col->view(), s->view()});
+
+  auto ret                  = cudf::explode(t, 0);
+  auto expected_numeric_col = fixed_width_column_wrapper<int32_t>{{1, null, null}, {1, 0, 0}};
+
+  auto expected_a = structs_column_wrapper{{expected_numeric_col}, {1, 1, 0}}.release();
+  auto expected_b = strings_column_wrapper({"a", "b", "c"}).release();
+
+  cudf::table_view expected({expected_a->view(), expected_b->view()});
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+  FCW expected_pos_col{0, 0, 0};
+  cudf::table_view pos_expected({expected_pos_col, expected_a->view(), expected_b->view()});
+
+  auto pos_ret = cudf::explode_position(t, 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
+}
+
 TYPED_TEST(ExplodeTypedTest, ListOfStructs)
 {
   //  a                        b
@@ -532,7 +617,6 @@ TEST_F(ExplodeOuterTest, SingleNull)
 
   FCW expected_pos_col{{0, 0, 1, 0, 0, 1}, {0, 1, 1, 0, 1, 1}};
   cudf::table_view pos_expected({expected_pos_col, expected_a, expected_b});
-
   auto pos_ret = cudf::explode_outer_position(t, 0);
   CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
 }
@@ -624,7 +708,7 @@ TEST_F(ExplodeOuterTest, SequentialNulls)
   auto ret = cudf::explode_outer(t, 0);
   CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
 
-  FCW expected_pos_col{{0, 1, 2, 0, 1, 0, 0, 0, 1, 2}, {1, 1, 0, 1, 1, 0, 0, 1, 1, 1}};
+  FCW expected_pos_col{{0, 1, 2, 0, 1, 0, 0, 0, 1, 2}, {1, 1, 1, 1, 1, 0, 0, 1, 1, 1}};
   cudf::table_view pos_expected({expected_pos_col, expected_a, expected_b});
 
   auto pos_ret = cudf::explode_outer_position(t, 0);
@@ -753,7 +837,7 @@ TEST_F(ExplodeOuterTest, NullsInList)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
 
-  FCW expected_pos_col{{0, 1, 2, 0, 1, 2, 3, 0, 0, 1, 2}, {1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1}};
+  FCW expected_pos_col{{0, 1, 2, 0, 1, 2, 3, 0, 0, 1, 2}, {1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1}};
   cudf::table_view pos_expected({expected_pos_col, expected_a, expected_b});
 
   auto pos_ret = cudf::explode_outer_position(t, 0);
@@ -885,7 +969,7 @@ TEST_F(ExplodeOuterTest, NullsInNestedDoubleExplode)
   CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
 
   FCW expected_pos_col{{0, 1, 0, 0, 1, 2, 0, 1, 0, 1, 0, 0, 1},
-                       {1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0}};
+                       {1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}};
   cudf::table_view pos_expected({expected_pos_col, expected_a, expected_b});
 
   auto pos_ret = cudf::explode_outer_position(first_explode_ret->view(), 0);
@@ -926,6 +1010,93 @@ TEST_F(ExplodeOuterTest, NestedStructs)
 
   FCW expected_pos_col{0, 1, 0, 0, 1, 2};
   cudf::table_view pos_expected({expected_pos_col, expected_a, expected_b});
+
+  auto pos_ret = cudf::explode_outer_position(t, 0);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);
+}
+
+TEST_F(ExplodeOuterTest, ListOfStructsWithEmpties)
+{
+  //  a           b
+  //  [{1}}]      "a"
+  //  [{null}]    "b"
+  //  [null]      "c"
+  //  []          "d"
+  //  null        "e"
+
+  constexpr auto null = 0;
+
+  // row 0.  1 struct that contains a single int
+  cudf::test::fixed_width_column_wrapper<int32_t> i0{1};
+  std::vector<std::unique_ptr<cudf::column>> s0_cols;
+  s0_cols.push_back(i0.release());
+  cudf::test::structs_column_wrapper s0(std::move(s0_cols));
+  cudf::test::fixed_width_column_wrapper<int32_t> off0{0, 1};
+  auto row0 = cudf::make_lists_column(1, off0.release(), s0.release(), 0, rmm::device_buffer{});
+
+  // row 1.  1 struct that contains a null value
+  cudf::test::fixed_width_column_wrapper<int32_t> i1{{1}, {false}};
+  std::vector<std::unique_ptr<cudf::column>> s1_cols;
+  s1_cols.push_back(i1.release());
+  cudf::test::structs_column_wrapper s1(std::move(s1_cols));
+  cudf::test::fixed_width_column_wrapper<int32_t> off1{0, 1};
+  auto row1 = cudf::make_lists_column(1, off1.release(), s1.release(), 0, rmm::device_buffer{});
+
+  // row 2.  1 null struct
+  cudf::test::fixed_width_column_wrapper<int32_t> i2{0};
+  std::vector<std::unique_ptr<cudf::column>> s2_cols;
+  s2_cols.push_back(i2.release());
+  std::vector<bool> r2_valids{false};
+  auto s2 = cudf::make_structs_column(
+    1,
+    std::move(s2_cols),
+    1,
+    cudf::test::detail::make_null_mask(r2_valids.begin(), r2_valids.end()));
+  cudf::test::fixed_width_column_wrapper<int32_t> off2{0, 1};
+  auto row2 = cudf::make_lists_column(1, off2.release(), std::move(s2), 0, rmm::device_buffer{});
+
+  // row 3.  empty list.
+  cudf::test::fixed_width_column_wrapper<int32_t> i3{};
+  std::vector<std::unique_ptr<cudf::column>> s3_cols;
+  s3_cols.push_back(i3.release());
+  auto s3 = cudf::make_structs_column(0, std::move(s3_cols), 0, rmm::device_buffer{});
+  cudf::test::fixed_width_column_wrapper<int32_t> off3{0, 0};
+  auto row3 = cudf::make_lists_column(1, off3.release(), std::move(s3), 0, rmm::device_buffer{});
+
+  // row 4.  null list
+  cudf::test::fixed_width_column_wrapper<int32_t> i4{};
+  std::vector<std::unique_ptr<cudf::column>> s4_cols;
+  s4_cols.push_back(i4.release());
+  auto s4 = cudf::make_structs_column(0, std::move(s4_cols), 0, rmm::device_buffer{});
+  cudf::test::fixed_width_column_wrapper<int32_t> off4{0, 0};
+  std::vector<bool> r4_valids{false};
+  auto row4 =
+    cudf::make_lists_column(1,
+                            off4.release(),
+                            std::move(s4),
+                            1,
+                            cudf::test::detail::make_null_mask(r4_valids.begin(), r4_valids.end()));
+
+  // concatenated
+  auto final_col =
+    cudf::concatenate(std::vector<cudf::column_view>({*row0, *row1, *row2, *row3, *row4}));
+  auto s = strings_column_wrapper({"a", "b", "c", "d", "e"}).release();
+
+  cudf::table_view t({final_col->view(), s->view()});
+
+  auto ret = cudf::explode_outer(t, 0);
+
+  auto expected_numeric_col =
+    fixed_width_column_wrapper<int32_t>{{1, null, null, null, null}, {1, 0, 0, 0, 0}};
+
+  auto expected_a = structs_column_wrapper{{expected_numeric_col}, {1, 1, 0, 0, 0}}.release();
+  auto expected_b = strings_column_wrapper({"a", "b", "c", "d", "e"}).release();
+
+  cudf::table_view expected({expected_a->view(), expected_b->view()});
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(ret->view(), expected);
+  FCW expected_pos_col{{0, 0, 0, null, null}, {1, 1, 1, 0, 0}};
+  cudf::table_view pos_expected({expected_pos_col, expected_a->view(), expected_b->view()});
 
   auto pos_ret = cudf::explode_outer_position(t, 0);
   CUDF_TEST_EXPECT_TABLES_EQUAL(pos_ret->view(), pos_expected);

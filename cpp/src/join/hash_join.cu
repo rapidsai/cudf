@@ -25,6 +25,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cstddef>
 #include <iostream>
 #include <numeric>
 
@@ -176,7 +177,7 @@ std::unique_ptr<multimap_type, std::function<void(multimap_type *)>> build_join_
   CUDF_EXPECTS(0 != build_device_table->num_rows(), "Build side table has no rows");
 
   size_type const build_table_num_rows{build_device_table->num_rows()};
-  size_t const hash_table_size = compute_hash_table_size(build_table_num_rows);
+  std::size_t const hash_table_size = compute_hash_table_size(build_table_num_rows);
 
   auto hash_table = multimap_type::create(hash_table_size,
                                           stream,
@@ -228,7 +229,7 @@ probe_join_hash_table(cudf::table_device_view build_table,
                       rmm::cuda_stream_view stream,
                       rmm::mr::device_memory_resource *mr)
 {
-  size_type estimated_size = estimate_join_output_size<JoinKind, multimap_type>(
+  std::size_t estimated_size = estimate_join_output_size<JoinKind, multimap_type>(
     build_table, probe_table, hash_table, compare_nulls, stream);
 
   // If the estimated output size is zero, return immediately
@@ -242,7 +243,7 @@ probe_join_hash_table(cudf::table_device_view build_table,
   // As such we will need to de-allocate memory and re-allocate memory to ensure
   // that the final output is correct.
   rmm::device_scalar<size_type> write_index(0, stream);
-  size_type join_size{0};
+  std::size_t join_size{0};
 
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
@@ -307,7 +308,11 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const &build,
   CUDF_EXPECTS(build.num_rows() < cudf::detail::MAX_JOIN_SIZE,
                "Build column size is too big for hash join");
 
-  _build = std::get<0>(structs::detail::flatten_nested_columns(build, {}, {}));
+  auto flattened_build = structs::detail::flatten_nested_columns(
+    build, {}, {}, structs::detail::column_nullability::FORCE);
+  _build = std::get<0>(flattened_build);
+  // need to store off the owning structures for some of the views in _build
+  _created_null_columns = std::move(std::get<3>(flattened_build));
 
   if (0 == build.num_rows()) { return; }
 
@@ -359,24 +364,26 @@ hash_join::hash_join_impl::compute_hash_join(cudf::table_view const &probe,
   CUDF_EXPECTS(probe.num_rows() < cudf::detail::MAX_JOIN_SIZE,
                "Probe column size is too big for hash join");
 
-  auto const _probe = std::get<0>(structs::detail::flatten_nested_columns(probe, {}, {}));
+  auto flattened_probe = structs::detail::flatten_nested_columns(
+    probe, {}, {}, structs::detail::column_nullability::FORCE);
+  auto const flattened_probe_table = std::get<0>(flattened_probe);
 
-  CUDF_EXPECTS(_build.num_columns() == _probe.num_columns(),
+  CUDF_EXPECTS(_build.num_columns() == flattened_probe_table.num_columns(),
                "Mismatch in number of columns to be joined on");
 
-  if (is_trivial_join(_probe, _build, JoinKind)) {
+  if (is_trivial_join(flattened_probe_table, _build, JoinKind)) {
     return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
                           std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
   CUDF_EXPECTS(std::equal(std::cbegin(_build),
                           std::cend(_build),
-                          std::cbegin(_probe),
-                          std::cend(_probe),
+                          std::cbegin(flattened_probe_table),
+                          std::cend(flattened_probe_table),
                           [](const auto &b, const auto &p) { return b.type() == p.type(); }),
                "Mismatch in joining column data types");
 
-  return probe_join_indices<JoinKind>(_probe, compare_nulls, stream, mr);
+  return probe_join_indices<JoinKind>(flattened_probe_table, compare_nulls, stream, mr);
 }
 
 template <cudf::detail::join_kind JoinKind>

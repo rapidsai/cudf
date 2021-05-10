@@ -28,7 +28,6 @@ children_pair replace_with_backrefs_large(column_device_view const& d_strings,
                                           reprog_device& d_prog,
                                           string_view const& d_repl_template,
                                           device_span<backref_type> backrefs,
-                                          size_type null_count,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
@@ -37,7 +36,6 @@ children_pair replace_with_backrefs_large(column_device_view const& d_strings,
     backrefs_fn<Iterator, RX_STACK_LARGE>{
       d_strings, d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
     d_strings.size(),
-    null_count,
     stream,
     mr);
 }
