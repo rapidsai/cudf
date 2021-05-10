@@ -54,7 +54,7 @@ static void BM_replace(benchmark::State& state)
   cudf::test::strings_column_wrapper replacements({"1", "2", "7", "0"});
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, 0);
+    cuda_event_timer raii(state, true);
     nvtext::replace_tokens(
       view, cudf::strings_column_view(targets), cudf::strings_column_view(replacements));
   }

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import builtins
 import datetime as dt
 import re
 from numbers import Number
-from typing import Any, Sequence, Union, cast
+from types import SimpleNamespace
+from typing import Any, Mapping, Sequence, Union, cast
 
 import numpy as np
 import pandas as pd
@@ -16,7 +18,13 @@ from cudf import _lib as libcudf
 from cudf._typing import DatetimeLikeScalar, Dtype, DtypeObj, ScalarLike
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer import Buffer
-from cudf.core.column import ColumnBase, column, string
+from cudf.core.column import (
+    ColumnBase,
+    as_column,
+    column,
+    column_empty_like,
+    string,
+)
 from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import _fillna_natwise
 
@@ -127,20 +135,17 @@ class DatetimeColumn(column.ColumnBase):
         return self.get_dt_field("weekday")
 
     def to_pandas(
-        self, index: "cudf.Index" = None, nullable: bool = False, **kwargs
+        self, index: pd.Index = None, nullable: bool = False, **kwargs
     ) -> "cudf.Series":
         # Workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
 
         # Pandas supports only `datetime64[ns]`, hence the cast.
-        pd_series = pd.Series(
-            self.astype("datetime64[ns]").to_array("NAT"), copy=False
+        return pd.Series(
+            self.astype("datetime64[ns]").to_array("NAT"),
+            copy=False,
+            index=index,
         )
-
-        if index is not None:
-            pd_series.index = index
-
-        return pd_series
 
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
@@ -195,6 +200,33 @@ class DatetimeColumn(column.ColumnBase):
                 size=self.size,
             ),
         )
+
+    @property
+    def __cuda_array_interface__(self) -> Mapping[builtins.str, Any]:
+        output = {
+            "shape": (len(self),),
+            "strides": (self.dtype.itemsize,),
+            "typestr": self.dtype.str,
+            "data": (self.data_ptr, False),
+            "version": 1,
+        }
+
+        if self.nullable and self.has_nulls:
+
+            # Create a simple Python object that exposes the
+            # `__cuda_array_interface__` attribute here since we need to modify
+            # some of the attributes from the numba device array
+            mask = SimpleNamespace(
+                __cuda_array_interface__={
+                    "shape": (len(self),),
+                    "typestr": "<t1",
+                    "data": (self.mask_ptr, True),
+                    "version": 1,
+                }
+            )
+            output["mask"] = mask
+
+        return output
 
     def as_datetime_column(self, dtype: Dtype, **kwargs) -> DatetimeColumn:
         dtype = np.dtype(dtype)
@@ -274,7 +306,7 @@ class DatetimeColumn(column.ColumnBase):
         reflect: bool = False,
     ) -> ColumnBase:
         if isinstance(rhs, cudf.DateOffset):
-            return binop_offset(self, rhs, op)
+            return rhs._datetime_binop(self, op, reflect=reflect)
         lhs, rhs = self, rhs
         if op in ("eq", "ne", "lt", "gt", "le", "ge", "NULL_EQUALS"):
             out_dtype = np.dtype(np.bool_)  # type: Dtype
@@ -306,7 +338,7 @@ class DatetimeColumn(column.ColumnBase):
         self, fill_value: Any = None, method: str = None, dtype: Dtype = None
     ) -> DatetimeColumn:
         if fill_value is not None:
-            if cudf.utils.utils.isnat(fill_value):
+            if cudf.utils.utils._isnat(fill_value):
                 return _fillna_natwise(self)
             if is_scalar(fill_value):
                 if not isinstance(fill_value, cudf.Scalar):
@@ -371,6 +403,23 @@ class DatetimeColumn(column.ColumnBase):
             return True
         else:
             return False
+
+    def _make_copy_with_na_as_null(self):
+        """Return a copy with NaN values replaced with nulls."""
+        null = column_empty_like(self, masked=True, newsize=1)
+        out_col = cudf._lib.replace.replace(
+            self,
+            as_column(
+                Buffer(
+                    np.array([self.default_na_value()], dtype=self.dtype).view(
+                        "|u1"
+                    )
+                ),
+                dtype=self.dtype,
+            ),
+            null,
+        )
+        return out_col
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")

@@ -119,15 +119,14 @@ std::unique_ptr<column> replace_with_backrefs(
         backrefs_fn<BackRefIterator, RX_STACK_SMALL>{
           *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
         strings.size(),
-        strings.null_count(),
         stream,
         mr);
     } else if (regex_insts <= RX_MEDIUM_INSTS)
       return replace_with_backrefs_medium(
-        *d_strings, *d_prog, d_repl_template, backrefs, strings.null_count(), stream, mr);
+        *d_strings, *d_prog, d_repl_template, backrefs, stream, mr);
     else
       return replace_with_backrefs_large(
-        *d_strings, *d_prog, d_repl_template, backrefs, strings.null_count(), stream, mr);
+        *d_strings, *d_prog, d_repl_template, backrefs, stream, mr);
   }();
 
   return make_strings_column(strings.size(),

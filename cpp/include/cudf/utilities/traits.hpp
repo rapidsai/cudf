@@ -140,7 +140,7 @@ constexpr inline bool is_numeric()
 
 struct is_numeric_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_numeric<T>();
   }
@@ -181,7 +181,7 @@ constexpr inline bool is_index_type()
 
 struct is_index_type_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_index_type<T>();
   }
@@ -218,7 +218,7 @@ constexpr inline bool is_unsigned()
 
 struct is_unsigned_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_unsigned<T>();
   }
@@ -264,7 +264,7 @@ constexpr inline bool is_floating_point()
 
 struct is_floating_point_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_floating_point<T>();
   }
@@ -332,7 +332,7 @@ constexpr inline bool is_timestamp()
 
 struct is_timestamp_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_timestamp<T>();
   }
@@ -367,7 +367,7 @@ constexpr inline bool is_fixed_point()
 
 struct is_fixed_point_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_fixed_point<T>();
   }
@@ -400,7 +400,7 @@ constexpr inline bool is_duration()
 
 struct is_duration_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_duration<T>();
   }
@@ -435,7 +435,7 @@ constexpr inline bool is_chrono()
 
 struct is_chrono_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_chrono<T>();
   }
@@ -488,7 +488,7 @@ constexpr inline bool is_dictionary()
 
 struct is_dictionary_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_dictionary<T>();
   }
@@ -524,7 +524,7 @@ constexpr inline bool is_fixed_width()
 
 struct is_fixed_width_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_fixed_width<T>();
   }
@@ -567,7 +567,7 @@ constexpr inline bool is_compound()
 
 struct is_compound_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_compound<T>();
   }
@@ -609,7 +609,7 @@ constexpr inline bool is_nested()
 
 struct is_nested_impl {
   template <typename T>
-  bool operator()()
+  constexpr bool operator()()
   {
     return is_nested<T>();
   }

@@ -20,7 +20,7 @@ def test_factorize_series_obj(ncats, nelem):
 
     uvals, labels = df["cats"].factorize()
     np.testing.assert_array_equal(labels.to_array(), sorted(set(arr)))
-    assert isinstance(uvals, cp.core.core.ndarray)
+    assert isinstance(uvals, cp.ndarray)
     assert isinstance(labels, Index)
 
     encoder = dict((labels[idx], idx) for idx in range(len(labels)))
@@ -39,7 +39,7 @@ def test_factorize_index_obj(ncats, nelem):
 
     uvals, labels = df.index.factorize()
     np.testing.assert_array_equal(labels.values.get(), sorted(set(arr)))
-    assert isinstance(uvals, cp.core.core.ndarray)
+    assert isinstance(uvals, cp.ndarray)
     assert isinstance(labels, Index)
 
     encoder = dict((labels[idx], idx) for idx in range(len(labels)))
@@ -127,15 +127,15 @@ def test_factorize_result_classes():
 
     labels, cats = cudf.factorize(cudf.Series(data))
 
-    assert isinstance(labels, cp.core.core.ndarray)
+    assert isinstance(labels, cp.ndarray)
     assert isinstance(cats, cudf.Index)
 
     labels, cats = cudf.factorize(cudf.Index(data))
 
-    assert isinstance(labels, cp.core.core.ndarray)
+    assert isinstance(labels, cp.ndarray)
     assert isinstance(cats, cudf.Index)
 
     labels, cats = cudf.factorize(cp.array(data))
 
-    assert isinstance(labels, cp.core.core.ndarray)
-    assert isinstance(cats, cp.core.core.ndarray)
+    assert isinstance(labels, cp.ndarray)
+    assert isinstance(cats, cp.ndarray)

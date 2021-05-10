@@ -43,7 +43,7 @@ static void BM_combine(benchmark::State& state)
   cudf::string_scalar separator("+");
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, 0);
+    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
     cudf::strings::concatenate(table->view(), separator);
   }
 

@@ -36,16 +36,6 @@ inline __device__ void syncwarp(void) { __syncwarp(); }
 
 inline __device__ uint32_t ballot(int pred) { return __ballot_sync(~0, pred); }
 
-template <typename T>
-inline __device__ void nanosleep(T d)
-{
-#if (__CUDA_ARCH__ >= 700)
-  __nanosleep(d);
-#else
-  clock();
-#endif
-}
-
 // Warp reduction helpers
 template <typename T>
 inline __device__ T WarpReduceOr2(T acc)
@@ -195,61 +185,6 @@ inline __device__ void memcpy_block(void *dstv, const void *srcv, uint32_t len, 
     if (sync_before_store) { __syncthreads(); }
     if (t < len) { dst[t] = b; }
   }
-}
-
-/**
- * @brief Compares two strings
- */
-template <class T, const T lesser, const T greater, const T equal>
-inline __device__ T nvstr_compare(const char *as, uint32_t alen, const char *bs, uint32_t blen)
-{
-  uint32_t len = min(alen, blen);
-  uint32_t i   = 0;
-  if (len >= 4) {
-    uint32_t align_a     = 3 & reinterpret_cast<uintptr_t>(as);
-    uint32_t align_b     = 3 & reinterpret_cast<uintptr_t>(bs);
-    const uint32_t *as32 = reinterpret_cast<const uint32_t *>(as - align_a);
-    const uint32_t *bs32 = reinterpret_cast<const uint32_t *>(bs - align_b);
-    uint32_t ofsa        = align_a * 8;
-    uint32_t ofsb        = align_b * 8;
-    do {
-      uint32_t a = *as32++;
-      uint32_t b = *bs32++;
-      if (ofsa) a = __funnelshift_r(a, *as32, ofsa);
-      if (ofsb) b = __funnelshift_r(b, *bs32, ofsb);
-      if (a != b) {
-        return (lesser == greater || __byte_perm(a, 0, 0x0123) < __byte_perm(b, 0, 0x0123))
-                 ? lesser
-                 : greater;
-      }
-      i += 4;
-    } while (i + 4 <= len);
-  }
-  while (i < len) {
-    uint8_t a = as[i];
-    uint8_t b = bs[i];
-    if (a != b) { return (a < b) ? lesser : greater; }
-    ++i;
-  }
-  return (alen == blen) ? equal : (alen < blen) ? lesser : greater;
-}
-
-inline __device__ bool nvstr_is_lesser(const char *as, uint32_t alen, const char *bs, uint32_t blen)
-{
-  return nvstr_compare<bool, true, false, false>(as, alen, bs, blen);
-}
-
-inline __device__ bool nvstr_is_greater(const char *as,
-                                        uint32_t alen,
-                                        const char *bs,
-                                        uint32_t blen)
-{
-  return nvstr_compare<bool, false, true, false>(as, alen, bs, blen);
-}
-
-inline __device__ bool nvstr_is_equal(const char *as, uint32_t alen, const char *bs, uint32_t blen)
-{
-  return nvstr_compare<bool, false, false, true>(as, alen, bs, blen);
 }
 
 }  // namespace io

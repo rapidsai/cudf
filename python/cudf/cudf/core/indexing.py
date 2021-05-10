@@ -2,6 +2,7 @@
 
 from typing import Any, Union
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 from nvtx import annotate
@@ -16,6 +17,7 @@ from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
     is_list_like,
+    is_numerical_dtype,
     is_scalar,
     to_cudf_compatible_scalar,
 )
@@ -57,7 +59,9 @@ def get_label_range_or_mask(index, start, stop, step):
         if start is not None and stop is not None:
             if start > stop:
                 return slice(0, 0, None)
-            boolean_mask = (index >= start) and (index <= stop)
+            # TODO: Once Index binary ops are updated to support logical_and,
+            # can use that instead of using cupy.
+            boolean_mask = cp.logical_and((index >= start), (index <= stop))
         elif start is not None:
             boolean_mask = index >= start
         else:
@@ -164,10 +168,17 @@ class _SeriesLocIndexer(object):
         self._sr.iloc[key] = value
 
     def _loc_to_iloc(self, arg):
-        from cudf.core.column import column
-        from cudf.core.series import Series
-
         if is_scalar(arg):
+            if not is_numerical_dtype(self._sr.index.dtype):
+                # TODO: switch to cudf.utils.dtypes.is_integer(arg)
+                if isinstance(
+                    arg, cudf.Scalar
+                ) and pd.api.types.is_integer_dtype(arg.dtype):
+                    found_index = arg.value
+                    return found_index
+                elif pd.api.types.is_integer(arg):
+                    found_index = arg
+                    return found_index
             try:
                 found_index = self._sr.index._values.find_first_value(
                     arg, closest=False
@@ -187,7 +198,7 @@ class _SeriesLocIndexer(object):
             return indices_from_labels(self._sr, arg)
 
         else:
-            arg = Series(column.as_column(arg))
+            arg = cudf.core.series.Series(cudf.core.column.as_column(arg))
             if arg.dtype in (bool, np.bool_):
                 return arg
             else:
@@ -402,10 +413,34 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 "DataFrames with a MultiIndex"
             )
 
-        columns = self._get_column_selection(key[1])
+        try:
+            columns = self._get_column_selection(key[1])
+        except KeyError:
+            if not self._df.empty and isinstance(key[0], slice):
+                pos_range = get_label_range_or_mask(
+                    self._df.index, key[0].start, key[0].stop, key[0].step
+                )
+                idx = self._df.index[pos_range]
+            elif self._df.empty and isinstance(key[0], slice):
+                idx = None
+            else:
+                idx = cudf.Index(key[0])
+            if is_scalar(value):
+                length = len(idx) if idx is not None else 1
+                value = as_column(value, length=length)
 
-        for col in columns:
-            self._df[col].loc[key[0]] = value
+            new_col = cudf.Series(value, index=idx)
+            if not self._df.empty:
+                new_col = new_col._align_to_index(self._df.index, how="right")
+
+            if self._df.empty:
+                self._df.index = (
+                    idx if idx is not None else cudf.RangeIndex(len(new_col))
+                )
+            self._df._data.insert(key[1], new_col)
+        else:
+            for col in columns:
+                self._df[col].loc[key[0]] = value
 
     def _get_column_selection(self, arg):
         return self._df._get_columns_by_label(arg)
