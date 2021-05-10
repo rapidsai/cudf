@@ -464,13 +464,12 @@ TEST_F(ColumnFactoryTest, DictionaryFromStringScalarError)
 }
 
 template <typename T>
-class ListsFactoryTest : public ColumnFactoryTest {
+class ListsFixedWidthLeafTest : public ColumnFactoryTest {
 };
 
-// TYPED_TEST_CASE(ListsFactoryTest, cudf::test::FixedWidthTypes);
-TYPED_TEST_CASE(ListsFactoryTest, int32_t);
+TYPED_TEST_CASE(ListsFixedWidthLeafTest, cudf::test::FixedWidthTypes);
 
-TYPED_TEST(ListsFactoryTest, FromNonNestedFixedWidthListScalar)
+TYPED_TEST(ListsFixedWidthLeafTest, FromNonNested)
 {
   using FCW     = cudf::test::fixed_width_column_wrapper<TypeParam>;
   using LCW     = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
@@ -485,19 +484,59 @@ TYPED_TEST(ListsFactoryTest, FromNonNestedFixedWidthListScalar)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, expected);
 }
 
-#define row_data \
-  LCW({LCW({-1, -1, 3}, valid_t{0, 0, 1}.begin()), LCW{}, LCW{}}, valid_t{1, 0, 1}.begin())
-
-TYPED_TEST(ListsFactoryTest, FromNestedFixedWidthListScalar)
+TYPED_TEST(ListsFixedWidthLeafTest, FromNested)
 {
   using LCW     = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
   using valid_t = std::vector<cudf::valid_type>;
+
+#define row_data \
+  LCW({LCW({-1, -1, 3}, valid_t{0, 0, 1}.begin()), LCW{}, LCW{}}, valid_t{1, 0, 1}.begin())
 
   auto s   = cudf::make_list_scalar(row_data);
   auto col = cudf::make_column_from_scalar(*s, 5);
 
   auto expected = LCW{row_data, row_data, row_data, row_data, row_data};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, expected);
-}
 
 #undef row_data
+}
+
+class ListsStringLeafTest : public ColumnFactoryTest {
+};
+
+TEST_F(ListsStringLeafTest, FromNonNested)
+{
+  using SCW     = cudf::test::strings_column_wrapper;
+  using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
+  using valid_t = std::vector<cudf::valid_type>;
+
+  auto s   = cudf::make_list_scalar(SCW({"xx", "", "z"}, {true, false, true}));
+  auto col = cudf::make_column_from_scalar(*s, 4);
+
+  auto expected = LCW{LCW({"xx", "", "z"}, valid_t{1, 0, 1}.begin()),
+                      LCW({"xx", "", "z"}, valid_t{1, 0, 1}.begin()),
+                      LCW({"xx", "", "z"}, valid_t{1, 0, 1}.begin()),
+                      LCW({"xx", "", "z"}, valid_t{1, 0, 1}.begin())};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, expected);
+}
+
+TEST_F(ListsStringLeafTest, FromNested)
+{
+  using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
+  using valid_t = std::vector<cudf::valid_type>;
+
+#define row_data                                                              \
+  LCW({LCW{},                                                                 \
+       LCW({"@@", "rapids", "", "四", "ら"}, valid_t{1, 1, 0, 1, 1}.begin()), \
+       LCW{},                                                                 \
+       LCW({"hello", ""}, valid_t{1, 0}.begin())},                            \
+      valid_t{0, 1, 1, 1}.begin())
+
+  auto s = cudf::make_list_scalar(row_data);
+
+  auto col = cudf::make_column_from_scalar(*s, 3);
+
+  auto expected = LCW{row_data, row_data, row_data};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, expected);
+#undef row_data
+}
