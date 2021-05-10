@@ -2,6 +2,7 @@ from cudf._lib.labeling import label_bins
 from cudf.core.column import as_column
 from cudf.core.column import build_categorical_column
 from cudf.core.index import IntervalIndex
+from pandas.core.indexes.interval import IntervalIndex as pandas_IntervalIndex
 from cudf.utils.dtypes import is_list_like
 import cupy
 import cudf
@@ -103,28 +104,54 @@ def cut(
             "raise, drop"
         )
 
+    if isinstance(bins, list):
+        if len(set(bins)) is not len(bins):
+            if duplicates == "raise":
+                raise ValueError(
+                    f"Bin edges must be unique: {repr(bins)}.\n"
+                    f"You can drop duplicate edges by setting the 'duplicates'"
+                    "kwarg"
+                )
+            elif duplicates == "drop":
+                bins = cupy.unique(bins)
+
+    # turn input into a cupy array
+    x = cupy.asarray(x)
+
+    if (
+        right is False
+        and isinstance(bins, pandas_IntervalIndex)
+        and bins.closed == "right"
+    ):
+        right = True
+    if not isinstance(bins, pandas_IntervalIndex):
+        if not isinstance(bins, list):
+            rng = (x.min(), x.max())
+            mn, mx = [mi + 0.0 for mi in rng]
+            bins = cupy.linspace(mn, mx, bins + 1, endpoint=True)
+            # extend the range of x by 0.1% on each side to include
+            # the minimum and maximum values of x.
+            adj = (mx - mn) * 0.001
+            if right:
+                bins[0] -= adj
+            else:
+                bins[-1] += adj
+
+        # if right and include lowest we adjust the first
+        # bin edge to make sure it is included
+        if right and include_lowest:
+            bins[0] = bins[0] - 10 ** (-precision)
+
+        # adjust bin edges decimal precision
+        bins = cupy.around(bins, precision)
+
+        # if right is false the last bin edge is not included
+        if right is False:
+            right_edge = bins[len(bins) - 1]
+            x[x == right_edge] = right_edge + 1
+
     # the inputs is a column of the values in the array x
     input_arr = as_column(x)
-
-    # create the bins
-    x = cupy.asarray(x)
-    rng = (x.min(), x.max())
-    mn, mx = [mi + 0.0 for mi in rng]
-    bins = cupy.linspace(mn, mx, bins + 1, endpoint=True)
-
-    # extend the range of x by 0.1% on each side to include
-    # the minimum and maximum values of x.
-    adj = (mx - mn) * 0.001
-    if right:
-        bins[0] -= adj
-    else:
-        bins[-1] += adj
-
-    if right and include_lowest:
-        bins[0] = bins[0] - 10 ** (-precision)
-
-    # adjust bin edges precision
-    bins = cupy.around(bins, precision)
 
     # checking for the correct inclusivity values
     if right:
@@ -133,7 +160,9 @@ def cut(
         closed = "left"
         left_inclusive = True
 
-    if labels is None:
+    if isinstance(bins, pandas_IntervalIndex):
+        interval_labels = bins
+    elif labels is None:
         # get labels for categories
         interval_labels = IntervalIndex.from_breaks(bins, closed=closed)
     elif labels is not False:
@@ -161,11 +190,18 @@ def cut(
                     labels if len(set(labels)) == len(labels) else None
                 )
 
-    # get the left and right edges of the bins as columns
-    left_edges = as_column(bins[:-1:])
-    right_edges = as_column(bins[+1::])
-    # the input arr must be changed to the same type as the edges
-    input_arr = input_arr.astype(left_edges._dtype)
+    if isinstance(bins, pandas_IntervalIndex):
+        # get the left and right edges of the bins as columns
+        # we cannot typecast an IntervalIndex, so we need to
+        # make the edges the same type as the input array
+        left_edges = as_column(bins.left).astype(x.dtype)
+        right_edges = as_column(bins.right).astype(x.dtype)
+    else:
+        # get the left and right edges of the bins as columns
+        left_edges = as_column(bins[:-1:])
+        right_edges = as_column(bins[+1::])
+        # the input arr must be changed to the same type as the edges
+        input_arr = input_arr.astype(left_edges._dtype)
     # get the indexes for the appropriate number
     index_labels = label_bins(
         input_arr, left_edges, left_inclusive, right_edges, right_inclusive

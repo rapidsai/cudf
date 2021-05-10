@@ -85,3 +85,102 @@ def test_cut_labels(
     )
 
     assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize(
+    "x",
+    [
+        [1, 7, 5, 4, 6, 3],
+        [1, 7],
+        pd.Series([1, 2, 3, 4, 5, 6]),
+        np.array([1, 7, 5, 4, 6, 3]),
+        np.array([2, 4, 6, 8, 10]),
+    ],
+)
+@pytest.mark.parametrize(
+    "bins", [1, 2, 3, [1, 2, 3], [0, 2, 4, 6, 10]],
+)
+@pytest.mark.parametrize("right", [True, False])
+@pytest.mark.parametrize("precision", [3])
+def test_cut_right(x, bins, right, precision):
+
+    pcat = pd.cut(x=x, bins=bins, right=right, precision=precision,)
+    pindex = pd.CategoricalIndex(pcat)
+    gindex = cut(x=x, bins=bins, right=right, precision=precision,)
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize(
+    "x",
+    [
+        [1, 7, 5, 4, 6, 3],
+        [1, 7],
+        pd.Series([1, 2, 3, 4, 5, 6]),
+        np.array([1, 7, 5, 4, 6, 3]),
+        np.array([2, 4, 6, 8, 10]),
+    ],
+)
+@pytest.mark.parametrize(
+    "bins", [1, 2, 3, [1, 2, 3], [0, 2, 4, 6, 10]],
+)
+@pytest.mark.parametrize("right", [False])
+@pytest.mark.parametrize("precision", [3])
+@pytest.mark.parametrize("duplicates", ["drop"])
+def test_cut_drop_duplicates(x, bins, right, precision, duplicates):
+
+    pcat = pd.cut(
+        x=x,
+        bins=bins,
+        right=right,
+        precision=precision,
+        duplicates=duplicates,
+    )
+    pindex = pd.CategoricalIndex(pcat)
+    gindex = cut(
+        x=x,
+        bins=bins,
+        right=right,
+        precision=precision,
+        duplicates=duplicates,
+    )
+
+    assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize(
+    "x",
+    [
+        [0, 0.5, 1.5, 2.5, 4.5],
+        [1, 7, 5, 4, 6, 3],
+        [1, 7],
+        pd.Series([1, 2, 3, 4, 5, 6]),
+        np.array([1, 7, 5, 4, 6, 3]),
+        np.array([2, 4, 6, 8, 10]),
+    ],
+)
+@pytest.mark.parametrize(
+    "bins", [pd.IntervalIndex.from_tuples([(0, 1), (2, 3), (4, 5)])],
+)
+@pytest.mark.parametrize("right", [True, False])
+@pytest.mark.parametrize("precision", [3])
+@pytest.mark.parametrize("duplicates", ["drop", "raise"])
+def test_cut_intervalindex_bin(x, bins, right, precision, duplicates):
+
+    pcat = pd.cut(
+        x=x,
+        bins=bins,
+        right=right,
+        precision=precision,
+        duplicates=duplicates,
+    )
+    pindex = pd.CategoricalIndex(pcat)
+    gindex = cut(
+        x=x,
+        bins=bins,
+        right=right,
+        precision=precision,
+        duplicates=duplicates,
+    )
+
+    assert_eq(pindex, gindex)
