@@ -70,7 +70,7 @@ struct window_exec {
 
   size_type num_rows() { return gby_column.size(); }
 
-  std::unique_ptr<column> operator()(std::unique_ptr<aggregation> const& agg) const
+  std::unique_ptr<column> operator()(std::unique_ptr<rolling_aggregation> const& agg) const
   {
     auto const grouping_keys = cudf::table_view{std::vector<column_view>{gby_column}};
 
@@ -81,7 +81,7 @@ struct window_exec {
                                               range_window_bounds::get(preceding),
                                               range_window_bounds::get(following),
                                               min_periods,
-                                              agg);
+                                              *agg);
   }
 
  private:
@@ -112,34 +112,36 @@ void verify_results_for_ascending(WindowExecT exec)
   auto const last_invalid = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0), [&n_rows](auto i) { return i != (n_rows - 1); });
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_count_aggregation(null_policy::INCLUDE))->view(),
-                                 size_col{{1, 2, 2, 3, 2, 3, 3, 4, 4, 1}, all_valid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_count_aggregation())->view(),
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    exec(make_count_aggregation<rolling_aggregation>(null_policy::INCLUDE))->view(),
+    size_col{{1, 2, 2, 3, 2, 3, 3, 4, 4, 1}, all_valid});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_count_aggregation<rolling_aggregation>())->view(),
                                  size_col{{1, 2, 2, 3, 2, 3, 3, 4, 4, 0}, all_valid});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    exec(make_sum_aggregation())->view(),
+    exec(make_sum_aggregation<rolling_aggregation>())->view(),
     fwcw<int64_t>{{0, 12, 12, 12, 8, 17, 17, 18, 18, 1}, last_invalid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_min_aggregation())->view(),
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_min_aggregation<rolling_aggregation>())->view(),
                                  int_col{{0, 4, 4, 2, 2, 3, 3, 1, 1, 1}, last_invalid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_max_aggregation())->view(),
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_max_aggregation<rolling_aggregation>())->view(),
                                  int_col{{0, 8, 8, 6, 6, 9, 9, 9, 9, 1}, last_invalid});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    exec(make_mean_aggregation())->view(),
+    exec(make_mean_aggregation<rolling_aggregation>())->view(),
     fwcw<double>{{0.0, 6.0, 6.0, 4.0, 4.0, 17.0 / 3, 17.0 / 3, 4.5, 4.5, 1.0}, last_invalid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(exec(make_collect_list_aggregation())->view(),
-                                      lists_col{{{0},
-                                                 {8, 4},
-                                                 {8, 4},
-                                                 {4, 6, 2},
-                                                 {6, 2},
-                                                 {9, 3, 5},
-                                                 {9, 3, 5},
-                                                 {9, 3, 5, 1},
-                                                 {9, 3, 5, 1},
-                                                 {{0}, all_invalid}},
-                                                all_valid});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-    exec(make_collect_list_aggregation(null_policy::EXCLUDE))->view(),
+    exec(make_collect_list_aggregation<rolling_aggregation>())->view(),
+    lists_col{{{0},
+               {8, 4},
+               {8, 4},
+               {4, 6, 2},
+               {6, 2},
+               {9, 3, 5},
+               {9, 3, 5},
+               {9, 3, 5, 1},
+               {9, 3, 5, 1},
+               {{0}, all_invalid}},
+              all_valid});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    exec(make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE))->view(),
     lists_col{{{0},
                {8, 4},
                {8, 4},
@@ -189,34 +191,36 @@ void verify_results_for_descending(WindowExecT exec)
   auto const first_invalid = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
                                                              [](auto i) { return i != 0; });
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_count_aggregation(null_policy::INCLUDE))->view(),
-                                 size_col{{1, 4, 4, 3, 3, 2, 3, 2, 2, 1}, all_valid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_count_aggregation())->view(),
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    exec(make_count_aggregation<rolling_aggregation>(null_policy::INCLUDE))->view(),
+    size_col{{1, 4, 4, 3, 3, 2, 3, 2, 2, 1}, all_valid});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_count_aggregation<rolling_aggregation>())->view(),
                                  size_col{{0, 4, 4, 3, 3, 2, 3, 2, 2, 1}, all_valid});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    exec(make_sum_aggregation())->view(),
+    exec(make_sum_aggregation<rolling_aggregation>())->view(),
     fwcw<int64_t>{{1, 18, 18, 17, 17, 8, 12, 12, 12, 0}, first_invalid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_min_aggregation())->view(),
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_min_aggregation<rolling_aggregation>())->view(),
                                  int_col{{1, 1, 1, 3, 3, 2, 2, 4, 4, 0}, first_invalid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_max_aggregation())->view(),
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(exec(make_max_aggregation<rolling_aggregation>())->view(),
                                  int_col{{1, 9, 9, 9, 9, 6, 6, 8, 8, 0}, first_invalid});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    exec(make_mean_aggregation())->view(),
+    exec(make_mean_aggregation<rolling_aggregation>())->view(),
     fwcw<double>{{1.0, 4.5, 4.5, 17.0 / 3, 17.0 / 3, 4.0, 4.0, 6.0, 6.0, 0.0}, first_invalid});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(exec(make_collect_list_aggregation())->view(),
-                                      lists_col{{{{0}, all_invalid},
-                                                 {1, 5, 3, 9},
-                                                 {1, 5, 3, 9},
-                                                 {5, 3, 9},
-                                                 {5, 3, 9},
-                                                 {2, 6},
-                                                 {2, 6, 4},
-                                                 {4, 8},
-                                                 {4, 8},
-                                                 {0}},
-                                                all_valid});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
-    exec(make_collect_list_aggregation(null_policy::EXCLUDE))->view(),
+    exec(make_collect_list_aggregation<rolling_aggregation>())->view(),
+    lists_col{{{{0}, all_invalid},
+               {1, 5, 3, 9},
+               {1, 5, 3, 9},
+               {5, 3, 9},
+               {5, 3, 9},
+               {2, 6},
+               {2, 6, 4},
+               {4, 8},
+               {4, 8},
+               {0}},
+              all_valid});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    exec(make_collect_list_aggregation<rolling_aggregation>(null_policy::EXCLUDE))->view(),
     lists_col{{{},
                {1, 5, 3, 9},
                {1, 5, 3, 9},
@@ -338,7 +342,7 @@ auto do_count_over_window(
                                             std::move(preceding),
                                             std::move(following),
                                             min_periods,
-                                            cudf::make_count_aggregation());
+                                            *cudf::make_count_aggregation<rolling_aggregation>());
 }
 
 TYPED_TEST(TypedRangeRollingNullsTest, CountSingleGroupOrderByASCNullsFirst)
