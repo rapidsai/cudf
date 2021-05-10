@@ -121,8 +121,6 @@ find_package(ZLIB REQUIRED)
 find_package(Threads REQUIRED)
 # add third party dependencies using CPM
 include(cmake/thirdparty/CUDF_GetCPM.cmake)
-# find boost
-include(cmake/thirdparty/CUDF_FindBoost.cmake)
 # find jitify
 include(cmake/thirdparty/CUDF_GetJitify.cmake)
 # find thrust/cub
@@ -478,7 +476,6 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(cudf
            PUBLIC ZLIB::ZLIB
-                  Boost::filesystem
                   ${ARROW_LIBRARIES}
                   cudf::Thrust
                   rmm::rmm)
