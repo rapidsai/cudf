@@ -581,7 +581,7 @@ class collect_list_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived aggregation class for specifying COLLECT_SET aggregation
  */
-class collect_set_aggregation final : public aggregation {
+class collect_set_aggregation final : public rolling_aggregation {
  public:
   explicit collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE,
                                    null_equality nulls_equal = null_equality::EQUAL,
