@@ -136,14 +136,14 @@ class writer::impl {
    * @param sink Output sink
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
-   * @param mr Device memory resource to use for device memory allocation
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<data_sink> sink,
                 orc_writer_options const& options,
                 SingleWriteMode mode,
-                rmm::mr::device_memory_resource* mr,
-                rmm::cuda_stream_view stream);
+                rmm::cuda_stream_view stream,
+                rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Constructor with chunked writer options.
@@ -151,14 +151,14 @@ class writer::impl {
    * @param sink Output sink
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
-   * @param mr Device memory resource to use for device memory allocation
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<data_sink> sink,
                 chunked_orc_writer_options const& options,
                 SingleWriteMode mode,
-                rmm::mr::device_memory_resource* mr,
-                rmm::cuda_stream_view stream);
+                rmm::cuda_stream_view stream,
+                rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Destructor to complete any incomplete write and release resources.

@@ -18,12 +18,18 @@ from pandas.api.types import is_dict_like, is_dtype_equal
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
-from cudf.core.column import as_column, build_categorical_column, column_empty
+from cudf.core.column import (
+    ColumnBase,
+    as_column,
+    build_categorical_column,
+    column_empty,
+)
 from cudf.core.join import merge
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
     is_numerical_dtype,
+    is_decimal_dtype,
     is_scalar,
     min_scalar_type,
 )
@@ -3306,6 +3312,19 @@ class Frame(libcudf.table.Table):
         return self._mimic_inplace(result, inplace=inplace)
 
 
+_truediv_int_dtype_corrections = {
+    np.int8: np.float32,
+    np.int16: np.float32,
+    np.int32: np.float32,
+    np.int64: np.float64,
+    np.uint8: np.float32,
+    np.uint16: np.float32,
+    np.uint32: np.float64,
+    np.uint64: np.float64,
+    np.bool_: np.float32,
+}
+
+
 class SingleColumnFrame(Frame):
     """A one-dimensional frame.
 
@@ -3509,6 +3528,227 @@ class SingleColumnFrame(Frame):
         ]
         """
         return self._column.to_arrow()
+
+    @property
+    def _copy_construct_defaults(self):
+        """A default dictionary of kwargs to be used for copy construction."""
+        raise NotImplementedError
+
+    def _copy_construct(self, **kwargs):
+        """Shallow copy this object by replacing certain ctor args.
+        """
+        return self.__class__(**{**self._copy_construct_defaults, **kwargs})
+
+    def _binaryop(
+        self,
+        other,
+        fn,
+        fill_value=None,
+        reflect=False,
+        lhs=None,
+        *args,
+        **kwargs,
+    ):
+        """Perform a binary operation between two single column frames.
+
+        Parameters
+        ----------
+        other : SingleColumnFrame
+            The second operand.
+        fn : str
+            The operation
+        fill_value : Any, default None
+            The value to replace null values with. If ``None``, nulls are not
+            filled before the operation.
+        reflect : bool, default False
+            If ``True`` the operation is reflected (i.e whether to swap the
+            left and right operands).
+        lhs : SingleColumnFrame, default None
+            The left hand operand. If ``None``, self is used. This parameter
+            allows child classes to preprocess the inputs if necessary.
+
+        Returns
+        -------
+        SingleColumnFrame
+            A new instance containing the result of the operation.
+        """
+        if lhs is None:
+            lhs = self
+
+        rhs = self._normalize_binop_value(other)
+
+        if fn == "truediv":
+            truediv_type = _truediv_int_dtype_corrections.get(lhs.dtype.type)
+            if truediv_type is not None:
+                lhs = lhs.astype(truediv_type)
+
+        output_mask = None
+        if fill_value is not None:
+            if is_scalar(rhs):
+                if lhs.nullable:
+                    lhs = lhs.fillna(fill_value)
+            else:
+                # If both columns are nullable, pandas semantics dictate that
+                # nulls that are present in both lhs and rhs are not filled.
+                if lhs.nullable and rhs.nullable:
+                    # Note: lhs is a Frame, while rhs is already a column.
+                    lmask = as_column(lhs._column.nullmask)
+                    rmask = as_column(rhs.nullmask)
+                    output_mask = (lmask | rmask).data
+                    lhs = lhs.fillna(fill_value)
+                    rhs = rhs.fillna(fill_value)
+                elif lhs.nullable:
+                    lhs = lhs.fillna(fill_value)
+                elif rhs.nullable:
+                    rhs = rhs.fillna(fill_value)
+
+        outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
+
+        # Get the appropriate name for output operations involving two objects
+        # that are Series-like objects. The output shares the lhs's name unless
+        # the rhs is a _differently_ named Series-like object.
+        if (
+            isinstance(other, (SingleColumnFrame, pd.Series, pd.Index))
+            and self.name != other.name
+        ):
+            result_name = None
+        else:
+            result_name = self.name
+
+        output = lhs._copy_construct(data=outcol, name=result_name)
+
+        if output_mask is not None:
+            output._column = output._column.set_mask(output_mask)
+        return output
+
+    def _normalize_binop_value(self, other):
+        """Returns a *column* (not a Series) or scalar for performing
+        binary operations with self._column.
+        """
+        if isinstance(other, ColumnBase):
+            return other
+        if isinstance(other, SingleColumnFrame):
+            return other._column
+        if other is cudf.NA:
+            return cudf.Scalar(other, dtype=self.dtype)
+        else:
+            return self._column.normalize_binop_value(other)
+
+    def _bitwise_binop(self, other, op):
+        """Type-coercing wrapper around _binaryop for bitwise operations."""
+        # This will catch attempts at bitwise ops on extension dtypes.
+        try:
+            self_is_bool = np.issubdtype(self.dtype, np.bool_)
+            other_is_bool = np.issubdtype(other.dtype, np.bool_)
+        except TypeError:
+            raise TypeError(
+                f"Operation 'bitwise {op}' not supported between "
+                f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
+            )
+
+        if (self_is_bool or np.issubdtype(self.dtype, np.integer)) and (
+            other_is_bool or np.issubdtype(other.dtype, np.integer)
+        ):
+            # TODO: This doesn't work on Series (op) DataFrame
+            # because dataframe doesn't have dtype
+            ser = self._binaryop(other, op)
+            if self_is_bool or other_is_bool:
+                ser = ser.astype(np.bool_)
+            return ser
+        else:
+            raise TypeError(
+                f"Operation 'bitwise {op}' not supported between "
+                f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
+            )
+
+    # Binary arithmetic operations.
+    def __add__(self, other):
+        return self._binaryop(other, "add")
+
+    def __radd__(self, other):
+        return self._binaryop(other, "add", reflect=True)
+
+    def __sub__(self, other):
+        return self._binaryop(other, "sub")
+
+    def __rsub__(self, other):
+        return self._binaryop(other, "sub", reflect=True)
+
+    def __mul__(self, other):
+        return self._binaryop(other, "mul")
+
+    def __rmul__(self, other):
+        return self._binaryop(other, "mul", reflect=True)
+
+    def __mod__(self, other):
+        return self._binaryop(other, "mod")
+
+    def __rmod__(self, other):
+        return self._binaryop(other, "mod", reflect=True)
+
+    def __pow__(self, other):
+        return self._binaryop(other, "pow")
+
+    def __rpow__(self, other):
+        return self._binaryop(other, "pow", reflect=True)
+
+    def __floordiv__(self, other):
+        return self._binaryop(other, "floordiv")
+
+    def __rfloordiv__(self, other):
+        return self._binaryop(other, "floordiv", reflect=True)
+
+    def __truediv__(self, other):
+        if is_decimal_dtype(self.dtype):
+            return self._binaryop(other, "div")
+        else:
+            return self._binaryop(other, "truediv")
+
+    def __rtruediv__(self, other):
+        if is_decimal_dtype(self.dtype):
+            return self._binaryop(other, "div", reflect=True)
+        else:
+            return self._binaryop(other, "truediv", reflect=True)
+
+    __div__ = __truediv__
+
+    def __and__(self, other):
+        return self._bitwise_binop(other, "and")
+
+    def __or__(self, other):
+        return self._bitwise_binop(other, "or")
+
+    def __xor__(self, other):
+        return self._bitwise_binop(other, "xor")
+
+    # Binary rich comparison operations.
+    def __eq__(self, other):
+        return self._binaryop(other, "eq")
+
+    def __ne__(self, other):
+        return self._binaryop(other, "ne")
+
+    def __lt__(self, other):
+        return self._binaryop(other, "lt")
+
+    def __le__(self, other):
+        return self._binaryop(other, "le")
+
+    def __gt__(self, other):
+        return self._binaryop(other, "gt")
+
+    def __ge__(self, other):
+        return self._binaryop(other, "ge")
+
+    # Unary logical operators
+    def __neg__(self):
+        return -1 * self
+
+    def __pos__(self):
+        return self.copy(deep=True)
+
+    def __abs__(self):
+        return self._unaryop("abs")
 
 
 def _get_replacement_values_for_columns(

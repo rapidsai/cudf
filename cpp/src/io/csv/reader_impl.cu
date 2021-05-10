@@ -734,8 +734,9 @@ std::vector<column_buffer> reader::impl::decode_data(device_span<char const> dat
 /**
  * @brief Create a serialized trie for N/A value matching, based on the options.
  */
-thrust::host_vector<SerialTrieNode> create_na_trie(char quotechar,
-                                                   csv_reader_options const &reader_opts)
+cudf::detail::trie create_na_trie(char quotechar,
+                                  csv_reader_options const &reader_opts,
+                                  rmm::cuda_stream_view stream)
 {
   // Default values to recognize as null values
   static std::vector<std::string> const default_na_values{"",
@@ -757,7 +758,7 @@ thrust::host_vector<SerialTrieNode> create_na_trie(char quotechar,
                                                           "nan",
                                                           "null"};
 
-  if (!reader_opts.is_enabled_na_filter()) { return {}; }
+  if (!reader_opts.is_enabled_na_filter()) { return cudf::detail::trie(0, stream); }
 
   std::vector<std::string> na_values = reader_opts.get_na_values();
   if (reader_opts.is_enabled_keep_default_na()) {
@@ -769,10 +770,11 @@ thrust::host_vector<SerialTrieNode> create_na_trie(char quotechar,
     na_values.push_back(std::string(2, quotechar));
   }
 
-  return createSerializedTrie(na_values);
+  return cudf::detail::create_serialized_trie(na_values, stream);
 }
 
-parse_options make_parse_options(csv_reader_options const &reader_opts)
+parse_options make_parse_options(csv_reader_options const &reader_opts,
+                                 rmm::cuda_stream_view stream)
 {
   auto parse_opts = parse_options{};
 
@@ -807,20 +809,22 @@ parse_options make_parse_options(csv_reader_options const &reader_opts)
   CUDF_EXPECTS(parse_opts.thousands != parse_opts.delimiter,
                "Thousands separator cannot be the same as the delimiter");
 
-  // Handle user-defined false values, whereby field data is substituted with a
+  // Handle user-defined true values, whereby field data is substituted with a
   // boolean true or numeric `1` value
   if (reader_opts.get_true_values().size() != 0) {
-    parse_opts.trie_true = createSerializedTrie(reader_opts.get_true_values());
+    parse_opts.trie_true =
+      cudf::detail::create_serialized_trie(reader_opts.get_true_values(), stream);
   }
 
   // Handle user-defined false values, whereby field data is substituted with a
   // boolean false or numeric `0` value
   if (reader_opts.get_false_values().size() != 0) {
-    parse_opts.trie_false = createSerializedTrie(reader_opts.get_false_values());
+    parse_opts.trie_false =
+      cudf::detail::create_serialized_trie(reader_opts.get_false_values(), stream);
   }
 
   // Handle user-defined N/A values, whereby field data is treated as null
-  parse_opts.trie_na = create_na_trie(parse_opts.quotechar, reader_opts);
+  parse_opts.trie_na = create_na_trie(parse_opts.quotechar, reader_opts, stream);
 
   return parse_opts;
 }
@@ -828,6 +832,7 @@ parse_options make_parse_options(csv_reader_options const &reader_opts)
 reader::impl::impl(std::unique_ptr<datasource> source,
                    std::string filepath,
                    csv_reader_options const &options,
+                   rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource *mr)
   : mr_(mr), source_(std::move(source)), filepath_(filepath), opts_(options)
 {
@@ -839,27 +844,29 @@ reader::impl::impl(std::unique_ptr<datasource> source,
                            filepath,
                            {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
 
-  opts = make_parse_options(options);
+  opts = make_parse_options(options, stream);
 }
 
 // Forward to implementation
 reader::reader(std::vector<std::string> const &filepaths,
                csv_reader_options const &options,
+               rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
   // Delay actual instantiation of data source until read to allow for
   // partial memory mapping of file using byte ranges
-  _impl = std::make_unique<impl>(nullptr, filepaths[0], options, mr);
+  _impl = std::make_unique<impl>(nullptr, filepaths[0], options, stream, mr);
 }
 
 // Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                csv_reader_options const &options,
+               rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
-  _impl = std::make_unique<impl>(std::move(sources[0]), "", options, mr);
+  _impl = std::make_unique<impl>(std::move(sources[0]), "", options, stream, mr);
 }
 
 // Destructor within this translation unit
