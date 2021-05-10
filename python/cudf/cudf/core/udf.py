@@ -13,7 +13,9 @@ from numba.core.extending import (
 from numba.core.typing import signature as nb_signature
 from inspect import signature as py_signature
 from numba.core.typing.templates import AbstractTemplate
-from numba.cuda.cudadecl import registry as cuda_registry
+from numba.cuda.cudadecl import registry as cuda_decl_registry
+from numba.cuda.cudaimpl import registry as cuda_impl_registry
+
 from numba.cuda.cudaimpl import (
     lower as cuda_lower,
     registry as cuda_lowering_registry,
@@ -47,6 +49,14 @@ class MaskedType(types.Type):
 
     def __hash__(self):
         return self.__repr__().__hash__()
+
+    def unify(self, context, other):
+        breakpoint()
+        unified = context.unify_pairs(self.value_type, other)
+        if unified is None:
+            return None
+
+        return MaskedType(unified)
 
 class NAType(types.Type):
     def __init__(self):
@@ -104,7 +114,7 @@ def impl_masked_constructor(context, builder, sig, args):
 """
 
 
-@cuda_registry.register_global(operator.add)
+@cuda_decl_registry.register_global(operator.add)
 class MaskedScalarAdd(AbstractTemplate):
     # abstracttemplate vs concretetemplate
     def generic(self, args, kws):
@@ -121,7 +131,7 @@ class MaskedScalarAdd(AbstractTemplate):
             )
 
 
-@cuda_registry.register_global(operator.add)
+@cuda_decl_registry.register_global(operator.add)
 class MaskedScalarAddNull(AbstractTemplate):
     def generic(self, args, kws):
         if isinstance(args[0], MaskedType) and isinstance(args[1], NAType):
@@ -181,7 +191,7 @@ def constant_dummy(context, builder, ty, pyval):
     return context.get_dummy_value()
 
 
-@cuda_registry.register_global(operator.add)
+@cuda_decl_registry.register_global(operator.add)
 class MaskedScalarAddConstant(AbstractTemplate):
     def generic(self, args, kws):
         if isinstance(args[0], MaskedType) and isinstance(
@@ -218,6 +228,15 @@ def masked_scalar_add_constant_impl(context, builder, sig, input_values):
 
     return result._getvalue()
 
+# To handle the unification, we need to support casting from any type to an
+# extension type. The cast implementation takes the value passed in and returns
+# an extension struct wrapping that value.
+@cuda_impl_registry.lower_cast(types.Any, MaskedType)
+def cast_primitive_to_extension(context, builder, fromty, toty, val):
+    casted = context.cast(builder, val, fromty, toty.value_type)
+    ext = cgutils.create_struct_proxy(toty)(context, builder)
+    ext.value = casted
+    return ext._getvalue()
 
 def compile_udf(func, dtypes):
     n_params = len(py_signature(func).parameters)
