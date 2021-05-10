@@ -1467,6 +1467,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
           throw new IllegalArgumentException("Child row count doesn't match the old child");
         }
         newChildren.add(view);
+        child.close();
       }
     });
     if (!map.isEmpty()) {
