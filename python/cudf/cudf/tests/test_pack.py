@@ -13,13 +13,12 @@
 # limitations under the License.
 
 import cudf
-from cudf.tests.utils import assert_eq
-
 from cudf._lib.copying import pack, unpack
+from cudf.tests.utils import assert_eq
 
 
 def test_unpacked_equality():
-    gdf = cudf.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]})
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     pdf = gdf.to_pandas()
 
     packed = pack(gdf)
@@ -30,10 +29,12 @@ def test_unpacked_equality():
 
 
 def test_unpacked_unique_pointers():
-    gdf = cudf.DataFrame({'a': [1, 2, 3, None], 'b': [4, 5, 6, None]})
+    gdf = cudf.DataFrame({"a": [1, 2, 3, None], "b": [4, 5, 6, None]})
     unpacked = unpack(pack(gdf))
 
-    assert all([
-        gdf._data[col].data.ptr != unpacked._data[col].data.ptr
-        for col in gdf
-    ])
+    assert all(
+        [
+            gdf._data[col].data.ptr != unpacked._data[col].data.ptr
+            for col in gdf
+        ]
+    )
