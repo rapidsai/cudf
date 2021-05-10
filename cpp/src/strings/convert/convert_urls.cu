@@ -30,11 +30,15 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cub/cub.cuh>
+
 #include <thrust/binary_search.h>
 #include <thrust/count.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/scan.h>
 
 #include <algorithm>
+#include <iostream>
 
 using cudf::device_span;
 
@@ -188,57 +192,63 @@ constexpr bool is_hex_digit(char ch)
   return (ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F') || (ch >= 'a' && ch <= 'f');
 }
 
-/**
- * @brief Functor for detecting character escape sequences in URL-encoded strings.
- */
-struct url_decode_escape_detector {
-  device_span<char const> const d_chars{};
-
-  /**
-   * @brief Detects if an escape sequence is at the specified character position.
-   *
-   * Returns true for a character index corresponding to the start of an escape
-   * sequence, i.e.: '%' followed by two hexadecimal digits. This does not check
-   * against string boundaries and therefore can produce false-positives.
-   *
-   * @param char_idx Character position to examine
-   * @return true An escape sequence was detected at the character position
-   * @return false No escape sequence at the character position
-   */
-  __device__ bool operator()(size_type char_idx) const
-  {
-    return (char_idx + 2 < d_chars.size()) && d_chars[char_idx] == '%' &&
-           is_hex_digit(d_chars[char_idx + 1]) && is_hex_digit(d_chars[char_idx + 2]);
-  }
-};
-
-/**
- * @brief Functor for detecting escape sequence positions that cross a string boundary.
- */
-struct url_decode_esc_position_filter {
-  device_span<int32_t const> const d_offsets{};
-
-  /**
-   * @brief Detects if an escape sequence crosses a string boundary
-   *
-   * Returns true for an escape sequence that straddles a boundary between two strings.
-   *
-   * @param esc_pos_idx Character position corresponding to the start of an escape sequence
-   * @return true The escape sequence crosses a string boundary
-   * @return false The escape sequence does not cross a string boundary
-   */
-  __device__ bool operator()(size_type esc_pos_idx) const
-  {
-    // find the end offset of the current string
-    size_type const* offset_ptr =
-      thrust::upper_bound(thrust::seq, d_offsets.begin(), d_offsets.end(), esc_pos_idx);
-    return esc_pos_idx + 2 >= *offset_ptr;
-  }
-};
-
 __forceinline__ __device__ bool is_escape_char(char const* const ptr)
 {
   return (ptr[0] == '%' && is_hex_digit(ptr[1]) && is_hex_digit(ptr[2]));
+}
+
+template <int warps_per_threadblock, int block_size>
+__global__ void url_decode_char_counter(char const* const in_chars,
+                                        int32_t const* const in_offsets,
+                                        int32_t* const out_counts,
+                                        int32_t const num_rows)
+{
+  __shared__ char temporary_buffer[warps_per_threadblock][block_size + 2];
+  __shared__ typename cub::WarpReduce<int8_t>::TempStorage cub_storage[warps_per_threadblock];
+
+  int global_thread_id  = blockIdx.x * blockDim.x + threadIdx.x;
+  int global_warp_id    = global_thread_id / cudf::detail::warp_size;
+  int local_warp_id     = threadIdx.x / cudf::detail::warp_size;
+  int warp_lane         = threadIdx.x % cudf::detail::warp_size;
+  int nwarps            = gridDim.x * blockDim.x / cudf::detail::warp_size;
+  char* in_chars_shared = temporary_buffer[local_warp_id];
+
+  for (size_type row_idx = global_warp_id; row_idx < num_rows; row_idx += nwarps) {
+    auto in_chars_string      = in_chars + in_offsets[row_idx];
+    auto string_length        = in_offsets[row_idx + 1] - in_offsets[row_idx];
+    int nblocks               = (string_length + block_size - 1) / block_size;
+    int32_t escape_char_count = 0;
+
+    for (int iblock = 0; iblock < nblocks; iblock++) {
+      int string_length_iblock = std::min(block_size, string_length - block_size * iblock);
+
+      // Each warp collectively loads input characters of the current block to shared memory
+      for (int ichar = warp_lane; ichar < string_length_iblock + 2;
+           ichar += cudf::detail::warp_size) {
+        char ch    = 0;
+        int in_idx = iblock * block_size + ichar;
+        if (in_idx < string_length) ch = in_chars_string[in_idx];
+        in_chars_shared[ichar] = ch;
+      }
+
+      __syncwarp();
+
+      for (int ichar_start = 0; ichar_start < string_length_iblock;
+           ichar_start += cudf::detail::warp_size) {
+        int ichar = ichar_start + warp_lane;
+        int8_t is_ichar_escape_char =
+          (ichar < string_length_iblock && is_escape_char(in_chars_shared + ichar)) ? 1 : 0;
+
+        int8_t total_escape_char =
+          cub::WarpReduce<int8_t>(cub_storage[local_warp_id]).Sum(is_ichar_escape_char);
+
+        if (warp_lane == 0) { escape_char_count += total_escape_char; }
+
+        __syncwarp();
+      }
+    }
+    if (warp_lane == 0) { out_counts[row_idx] = string_length - escape_char_count * 2; }
+  }
 }
 
 template <int warps_per_threadblock, int block_size>
@@ -314,33 +324,6 @@ __global__ void url_decode_char_replacer(char const* const in_chars,
   }
 }
 
-/**
- * @brief Functor to update the string column offsets.
- */
-struct url_decode_offsets_updater {
-  device_span<size_type const> const d_esc_positions{};
-  int32_t const first_input_offset = 0;
-
-  /**
-   * @brief Convert input offsets into output offsets
-   *
-   * Each offset is reduced by 2 for every escape sequence that occurs in the entire string column
-   * character data before the offset, as 3 characters are replaced with 1 for each escape.
-   *
-   * @param offset An original offset value from the input string column
-   * @return Adjusted offset value
-   */
-  __device__ int32_t operator()(int32_t offset) const
-  {
-    // determine the number of escape sequences occurring before this offset
-    size_type const* next_esc_pos_ptr =
-      thrust::lower_bound(thrust::seq, d_esc_positions.begin(), d_esc_positions.end(), offset);
-    size_type num_prev_esc = next_esc_pos_ptr - d_esc_positions.data();
-    // every escape that occurs before this one replaces 3 characters with 1
-    return offset - first_input_offset - (num_prev_esc * 2);
-  }
-};
-
 }  // namespace
 
 //
@@ -355,78 +338,46 @@ std::unique_ptr<column> url_decode(
   auto offset_count = strings_count + 1;
   auto d_offsets    = strings.offsets().data<int32_t>() + strings.offset();
   auto d_in_chars   = strings.chars().data<char>();
-  // determine index of first character in base column
-  size_type chars_start = (strings.offset() == 0) ? 0
-                                                  : cudf::detail::get_value<int32_t>(
-                                                      strings.offsets(), strings.offset(), stream);
-  size_type chars_end = (offset_count == strings.offsets().size())
-                          ? strings.chars_size()
-                          : cudf::detail::get_value<int32_t>(
-                              strings.offsets(), strings.offset() + strings_count, stream);
-  size_type chars_bytes = chars_end - chars_start;
 
-  url_decode_escape_detector esc_detector{device_span<char const>(d_in_chars, chars_end)};
-
-  // Count the number of URL escape sequences across all strings, ignoring string boundaries.
-  // This may count more sequences than actually are there since string boundaries are ignored.
-  size_type esc_count = thrust::count_if(rmm::exec_policy(stream),
-                                         thrust::make_counting_iterator<size_type>(chars_start),
-                                         thrust::make_counting_iterator<size_type>(chars_end),
-                                         esc_detector);
-
+  /*
   if (esc_count == 0) {
     // nothing to replace, so just copy the input column
     return std::make_unique<cudf::column>(strings.parent(), stream, mr);
   }
-
-  // create a vector of the potential escape sequence positions
-  rmm::device_uvector<size_type> esc_positions(esc_count, stream);
-  auto d_esc_positions = esc_positions.data();
-  thrust::copy_if(rmm::exec_policy(stream),
-                  thrust::make_counting_iterator<size_t>(chars_start),
-                  thrust::make_counting_iterator<size_t>(chars_end),
-                  d_esc_positions,
-                  esc_detector);
-
-  // In-place remove any escape positions that crossed string boundaries.
-  device_span<int32_t const> d_offsets_span(d_offsets, offset_count);
-  auto esc_pos_end = thrust::remove_if(rmm::exec_policy(stream),
-                                       d_esc_positions,
-                                       d_esc_positions + esc_count,
-                                       url_decode_esc_position_filter{d_offsets_span});
-
-  // update count in case any were filtered
-  esc_count = esc_pos_end - d_esc_positions;
-  if (esc_count == 0) {
-    // nothing to replace, so just copy the input column
-    return std::make_unique<cudf::column>(strings.parent(), stream, mr);
-  }
-
-  device_span<size_type const> d_esc_positions_span(d_esc_positions, esc_count);
+  */
 
   // build offsets column
   auto offsets_column = make_numeric_column(
     data_type{type_id::INT32}, offset_count, mask_state::UNALLOCATED, stream, mr);
-  auto offsets_view = offsets_column->mutable_view();
-  thrust::transform(rmm::exec_policy(stream),
-                    d_offsets_span.begin(),
-                    d_offsets_span.end(),
-                    offsets_view.begin<int32_t>(),
-                    url_decode_offsets_updater{d_esc_positions_span, chars_start});
+
+  // count number of bytes in each row after decoding
+  auto offsets_view         = offsets_column->view();
+  auto offsets_mutable_view = offsets_column->mutable_view();
+  url_decode_char_counter<4, 286><<<65536, 128, 0, stream.value()>>>(
+    d_in_chars, d_offsets, offsets_mutable_view.begin<int32_t>() + 1, strings_count);
+
+  thrust::inclusive_scan(rmm::exec_policy(stream),
+                         offsets_view.begin<int32_t>() + 1,
+                         offsets_view.begin<int32_t>() + offset_count,
+                         offsets_mutable_view.begin<int32_t>() + 1);
+
+  CUDA_TRY(
+    cudaMemsetAsync(offsets_mutable_view.begin<int32_t>(), 0, sizeof(int32_t), stream.value()));
+
+  int32_t out_chars_bytes;
+  CUDA_TRY(cudaMemcpyAsync(&out_chars_bytes,
+                           offsets_view.begin<int32_t>() + offset_count - 1,
+                           sizeof(int32_t),
+                           cudaMemcpyDeviceToHost,
+                           stream.value()));
+  stream.synchronize();
 
   // create the chars column
-  auto chars_column =
-    create_chars_child_column(strings_count,
-                              chars_bytes - (esc_count * 2),  // replacing 3 bytes with 1
-                              stream,
-                              mr);
-  auto d_out_chars = chars_column->mutable_view().data<char>();
+  auto chars_column = create_chars_child_column(strings_count, out_chars_bytes, stream, mr);
+  auto d_out_chars  = chars_column->mutable_view().data<char>();
 
-  url_decode_char_replacer<4, 284><<<65536, 128>>>(
+  url_decode_char_replacer<4, 284><<<65536, 128, 0, stream.value()>>>(
     d_in_chars, d_offsets, d_out_chars, offsets_column->view().begin<int32_t>(), strings_count);
-
-  // free the escape positions buffer as it is no longer needed
-  (void)esc_positions.release();
 
   // copy null mask
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
