@@ -15,9 +15,11 @@
  */
 
 #include <cudf/detail/gather.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/lists/column_factories.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
+#include <thrust/sequence.h>
 
 namespace cudf {
 namespace lists {
@@ -29,15 +31,24 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
                                                             rmm::mr::device_memory_resource* mr)
 {
   // Handcraft a 1-row column
-  auto offsets         = make_numeric_column(data_type(type_id::INT32), 2, mask_state::UNALLOCATED);
+  auto offsets   = make_numeric_column(data_type(type_id::INT32), 2, mask_state::UNALLOCATED);
+  auto m_offsets = offsets->mutable_view();
+  thrust::sequence(rmm::exec_policy(stream),
+                   m_offsets.begin<size_type>(),
+                   m_offsets.end<size_type>(),
+                   0,
+                   value.view().size());
   auto child           = std::make_unique<column>(value.view());
   size_type null_count = value.is_valid(stream) ? 0 : 1;
   auto null_mask       = null_count ? create_null_mask(1, mask_state::ALL_NULL)
                               : create_null_mask(1, mask_state::UNALLOCATED);
-  auto one_row_col = make_lists_column(
-    1, std::move(offsets), std::move(child), null_count, std::move(null_mask), stream, mr);
+  if (size == 1) {
+    return make_lists_column(
+      1, std::move(offsets), std::move(child), null_count, std::move(null_mask), stream, mr);
+  }
 
-  if (size == 1) { return one_row_col; }
+  auto one_row_col = make_lists_column(
+    1, std::move(offsets), std::move(child), null_count, std::move(null_mask), stream);
 
   auto begin = thrust::make_constant_iterator(0);
   auto res   = cudf::detail::gather(table_view({one_row_col->view()}),
@@ -46,7 +57,6 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
                                   out_of_bounds_policy::DONT_CHECK,
                                   stream,
                                   mr);
-
   return std::move(res->release()[0]);
 }
 
