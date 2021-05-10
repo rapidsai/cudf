@@ -80,7 +80,7 @@ union statistics_val {
   string_stats str_val;  //!< string columns
   double fp_val;         //!< float columns
   int64_t i_val;         //!< integer columns
-  uint64_t u_val;         //!< unsigned integer columns
+  uint64_t u_val;        //!< unsigned integer columns
 };
 
 struct statistics_chunk {
@@ -89,8 +89,8 @@ struct statistics_chunk {
   statistics_val min_value;  //!< minimum value in chunk
   statistics_val max_value;  //!< maximum value in chunk
   union {
-    double fp_val;  //!< Sum for fp types
-    int64_t i_val;  //!< Sum for integer types or string lengths
+    double fp_val;   //!< Sum for fp types
+    int64_t i_val;   //!< Sum for integer types or string lengths
     uint64_t u_val;  //!< Sum for unsigned integer types or string lengths
   } sum;
   uint8_t has_minmax;  //!< Nonzero if min_value and max_values are valid

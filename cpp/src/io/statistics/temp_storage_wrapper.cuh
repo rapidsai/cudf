@@ -35,16 +35,12 @@ namespace detail {
 template <typename T, int block_size>
 using cub_temp_storage = typename cub::BlockReduce<T, block_size>::TempStorage;
 
-using numeric::decimal32;
-using numeric::decimal64;
+#define MEMBER_NAME(TYPE) TYPE##_stats
 
-#define MEMBER_NAME(TYPE) TYPE ## _stats
-
-#define DECLARE_MEMBER(TYPE)\
-  cub_temp_storage<TYPE, block_size> MEMBER_NAME(TYPE);
+#define DECLARE_MEMBER(TYPE) cub_temp_storage<TYPE, block_size> MEMBER_NAME(TYPE);
 
 template <int block_size>
-union block_reduce_storage{
+union block_reduce_storage {
   DECLARE_MEMBER(bool)
   DECLARE_MEMBER(int8_t)
   DECLARE_MEMBER(int16_t)
@@ -61,22 +57,24 @@ union block_reduce_storage{
 
 template <typename T, int block_size>
 struct temp_storage_wrapper {
-  block_reduce_storage<block_size> &storage;
-  __device__
-  temp_storage_wrapper(block_reduce_storage<block_size>& _temp_storage) : storage(_temp_storage) {}
+  block_reduce_storage<block_size>& storage;
+  __device__ temp_storage_wrapper(block_reduce_storage<block_size>& _temp_storage)
+    : storage(_temp_storage)
+  {
+  }
   __device__ cub_temp_storage<T, block_size>& get() = delete;
 };
 
-#define TEMP_STORAGE_WRAPPER(TYPE)\
-template <int block_size>\
-struct temp_storage_wrapper<TYPE, block_size> {\
-  block_reduce_storage<block_size> &storage;\
-  __device__\
-  temp_storage_wrapper(block_reduce_storage<block_size>& _temp_storage) : storage(_temp_storage) {}\
-  __device__ cub_temp_storage<TYPE, block_size>& get() {\
-    return storage.MEMBER_NAME(TYPE);\
-  }\
-};
+#define TEMP_STORAGE_WRAPPER(TYPE)                                                             \
+  template <int block_size>                                                                    \
+  struct temp_storage_wrapper<TYPE, block_size> {                                              \
+    block_reduce_storage<block_size>& storage;                                                 \
+    __device__ temp_storage_wrapper(block_reduce_storage<block_size>& _temp_storage)           \
+      : storage(_temp_storage)                                                                 \
+    {                                                                                          \
+    }                                                                                          \
+    __device__ cub_temp_storage<TYPE, block_size>& get() { return storage.MEMBER_NAME(TYPE); } \
+  };
 
 TEMP_STORAGE_WRAPPER(bool);
 TEMP_STORAGE_WRAPPER(int8_t);
@@ -91,19 +89,20 @@ TEMP_STORAGE_WRAPPER(float);
 TEMP_STORAGE_WRAPPER(double);
 TEMP_STORAGE_WRAPPER(string_view);
 
-#define STORAGE_WRAPPER_GET(TYPE)\
-  template <typename T>\
-  __device__\
-  std::enable_if_t<std::is_same_v<T, TYPE>, cub_temp_storage<TYPE, block_size>&>\
-  get() {\
-    return storage.MEMBER_NAME(TYPE);\
+#define STORAGE_WRAPPER_GET(TYPE)                                                                 \
+  template <typename T>                                                                           \
+  __device__ std::enable_if_t<std::is_same_v<T, TYPE>, cub_temp_storage<TYPE, block_size>&> get() \
+  {                                                                                               \
+    return storage.MEMBER_NAME(TYPE);                                                             \
   }
 
 template <int block_size>
 struct storage_wrapper {
-  block_reduce_storage<block_size> &storage;
-  __device__
-  storage_wrapper(block_reduce_storage<block_size>& _temp_storage) : storage(_temp_storage) {}
+  block_reduce_storage<block_size>& storage;
+  __device__ storage_wrapper(block_reduce_storage<block_size>& _temp_storage)
+    : storage(_temp_storage)
+  {
+  }
 
   STORAGE_WRAPPER_GET(bool);
   STORAGE_WRAPPER_GET(int8_t);
@@ -117,7 +116,6 @@ struct storage_wrapper {
   STORAGE_WRAPPER_GET(float);
   STORAGE_WRAPPER_GET(double);
   STORAGE_WRAPPER_GET(string_view);
-
 };
 
 #undef TEMP_STORAGE_WRAPPER

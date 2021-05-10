@@ -29,18 +29,18 @@ namespace io {
  * @brief shared state for statistics gather kernel
  */
 struct stats_state_s {
-  stats_column_desc col;                 ///< Column information
-  statistics_group group;                ///< Group description
-  statistics_chunk ck;                   ///< Output statistics chunk
+  stats_column_desc col;   ///< Column information
+  statistics_group group;  ///< Group description
+  statistics_chunk ck;     ///< Output statistics chunk
 };
 
 /**
  * @brief shared state for statistics merge kernel
  */
 struct merge_state_s {
-  stats_column_desc col;                 ///< Column information
-  statistics_merge_group group;          ///< Group description
-  statistics_chunk ck;                   ///< Resulting statistics chunk
+  stats_column_desc col;         ///< Column information
+  statistics_merge_group group;  ///< Group description
+  statistics_chunk ck;           ///< Resulting statistics chunk
 };
 
 template <int dimension>
@@ -48,25 +48,30 @@ using block_reduce_storage = detail::block_reduce_storage<dimension>;
 
 template <int block_size, detail::io_type IO>
 struct gather_statistics {
-
   block_reduce_storage<block_size> &temp_storage;
 
-  __device__
-  gather_statistics(block_reduce_storage<block_size> &d_temp_storage) : temp_storage(d_temp_storage) {}
-
-  template <typename T, std::enable_if_t<detail::statistics_type_category<T, IO>::ignored_statistics>* = nullptr>
-  __device__ void operator()(stats_state_s& s, uint32_t t){
-    //No-op for unsupported aggregation types
+  __device__ gather_statistics(block_reduce_storage<block_size> &d_temp_storage)
+    : temp_storage(d_temp_storage)
+  {
   }
 
-  template <typename T, std::enable_if_t<not detail::statistics_type_category<T, IO>::ignored_statistics>* = nullptr>
-  __device__ void operator()(stats_state_s& s, uint32_t t){
-    using E = typename detail::extrema_type<T>::type;
-    using extrema_reduce = cub::BlockReduce<E, block_size>;
-    detail::temp_storage_wrapper<E, block_size> extrema_storage(temp_storage);
+  template <
+    typename T,
+    std::enable_if_t<detail::statistics_type_category<T, IO>::ignored_statistics> * = nullptr>
+  __device__ void operator()(stats_state_s &s, uint32_t t)
+  {
+    // No-op for unsupported aggregation types
+  }
+
+  template <
+    typename T,
+    std::enable_if_t<not detail::statistics_type_category<T, IO>::ignored_statistics> * = nullptr>
+  __device__ void operator()(stats_state_s &s, uint32_t t)
+  {
+    detail::storage_wrapper<block_size> storage(temp_storage);
 
     using type_convert = detail::type_conversion<detail::conversion_map<IO>>;
-    using CT = typename type_convert::template type<T>;
+    using CT           = typename type_convert::template type<T>;
     typed_statistics_chunk<CT> chunk(s.group.num_rows);
 
     for (uint32_t i = 0; i < s.group.num_rows; i += block_size) {
@@ -78,105 +83,67 @@ struct gather_statistics {
         chunk.reduce(converted_value);
       }
     }
-    chunk.minimum_value =
-      extrema_reduce(extrema_storage.get()).Reduce(chunk.minimum_value, cub::Min());
-    __syncthreads();
-    chunk.maximum_value =
-      extrema_reduce(extrema_storage.get()).Reduce(chunk.maximum_value, cub::Max());
-    __syncthreads();
-    chunk.has_minmax = __syncthreads_or(chunk.has_minmax);
 
-    if constexpr (detail::aggregation_type<CT>::is_supported) {
-      if (chunk.has_minmax) {
-        using A = typename detail::aggregation_type<CT>::type;
-        using aggregate_reduce = cub::BlockReduce<A, block_size>;
-        detail::temp_storage_wrapper<A, block_size> aggregate_storage(temp_storage);
-        chunk.aggregate = aggregate_reduce(aggregate_storage.get()).Sum(chunk.aggregate);
-      }
-    }
+    chunk = block_reduce(chunk, storage);
 
-    if (threadIdx.x == 0) {
-      s.ck = get_untyped_chunk(chunk);
-    }
+    if (threadIdx.x == 0) { s.ck = get_untyped_chunk(chunk); }
   }
 };
 
 template <int block_size, detail::io_type IO>
 struct merge_statistics {
-
   block_reduce_storage<block_size> &temp_storage;
 
-  __device__
-  merge_statistics(block_reduce_storage<block_size> &d_temp_storage) : temp_storage(d_temp_storage) {}
-
-  template <typename T, std::enable_if_t<detail::statistics_type_category<T, IO>::ignored_statistics>* = nullptr>
-  __device__ void operator()(merge_state_s& s, const statistics_chunk *chunks, const uint32_t num_chunks, uint32_t t){
-    //No-op for unsupported aggregation types
+  __device__ merge_statistics(block_reduce_storage<block_size> &d_temp_storage)
+    : temp_storage(d_temp_storage)
+  {
   }
 
-  template <typename T, std::enable_if_t<not detail::statistics_type_category<T, IO>::ignored_statistics>* = nullptr>
-  __device__ void operator()(merge_state_s& s, const statistics_chunk *chunks, const uint32_t num_chunks, uint32_t t){
-    using E = typename detail::extrema_type<T>::type;
-    using extrema_reduce = cub::BlockReduce<E, block_size>;
-    using count_reduce = cub::BlockReduce<uint32_t, block_size>;
-    //TODO : Decide which better wrapper style
-    //detail::temp_storage_wrapper<E, block_size> extrema_storage(temp_storage);
-    //detail::temp_storage_wrapper<uint32_t, block_size> count_storage(temp_storage);
+  template <
+    typename T,
+    std::enable_if_t<detail::statistics_type_category<T, IO>::ignored_statistics> * = nullptr>
+  __device__ void operator()(merge_state_s &s,
+                             const statistics_chunk *chunks,
+                             const uint32_t num_chunks,
+                             uint32_t t)
+  {
+    // No-op for unsupported aggregation types
+  }
 
+  template <
+    typename T,
+    std::enable_if_t<not detail::statistics_type_category<T, IO>::ignored_statistics> * = nullptr>
+  __device__ void operator()(merge_state_s &s,
+                             const statistics_chunk *chunks,
+                             const uint32_t num_chunks,
+                             uint32_t t)
+  {
     detail::storage_wrapper<block_size> storage(temp_storage);
 
     typed_statistics_chunk<T> chunk;
 
-    for (uint32_t i = t; i < num_chunks; i += block_size) {
-      chunk.reduce(chunks[i]);
-    }
+    for (uint32_t i = t; i < num_chunks; i += block_size) { chunk.reduce(chunks[i]); }
     chunk.has_minmax = (chunk.minimum_value <= chunk.maximum_value);
 
-    chunk.minimum_value =
-      extrema_reduce(storage.template get<E>()).Reduce(chunk.minimum_value, cub::Min());
-    __syncthreads();
-    chunk.maximum_value =
-      extrema_reduce(storage.template get<E>()).Reduce(chunk.maximum_value, cub::Max());
-    __syncthreads();
-    chunk.non_nulls =
-      count_reduce(storage.template get<uint32_t>()).Sum(chunk.non_nulls);
-    __syncthreads();
-    chunk.null_count =
-      count_reduce(storage.template get<uint32_t>()).Sum(chunk.null_count);
-    __syncthreads();
-    chunk.has_minmax = __syncthreads_or(chunk.has_minmax);
+    chunk = block_reduce(chunk, storage);
 
-    if constexpr (detail::aggregation_type<T>::is_supported) {
-      if (chunk.has_minmax) {
-        using A = typename detail::aggregation_type<T>::type;
-        using aggregate_reduce = cub::BlockReduce<A, block_size>;
-        //detail::temp_storage_wrapper<A, block_size> aggregate_storage(temp_storage);
-        chunk.aggregate = aggregate_reduce(storage.template get<A>()).Sum(chunk.aggregate);
-      }
-    }
-
-    if (threadIdx.x == 0) {
-      s.ck = get_untyped_chunk(chunk);
-    }
+    if (threadIdx.x == 0) { s.ck = get_untyped_chunk(chunk); }
   }
-
 };
 
 template <typename T>
-__device__
-void cooperative_load(T& destination) {
-  using load_type = std::conditional_t<((sizeof(T) % sizeof(uint32_t)) == 0),
-        uint32_t, uint8_t>;
+__device__ void cooperative_load(T &destination)
+{
+  using load_type = std::conditional_t<((sizeof(T) % sizeof(uint32_t)) == 0), uint32_t, uint8_t>;
   for (auto i = threadIdx.x; i < sizeof(T) / sizeof(load_type); i += blockDim.x) {
     reinterpret_cast<load_type *>(&destination)[i] = load_type{0};
   }
 }
 
 template <typename T>
-__device__
-void cooperative_load(T& destination, const T& source) {
-  using load_type = std::conditional_t<((sizeof(T) % sizeof(uint32_t)) == 0),
-        uint32_t, uint8_t>;
+__device__ void cooperative_load(T &destination, const T &source)
+{
+  using load_type = std::conditional_t<((sizeof(T) % sizeof(uint32_t)) == 0), uint32_t, uint8_t>;
   for (auto i = threadIdx.x; i < (sizeof(T) / sizeof(load_type)); i += blockDim.x) {
     reinterpret_cast<load_type *>(&destination)[i] =
       reinterpret_cast<const load_type *>(&source)[i];
@@ -184,13 +151,11 @@ void cooperative_load(T& destination, const T& source) {
 }
 
 template <typename T>
-__device__
-void cooperative_load(T& destination, const T* source) {
-  using load_type = std::conditional_t<((sizeof(T) % sizeof(uint32_t)) == 0),
-        uint32_t, uint8_t>;
+__device__ void cooperative_load(T &destination, const T *source)
+{
+  using load_type = std::conditional_t<((sizeof(T) % sizeof(uint32_t)) == 0), uint32_t, uint8_t>;
   for (auto i = threadIdx.x; i < (sizeof(T) / sizeof(load_type)); i += blockDim.x) {
-    reinterpret_cast<load_type *>(&destination)[i] =
-      reinterpret_cast<const load_type *>(source)[i];
+    reinterpret_cast<load_type *>(&destination)[i] = reinterpret_cast<const load_type *>(source)[i];
   }
 }
 
@@ -209,15 +174,16 @@ __global__ void __launch_bounds__(block_size, 1)
   __shared__ __align__(8) stats_state_s state;
   __shared__ block_reduce_storage<block_size> storage;
 
-  //Load state members
+  // Load state members
   cooperative_load(state.group, groups[blockIdx.x]);
   cooperative_load(state.ck);
   __syncthreads();
   cooperative_load(state.col, state.group.col);
   __syncthreads();
 
-  //Calculate statistics
-  type_dispatcher(state.col.leaf_column->type(), gather_statistics<block_size, IO>(storage), state, threadIdx.x);
+  // Calculate statistics
+  type_dispatcher(
+    state.col.leaf_column->type(), gather_statistics<block_size, IO>(storage), state, threadIdx.x);
   __syncthreads();
 
   cooperative_load(chunks[blockIdx.x], state.ck);
@@ -259,12 +225,12 @@ __global__ void __launch_bounds__(block_size, 1)
   cooperative_load(state.col, state.group.col);
   __syncthreads();
 
-  type_dispatcher(
-      state.col.leaf_column->type(),
-      merge_statistics<block_size, IO>(storage),
-      state, chunks_in + state.group.start_chunk,
-      state.group.num_chunks,
-      threadIdx.x);
+  type_dispatcher(state.col.leaf_column->type(),
+                  merge_statistics<block_size, IO>(storage),
+                  state,
+                  chunks_in + state.group.start_chunk,
+                  state.group.num_chunks,
+                  threadIdx.x);
   __syncthreads();
 
   cooperative_load(chunks_out[blockIdx.x], state.ck);

@@ -19,8 +19,8 @@
  * @brief cuDF-IO parquet writer class implementation
  */
 
-#include "writer_impl.hpp"
 #include <io/statistics/column_stats.cuh>
+#include "writer_impl.hpp"
 
 #include <io/parquet/compact_protocol_writer.hpp>
 #include <io/utilities/column_utils.cuh>
@@ -801,13 +801,15 @@ void writer::impl::init_encoder_pages(hostdevice_vector<gpu::EncColumnChunk> &ch
                    (num_stats_bfr > num_pages) ? page_stats_mrg.data().get() + num_pages : nullptr,
                    stream);
   if (num_stats_bfr > 0) {
-    detail::MergeColumnStatistics<detail::io_type::PARQUET>(page_stats, frag_stats, page_stats_mrg.data().get(), num_pages, stream);
+    detail::MergeColumnStatistics<detail::io_type::PARQUET>(
+      page_stats, frag_stats, page_stats_mrg.data().get(), num_pages, stream);
     if (num_stats_bfr > num_pages) {
-      detail::MergeColumnStatistics<detail::io_type::PARQUET>(page_stats + num_pages,
-                            page_stats,
-                            page_stats_mrg.data().get() + num_pages,
-                            num_stats_bfr - num_pages,
-                            stream);
+      detail::MergeColumnStatistics<detail::io_type::PARQUET>(
+        page_stats + num_pages,
+        page_stats,
+        page_stats_mrg.data().get() + num_pages,
+        num_stats_bfr - num_pages,
+        stream);
     }
   }
   stream.synchronize();

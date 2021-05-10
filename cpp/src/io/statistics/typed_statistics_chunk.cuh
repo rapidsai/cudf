@@ -20,6 +20,8 @@
 
 #include "statistics_type_identification.cuh"
 
+#include "temp_storage_wrapper.cuh"
+
 #include <cudf/fixed_point/fixed_point.hpp>
 
 #include <cudf/wrappers/timestamps.hpp>
@@ -33,55 +35,53 @@ class union_member {
   template <typename U, typename V>
   using reference_type = std::conditional_t<std::is_const_v<U>, const V&, V&>;
 
-  public:
+ public:
   template <typename T, typename U>
-  using type = std::conditional_t<std::is_same_v<std::remove_cv_t<T>,string_view>,
-    reference_type<U, string_stats>,
-    reference_type<U, T>>;
+  using type = std::conditional_t<std::is_same_v<std::remove_cv_t<T>, string_view>,
+                                  reference_type<U, string_stats>,
+                                  reference_type<U, T>>;
 
   template <typename T, typename U>
-  __device__ static
-  std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T>, type<T,U>>
-  get(U& val) {
+  __device__ static std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T>, type<T, U>>
+  get(U& val)
+  {
     return val.u_val;
   }
 
   template <typename T, typename U>
-  __device__ static
-  std::enable_if_t<std::is_integral_v<T> and std::is_signed_v<T>, type<T,U>>
-  get(U& val) {
+  __device__ static std::enable_if_t<std::is_integral_v<T> and std::is_signed_v<T>, type<T, U>> get(
+    U& val)
+  {
     return val.i_val;
   }
 
   template <typename T, typename U>
-  __device__ static
-  std::enable_if_t<std::is_floating_point_v<T>, type<T,U>>
-  get(U& val) {
+  __device__ static std::enable_if_t<std::is_floating_point_v<T>, type<T, U>> get(U& val)
+  {
     return val.fp_val;
   }
 
   template <typename T, typename U>
-  __device__ static
-  std::enable_if_t<std::is_same_v<T,string_view>, type<T,U>>
-  get(U& val) {
+  __device__ static std::enable_if_t<std::is_same_v<T, string_view>, type<T, U>> get(U& val)
+  {
     return val.str_val;
   }
-
 };
 
 template <typename T, typename Enable = void>
-struct typed_statistics_chunk{};
+struct typed_statistics_chunk {
+};
 
 template <typename T>
-struct typed_statistics_chunk<T,
-  typename std::enable_if_t<detail::aggregation_type<T>::is_supported>>{
-
+struct typed_statistics_chunk<
+  T,
+  typename std::enable_if_t<detail::aggregation_type<T>::is_supported>> {
   using E = typename detail::extrema_type<T>::type;
   using A = typename detail::aggregation_type<T>::type;
 
-  uint32_t num_rows;        //!< number of non-null values in chunk
-  uint32_t non_nulls;        //!< number of non-null values in chunk
-  uint32_t null_count;       //!< number of null values in chunk
+  uint32_t num_rows;    //!< number of non-null values in chunk
+  uint32_t non_nulls;   //!< number of non-null values in chunk
+  uint32_t null_count;  //!< number of null values in chunk
 
   E minimum_value;
   E maximum_value;
@@ -90,20 +90,20 @@ struct typed_statistics_chunk<T,
   uint8_t has_minmax;  //!< Nonzero if min_value and max_values are valid
   uint8_t has_sum;     //!< Nonzero if sum is valid
 
-  __device__
-  typed_statistics_chunk(const uint32_t _num_rows = 0) :
-    num_rows(_num_rows),
-    non_nulls(0),
-    null_count(0),
-    minimum_value(detail::minimum_identity<E>()),
-    maximum_value(detail::maximum_identity<E>()),
-    aggregate(0),
-    has_minmax(false),
-    has_sum(false)//Set to true when storing
-    {}
+  __device__ typed_statistics_chunk(const uint32_t _num_rows = 0)
+    : num_rows(_num_rows),
+      non_nulls(0),
+      null_count(0),
+      minimum_value(detail::minimum_identity<E>()),
+      maximum_value(detail::maximum_identity<E>()),
+      aggregate(0),
+      has_minmax(false),
+      has_sum(false)  // Set to true when storing
+  {
+  }
 
-  __device__
-  void reduce(const T& elem) {
+  __device__ void reduce(const T& elem)
+  {
     non_nulls++;
     minimum_value = thrust::min<E>(minimum_value, detail::extrema_type<T>::convert(elem));
     maximum_value = thrust::max<E>(maximum_value, detail::extrema_type<T>::convert(elem));
@@ -111,8 +111,8 @@ struct typed_statistics_chunk<T,
     has_minmax = true;
   }
 
-  __device__
-  void reduce(const statistics_chunk& chunk) {
+  __device__ void reduce(const statistics_chunk& chunk)
+  {
     if (chunk.has_minmax) {
       minimum_value = thrust::min<E>(minimum_value, union_member::get<E>(chunk.min_value));
       maximum_value = thrust::max<E>(maximum_value, union_member::get<E>(chunk.max_value));
@@ -127,13 +127,12 @@ struct typed_statistics_chunk<T,
 };
 
 template <typename T>
-struct typed_statistics_chunk<T,
-  typename std::enable_if<cudf::is_timestamp<T>()>::type>{
+struct typed_statistics_chunk<T, typename std::enable_if<cudf::is_timestamp<T>()>::type> {
   using E = typename detail::extrema_type<T>::type;
 
-  uint32_t num_rows;        //!< number of non-null values in chunk
-  uint32_t non_nulls;        //!< number of non-null values in chunk
-  uint32_t null_count;       //!< number of null values in chunk
+  uint32_t num_rows;    //!< number of non-null values in chunk
+  uint32_t non_nulls;   //!< number of non-null values in chunk
+  uint32_t null_count;  //!< number of null values in chunk
 
   E minimum_value;
   E maximum_value;
@@ -141,27 +140,27 @@ struct typed_statistics_chunk<T,
   uint8_t has_minmax;  //!< Nonzero if min_value and max_values are valid
   uint8_t has_sum;     //!< Nonzero if sum is valid
 
-  __device__
-  typed_statistics_chunk(const uint32_t _num_rows = 0) :
-    num_rows(_num_rows),
-    non_nulls(0),
-    null_count(0),
-    minimum_value(detail::minimum_identity<E>()),
-    maximum_value(detail::maximum_identity<E>()),
-    has_minmax(false),
-    has_sum(false)//Set to true when storing
-    {}
+  __device__ typed_statistics_chunk(const uint32_t _num_rows = 0)
+    : num_rows(_num_rows),
+      non_nulls(0),
+      null_count(0),
+      minimum_value(detail::minimum_identity<E>()),
+      maximum_value(detail::maximum_identity<E>()),
+      has_minmax(false),
+      has_sum(false)  // Set to true when storing
+  {
+  }
 
-  __device__
-  void reduce(const T& elem) {
+  __device__ void reduce(const T& elem)
+  {
     non_nulls++;
     minimum_value = thrust::min<E>(minimum_value, detail::extrema_type<T>::convert(elem));
     maximum_value = thrust::max<E>(maximum_value, detail::extrema_type<T>::convert(elem));
-    has_minmax = true;
+    has_minmax    = true;
   }
 
-  __device__
-  void reduce(const statistics_chunk& chunk) {
+  __device__ void reduce(const statistics_chunk& chunk)
+  {
     if (chunk.has_minmax) {
       minimum_value = thrust::min<E>(minimum_value, union_member::get<E>(chunk.min_value));
       maximum_value = thrust::max<E>(maximum_value, union_member::get<E>(chunk.max_value));
@@ -172,26 +171,63 @@ struct typed_statistics_chunk<T,
   }
 };
 
+template <typename T, int block_size>
+__inline__ __device__ typed_statistics_chunk<T> block_reduce(
+  typed_statistics_chunk<T>& chunk, detail::storage_wrapper<block_size>& storage)
+{
+  typed_statistics_chunk<T> output_chunk = chunk;
+
+  using E              = typename detail::extrema_type<T>::type;
+  using extrema_reduce = cub::BlockReduce<E, block_size>;
+  using count_reduce   = cub::BlockReduce<uint32_t, block_size>;
+  output_chunk.minimum_value =
+    extrema_reduce(storage.template get<E>()).Reduce(output_chunk.minimum_value, cub::Min());
+  __syncthreads();
+  output_chunk.maximum_value =
+    extrema_reduce(storage.template get<E>()).Reduce(output_chunk.maximum_value, cub::Max());
+  __syncthreads();
+  output_chunk.non_nulls =
+    count_reduce(storage.template get<uint32_t>()).Sum(output_chunk.non_nulls);
+  __syncthreads();
+  output_chunk.null_count =
+    count_reduce(storage.template get<uint32_t>()).Sum(output_chunk.null_count);
+  __syncthreads();
+  output_chunk.has_minmax = __syncthreads_or(output_chunk.has_minmax);
+
+  // FIXME : Is another syncthreads needed here?
+  if constexpr (detail::aggregation_type<T>::is_supported) {
+    if (output_chunk.has_minmax) {
+      using A                = typename detail::aggregation_type<T>::type;
+      using aggregate_reduce = cub::BlockReduce<A, block_size>;
+      output_chunk.aggregate =
+        aggregate_reduce(storage.template get<A>()).Sum(output_chunk.aggregate);
+    }
+  }
+  return output_chunk;
+}
+
 template <typename T>
-__inline__ __device__
-statistics_chunk
-get_untyped_chunk(const typed_statistics_chunk<T> &chunk) {
+__inline__ __device__ statistics_chunk get_untyped_chunk(const typed_statistics_chunk<T>& chunk)
+{
   statistics_chunk stat;
-  stat.non_nulls = chunk.non_nulls;
+  stat.non_nulls  = chunk.non_nulls;
   stat.null_count = chunk.num_rows - chunk.non_nulls;
   stat.has_minmax = chunk.has_minmax;
-  stat.has_sum = chunk.has_minmax; // If a valid input was encountered we assume that the sum is valid
+  stat.has_sum =
+    chunk.has_minmax;  // If a valid input was encountered we assume that the sum is valid
   if (chunk.has_minmax) {
     using E = typename detail::extrema_type<T>::type;
     if constexpr (std::is_floating_point_v<E>) {
-      union_member::get<E>(stat.min_value) = (chunk.minimum_value != 0.0 )? chunk.minimum_value : CUDART_NEG_ZERO;
-      union_member::get<E>(stat.max_value) = (chunk.maximum_value != 0.0 )? chunk.maximum_value : CUDART_ZERO;
+      union_member::get<E>(stat.min_value) =
+        (chunk.minimum_value != 0.0) ? chunk.minimum_value : CUDART_NEG_ZERO;
+      union_member::get<E>(stat.max_value) =
+        (chunk.maximum_value != 0.0) ? chunk.maximum_value : CUDART_ZERO;
     } else {
       union_member::get<E>(stat.min_value) = chunk.minimum_value;
       union_member::get<E>(stat.max_value) = chunk.maximum_value;
     }
     if constexpr (detail::aggregation_type<T>::is_supported) {
-      using A = typename detail::aggregation_type<T>::type;
+      using A                        = typename detail::aggregation_type<T>::type;
       union_member::get<A>(stat.sum) = chunk.aggregate;
     }
   }

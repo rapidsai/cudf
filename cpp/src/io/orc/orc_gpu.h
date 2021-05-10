@@ -20,9 +20,9 @@
 
 #include <io/comp/gpuinflate.h>
 #include <io/orc/orc_common.h>
-#include <io/statistics/statistics.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
+#include <io/statistics/statistics.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
