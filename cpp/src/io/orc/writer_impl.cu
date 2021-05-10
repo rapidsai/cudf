@@ -969,8 +969,8 @@ void writer::impl::add_uncompressed_block_headers(std::vector<uint8_t> &v)
 writer::impl::impl(std::unique_ptr<data_sink> sink,
                    orc_writer_options const &options,
                    SingleWriteMode mode,
-                   rmm::mr::device_memory_resource *mr,
-                   rmm::cuda_stream_view stream)
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource *mr)
   : compression_kind_(to_orc_compression(options.get_compression())),
     enable_statistics_(options.enable_statistics()),
     out_sink_(std::move(sink)),
@@ -985,8 +985,8 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
 writer::impl::impl(std::unique_ptr<data_sink> sink,
                    chunked_orc_writer_options const &options,
                    SingleWriteMode mode,
-                   rmm::mr::device_memory_resource *mr,
-                   rmm::cuda_stream_view stream)
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource *mr)
   : compression_kind_(to_orc_compression(options.get_compression())),
     enable_statistics_(options.enable_statistics()),
     out_sink_(std::move(sink)),
@@ -1326,9 +1326,9 @@ void writer::impl::close()
 writer::writer(std::unique_ptr<data_sink> sink,
                orc_writer_options const &options,
                SingleWriteMode mode,
-               rmm::mr::device_memory_resource *mr,
-               rmm::cuda_stream_view stream)
-  : _impl(std::make_unique<impl>(std::move(sink), options, mode, mr, stream))
+               rmm::cuda_stream_view stream,
+               rmm::mr::device_memory_resource *mr)
+  : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream, mr))
 {
 }
 
@@ -1336,9 +1336,9 @@ writer::writer(std::unique_ptr<data_sink> sink,
 writer::writer(std::unique_ptr<data_sink> sink,
                chunked_orc_writer_options const &options,
                SingleWriteMode mode,
-               rmm::mr::device_memory_resource *mr,
-               rmm::cuda_stream_view stream)
-  : _impl(std::make_unique<impl>(std::move(sink), options, mode, mr, stream))
+               rmm::cuda_stream_view stream,
+               rmm::mr::device_memory_resource *mr)
+  : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream, mr))
 {
 }
 

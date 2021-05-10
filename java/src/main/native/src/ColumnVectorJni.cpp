@@ -23,62 +23,15 @@
 #include <cudf/reshape.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/detail/interop.hpp>
+#include <cudf/lists/concatenate_rows.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/strings/combine.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
-
-namespace cudf {
-namespace jni {
-  /**
-   * @brief Creates an empty column according to the type tree specified
-   * in @p view
-   *
-   * An empty column contains zero elements and no validity mask.
-   *
-   * Unlike the 'cudf::make_empty_column', it takes care of the nested type by
-   * iterating the children columns in the @p view
-   *
-   * @param[in] view The input column view
-   * @return An empty column for the input column view
-   */
-  std::unique_ptr<cudf::column> make_empty_column(JNIEnv *env, cudf::column_view const& view) {
-    auto tid = view.type().id();
-    if (tid == cudf::type_id::LIST) {
-      // List
-      if (view.num_children() != 2) {
-        throw jni_exception("List type requires two children(offset, data).");
-      }
-      // Only needs the second child.
-      auto data_view = view.child(1);
-      // offsets: [0]
-      auto offsets_buffer = rmm::device_buffer(sizeof(cudf::size_type));
-      device_memset_async(env, offsets_buffer, 0);
-      auto offsets = std::make_unique<column>(cudf::data_type{cudf::type_id::INT32}, 1,
-                                              std::move(offsets_buffer),
-                                              rmm::device_buffer(), 0);
-      auto data_col = make_empty_column(env, data_view);
-      return cudf::make_lists_column(0, std::move(offsets), std::move(data_col),
-                                     0, rmm::device_buffer());
-    } else if (tid == cudf::type_id::STRUCT) {
-      // Struct
-      std::vector<std::unique_ptr<column>> children(view.num_children());
-      std::transform(view.child_begin(), view.child_end(), children.begin(),
-          [env](auto const& child_v) {
-            return make_empty_column(env, child_v);
-          });
-      return cudf::make_structs_column(0, std::move(children), 0, rmm::device_buffer());
-    } else {
-      // Non nested types
-      return cudf::make_empty_column(view.type());
-    }
-  }
-
-} // namespace jni
-} // namespace cudf
 
 extern "C" {
 
@@ -172,6 +125,56 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, 
   CATCH_STD(env, 0);
 }
 
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenation(JNIEnv *env, jclass,
+                                                                             jlongArray column_handles,
+                                                                             jlong separator,
+                                                                             jlong narep) {
+  JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
+  JNI_NULL_CHECK(env, separator, "separator string scalar object is null", 0);
+  JNI_NULL_CHECK(env, narep, "narep string scalar object is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    const auto& separator_scalar = *reinterpret_cast<cudf::string_scalar*>(separator);
+    const auto& narep_scalar     = *reinterpret_cast<cudf::string_scalar*>(narep);
+
+    cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
+    std::vector<cudf::column_view> column_views;
+    std::transform(n_cudf_columns.data(),
+                   n_cudf_columns.data() + n_cudf_columns.size(),
+                   std::back_inserter(column_views),
+                   [](auto const &p_column) { return *p_column; });
+
+    std::unique_ptr<cudf::column> result =
+      cudf::strings::concatenate(cudf::table_view(column_views), separator_scalar, narep_scalar);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatListByRow(JNIEnv *env, jclass,
+                                                                         jlongArray column_handles,
+                                                                         jboolean ignore_null) {
+  JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto null_policy = ignore_null ? cudf::lists::concatenate_null_policy::IGNORE
+                                   : cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW;
+
+    cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
+    std::vector<cudf::column_view> column_views;
+    std::transform(n_cudf_columns.data(),
+                   n_cudf_columns.data() + n_cudf_columns.size(),
+                   std::back_inserter(column_views),
+                   [](auto const &p_column) { return *p_column; });
+
+    std::unique_ptr<cudf::column> result =
+      cudf::lists::concatenate_rows(cudf::table_view(column_views), null_policy);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, jobject j_object,
                                                                   jlongArray handles,
                                                                   jlong j_type,
@@ -246,10 +249,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
       // 'row_count' times, because 'cudf::make_column_from_scalar' does not support list
       // type.
       // (Assumes the `row_count` is not big, otherwise there would be a performance issue.)
-      // Checks the `row_count` because `cudf::concatenate` does not support no columns.
+      // Checks the `row_count` because `cudf::concatenate` does not support no rows.
       auto data_col = row_count > 0
           ? cudf::concatenate(std::vector<cudf::column_view>(row_count, s_val))
-          : cudf::jni::make_empty_column(env, s_val);
+          : cudf::empty_like(s_val);
       col = cudf::make_lists_column(row_count, std::move(offsets), std::move(data_col),
                                     cudf::state_null_count(mask_state, row_count),
                                     cudf::create_null_mask(row_count, mask_state));

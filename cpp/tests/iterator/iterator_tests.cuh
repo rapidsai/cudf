@@ -12,6 +12,7 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
+#pragma once
 
 #include <cudf/detail/iterator.cuh>                             // include iterator header
 #include <cudf/detail/utilities/transform_unary_functions.cuh>  //for meanvar
@@ -35,7 +36,6 @@
 #include <cub/device/device_reduce.cuh>
 
 // Base Typed test fixture for iterator test
-
 template <typename T>
 struct IteratorTest : public cudf::test::BaseFixture {
   // iterator test case which uses cub
@@ -115,10 +115,10 @@ struct IteratorTest : public cudf::test::BaseFixture {
     thrust::host_vector<T_output> hos_result(dev_result);
 
     EXPECT_EQ(expected, hos_result[0]) << msg;
-    std::cout << "Done: expected <" << msg
-              << "> = "
-              //<< hos_result[0] //TODO uncomment after time_point ostream operator<<
-              << std::endl;
+    // std::cout << "Done: expected <" << msg
+    //           << "> = "
+    //           //<< hos_result[0] //TODO uncomment after time_point ostream operator<<
+    //           << std::endl;
   }
 
   template <typename T_output>
