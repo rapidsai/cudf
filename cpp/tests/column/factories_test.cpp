@@ -501,6 +501,57 @@ TYPED_TEST(ListsFixedWidthLeafTest, FromNested)
 #undef row_data
 }
 
+template<typename T>
+class ListsDictionaryLeafTest : public ColumnFactoryTest {
+};
+
+TYPED_TEST_CASE(ListsDictionaryLeafTest, cudf::test::FixedWidthTypes);
+
+TYPED_TEST(ListsDictionaryLeafTest, FromNonNested)
+{
+  using DCW     = cudf::test::dictionary_column_wrapper<TypeParam>;
+  using FCW     = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+
+  auto s   = cudf::make_list_scalar(DCW({1, 3, -1, 1, 3}, {1, 1, 0, 1, 1}));
+  auto col = cudf::make_column_from_scalar(*s, 2);
+
+  DCW leaf({1, 3, -1, 1, 3, 1, 3, -1, 1, 3}, {1, 1, 0, 1, 1, 1, 1, 0, 1, 1});
+  FCW offsets{0, 5, 10};
+  auto mask = cudf::create_null_mask(2, cudf::mask_state::UNALLOCATED);
+
+  auto expected = cudf::make_lists_column(2, offsets.release(), leaf.release(), 0, std::move(mask));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, *expected);
+}
+
+TYPED_TEST(ListsDictionaryLeafTest, FromNested)
+{
+  using DCW     = cudf::test::dictionary_column_wrapper<TypeParam>;
+  using FCW     = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+
+  DCW leaf({1, 3, -1, 1, 3, 1, 3, -1, 1, 3}, {1, 1, 0, 1, 1, 1, 1, 0, 1, 1});
+  FCW offsets{0, 3, 3, 6, 6, 10};
+  auto mask = cudf::create_null_mask(5, cudf::mask_state::ALL_VALID);
+  cudf::set_null_mask(static_cast<cudf::bitmask_type *>(mask.data()), 1, 2, false);
+  auto data = cudf::make_lists_column(5, offsets.release(), leaf.release(), 0, std::move(mask));
+
+  auto s = cudf::make_list_scalar(*data);
+  auto col = cudf::make_column_from_scalar(*s, 3);
+
+  DCW leaf2({1, 3, -1, 1, 3, 1, 3, -1, 1, 3, 1, 3, -1, 1, 3, 1, 3, -1, 1, 3, 1, 3, -1, 1, 3, 1, 3, -1, 1, 3}, {1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1});
+  FCW offsets2{0, 3, 3, 6, 6, 10, 13, 13, 16, 16, 20, 23, 23, 26, 26, 30};
+  auto mask2 = cudf::create_null_mask(15, cudf::mask_state::ALL_VALID);
+  cudf::set_null_mask(static_cast<cudf::bitmask_type *>(mask2.data()), 1, 2, false);
+  cudf::set_null_mask(static_cast<cudf::bitmask_type *>(mask2.data()), 6, 7, false);
+  cudf::set_null_mask(static_cast<cudf::bitmask_type *>(mask2.data()), 11, 12, false);
+  auto nested = cudf::make_lists_column(15, offsets2.release(), leaf2.release(), 3, std::move(mask2));
+
+  FCW offsets3{0, 5, 10, 15};
+  auto mask3 = cudf::create_null_mask(3, cudf::mask_state::UNALLOCATED);
+  auto expected = cudf::make_lists_column(3, offsets3.release(), std::move(nested), 0, std::move(mask3));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, *expected);
+}
+
 class ListsStringLeafTest : public ColumnFactoryTest {
 };
 
