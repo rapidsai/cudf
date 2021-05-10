@@ -15,11 +15,13 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -460,3 +462,42 @@ TEST_F(ColumnFactoryTest, DictionaryFromStringScalarError)
   cudf::string_scalar value("hello", false);
   EXPECT_THROW(cudf::make_dictionary_from_scalar(value, 1), cudf::logic_error);
 }
+
+template <typename T>
+class ListsFactoryTest : public ColumnFactoryTest {
+};
+
+// TYPED_TEST_CASE(ListsFactoryTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(ListsFactoryTest, int32_t);
+
+TYPED_TEST(ListsFactoryTest, FromNonNestedFixedWidthListScalar)
+{
+  using FCW     = cudf::test::fixed_width_column_wrapper<TypeParam>;
+  using LCW     = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+  using valid_t = std::vector<cudf::valid_type>;
+
+  auto s   = cudf::make_list_scalar(FCW({1, -1, 3}, {1, 0, 1}));
+  auto col = cudf::make_column_from_scalar(*s, 3);
+
+  auto expected = LCW{LCW({1, 2, 3}, valid_t{1, 0, 1}.begin()),
+                      LCW({1, 2, 3}, valid_t{1, 0, 1}.begin()),
+                      LCW({1, 2, 3}, valid_t{1, 0, 1}.begin())};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, expected);
+}
+
+#define row_data \
+  LCW({LCW({-1, -1, 3}, valid_t{0, 0, 1}.begin()), LCW{}, LCW{}}, valid_t{1, 0, 1}.begin())
+
+TYPED_TEST(ListsFactoryTest, FromNestedFixedWidthListScalar)
+{
+  using LCW     = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+  using valid_t = std::vector<cudf::valid_type>;
+
+  auto s   = cudf::make_list_scalar(row_data);
+  auto col = cudf::make_column_from_scalar(*s, 5);
+
+  auto expected = LCW{row_data, row_data, row_data, row_data, row_data};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, expected);
+}
+
+#undef row_data
