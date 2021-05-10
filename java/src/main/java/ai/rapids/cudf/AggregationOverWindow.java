@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,10 +22,11 @@ package ai.rapids.cudf;
  * An Aggregation instance that also holds a column number and window metadata so the aggregation
  * can be done over a specific window.
  */
-public class AggregationOverWindow extends AggregationOnColumn {
+public class AggregationOverWindow<T extends Aggregation & RollingAggregation<T>>
+    extends AggregationOnColumn<T> {
     protected final WindowOptions windowOptions;
 
-    AggregationOverWindow(Aggregation wrapped, int columnIndex, WindowOptions windowOptions) {
+    AggregationOverWindow(T wrapped, int columnIndex, WindowOptions windowOptions) {
         super(wrapped, columnIndex);
         this.windowOptions = windowOptions;
 
@@ -43,7 +44,7 @@ public class AggregationOverWindow extends AggregationOnColumn {
     }
 
     @Override
-    public AggregationOnColumn onColumn(int columnIndex) {
+    public AggregationOnColumn<T> onColumn(int columnIndex) {
         if (columnIndex == getColumnIndex()) {
             return this; // NOOP
         } else {
@@ -52,7 +53,7 @@ public class AggregationOverWindow extends AggregationOnColumn {
     }
 
     @Override
-    public AggregationOverWindow overWindow(WindowOptions windowOptions) {
+    public AggregationOverWindow<T> overWindow(WindowOptions windowOptions) {
         if (this.windowOptions.equals(windowOptions)) {
             return this;
         }
