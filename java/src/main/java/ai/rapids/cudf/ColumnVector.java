@@ -1489,4 +1489,48 @@ public final class ColumnVector extends ColumnView {
     return build(DType.TIMESTAMP_NANOSECONDS, values.length, (b) -> b.appendBoxed(values));
   }
 
+  /**
+   * Creates an empty column according to the data type.
+   *
+   * It will create all the nested columns by iterating all the children in the input
+   * type object 'colType'.
+   *
+   * The performance is not good, so use it carefully. We may want to move this implementation
+   * to the native once figuring out a way to pass the nested data type to the native.
+   *
+   * @param colType the data type of the empty column
+   * @return an empty ColumnVector with its children. Each children contains zero elements.
+   * Users should close the ColumnVector to avoid memory leak.
+   */
+  public static ColumnVector empty(HostColumnVector.DataType colType) {
+    if (colType == null || colType.getType() == null) {
+      throw new IllegalArgumentException("The data type and its 'DType' should NOT be null.");
+    }
+    if (colType instanceof HostColumnVector.BasicType) {
+      // Non nested type
+      DType dt = colType.getType();
+      return new ColumnVector(makeEmptyCudfColumn(dt.typeId.getNativeId(), dt.getScale()));
+    } else if (colType instanceof HostColumnVector.ListType) {
+      // List type
+      assert colType.getNumChildren() == 1 : "List type requires one child type";
+      try (ColumnVector child = empty(colType.getChild(0))) {
+        return makeList(child);
+      }
+    } else if (colType instanceof HostColumnVector.StructType) {
+      // Struct type
+      ColumnVector[] children = new ColumnVector[colType.getNumChildren()];
+      try {
+        for (int i = 0; i < children.length; i++) {
+          children[i] = empty(colType.getChild(i));
+        }
+        return makeStruct(children);
+      } finally {
+        for (ColumnVector cv : children) {
+          if (cv != null) cv.close();
+        }
+      }
+    } else {
+      throw new IllegalArgumentException("Unsupported data type: " + colType);
+    }
+  }
 }
