@@ -155,7 +155,11 @@ def masked_scalar_add_impl(context, builder, sig, args):
     result.valid = valid
     with builder.if_then(valid):
         # result.value = numba_op(m1.value, m2.value)
-        result.value = builder.add(m1.value, m2.value)
+        result.value = context.compile_internal(
+            builder, 
+            lambda x, y: x + y, 
+            nb_signature(masked_return_type.value_type, masked_type_1.value_type, masked_type_2.value_type), (m1.value, m2.value)
+        )
 
     return result._getvalue()
 
@@ -217,19 +221,19 @@ def masked_scalar_add_constant_impl(context, builder, sig, input_values):
 
 def compile_udf(func, dtypes):
     n_params = len(py_signature(func).parameters)
-    breakpoint()
     to_compiler_sig = tuple(
         MaskedType(arg)
         for arg in (numpy_support.from_dtype(np_type) for np_type in dtypes)
     )
     # Get the inlineable PTX function
-    ptx, _ = cuda.compile_ptx_for_current_device(
+    ptx, numba_output_type = cuda.compile_ptx_for_current_device(
         func, to_compiler_sig, device=True
     )
+    numpy_output_type = numpy_support.as_dtype(
+        numba_output_type.value_type
+    )
 
-    # get the kernel that calls the inlineable function
-    kernel = None
-    return kernel, ptx
+    return numpy_output_type, ptx
 
 
 NA = _NAType()

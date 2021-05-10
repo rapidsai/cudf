@@ -134,7 +134,7 @@ def masked_udf(Table incols, op, Column output_column, Column output_mask):
     cdef data_type c_dtype
 
     c_tid = <type_id> (
-        <underlying_type_t_type_id> np_to_cudf_types[np.dtype('int64')]
+        <underlying_type_t_type_id> np_to_cudf_types[output_column.dtype]
     )
     c_dtype = data_type(c_tid)
 

@@ -38,8 +38,9 @@ namespace cudf {
 namespace transformation {
 namespace jit {
 
+template <typename T>
 struct Masked {
-  int64_t value;
+  T value;
   bool valid;
 };
 
@@ -82,7 +83,7 @@ void generic_udf_kernel(cudf::size_type size,
     int start = tid + blkid * blksz;
     int step = blksz * gridsz;
 
-    Masked output;
+    Masked<TypeOut> output;
     for (cudf::size_type i=start; i<size; i+=step) {
       auto func_args = cuda::std::tuple_cat(
           cuda::std::make_tuple(&output.value),
