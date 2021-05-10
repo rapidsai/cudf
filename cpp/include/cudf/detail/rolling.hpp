@@ -33,7 +33,7 @@ namespace detail {
  *            column_view const& preceding_window,
  *            column_view const& following_window,
  *            size_type min_periods,
- *            std::unique_ptr<aggregation> const& agg,
+ *            rolling_aggregation const& agg,
  *            rmm::mr::device_memory_resource* mr)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -43,7 +43,7 @@ std::unique_ptr<column> rolling_window(
   column_view const& preceding_window,
   column_view const& following_window,
   size_type min_periods,
-  std::unique_ptr<aggregation> const& agg,
+  rolling_aggregation const& agg,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

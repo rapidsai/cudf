@@ -196,6 +196,7 @@ ConfigureTest(SORT_TEST
 # - copying tests ---------------------------------------------------------------------------------
 ConfigureTest(COPYING_TEST
     copying/concatenate_tests.cu
+    copying/copy_if_else_nested_tests.cpp
     copying/copy_range_tests.cpp
     copying/copy_tests.cu
     copying/detail_gather_tests.cu
@@ -231,10 +232,16 @@ ConfigureTest(SPAN_TEST utilities_tests/span_tests.cu)
 ###################################################################################################
 # - iterator tests --------------------------------------------------------------------------------
 ConfigureTest(ITERATOR_TEST
-    iterator/value_iterator_test.cu
-    iterator/pair_iterator_test.cu
+    iterator/value_iterator.cpp
+    iterator/value_iterator_test_chrono.cu
+    iterator/value_iterator_test_numeric.cu
+    iterator/value_iterator_test_strings.cu
+    iterator/value_iterator_test_transform.cu
+    iterator/pair_iterator_test_chrono.cu
+    iterator/pair_iterator_test_numeric.cu
     iterator/scalar_iterator_test.cu
-    iterator/optional_iterator_test.cu
+    iterator/optional_iterator_test_chrono.cu
+    iterator/optional_iterator_test_numeric.cu
     )
 
 ###################################################################################################
@@ -369,7 +376,8 @@ ConfigureTest(TEXT_TEST
 ConfigureTest(BITMASK_TEST
     bitmask/valid_if_tests.cu
     bitmask/set_nullmask_tests.cu
-    bitmask/bitmask_tests.cu)
+    bitmask/bitmask_tests.cu
+    bitmask/is_element_valid_tests.cpp)
 
 
 ###################################################################################################
