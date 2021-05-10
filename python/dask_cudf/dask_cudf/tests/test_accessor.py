@@ -2,19 +2,13 @@ import numpy as np
 import pandas as pd
 import pytest
 from pandas.testing import assert_series_equal
-from contextlib import contextmanager
 
 from dask import dataframe as dd
 
-import dask_cudf as dgd
-
 from cudf import DataFrame, Series
-from cudf.tests.utils import (
-    assert_eq,
-    does_not_raise
-)
+from cudf.tests.utils import assert_eq, does_not_raise
 
-import pyarrow as pa
+import dask_cudf as dgd
 
 #############################################################################
 #                        Datetime Accessor                                  #
@@ -302,20 +296,29 @@ def test_str_slice():
 #                              List Accessor                                #
 #############################################################################
 
+
 def data_test_1():
     return [list(range(100)) for _ in range(100)]
+
 
 def data_test_2():
     return [list(i for _ in range(i)) for i in range(500)]
 
+
 def data_test_non_numeric():
-    return [list(chr(97 + i%20) for _ in range(i)) for i in range(500)]
+    return [list(chr(97 + i % 20) for _ in range(i)) for i in range(500)]
+
 
 def data_test_nested():
-    return [list(list(y for y in range(x % 5)) for x in range(i)) for i in range(40)]
+    return [
+        list(list(y for y in range(x % 5)) for x in range(i))
+        for i in range(40)
+    ]
+
 
 def data_test_sort():
-    return [[1,2,3,1,2,5] for _ in range(20)]
+    return [[1, 2, 3, 1, 2, 5] for _ in range(20)]
+
 
 @pytest.mark.parametrize(
     "data",
@@ -341,8 +344,7 @@ def test_create_list_series(data):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [data_test_1(), data_test_2(), data_test_non_numeric()],
+    "data", [data_test_1(), data_test_2(), data_test_non_numeric()],
 )
 def test_unique(data):
     expect = Series(data).list.unique()
@@ -351,8 +353,7 @@ def test_unique(data):
 
 
 @pytest.mark.parametrize(
-    "data",
-    [data_test_2(), data_test_non_numeric()],
+    "data", [data_test_2(), data_test_non_numeric()],
 )
 def test_len(data):
     expect = Series(data).list.len()
@@ -361,50 +362,28 @@ def test_len(data):
 
 
 @pytest.mark.xfail(
-    reason="""cuDF list accesscor .contains() works incorrectly on a slice of data (issue #8186)"""
+    reason="""cuDF list accesscor .contains() works incorrectly on a slice of data (issue
+            #8186)"""
 )
 @pytest.mark.parametrize(
-    "data, search_key",
-    [(data_test_2(), 1),],
+    "data, ascending, na_position, ignore_index",
+    [
+        (data_test_sort(), True, "first", False),
+        (data_test_sort(), False, "last", True),
+    ],
 )
 def test_contains(data, search_key):
     expect = Series(data).list.contains(search_key)
-    ds = dask_cudf.from_cudf(Series(data), 5)
+    ds = dgd.from_cudf(Series(data), 5)
     assert_eq(expect, ds.list.contains(search_key).compute())
 
 
 @pytest.mark.parametrize(
     "data, index, expectation",
-    [(data_test_1(), 1, does_not_raise()),
-     (data_test_2(), 2, pytest.raises(IndexError)),],
-)
-def test_get(data, index, expectation):
-    with expectation:
-        expect = Series(data).list.get(index)
-
-    # expect = Series(data).list.get(index)
-    if expectation == does_not_raise():
-        ds = dgd.from_cudf(Series(data), 5)
-        assert_eq(expect, ds.list.get(index).compute())
-
-
-@pytest.mark.xfail(
-    reason="""cuDF list accesscor .leaves works incorrectly on a slice of data (issue #8186)"""
-)
-@pytest.mark.parametrize(
-    "data",
-    [data_test_1(), data_test_2(), data_test_non_numeric()],
-)
-def test_get(data):
-    expect = Series(data).list.leaves
-    ds = dgd.from_cudf(Series(data), 5)
-    assert_eq(expect, ds.list.leaves.compute())
-
-
-@pytest.mark.parametrize(
-    "data, index, expectation",
-    [(data_test_1(), 1, does_not_raise()),
-     (data_test_2(), 2, pytest.raises(IndexError)),],
+    [
+        (data_test_1(), 1, does_not_raise()),
+        (data_test_2(), 2, pytest.raises(IndexError)),
+    ],
 )
 def test_get(data, index, expectation):
     with expectation:
@@ -419,21 +398,26 @@ def test_get(data, index, expectation):
     reason="""Indexing issue with map_partitions() (Issue #8196)"""
 )
 @pytest.mark.parametrize(
-    "data",
-    [data_test_1(), data_test_2(), data_test_nested()],
+    "data", [data_test_1(), data_test_2(), data_test_nested()],
 )
 def test_leaves(data):
-    expect = Series(data).leaves.get(index)
+    expect = Series(data).list.leaves
     ds = dgd.from_cudf(Series(data), 5)
     assert_eq(expect, ds.list.leaves.compute())
 
 
 @pytest.mark.parametrize(
     "data, list_indices, expectation",
-    [(data_test_1(), [[0,1] for _ in range(len(data_test_1()))], does_not_raise()),
-     (data_test_2(), [[0]], pytest.raises(ValueError)),],
+    [
+        (
+            data_test_1(),
+            [[0, 1] for _ in range(len(data_test_1()))],
+            does_not_raise(),
+        ),
+        (data_test_2(), [[0]], pytest.raises(ValueError)),
+    ],
 )
-def test_get(data, list_indices, expectation):
+def test_take(data, list_indices, expectation):
     with expectation:
         expect = Series(data).list.take(list_indices)
 
@@ -447,14 +431,22 @@ def test_get(data, list_indices, expectation):
 )
 @pytest.mark.parametrize(
     "data, ascending, na_position, ignore_index",
-    [(data_test_sort(), True, "first", False),
-     (data_test_sort(), False, "last", True)],
+    [
+        (data_test_sort(), True, "first", False),
+        (data_test_sort(), False, "last", True),
+    ],
 )
 def test_sorting(data, ascending, na_position, ignore_index):
     expect = Series(data).list.sort_values(
         ascending=ascending, na_position=na_position, ignore_index=ignore_index
     )
-    got = dgd.from_cudf(Series(data), 5).list.sort_values(
-        ascending=ascending, na_position=na_position, ignore_index=ignore_index
-    ).compute()
+    got = (
+        dgd.from_cudf(Series(data), 5)
+        .list.sort_values(
+            ascending=ascending,
+            na_position=na_position,
+            ignore_index=ignore_index,
+        )
+        .compute()
+    )
     assert_eq(expect, got)

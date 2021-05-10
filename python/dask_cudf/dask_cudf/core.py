@@ -21,6 +21,7 @@ from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 
 import cudf
 from cudf import _lib as libcudf
+
 from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods
 
@@ -696,6 +697,7 @@ def from_cudf(data, npartitions=None, chunksize=None, sort=True, name=None):
         sort=sort,
         name=name,
     )
+
 
 from_cudf.__doc__ = (
     "Wraps main-line Dask from_pandas...\n" + dd.from_pandas.__doc__
