@@ -40,15 +40,24 @@ namespace {
 // Struct to launch only defined operations.
 template <typename BinaryOperator>
 struct ops_wrapper {
-  template <typename T, typename... Args>
-  __device__ enable_if_t<BinaryOperator::template is_supported<T>(), void> operator()(Args... args)
+  template <typename TypeCommon,
+            std::enable_if_t<is_op_supported<TypeCommon, TypeCommon, BinaryOperator>()>* = nullptr>
+  __device__ void operator()(size_type i,
+                             column_device_view const lhs,
+                             column_device_view const rhs,
+                             mutable_column_device_view const out)
   {
-    BinaryOperator{}.template operator()<T>(std::forward<Args>(args)...);
+    TypeCommon x = type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs);
+    TypeCommon y = type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs);
+    auto result  = BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(x, y);
+    type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
   }
 
-  template <typename T, typename... Args>
-  __device__ enable_if_t<not BinaryOperator::template is_supported<T>(), void> operator()(
-    Args... args)
+  template <
+    typename TypeCommon,
+    typename... Args,
+    std::enable_if_t<not is_op_supported<TypeCommon, TypeCommon, BinaryOperator>()>* = nullptr>
+  __device__ void operator()(Args... args)
   {
   }
 };
@@ -56,16 +65,27 @@ struct ops_wrapper {
 // TODO merge these 2 structs somehow.
 template <typename BinaryOperator>
 struct ops2_wrapper {
-  template <typename T1, typename T2, typename... Args>
-  __device__ enable_if_t<BinaryOperator::template is_supported<T1, T2>(), void> operator()(
-    Args... args)
+  template <typename TypeLhs,
+            typename TypeRhs,
+            std::enable_if_t<!has_common_type_v<TypeLhs, TypeRhs> and
+                             is_op_supported<TypeLhs, TypeRhs, BinaryOperator>()>* = nullptr>
+  __device__ void operator()(size_type i,
+                             column_device_view const lhs,
+                             column_device_view const rhs,
+                             mutable_column_device_view const out)
   {
-    BinaryOperator{}.template operator()<T1, T2>(std::forward<Args>(args)...);
+    TypeLhs x   = lhs.element<TypeLhs>(i);
+    TypeRhs y   = rhs.element<TypeRhs>(i);
+    auto result = BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(x, y);
+    type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
   }
 
-  template <typename T1, typename T2, typename... Args>
-  __device__ enable_if_t<not BinaryOperator::template is_supported<T1, T2>(), void> operator()(
-    Args... args)
+  template <typename TypeLhs,
+            typename TypeRhs,
+            typename... Args,
+            std::enable_if_t<has_common_type_v<TypeLhs, TypeRhs> or
+                             not is_op_supported<TypeLhs, TypeRhs, BinaryOperator>()>* = nullptr>
+  __device__ void operator()(Args... args)
   {
   }
 };
@@ -102,14 +122,14 @@ struct operator_dispatcher {
     // clang-format off
     switch (op) {
         // TODO One more level of indirection to allow double type dispatching for chrono types.
-      case binary_operator::ADD:                  dispatch_single_double<Add>(i); break;
-      case binary_operator::SUB:                  dispatch_single_double<Sub>(i); break;
-      case binary_operator::MUL:                  dispatch_single_double<Mul>(i); break;
-      case binary_operator::DIV:                  dispatch_single_double<Div>(i); break;
-      case binary_operator::TRUE_DIV:             dispatch_single_double<TrueDiv>(i); break;
+      case binary_operator::ADD:                  dispatch_single_double<ops::Add>(i); break;
+      case binary_operator::SUB:                  dispatch_single_double<ops::Sub>(i); break;
+      case binary_operator::MUL:                  dispatch_single_double<ops::Mul>(i); break;
+      case binary_operator::DIV:                  dispatch_single_double<ops::Div>(i); break;
+      case binary_operator::TRUE_DIV:             dispatch_single_double<ops::TrueDiv>(i); break;
+      case binary_operator::FLOOR_DIV:            dispatch_single_double<ops::FloorDiv>(i); break;
+      case binary_operator::MOD:                  dispatch_single_double<ops::Mod>(i); break;
       /*
-      case binary_operator::FLOOR_DIV:            FloorDiv;
-      case binary_operator::MOD:                  Mod;
       case binary_operator::PYMOD:                PyMod;
       case binary_operator::POW:                  Pow;
       case binary_operator::EQUAL:                Equal;
@@ -157,7 +177,6 @@ void binary_operation_compiled(mutable_column_view& out,
     auto outd = mutable_column_device_view::create(out, stream);
     // auto binop_func = device_dispatch_functor<cudf::binops::jit::Add2>{*lhsd, *rhsd, *outd};
 
-    // TODO move to utility.
     auto common_dtype = get_common_type(out.type(), lhs.type(), rhs.type());
     if (not(op == binary_operator::ADD or op == binary_operator::SUB or
             op == binary_operator::MUL or op == binary_operator::DIV or

@@ -24,6 +24,8 @@ namespace cudf {
 namespace binops {
 namespace compiled {
 
+data_type get_common_type(data_type out, data_type lhs, data_type rhs);
+
 template <typename CastType>
 struct type_casted_accessor {
   template <typename Element>
@@ -50,260 +52,93 @@ struct typed_casted_writer {
   }
 };
 
-// TODO use inheritance. (or some other way to simplify the operator.)
+namespace ops {
+
 struct Add {
-  template <typename TypeCommon>
-  static constexpr inline bool is_supported()
+  template <typename T1, typename T2>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs + rhs)
   {
-    return cudf::binops::compiled::CHECK::PlusExists<TypeCommon, TypeCommon>::value;
-  }
-
-  template <typename TypeLhs, typename TypeRhs>
-  static constexpr inline bool is_supported()
-  {
-    return !has_common_type_v<TypeLhs, TypeRhs> and
-           cudf::binops::compiled::CHECK::PlusExists<TypeLhs, TypeRhs>::value;
-    //(is_chrono<TypeLhs>() and is_chrono<TypeRhs>()) and
-    //!(is_timestamp<TypeLhs>() and is_timestamp<TypeRhs>());
-  }
-
-  // 1. With common type. (single dispatch, + typecast dispatch)
-  // Allow sum between chronos only when both input and output types
-  // are chronos. Unsupported combinations will fail to compile
-  template <typename TypeCommon, std::enable_if_t<is_supported<TypeCommon>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(size_type i,
-                                            column_device_view const lhs,
-                                            column_device_view const rhs,
-                                            mutable_column_device_view const out)
-  {
-    TypeCommon x = type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs);
-    TypeCommon y = type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs);
-    auto result  = x + y;
-    type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
-  }
-
-  // 2. without common type. (double dispatch, + out typecast dispatch)
-
-  // chronos t+d, d+t, d+d, !(t+t)
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<is_supported<TypeLhs, TypeRhs>()
-                             //(is_chrono<TypeLhs>() and is_chrono<TypeRhs>()) and
-                             //!(is_timestamp<TypeLhs>() and is_timestamp<TypeRhs>())
-                             >* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(size_type i,
-                                            column_device_view const lhs,
-                                            column_device_view const rhs,
-                                            mutable_column_device_view const out)
-  {
-    TypeLhs x   = lhs.element<TypeLhs>(i);
-    TypeRhs y   = rhs.element<TypeRhs>(i);
-    auto result = x + y;
-    type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
+    return lhs + rhs;
   }
 };
 
 struct Sub {
-  template <typename TypeCommon>
-  static constexpr inline bool is_supported()
+  template <typename T1, typename T2>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs - rhs)
   {
-    return cudf::binops::compiled::CHECK::MinusExists<TypeCommon, TypeCommon>::value;
-  }
-
-  template <typename TypeLhs, typename TypeRhs>
-  static constexpr inline bool is_supported()
-  {
-    return (!has_common_type_v<TypeLhs, TypeRhs>)and cudf::binops::compiled::CHECK::
-      MinusExists<TypeLhs, TypeRhs>::value;
-  }
-
-  // Allow sum between chronos only when both input and output types
-  // are chronos. Unsupported combinations will fail to compile
-  template <typename TypeCommon, std::enable_if_t<is_supported<TypeCommon>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(size_type i,
-                                            column_device_view const lhs,
-                                            column_device_view const rhs,
-                                            mutable_column_device_view const out)
-  {
-    TypeCommon x = type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs);
-    TypeCommon y = type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs);
-    auto result  = x - y;
-    type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
-  }
-  // chronos t-d, d-d, t-t, !(d-t)
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<is_supported<TypeLhs, TypeRhs>()
-                             //(is_chrono<TypeLhs>() and is_chrono<TypeRhs>()) and
-                             //!(is_duration<TypeLhs>() and is_timestamp<TypeRhs>())
-                             >* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(size_type i,
-                                            column_device_view const lhs,
-                                            column_device_view const rhs,
-                                            mutable_column_device_view const out)
-  {
-    TypeLhs x   = lhs.element<TypeLhs>(i);
-    TypeRhs y   = rhs.element<TypeRhs>(i);
-    auto result = x - y;
-    type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
+    return lhs - rhs;
   }
 };
 
 struct Mul {
-  template <typename TypeCommon>
-  static constexpr inline bool is_supported()
-  {
-    return cudf::binops::compiled::CHECK::MulExists<TypeCommon, TypeCommon>::value;
-  }
-
   template <typename TypeLhs, typename TypeRhs>
   static constexpr inline bool is_supported()
   {
-    return (!has_common_type_v<TypeLhs, TypeRhs>)and cudf::binops::compiled::CHECK::
-             MulExists<TypeLhs, TypeRhs>::value and
-           ((is_duration<TypeLhs>() && std::is_integral<TypeRhs>()) ||
-            (std::is_integral<TypeLhs>() && is_duration<TypeRhs>()));
+    return has_common_type_v<TypeLhs, TypeRhs> or
+           // FIXME: without the following line, compilation error
+           // _deps/libcudacxx-src/include/cuda/std/detail/libcxx/include/chrono(917): error:
+           // identifier "cuda::std::__3::ratio<(long)86400000000l, (long)1l> ::num" is undefined in
+           // device code
+           ((is_duration<TypeLhs>() and std::is_integral<TypeRhs>()) or
+            (std::is_integral<TypeLhs>() and is_duration<TypeRhs>()));
   }
-
-  // Allow sum between chronos only when both input and output types
-  // are chronos. Unsupported combinations will fail to compile
-  template <typename TypeCommon, std::enable_if_t<is_supported<TypeCommon>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(size_type i,
-                                            column_device_view const lhs,
-                                            column_device_view const rhs,
-                                            mutable_column_device_view const out)
+  template <typename T1, typename T2, std::enable_if_t<is_supported<T1, T2>()>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs * rhs)
   {
-    TypeCommon x = type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs);
-    TypeCommon y = type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs);
-    auto result  = x * y;
-    type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
-  }
-  // chronos n*d, d*n
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<is_supported<TypeLhs, TypeRhs>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(size_type i,
-                                            column_device_view const lhs,
-                                            column_device_view const rhs,
-                                            mutable_column_device_view const out)
-  {
-    TypeLhs x   = lhs.element<TypeLhs>(i);
-    TypeRhs y   = rhs.element<TypeRhs>(i);
-    auto result = x * y;
-    type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
+    return lhs * rhs;
   }
 };
 
 struct Div {
-  template <typename TypeCommon>
-  static constexpr inline bool is_supported()
-  {
-    return cudf::binops::compiled::CHECK::DivExists<TypeCommon, TypeCommon>::value;
-  }
-
   template <typename TypeLhs, typename TypeRhs>
   static constexpr inline bool is_supported()
   {
-    return (!has_common_type_v<TypeLhs, TypeRhs>)and cudf::binops::compiled::CHECK::
-             DivExists<TypeLhs, TypeRhs>::value and
-           is_duration<TypeLhs>() && (std::is_integral<TypeRhs>() || is_duration<TypeRhs>());
+    return has_common_type_v<TypeLhs, TypeRhs> or
+           // FIXME: without this, compilation error on chrono:917
+           is_duration<TypeLhs>() and (std::is_integral<TypeRhs>() or is_duration<TypeRhs>());
   }
-
-  // Allow sum between chronos only when both input and output types
-  // are chronos. Unsupported combinations will fail to compile
-  template <typename TypeCommon, std::enable_if_t<is_supported<TypeCommon>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(size_type i,
-                                            column_device_view const lhs,
-                                            column_device_view const rhs,
-                                            mutable_column_device_view const out)
+  template <typename T1, typename T2, std::enable_if_t<is_supported<T1, T2>()>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs / rhs)
   {
-    TypeCommon x = type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs);
-    TypeCommon y = type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs);
-    auto result  = x / y;
-    type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
-  }
-  // chronos d/n, d/d
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<is_supported<TypeLhs, TypeRhs>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(size_type i,
-                                            column_device_view const lhs,
-                                            column_device_view const rhs,
-                                            mutable_column_device_view const out)
-  {
-    TypeLhs x   = lhs.element<TypeLhs>(i);
-    TypeRhs y   = rhs.element<TypeRhs>(i);
-    auto result = x / y;
-    type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
+    return lhs / rhs;
   }
 };
 
 struct TrueDiv {
-  template <typename TypeCommon>
-  static constexpr inline bool is_supported()
+  template <typename T1, typename T2>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs)
+    -> decltype((static_cast<double>(lhs) / static_cast<double>(rhs)))
   {
-    return std::is_constructible_v<double, TypeCommon>;
+    return (static_cast<double>(lhs) / static_cast<double>(rhs));
   }
+};
 
+struct FloorDiv {
+  template <typename T1, typename T2>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs)
+    -> decltype(floor(static_cast<double>(lhs) / static_cast<double>(rhs)))
+  {
+    return floor(static_cast<double>(lhs) / static_cast<double>(rhs));
+  }
+};
+
+struct Mod {
   template <typename TypeLhs, typename TypeRhs>
   static constexpr inline bool is_supported()
   {
-    return (!has_common_type_v<TypeLhs, TypeRhs>)and std::is_constructible_v<double, TypeLhs> and
-           std::is_constructible_v<double, TypeRhs>;
+    return has_common_type_v<TypeLhs, TypeRhs> or
+           // FIXME: without this, compilation error
+           //_deps/libcudacxx-src/include/cuda/std/detail/libcxx/include/chrono(1337):
+           // error : expression must have integral or unscoped enum type
+           is_duration<TypeLhs>() and (std::is_integral<TypeRhs>() or is_duration<TypeRhs>());
   }
-
-  // Allow sum between chronos only when both input and output types
-  // are chronos. Unsupported combinations will fail to compile
-  template <typename TypeCommon, std::enable_if_t<is_supported<TypeCommon>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(size_type i,
-                                            column_device_view const lhs,
-                                            column_device_view const rhs,
-                                            mutable_column_device_view const out)
+  template <typename T1, typename T2, std::enable_if_t<is_supported<T1, T2>()>* = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs % rhs)
   {
-    TypeCommon x = type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs);
-    TypeCommon y = type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs);
-    auto result  = (static_cast<double>(x) / static_cast<double>(y));
-    type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
-  }
-  // chronos d/n, d/d
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<is_supported<TypeLhs, TypeRhs>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(size_type i,
-                                            column_device_view const lhs,
-                                            column_device_view const rhs,
-                                            mutable_column_device_view const out)
-  {
-    TypeLhs x   = lhs.element<TypeLhs>(i);
-    TypeRhs y   = rhs.element<TypeRhs>(i);
-    auto result = (static_cast<double>(x) / static_cast<double>(y));
-    type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
+    return lhs % rhs;
   }
 };
-
-struct Mul2 {
-  // Allow sum between chronos only when both input and output types
-  // are chronos. Unsupported combinations will fail to compile
-  template <typename TypeOut,
-            typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<
-              (CHECK::MulExists<TypeLhs, TypeRhs>::value and
-               std::is_convertible<decltype(std::declval<TypeLhs>() * std::declval<TypeRhs>()),
-                                   TypeOut>::value)>* = nullptr>
-  static CUDA_HOST_DEVICE_CALLABLE TypeOut operate(TypeLhs x, TypeRhs y)
-  {
-    if constexpr (has_common_type_v<TypeOut, TypeLhs, TypeRhs>) {
-      using TypeCommon = typename std::common_type<TypeOut, TypeLhs, TypeRhs>::type;
-      return static_cast<TypeOut>(static_cast<TypeCommon>(x) * static_cast<TypeCommon>(y));
-    } else {
-      return static_cast<TypeOut>(x * y);
-    }
-  }
-};
-
-data_type get_common_type(data_type out, data_type lhs, data_type rhs);
-
+}  // namespace ops
 }  // namespace compiled
 }  // namespace binops
 }  // namespace cudf

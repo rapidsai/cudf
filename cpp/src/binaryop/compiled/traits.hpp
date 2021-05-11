@@ -37,6 +37,19 @@ template <typename... Ts>
 constexpr inline bool has_common_type_v = has_common_type_impl<void, Ts...>::value;
 
 namespace binops::compiled {
+
+template <typename T1, typename BinaryFunctor>
+constexpr bool is_op_supported(void)
+{
+  return std::is_invocable_v<BinaryFunctor, T1>;
+}
+
+template <typename T1, typename T2, typename BinaryFunctor>
+constexpr bool is_op_supported(void)
+{
+  return std::is_invocable_v<BinaryFunctor, T1, T2>;
+}
+
 namespace CHECK {
 
 struct No {
