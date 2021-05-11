@@ -18,6 +18,7 @@
 #include <cudf/lists/detail/gather.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+#include "cudf/copying.hpp"
 
 #include <thrust/binary_search.h>
 
@@ -96,17 +97,12 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
   size_type gather_map_size = gd.gather_map_size;
 
   // call the normal gather
-  auto leaf_column = cudf::type_dispatcher<dispatch_storage_type>(
-    column.type(),
-    cudf::detail::column_gatherer{},
-    column,
-    gather_map_begin,
-    gather_map_begin + gather_map_size,
-    // note : we don't need to bother checking for out-of-bounds here since
-    // our inputs at this stage aren't coming from the user.
-    false,
-    stream,
-    mr);
+  auto leaf_column = cudf::detail::gather(column,
+                                          gather_map_begin,
+                                          gather_map_begin + gather_map_size,
+                                          out_of_bounds_policy::DONT_CHECK,
+                                          stream,
+                                          mr);
 
   // the column_gatherer doesn't create the null mask because it expects
   // that will be done in the gather_bitmask() step.  however, gather_bitmask()

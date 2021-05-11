@@ -460,14 +460,11 @@ struct column_gatherer_impl<struct_view> {
                    std::back_inserter(output_struct_members),
                    [&gather_map_begin, &gather_map_end, nullify_out_of_bounds, stream, mr](
                      cudf::column_view const& col) {
-                     return cudf::type_dispatcher<dispatch_storage_type>(col.type(),
-                                                                         column_gatherer{},
-                                                                         col,
-                                                                         gather_map_begin,
-                                                                         gather_map_end,
-                                                                         nullify_out_of_bounds,
-                                                                         stream,
-                                                                         mr);
+                     auto const out_of_bounds = nullify_out_of_bounds
+                                                  ? out_of_bounds_policy::NULLIFY
+                                                  : out_of_bounds_policy::DONT_CHECK;
+                     return cudf::detail::gather(
+                       col, gather_map_begin, gather_map_end, out_of_bounds, stream, mr);
                    });
 
     auto const nullable = std::any_of(structs_column.child_begin(),
