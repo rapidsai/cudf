@@ -2526,10 +2526,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(mapLookup(getNativeView(), key.getScalarHandle()));
   }
 
+  /** For a column of type List<Struct<String, String>> and a passed in String key, return an int column
+   * for all the offsets(index) in the struct for key, -1 if the key doesn't exist.
+   * @param key the String scalar to lookup in the column
+   * @return a boolean column based on the lookup result
+   */
   public final ColumnVector getMapKeyExistence(Scalar key) {
     assert type.equals(DType.LIST) : "column type must be a LIST";
     assert key != null : "target string may not be null";
-    assert key.getType().equals(DType.STRING) : "target string must be a string scalar";
+    assert key.getType().equals(DType.STRING) : "target must be a string scalar";
 
     return new ColumnVector(mapContains(getNativeView(), key.getScalarHandle()));
   }
@@ -2852,6 +2857,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long mapLookup(long columnView, long key) throws CudfException;
 
+  /**
+   * Native method for check the existence of a key over a column of List<Struct<String,String>>
+   * @param columnView the column view handle of the map
+   * @param key the string scalar that is the key for lookup
+   * @return an boolean column handle of the resultant
+   * @throws CudfException
+   */
   private static native long mapContains(long columnView, long key) throws CudfException;
   /**
    * Native method to add zeros as padding to the left of each string.

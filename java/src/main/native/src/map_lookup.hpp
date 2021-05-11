@@ -18,6 +18,7 @@
 
 #include <cudf/column/column.hpp>
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
 namespace cudf {
 
@@ -66,12 +67,12 @@ map_lookup(column_view const &map_column, string_scalar lookup_key, bool has_nul
  *
  * @param map_column The input "map" column to be searched. Must be of
  *                   type list_view<struct_view<string_view, string_view>>.
- * @param lookup_key The search key, whose value is to be returned for each list row
+ * @param lookup_key The search key, whose index(offset) is to be returned for each list row
  * @param has_nulls  Whether the input column might contain null list-rows, or null keys.
  * @param stream     The CUDA stream
  * @param mr         The device memory resource to be used for allocations
- * @return           A string_view column with the value from the first match in each list.
- *                   A null row is returned for any row where the lookup_key is not found.
+ * @return           An boolean_view column reflecting the existence for the key in each list.
+ *                   false means the lookup_key is not found.
  * @throw cudf::logic_error If the input column is not of type
  *                          list_view<struct_view<string_view, string_view>>
  */
