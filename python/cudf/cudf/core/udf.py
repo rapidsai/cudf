@@ -30,13 +30,6 @@ from cudf.core.scalar import _NAType
 
 from numba.core.extending import make_attribute_wrapper
 
-
-class Masked(object):
-    def __init__(self, value, valid):
-        self.value = value
-        self.valid = valid
-
-
 class MaskedType(types.Type):
     def __init__(self, value):
         # MaskedType in numba shall be parameterized
@@ -116,32 +109,9 @@ class NAType(types.Type):
         if isinstance(other, types.abstract.Literal):
             return MaskedType(other.literal_type)
 
-numba_na = NAType()
-
-
-@typeof_impl.register(Masked)
-def typeof_masked(val, c):
-    return Masked(val.value)
-
-
 @typeof_impl.register(_NAType)
 def typeof_na(val, c):
-    return numba_na
-
-
-@type_callable(Masked)
-def type_masked(context):
-    def typer(value, valid):
-        if isinstance(value, types.Integer) and isinstance(
-            valid, types.Boolean
-        ):
-            return Masked(value)
-
-    return typer
-
-
-make_attribute_wrapper(MaskedType, "value", "value")
-make_attribute_wrapper(MaskedType, "valid", "valid")
+    return NAType()
 
 
 @register_model(MaskedType)
@@ -152,19 +122,6 @@ class MaskedModel(models.StructModel):
 
 
 register_model(NAType)(models.OpaqueModel)
-
-# types.int64 instance, change to typeclass (types.Integer, types.Number, etc)
-"""
-@lower_builtin(Masked, types.int64, types.bool_)
-def impl_masked_constructor(context, builder, sig, args):
-    typ = sig.return_type
-    value, valid = args
-
-    masked = cgutils.create_struct_proxy(typ)(context, builder)
-    masked.value = value
-    masked.valid = valid
-    return masked._getvalue()  # return a pointer to the struct I created
-"""
 
 
 @cuda_decl_registry.register_global(operator.add)
@@ -194,7 +151,7 @@ class MaskedScalarAddNull(AbstractTemplate):
             return nb_signature(
                 MaskedType(return_type),
                 MaskedType(args[0].value_type),
-                numba_na,
+                NAType(),
             )
 
 
