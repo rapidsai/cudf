@@ -30,6 +30,7 @@
 #include <curand_kernel.h>
 
 #include <cassert>
+
 __global__ static void init_curand(curandState* state, const int nstates)
 {
   int ithread = threadIdx.x + blockIdx.x * blockDim.x;
