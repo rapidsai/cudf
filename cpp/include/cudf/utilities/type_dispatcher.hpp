@@ -539,7 +539,7 @@ struct dispatched_invoke {
  * @param dtype The `cudf::data_type` whose `id()` determines which template
  * instantiation is invoked
  * @param args Parameter pack of arguments forwarded to `Invoker<T>::invoke`
- * @return The result of `Invoker<T>::invoke(std::forward<Ts>(args)...)` 
+ * @return The result of `Invoker<T>::invoke(std::forward<Ts>(args)...)`
  */
 template <template <typename> typename Invoker,
           template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
@@ -547,14 +547,13 @@ template <template <typename> typename Invoker,
 CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) dispatch_to_invoke(cudf::data_type dtype,
                                                                       Ts&&... args)
 {
-  return type_dispatcher<IdTypeMap>(dtype, detail::dispatched_invoke<Invoker>{}, std::forward<Ts>(args)...);
+  return type_dispatcher<IdTypeMap>(
+    dtype, detail::dispatched_invoke<Invoker>{}, std::forward<Ts>(args)...);
 }
 
-
-  namespace detail
-{
-  template <typename T1>
-  struct double_type_dispatcher_second_type {
+namespace detail {
+template <typename T1>
+struct double_type_dispatcher_second_type {
 #pragma nv_exec_check_disable
   template <typename T2, typename F, typename... Ts>
   CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(F&& f, Ts&&... args) const
