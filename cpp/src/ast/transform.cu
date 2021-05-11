@@ -74,8 +74,8 @@ __launch_bounds__(max_block_size) __global__ void compute_column_kernel(
   auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * num_intermediates];
   auto const start_idx = static_cast<cudf::size_type>(threadIdx.x + blockIdx.x * blockDim.x);
   auto const stride    = static_cast<cudf::size_type>(blockDim.x * gridDim.x);
-  auto const evaluator =
-    cudf::ast::detail::row_evaluator(table, literals, thread_intermediate_storage, &output_column);
+  auto const evaluator = cudf::ast::detail::two_table_evaluator(
+    table, literals, thread_intermediate_storage, &output_column);
 
   for (cudf::size_type row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
     evaluate_row_expression(

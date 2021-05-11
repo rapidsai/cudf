@@ -592,7 +592,7 @@ __global__ void nested_loop_predicate_join(
 
   const unsigned int activemask = __ballot_sync(0xffffffff, left_row_index < left_num_rows);
   auto const evaluator          = cudf::ast::detail::two_table_evaluator(
-    left_table, right_table, literals, thread_intermediate_storage, &operator_outputs);
+    left_table, literals, thread_intermediate_storage, &operator_outputs, right_table);
 
   if (left_row_index < left_num_rows) {
     bool found_match = false;
