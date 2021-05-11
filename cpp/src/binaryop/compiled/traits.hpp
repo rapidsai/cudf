@@ -50,51 +50,6 @@ constexpr bool is_op_supported(void)
   return std::is_invocable_v<BinaryFunctor, T1, T2>;
 }
 
-namespace CHECK {
-
-struct No {
-};
-template <typename T, typename Arg>
-No operator+(const T&, const Arg&);
-
-template <typename T, typename Arg = T>
-struct PlusExists {
-  enum { value = !std::is_same<decltype(std::declval<T>() + std::declval<Arg>()), No>::value };
-};
-
-template <typename T, typename Arg>
-No operator-(const T&, const Arg&);
-template <typename T, typename Arg = T>
-struct MinusExists {
-  enum { value = !std::is_same<decltype(std::declval<T>() - std::declval<Arg>()), No>::value };
-};
-
-template <typename T, typename Arg>
-No operator*(const T&, const Arg&);
-template <typename T, typename Arg = T>
-struct MulExists {
-  enum { value = !std::is_same<decltype(std::declval<T>() * std::declval<Arg>()), No>::value };
-};
-
-template <typename T, typename Arg>
-No operator/(const T&, const Arg&);
-template <typename T, typename Arg = T>
-struct DivExists {
-  enum { value = !std::is_same<decltype(std::declval<T>() / std::declval<Arg>()), No>::value };
-};
-// TODO This doesn't seem scalable. This should be parameterisable. (without compromising compile
-// time).
-
-/* No idea why this does not work!
-template <typename T, typename Arg, typename = void>
-struct PlusExists : std::false_type {};
-
-template <typename T, typename Arg>
-struct PlusExists<T, Arg, std::void_t<decltype(std::declval<T>() + std::declval<Arg>())> > :
-std::true_type{};
-*/
-}  // namespace CHECK
-
 // has ::operate
 
 template <typename T, typename T1, typename T2, typename T3, typename = T>
