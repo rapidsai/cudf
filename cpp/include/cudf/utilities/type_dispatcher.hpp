@@ -520,7 +520,7 @@ namespace detail {
 template <template <typename...> typename Invoker>
 struct dispatched_invoke {
   template <typename T, typename... Args>
-  decltype(auto) operator()(Args&&... args)
+  CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) operator()(Args&&... args)
   {
     return Invoker<T>::invoke(std::forward<Args>(args)...);
   }
