@@ -1463,11 +1463,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       if (view == null) {
         newChildren.add(child);
       } else {
-        if (child.getRowCount() != view.getRowCount()) {
-          throw new IllegalArgumentException("Child row count doesn't match the old child");
+        try {
+          if (child.getRowCount() != view.getRowCount()) {
+            throw new IllegalArgumentException("Child row count doesn't match the old child");
+          }
+          newChildren.add(view);
+        } finally {
+          child.close();
         }
-        newChildren.add(view);
-        child.close();
       }
     });
     if (!map.isEmpty()) {
