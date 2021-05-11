@@ -6,6 +6,7 @@ from pandas.core.indexes.interval import IntervalIndex as pandas_IntervalIndex
 from cudf.utils.dtypes import is_list_like
 import cupy
 import cudf
+import pandas as pd
 
 
 def cut(
@@ -94,6 +95,9 @@ def cut(
     """
     left_inclusive = False
     right_inclusive = True
+
+    # saving the original input x for use in case its a series
+    orig_x = x
 
     if not ordered and labels is None:
         raise ValueError("'labels' must be provided if 'ordered = False'")
@@ -229,5 +233,8 @@ def cut(
     if retbins:
         # if retbins is true we return the bins as well
         return categorical_index, bins
+    elif isinstance(orig_x, pd.Series) or isinstance(orig_x, cudf.Series):
+        # if we have a series input we return a series output
+        return cudf.Series(categorical_index, index=orig_x.index)
     else:
         return categorical_index

@@ -48,6 +48,9 @@ from cudf.utils.dtypes import (
     _decimal_normalize_types,
     can_convert_to_column,
     is_decimal_dtype,
+    is_struct_dtype,
+    is_categorical_dtype,
+    is_interval_dtype,
     is_list_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
@@ -1223,11 +1226,9 @@ class Series(SingleColumnFrame, Serializable):
             if get_option("display.max_rows") == 0
             else get_option("display.max_rows")
         )
-
         if len(self) > max_rows and max_rows != 0:
             top = self.head(int(max_rows / 2 + 1))
             bottom = self.tail(int(max_rows / 2 + 1))
-
             preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self.copy()
@@ -1271,6 +1272,14 @@ class Series(SingleColumnFrame, Serializable):
                     )
                 )
             else:
+                if is_categorical_dtype(self):
+                    if is_interval_dtype(
+                        self.dtype.categories
+                    ) and is_struct_dtype(preprocess._column.categories):
+                        # with a series input the IntervalIndex's are turn
+                        # into a struct dtype this line will change the
+                        # categories back to an intervalIndex.
+                        preprocess.dtype._categories = self.dtype.categories
                 pd_series = preprocess.to_pandas()
             output = pd_series.to_string(
                 name=self.name,
@@ -2867,7 +2876,6 @@ class Series(SingleColumnFrame, Serializable):
         3    30.0
         dtype: float64
         """
-
         if index is True:
             index = self.index.to_pandas()
         s = self._column.to_pandas(index=index, nullable=nullable)
