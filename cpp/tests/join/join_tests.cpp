@@ -1657,21 +1657,40 @@ TEST_F(JoinTest, FullJoinWithStructsAndNulls)
 
 TEST_F(JoinTest, PredicateJoin)
 {
-  auto const left_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{0};
-  auto const left_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{0};
+  {
+    auto const left_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{0};
+    auto const left_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{0};
 
-  auto const right_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{0};
-  auto const right_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{0};
+    auto const right_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{0};
+    auto const right_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{0};
 
-  cudf::table_view left({left_first_col, left_second_col});
-  cudf::table_view right({right_first_col, right_second_col});
+    cudf::table_view left({left_first_col, left_second_col});
+    cudf::table_view right({right_first_col, right_second_col});
 
-  auto col_ref_0  = cudf::ast::column_reference(0);
-  auto col_ref_1  = cudf::ast::column_reference(1);
-  auto expression = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, col_ref_1);
-  auto result     = cudf::predicate_join(left, right, expression);
+    auto col_ref_0  = cudf::ast::column_reference(0);
+    auto col_ref_1  = cudf::ast::column_reference(1);
+    auto expression = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, col_ref_1);
+    auto result     = cudf::predicate_join(left, right, expression);
 
-  EXPECT_EQ(result.first->size(), 1);
+    EXPECT_EQ(result.first->size(), 1);
+  }
+  {
+    auto const left_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1};
+    auto const left_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1};
+
+    auto const right_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1};
+    auto const right_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1};
+
+    cudf::table_view left({left_first_col, left_second_col});
+    cudf::table_view right({right_first_col, right_second_col});
+
+    auto col_ref_0  = cudf::ast::column_reference(0);
+    auto col_ref_1  = cudf::ast::column_reference(1);
+    auto expression = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, col_ref_1);
+    auto result     = cudf::predicate_join(left, right, expression);
+
+    EXPECT_EQ(result.first->size(), 2);
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

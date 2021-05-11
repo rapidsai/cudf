@@ -247,10 +247,12 @@ get_base_nested_loop_predicate_join_indices(table_view const& left,
   // TODO: The AST code's linearizer data path_only uses the table of the
   // expression for determining the data type of a column reference, so for now
   // we can reuse the same linearizer for convenience and assume that the left
-  // and right tables have all the same data types. We may eventually have to
+  // and right tables have all the same data types. We will eventually have to
   // relax this assumption to provide reasonable error checking.
   auto const expr_linearizer = ast::detail::linearizer(binary_pred, left);  // Linearize the AST
   auto const plan = ast::detail::ast_plan{expr_linearizer, stream, mr};     // Create ast_plan
+  auto const num_intermediates     = expr_linearizer.intermediate_count();
+  auto const shmem_size_per_thread = static_cast<int>(sizeof(std::int64_t) * num_intermediates);
 
   // Because we are approximating the number of joined elements, our approximation
   // might be incorrect and we might have underestimated the number of joined elements.
@@ -259,12 +261,21 @@ get_base_nested_loop_predicate_join_indices(table_view const& left,
   rmm::device_scalar<size_type> write_index(0, stream);
   size_type join_size{0};
 
-  auto left_indices           = std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
-  auto right_indices          = std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
+  auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
+  auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
+
   auto current_estimated_size = estimated_size;
   do {
     left_indices->resize(estimated_size, stream);
     right_indices->resize(estimated_size, stream);
+
+    auto output_column = cudf::make_fixed_width_column(expr_linearizer.root_data_type(),
+                                                       current_estimated_size,
+                                                       mask_state::UNALLOCATED,
+                                                       stream,
+                                                       mr);
+    auto mutable_output_device =
+      cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
     constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
     detail::grid_1d config(left_table->num_rows(), block_size);
@@ -274,19 +285,21 @@ get_base_nested_loop_predicate_join_indices(table_view const& left,
     const auto& join_output_l = flip_join_indices ? right_indices->data() : left_indices->data();
     const auto& join_output_r = flip_join_indices ? left_indices->data() : right_indices->data();
     nested_loop_predicate_join<block_size, DEFAULT_JOIN_CACHE_SIZE>
-      <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
+      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_thread, stream.value()>>>(
         *left_table,
         *right_table,
         JoinKind,
         equality,
         join_output_l,
         join_output_r,
+        *mutable_output_device,
         write_index.data(),
         plan._device_literals,
         plan._device_data_references,
         plan._device_operators,
         plan._device_operator_source_indices,
-        estimated_size);
+        estimated_size,
+        num_intermediates);
 
     CHECK_CUDA(stream.value());
 

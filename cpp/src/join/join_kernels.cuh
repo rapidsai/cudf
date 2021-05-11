@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <cub/cub.cuh>
 #include <cudf/ast/detail/linearizer.hpp>
+#include <cudf/ast/detail/transform.cuh>
 #include <cudf/ast/operators.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -562,17 +563,22 @@ __global__ void nested_loop_predicate_join(
   row_equality check_row_equality,
   cudf::size_type* join_output_l,
   cudf::size_type* join_output_r,
+  mutable_column_device_view operator_outputs,
   cudf::size_type* current_idx,
   device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals,
   device_span<const ast::detail::device_data_reference> data_references,
   device_span<const ast::ast_operator> operators,
   device_span<const cudf::size_type> operator_source_indices,
-  const cudf::size_type max_size)
+  const cudf::size_type max_size,
+  const cudf::size_type num_intermediates)
 {
   constexpr int num_warps = block_size / detail::warp_size;
   __shared__ cudf::size_type current_idx_shared[num_warps];
   __shared__ cudf::size_type join_shared_l[num_warps][output_cache_size];
   __shared__ cudf::size_type join_shared_r[num_warps][output_cache_size];
+
+  extern __shared__ std::int64_t intermediate_storage[];
+  auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * num_intermediates];
 
   const int warp_id                    = threadIdx.x / detail::warp_size;
   const int lane_id                    = threadIdx.x % detail::warp_size;
@@ -586,10 +592,22 @@ __global__ void nested_loop_predicate_join(
   cudf::size_type left_row_index = threadIdx.x + blockIdx.x * blockDim.x;
 
   const unsigned int activemask = __ballot_sync(0xffffffff, left_row_index < left_num_rows);
+  auto const evaluator          = cudf::ast::detail::two_table_evaluator(
+    left_table, right_table, literals, thread_intermediate_storage, &operator_outputs);
+
   if (left_row_index < left_num_rows) {
     bool found_match = false;
     for (size_type right_row_index(0); right_row_index < right_num_rows; right_row_index++) {
-      if (check_row_equality(left_row_index, right_row_index)) {
+      auto output_row_index = left_row_index * right_num_rows + right_row_index;
+      cudf::ast::detail::evaluate_join_expression(evaluator,
+                                                  data_references,
+                                                  operators,
+                                                  operator_source_indices,
+                                                  left_row_index,
+                                                  right_row_index,
+                                                  output_row_index);
+
+      if (operator_outputs.element<bool>(output_row_index)) {
         // If the rows are equal, then we have found a true match
         found_match = true;
         add_pair_to_cache(left_row_index,
