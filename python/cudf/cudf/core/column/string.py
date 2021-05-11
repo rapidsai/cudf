@@ -110,6 +110,7 @@ from cudf._lib.strings.find import (
     startswith_multiple as cpp_startswith_multiple,
 )
 from cudf._lib.strings.findall import findall as cpp_findall
+from cudf._lib.strings.json import get_json_object as cpp_get_json_object
 from cudf._lib.strings.padding import (
     PadSide,
     center as cpp_center,
@@ -2179,6 +2180,72 @@ class StringMethods(ColumnMethodsMixin):
         """
 
         return self._return_or_inplace(cpp_string_get(self._column, i))
+
+    def get_json_object(self, json_path):
+        """
+        Applies a JSONPath string to an input strings column
+        where each row in the column is a valid json string
+
+        Parameters
+        ----------
+        json_path: str
+            The JSONPath string to be applied to each row
+            of the input column
+
+        Returns
+        -------
+        Column: New strings column containing the retrieved json object strings
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(
+            [
+                \\"\\"\\"
+                {
+                    "store":{
+                        "book":[
+                            {
+                                "category":"reference",
+                                "author":"Nigel Rees",
+                                "title":"Sayings of the Century",
+                                "price":8.95
+                            },
+                            {
+                                "category":"fiction",
+                                "author":"Evelyn Waugh",
+                                "title":"Sword of Honour",
+                                "price":12.99
+                            }
+                        ]
+                    }
+                }
+                \\"\\"\\"
+            ])
+        >>> s
+            0    {"store": {\\n        "book": [\\n        { "cat...
+            dtype: object
+        >>> s.str.get_json_object("$.store.book")
+            0    [\\n        { "category": "reference",\\n       ...
+            dtype: object
+        """
+
+        try:
+            res = self._return_or_inplace(
+                cpp_get_json_object(
+                    self._column, cudf.Scalar(json_path, "str")
+                )
+            )
+        except RuntimeError as e:
+            matches = (
+                "Unrecognized JSONPath operator",
+                "Invalid empty name in JSONPath query string",
+            )
+            if any(match in str(e) for match in matches):
+                raise ValueError("JSONPath value not found") from e
+            raise
+        else:
+            return res
 
     def split(
         self, pat: str = None, n: int = -1, expand: bool = None
