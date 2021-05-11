@@ -26,6 +26,8 @@
 #include <cudf/strings/detail/fill.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include "cudf/copying.hpp"
+#include "cudf/types.hpp"
 
 #include <thrust/iterator/constant_iterator.h>
 
@@ -167,6 +169,7 @@ struct column_from_scalar_dispatch {
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr) const
   {
+    if (size == 0) {return make_empty_column(value.type());}
     if (!value.is_valid())
       return make_fixed_width_column(value.type(), size, mask_state::ALL_NULL, stream, mr);
     auto output_column =
@@ -184,6 +187,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr) const
 {
+  if (size == 0) {return make_empty_column(value.type());}
   auto null_mask = detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
 
   if (!value.is_valid())
@@ -241,7 +245,6 @@ std::unique_ptr<column> make_column_from_scalar(scalar const& s,
                                                 rmm::cuda_stream_view stream,
                                                 rmm::mr::device_memory_resource* mr)
 {
-  if (size == 0) return make_empty_column(s.type());
   return type_dispatcher(s.type(), column_from_scalar_dispatch{}, s, size, stream, mr);
 }
 

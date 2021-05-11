@@ -689,3 +689,70 @@ TYPED_TEST(ListsStructsLeafTest, FromNested)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*col, *expected);
 }
+
+class ListsZeroLengthColumnTest : public ColumnFactoryTest {
+ protected:
+  using StructsCW = cudf::test::structs_column_wrapper;
+  StructsCW make_test_structs_column(cudf::test::fixed_width_column_wrapper<int32_t> field1,
+                                     cudf::test::strings_column_wrapper field2,
+                                     cudf::test::lists_column_wrapper<int32_t> field3)
+  {
+    return StructsCW{field1, field2, field3};
+  }
+};
+
+TEST_F(ListsZeroLengthColumnTest, MixedTypes)
+{
+  using FCW      = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using StringCW = cudf::test::strings_column_wrapper;
+  using LCW      = cudf::test::lists_column_wrapper<int32_t>;
+  {
+    auto s   = cudf::make_list_scalar(FCW{1, 2, 3});
+    auto got = cudf::make_column_from_scalar(*s, 0);
+    auto expected =
+      cudf::make_lists_column(0,
+                              FCW{}.release(),
+                              FCW{}.release(),
+                              0,
+                              cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, *expected);
+  }
+
+  {
+    auto s      = cudf::make_list_scalar(LCW{LCW{1, 2, 3}, LCW{}, LCW{5, 6}});
+    auto got    = cudf::make_column_from_scalar(*s, 0);
+    auto nested = cudf::make_lists_column(0,
+                                          FCW{}.release(),
+                                          FCW{}.release(),
+                                          0,
+                                          cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
+    auto expected =
+      cudf::make_lists_column(0,
+                              FCW{}.release(),
+                              std::move(nested),
+                              0,
+                              cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, *expected);
+  }
+
+  {
+    auto s = cudf::make_list_scalar(
+      this->make_test_structs_column({1, 2, 3}, StringCW({"x", "", "y"}), LCW{{5, 6}, {}, {7}}));
+    auto got = cudf::make_column_from_scalar(*s, 0);
+
+    std::vector<std::unique_ptr<cudf::column>> children;
+    children.emplace_back(FCW{}.release());
+    children.emplace_back(StringCW{}.release());
+    children.emplace_back(LCW{}.release());
+    auto nested = cudf::make_structs_column(
+      0, std::move(children), 0, cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
+
+    auto expected =
+      cudf::make_lists_column(0,
+                              FCW{}.release(),
+                              std::move(nested),
+                              0,
+                              cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, *expected);
+  }
+}

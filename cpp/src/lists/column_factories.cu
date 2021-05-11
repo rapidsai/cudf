@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/lists/column_factories.hpp>
@@ -30,6 +31,13 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
                                                             rmm::cuda_stream_view stream,
                                                             rmm::mr::device_memory_resource* mr)
 {
+  if (size == 0) {
+    return make_lists_column(0,
+                             make_empty_column(data_type{type_id::INT32}),
+                             empty_like(value.view()),
+                             0,
+                             cudf::create_null_mask(0, mask_state::UNALLOCATED));
+  }
   // Handcraft a 1-row column
   auto offsets   = make_numeric_column(data_type(type_id::INT32), 2, mask_state::UNALLOCATED);
   auto m_offsets = offsets->mutable_view();
