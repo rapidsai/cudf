@@ -177,8 +177,8 @@ TEST_F(StructScalarFactory, Basic)
 
   // table_view constructor
   {
-    auto sc = cudf::make_struct_scalar(cudf::table_view{children});
-    auto s  = static_cast<cudf::scalar_type_t<cudf::struct_view>*>(sc.get());
+    auto sc    = cudf::make_struct_scalar(cudf::table_view{children});
+    auto s     = static_cast<cudf::scalar_type_t<cudf::struct_view>*>(sc.get());
     auto sview = s->view();
     EXPECT_TRUE(s->is_valid());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(cudf::table_view{children}, s->view());
@@ -186,8 +186,8 @@ TEST_F(StructScalarFactory, Basic)
 
   // host_span constructor
   {
-    auto sc     = cudf::make_struct_scalar(cudf::host_span<cudf::column_view const>{children});
-    auto s  = static_cast<cudf::scalar_type_t<cudf::struct_view>*>(sc.get());
+    auto sc    = cudf::make_struct_scalar(cudf::host_span<cudf::column_view const>{children});
+    auto s     = static_cast<cudf::scalar_type_t<cudf::struct_view>*>(sc.get());
     auto sview = s->view();
     EXPECT_TRUE(s->is_valid());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(cudf::table_view{children}, s->view());
