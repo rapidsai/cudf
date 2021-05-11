@@ -1457,23 +1457,32 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       map.put(indices[index], views[index]);
     });
     List<ColumnView> newChildren = new ArrayList<>(getNumChildren());
-    IntStream.range(0, getNumChildren()).forEach(i -> {
-      ColumnView view = map.remove(i);
-      ColumnView child = getChildColumnView(i);
-      if (view == null) {
-        newChildren.add(child);
-      } else {
-        if (child.getRowCount() != view.getRowCount()) {
-          throw new IllegalArgumentException("Child row count doesn't match the old child");
+    List<ColumnView> toClose = new ArrayList<>(getNumChildren());
+    try {
+      IntStream.range(0, getNumChildren()).forEach(i -> {
+        ColumnView view = map.remove(i);
+        ColumnView child = getChildColumnView(i);
+        toClose.add(child);
+        if (view == null) {
+          newChildren.add(child);
+        } else {
+          if (child.getRowCount() != view.getRowCount()) {
+            throw new IllegalArgumentException("Child row count doesn't match the old child");
+          }
+          newChildren.add(view);
         }
-        newChildren.add(view);
+      });
+      if (!map.isEmpty()) {
+        throw new IllegalArgumentException("One or more invalid child indices passed to be " +
+            "replaced");
       }
-    });
-    if (!map.isEmpty()) {
-      throw new IllegalArgumentException("One or more invalid child indices passed to be replaced");
+      return new ColumnView(type, getRowCount(), Optional.of(getNullCount()), getValid(),
+          getOffsets(), newChildren.stream().toArray(n -> new ColumnView[n]));
+    } finally {
+      for (ColumnView columnView: toClose) {
+        columnView.close();
+      }
     }
-    return new ColumnView(type, getRowCount(), Optional.of(getNullCount()), getValid(),
-        getOffsets(), newChildren.stream().toArray(n -> new ColumnView[n]));
   }
 
   /**
