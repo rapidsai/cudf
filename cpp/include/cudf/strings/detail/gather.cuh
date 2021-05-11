@@ -65,14 +65,15 @@ __global__ void gather_chars_fn_string_parallel(StringIterator strings_begin,
                                                 MapIterator string_indices,
                                                 size_type total_out_strings)
 {
-  constexpr size_t datatype_size = sizeof(uint4);
+  constexpr size_t out_datatype_size = sizeof(uint4);
+  constexpr size_t in_datatype_size  = sizeof(uint);
 
   int global_thread_id = blockIdx.x * blockDim.x + threadIdx.x;
   int global_warp_id   = global_thread_id / cudf::detail::warp_size;
   int warp_lane        = global_thread_id % cudf::detail::warp_size;
   int nwarps           = gridDim.x * blockDim.x / cudf::detail::warp_size;
 
-  auto const alignment_offset = reinterpret_cast<std::uintptr_t>(out_chars) % datatype_size;
+  auto const alignment_offset = reinterpret_cast<std::uintptr_t>(out_chars) % out_datatype_size;
   uint4* out_chars_aligned    = reinterpret_cast<uint4*>(out_chars - alignment_offset);
 
   for (size_type istring = global_warp_id; istring < total_out_strings; istring += nwarps) {
@@ -85,18 +86,23 @@ __global__ void gather_chars_fn_string_parallel(StringIterator strings_begin,
     const char* in_start = strings_begin[string_indices[istring]].data();
 
     // Both `out_start_aligned` and `out_end_aligned` are indices into `out_chars`.
-    // `out_start_aligned` is the first 16B aligned memory location after `out_start`.
-    // `out_end_aligned` is the last 16B aligned memory location before `out_end`. Characters
+    // `out_start_aligned` is the first 16B aligned memory location after `out_start + 4`.
+    // `out_end_aligned` is the last 16B aligned memory location before `out_end - 4`. Characters
     // between `[out_start_aligned, out_end_aligned)` will be copied using uint4.
+    // `out_start + 4` and `out_end - 4` are used instead of `out_start` and `out_end` to avoid
+    // `load_uint4` reading beyond string boundaries.
     int32_t out_start_aligned =
-      (out_start + alignment_offset + datatype_size - 1) / datatype_size * datatype_size -
+      (out_start + in_datatype_size + alignment_offset + out_datatype_size - 1) /
+        out_datatype_size * out_datatype_size -
       alignment_offset;
     int32_t out_end_aligned =
-      (out_end + alignment_offset) / datatype_size * datatype_size - alignment_offset;
+      (out_end - in_datatype_size + alignment_offset) / out_datatype_size * out_datatype_size -
+      alignment_offset;
 
-    for (size_type ichar = out_start_aligned + warp_lane * datatype_size; ichar < out_end_aligned;
-         ichar += cudf::detail::warp_size * datatype_size) {
-      *(out_chars_aligned + (ichar + alignment_offset) / datatype_size) =
+    for (size_type ichar = out_start_aligned + warp_lane * out_datatype_size;
+         ichar < out_end_aligned;
+         ichar += cudf::detail::warp_size * out_datatype_size) {
+      *(out_chars_aligned + (ichar + alignment_offset) / out_datatype_size) =
         load_uint4(in_start + ichar - out_start);
     }
 
@@ -104,10 +110,11 @@ __global__ void gather_chars_fn_string_parallel(StringIterator strings_begin,
     // out_end_aligned)`.
     if (out_end_aligned <= out_start_aligned) {
       // In this case, `[out_start_aligned, out_end_aligned)` is an empty set, and we copy the
-      // entire string. Note that for 16B alignment, the maximum number of characters in this string
-      // is less than 32, so for each thread in the warp, copying one byte is enough.
-      int32_t ichar = out_start + warp_lane;
-      if (ichar < out_end) { out_chars[ichar] = in_start[warp_lane]; }
+      // entire string.
+      for (int32_t ichar = out_start + warp_lane; ichar < out_end;
+           ichar += cudf::detail::warp_size) {
+        out_chars[ichar] = in_start[ichar - out_start];
+      }
     } else {
       // Copy characters in range `[out_start, out_start_aligned)`.
       if (out_start + warp_lane < out_start_aligned) {
