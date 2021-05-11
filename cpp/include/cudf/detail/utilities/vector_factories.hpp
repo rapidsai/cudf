@@ -281,8 +281,6 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_sync(
   return make_device_uvector_sync(device_span<typename Container::value_type const>{c}, stream, mr);
 }
 
-namespace {
-
 // Utility function template to allow copying to either a thrust::host_vector or std::vector
 template <typename T, typename OutContainer>
 OutContainer make_vector_async(device_span<T const> v,
@@ -293,7 +291,6 @@ OutContainer make_vector_async(device_span<T const> v,
     result.data(), v.data(), v.size() * sizeof(T), cudaMemcpyDeviceToHost, stream.value()));
   return result;
 }
-}  // namespace
 
 /**
  * @brief Asynchronously construct a `std::vector` containing a copy of data from a
