@@ -51,6 +51,35 @@ map_lookup(column_view const &map_column, string_scalar lookup_key, bool has_nul
            rmm::cuda_stream_view stream = rmm::cuda_stream_default,
            rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
+
+/**
+ * @brief Looks up a "map" column by specified key to see if the key exists or not,
+ *        and returns a column of int values.
+ *
+ * The map-column is represented as follows:
+ *
+ *  list_view<struct_view< string_view, string_view > >.
+ *                         <---KEY--->  <--VALUE-->
+ *
+ * The string_view struct members are the key and value, respectively.
+ * For each row in the input list column. If the key is not found, -1 is returned.
+ *
+ * @param map_column The input "map" column to be searched. Must be of
+ *                   type list_view<struct_view<string_view, string_view>>.
+ * @param lookup_key The search key, whose value is to be returned for each list row
+ * @param has_nulls  Whether the input column might contain null list-rows, or null keys.
+ * @param stream     The CUDA stream
+ * @param mr         The device memory resource to be used for allocations
+ * @return           A string_view column with the value from the first match in each list.
+ *                   A null row is returned for any row where the lookup_key is not found.
+ * @throw cudf::logic_error If the input column is not of type
+ *                          list_view<struct_view<string_view, string_view>>
+ */
+std::unique_ptr<column>
+map_search_key(column_view const &map_column, string_scalar lookup_key, bool has_nulls = true,
+           rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+           rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+
 } // namespace jni
 
 } // namespace cudf

@@ -127,6 +127,35 @@ get_gather_map_for_map_values(column_view const &input, string_scalar &lookup_ke
 } // namespace
 
 namespace jni {
+
+std::unique_ptr<column> map_search_key(column_view const &map_column, string_scalar lookup_key,
+                                        bool has_nulls, rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource *mr) {
+  // Defensive checks.
+  CUDF_EXPECTS(map_column.type().id() == type_id::LIST, "Expected LIST<STRUCT<key,value>>.");
+
+  lists_column_view lcv{map_column};
+  auto structs_column = lcv.get_sliced_child(stream);
+
+  CUDF_EXPECTS(structs_column.type().id() == type_id::STRUCT, "Expected LIST<STRUCT<key,value>>.");
+
+  structs_column_view scv{structs_column};
+  CUDF_EXPECTS(structs_column.num_children() == 2, "Expected LIST<STRUCT<key,value>>.");
+  CUDF_EXPECTS(structs_column.child(0).type().id() == type_id::STRING,
+               "Expected LIST<STRUCT<key,value>>.");
+  CUDF_EXPECTS(structs_column.child(1).type().id() == type_id::STRING,
+               "Expected LIST<STRUCT<key,value>>.");
+
+  // Two-pass plan: construct gather map, and then gather() on structs_column.child(1). Plan A.
+  // (Can do in one pass perhaps, but that's Plan B.)
+
+  auto gather_map = has_nulls ?
+                        get_gather_map_for_map_values<true>(map_column, lookup_key, stream, mr) :
+                        get_gather_map_for_map_values<false>(map_column, lookup_key, stream, mr);
+  return gather_map;
+}
+
+
 std::unique_ptr<column> map_lookup(column_view const &map_column, string_scalar lookup_key,
                                    bool has_nulls, rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource *mr) {
