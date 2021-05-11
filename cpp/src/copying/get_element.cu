@@ -136,7 +136,8 @@ struct get_element_functor {
       return std::make_unique<list_scalar>(
         std::move(*row_slice_contents.children[1]), valid, stream, mr);
     } else {
-      return make_default_constructed_scalar(data_type(type_id::LIST));
+      auto empty_row_contents = empty_like(input)->release();
+      return std::make_unique<list_scalar>(std::move(*empty_row_contents.children[1]), valid, stream, mr);
     }
   }
 

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <gtest/gtest.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
@@ -750,6 +751,13 @@ TYPED_TEST(ListGetStructValueTest, NestedGetNull)
   auto s          = get_element(list_column_nested->view(), index);
 
   EXPECT_FALSE(s->is_valid());
+}
+
+struct ListsGetNullHierarchyTest : public BaseFixture {
+};
+
+TEST_F(ListsGetNullHierarchyTest, MixedTypes) {
+  
 }
 
 }  // namespace test
