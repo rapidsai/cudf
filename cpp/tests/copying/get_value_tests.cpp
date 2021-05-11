@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <gtest/gtest.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
@@ -224,12 +223,17 @@ TYPED_TEST(ListGetFixedWidthValueTest, NonNestedGetNonNullEmpty)
 TYPED_TEST(ListGetFixedWidthValueTest, NonNestedGetNull)
 {
   using LCW = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+  using FCW = cudf::test::fixed_width_column_wrapper<TypeParam>;
+
   LCW col({LCW{1, 2, 34}, LCW{}, LCW{1}, LCW{}}, this->odds_valid());
   size_type index = 2;
 
-  auto s = get_element(col, index);
+  auto s       = get_element(col, index);
+  auto typed_s = static_cast<list_scalar const *>(s.get());
 
   EXPECT_FALSE(s->is_valid());
+  // Test preserve column hierarchy
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(typed_s->view(), FCW{});
 }
 
 TYPED_TEST(ListGetFixedWidthValueTest, NestedGetNonNullNonEmpty)
@@ -302,7 +306,9 @@ TYPED_TEST(ListGetFixedWidthValueTest, NestedGetNonNullEmpty)
 
 TYPED_TEST(ListGetFixedWidthValueTest, NestedGetNull)
 {
-  using LCW = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+  using LCW      = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+  using FCW      = cudf::test::fixed_width_column_wrapper<TypeParam>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<size_type>;
 
   std::vector<valid_type> valid{1, 0, 1, 0};
   // clang-format off
@@ -316,9 +322,15 @@ TYPED_TEST(ListGetFixedWidthValueTest, NestedGetNull)
   // clang-format on
   size_type index = 1;
 
-  auto s = get_element(col, index);
+  auto s       = get_element(col, index);
+  auto typed_s = static_cast<list_scalar const *>(s.get());
+
+  auto expected_data =
+    make_lists_column(0, offset_t{}.release(), FCW{}.release(), 0, rmm::device_buffer{});
 
   EXPECT_FALSE(s->is_valid());
+  // Test preserve column hierarchy
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(typed_s->view(), *expected_data);
 }
 
 struct ListGetStringValueTest : public BaseFixture {
@@ -364,15 +376,18 @@ TEST_F(ListGetStringValueTest, NonNestedGetNonNullEmpty)
 
 TEST_F(ListGetStringValueTest, NonNestedGetNull)
 {
-  using LCW = cudf::test::lists_column_wrapper<string_view>;
+  using LCW      = cudf::test::lists_column_wrapper<string_view>;
+  using StringCW = strings_column_wrapper;
 
   std::vector<valid_type> valid{1, 0, 0, 1};
   LCW col({LCW{"aaa", "Héllo"}, LCW{}, LCW{""}, LCW{"42"}}, valid.begin());
   size_type index = 2;
 
-  auto s = get_element(col, index);
+  auto s       = get_element(col, index);
+  auto typed_s = static_cast<list_scalar const *>(s.get());
 
   EXPECT_FALSE(s->is_valid());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(typed_s->view(), StringCW{});
 }
 
 TEST_F(ListGetStringValueTest, NestedGetNonNullNonEmpty)
@@ -447,7 +462,9 @@ TEST_F(ListGetStringValueTest, NestedGetNonNullEmpty)
 
 TEST_F(ListGetStringValueTest, NestedGetNull)
 {
-  using LCW = cudf::test::lists_column_wrapper<string_view>;
+  using LCW      = cudf::test::lists_column_wrapper<string_view>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<size_type>;
+  using StringCW = cudf::test::strings_column_wrapper;
 
   std::vector<valid_type> valid{0, 0, 1, 1};
   // clang-format off
@@ -459,11 +476,16 @@ TEST_F(ListGetStringValueTest, NestedGetNull)
       LCW{}
     }, valid.begin());
   // clang-format on
-  LCW expected_data{};
   size_type index = 0;
 
-  auto s = get_element(col, index);
+  auto s       = get_element(col, index);
+  auto typed_s = static_cast<list_scalar const *>(s.get());
+
+  auto expected_data =
+    make_lists_column(0, offset_t{}.release(), StringCW{}.release(), 0, rmm::device_buffer{});
+
   EXPECT_FALSE(s->is_valid());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_data, typed_s->view());
 }
 
 /**
@@ -753,12 +775,44 @@ TYPED_TEST(ListGetStructValueTest, NestedGetNull)
   EXPECT_FALSE(s->is_valid());
 }
 
-struct ListsGetNullHierarchyTest : public BaseFixture {
-};
+// template<typename T>
+// struct ListsGetNullHierarchyTest : public BaseFixture {
+// protected:
+//   auto empty_offset() {
+//     return make_empty_column(data_type{type_id::INT32});
+//   }
+// };
 
-TEST_F(ListsGetNullHierarchyTest, MixedTypes) {
-  
-}
+// TYPED_TEST_CASE(ListsGetNullHierarchyTest, int32_t);
+
+// TYPED_TEST(ListsGetNullHierarchyTest, NonNestedFixedWidth) {
+//   using valid_t = std::vector<valid_type>;
+//   using LCW = lists_column_wrapper<TypeParam>;
+//   using FCW = fixed_width_column_wrapper<TypeParam>;
+
+//   auto col = LCW({LCW{1, 2}, LCW{}, LCW{4}}, valid_t{1, 0, 1}.begin());
+//   auto s = get_element(col, 1);
+//   auto typed_s    = static_cast<list_scalar const *>(s.get());
+
+//   CUDF_TEST_EXPECT_COLUMNS_EQUAL(typed_s->view(), FCW{});
+// }
+
+// TYPED_TEST(ListsGetNullHierarchyTest, NestedStrings) {
+//   using valid_t = std::vector<valid_type>;
+//   using LCW = lists_column_wrapper<TypeParam>;
+//   using StringCW = strings_column_wrapper;
+
+//   auto col = LCW({LCW{LCW{"xx", "y", "z"}, LCW{"n"}}, LCW{}}, valid_t{1, 0}.begin());
+//   auto s = get_element(col->view(), 1);
+//   auto typed_s    = static_cast<list_scalar const *>(s.get());
+
+//   // Well-formed, 0-length List<string> hierarchy
+//   auto nested = make_lists_column(0, this->empty_offset(),
+//   make_empty_column(data_type{type_id::STRING}), 0, rmm::device_buffer{}); auto expected =
+//   make_lists_column(0, this->empty_offset(), std::move(nested), 0, rmm::device_buffer{});
+
+//   CUDF_TEST_EXPECT_COLUMNS_EQUAL(typed_s->view(), *expected);
+// }
 
 }  // namespace test
 }  // namespace cudf
