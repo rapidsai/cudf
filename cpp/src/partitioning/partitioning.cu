@@ -432,7 +432,8 @@ struct copy_block_partitions_dispatcher {
                                          grid_size,
                                          stream);
 
-    return gather(input, gather_map.begin(), gather_map.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
+    return gather(
+      input, gather_map.begin(), gather_map.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
   }
 };
 
