@@ -35,11 +35,6 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
-// Strategy 1: String-parallel
-// This strategy assigns strings to warps so that each warp can cooperatively copy from the input
-// location of the string to the corresponding output location. Large datatype (uint4) is used for
-// stores. This strategy is best suited for large strings.
-
 // Helper function for loading 16B from a potentially unaligned memory location to registers.
 __forceinline__ __device__ uint4 load_uint4(const char* ptr)
 {
@@ -59,6 +54,10 @@ __forceinline__ __device__ uint4 load_uint4(const char* ptr)
   return regs;
 }
 
+// Strategy 1: String-parallel
+// This strategy assigns strings to warps so that each warp can cooperatively copy from the input
+// location of the string to the corresponding output location. Large datatype (uint4) is used for
+// stores. This strategy is best suited for large strings.
 template <typename StringIterator, typename MapIterator>
 __global__ void gather_chars_fn_string_parallel(StringIterator strings_begin,
                                                 char* out_chars,
@@ -203,19 +202,23 @@ std::unique_ptr<cudf::column> gather_chars(StringIterator strings_begin,
   auto chars_column  = create_chars_child_column(output_count, chars_bytes, stream, mr);
   auto const d_chars = chars_column->mutable_view().template data<char>();
 
+  constexpr int warps_per_threadblock = 4;
+
   size_type average_string_length = chars_bytes / output_count;
 
   if (average_string_length > 32) {
-    gather_chars_fn_string_parallel<<<min((static_cast<int>(output_count) + 3) / 4, 65536),
-                                      128,
-                                      0,
-                                      stream.value()>>>(
-      strings_begin, d_chars, offsets, map_begin, output_count);
+    constexpr int max_threadblocks = 65536;
+    gather_chars_fn_string_parallel<<<
+      min((static_cast<int>(output_count) + warps_per_threadblock - 1) / warps_per_threadblock,
+          max_threadblocks),
+      warps_per_threadblock * cudf::detail::warp_size,
+      0,
+      stream.value()>>>(strings_begin, d_chars, offsets, map_begin, output_count);
   } else {
     constexpr int strings_per_threadblock = 32;
     gather_chars_fn_char_parallel<strings_per_threadblock>
       <<<(output_count + strings_per_threadblock - 1) / strings_per_threadblock,
-         128,
+         warps_per_threadblock * cudf::detail::warp_size,
          0,
          stream.value()>>>(strings_begin, d_chars, offsets, map_begin, output_count);
   }
