@@ -2239,7 +2239,7 @@ def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     # If all columns are `NumericalColumn` with different dtypes,
     # we cast them to a common dtype.
     # Notice, we can always cast pure null columns
-    not_null_col_dtypes = [o.dtype for o in objs if o.valid_count > 0]
+    not_null_col_dtypes = [o.dtype for o in objs if o.valid_count]
     if len(not_null_col_dtypes) and all(
         is_numerical_dtype(dtyp) and np.issubdtype(dtyp, np.datetime64)
         for dtyp in not_null_col_dtypes
@@ -2287,6 +2287,6 @@ def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
         col = column_empty(0, head.dtype, masked=True)
     else:
         # Filter out inputs that have 0 length, then concatenate.
-        objs = [o for o in objs if len(o) > 0]
+        objs = [o for o in objs if len(o)]
         col = libcudf.concat.concat_columns(objs)
     return col

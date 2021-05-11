@@ -1499,7 +1499,7 @@ class CategoricalColumn(column.ColumnBase):
             col = column.column_empty(0, head.dtype, masked=True)
         else:
             # Filter out inputs that have 0 length, then concatenate.
-            objs = [o for o in objs if len(o) > 0]
+            objs = [o for o in objs if len(o)]
             col = libcudf.concat.concat_columns(objs)
 
         return column.build_categorical_column(
