@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/fill.hpp>
+#include <cudf/detail/gather.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
@@ -230,8 +231,18 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stru
   size_type size,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr) const
-{
-  CUDF_FAIL("TODO. struct_view currently not supported.");
+{  
+  auto ss = static_cast<scalar_type_t<cudf::struct_view> const&>(value);  
+  auto iter = thrust::make_constant_iterator(0);
+
+  auto children = detail::gather(ss.view(), iter, iter + size, out_of_bounds_policy::NULLIFY, stream, mr);
+  auto const is_valid = ss.is_valid();
+  return make_structs_column(size, 
+                             std::move(children->release()), 
+                             is_valid ? 0 : size,
+                             is_valid ? rmm::device_buffer{} : detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr),
+                             stream,
+                             mr);
 }
 
 std::unique_ptr<column> make_column_from_scalar(scalar const& s,

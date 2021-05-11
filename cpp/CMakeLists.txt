@@ -157,7 +157,7 @@ add_library(cudf
     src/bitmask/null_mask.cu
     src/column/column.cu
     src/column/column_device_view.cu
-    src/column/column_factories.cpp
+    src/column/column_factories.cu
     src/column/column_view.cpp
     src/comms/ipc/ipc.cpp
     src/copying/concatenate.cu
