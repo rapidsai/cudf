@@ -17,29 +17,29 @@
 #include <cudf/utilities/error.hpp>
 
 #include <cuda.h>
-#include <boost/filesystem.hpp>
 #include <jitify2.hpp>
 
 #include <cstddef>
+#include <filesystem>
 
 namespace cudf {
 namespace jit {
 
 // Get the directory in home to use for storing the cache
-boost::filesystem::path get_user_home_cache_dir()
+std::filesystem::path get_user_home_cache_dir()
 {
   auto home_dir = std::getenv("HOME");
   if (home_dir != nullptr) {
-    return boost::filesystem::path(home_dir) / ".cudf";
+    return std::filesystem::path(home_dir) / ".cudf";
   } else {
-    return boost::filesystem::path();
+    return std::filesystem::path();
   }
 }
 
 // Default `LIBCUDF_KERNEL_CACHE_PATH` to `$HOME/.cudf/$CUDF_VERSION`.
 // This definition can be overridden at compile time by specifying a
 // `-DLIBCUDF_KERNEL_CACHE_PATH=/kernel/cache/path` CMake argument.
-// Use `boost::filesystem` for cross-platform path resolution and dir
+// Use `std::filesystem` for cross-platform path resolution and dir
 // creation. This path is used in the `getCacheDir()` function below.
 #if !defined(LIBCUDF_KERNEL_CACHE_PATH)
 #define LIBCUDF_KERNEL_CACHE_PATH get_user_home_cache_dir()
@@ -59,12 +59,12 @@ boost::filesystem::path get_user_home_cache_dir()
  * are used and if $HOME is not defined, returns an empty path and file
  * caching is not used.
  */
-boost::filesystem::path get_cache_dir()
+std::filesystem::path get_cache_dir()
 {
   // The environment variable always overrides the
   // default/compile-time value of `LIBCUDF_KERNEL_CACHE_PATH`
   auto kernel_cache_path_env = std::getenv("LIBCUDF_KERNEL_CACHE_PATH");
-  auto kernel_cache_path     = boost::filesystem::path(
+  auto kernel_cache_path     = std::filesystem::path(
     kernel_cache_path_env != nullptr ? kernel_cache_path_env : LIBCUDF_KERNEL_CACHE_PATH);
 
   // Cache path could be empty when env HOME is unset or LIBCUDF_KERNEL_CACHE_PATH is defined to be
@@ -86,10 +86,10 @@ boost::filesystem::path get_cache_dir()
 
     try {
       // `mkdir -p` the kernel cache path if it doesn't exist
-      boost::filesystem::create_directories(kernel_cache_path);
+      std::filesystem::create_directories(kernel_cache_path);
     } catch (const std::exception& e) {
       // if directory creation fails for any reason, return empty path
-      return boost::filesystem::path();
+      return std::filesystem::path();
     }
   }
   return kernel_cache_path;
