@@ -362,15 +362,10 @@ def test_len(data):
 
 
 @pytest.mark.xfail(
-    reason="""cuDF list accesscor .contains() works incorrectly on a slice of data (issue
-            #8186)"""
+    reason="""list.contains() is incorrect for a slice (issue #8186)"""
 )
 @pytest.mark.parametrize(
-    "data, ascending, na_position, ignore_index",
-    [
-        (data_test_sort(), True, "first", False),
-        (data_test_sort(), False, "last", True),
-    ],
+    "data, search_key", [(data_test_2(), 1)],
 )
 def test_contains(data, search_key):
     expect = Series(data).list.contains(search_key)
