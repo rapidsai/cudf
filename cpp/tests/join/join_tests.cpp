@@ -267,7 +267,7 @@ TEST_F(JoinTest, FullJoinOnNulls)
   cols_gold.push_back(col_gold_3.release());
   cols_gold.push_back(col_gold_4.release());
   cols_gold.push_back(col_gold_5.release());
-  
+
   Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
@@ -551,7 +551,7 @@ TEST_F(JoinTest, LeftJoinOnNulls)
                                      {   1,     1,    0});
   column_wrapper<int32_t> col_gold_5{{   2,     8,   -1},
                                      {   1,     1,    0}};
-  
+
   CVector cols_gold;
   cols_gold.push_back(col_gold_0.release());
   cols_gold.push_back(col_gold_1.release());
@@ -581,7 +581,7 @@ TEST_F(JoinTest, LeftJoinOnNulls)
   result_sort_order = cudf::sorted_order(result->view());
   sorted_result     = cudf::gather(result->view(), *result_sort_order);
 
-  
+
   col_gold_0 = {{   3,    -1,    2},
                 {   1,     0,    1}};
   col_gold_1 = {{ "s0",  "s1", "s2"},
@@ -828,7 +828,7 @@ TEST_F(JoinTest, InnerJoinOnNulls)
   cols_gold.push_back(col_gold_3.release());
   cols_gold.push_back(col_gold_4.release());
   cols_gold.push_back(col_gold_5.release());
-  
+
   Table gold(std::move(cols_gold));
 
   auto gold_sort_order = cudf::sorted_order(gold.view());
@@ -1668,28 +1668,97 @@ TEST_F(JoinTest, PredicateJoin)
     cudf::table_view right({right_first_col, right_second_col});
 
     auto col_ref_0  = cudf::ast::column_reference(0);
-    auto col_ref_1  = cudf::ast::column_reference(1);
+    auto col_ref_1  = cudf::ast::column_reference(0);
     auto expression = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, col_ref_1);
     auto result     = cudf::predicate_join(left, right, expression);
 
     EXPECT_EQ(result.first->size(), 1);
   }
+  // TODO: There is a bug that, in the following two cases at least,
+  // manifests as requiring at least one completely matching row. If I change
+  // the right_second_col[0] to not match left_second_col[0], I get zero
+  // matches no matter what the first columns look like.
   {
-    auto const left_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1};
-    auto const left_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1};
+    auto const left_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2};
+    auto const left_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30};
 
-    auto const right_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1};
-    auto const right_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1};
+    auto const right_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 3};
+    auto const right_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{10, 40, 50};
 
     cudf::table_view left({left_first_col, left_second_col});
     cudf::table_view right({right_first_col, right_second_col});
 
     auto col_ref_0  = cudf::ast::column_reference(0);
-    auto col_ref_1  = cudf::ast::column_reference(1);
+    auto col_ref_1  = cudf::ast::column_reference(0);
     auto expression = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, col_ref_1);
     auto result     = cudf::predicate_join(left, right, expression);
 
     EXPECT_EQ(result.first->size(), 2);
+  }
+  {
+    auto const left_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2};
+    auto const left_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30};
+
+    auto const right_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2};
+    auto const right_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{10, 40, 50};
+
+    cudf::table_view left({left_first_col, left_second_col});
+    cudf::table_view right({right_first_col, right_second_col});
+
+    auto col_ref_0  = cudf::ast::column_reference(0);
+    auto col_ref_1  = cudf::ast::column_reference(0);
+    auto expression = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, col_ref_1);
+    auto result     = cudf::predicate_join(left, right, expression);
+
+    EXPECT_EQ(result.first->size(), 3);
+  }
+  {
+    auto const left_first_col = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0};
+
+    auto const right_first_col = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0};
+
+    cudf::table_view left({left_first_col});
+    cudf::table_view right({right_first_col});
+
+    auto col_ref_0  = cudf::ast::column_reference(0);
+    auto col_ref_1  = cudf::ast::column_reference(0);
+    auto expression = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, col_ref_1);
+    auto result     = cudf::predicate_join(left, right, expression);
+
+    EXPECT_EQ(result.first->size(), 4);
+  }
+  {
+    auto const left_first_col = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1};
+
+    auto const right_first_col = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0};
+
+    cudf::table_view left({left_first_col});
+    cudf::table_view right({right_first_col});
+
+    auto col_ref_0  = cudf::ast::column_reference(0);
+    auto col_ref_1  = cudf::ast::column_reference(0);
+    auto expression = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, col_ref_1);
+    auto result     = cudf::predicate_join(left, right, expression);
+
+    EXPECT_EQ(result.first->size(), 2);
+  }
+  // TODO: The same bug as mentioned above shows up here. If I make
+  // right_first_col[0] != left_first_col[0], I get the wrong answer, but if
+  // they are equal I get the expected value (6).
+  {
+    auto const left_first_col = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2};
+
+    auto const right_first_col = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0};
+
+    cudf::table_view left({left_first_col});
+    cudf::table_view right({right_first_col});
+
+    auto col_ref_0  = cudf::ast::column_reference(0);
+    auto col_ref_1  = cudf::ast::column_reference(0);
+    auto expression = cudf::ast::expression(cudf::ast::ast_operator::GREATER, col_ref_0, col_ref_1);
+    auto result     = cudf::predicate_join(left, right, expression);
+
+    EXPECT_EQ(result.first->size(), 6);
   }
 }
 
