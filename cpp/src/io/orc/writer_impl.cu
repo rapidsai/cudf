@@ -1130,9 +1130,11 @@ encoder_decimal_info decimal_chunk_sizes(table_view const &table,
                         curr_sizes.begin(),
                         [d_col = *d_column] __device__(auto idx) {
                           if (!d_col.is_valid(idx)) return 0u;
-                          int64_t v     = d_col.element<int64_t>(idx);
-                          int64_t s     = (v < 0) ? 1 : 0;
-                          uint64_t zz_v = ((v ^ -s) * 2) + s;
+                          int64_t const v = (d_col.type().id() == type_id::DECIMAL32)
+                                              ? d_col.element<int32_t>(idx)
+                                              : d_col.element<int64_t>(idx);
+                          int64_t const s = (v < 0) ? 1 : 0;
+                          uint64_t zz_v   = ((v ^ -s) * 2) + s;
 
                           uint32_t len = 1;
                           while (zz_v > 127) {

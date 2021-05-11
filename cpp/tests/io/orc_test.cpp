@@ -1062,4 +1062,39 @@ TEST_F(OrcWriterTest, SlicedValidMask)
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
+TEST_F(OrcWriterTest, Decimal32)
+{
+  constexpr auto num_rows = 12000;
+
+  // Using int16_t because scale causes values to overflow if they already require 32 bits
+  auto const vals = random_values<int16_t>(num_rows);
+  auto data       = cudf::detail::make_counting_transform_iterator(0, [&vals](auto i) {
+    return numeric::decimal32{vals[i], numeric::scale_type{2}};
+  });
+  auto mask = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 13 == 0; });
+  column_wrapper<numeric::decimal32> col{data, data + num_rows, mask};
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+
+  auto filepath = temp_env->get_temp_filepath("Decimal.orc");
+  cudf_io::orc_writer_options out_opts =
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected->view());
+
+  cudf_io::write_orc(out_opts);
+
+  cudf_io::orc_reader_options in_opts =
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath});
+  auto result = cudf_io::read_orc(in_opts);
+
+  // Need a 64bit decimal column for comparison since the reader always creates DECIMAL64 columns
+  auto data64 = cudf::detail::make_counting_transform_iterator(0, [&vals](auto i) {
+    return numeric::decimal64{vals[i], numeric::scale_type{2}};
+  });
+  column_wrapper<numeric::decimal64> col64{data64, data64 + num_rows, mask};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col64, result.tbl->view().column(0));
+}
+
 CUDF_TEST_PROGRAM_MAIN()

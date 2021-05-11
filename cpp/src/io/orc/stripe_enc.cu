@@ -868,9 +868,12 @@ __global__ void __launch_bounds__(block_size)
             break;
           case DECIMAL: {
             if (valid) {
-              auto zzv    = zigzag(s->chunk.leaf_column->element<int64_t>(row));
-              auto offset = (row == s->chunk.start_row) ? 0 : s->chunk.decimal_offsets[row - 1];
-              StoreVarint(s->stream.data_ptrs[CI_DATA] + offset, zzv);
+              uint64_t const zz_val = (s->chunk.leaf_column->type().id() == type_id::DECIMAL32)
+                                        ? zigzag(s->chunk.leaf_column->element<int32_t>(row))
+                                        : zigzag(s->chunk.leaf_column->element<int64_t>(row));
+              auto const offset =
+                (row == s->chunk.start_row) ? 0 : s->chunk.decimal_offsets[row - 1];
+              StoreVarint(s->stream.data_ptrs[CI_DATA] + offset, zz_val);
               // can verify the len against the offsets
             }
             n = s->numvals;
