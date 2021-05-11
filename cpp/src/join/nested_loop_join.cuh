@@ -281,7 +281,6 @@ get_base_nested_loop_predicate_join_indices(table_view const& left,
     detail::grid_1d config(left_table->num_rows(), block_size);
     write_index.set_value_zero(stream);
 
-    row_equality equality{*left_table, *right_table, compare_nulls == null_equality::EQUAL};
     const auto& join_output_l = flip_join_indices ? right_indices->data() : left_indices->data();
     const auto& join_output_r = flip_join_indices ? left_indices->data() : right_indices->data();
     nested_loop_predicate_join<block_size, DEFAULT_JOIN_CACHE_SIZE>
@@ -289,7 +288,6 @@ get_base_nested_loop_predicate_join_indices(table_view const& left,
         *left_table,
         *right_table,
         JoinKind,
-        equality,
         join_output_l,
         join_output_r,
         *mutable_output_device,

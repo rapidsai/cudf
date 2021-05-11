@@ -560,7 +560,6 @@ __global__ void nested_loop_predicate_join(
   table_device_view left_table,
   table_device_view right_table,
   join_kind JoinKind,
-  row_equality check_row_equality,
   cudf::size_type* join_output_l,
   cudf::size_type* join_output_r,
   mutable_column_device_view operator_outputs,
