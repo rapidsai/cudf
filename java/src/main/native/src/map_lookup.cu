@@ -128,7 +128,7 @@ get_gather_map_for_map_values(column_view const &input, string_scalar &lookup_ke
 
 namespace jni {
 
-std::unique_ptr<column> map_search_key(column_view const &map_column, string_scalar lookup_key,
+std::unique_ptr<column> map_contains(column_view const &map_column, string_scalar lookup_key,
                                         bool has_nulls, rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource *mr) {
   // Defensive checks.

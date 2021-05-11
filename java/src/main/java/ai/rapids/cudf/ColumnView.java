@@ -2526,6 +2526,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(mapLookup(getNativeView(), key.getScalarHandle()));
   }
 
+  public final ColumnVector getMapKeyExistence(Scalar key) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    assert key != null : "target string may not be null";
+    assert key.getType().equals(DType.STRING) : "target string must be a string scalar";
+
+    return new ColumnVector(mapContains(getNativeView(), key.getScalarHandle()));
+  }
 
   /**
    * Create a new struct column view of existing column views. Note that this will NOT copy
@@ -2844,6 +2851,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @throws CudfException
    */
   private static native long mapLookup(long columnView, long key) throws CudfException;
+
+  private static native long mapContains(long columnView, long key) throws CudfException;
   /**
    * Native method to add zeros as padding to the left of each string.
    */

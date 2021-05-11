@@ -1169,7 +1169,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapLookup(JNIEnv *env, jc
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapSearchKey(JNIEnv *env, jclass,
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapContains(JNIEnv *env, jclass,
                                                                  jlong map_column_view,
                                                                  jlong lookup_key) {
   JNI_NULL_CHECK(env, map_column_view, "column is null", 0);
@@ -1179,7 +1179,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapSearchKey(JNIEnv *env,
     cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
     cudf::string_scalar *ss_key = reinterpret_cast<cudf::string_scalar *>(lookup_key);
 
-    std::unique_ptr<cudf::column> result = cudf::jni::map_search_key(*cv, *ss_key);
+    std::unique_ptr<cudf::column> result = cudf::jni::map_contains(*cv, *ss_key);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

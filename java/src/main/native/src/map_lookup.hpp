@@ -76,7 +76,7 @@ map_lookup(column_view const &map_column, string_scalar lookup_key, bool has_nul
  *                          list_view<struct_view<string_view, string_view>>
  */
 std::unique_ptr<column>
-map_search_key(column_view const &map_column, string_scalar lookup_key, bool has_nulls = true,
+map_contains(column_view const &map_column, string_scalar lookup_key, bool has_nulls = true,
            rmm::cuda_stream_view stream = rmm::cuda_stream_default,
            rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
