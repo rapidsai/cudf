@@ -26,6 +26,8 @@
 
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/utilities/error.hpp>
+#include "rmm/cuda_stream_view.hpp"
+#include "rmm/exec_policy.hpp"
 
 __global__ static void init_curand(curandState* state, const int nstates)
 {
@@ -188,61 +190,62 @@ void generate_input_tables(key_type* const build_tbl,
 
   const int num_states =
     num_sms * std::max(num_blocks_init_build_tbl, num_blocks_init_probe_tbl) * block_size;
-  rmm::device_vector<curandState> devStates(num_states);
+  rmm::device_uvector<curandState> devStates(num_states, rmm::cuda_stream_default);
 
-  init_curand<<<(num_states - 1) / block_size + 1, block_size>>>(devStates.data().get(),
-                                                                 num_states);
+  init_curand<<<(num_states - 1) / block_size + 1, block_size>>>(devStates.data(), num_states);
 
   CHECK_CUDA(0);
 
-  rmm::device_vector<key_type> build_tbl_sorted(build_tbl_size);
-
   size_type lottery_size =
     rand_max < std::numeric_limits<key_type>::max() - 1 ? rand_max + 1 : rand_max;
-  rmm::device_vector<key_type> lottery(lottery_size);
+  rmm::device_uvector<key_type> lottery(lottery_size, rmm::cuda_stream_default);
 
-  if (uniq_build_tbl_keys) { thrust::sequence(thrust::device, lottery.begin(), lottery.end(), 0); }
+  if (uniq_build_tbl_keys) {
+    thrust::sequence(rmm::exec_policy(), lottery.begin(), lottery.end(), 0);
+  }
 
   init_build_tbl<key_type, size_type>
     <<<num_sms * num_blocks_init_build_tbl, block_size>>>(build_tbl,
                                                           build_tbl_size,
                                                           rand_max,
                                                           uniq_build_tbl_keys,
-                                                          lottery.data().get(),
+                                                          lottery.data(),
                                                           lottery_size,
-                                                          devStates.data().get(),
+                                                          devStates.data(),
                                                           num_states);
 
   CHECK_CUDA(0);
 
-  CUDA_TRY(cudaMemcpy(build_tbl_sorted.data().get(),
+  rmm::device_uvector<key_type> build_tbl_sorted(build_tbl_size, rmm::cuda_stream_default);
+
+  CUDA_TRY(cudaMemcpy(build_tbl_sorted.data(),
                       build_tbl,
                       build_tbl_size * sizeof(key_type),
                       cudaMemcpyDeviceToDevice));
 
-  thrust::sort(thrust::device, build_tbl_sorted.begin(), build_tbl_sorted.end());
+  thrust::sort(rmm::exec_policy(), build_tbl_sorted.begin(), build_tbl_sorted.end());
 
   // Exclude keys used in build table from lottery
   thrust::counting_iterator<key_type> first_lottery_elem(0);
   thrust::counting_iterator<key_type> last_lottery_elem = first_lottery_elem + lottery_size;
-  key_type* lottery_end                                 = thrust::set_difference(thrust::device,
+  key_type* lottery_end                                 = thrust::set_difference(rmm::exec_policy(),
                                                  first_lottery_elem,
                                                  last_lottery_elem,
                                                  build_tbl_sorted.begin(),
                                                  build_tbl_sorted.end(),
-                                                 lottery.data().get());
+                                                 lottery.data());
 
-  lottery_size = thrust::distance(lottery.data().get(), lottery_end);
+  lottery_size = thrust::distance(lottery.data(), lottery_end);
 
   init_probe_tbl<key_type, size_type>
     <<<num_sms * num_blocks_init_build_tbl, block_size>>>(probe_tbl,
                                                           probe_tbl_size,
                                                           build_tbl,
                                                           build_tbl_size,
-                                                          lottery.data().get(),
+                                                          lottery.data(),
                                                           lottery_size,
                                                           selectivity,
-                                                          devStates.data().get(),
+                                                          devStates.data(),
                                                           num_states);
 
   CHECK_CUDA(0);
