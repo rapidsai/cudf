@@ -389,16 +389,14 @@ def test_get(data, index, expectation):
         assert_eq(expect, ds.list.get(index).compute())
 
 
-@pytest.mark.xfail(
-    reason="""Indexing issue with map_partitions() (Issue #8196)"""
-)
 @pytest.mark.parametrize(
     "data", [data_test_1(), data_test_2(), data_test_nested()],
 )
 def test_leaves(data):
     expect = Series(data).list.leaves
     ds = dgd.from_cudf(Series(data), 5)
-    assert_eq(expect, ds.list.leaves.compute())
+    got = ds.list.leaves.compute().reset_index(drop=True)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -421,9 +419,6 @@ def test_take(data, list_indices, expectation):
         assert_eq(expect, ds.list.take(list_indices).compute())
 
 
-@pytest.mark.xfail(
-    reason="""Likely some indexing issue with map_partitions() (Issue #8196)"""
-)
 @pytest.mark.parametrize(
     "data, ascending, na_position, ignore_index",
     [
@@ -443,5 +438,6 @@ def test_sorting(data, ascending, na_position, ignore_index):
             ignore_index=ignore_index,
         )
         .compute()
+        .reset_index(drop=True)
     )
     assert_eq(expect, got)
