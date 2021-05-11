@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,22 @@
  * limitations under the License.
  */
 
-#ifndef __GENERATE_INPUT_TABLES_CUH
-#define __GENERATE_INPUT_TABLES_CUH
-
-#include <curand.h>
-#include <curand_kernel.h>
-#include <thrust/distance.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/sequence.h>
-#include <cassert>
+#pragma once
 
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/utilities/error.hpp>
-#include "rmm/cuda_stream_view.hpp"
-#include "rmm/exec_policy.hpp"
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/distance.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/sequence.h>
+
+#include <curand.h>
+#include <curand_kernel.h>
+
+#include <cassert>
 __global__ static void init_curand(curandState* state, const int nstates)
 {
   int ithread = threadIdx.x + blockIdx.x * blockDim.x;
@@ -250,5 +251,3 @@ void generate_input_tables(key_type* const build_tbl,
 
   CHECK_CUDA(0);
 }
-
-#endif  // __GENERATE_INPUT_TABLES_CUH

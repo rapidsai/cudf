@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,19 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
-
-#include <cudf_test/column_wrapper.hpp>
-
 #include "../fixture/benchmark_fixture.hpp"
 #include "../synchronization/synchronization.hpp"
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
-
-#include <cudf/detail/iterator.cuh>
+#include <cudf_test/column_wrapper.hpp>
 
 #include <rmm/device_uvector.hpp>
 
 #include <cub/device/device_reduce.cuh>
+
+#include <benchmark/benchmark.h>
 
 #include <random>
 
@@ -135,6 +133,7 @@ void BM_iterator(benchmark::State &state)
   cudf::test::fixed_width_column_wrapper<T> wrap_hasnull_F(num_gen, num_gen + column_size);
   cudf::column_view hasnull_F = wrap_hasnull_F;
 
+  // Initialize dev_result to false
   auto dev_result = cudf::detail::make_zeroed_device_uvector_sync<TypeParam>(1);
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
@@ -202,6 +201,7 @@ void BM_pair_iterator(benchmark::State &state)
   cudf::column_view hasnull_F = wrap_hasnull_F;
   cudf::column_view hasnull_T = wrap_hasnull_T;
 
+  // Initialize dev_result to false
   auto dev_result = cudf::detail::make_zeroed_device_uvector_sync<thrust::pair<T, bool>>(1);
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
