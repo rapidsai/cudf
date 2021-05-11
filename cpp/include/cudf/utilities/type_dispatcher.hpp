@@ -517,8 +517,44 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
 }
 
 namespace detail {
-template <typename T1>
-struct double_type_dispatcher_second_type {
+template <template <typename...> typename Invoker>
+struct dispatched_invoke {
+  template <typename T, typename... Args>
+  decltype(auto) operator()(Args&&... args)
+  {
+    return Invoker<T>::invoke(std::forward<Args>(args)...);
+  }
+};
+}  // namespace detail
+
+/**
+ * @brief Instantiates a type template `Invoker<T>` where `T` is dispatched based on the specified
+ * `dtype` and invokes `Invoker<T>::invoke` with forwarded `args`.
+ *
+ * @tparam Invoker A type template with a single non-deduced type parameter and static `invoke`
+ * member function
+ * @tparam IdTypeMap A type template with a single cudf::type_id non-type parameter that determines
+ * the mapping between a given `type_id` and its concrete, dispatched type.
+ * @tparam Ts Template parameter pack for `args`
+ * @param dtype The `cudf::data_type` whose `id()` determines which template
+ * instantiation is invoked
+ * @param args Parameter pack of arguments forwarded to `Invoker<T>::invoke`
+ * @return The result of `Invoker<T>::invoke(std::forward<Ts>(args)...)` 
+ */
+template <template <typename> typename Invoker,
+          template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
+          typename... Ts>
+CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) dispatch_to_invoke(cudf::data_type dtype,
+                                                                      Ts&&... args)
+{
+  return type_dispatcher<IdTypeMap>(dtype, detail::dispatched_invoke<Invoker>{}, std::forward<Ts>(args)...);
+}
+
+
+  namespace detail
+{
+  template <typename T1>
+  struct double_type_dispatcher_second_type {
 #pragma nv_exec_check_disable
   template <typename T2, typename F, typename... Ts>
   CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(F&& f, Ts&&... args) const
