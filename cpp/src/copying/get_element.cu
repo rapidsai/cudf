@@ -137,7 +137,8 @@ struct get_element_functor {
         std::move(*row_slice_contents.children[1]), valid, stream, mr);
     } else {
       auto empty_row_contents = empty_like(input)->release();
-      return std::make_unique<list_scalar>(std::move(*empty_row_contents.children[1]), valid, stream, mr);
+      return std::make_unique<list_scalar>(
+        std::move(*empty_row_contents.children[1]), valid, stream, mr);
     }
   }
 
