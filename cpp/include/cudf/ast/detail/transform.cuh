@@ -178,9 +178,7 @@ struct binary_two_table_output : public two_table_output {
   template <
     ast_operator op,
     std::enable_if_t<detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* = nullptr>
-  __device__ void operator()(cudf::size_type left_row_index,
-                             cudf::size_type right_row_index,
-                             LHS lhs,
+  __device__ void operator()(LHS lhs,
                              RHS rhs,
                              detail::device_data_reference output,
                              cudf::size_type output_row_index) const
@@ -193,9 +191,7 @@ struct binary_two_table_output : public two_table_output {
   template <ast_operator op,
             std::enable_if_t<!detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* =
               nullptr>
-  __device__ void operator()(cudf::size_type left_row_index,
-                             cudf::size_type right_row_index,
-                             LHS lhs,
+  __device__ void operator()(LHS lhs,
                              RHS rhs,
                              detail::device_data_reference output,
                              cudf::size_type output_row_index) const
@@ -465,14 +461,8 @@ struct two_table_evaluator {
   {
     auto const typed_lhs = resolve_input<LHS>(lhs, left_row_index);
     auto const typed_rhs = resolve_input<RHS>(rhs, right_row_index);
-    ast_operator_dispatcher(op,
-                            binary_two_table_output<LHS, RHS>(*this),
-                            left_row_index,
-                            right_row_index,
-                            typed_lhs,
-                            typed_rhs,
-                            output,
-                            output_row_index);
+    ast_operator_dispatcher(
+      op, binary_two_table_output<LHS, RHS>(*this), typed_lhs, typed_rhs, output, output_row_index);
   }
 
   template <typename OperatorFunctor,
