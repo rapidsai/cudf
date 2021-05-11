@@ -1668,7 +1668,7 @@ TEST_F(JoinTest, PredicateJoin)
     cudf::table_view right({right_first_col, right_second_col});
 
     auto col_ref_0  = cudf::ast::column_reference(0);
-    auto col_ref_1  = cudf::ast::column_reference(0);
+    auto col_ref_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
     auto expression = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, col_ref_1);
     auto result     = cudf::predicate_join(left, right, expression);
 
@@ -1689,7 +1689,7 @@ TEST_F(JoinTest, PredicateJoin)
     cudf::table_view right({right_first_col, right_second_col});
 
     auto col_ref_0  = cudf::ast::column_reference(0);
-    auto col_ref_1  = cudf::ast::column_reference(0);
+    auto col_ref_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
     auto expression = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, col_ref_1);
     auto result     = cudf::predicate_join(left, right, expression);
 
@@ -1706,7 +1706,7 @@ TEST_F(JoinTest, PredicateJoin)
     cudf::table_view right({right_first_col, right_second_col});
 
     auto col_ref_0  = cudf::ast::column_reference(0);
-    auto col_ref_1  = cudf::ast::column_reference(0);
+    auto col_ref_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
     auto expression = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, col_ref_1);
     auto result     = cudf::predicate_join(left, right, expression);
 
@@ -1721,7 +1721,7 @@ TEST_F(JoinTest, PredicateJoin)
     cudf::table_view right({right_first_col});
 
     auto col_ref_0  = cudf::ast::column_reference(0);
-    auto col_ref_1  = cudf::ast::column_reference(0);
+    auto col_ref_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
     auto expression = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, col_ref_1);
     auto result     = cudf::predicate_join(left, right, expression);
 
@@ -1736,7 +1736,7 @@ TEST_F(JoinTest, PredicateJoin)
     cudf::table_view right({right_first_col});
 
     auto col_ref_0  = cudf::ast::column_reference(0);
-    auto col_ref_1  = cudf::ast::column_reference(0);
+    auto col_ref_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
     auto expression = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, col_ref_1);
     auto result     = cudf::predicate_join(left, right, expression);
 
@@ -1754,7 +1754,7 @@ TEST_F(JoinTest, PredicateJoin)
     cudf::table_view right({right_first_col});
 
     auto col_ref_0  = cudf::ast::column_reference(0);
-    auto col_ref_1  = cudf::ast::column_reference(0);
+    auto col_ref_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
     auto expression = cudf::ast::expression(cudf::ast::ast_operator::GREATER, col_ref_0, col_ref_1);
     auto result     = cudf::predicate_join(left, right, expression);
 

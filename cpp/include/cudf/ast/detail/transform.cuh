@@ -394,12 +394,13 @@ struct two_table_evaluator {
    * @return Element
    */
   template <typename Element, CUDF_ENABLE_IF(column_device_view::has_element_accessor<Element>())>
-  __device__ Element resolve_input(table_device_view const& table,
-                                   detail::device_data_reference device_data_reference,
+  __device__ Element resolve_input(detail::device_data_reference device_data_reference,
                                    cudf::size_type row_index) const
   {
     auto const data_index = device_data_reference.data_index;
     auto const ref_type   = device_data_reference.reference_type;
+    // TODO: Should we error check for table_reference::OUTPUT?
+    auto const& table = device_data_reference.table_source == table_reference::LEFT ? left : right;
     if (ref_type == detail::device_data_reference_type::COLUMN) {
       return table.column(data_index).element<Element>(row_index);
     } else if (ref_type == detail::device_data_reference_type::LITERAL) {
@@ -416,8 +417,7 @@ struct two_table_evaluator {
 
   template <typename Element,
             CUDF_ENABLE_IF(not column_device_view::has_element_accessor<Element>())>
-  __device__ Element resolve_input(table_device_view const& table,
-                                   detail::device_data_reference device_data_reference,
+  __device__ Element resolve_input(detail::device_data_reference device_data_reference,
                                    cudf::size_type row_index) const
   {
     cudf_assert(false && "Unsupported type in resolve_input.");
@@ -463,8 +463,8 @@ struct two_table_evaluator {
                              cudf::size_type output_row_index,
                              ast_operator op) const
   {
-    auto const typed_lhs = resolve_input<LHS>(left, lhs, left_row_index);
-    auto const typed_rhs = resolve_input<RHS>(right, rhs, right_row_index);
+    auto const typed_lhs = resolve_input<LHS>(lhs, left_row_index);
+    auto const typed_rhs = resolve_input<RHS>(rhs, right_row_index);
     ast_operator_dispatcher(op,
                             binary_two_table_output<LHS, RHS>(*this),
                             left_row_index,
