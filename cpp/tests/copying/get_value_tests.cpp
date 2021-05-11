@@ -642,7 +642,7 @@ TYPED_TEST(ListGetStructValueTest, NonNestedGetNonNullEmpty)
   // 3-rows
   // [{1, NULL, NULL}, NULL]
   // [{3, "xyz", [3, 8, 4]}]
-  // [] <- get_element(0)
+  // []                      <- get_element(2)
 
   auto list_column = this->make_test_lists_column(3, {0, 2, 3, 3}, this->leaf_data(), {1, 1, 1});
   size_type index  = 2;
@@ -661,15 +661,21 @@ TYPED_TEST(ListGetStructValueTest, NonNestedGetNonNullEmpty)
 TYPED_TEST(ListGetStructValueTest, NonNestedGetNull)
 {
   // 2-rows
-  // NULL <- get_element(0)
+  // NULL                    <- get_element(0)
   // [{3, "xyz", [3, 8, 4]}]
+
+  using valid_t = std::vector<valid_type>;
 
   auto list_column = this->make_test_lists_column(2, {0, 2, 3}, this->leaf_data(), {0, 1});
   size_type index  = 0;
 
-  auto s = get_element(list_column->view(), index);
+  auto s       = get_element(list_column->view(), index);
+  auto typed_s = static_cast<list_scalar const *>(s.get());
+
+  auto expected_data = this->make_test_structs_column({}, {}, {}, valid_t{}.begin());
 
   EXPECT_FALSE(s->is_valid());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(typed_s->view(), expected_data);
 }
 
 TYPED_TEST(ListGetStructValueTest, NestedGetNonNullNonEmpty)
@@ -739,7 +745,7 @@ TYPED_TEST(ListGetStructValueTest, NestedGetNonNullEmpty)
 {
   // 3-rows
   // [[{1, NULL, NULL}, NULL]]
-  // [] <- get_element(1)
+  // []                        <- get_element(1)
   // [[{3, "xyz", [3, 8, 4]}]]
 
   auto list_column = this->make_test_lists_column(2, {0, 2, 3}, this->leaf_data(), {1, 1});
@@ -764,55 +770,26 @@ TYPED_TEST(ListGetStructValueTest, NestedGetNull)
   // 3-rows
   // [[{1, NULL, NULL}, NULL]]
   // []
-  // NULL <- get_element(1)
+  // NULL                      <- get_element(2)
+
+  using valid_t  = std::vector<valid_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<size_type>;
+
   auto list_column = this->make_test_lists_column(2, {0, 2, 3}, this->leaf_data(), {1, 1});
   auto list_column_nested =
     this->make_test_lists_column(3, {0, 1, 1, 2}, std::move(list_column), {1, 1, 0});
 
   size_type index = 2;
   auto s          = get_element(list_column_nested->view(), index);
+  auto typed_s    = static_cast<list_scalar const *>(s.get());
+
+  auto nested = this->make_test_structs_column({}, {}, {}, valid_t{}.begin());
+  auto expected_data =
+    make_lists_column(0, offset_t{}.release(), nested.release(), 0, rmm::device_buffer{});
 
   EXPECT_FALSE(s->is_valid());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected_data, typed_s->view());
 }
-
-// template<typename T>
-// struct ListsGetNullHierarchyTest : public BaseFixture {
-// protected:
-//   auto empty_offset() {
-//     return make_empty_column(data_type{type_id::INT32});
-//   }
-// };
-
-// TYPED_TEST_CASE(ListsGetNullHierarchyTest, int32_t);
-
-// TYPED_TEST(ListsGetNullHierarchyTest, NonNestedFixedWidth) {
-//   using valid_t = std::vector<valid_type>;
-//   using LCW = lists_column_wrapper<TypeParam>;
-//   using FCW = fixed_width_column_wrapper<TypeParam>;
-
-//   auto col = LCW({LCW{1, 2}, LCW{}, LCW{4}}, valid_t{1, 0, 1}.begin());
-//   auto s = get_element(col, 1);
-//   auto typed_s    = static_cast<list_scalar const *>(s.get());
-
-//   CUDF_TEST_EXPECT_COLUMNS_EQUAL(typed_s->view(), FCW{});
-// }
-
-// TYPED_TEST(ListsGetNullHierarchyTest, NestedStrings) {
-//   using valid_t = std::vector<valid_type>;
-//   using LCW = lists_column_wrapper<TypeParam>;
-//   using StringCW = strings_column_wrapper;
-
-//   auto col = LCW({LCW{LCW{"xx", "y", "z"}, LCW{"n"}}, LCW{}}, valid_t{1, 0}.begin());
-//   auto s = get_element(col->view(), 1);
-//   auto typed_s    = static_cast<list_scalar const *>(s.get());
-
-//   // Well-formed, 0-length List<string> hierarchy
-//   auto nested = make_lists_column(0, this->empty_offset(),
-//   make_empty_column(data_type{type_id::STRING}), 0, rmm::device_buffer{}); auto expected =
-//   make_lists_column(0, this->empty_offset(), std::move(nested), 0, rmm::device_buffer{});
-
-//   CUDF_TEST_EXPECT_COLUMNS_EQUAL(typed_s->view(), *expected);
-// }
 
 }  // namespace test
 }  // namespace cudf
