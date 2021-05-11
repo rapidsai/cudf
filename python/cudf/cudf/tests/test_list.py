@@ -317,7 +317,7 @@ def test_contains_null_search_key(data, expect):
     assert_eq(expect, got)
 
 
-def test_concatenate_rows_of_lists_ex1():
+def test_concatenate_rows_of_lists():
     pdf = pd.DataFrame({"val": [["a", "a"], ["b"], ["c"]]})
     gdf = cudf.from_pandas(pdf)
 
@@ -327,11 +327,8 @@ def test_concatenate_rows_of_lists_ex1():
     assert_eq(expect, got)
 
 
-def test_concatenate_rows_of_lists_ex2():
-    pdf = pd.DataFrame({"A": ["a", "b", "c"], "B": ["a", "b", "c"]})
-    gdf = cudf.from_pandas(pdf)
-
-    expect = pdf["A"] + pdf["B"]
-    got = gdf["A"] + gdf["B"]
-
-    assert_eq(expect, got)
+def test_concatenate_list_with_nonlist():
+    with pytest.raises(TypeError, match="can only concatenate list to list"):
+        gdf1 = cudf.DataFrame({"A": [["a", "c"], ["b", "d"], ["c", "d"]]})
+        gdf2 = cudf.DataFrame({"A": ["a", "b", "c"]})
+        gdf1["A"] + gdf2["A"]

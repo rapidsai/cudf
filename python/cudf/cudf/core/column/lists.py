@@ -118,6 +118,7 @@ class ListColumn(ColumnBase):
         Name: val, dtype: list
 
         """
+
         if isinstance(other.dtype, ListDtype):
             if binop == "add":
                 return concatenate_rows(Table({0: self, 1: other}))
@@ -127,7 +128,7 @@ class ListColumn(ColumnBase):
                     "supported"
                 )
         else:
-            return ValueError
+            raise TypeError("can only concatenate list to list")
 
     @property
     def elements(self):
