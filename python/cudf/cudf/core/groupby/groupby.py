@@ -599,7 +599,8 @@ class GroupBy(Serializable):
 
     def describe(self):
         """Return descriptive stats of the values in each group"""
-        pass
+
+        return self.agg(["count", "mean", "std", "min", "max"])
 
     def sum(self):
         """Compute the column-wise sum of the values in each group."""
