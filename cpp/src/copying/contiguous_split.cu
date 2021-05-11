@@ -1021,7 +1021,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
 
   // copy.  1 block per buffer
   {
-    constexpr size_type block_size = 512;
+    constexpr size_type block_size = 256;
     copy_partition<block_size><<<num_bufs, block_size, 0, stream.value()>>>(
       num_src_bufs, num_partitions, d_src_bufs, d_dst_bufs, d_dst_buf_info);
   }
