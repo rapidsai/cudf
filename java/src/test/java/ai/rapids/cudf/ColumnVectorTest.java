@@ -4412,13 +4412,13 @@ public class ColumnVectorTest extends CudfTestBase {
   }
     @Test
     void testGetMapKeyExistence() {
-        List<HostColumnVector.StructData> list1 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
-        List<HostColumnVector.StructData> list2 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "c")));
-        List<HostColumnVector.StructData> list3 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("e", "d")));
-        List<HostColumnVector.StructData> list4 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "g")));
-        List<HostColumnVector.StructData> list5 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("f", "h")));
-        List<HostColumnVector.StructData> list6 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", null)));
-        List<HostColumnVector.StructData> list7 = Arrays.asList(new HostColumnVector.StructData(Arrays.asList(null, null)));
+        List<HostColumnVector.StructData> list1 = Arrays.asList(new HostColumnVector.StructData("a", "b"));
+        List<HostColumnVector.StructData> list2 = Arrays.asList(new HostColumnVector.StructData("a", "c"));
+        List<HostColumnVector.StructData> list3 = Arrays.asList(new HostColumnVector.StructData("e", "d"));
+        List<HostColumnVector.StructData> list4 = Arrays.asList(new HostColumnVector.StructData("a", "g"));
+        List<HostColumnVector.StructData> list5 = Arrays.asList(new HostColumnVector.StructData("f", "h"));
+        List<HostColumnVector.StructData> list6 = Arrays.asList(new HostColumnVector.StructData("a", null));
+        List<HostColumnVector.StructData> list7 = Arrays.asList(new HostColumnVector.StructData(null, null));
         HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
                 new HostColumnVector.BasicType(true, DType.STRING)));
         try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3, list4, list5, list6, list7);

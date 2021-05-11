@@ -18,7 +18,6 @@
 
 #include <cudf/column/column.hpp>
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 
 namespace cudf {
 

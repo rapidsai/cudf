@@ -2526,8 +2526,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(mapLookup(getNativeView(), key.getScalarHandle()));
   }
 
-  /** For a column of type List<Struct<String, String>> and a passed in String key, return an int column
-   * for all the offsets(index) in the struct for key, -1 if the key doesn't exist.
+  /** For a column of type List<Struct<String, String>> and a passed in String key, return a boolean
+   * column for all keys in the structs, false if the key doesn't exist.
    * @param key the String scalar to lookup in the column
    * @return a boolean column based on the lookup result
    */
