@@ -29,10 +29,10 @@ VERSION_REGEX = re.compile(r"clang-format version ([0-9.]+)")
 DEFAULT_DIRS = [
     "cpp/benchmarks",
     "cpp/include",
-    "cpp/include/cudf",
-    "cpp/include/nvtext",
+    "cpp/libcudf_kafka",
     "cpp/src",
     "cpp/tests",
+    "java/src/main/native",
 ]
 
 
