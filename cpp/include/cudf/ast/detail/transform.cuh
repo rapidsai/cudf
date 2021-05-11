@@ -208,7 +208,9 @@ struct two_table_evaluator {
   {
     auto const data_index = device_data_reference.data_index;
     auto const ref_type   = device_data_reference.reference_type;
-    // TODO: Should we error check for table_reference::OUTPUT?
+    // TODO: Should we error check for table_reference::OUTPUT? If left and
+    // right are identical, should we error if a user passes
+    // table_reference::RIGHT?
     auto const& table = device_data_reference.table_source == table_reference::LEFT ? left : right;
     if (ref_type == detail::device_data_reference_type::COLUMN) {
       return table.column(data_index).element<Element>(row_index);
@@ -454,18 +456,17 @@ __device__ inline void evaluate_join_expression(
     // Execute operator
     auto const op    = operators[operator_index];
     auto const arity = ast_operator_arity(op);
-    // TODO: Enable unary ops. This will require some means of indicating
-    // _which_ table the operator is acting on, so the table references need to
-    // get added.
-    // if (arity == 1) {
-    //  // Unary operator
-    //  auto const input  = data_references[operator_source_indices[operator_source_index]];
-    //  auto const output = data_references[operator_source_indices[operator_source_index + 1]];
-    //  operator_source_index += arity + 1;
-    //  type_dispatcher(input.data_type, evaluator, left_row_index, right_row_index, input, output,
-    //  op);
-    //} else if (arity == 2) {
-    if (true) {
+    if (arity == 1) {
+      // Unary operator
+      auto const input  = data_references[operator_source_indices[operator_source_index]];
+      auto const output = data_references[operator_source_indices[operator_source_index + 1]];
+      operator_source_index += arity + 1;
+      // TODO: Error checking of table_reference::RIGHT/OUTPUT.
+      auto input_row_index =
+        input.table_source == table_reference::LEFT ? left_row_index : right_row_index;
+      type_dispatcher(
+        input.data_type, evaluator, input_row_index, input, output, output_row_index, op);
+    } else if (arity == 2) {
       // Binary operator
       auto const lhs    = data_references[operator_source_indices[operator_source_index]];
       auto const rhs    = data_references[operator_source_indices[operator_source_index + 1]];
