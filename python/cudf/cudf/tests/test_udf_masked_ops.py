@@ -1,5 +1,5 @@
 import cudf
-from cudf.core.udf import nulludf
+from cudf.core.udf.pipeline import nulludf
 from cudf.tests.utils import assert_eq, NUMERIC_TYPES
 import pandas as pd
 import itertools

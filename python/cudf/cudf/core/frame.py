@@ -1419,9 +1419,7 @@ class Frame(libcudf.table.Table):
         return result
 
     def _apply(self, func):
-        from cudf.core.udf import compile_udf
-
-        output_dtype, ptx = compile_udf(func, self.dtypes)
+        output_dtype, ptx = cudf.core.udf.pipeline.compile_udf(func, self.dtypes)
 
         output_column = cudf.core.column.column_empty(row_count=len(self), dtype=output_dtype)
         output_mask = cudf.core.column.column_empty(row_count=len(self), dtype='bool')
