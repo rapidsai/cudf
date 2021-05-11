@@ -136,14 +136,14 @@ class writer::impl {
    * @param sink Output sink
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
-   * @param mr Device memory resource to use for device memory allocation
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<data_sink> sink,
                 orc_writer_options const& options,
                 SingleWriteMode mode,
-                rmm::mr::device_memory_resource* mr,
-                rmm::cuda_stream_view stream);
+                rmm::cuda_stream_view stream,
+                rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Constructor with chunked writer options.
@@ -151,14 +151,14 @@ class writer::impl {
    * @param sink Output sink
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
-   * @param mr Device memory resource to use for device memory allocation
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<data_sink> sink,
                 chunked_orc_writer_options const& options,
                 SingleWriteMode mode,
-                rmm::mr::device_memory_resource* mr,
-                rmm::cuda_stream_view stream);
+                rmm::cuda_stream_view stream,
+                rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Destructor to complete any incomplete write and release resources.
@@ -245,6 +245,8 @@ class writer::impl {
    * @param view Table device view representing input table
    * @param columns List of columns
    * @param str_col_ids List of columns that are strings type
+   * @param dict_data Dictionary data memory
+   * @param dict_index Dictionary index memory
    * @param stripe_bounds List of stripe boundaries
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Encoded data and per-chunk stream descriptors
@@ -252,6 +254,8 @@ class writer::impl {
   encoded_data encode_columns(const table_device_view& view,
                               host_span<orc_column_view const> columns,
                               std::vector<int> const& str_col_ids,
+                              rmm::device_uvector<uint32_t>&& dict_data,
+                              rmm::device_uvector<uint32_t>&& dict_index,
                               host_span<stripe_rowgroups const> stripe_bounds,
                               orc_streams const& streams);
 

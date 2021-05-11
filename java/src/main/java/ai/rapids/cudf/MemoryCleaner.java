@@ -257,6 +257,21 @@ public final class MemoryCleaner {
     all.add(new CleanerWeakReference(metadata, cleaner, collected, false));
   }
 
+  static void register(CuFileDriver driver, Cleaner cleaner) {
+    // It is now registered...
+    all.add(new CleanerWeakReference(driver, cleaner, collected, false));
+  }
+
+  static void register(CuFileBuffer buffer, Cleaner cleaner) {
+    // It is now registered...
+    all.add(new CleanerWeakReference(buffer, cleaner, collected, false));
+  }
+
+  static void register(CuFileHandle handle, Cleaner cleaner) {
+    // It is now registered...
+    all.add(new CleanerWeakReference(handle, cleaner, collected, false));
+  }
+
   /**
    * This is not 100% perfect and we can still run into situations where RMM buffers were not
    * collected and this returns false because of thread race conditions. This is just a best effort.

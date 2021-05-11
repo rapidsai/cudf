@@ -430,12 +430,15 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // Remove this once we support Decimal128 data type
     CUDF_EXPECTS((col_type != type_id::DECIMAL64) or (_metadata->ff.types[col].precision <= 18),
                  "Decimal data has precision > 18, Decimal64 data type doesn't support it.");
-    // sign of the scale is changed since cuDF follows c++ libraries like CNL
-    // which uses negative scaling, but liborc and other libraries
-    // follow positive scaling.
-    auto scale =
-      (col_type == type_id::DECIMAL64) ? -static_cast<int32_t>(_metadata->ff.types[col].scale) : 0;
-    column_types.emplace_back(col_type, scale);
+    if (col_type == type_id::DECIMAL64) {
+      // sign of the scale is changed since cuDF follows c++ libraries like CNL
+      // which uses negative scaling, but liborc and other libraries
+      // follow positive scaling.
+      auto const scale = -static_cast<int32_t>(_metadata->ff.types[col].scale);
+      column_types.emplace_back(col_type, scale);
+    } else {
+      column_types.emplace_back(col_type);
+    }
 
     // Map each ORC column to its column
     orc_col_map[col] = column_types.size() - 1;
@@ -504,10 +507,16 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           len += stream_info[stream_count].length;
           stream_count++;
         }
-        const auto buffer = _source->host_read(offset, len);
-        CUDA_TRY(
-          cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyHostToDevice, stream.value()));
-        stream.synchronize();
+        if (_source->is_device_read_preferred(len)) {
+          CUDF_EXPECTS(_source->device_read(offset, len, d_dst, stream) == len,
+                       "Unexpected discrepancy in bytes read.");
+        } else {
+          const auto buffer = _source->host_read(offset, len);
+          CUDF_EXPECTS(buffer->size() == len, "Unexpected discrepancy in bytes read.");
+          CUDA_TRY(
+            cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyHostToDevice, stream.value()));
+          stream.synchronize();
+        }
       }
 
       // Update chunks to reference streams pointers
@@ -615,6 +624,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 // Forward to implementation
 reader::reader(std::vector<std::string> const &filepaths,
                orc_reader_options const &options,
+               rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
@@ -624,6 +634,7 @@ reader::reader(std::vector<std::string> const &filepaths,
 // Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                orc_reader_options const &options,
+               rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
