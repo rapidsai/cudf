@@ -60,7 +60,7 @@ index fe4b321c..b3974c69 100644
                               AddInitToScan              add_init_to_scan)
    {
 -    int          num_items    = static_cast<int>(thrust::distance(keys_first, keys_last));
-+    Size         num_items    = static_cast<Size>(thrust::distance(keys_first, keys_last));
++    size_t       num_items    = static_cast<size_t>(thrust::distance(keys_first, keys_last));
      size_t       storage_size = 0;
      cudaStream_t stream       = cuda_cub::stream(policy);
      bool         debug_sync   = THRUST_DEBUG_SYNC_FLAG;
