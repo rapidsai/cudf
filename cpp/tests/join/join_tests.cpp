@@ -1760,6 +1760,37 @@ TEST_F(JoinTest, PredicateJoin)
 
     EXPECT_EQ(result.first->size(), 6);
   }
+  {
+    auto const left_first_col = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2};
+
+    auto const right_first_col = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0};
+
+    cudf::table_view left({left_first_col});
+    cudf::table_view right({right_first_col});
+
+    auto col_ref_0  = cudf::ast::column_reference(0);
+    auto expression = cudf::ast::expression(cudf::ast::ast_operator::NOT, col_ref_0);
+    auto result     = cudf::predicate_join(left, right, expression);
+
+    EXPECT_EQ(result.first->size(), 3);
+  }
+  {
+    auto const left_first_col = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 1, 1, 2, 2};
+
+    auto const right_first_col = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0, 0, 0, 0};
+
+    cudf::table_view left({left_first_col});
+    cudf::table_view right({right_first_col});
+
+    // LEFT is implicit, but specifying explicitly to validate that it works.
+    auto col_ref_0     = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+    auto literal_value = cudf::numeric_scalar<int32_t>(1);
+    auto literal_0     = cudf::ast::literal(literal_value);
+    auto expression = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, literal_0);
+    auto result     = cudf::predicate_join(left, right, expression);
+
+    EXPECT_EQ(result.first->size(), 12);
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

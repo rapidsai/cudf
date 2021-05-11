@@ -168,6 +168,36 @@ struct two_table_output {
   two_table_evaluator const& evaluator;
 };
 
+template <typename Input>
+struct unary_two_table_output : public two_table_output {
+  __device__ unary_two_table_output(two_table_evaluator const& evaluator)
+    : two_table_output(evaluator)
+  {
+  }
+
+  template <
+    ast_operator op,
+    std::enable_if_t<detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
+  __device__ void operator()(cudf::size_type output_row_index,
+                             Input input,
+                             detail::device_data_reference output) const
+  {
+    using OperatorFunctor = detail::operator_functor<op>;
+    using Out             = cuda::std::invoke_result_t<OperatorFunctor, Input>;
+    resolve_output<Out>(output, output_row_index, OperatorFunctor{}(input));
+  }
+
+  template <
+    ast_operator op,
+    std::enable_if_t<!detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
+  __device__ void operator()(cudf::size_type output_row_index,
+                             Input input,
+                             detail::device_data_reference output) const
+  {
+    cudf_assert(false && "Invalid unary dispatch operator for the provided input.");
+  }
+};
+
 template <typename LHS, typename RHS>
 struct binary_two_table_output : public two_table_output {
   __device__ binary_two_table_output(two_table_evaluator const& evaluator)
@@ -348,8 +378,8 @@ struct row_evaluator {
  */
 struct two_table_evaluator {
   friend struct two_table_output;
-  // template <typename Input>
-  // friend struct unary_two_table_output;
+  template <typename Input>
+  friend struct unary_two_table_output;
   template <typename LHS, typename RHS>
   friend struct binary_two_table_output;
 
@@ -429,15 +459,17 @@ struct two_table_evaluator {
    * @param input Input data reference.
    * @param output Output data reference.
    */
-  // template <typename Input>
-  //__device__ void operator()(cudf::size_type row_index,
-  //                           detail::device_data_reference input,
-  //                           detail::device_data_reference output,
-  //                           ast_operator op) const
-  //{
-  //  auto const typed_input = resolve_input<Input>(input, row_index);
-  //  ast_operator_dispatcher(op, unary_row_output<Input>(*this), row_index, typed_input, output);
-  //}
+  template <typename Input>
+  __device__ void operator()(cudf::size_type input_row_index,
+                             detail::device_data_reference input,
+                             detail::device_data_reference output,
+                             cudf::size_type output_row_index,
+                             ast_operator op) const
+  {
+    auto const typed_input = resolve_input<Input>(input, input_row_index);
+    ast_operator_dispatcher(
+      op, unary_row_output<Input>(*this), output_row_index, typed_input, output);
+  }
 
   /**
    * @brief Callable to perform a binary operation.
