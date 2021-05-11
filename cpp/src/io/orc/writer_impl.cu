@@ -112,6 +112,15 @@ constexpr int32_t to_clockscale(cudf::type_id timestamp_id)
   }
 }
 
+constexpr auto orc_precision(cudf::type_id decimal_id)
+{
+  switch (decimal_id) {
+    case cudf::type_id::DECIMAL32: return 9;
+    case cudf::type_id::DECIMAL64: return 18;
+    default: return 0;
+  }
+}
+
 }  // namespace
 
 /**
@@ -137,7 +146,8 @@ class orc_column_view {
       _nulls(col.null_mask()),
       _type_kind(to_orc_type(col.type().id())),
       _scale{(_type_kind == TypeKind::DECIMAL) ? -col.type().scale()
-                                               : to_clockscale(col.type().id())}
+                                               : to_clockscale(col.type().id())},
+      _precision{orc_precision(col.type().id())}
   {
     // Generating default name if name isn't present in metadata
     if (metadata && _index < metadata->column_names.size()) {
@@ -194,7 +204,9 @@ class orc_column_view {
   size_t null_count() const noexcept { return _null_count; }
   bool nullable() const noexcept { return (_nulls != nullptr); }
   uint32_t const *nulls() const noexcept { return _nulls; }
+
   auto scale() const noexcept { return _scale; }
+  auto precision() const noexcept { return _precision; }
 
   void set_orc_encoding(ColumnEncodingKind e) { _encoding_kind = e; }
   auto orc_kind() const noexcept { return _type_kind; }
@@ -217,7 +229,8 @@ class orc_column_view {
   TypeKind _type_kind;
   ColumnEncodingKind _encoding_kind;
 
-  int32_t _scale = 0;
+  int32_t _scale     = 0;
+  int32_t _precision = 0;
 
   // String dictionary-related members
   size_t dict_stride                       = 0;
@@ -1417,7 +1430,8 @@ void writer::impl::write(table_view const &table)
     for (auto const &column : orc_columns) {
       ff.types[column.id()].kind = column.orc_kind();
       if (column.orc_kind() == DECIMAL) {
-        ff.types[column.id()].scale = static_cast<uint32_t>(column.scale());
+        ff.types[column.id()].scale     = static_cast<uint32_t>(column.scale());
+        ff.types[column.id()].precision = column.precision();
       }
       ff.types[0].subtypes[column.index()]   = column.id();
       ff.types[0].fieldNames[column.index()] = column.orc_name();
