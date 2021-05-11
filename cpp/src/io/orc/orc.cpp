@@ -227,7 +227,7 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
   if (data_blk >= 0) { sz += put_uint(data_blk); }
   if (data_ofs >= 0) {
     sz += put_uint(data_ofs);
-    if (kind != STRING && kind != FLOAT && kind != DOUBLE) {
+    if (kind != STRING && kind != FLOAT && kind != DOUBLE && kind != DECIMAL) {
       putb(0);  // RLE run pos always zero (assumes RLE aligned with row index boundaries)
       sz++;
       if (kind == BOOLEAN) {
