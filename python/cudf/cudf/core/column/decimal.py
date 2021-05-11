@@ -283,7 +283,9 @@ def _binop_scale(l_dtype, r_dtype, op):
 def _binop_precision(l_dtype, r_dtype, op):
     """
     Returns the result precision when performing the
-    binary operation `op` for the given dtypes.
+    binary operation `op` for the given dtypes. Does
+    not guarantee result will be bounded by
+    cudf.Decimal64Dtype.MAX_PRECISION.
 
     See: https://docs.microsoft.com/en-us/sql/t-sql/data-types/precision-scale-and-length-transact-sql
     """  # noqa: E501
