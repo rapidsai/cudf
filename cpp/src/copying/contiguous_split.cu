@@ -255,7 +255,6 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
  */
 template <int block_size>
 __global__ void copy_partition(int num_src_bufs,
-                               int num_partitions,
                                uint8_t** src_bufs,
                                uint8_t** dst_bufs,
                                dst_buf_info* buf_info)
@@ -1023,7 +1022,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
   {
     constexpr size_type block_size = 512;
     copy_partition<block_size><<<num_bufs, block_size, 0, stream.value()>>>(
-      num_src_bufs, num_partitions, d_src_bufs, d_dst_bufs, d_dst_buf_info);
+      num_src_bufs, d_src_bufs, d_dst_bufs, d_dst_buf_info);
   }
 
   // DtoH dst info (to retrieve null counts)
