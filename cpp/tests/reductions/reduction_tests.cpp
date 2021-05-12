@@ -27,7 +27,6 @@
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <thrust/device_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 
 #include <iostream>
