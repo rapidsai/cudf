@@ -781,6 +781,8 @@ __global__ void __launch_bounds__(block_size)
               s->lengths.u32[nz_idx]                  = value.size_bytes();
             }
             break;
+            // Reusing the lengths array for the scale stream
+            // Note: can be written in a faster manner, given that all values are equal
           case DECIMAL: s->lengths.u32[nz_idx] = zigzag(s->chunk.scale); break;
           default: break;
         }
@@ -874,7 +876,6 @@ __global__ void __launch_bounds__(block_size)
               auto const offset =
                 (row == s->chunk.start_row) ? 0 : s->chunk.decimal_offsets[row - 1];
               StoreVarint(s->stream.data_ptrs[CI_DATA] + offset, zz_val);
-              // can verify the len against the offsets
             }
             n = s->numvals;
           } break;

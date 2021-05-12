@@ -76,7 +76,7 @@ orc::CompressionKind to_orc_compression(compression_type compression)
 /**
  * @brief Function that translates GDF dtype to ORC datatype
  */
-orc::TypeKind to_orc_type(cudf::type_id id)
+constexpr orc::TypeKind to_orc_type(cudf::type_id id)
 {
   switch (id) {
     case cudf::type_id::INT8: return TypeKind::BYTE;
@@ -99,7 +99,7 @@ orc::TypeKind to_orc_type(cudf::type_id id)
 }
 
 /**
- * @brief Function that translates time unit to nanoscale multiple
+ * @brief Translates time unit to nanoscale multiple.
  */
 constexpr int32_t to_clockscale(cudf::type_id timestamp_id)
 {
@@ -112,6 +112,9 @@ constexpr int32_t to_clockscale(cudf::type_id timestamp_id)
   }
 }
 
+/**
+ * @brief Returns the precision of the given decimal type.
+ */
 constexpr auto orc_precision(cudf::type_id decimal_id)
 {
   switch (decimal_id) {
@@ -1074,6 +1077,10 @@ rmm::device_uvector<size_type> get_string_column_ids(const table_device_view &vi
   return string_column_ids;
 }
 
+/**
+ * @brief Iterates over row indexes but returns the corresponding rowgroup index.
+ *
+ */
 struct rowgroup_iterator {
   using difference_type   = long;
   using value_type        = int;
@@ -1116,45 +1123,48 @@ encoder_decimal_info decimal_chunk_sizes(table_view const &table,
 {
   std::map<uint32_t, rmm::device_uvector<uint32_t>> elem_sizes;
 
+  // Compute per-element offsets (within each row group) on the device
   for (size_t col_idx = 0; col_idx < orc_columns.size(); ++col_idx) {
     auto &orc_col = orc_columns[col_idx];
     if (orc_col.orc_kind() == DECIMAL) {
-      auto col = table.column(col_idx);
-      auto &curr_sizes =
+      auto const &col = table.column(col_idx);
+      auto &current_sizes =
         elem_sizes.insert({col_idx, rmm::device_uvector<uint32_t>(col.size(), stream)})
           .first->second;
       auto d_column = column_device_view::create(col, stream);
       thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(col.size()),
-                        curr_sizes.begin(),
+                        current_sizes.begin(),
                         [d_col = *d_column] __device__(auto idx) {
                           if (!d_col.is_valid(idx)) return 0u;
-                          int64_t const v = (d_col.type().id() == type_id::DECIMAL32)
-                                              ? d_col.element<int32_t>(idx)
-                                              : d_col.element<int64_t>(idx);
-                          int64_t const s = (v < 0) ? 1 : 0;
-                          uint64_t zz_v   = ((v ^ -s) * 2) + s;
+                          int64_t const element = (d_col.type().id() == type_id::DECIMAL32)
+                                                    ? d_col.element<int32_t>(idx)
+                                                    : d_col.element<int64_t>(idx);
+                          int64_t const sign      = (element < 0) ? 1 : 0;
+                          uint64_t zigzaged_value = ((element ^ -sign) * 2) + sign;
 
-                          uint32_t len = 1;
-                          while (zz_v > 127) {
-                            zz_v >>= 7u;
-                            ++len;
+                          uint32_t encoded_length = 1;
+                          while (zigzaged_value > 127) {
+                            zigzaged_value >>= 7u;
+                            ++encoded_length;
                           }
-                          return len;
+                          return encoded_length;
                         });
 
+      // Compute element offsets within each row group
       thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                     rowgroup_iterator{0, rowgroup_size},
                                     rowgroup_iterator{col.size(), rowgroup_size},
-                                    curr_sizes.begin(),
-                                    curr_sizes.begin());
+                                    current_sizes.begin(),
+                                    current_sizes.begin());
 
-      orc_col.attach_decimal_offsets(curr_sizes.data());
+      orc_col.attach_decimal_offsets(current_sizes.data());
     }
   }
   if (elem_sizes.empty()) return {};
 
+  // Gather the row group sizes and copy to host
   auto const num_rowgroups  = stripes_size(stripes);
   auto d_tmp_rowgroup_sizes = rmm::device_uvector<uint32_t>(num_rowgroups, stream);
   std::map<uint32_t, std::vector<uint32_t>> rg_sizes;

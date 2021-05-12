@@ -65,12 +65,12 @@ struct stripe_rowgroups {
 };
 
 /**
- * @brief TODO
- *
+ * @brief Holds the sizes of encoded elements of decimal columns.
  */
 struct encoder_decimal_info {
-  std::map<uint32_t, rmm::device_uvector<uint32_t>> elem_sizes;
-  std::map<uint32_t, std::vector<uint32_t>> rg_sizes;
+  std::map<uint32_t, rmm::device_uvector<uint32_t>>
+    elem_sizes;                                        ///< Column index -> per-element size map
+  std::map<uint32_t, std::vector<uint32_t>> rg_sizes;  ///< Column index -> per-rowgroup size map
 };
 
 /**
