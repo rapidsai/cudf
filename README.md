@@ -85,7 +85,7 @@ conda install -c rapidsai-nightly -c nvidia -c numba -c conda-forge \
 
 # or, for CUDA 11.2
 conda install -c rapidsai-nightly -c nvidia -c numba -c conda-forge \
-    cudf python=3.7 cudatoolkit=11.1
+    cudf python=3.7 cudatoolkit=11.2
 ```
 
 Note: cuDF is supported only on Linux, and with Python versions 3.7 and later.
