@@ -18,7 +18,10 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/lists/contains.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/structs/structs_column_view.hpp>
@@ -125,11 +128,9 @@ get_gather_map_for_map_values(column_view const &input, string_scalar &lookup_ke
   return gather_map;
 }
 
-} // namespace
-
-namespace jni {
-
-
+/**
+ * @brief a defensive check for the map column that is going to be processed
+ */
 void map_check(column_view const &map_column, rmm::cuda_stream_view stream) {
   CUDF_EXPECTS(map_column.type().id() == type_id::LIST, "Expected LIST<STRUCT<key,value>>.");
 
@@ -143,30 +144,33 @@ void map_check(column_view const &map_column, rmm::cuda_stream_view stream) {
                "Expected LIST<STRUCT<key,value>>.");
   CUDF_EXPECTS(structs_column.child(1).type().id() == type_id::STRING,
                "Expected LIST<STRUCT<key,value>>.");
-  return;
 }
 
-std::unique_ptr<column> map_contains(column_view const &map_column, string_scalar lookup_key,
+} // namespace
+
+namespace jni {
+
+std::unique_ptr<scalar> map_contains(column_view const &map_column, string_scalar lookup_key,
                                      bool has_nulls, rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource *mr) {
   // Defensive checks.
   map_check(map_column, stream);
 
-  // Two-pass plan: construct gather map, and then gather() on structs_column.child(1). Plan A.
-  // (Can do in one pass perhaps, but that's Plan B.)
+  lists_column_view lcv(map_column);
+  structs_column_view scv(lcv.child());
 
-  auto gather_map = has_nulls ?
-                        get_gather_map_for_map_values<true>(map_column, lookup_key, stream, mr) :
-                        get_gather_map_for_map_values<false>(map_column, lookup_key, stream, mr);
+  std::vector<column_view> children;
+  children.push_back(lcv.offsets());
+  children.push_back(scv.child(0));
 
-  auto found = make_numeric_column(data_type{type_id::BOOL8}, gather_map->size(),
-                                   mask_state::UNALLOCATED, stream, mr);
-  thrust::transform(rmm::exec_policy(stream), thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(gather_map->size()),
-                    found->mutable_view().template begin<bool>(),
-                    [d_gather_map = gather_map->view().template begin<size_type>()] __device__(
-                        auto i) { return d_gather_map[i] >= 0; });
-  return found;
+  column_view list_of_keys(map_column.type(), map_column.size(),
+    nullptr, map_column.null_mask(), map_column.null_count(), 0, children);
+  auto contains_column  = lists::contains(list_of_keys, lookup_key);
+  // null will skipped in all-aggregation, so mask all nulls with 0.
+  contains_column->set_null_mask(rmm::device_buffer{0}, 0);
+  auto result = cudf::reduce(contains_column->view(), make_all_aggregation(),
+    cudf::data_type{type_id::BOOL8});
+  return result;
 }
 
 std::unique_ptr<column> map_lookup(column_view const &map_column, string_scalar lookup_key,

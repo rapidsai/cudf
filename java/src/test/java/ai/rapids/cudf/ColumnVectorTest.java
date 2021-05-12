@@ -4416,15 +4416,22 @@ public class ColumnVectorTest extends CudfTestBase {
         List<HostColumnVector.StructData> list2 = Arrays.asList(new HostColumnVector.StructData("a", "c"));
         List<HostColumnVector.StructData> list3 = Arrays.asList(new HostColumnVector.StructData("e", "d"));
         List<HostColumnVector.StructData> list4 = Arrays.asList(new HostColumnVector.StructData("a", "g"));
-        List<HostColumnVector.StructData> list5 = Arrays.asList(new HostColumnVector.StructData("f", "h"));
-        List<HostColumnVector.StructData> list6 = Arrays.asList(new HostColumnVector.StructData("a", null));
-        List<HostColumnVector.StructData> list7 = Arrays.asList(new HostColumnVector.StructData(null, null));
+        List<HostColumnVector.StructData> list5 = Arrays.asList(new HostColumnVector.StructData("a", null));
+        List<HostColumnVector.StructData> list6 = Arrays.asList(new HostColumnVector.StructData(null, null));
         HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
                 new HostColumnVector.BasicType(true, DType.STRING)));
-        try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3, list4, list5, list6, list7);
-             ColumnVector res = cv.getMapKeyExistence(Scalar.fromString("a"));
-             ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, false, true, false, true, false)) {
-            assertColumnsAreEqual(expected, res);
+        try (ColumnVector cv_1 = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list4, list5);
+             ColumnVector cv_2 = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3);
+             ColumnVector cv_3 = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list4, list5, list6);
+             Scalar res_1 = cv_1.getMapKeyExistence(Scalar.fromString("a"));
+             Scalar res_2 = cv_2.getMapKeyExistence(Scalar.fromString("a"));
+             Scalar res_3 = cv_3.getMapKeyExistence(Scalar.fromString("a"));
+             Scalar expectedTrue = Scalar.fromBool(true);
+             Scalar expectedFalse = Scalar.fromBool(false)
+        ) {
+            assertEquals(expectedTrue, res_1);
+            assertEquals(expectedFalse, res_2);
+            assertEquals(expectedFalse, res_3);
         }
     }
 
