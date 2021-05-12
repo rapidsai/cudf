@@ -2201,7 +2201,7 @@ class StringMethods(ColumnMethodsMixin):
         >>> import cudf
         >>> s = cudf.Series(
             [
-                \"\"\"
+                \\"\\"\\"
                 {
                     "store":{
                         "book":[
@@ -2220,13 +2220,13 @@ class StringMethods(ColumnMethodsMixin):
                         ]
                     }
                 }
-                \"\"\"
+                \\"\\"\\"
             ])
         >>> s
-            0    {"store": {\n        "book": [\n        { "cat...
+            0    {"store": {\\n        "book": [\\n        { "cat...
             dtype: object
         >>> s.str.get_json_object("$.store.book")
-            0    [\n        { "category": "reference",\n       ...
+            0    [\\n        { "category": "reference",\\n       ...
             dtype: object
         """
 
