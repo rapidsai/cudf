@@ -35,7 +35,7 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
 {
   if (size == 0) {
     return make_lists_column(0,
-                             make_empty_column(data_type{type_id::INT32}),
+                             make_empty_column(data_type{type_to_id<offset_type>()}),
                              empty_like(value.view()),
                              0,
                              cudf::create_null_mask(0, mask_state::UNALLOCATED),
@@ -45,8 +45,8 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
   auto mr_final = size == 1 ? mr : rmm::mr::get_current_device_resource();
 
   // Handcraft a 1-row column
-  auto offsets =
-    make_numeric_column(data_type(type_id::INT32), 2, mask_state::UNALLOCATED, stream, mr_final);
+  auto offsets = make_numeric_column(
+    data_type{type_to_id<offset_type>()}, 2, mask_state::UNALLOCATED, stream, mr_final);
   auto m_offsets = offsets->mutable_view();
   thrust::sequence(rmm::exec_policy(stream),
                    m_offsets.begin<size_type>(),
