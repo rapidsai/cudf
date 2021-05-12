@@ -1062,6 +1062,45 @@ TEST_F(OrcWriterTest, SlicedValidMask)
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
 
+struct OrcWriterTestDecimal : public OrcWriterTest,
+                              public ::testing::WithParamInterface<std::tuple<int, int>> {
+};
+
+TEST_P(OrcWriterTestDecimal, Decimal64)
+{
+  auto const num_rows = std::get<0>(GetParam());
+  auto const scale    = std::get<1>(GetParam());
+
+  // Using int16_t because scale causes values to overflow if they already require 32 bits
+  auto const vals = random_values<int32_t>(num_rows);
+  auto data       = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    return numeric::decimal64{vals[i], numeric::scale_type{scale}};
+  });
+  auto mask = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 7 == 0; });
+  column_wrapper<numeric::decimal64> col{data, data + num_rows, mask};
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col.release());
+  auto tbl = std::make_unique<table>(std::move(cols));
+
+  auto filepath = temp_env->get_temp_filepath("Decimal64.orc");
+  cudf_io::orc_writer_options out_opts =
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, tbl->view());
+
+  cudf_io::write_orc(out_opts);
+
+  cudf_io::orc_reader_options in_opts =
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath});
+  auto result = cudf_io::read_orc(in_opts);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(tbl->view().column(0), result.tbl->view().column(0));
+}
+
+INSTANTIATE_TEST_CASE_P(OrcWriterTest,
+                        OrcWriterTestDecimal,
+                        ::testing::Combine(::testing::Values(1, 10000, 10001, 34567),
+                                           ::testing::Values(-2, 0, 2)));
+
 TEST_F(OrcWriterTest, Decimal32)
 {
   constexpr auto num_rows = 12000;
@@ -1078,7 +1117,7 @@ TEST_F(OrcWriterTest, Decimal32)
   cols.push_back(col.release());
   auto expected = std::make_unique<table>(std::move(cols));
 
-  auto filepath = temp_env->get_temp_filepath("Decimal.orc");
+  auto filepath = temp_env->get_temp_filepath("Decimal32.orc");
   cudf_io::orc_writer_options out_opts =
     cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected->view());
 
