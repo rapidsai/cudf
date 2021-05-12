@@ -55,7 +55,7 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
                    value.view().size());
   auto child           = std::make_unique<column>(value.view(), stream, mr_final);
   size_type null_count = value.is_valid(stream) ? 0 : 1;
-  auto null_mask_state = null_count ? mask_state::UNALLOCATED : mask_state::ALL_NULL;
+  auto null_mask_state = null_count ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
   auto null_mask       = cudf::detail::create_null_mask(1, null_mask_state, stream, mr_final);
 
   if (size == 1) {
