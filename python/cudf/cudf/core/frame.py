@@ -29,6 +29,7 @@ from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
     is_numerical_dtype,
+    is_decimal_dtype,
     is_scalar,
     min_scalar_type,
 )
@@ -3698,10 +3699,16 @@ class SingleColumnFrame(Frame):
         return self._binaryop(other, "floordiv", reflect=True)
 
     def __truediv__(self, other):
-        return self._binaryop(other, "truediv")
+        if is_decimal_dtype(self.dtype):
+            return self._binaryop(other, "div")
+        else:
+            return self._binaryop(other, "truediv")
 
     def __rtruediv__(self, other):
-        return self._binaryop(other, "truediv", reflect=True)
+        if is_decimal_dtype(self.dtype):
+            return self._binaryop(other, "div", reflect=True)
+        else:
+            return self._binaryop(other, "truediv", reflect=True)
 
     __div__ = __truediv__
 
