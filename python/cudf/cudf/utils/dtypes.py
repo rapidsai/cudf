@@ -158,8 +158,33 @@ def is_integer_dtype(obj):
     try:
         dtype = np.dtype(obj)
     except TypeError:
-        return pd.api.types.is_integer_dtype(obj)
+        try:
+            return pd.api.types.is_integer_dtype(obj)
+        except TypeError:
+            return False
     return dtype.kind in "iu"
+
+
+def is_float_dtype(obj):
+    try:
+        dtype = np.dtype(obj)
+    except TypeError:
+        try:
+            return pd.api.types.is_float_dtype(obj)
+        except TypeError:
+            return False
+    return dtype.kind == "f"
+
+
+def is_bool_dtype(obj):
+    try:
+        dtype = np.dtype(obj)
+    except TypeError:
+        try:
+            return pd.api.types.is_float_dtype(obj)
+        except TypeError:
+            return False
+    return dtype.kind == "b"
 
 
 def is_integer(obj):

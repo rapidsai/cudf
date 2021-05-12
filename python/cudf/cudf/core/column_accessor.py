@@ -20,6 +20,7 @@ import pandas as pd
 
 import cudf
 from cudf.core import column
+from cudf.internals.arrays import ArrayAccessor, array
 from cudf.utils.utils import cached_property
 
 if TYPE_CHECKING:
@@ -81,7 +82,7 @@ def _to_flat_dict(d):
 
 class ColumnAccessor(MutableMapping):
 
-    _data: "Dict[Any, ColumnBase]"
+    _arrays: ArrayAccessor
     multiindex: bool
     _level_names: Tuple[Any, ...]
 
@@ -110,13 +111,13 @@ class ColumnAccessor(MutableMapping):
         if isinstance(data, ColumnAccessor):
             multiindex = multiindex or data.multiindex
             level_names = level_names or data.level_names
-            self._data = data._data
+            self._arrays = data._arrays
             self.multiindex = multiindex
             self._level_names = level_names
         else:
             # This code path is performance-critical for copies and should be
             # modified with care.
-            self._data = {}
+            self._arrays = ArrayAccessor()
             if data:
                 data = dict(data)
                 # Faster than next(iter(data.values()))
@@ -129,7 +130,8 @@ class ColumnAccessor(MutableMapping):
                         v = column.as_column(v)
                     if len(v) != column_length:
                         raise ValueError("All columns must be of equal length")
-                    self._data[k] = v
+                    self._arrays.names.append(k)
+                    self._arrays.data.append(array(v))
 
             self.multiindex = multiindex
             self._level_names = level_names
@@ -144,10 +146,18 @@ class ColumnAccessor(MutableMapping):
         # create a ColumnAccessor without verifying column
         # type or size
         obj = cls()
-        obj._data = data
+        obj._arrays = ArrayAccessor(
+            list(data.keys()), list(map(array, data.values()))
+        )
         obj.multiindex = multiindex
         obj._level_names = level_names
         return obj
+
+    @property
+    def _data(self):
+        return dict(
+            zip(self._arrays.names, (x._column for x in self._arrays.data))
+        )
 
     def __iter__(self):
         return self._data.__iter__()
@@ -159,7 +169,9 @@ class ColumnAccessor(MutableMapping):
         self.set_by_label(key, value)
 
     def __delitem__(self, key: Any):
-        self._data.__delitem__(key)
+        i = self._arrays.names.index(key)
+        del self._arrays.names[i]
+        del self._arrays.data[i]
         self._clear_cache()
 
     def __len__(self) -> int:
@@ -299,11 +311,11 @@ class ColumnAccessor(MutableMapping):
                         raise ValueError("All columns must be of equal length")
                 else:
                     self._column_length = len(value)
-            self._data[name] = value
+            self._arrays.names.append(name)
+            self._arrays.data.append(array(value))
         else:
-            new_keys = self.names[:loc] + (name,) + self.names[loc:]
-            new_values = self.columns[:loc] + (value,) + self.columns[loc:]
-            self._data = self._data.__class__(zip(new_keys, new_values))
+            self._arrays.names.insert(loc, name)
+            self._arrays.data.insert(loc, array(value))
         self._clear_cache()
 
     def copy(self, deep=False) -> ColumnAccessor:
@@ -393,7 +405,11 @@ class ColumnAccessor(MutableMapping):
             else:
                 self._column_length = len(value)
 
-        self._data[key] = value
+        if key in self._data:
+            self._arrays.data[self._arrays.names.index(key)] = array(value)
+        else:
+            self._arrays.data.append(array(value))
+            self._arrays.names.append(key)
         self._clear_cache()
 
     def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:

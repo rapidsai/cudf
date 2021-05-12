@@ -8,9 +8,10 @@ class Table(object):
     _data: cudf.core.column_accessor.ColumnAccessor
     _index: Optional[cudf.core.index.Index]
 
-    _arrays: Optional[cudf.internals.arrays.ArrayAccessor]
-
     def __init__(self, data: object = None, index: object = None) -> None: ...
+
+    @property
+    def _data(self) -> cudf.core.column_accessor.ColumnAccessor: ...
 
     @property
     def _num_columns(self) -> int: ...
