@@ -12,6 +12,7 @@ class ListMethods:
         Returns
         -------
         Series or Index
+        
         Examples
         --------
         >>> s = cudf.Series([[1, 2, 3], None, [4, 5]])
