@@ -8,6 +8,7 @@ class ListMethods:
     def len(self):
         """
         Computes the length of each element in the Series/Index.
+        
         Returns
         -------
         Series or Index
