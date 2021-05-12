@@ -621,7 +621,7 @@ TYPED_TEST(ListsStructsLeafTest, FromNonNested)
 {
   using LCWinner_t = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
   using StringCW   = cudf::test::strings_column_wrapper;
-  using offset_t   = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+  using offset_t   = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
   using valid_t    = std::vector<cudf::valid_type>;
 
   auto data = this->make_test_structs_column(
@@ -652,7 +652,7 @@ TYPED_TEST(ListsStructsLeafTest, FromNested)
 {
   using LCWinner_t = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
   using StringCW   = cudf::test::strings_column_wrapper;
-  using offset_t   = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
+  using offset_t   = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
   using valid_t    = std::vector<cudf::valid_type>;
   auto leaf        = this->make_test_structs_column(
     {{1, 2}, {0, 1}},
