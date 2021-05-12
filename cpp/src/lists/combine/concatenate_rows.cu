@@ -224,8 +224,8 @@ struct compute_string_sizes_and_concatenate_lists_fn {
               start_byte;
             auto const output_ptr = d_chars + d_offsets[write_idx];
             thrust::copy(thrust::seq, input_ptr, input_ptr + end_byte - start_byte, output_ptr);
-            write_idx += end_str_idx - start_str_idx;
           }
+          write_idx += end_str_idx - start_str_idx;
         }
       });
   }
