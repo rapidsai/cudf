@@ -72,7 +72,7 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
                                                  size_t max_rows,
                                                  const uint8_t *cur,
                                                  const uint8_t *end,
-                                                 device_span<nvstrdesc_s> global_dictionary)
+                                                 device_span<string_index_pair> global_dictionary)
 {
   uint32_t array_start = 0, array_repeat_count = 0;
   int array_children = 0;
@@ -123,8 +123,8 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
           if (kind == type_enum) {  // dictionary
             size_t idx = schema[i].count + v;
             if (idx < global_dictionary.size()) {
-              ptr   = global_dictionary[idx].ptr;
-              count = global_dictionary[idx].count;
+              ptr   = global_dictionary[idx].first;
+              count = global_dictionary[idx].second;
             }
           } else if (v >= 0 && cur + v <= end) {  // string
             ptr   = reinterpret_cast<const char *>(cur);
@@ -132,8 +132,8 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
             cur += count;
           }
           if (dataptr != nullptr && row < max_rows) {
-            static_cast<nvstrdesc_s *>(dataptr)[row].ptr   = ptr;
-            static_cast<nvstrdesc_s *>(dataptr)[row].count = count;
+            static_cast<string_index_pair *>(dataptr)[row].first  = ptr;
+            static_cast<string_index_pair *>(dataptr)[row].second = count;
           }
         }
       } break;
@@ -230,7 +230,7 @@ static const uint8_t *__device__ avro_decode_row(const schemadesc_s *schema,
 extern "C" __global__ void __launch_bounds__(num_warps * 32, 2)
   gpuDecodeAvroColumnData(block_desc_s *blocks,
                           schemadesc_s *schema_g,
-                          device_span<nvstrdesc_s> global_dictionary,
+                          device_span<string_index_pair> global_dictionary,
                           const uint8_t *avro_data,
                           uint32_t num_blocks,
                           uint32_t schema_len,
@@ -313,7 +313,7 @@ extern "C" __global__ void __launch_bounds__(num_warps * 32, 2)
  */
 void DecodeAvroColumnData(block_desc_s *blocks,
                           schemadesc_s *schema,
-                          device_span<nvstrdesc_s> global_dictionary,
+                          device_span<string_index_pair> global_dictionary,
                           const uint8_t *avro_data,
                           uint32_t num_blocks,
                           uint32_t schema_len,

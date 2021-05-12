@@ -18,7 +18,7 @@
 
 #include <cudf/io/data_sink.hpp>
 #include <cudf/utilities/error.hpp>
-#include <io/utilities/file_io_utilities.hpp>
+#include "file_io_utilities.hpp"
 
 #include <rmm/cuda_stream_view.hpp>
 

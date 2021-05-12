@@ -16,18 +16,21 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/trie.cuh>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/span.hpp>
+#include <io/utilities/trie.cuh>
 
-#include <io/utilities/column_type_histogram.hpp>
+#include "column_type_histogram.hpp"
 
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
+
+#include <optional>
 
 using cudf::device_span;
 
 namespace cudf {
 namespace io {
+
 /**
  * @brief Structure for holding various options used when parsing and
  * converting CSV/json data to cuDF data type values.
@@ -43,9 +46,9 @@ struct parse_options_view {
   bool doublequote;
   bool dayfirst;
   bool skipblanklines;
-  device_span<SerialTrieNode const> trie_true;
-  device_span<SerialTrieNode const> trie_false;
-  device_span<SerialTrieNode const> trie_na;
+  cudf::detail::trie_view trie_true;
+  cudf::detail::trie_view trie_false;
+  cudf::detail::trie_view trie_na;
   bool multi_delimiter;
 };
 
@@ -60,9 +63,9 @@ struct parse_options {
   bool doublequote;
   bool dayfirst;
   bool skipblanklines;
-  rmm::device_vector<SerialTrieNode> trie_true;
-  rmm::device_vector<SerialTrieNode> trie_false;
-  rmm::device_vector<SerialTrieNode> trie_na;
+  cudf::detail::optional_trie trie_true;
+  cudf::detail::optional_trie trie_false;
+  cudf::detail::optional_trie trie_na;
   bool multi_delimiter;
 
   parse_options_view view()
@@ -77,9 +80,9 @@ struct parse_options {
             doublequote,
             dayfirst,
             skipblanklines,
-            trie_true,
-            trie_false,
-            trie_na,
+            cudf::detail::make_trie_view(trie_true),
+            cudf::detail::make_trie_view(trie_false),
+            cudf::detail::make_trie_view(trie_na),
             multi_delimiter};
   }
 };
@@ -381,6 +384,7 @@ __device__ __inline__ cudf::size_type* infer_integral_field_counter(char const* 
  * @param[in] keys Vector containing the keys to count in the buffer
  * @param[in] result_offset Offset to add to the output positions
  * @param[out] positions Array containing the output positions
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  *
  * @return cudf::size_type total number of occurrences
  */
@@ -388,7 +392,8 @@ template <class T>
 cudf::size_type find_all_from_set(const rmm::device_buffer& d_data,
                                   const std::vector<char>& keys,
                                   uint64_t result_offset,
-                                  T* positions);
+                                  T* positions,
+                                  rmm::cuda_stream_view stream);
 
 /**
  * @brief Searches the input character array for each of characters in a set.
@@ -403,6 +408,7 @@ cudf::size_type find_all_from_set(const rmm::device_buffer& d_data,
  * @param[in] keys Vector containing the keys to count in the buffer
  * @param[in] result_offset Offset to add to the output positions
  * @param[out] positions Array containing the output positions
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  *
  * @return cudf::size_type total number of occurrences
  */
@@ -411,18 +417,22 @@ cudf::size_type find_all_from_set(const char* h_data,
                                   size_t h_size,
                                   const std::vector<char>& keys,
                                   uint64_t result_offset,
-                                  T* positions);
+                                  T* positions,
+                                  rmm::cuda_stream_view stream);
 
 /**
  * @brief Searches the input character array for each of characters in a set
  * and sums up the number of occurrences.
  *
- * @param[in] d_data Input data buffer in device memory
- * @param[in] keys Vector containing the keys to count in the buffer
+ * @param d_data Input data buffer in device memory
+ * @param keys Vector containing the keys to count in the buffer
+ * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return cudf::size_type total number of occurrences
  */
-cudf::size_type count_all_from_set(const rmm::device_buffer& d_data, const std::vector<char>& keys);
+cudf::size_type count_all_from_set(const rmm::device_buffer& d_data,
+                                   const std::vector<char>& keys,
+                                   rmm::cuda_stream_view stream);
 
 /**
  * @brief Searches the input character array for each of characters in a set
@@ -431,15 +441,17 @@ cudf::size_type count_all_from_set(const rmm::device_buffer& d_data, const std::
  * Does not load the entire buffer into the GPU memory at any time, so it can
  * be used with buffers of any size.
  *
- * @param[in] h_data Pointer to the data in host memory
- * @param[in] h_size Size of the input data, in bytes
- * @param[in] keys Vector containing the keys to count in the buffer
+ * @param h_data Pointer to the data in host memory
+ * @param h_size Size of the input data, in bytes
+ * @param keys Vector containing the keys to count in the buffer
+ * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return cudf::size_type total number of occurrences
  */
 cudf::size_type count_all_from_set(const char* h_data,
                                    size_t h_size,
-                                   const std::vector<char>& keys);
+                                   const std::vector<char>& keys,
+                                   rmm::cuda_stream_view stream);
 
 /**
  * @brief Infer file compression type based on user supplied arguments.

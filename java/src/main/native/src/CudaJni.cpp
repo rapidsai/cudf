@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <rmm/device_buffer.hpp>
 #include "jni_utils.hpp"
 
 namespace {
@@ -45,6 +46,12 @@ void auto_set_device(JNIEnv *env) {
       Thread_device = Cudf_device;
     }
   }
+}
+
+/** Fills all the bytes in the buffer 'buf' with 'value'. */
+void device_memset_async(JNIEnv *env, rmm::device_buffer& buf, char value) {
+  cudaError_t cuda_status = cudaMemsetAsync((void *)buf.data(), value, buf.size());
+  jni_cuda_check(env, cuda_status);
 }
 
 } // namespace jni

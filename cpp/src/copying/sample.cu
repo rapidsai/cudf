@@ -25,7 +25,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/device_vector.h>
 #include <thrust/random.h>
 #include <thrust/random/uniform_int_distribution.h>
 #include <thrust/shuffle.h>

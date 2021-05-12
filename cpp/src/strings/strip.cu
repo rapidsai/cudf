@@ -18,12 +18,12 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/strip.hpp>
 #include <cudf/utilities/error.hpp>
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -110,7 +110,7 @@ std::unique_ptr<column> strip(
 
   // this utility calls the strip_fn to build the offsets and chars columns
   auto children = cudf::strings::detail::make_strings_children(
-    strip_fn{*d_column, stype, d_to_strip}, strings.size(), strings.null_count(), stream, mr);
+    strip_fn{*d_column, stype, d_to_strip}, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
                              std::move(children.first),
