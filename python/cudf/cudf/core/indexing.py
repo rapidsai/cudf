@@ -101,11 +101,11 @@ class _SeriesIlocIndexer(object):
             value = to_cudf_compatible_scalar(value)
         else:
             value = column.as_column(value)
-
         if (
             not is_categorical_dtype(self._sr._column.dtype)
             and hasattr(value, "dtype")
             and pd.api.types.is_numeric_dtype(value.dtype)
+            and not isinstance(self._sr._column.dtype, cudf.Decimal64Dtype)
         ):
             # normalize types if necessary:
             if not pd.api.types.is_integer(key):
