@@ -53,7 +53,7 @@ test:
     - test -f $PREFIX/include/cudf/ast/transform.hpp
     - test -f $PREFIX/include/cudf/ast/detail/linearizer.hpp
     - test -f $PREFIX/include/cudf/ast/detail/operators.hpp
-    - test -f $PREFIX/include/cudf/ast/linearizer.hpp
+    - test -f $PREFIX/include/cudf/ast/nodes.hpp
     - test -f $PREFIX/include/cudf/ast/operators.hpp
     - test -f $PREFIX/include/cudf/binaryop.hpp
     - test -f $PREFIX/include/cudf/labeling/label_bins.hpp
