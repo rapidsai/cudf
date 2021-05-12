@@ -519,6 +519,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
 namespace detail {
 template <template <typename...> typename Invoker>
 struct dispatched_invoke {
+#pragma nv_exec_check_disable
   template <typename T, typename... Args>
   CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) operator()(Args&&... args)
   {
@@ -541,6 +542,7 @@ struct dispatched_invoke {
  * @param args Parameter pack of arguments forwarded to `Invoker<T>::invoke`
  * @return The result of `Invoker<T>::invoke(std::forward<Ts>(args)...)`
  */
+#pragma nv_exec_check_disable
 template <template <typename> typename Invoker,
           template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
           typename... Ts>
