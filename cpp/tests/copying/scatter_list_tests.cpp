@@ -32,12 +32,8 @@
 template <typename T>
 class TypedScatterListsTest : public cudf::test::BaseFixture {
 };
-using FixedWidthTypes = cudf::test::Concat<cudf::test::IntegralTypes,
-                                           cudf::test::FloatingPointTypes,
-                                           cudf::test::DurationTypes,
-                                           cudf::test::TimestampTypes,
-                                           cudf::test::FixedPointTypes>;
-TYPED_TEST_CASE(TypedScatterListsTest, FixedWidthTypes);
+
+TYPED_TEST_CASE(TypedScatterListsTest, cudf::test::FixedWidthTypes);
 
 class ScatterListsTest : public cudf::test::BaseFixture {
 };

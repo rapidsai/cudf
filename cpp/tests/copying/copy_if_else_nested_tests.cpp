@@ -28,13 +28,8 @@ struct CopyIfElseNestedTest : cudf::test::BaseFixture {
 template <typename T>
 struct TypedCopyIfElseNestedTest : CopyIfElseNestedTest {
 };
-using FixedWidthTypes = cudf::test::Concat<cudf::test::IntegralTypes,
-                                           cudf::test::FloatingPointTypes,
-                                           cudf::test::DurationTypes,
-                                           cudf::test::TimestampTypes,
-                                           cudf::test::FixedPointTypes>;
 
-TYPED_TEST_CASE(TypedCopyIfElseNestedTest, FixedWidthTypes);
+TYPED_TEST_CASE(TypedCopyIfElseNestedTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(TypedCopyIfElseNestedTest, Structs)
 {
