@@ -216,6 +216,7 @@ struct SkipRowTest {
 
 }  // namespace
 
+/*
 TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn)
 {
   auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
@@ -1026,6 +1027,7 @@ TEST_F(OrcStatisticsTest, Basic)
   validate_statistics(stats.stripes_stats[0]);
 }
 
+
 TEST_F(OrcWriterTest, SlicedValidMask)
 {
   std::vector<const char*> strings;
@@ -1060,6 +1062,32 @@ TEST_F(OrcWriterTest, SlicedValidMask)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(tbl, result.tbl->view());
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
+}
+*/
+
+TEST_F(OrcReaderTest, MultipleInputs)
+{
+  srand(31537);
+  auto table1 = create_random_fixed_table<int>(5, 5, true);
+  auto table2 = create_random_fixed_table<int>(5, 5, true);
+
+  auto full_table = cudf::concatenate(std::vector<table_view>({*table1, *table2}));
+
+  auto filepath1 = temp_env->get_temp_filepath("SimpleTable1.orc");
+  cudf_io::chunked_orc_writer_options opts1 =
+    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath1});
+  cudf_io::orc_chunked_writer(opts1).write(*table1);
+
+  auto filepath2 = temp_env->get_temp_filepath("SimpleTable2.orc");
+  cudf_io::chunked_orc_writer_options opts2 =
+    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath2});
+  cudf_io::orc_chunked_writer(opts2).write(*table2);
+
+  cudf_io::orc_reader_options read_opts =
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{{filepath1, filepath2}});
+  auto result = cudf_io::read_orc(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

@@ -40,11 +40,20 @@ namespace orc {
 using namespace cudf::io::orc;
 using namespace cudf::io;
 
+/**
+ * @brief Struct representing an input column in the file.
+ */
+struct input_column_info {
+  int schema_idx;
+  std::string name;
+};
+
 // Forward declarations
 class metadata;
 namespace {
 struct orc_stream_info;
-}
+struct stripe_source_mapping;
+}  // namespace
 class aggregate_orc_metadata;
 
 /**
@@ -129,8 +138,13 @@ class reader::impl {
   rmm::mr::device_memory_resource *_mr = nullptr;
   std::vector<std::unique_ptr<datasource>> _sources;
   std::unique_ptr<aggregate_orc_metadata> _metadata;
-
+  // input columns to be processed
+  std::vector<input_column_info> _input_columns;
+  // output columns to be generated
+  std::vector<column_buffer> _output_columns;
+  // _output_columns associated schema indices
   std::vector<int> _selected_columns;
+
   bool _use_index            = true;
   bool _use_np_dtypes        = true;
   bool _has_timestamp_column = false;
