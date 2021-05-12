@@ -38,7 +38,7 @@ namespace detail {
  * @param num_groups Number of groups
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return Pair of null eliminated grouped values corresponding offsets
+ * @return Pair of null-eliminated grouped values and corresponding offsets
  */
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> purge_null_entries(
   column_view const &values,
