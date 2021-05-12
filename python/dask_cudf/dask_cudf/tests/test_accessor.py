@@ -361,9 +361,6 @@ def test_len(data):
     assert_eq(expect, ds.list.len().compute())
 
 
-@pytest.mark.xfail(
-    reason="""list.contains() is incorrect for a slice (issue #8186)"""
-)
 @pytest.mark.parametrize(
     "data, search_key", [(data_test_2(), 1)],
 )
