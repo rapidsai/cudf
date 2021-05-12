@@ -31,7 +31,7 @@ class DecimalColumn(ColumnBase):
 
     def __setitem__(self, key, value):
         if isinstance(value, np.integer):
-            value = cudf.Scalar(int(value), dtype=self.dtype)
+            value = int(value)
         super().__setitem__(key, value)
 
     @classmethod
