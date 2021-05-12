@@ -298,8 +298,10 @@ struct EncColumnChunk {
   statistics_chunk const *stats;               //!< Fragment statistics
   uint32_t bfr_size;                           //!< Uncompressed buffer size
   uint32_t compressed_size;                    //!< Compressed buffer size
-  uint32_t start_row;                          //!< First row of chunk
-  uint32_t num_rows;                           //!< Number of rows in chunk
+  uint32_t max_page_data_size;  //!< Max data size (excuding header) of any page in this chunk
+  uint32_t page_headers_size;   //!< Sum of size of all page headers
+  uint32_t start_row;           //!< First row of chunk
+  uint32_t num_rows;            //!< Number of rows in chunk
   uint32_t num_values;      //!< Number of values in chunk. Different from num_rows for nested types
   uint32_t first_fragment;  //!< First fragment of chunk
   EncPage *pages;           //!< Ptr to pages that belong to this chunk
@@ -480,6 +482,7 @@ void InitFragmentStatistics(cudf::detail::device_2dspan<statistics_group> groups
  * @param[in] num_columns Number of columns
  * @param[in] page_grstats Setup for page-level stats
  * @param[in] chunk_grstats Setup for chunk-level stats
+ * @param[in] max_page_comp_data_size Calculated maximum compressed data size of pages
  * @param[in] stream CUDA stream to use, default 0
  */
 void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
@@ -488,6 +491,7 @@ void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                       int32_t num_columns,
                       statistics_merge_group *page_grstats  = nullptr,
                       statistics_merge_group *chunk_grstats = nullptr,
+                      size_t max_page_comp_data_size        = 0,
                       rmm::cuda_stream_view stream          = rmm::cuda_stream_default);
 
 /**

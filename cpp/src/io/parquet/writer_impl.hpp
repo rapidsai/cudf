@@ -165,6 +165,9 @@ class writer::impl {
    * @param chunks column chunk array
    * @param col_desc column description array
    * @param pages encoder pages array
+   * @param page_stats page statistics array
+   * @param frag_stats fragment statistics array
+   * @param max_page_comp_data_size max compressed
    * @param num_columns Total number of columns
    * @param num_pages Total number of pages
    * @param num_stats_bfr Number of statistics buffers
@@ -174,6 +177,7 @@ class writer::impl {
                           device_span<gpu::EncPage> pages,
                           statistics_chunk* page_stats,
                           statistics_chunk* frag_stats,
+                          size_t max_page_comp_data_size,
                           uint32_t num_columns,
                           uint32_t num_pages,
                           uint32_t num_stats_bfr);
