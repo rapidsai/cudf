@@ -110,18 +110,15 @@ TYPED_TEST(groupby_collect_list_test, CollectListsWithNullExclusion)
   using K = int32_t;
   using V = TypeParam;
 
-  using LCW = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
+  using LCW = cudf::test::lists_column_wrapper<V, int32_t>;
 
   fixed_width_column_wrapper<K, int32_t> keys{1, 1, 2, 2, 3, 3, 4, 4};
-  const bool validity_mask[8] = {true, false, false, true, true, true, false, false};
-  auto validity               = cudf::detail::make_counting_transform_iterator(
-    0, [&validity_mask](auto i) { return validity_mask[i]; });
-  lists_column_wrapper<V, int32_t> values{
-    {{1, 2}, {3, 4}, {5, 6, 7}, LCW{}, {9, 10}, {11}, {20, 30, 40}, LCW{}}, validity};
+  const bool validity_mask[] = {true, false, false, true, true, true, false, false};
+  LCW values{{{1, 2}, {3, 4}, {5, 6, 7}, LCW{}, {9, 10}, {11}, {20, 30, 40}, LCW{}}, validity_mask};
 
   fixed_width_column_wrapper<K, int32_t> expect_keys{1, 2, 3, 4};
 
-  lists_column_wrapper<V, int32_t> expect_vals{{{1, 2}}, {LCW{}}, {{9, 10}, {11}}, {}};
+  LCW expect_vals{{{1, 2}}, {LCW{}}, {{9, 10}, {11}}, {}};
 
   auto agg = cudf::make_collect_list_aggregation(null_policy::EXCLUDE);
   test_single_agg(keys, values, expect_keys, expect_vals, std::move(agg));

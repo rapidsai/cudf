@@ -359,8 +359,8 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
  * @param num_groups Number of groups
  * @param null_handling Exclude nulls while counting if null_policy::EXCLUDE,
  *  Include nulls if null_policy::INCLUDE.
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_collect(column_view const& values,
                                       cudf::device_span<size_type const> group_offsets,
