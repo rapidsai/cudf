@@ -38,20 +38,26 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
                              make_empty_column(data_type{type_id::INT32}),
                              empty_like(value.view()),
                              0,
-                             cudf::create_null_mask(0, mask_state::UNALLOCATED));
+                             cudf::create_null_mask(0, mask_state::UNALLOCATED),
+                             stream,
+                             mr);
   }
+  auto mr_final = size == 1 ? mr : rmm::mr::get_current_device_resource();
+
   // Handcraft a 1-row column
-  auto offsets   = make_numeric_column(data_type(type_id::INT32), 2, mask_state::UNALLOCATED);
+  auto offsets =
+    make_numeric_column(data_type(type_id::INT32), 2, mask_state::UNALLOCATED, stream, mr_final);
   auto m_offsets = offsets->mutable_view();
   thrust::sequence(rmm::exec_policy(stream),
                    m_offsets.begin<size_type>(),
                    m_offsets.end<size_type>(),
                    0,
                    value.view().size());
-  auto child           = std::make_unique<column>(value.view());
+  auto child           = std::make_unique<column>(value.view(), stream, mr_final);
   size_type null_count = value.is_valid(stream) ? 0 : 1;
-  auto null_mask       = null_count ? create_null_mask(1, mask_state::ALL_NULL)
-                              : create_null_mask(1, mask_state::UNALLOCATED);
+  auto null_mask_state = null_count ? mask_state::UNALLOCATED : mask_state::ALL_NULL;
+  auto null_mask       = cudf::detail::create_null_mask(1, null_mask_state, stream, mr_final);
+
   if (size == 1) {
     return make_lists_column(
       1, std::move(offsets), std::move(child), null_count, std::move(null_mask), stream, mr);
