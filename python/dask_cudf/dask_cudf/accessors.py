@@ -8,11 +8,11 @@ class ListMethods:
     def len(self):
         """
         Computes the length of each element in the Series/Index.
-        
+
         Returns
         -------
         Series or Index
-        
+
         Examples
         --------
         >>> s = cudf.Series([[1, 2, 3], None, [4, 5]])
@@ -36,13 +36,16 @@ class ListMethods:
         """
         Creates a column of bool values indicating whether the specified scalar
         is an element of each row of a list column.
+
         Parameters
         ----------
         search_key : scalar
             element being searched for in each row of the list column
+
         Returns
         -------
         Column
+
         Examples
         --------
         >>> s = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
@@ -60,12 +63,15 @@ class ListMethods:
         Extract element at the given index from each component
         Extract element from lists, tuples, or strings in
         each element in the Series/Index.
+
         Parameters
         ----------
         index : int
+
         Returns
         -------
         Series or Index
+
         Examples
         --------
         >>> s = cudf.Series([[1, 2, 3], [3, 4, 5], [4, 5, 6]])
@@ -85,9 +91,11 @@ class ListMethods:
         """
         From a Series of (possibly nested) lists, obtain the elements from
         the innermost lists as a flat Series (one value per row).
+
         Returns
         -------
         Series
+
         Examples
         --------
         >>> s = cudf.Series([[[1, None], [3, 4]], None, [[5, 6]]])
@@ -108,13 +116,16 @@ class ListMethods:
     def take(self, lists_indices):
         """
         Collect list elements based on given indices.
+
         Parameters
         ----------
         lists_indices: List type arrays
             Specifies what to collect from each row
+
         Returns
         -------
         ListColumn
+
         Examples
         --------
         >>> s = cudf.Series([[1, 2, 3], None, [4, 5]])
@@ -138,9 +149,11 @@ class ListMethods:
         """
         Returns unique element for each list in the column, order for each
         unique element is not guaranteed.
+
         Returns
         -------
         ListColumn
+
         Examples
         --------
         >>> s = cudf.Series([[1, 1, 2, None, None], None, [4, 4], []])
@@ -173,6 +186,7 @@ class ListMethods:
         """
         Sort each list by the values.
         Sort the lists in ascending or descending order by some criterion.
+
         Parameters
         ----------
         ascending : bool, default True
@@ -181,13 +195,16 @@ class ListMethods:
             'first' puts nulls at the beginning, 'last' puts nulls at the end.
         ignore_index : bool, default False
             If True, the resulting axis will be labeled 0, 1, ..., n - 1.
+
         Returns
         -------
         ListColumn with each list sorted
+
         Notes
         -----
         Difference from pandas:
           * Not supporting: `inplace`, `kind`
+
         Examples
         --------
         >>> s = cudf.Series([[4, 2, None, 9], [8, 8, 2], [2, 1]])
