@@ -7,6 +7,7 @@ from cudf.utils.dtypes import is_list_like
 import cupy
 import cudf
 import pandas as pd
+from collections import Sequence
 
 
 def cut(
@@ -108,7 +109,8 @@ def cut(
             "raise, drop"
         )
 
-    if isinstance(bins, list):
+    # bins can either be an int, sequence of scalars or an intervalIndex
+    if isinstance(bins, Sequence):
         if len(set(bins)) is not len(bins):
             if duplicates == "raise":
                 raise ValueError(
@@ -117,19 +119,23 @@ def cut(
                     "kwarg"
                 )
             elif duplicates == "drop":
-                bins = cupy.unique(bins)
+                # get unique values but maintain list dtype
+                bins = cupy.unique(bins).tolist()
 
-    # turn input into a cupy array
+    # turn input into a cupy array to make for easier handling
     x = cupy.asarray(x)
 
+    # if bins is an intervalIndex we ignore the value of right
     if (
         right is False
         and isinstance(bins, pandas_IntervalIndex)
         and bins.closed == "right"
     ):
         right = True
+
+    # create bins if given an int or single scalar
     if not isinstance(bins, pandas_IntervalIndex):
-        if not isinstance(bins, list):
+        if not isinstance(bins, (Sequence)):
             rng = (x.min(), x.max())
             mn, mx = [mi + 0.0 for mi in rng]
             bins = cupy.linspace(mn, mx, bins + 1, endpoint=True)
@@ -152,7 +158,7 @@ def cut(
         # if right is false the last bin edge is not included
         if right is False:
             right_edge = bins[len(bins) - 1]
-            x[x == right_edge] = right_edge + 1
+            x[x == right_edge.item()] = right_edge.item() + 1
 
     # the inputs is a column of the values in the array x
     input_arr = as_column(x)
@@ -210,31 +216,55 @@ def cut(
     index_labels = label_bins(
         input_arr, left_edges, left_inclusive, right_edges, right_inclusive
     )
-    if index_labels.base_mask:
-        index_labels._base_mask = None
+    # breakpoint()
+    # if index_labels.base_mask and not index_labels.has_nulls:
+    #     index_labels._base_mask = None
 
     if labels is False:
-        # if labels is false we return the bin indexes
-        indx_arr = index_labels.values
-        return indx_arr
+        # if labels is false we return the index labels, we return them
+        # as a series if we have a series input
+        if isinstance(orig_x, pd.Series) or isinstance(orig_x, cudf.Series):
+            # need to run more tests but looks like in this case pandas
+            # always returns a float64 dtype
+            indx_arr_series = cudf.Series(index_labels, dtype="float64")
+            # if retbins we return the bins as well
+            if retbins:
+                return indx_arr_series, bins
+            else:
+                return indx_arr_series
+        elif retbins:
+            return index_labels.values, bins
+        else:
+            return index_labels.values
 
     if labels is not None:
         if labels is not ordered and len(set(labels)) != len(labels):
             # when we have duplicate labels and ordered is False, we
-            # should allow duplicate categories
+            # should allow duplicate categories. The categories are
+            # returned in order
             new_data = [interval_labels[i][0] for i in index_labels.values]
             return cudf.CategoricalIndex(
                 new_data, categories=sorted(set(labels)), ordered=False
             )
+
     col = build_categorical_column(
-        categories=interval_labels, codes=index_labels, ordered=ordered
+        categories=interval_labels,
+        codes=index_labels,
+        ordered=ordered,
+        size=index_labels.size,
     )
+    # we return a categorical index, as we don't have a Categorical method
     categorical_index = cudf.core.index.as_index(col)
-    if retbins:
+
+    if isinstance(orig_x, pd.Series) or isinstance(orig_x, cudf.Series):
+        # if we have a series input we return a series output
+        res_series = cudf.Series(categorical_index, index=orig_x.index)
+        if retbins:
+            return res_series, bins
+        else:
+            return res_series
+    elif retbins:
         # if retbins is true we return the bins as well
         return categorical_index, bins
-    elif isinstance(orig_x, pd.Series) or isinstance(orig_x, cudf.Series):
-        # if we have a series input we return a series output
-        return cudf.Series(categorical_index, index=orig_x.index)
     else:
         return categorical_index
