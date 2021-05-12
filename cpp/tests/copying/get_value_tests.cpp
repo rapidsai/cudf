@@ -308,7 +308,7 @@ TYPED_TEST(ListGetFixedWidthValueTest, NestedGetNull)
 {
   using LCW      = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
   using FCW      = cudf::test::fixed_width_column_wrapper<TypeParam>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<size_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<offset_type>;
 
   std::vector<valid_type> valid{1, 0, 1, 0};
   // clang-format off
@@ -463,7 +463,7 @@ TEST_F(ListGetStringValueTest, NestedGetNonNullEmpty)
 TEST_F(ListGetStringValueTest, NestedGetNull)
 {
   using LCW      = cudf::test::lists_column_wrapper<string_view>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<size_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<offset_type>;
   using StringCW = cudf::test::strings_column_wrapper;
 
   std::vector<valid_type> valid{0, 0, 1, 1};
@@ -503,10 +503,11 @@ struct ListGetStructValueTest : public BaseFixture {
    * in `initializer_list`. However this is an expensive function because it repeatedly
    * calls `cudf::set_null_mask` for each row.
    */
-  std::unique_ptr<cudf::column> make_test_lists_column(size_type num_lists,
-                                                       fixed_width_column_wrapper<int32_t> offsets,
-                                                       std::unique_ptr<cudf::column> child,
-                                                       std::initializer_list<valid_type> null_mask)
+  std::unique_ptr<cudf::column> make_test_lists_column(
+    size_type num_lists,
+    fixed_width_column_wrapper<offset_type> offsets,
+    std::unique_ptr<cudf::column> child,
+    std::initializer_list<valid_type> null_mask)
   {
     size_type null_count = num_lists - std::accumulate(null_mask.begin(), null_mask.end(), 0);
     auto d_null_mask     = cudf::create_null_mask(
@@ -773,7 +774,7 @@ TYPED_TEST(ListGetStructValueTest, NestedGetNull)
   // NULL                      <- get_element(2)
 
   using valid_t  = std::vector<valid_type>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<size_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<offset_type>;
 
   auto list_column = this->make_test_lists_column(2, {0, 2, 3}, this->leaf_data(), {1, 1});
   auto list_column_nested =
