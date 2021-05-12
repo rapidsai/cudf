@@ -30,7 +30,6 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/exec_policy.hpp>
 
 namespace cudf {
 namespace {

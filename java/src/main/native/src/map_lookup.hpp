@@ -54,7 +54,7 @@ map_lookup(column_view const &map_column, string_scalar lookup_key, bool has_nul
 
 /**
  * @brief Looks up a "map" column by specified key to see if the key exists or not,
- *        and returns a column of int values.
+ *        and returns a cudf scalar of bool value.
  *
  * The map-column is represented as follows:
  *
