@@ -46,7 +46,7 @@ struct merge_state_s {
 template <int dimension>
 using block_reduce_storage = detail::block_reduce_storage<dimension>;
 
-template <int block_size, detail::io_type IO>
+template <int block_size, detail::io_file_format IO>
 struct gather_statistics {
   block_reduce_storage<block_size> &temp_storage;
 
@@ -90,7 +90,7 @@ struct gather_statistics {
   }
 };
 
-template <int block_size, detail::io_type IO>
+template <int block_size, detail::io_file_format IO>
 struct merge_statistics {
   block_reduce_storage<block_size> &temp_storage;
 
@@ -167,7 +167,7 @@ __device__ void cooperative_load(T &destination, const T *source)
  * @param[in] num_chunks Number of chunks & rowgroups
  * @param[in] stream CUDA stream to use, default 0
  */
-template <int block_size, detail::io_type IO>
+template <int block_size, detail::io_file_format IO>
 __global__ void __launch_bounds__(block_size, 1)
   gpuGatherColumnStatistics(statistics_chunk *chunks, const statistics_group *groups)
 {
@@ -188,19 +188,10 @@ __global__ void __launch_bounds__(block_size, 1)
 
   cooperative_load(chunks[blockIdx.x], state.ck);
 }
-void GatherColumnStatistics(statistics_chunk *chunks,
-                            const statistics_group *groups,
-                            uint32_t num_chunks,
-                            rmm::cuda_stream_view stream);
-void MergeColumnStatistics(statistics_chunk *chunks_out,
-                           const statistics_chunk *chunks_in,
-                           const statistics_merge_group *groups,
-                           uint32_t num_chunks,
-                           rmm::cuda_stream_view stream);
 
 namespace detail {
 
-template <detail::io_type IO>
+template <detail::io_file_format IO>
 void GatherColumnStatistics(statistics_chunk *chunks,
                             const statistics_group *groups,
                             uint32_t num_chunks,
@@ -211,7 +202,7 @@ void GatherColumnStatistics(statistics_chunk *chunks,
     <<<num_chunks, block_size, 0, stream.value()>>>(chunks, groups);
 }
 
-template <int block_size, detail::io_type IO>
+template <int block_size, detail::io_file_format IO>
 __global__ void __launch_bounds__(block_size, 1)
   gpuMergeColumnStatistics(statistics_chunk *chunks_out,
                            const statistics_chunk *chunks_in,
@@ -245,7 +236,7 @@ __global__ void __launch_bounds__(block_size, 1)
  * @param[in] num_chunks Number of chunks & groups
  * @param[in] stream CUDA stream to use, default 0
  */
-template <detail::io_type IO>
+template <detail::io_file_format IO>
 void MergeColumnStatistics(statistics_chunk *chunks_out,
                            const statistics_chunk *chunks_in,
                            const statistics_merge_group *groups,

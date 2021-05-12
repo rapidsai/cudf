@@ -16,12 +16,9 @@
 
 #pragma once
 
-#include <cudf/strings/string_view.cuh>
-
 #include <cudf/fixed_point/fixed_point.hpp>
-
+#include <cudf/strings/string_view.cuh>
 #include <cudf/wrappers/durations.hpp>
-
 #include <cudf/wrappers/timestamps.hpp>
 
 #include "statistics.cuh"

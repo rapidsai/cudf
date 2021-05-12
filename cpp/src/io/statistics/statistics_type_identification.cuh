@@ -34,14 +34,14 @@ namespace cudf {
 namespace io {
 namespace detail {
 
-enum class io_type { ORC, PARQUET };
+enum class io_file_format { ORC, PARQUET };
 
-template <io_type IO>
+template <io_file_format IO>
 struct conversion_map;
 
 // Every timestamp or duration type is converted to milliseconds in ORC statistics
 template <>
-struct conversion_map<io_type::ORC> {
+struct conversion_map<io_file_format::ORC> {
   using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
                            std::pair<cudf::timestamp_us, cudf::timestamp_ms>,
                            std::pair<cudf::timestamp_ns, cudf::timestamp_ms>,
@@ -54,7 +54,7 @@ struct conversion_map<io_type::ORC> {
 // milliseconds. Timestamps and durations with nanosecond resoluion are
 // converted to microseconds.
 template <>
-struct conversion_map<io_type::PARQUET> {
+struct conversion_map<io_file_format::PARQUET> {
   using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
                            std::pair<cudf::timestamp_ns, cudf::timestamp_us>,
                            std::pair<cudf::duration_s, cudf::duration_ms>,
@@ -190,39 +190,25 @@ class aggregation_type {
 };
 
 template <typename T>
-__inline__ __device__ constexpr std::enable_if_t<std::is_same_v<T, string_view>, T>
-minimum_identity(void)
+__inline__ __device__ constexpr T minimum_identity()
 {
-  return string_view::max();
+  if constexpr (std::is_same_v<T, string_view>) { return string_view::max(); }
+  return cuda::std::numeric_limits<T>::max();
 }
 
 template <typename T>
-__inline__ __device__ constexpr std::enable_if_t<not std::is_same_v<T, string_view>, T>
-minimum_identity(void)
+__inline__ __device__ constexpr T maximum_identity()
 {
-  return std::numeric_limits<T>::max();
+  if constexpr (std::is_same_v<T, string_view>) { return string_view::min(); }
+  return cuda::std::numeric_limits<T>::lowest();
 }
 
-template <typename T>
-__inline__ __device__ constexpr std::enable_if_t<std::is_same_v<T, string_view>, T>
-maximum_identity(void)
-{
-  return string_view::min();
-}
-
-template <typename T>
-__inline__ __device__ constexpr std::enable_if_t<not std::is_same_v<T, string_view>, T>
-maximum_identity(void)
-{
-  return std::numeric_limits<T>::lowest();
-}
-
-template <typename T, io_type IO>
+template <typename T, io_file_format IO>
 class statistics_type_category {
   // ORC does not calculate the statistics of unsigned integers except bools
   // and durations
   static constexpr bool ignore_aggregated_statistics =
-    (IO == io_type::ORC) and
+    (IO == io_file_format::ORC) and
     (((not std::is_same_v<T, bool>)and(std::is_integral_v<T> and std::is_unsigned_v<T>)) or
      cudf::is_duration<T>());
 

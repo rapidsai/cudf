@@ -21,7 +21,7 @@
 
 #include "writer_impl.hpp"
 
-#include <io/statistics/column_stats.cuh>
+#include <io/statistics/column_statistics.cuh>
 #include <io/utilities/column_utils.cuh>
 
 #include <cudf/null_mask.hpp>
@@ -799,15 +799,15 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
                                   row_index_stride_,
                                   stream);
 
-  detail::GatherColumnStatistics<detail::io_type::ORC>(
+  detail::GatherColumnStatistics<detail::io_file_format::ORC>(
     stat_chunks.data(), stat_groups.data(), num_chunks, stream);
-  detail::MergeColumnStatistics<detail::io_type::ORC>(stat_chunks.data() + num_chunks,
-                                                      stat_chunks.data(),
-                                                      stat_merge.device_ptr(),
-                                                      stripe_bounds.size() * columns.size(),
-                                                      stream);
+  detail::MergeColumnStatistics<detail::io_file_format::ORC>(stat_chunks.data() + num_chunks,
+                                                             stat_chunks.data(),
+                                                             stat_merge.device_ptr(),
+                                                             stripe_bounds.size() * columns.size(),
+                                                             stream);
 
-  detail::MergeColumnStatistics<detail::io_type::ORC>(
+  detail::MergeColumnStatistics<detail::io_file_format::ORC>(
     stat_chunks.data() + num_chunks + stripe_bounds.size() * columns.size(),
     stat_chunks.data() + num_chunks,
     stat_merge.device_ptr(stripe_bounds.size() * columns.size()),
