@@ -753,43 +753,6 @@ struct operator_functor<ast_operator::NOT> {
   }
 };
 
-#if 0
-/**
- * @brief Functor used to double-type-dispatch binary operators.
- *
- * This functor's `operator()` is templated to validate calls to its operators based on the input
- * type, as determined by the `is_valid_binary_op` trait.
- *
- * @tparam OperatorFunctor Binary operator functor.
- */
-template <typename OperatorFunctor>
-struct double_dispatch_binary_operator_types {
-  template <typename LHS,
-            typename RHS,
-            typename F,
-            typename... Ts,
-            std::enable_if_t<is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(F&& f, Ts&&... args)
-  {
-    f.template operator()<OperatorFunctor, LHS, RHS>(std::forward<Ts>(args)...);
-  }
-
-  template <typename LHS,
-            typename RHS,
-            typename F,
-            typename... Ts,
-            std::enable_if_t<!is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE void operator()(F&& f, Ts&&... args)
-  {
-#ifndef __CUDA_ARCH__
-    CUDF_FAIL("Invalid binary operation.");
-#else
-    cudf_assert(false && "Invalid binary operation.");
-#endif
-  }
-};
-#endif
-
 /**
  * @brief Functor used to single-type-dispatch binary operators.
  *
@@ -856,16 +819,6 @@ struct type_dispatch_binary_op {
                                             F&& f,
                                             Ts&&... args)
   {
-#if 0
-    // Double dispatch
-    /*
-    double_type_dispatcher(lhs_type,
-                           rhs_type,
-                           detail::double_dispatch_binary_operator_types<operator_functor<op>>{},
-                           std::forward<F>(f),
-                           std::forward<Ts>(args)...);
-    */
-#endif
     // Single dispatch (assume lhs_type == rhs_type)
     type_dispatcher(lhs_type,
                     detail::single_dispatch_binary_operator_types<operator_functor<op>>{},
