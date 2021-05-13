@@ -62,10 +62,10 @@ map_lookup(column_view const &map_column, string_scalar lookup_key, bool has_nul
  *                         <---KEY--->  <--VALUE-->
  *
  * The string_view struct members are the key and value, respectively.
- * For each row in the input list column, if the key is not found, false will be returned for that 
+ * For each row in the input list column, if the key is not found, false will be returned for that
  * row.
- * Note: when search for the scalar key of "null", a column full of "false" will be returned because 
- *       of cudf::list:contains
+ * Note: when search for the scalar key of "null", a column full of "false" will be returned because
+ *       map_contains is leveraging cudf::list:contains.
  *
  * @param map_column The input "map" column to be searched. Must be of
  *                   type list_view<struct_view<string_view, string_view>>.
