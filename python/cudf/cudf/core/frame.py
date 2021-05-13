@@ -18,12 +18,18 @@ from pandas.api.types import is_dict_like, is_dtype_equal
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries
-from cudf.core.column import as_column, build_categorical_column, column_empty
+from cudf.core.column import (
+    ColumnBase,
+    as_column,
+    build_categorical_column,
+    column_empty,
+)
 from cudf.core.join import merge
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
     is_numerical_dtype,
+    is_decimal_dtype,
     is_scalar,
     min_scalar_type,
 )
@@ -47,6 +53,12 @@ class Frame(libcudf.table.Table):
     """
 
     _data: "ColumnAccessor"
+
+    @classmethod
+    def __init_subclass__(cls):
+        # All subclasses contain a set _accessors that is used to hold custom
+        # accessors defined by user APIs (see cudf/api/extensions/accessor.py).
+        cls._accessors = set()
 
     @classmethod
     def _from_table(cls, table: Frame):
@@ -480,6 +492,11 @@ class Frame(libcudf.table.Table):
                     cudf.core.index.as_index(out.index._values)
                 )
 
+        # Reassign precision for any decimal cols
+        for name, col in out._data.items():
+            if isinstance(col, cudf.core.column.DecimalColumn):
+                col = tables[0]._data[name]._copy_type_metadata(col)
+
         # Reassign index and column names
         if isinstance(objs[0].columns, pd.MultiIndex):
             out.columns = objs[0].columns
@@ -608,7 +625,7 @@ class Frame(libcudf.table.Table):
 
         """
         data = self._data.select_by_index(indices)
-        return self._constructor(
+        return self.__class__(
             data, columns=data.to_pandas_index(), index=self.index
         )
 
@@ -3295,6 +3312,445 @@ class Frame(libcudf.table.Table):
         return self._mimic_inplace(result, inplace=inplace)
 
 
+_truediv_int_dtype_corrections = {
+    np.int8: np.float32,
+    np.int16: np.float32,
+    np.int32: np.float32,
+    np.int64: np.float64,
+    np.uint8: np.float32,
+    np.uint16: np.float32,
+    np.uint32: np.float64,
+    np.uint64: np.float64,
+    np.bool_: np.float32,
+}
+
+
+class SingleColumnFrame(Frame):
+    """A one-dimensional frame.
+
+    Frames with only a single column share certain logic that is encoded in
+    this class.
+    """
+
+    @property
+    def name(self):
+        """The name of this object."""
+        return next(iter(self._data.names))
+
+    @name.setter
+    def name(self, value):
+        self._data[value] = self._data.pop(self.name)
+
+    @property
+    def ndim(self):
+        """Dimension of the data (always 1)."""
+        return 1
+
+    @property
+    def shape(self):
+        """Returns a tuple representing the dimensionality of the Index.
+        """
+        return (len(self),)
+
+    def __iter__(self):
+        cudf.utils.utils.raise_iteration_error(obj=self)
+
+    def __len__(self):
+        return len(self._column)
+
+    def __bool__(self):
+        raise TypeError(
+            f"The truth value of a {type(self)} is ambiguous. Use "
+            "a.empty, a.bool(), a.item(), a.any() or a.all()."
+        )
+
+    @property
+    def _column(self):
+        return self._data[self.name]
+
+    @_column.setter
+    def _column(self, value):
+        self._data[self.name] = value
+
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the data.
+
+        Returns
+        -------
+        out : cupy.ndarray
+            A device representation of the underlying data.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([1, -10, 100, 20])
+        >>> ser.values
+        array([  1, -10, 100,  20])
+        >>> type(ser.values)
+        <class 'cupy.core.core.ndarray'>
+        >>> index = cudf.Index([1, -10, 100, 20])
+        >>> index.values
+        array([  1, -10, 100,  20])
+        >>> type(index.values)
+        <class 'cupy.core.core.ndarray'>
+        """
+        return self._column.values
+
+    @property
+    def values_host(self):
+        """
+        Return a NumPy representation of the data.
+
+        Returns
+        -------
+        out : numpy.ndarray
+            A host representation of the underlying data.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([1, -10, 100, 20])
+        >>> ser.values_host
+        array([  1, -10, 100,  20])
+        >>> type(ser.values_host)
+        <class 'numpy.ndarray'>
+        >>> index = cudf.Index([1, -10, 100, 20])
+        >>> index.values_host
+        array([  1, -10, 100,  20])
+        >>> type(index.values_host)
+        <class 'numpy.ndarray'>
+        """
+        return self._column.values_host
+
+    def tolist(self):
+
+        raise TypeError(
+            "cuDF does not support conversion to host memory "
+            "via the `tolist()` method. Consider using "
+            "`.to_arrow().to_pylist()` to construct a Python list."
+        )
+
+    to_list = tolist
+
+    def to_gpu_array(self, fillna=None):
+        """Get a dense numba device array for the data.
+
+        Parameters
+        ----------
+        fillna : str or None
+            See *fillna* in ``.to_array``.
+
+        Notes
+        -----
+
+        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
+        output size could be smaller.
+
+        Returns
+        -------
+        numba.DeviceNDArray
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([10, 20, 30, 40, 50])
+        >>> s
+        0    10
+        1    20
+        2    30
+        3    40
+        4    50
+        dtype: int64
+        >>> s.to_gpu_array()
+        <numba.cuda.cudadrv.devicearray.DeviceNDArray object at 0x7f1840858890>
+        """
+        return self._column.to_gpu_array(fillna=fillna)
+
+    @classmethod
+    def from_arrow(cls, array):
+        """Create from PyArrow Array/ChunkedArray.
+
+        Parameters
+        ----------
+        array : PyArrow Array/ChunkedArray
+            PyArrow Object which has to be converted.
+
+        Raises
+        ------
+        TypeError for invalid input type.
+
+        Returns
+        -------
+        SingleColumnFrame
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pyarrow as pa
+        >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
+        StringIndex(['a' 'b' None], dtype='object')
+        >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
+        0       a
+        1       b
+        2    <NA>
+        dtype: object
+        """
+        return cls(cudf.core.column.column.ColumnBase.from_arrow(array))
+
+    def to_arrow(self):
+        """
+        Convert to a PyArrow Array.
+
+        Returns
+        -------
+        PyArrow Array
+
+        Examples
+        --------
+        >>> import cudf
+        >>> sr = cudf.Series(["a", "b", None])
+        >>> sr.to_arrow()
+        <pyarrow.lib.StringArray object at 0x7f796b0e7600>
+        [
+          "a",
+          "b",
+          null
+        ]
+        >>> ind = cudf.Index(["a", "b", None])
+        >>> ind.to_arrow()
+        <pyarrow.lib.StringArray object at 0x7f796b0e7750>
+        [
+          "a",
+          "b",
+          null
+        ]
+        """
+        return self._column.to_arrow()
+
+    @property
+    def _copy_construct_defaults(self):
+        """A default dictionary of kwargs to be used for copy construction."""
+        raise NotImplementedError
+
+    def _copy_construct(self, **kwargs):
+        """Shallow copy this object by replacing certain ctor args.
+        """
+        return self.__class__(**{**self._copy_construct_defaults, **kwargs})
+
+    def _binaryop(
+        self,
+        other,
+        fn,
+        fill_value=None,
+        reflect=False,
+        lhs=None,
+        *args,
+        **kwargs,
+    ):
+        """Perform a binary operation between two single column frames.
+
+        Parameters
+        ----------
+        other : SingleColumnFrame
+            The second operand.
+        fn : str
+            The operation
+        fill_value : Any, default None
+            The value to replace null values with. If ``None``, nulls are not
+            filled before the operation.
+        reflect : bool, default False
+            If ``True`` the operation is reflected (i.e whether to swap the
+            left and right operands).
+        lhs : SingleColumnFrame, default None
+            The left hand operand. If ``None``, self is used. This parameter
+            allows child classes to preprocess the inputs if necessary.
+
+        Returns
+        -------
+        SingleColumnFrame
+            A new instance containing the result of the operation.
+        """
+        if lhs is None:
+            lhs = self
+
+        rhs = self._normalize_binop_value(other)
+
+        if fn == "truediv":
+            truediv_type = _truediv_int_dtype_corrections.get(lhs.dtype.type)
+            if truediv_type is not None:
+                lhs = lhs.astype(truediv_type)
+
+        output_mask = None
+        if fill_value is not None:
+            if is_scalar(rhs):
+                if lhs.nullable:
+                    lhs = lhs.fillna(fill_value)
+            else:
+                # If both columns are nullable, pandas semantics dictate that
+                # nulls that are present in both lhs and rhs are not filled.
+                if lhs.nullable and rhs.nullable:
+                    # Note: lhs is a Frame, while rhs is already a column.
+                    lmask = as_column(lhs._column.nullmask)
+                    rmask = as_column(rhs.nullmask)
+                    output_mask = (lmask | rmask).data
+                    lhs = lhs.fillna(fill_value)
+                    rhs = rhs.fillna(fill_value)
+                elif lhs.nullable:
+                    lhs = lhs.fillna(fill_value)
+                elif rhs.nullable:
+                    rhs = rhs.fillna(fill_value)
+
+        outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
+
+        # Get the appropriate name for output operations involving two objects
+        # that are Series-like objects. The output shares the lhs's name unless
+        # the rhs is a _differently_ named Series-like object.
+        if (
+            isinstance(other, (SingleColumnFrame, pd.Series, pd.Index))
+            and self.name != other.name
+        ):
+            result_name = None
+        else:
+            result_name = self.name
+
+        output = lhs._copy_construct(data=outcol, name=result_name)
+
+        if output_mask is not None:
+            output._column = output._column.set_mask(output_mask)
+        return output
+
+    def _normalize_binop_value(self, other):
+        """Returns a *column* (not a Series) or scalar for performing
+        binary operations with self._column.
+        """
+        if isinstance(other, ColumnBase):
+            return other
+        if isinstance(other, SingleColumnFrame):
+            return other._column
+        if other is cudf.NA:
+            return cudf.Scalar(other, dtype=self.dtype)
+        else:
+            return self._column.normalize_binop_value(other)
+
+    def _bitwise_binop(self, other, op):
+        """Type-coercing wrapper around _binaryop for bitwise operations."""
+        # This will catch attempts at bitwise ops on extension dtypes.
+        try:
+            self_is_bool = np.issubdtype(self.dtype, np.bool_)
+            other_is_bool = np.issubdtype(other.dtype, np.bool_)
+        except TypeError:
+            raise TypeError(
+                f"Operation 'bitwise {op}' not supported between "
+                f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
+            )
+
+        if (self_is_bool or np.issubdtype(self.dtype, np.integer)) and (
+            other_is_bool or np.issubdtype(other.dtype, np.integer)
+        ):
+            # TODO: This doesn't work on Series (op) DataFrame
+            # because dataframe doesn't have dtype
+            ser = self._binaryop(other, op)
+            if self_is_bool or other_is_bool:
+                ser = ser.astype(np.bool_)
+            return ser
+        else:
+            raise TypeError(
+                f"Operation 'bitwise {op}' not supported between "
+                f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
+            )
+
+    # Binary arithmetic operations.
+    def __add__(self, other):
+        return self._binaryop(other, "add")
+
+    def __radd__(self, other):
+        return self._binaryop(other, "add", reflect=True)
+
+    def __sub__(self, other):
+        return self._binaryop(other, "sub")
+
+    def __rsub__(self, other):
+        return self._binaryop(other, "sub", reflect=True)
+
+    def __mul__(self, other):
+        return self._binaryop(other, "mul")
+
+    def __rmul__(self, other):
+        return self._binaryop(other, "mul", reflect=True)
+
+    def __mod__(self, other):
+        return self._binaryop(other, "mod")
+
+    def __rmod__(self, other):
+        return self._binaryop(other, "mod", reflect=True)
+
+    def __pow__(self, other):
+        return self._binaryop(other, "pow")
+
+    def __rpow__(self, other):
+        return self._binaryop(other, "pow", reflect=True)
+
+    def __floordiv__(self, other):
+        return self._binaryop(other, "floordiv")
+
+    def __rfloordiv__(self, other):
+        return self._binaryop(other, "floordiv", reflect=True)
+
+    def __truediv__(self, other):
+        if is_decimal_dtype(self.dtype):
+            return self._binaryop(other, "div")
+        else:
+            return self._binaryop(other, "truediv")
+
+    def __rtruediv__(self, other):
+        if is_decimal_dtype(self.dtype):
+            return self._binaryop(other, "div", reflect=True)
+        else:
+            return self._binaryop(other, "truediv", reflect=True)
+
+    __div__ = __truediv__
+
+    def __and__(self, other):
+        return self._bitwise_binop(other, "and")
+
+    def __or__(self, other):
+        return self._bitwise_binop(other, "or")
+
+    def __xor__(self, other):
+        return self._bitwise_binop(other, "xor")
+
+    # Binary rich comparison operations.
+    def __eq__(self, other):
+        return self._binaryop(other, "eq")
+
+    def __ne__(self, other):
+        return self._binaryop(other, "ne")
+
+    def __lt__(self, other):
+        return self._binaryop(other, "lt")
+
+    def __le__(self, other):
+        return self._binaryop(other, "le")
+
+    def __gt__(self, other):
+        return self._binaryop(other, "gt")
+
+    def __ge__(self, other):
+        return self._binaryop(other, "ge")
+
+    # Unary logical operators
+    def __neg__(self):
+        return -1 * self
+
+    def __pos__(self):
+        return self.copy(deep=True)
+
+    def __abs__(self):
+        return self._unaryop("abs")
+
+
 def _get_replacement_values_for_columns(
     to_replace: Any, value: Any, columns_dtype_map: Dict[Any, Any]
 ) -> Tuple[Dict[Any, bool], Dict[Any, Any], Dict[Any, Any]]:
@@ -3512,6 +3968,17 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
             # Set the column dtype to the codes' dtype. The categories
             # will be re-assigned at the end
             dtypes[idx] = min_scalar_type(len(categories[idx]))
+        elif all(
+            isinstance(col, cudf.core.column.DecimalColumn) for col in cols
+        ):
+            # Find the largest scale and the largest difference between
+            # precision and scale of the columns to be concatenated
+            s = max([col.dtype.scale for col in cols])
+            lhs = max([col.dtype.precision - col.dtype.scale for col in cols])
+            # Combine to get the necessary precision and clip at the maximum
+            # precision
+            p = min(cudf.Decimal64Dtype.MAX_PRECISION, s + lhs)
+            dtypes[idx] = cudf.Decimal64Dtype(p, s)
         # Otherwise raise an error if columns have different dtypes
         elif not all(is_dtype_equal(c.dtype, dtypes[idx]) for c in cols):
             raise ValueError("All columns must be the same type")

@@ -36,10 +36,12 @@
 #include <cudf/search.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
+#include <cudf/types.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
+#include "jni_utils.hpp"
 #include "row_conversion.hpp"
 
 #include <algorithm>
@@ -656,6 +658,67 @@ std::vector<cudf::null_order> resolve_null_precedence(JNIEnv *env, jbooleanArray
 
 namespace {
 
+int set_column_metadata(cudf::io::column_in_metadata &column_metadata,
+                         std::vector<std::string> &col_names, 
+                         cudf::jni::native_jbooleanArray &nullability,
+                         cudf::jni::native_jbooleanArray &isInt96,
+                         cudf::jni::native_jintArray &precisions,
+                         cudf::jni::native_jintArray &children, int num_children, int read_index) {
+  int write_index = 0;
+  for (int i = 0; i < num_children; i++, write_index++) {
+    cudf::io::column_in_metadata child;
+    child.set_name(col_names[read_index])
+        .set_decimal_precision(precisions[read_index])
+        .set_int96_timestamps(isInt96[read_index])
+        .set_nullability(nullability[read_index]);
+    column_metadata.add_child(child);
+    int childs_children = children[read_index++];
+    if (childs_children > 0) {
+      read_index = set_column_metadata(column_metadata.child(write_index), col_names, nullability,
+                                       isInt96, precisions, children, childs_children, read_index);
+    }
+  }
+  return read_index;
+}
+
+void createTableMetaData(JNIEnv *env, jint num_children, jobjectArray &j_col_names, jintArray &j_children,
+                          jbooleanArray &j_col_nullability, jobjectArray &j_metadata_keys,
+                          jobjectArray &j_metadata_values, jint j_compression, jint j_stats_freq,
+                          jbooleanArray &j_isInt96, jintArray &j_precisions,
+                          cudf::io::table_input_metadata& metadata) {
+  cudf::jni::auto_set_device(env);
+  cudf::jni::native_jstringArray col_names(env, j_col_names);
+  cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
+  cudf::jni::native_jbooleanArray isInt96(env, j_isInt96);
+  cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
+  cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
+  cudf::jni::native_jintArray precisions(env, j_precisions);
+  cudf::jni::native_jintArray children(env, j_children);
+
+  auto cpp_names = col_names.as_cpp_vector();
+
+  int top_level_children = num_children;
+
+  metadata.column_metadata.resize(top_level_children);
+  int read_index = 0; // the read_index, which will be used to read the arrays
+  for (int i = read_index, write_index = 0; i < top_level_children; i++, write_index++) {
+    metadata.column_metadata[write_index]
+        .set_name(cpp_names[read_index])
+        .set_nullability(col_nullability[read_index])
+        .set_int96_timestamps(isInt96[read_index])
+        .set_decimal_precision(precisions[read_index]);
+    int childs_children = children[read_index++];
+    if (childs_children > 0) {
+      read_index = set_column_metadata(metadata.column_metadata[write_index], cpp_names,
+                                       col_nullability, isInt96, precisions, children, childs_children, read_index);
+    }
+  }
+  for (auto i = 0; i < meta_keys.size(); ++i) {
+    metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
+  }
+
+}
+
 // Check that window parameters are valid.
 bool valid_window_parameters(native_jintArray const &values,
                              native_jpointerArray<cudf::aggregation> const &ops,
@@ -1111,55 +1174,33 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readParquet(
 }
 
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
-    JNIEnv *env, jclass, jobjectArray j_col_names, jbooleanArray j_col_nullability,
-    jobjectArray j_metadata_keys, jobjectArray j_metadata_values, jint j_compression,
-    jint j_stats_freq, jboolean j_isInt96, jintArray j_precisions, jobject consumer) {
+    JNIEnv *env, jclass, jobjectArray j_col_names, jint j_num_children, jintArray j_children,
+    jbooleanArray j_col_nullability, jobjectArray j_metadata_keys, jobjectArray j_metadata_values,
+    jint j_compression, jint j_stats_freq, jbooleanArray j_isInt96, jintArray j_precisions,
+    jobject consumer) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
   JNI_NULL_CHECK(env, j_metadata_values, "null metadata values", 0);
   JNI_NULL_CHECK(env, consumer, "null consumer", 0);
   try {
-    cudf::jni::auto_set_device(env);
-    using namespace cudf::io;
-    cudf::jni::native_jstringArray col_names(env, j_col_names);
-    cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
-    cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
-    cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
-    cudf::jni::native_jintArray precisions(env, j_precisions);
-
-    auto cpp_names = col_names.as_cpp_vector();
-    table_input_metadata metadata;
-    metadata.column_metadata.resize(col_nullability.size());
-    for (int i = 0; i < col_nullability.size(); i++) {
-       metadata.column_metadata[i]
-           .set_name(cpp_names[i])
-           .set_nullability(col_nullability[i])
-           .set_int96_timestamps(j_isInt96);
-    }
-
-    // Precisions is not always set
-    for (int i = 0; i < precisions.size(); i++) {
-       metadata.column_metadata[i]
-           .set_decimal_precision(precisions[i]);
-    }
-
-    for (auto i = 0; i < meta_keys.size(); ++i) {
-      metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
-    }
-
     std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
         new cudf::jni::jni_writer_data_sink(env, consumer));
+    
+    using namespace cudf::io;
+    using namespace cudf::jni;
     sink_info sink{data_sink.get()};
-    std::vector<uint8_t> const v_precisions(
-        precisions.data(), precisions.data() + precisions.size());
+    table_input_metadata metadata;
+    createTableMetaData(env, j_num_children, j_col_names, j_children, j_col_nullability, j_metadata_keys,
+                         j_metadata_values, j_compression, j_stats_freq, j_isInt96, j_precisions,
+                         metadata);
+
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
             .metadata(&metadata)
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
             .build();
-
     auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
     cudf::jni::native_parquet_writer_handle *ret =
         new cudf::jni::native_parquet_writer_handle(std::move(writer_ptr), std::move(data_sink));
@@ -1169,44 +1210,23 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
 }
 
 JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
-    JNIEnv *env, jclass, jobjectArray j_col_names, jbooleanArray j_col_nullability,
-    jobjectArray j_metadata_keys, jobjectArray j_metadata_values, jint j_compression,
-    jint j_stats_freq, jboolean j_isInt96, jintArray j_precisions, jstring j_output_path) {
+    JNIEnv *env, jclass, jobjectArray j_col_names, jint j_num_children, jintArray j_children,
+    jbooleanArray j_col_nullability, jobjectArray j_metadata_keys, jobjectArray j_metadata_values,
+    jint j_compression, jint j_stats_freq, jbooleanArray j_isInt96, jintArray j_precisions,
+    jstring j_output_path) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, j_col_nullability, "null nullability", 0);
   JNI_NULL_CHECK(env, j_metadata_keys, "null metadata keys", 0);
   JNI_NULL_CHECK(env, j_metadata_values, "null metadata values", 0);
   JNI_NULL_CHECK(env, j_output_path, "null output path", 0);
   try {
-    cudf::jni::auto_set_device(env);
-    using namespace cudf::io;
-    cudf::jni::native_jstringArray col_names(env, j_col_names);
-    cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
-    cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
-    cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
     cudf::jni::native_jstring output_path(env, j_output_path);
-    cudf::jni::native_jintArray precisions(env, j_precisions);
 
-    auto cpp_names = col_names.as_cpp_vector();
+    using namespace cudf::io;                     
+    using namespace cudf::jni;                     
     table_input_metadata metadata;
-    metadata.column_metadata.resize(col_nullability.size());
-    for (int i = 0; i < col_nullability.size(); i++) {
-       metadata.column_metadata[i]
-           .set_name(cpp_names[i])
-           .set_nullability(col_nullability[i])
-           .set_int96_timestamps(j_isInt96);
-    }
-
-    // Precisions is not always set
-    for (int i = 0; i < precisions.size(); i++) {
-       metadata.column_metadata[i]
-           .set_decimal_precision(precisions[i]);
-    }
-
-    for (auto i = 0; i < meta_keys.size(); ++i) {
-      metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
-    }
-
+    createTableMetaData(env, j_num_children, j_col_names, j_children, j_col_nullability, j_metadata_keys,
+                         j_metadata_values, j_compression, j_stats_freq, j_isInt96, j_precisions, metadata);
     sink_info sink{output_path.get()};
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
@@ -1875,8 +1895,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_crossJoin(JNIEnv *env, jc
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_interleaveColumns(JNIEnv *env, jclass,
                                                                     jlongArray j_cudf_table_view) {
 
-  JNI_NULL_CHECK(env, j_cudf_table_view, "table is null", 0);
-  try {
+  JNI_NULL_CHECK(env, j_cudf_table_view, "table is null", 0);  try {
     cudf::jni::auto_set_device(env);
     cudf::table_view *table_view = reinterpret_cast<cudf::table_view *>(j_cudf_table_view);
     std::unique_ptr<cudf::column> result = cudf::interleave_columns(*table_view);
@@ -2275,15 +2294,18 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
 
     std::vector<std::unique_ptr<cudf::column>> result_columns;
     for (int i(0); i < values.size(); ++i) {
+      cudf::rolling_aggregation * agg = dynamic_cast<cudf::rolling_aggregation *>(agg_instances[i]);
+      JNI_ARG_CHECK(env, agg != nullptr, "aggregation is not an instance of rolling_aggregation", nullptr);
+
       int agg_column_index = values[i];
       if (default_output[i] != nullptr) {
         result_columns.emplace_back(std::move(cudf::grouped_rolling_window(
             groupby_keys, input_table->column(agg_column_index), *default_output[i], preceding[i],
-            following[i], min_periods[i], agg_instances[i]->clone())));
+            following[i], min_periods[i], *agg)));
       } else {
         result_columns.emplace_back(std::move(cudf::grouped_rolling_window(
             groupby_keys, input_table->column(agg_column_index), preceding[i], following[i],
-            min_periods[i], agg_instances[i]->clone())));
+            min_periods[i], *agg)));
       }
     }
 
@@ -2339,6 +2361,10 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAgg
     std::vector<std::unique_ptr<cudf::column>> result_columns;
     for (int i(0); i < values.size(); ++i) {
       int agg_column_index = values[i];
+
+      cudf::rolling_aggregation * agg = dynamic_cast<cudf::rolling_aggregation *>(agg_instances[i]);
+      JNI_ARG_CHECK(env, agg != nullptr, "aggregation is not an instance of rolling_aggregation", nullptr);
+
       result_columns.emplace_back(
         std::move(
           cudf::grouped_time_range_rolling_window(
@@ -2349,7 +2375,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAgg
             unbounded_preceding[i] ? cudf::window_bounds::unbounded() : cudf::window_bounds::get(preceding[i]), 
             unbounded_following[i] ? cudf::window_bounds::unbounded() : cudf::window_bounds::get(following[i]), 
             min_periods[i],
-            agg_instances[i]->clone()
+            *agg
           )
         )
       );

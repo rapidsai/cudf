@@ -86,6 +86,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       return new Scalar(type, makeDecimal32Scalar(0, type.getScale(), false));
     case DECIMAL64:
       return new Scalar(type, makeDecimal64Scalar(0L, type.getScale(), false));
+    case LIST:
+      throw new IllegalArgumentException("Please call 'listFromNull' to create a null list scalar.");
     default:
       throw new IllegalArgumentException("Unexpected type: " + type);
     }
@@ -333,6 +335,35 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return new Scalar(DType.STRING, makeStringScalar(value.getBytes(StandardCharsets.UTF_8), true));
   }
 
+  /**
+   * Creates a null scalar of list type.
+   *
+   * Having this special API because the element type is required to build an empty
+   * nested column as the underlying column of the list scalar.
+   *
+   * @param elementType the data type of the element in the list.
+   * @return a null scalar of list type
+   */
+  public static Scalar listFromNull(HostColumnVector.DataType elementType) {
+    try (ColumnVector col = ColumnVector.empty(elementType)) {
+      return new Scalar(DType.LIST, makeListScalar(col.getNativeView(), false));
+    }
+  }
+
+  /**
+   * Creates a scalar of list from a ColumnView.
+   *
+   * All the rows in the ColumnView will be copied into the Scalar. So the ColumnView
+   * can be closed after this call completes.
+   */
+  public static Scalar listFromColumnView(ColumnView list) {
+    if (list == null) {
+      throw new IllegalArgumentException("'list' should NOT be null." +
+          " Please call 'listFromNull' to create a null list scalar.");
+    }
+    return new Scalar(DType.LIST, makeListScalar(list.getNativeView(), true));
+  }
+
   private static native void closeScalar(long scalarHandle);
   private static native boolean isScalarValid(long scalarHandle);
   private static native byte getByte(long scalarHandle);
@@ -342,6 +373,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native float getFloat(long scalarHandle);
   private static native double getDouble(long scalarHandle);
   private static native byte[] getUTF8(long scalarHandle);
+  private static native long getListAsColumnView(long scalarHandle);
   private static native long makeBool8Scalar(boolean isValid, boolean value);
   private static native long makeInt8Scalar(byte value, boolean isValid);
   private static native long makeUint8Scalar(byte value, boolean isValid);
@@ -360,6 +392,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native long makeTimestampTimeScalar(int dtypeNativeId, long value, boolean isValid);
   private static native long makeDecimal32Scalar(int value, int scale, boolean isValid);
   private static native long makeDecimal64Scalar(long value, int scale, boolean isValid);
+  private static native long makeListScalar(long viewHandle, boolean isValid);
 
 
   Scalar(DType type, long scalarHandle) {
@@ -484,6 +517,19 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return getUTF8(getScalarHandle());
   }
 
+  /**
+   * Returns the scalar value as a ColumnView. Callers should close the returned ColumnView to
+   * avoid memory leak.
+   *
+   * The returned ColumnView is only valid as long as the Scalar remains valid. If the Scalar
+   * is closed before this ColumnView is closed, using this ColumnView will result in undefined
+   * behavior.
+   */
+  public ColumnView getListAsColumnView() {
+    assert DType.LIST.equals(type) : "Cannot get list for the vector of type " + type;
+    return new ColumnView(getListAsColumnView(getScalarHandle()));
+  }
+
   @Override
   public ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType) {
     if (rhs instanceof ColumnView) {
@@ -541,6 +587,11 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       return getLong() == other.getLong();
     case STRING:
       return Arrays.equals(getUTF8(), other.getUTF8());
+    case LIST:
+      try (ColumnView viewMe = getListAsColumnView();
+           ColumnView viewO = other.getListAsColumnView()) {
+        return viewMe.equals(viewO);
+      }
     default:
       throw new IllegalStateException("Unexpected type: " + type);
     }
@@ -588,6 +639,11 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         break;
       case STRING:
         valueHash = Arrays.hashCode(getUTF8());
+        break;
+      case LIST:
+        try (ColumnView v = getListAsColumnView()) {
+          valueHash = v.hashCode();
+        }
         break;
       default:
         throw new IllegalStateException("Unknown scalar type: " + type);
@@ -650,6 +706,12 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         // FALL THROUGH
       case DECIMAL64:
         sb.append(getBigDecimal());
+        break;
+      case LIST:
+        try (ColumnView v = getListAsColumnView()) {
+          // It's not easy to pull out the elements so just a simple string of some metadata.
+          sb.append(v.toString());
+        }
         break;
       default:
         throw new IllegalArgumentException("Unknown scalar type: " + type);
