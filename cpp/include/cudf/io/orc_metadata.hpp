@@ -63,10 +63,9 @@ struct raw_orc_statistics {
 raw_orc_statistics read_raw_orc_statistics(source_info const& src_info);
 
 /**
- * @brief Monostate type for the statistics variant.
+ * @brief Monostate type alias for the statistics variant.
  */
-struct no_statistics {
-};
+using no_statistics = std::monostate;
 
 /**
  * @brief Base class for column statistics that include optional minimum and maximum.
