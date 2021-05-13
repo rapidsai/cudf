@@ -2110,6 +2110,26 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testConcatWsTypeError() {
+    try (ColumnVector v0 = ColumnVector.fromInts(1, 2, 3, 4);
+         ColumnVector v1 = ColumnVector.fromFloats(5.0f, 6.0f);
+         ColumnVector sep_col = ColumnVector.fromStrings("-*");
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar nullString = Scalar.fromString(null)) {
+      assertThrows(CudfException.class, () -> ColumnVector.stringConcatenateWs(new ColumnView[]{v0, v1}, sep_col, separatorString, nullString));
+    }
+  }
+
+  @Test
+  void testConcatWsNoColumn() {
+    try (ColumnVector sep_col = ColumnVector.fromStrings("-*");
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar nullString = Scalar.fromString(null)) {
+      assertThrows(AssertionError.class, () -> ColumnVector.stringConcatenateWs(new ColumnView[]{}, sep_col, separatorString, nullString));
+    }
+  }
+
+  @Test
   void testStringConcatWsSimple() {
     try (ColumnVector sv1 = ColumnVector.fromStrings("a");
          ColumnVector sv2 = ColumnVector.fromStrings("B");
@@ -2167,17 +2187,20 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testStringConcatWsNullSepNaRep() {
-    try (ColumnVector sv1 = ColumnVector.fromStrings("a", "c", "e");
+  void testStringConcatWsNullAllCol() {
+    try (Scalar nullString = Scalar.fromString(null);
+         ColumnVector sv1 = ColumnVector.fromScalar(nullString, 3);
+         ColumnVector sv2 = ColumnVector.fromScalar(nullString, 3);
          ColumnVector sep_col = ColumnVector.fromStrings("-", "-", "-");
-         ColumnVector e_concat = ColumnVector.fromStrings("a", "c", "e");
+         // TODO - Spark expects this to be empty String
+         // ColumnVector e_concat = ColumnVector.fromStrings("", "", "");
+         ColumnVector e_concat = ColumnVector.fromScalar(nullString, 3);
          Scalar separatorString = Scalar.fromString(null);
          Scalar nullEmptyString = Scalar.fromString(null);
-         ColumnVector concat = ColumnVector.stringConcatenateWs(new ColumnView[]{sv1}, sep_col, separatorString, nullEmptyString)) {
+         ColumnVector concat = ColumnVector.stringConcatenateWs(new ColumnView[]{sv1, sv2}, sep_col, separatorString, nullEmptyString)) {
       assertColumnsAreEqual(e_concat, concat);
     }
   }
-
 
   /*
   @Test

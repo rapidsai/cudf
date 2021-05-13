@@ -527,7 +527,23 @@ public final class ColumnVector extends ColumnView {
 
   /**
    * Concatenate columns of strings together using a separator specified for each row
-   * and returns the result as a string column.
+   * and returns the result as a string column. If the row separator for a given row is null,
+   * output column for that row is null. Null column values for a given row are skipped.
+   * @param columns array of columns containing strings, must be more than 1 columns
+   * @param sep_col strings column that provides the separator for a given row
+   * @return A new java column vector containing the concatenated strings with separator between.
+   */
+  public static ColumnVector stringConcatenateWs(ColumnView[] columns, ColumnView sep_col) {
+    try (Scalar nullString = Scalar.fromString(null)) {
+      return stringConcatenateWs(columns, sep_col, nullString, nullString);
+    }
+  }
+
+  /**
+   * Concatenate columns of strings together using a separator specified for each row
+   * and returns the result as a string column. If the row separator for a given row is null,
+   * output column for that row is null unless separator_narep is provided. Null column values
+   * for a given row are skipped unless col_narep is provided.
    * @param columns array of columns containing strings, must be more than 1 columns
    * @param sep_col strings column that provides the separator for a given row
    * @param separator_narep String that should be used in place of a null separator for a given
@@ -537,6 +553,23 @@ public final class ColumnVector extends ColumnView {
    * @return A new java column vector containing the concatenated strings with separator between.
    */
   public static ColumnVector stringConcatenateWs(ColumnView[] columns, ColumnView sep_col, Scalar separator_narep, Scalar col_narep) {
+    assert columns.length >= 1 : ".stringConcatenate() operation requires at least 1 column";
+    assert separator_narep != null : "separator narep scalar provided may not be null";
+    assert col_narep != null : "column narep scalar provided may not be null";
+    assert separator_narep.getType().equals(DType.STRING) : "separator naprep scalar must be a string scalar";
+    assert col_narep.getType().equals(DType.STRING) : "column narep scalar must be a string scalar";
+
+    long[] column_views = new long[columns.length];
+    for(int i = 0; i < columns.length; i++) {
+      assert columns[i] != null : "Column vectors passed may not be null";
+      column_views[i] = columns[i].getNativeView();
+    }
+
+    return new ColumnVector(stringConcatenationWs(column_views, sep_col.getNativeView(),
+      separator_narep.getScalarHandle(), col_narep.getScalarHandle()));
+  }
+
+  public static ColumnVector concatenateListElements(ColumnView[] columns, ColumnView sep_col, Scalar separator_narep, Scalar col_narep) {
     assert columns.length >= 1 : ".stringConcatenate() operation requires at least 1 column";
     assert separator_narep != null : "separator narep scalar provided may not be null";
     assert col_narep != null : "column narep scalar provided may not be null";
