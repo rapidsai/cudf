@@ -31,6 +31,9 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/device_vector.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <nvcomp/snappy.h>
 
 #include <algorithm>
 #include <array>
@@ -908,6 +911,58 @@ void reader::impl::decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc> &
   pages.device_to_host(stream, true);
 }
 
+void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
+                       device_span<gpu_inflate_status_s> comp_stat,
+                       size_t max_uncomp_page_size,
+                       rmm::cuda_stream_view stream)
+{
+  size_t num_comp_pages = comp_in.size();
+  size_t temp_size;
+
+  CUDF_EXPECTS(nvcompError_t::nvcompSuccess == nvcompBatchedSnappyDecompressGetTempSize(
+                                                 num_comp_pages, max_uncomp_page_size, &temp_size),
+               "Unable to get scratch size for snappy decompression");
+
+  // Not needed now but nvcomp API makes no promises about future
+  rmm::device_buffer scratch(temp_size, stream);
+  // Analogous to comp_in.srcDevice
+  rmm::device_uvector<void const *> compressed_data_ptrs(num_comp_pages, stream);
+  // Analogous to comp_in.srcSize
+  rmm::device_uvector<size_t> compressed_data_sizes(num_comp_pages, stream);
+  // Analogous to comp_in.dstDevice
+  rmm::device_uvector<void *> uncompressed_data_ptrs(num_comp_pages, stream);
+  // Analogous to comp_in.dstSize
+  rmm::device_uvector<size_t> uncompressed_data_sizes(num_comp_pages, stream);
+
+  // nvcomp does not report
+
+  // Prepare the vectors
+  auto comp_it = thrust::make_zip_iterator(compressed_data_ptrs.begin(),
+                                           compressed_data_sizes.begin(),
+                                           uncompressed_data_ptrs.begin(),
+                                           uncompressed_data_sizes.data());
+  thrust::transform(rmm::exec_policy(stream),
+                    comp_in.begin(),
+                    comp_in.end(),
+                    comp_it,
+                    [] __device__(gpu_inflate_input_s in) {
+                      return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice, in.dstSize);
+                    });
+  CUDF_EXPECTS(nvcompError_t::nvcompSuccess ==
+                 nvcompBatchedSnappyDecompressAsync(compressed_data_ptrs.data(),
+                                                    compressed_data_sizes.data(),
+                                                    uncompressed_data_sizes.data(),
+                                                    num_comp_pages,
+                                                    scratch.data(),  // Not needed rn but future
+                                                    scratch.size(),
+                                                    uncompressed_data_ptrs.data(),
+                                                    stream.value()),
+               "unable to perform snappy decompression");
+
+  // nvcomp doesn't return any information that should be written to comp_out.
+  // Parquet reader doesn't make use of comp_out anyway.
+}
+
 /**
  * @copydoc cudf::io::detail::parquet::decompress_page_data
  */
@@ -932,18 +987,27 @@ rmm::device_buffer reader::impl::decompress_page_data(
   // Count the exact number of compressed pages
   size_t num_comp_pages    = 0;
   size_t total_decomp_size = 0;
-  std::array<std::pair<parquet::Compression, size_t>, 3> codecs{std::make_pair(parquet::GZIP, 0),
-                                                                std::make_pair(parquet::SNAPPY, 0),
-                                                                std::make_pair(parquet::BROTLI, 0)};
+
+  struct codec_stats {
+    parquet::Compression compression_type;
+    size_t num_pages;
+    int32_t max_decompressed_size;
+  };
+
+  std::array<codec_stats, 3> codecs{codec_stats{parquet::GZIP, 0, 0},
+                                    codec_stats{parquet::SNAPPY, 0, 0},
+                                    codec_stats{parquet::BROTLI, 0, 0}};
 
   for (auto &codec : codecs) {
-    for_each_codec_page(codec.first, [&](size_t page) {
-      total_decomp_size += pages[page].uncompressed_page_size;
-      codec.second++;
+    for_each_codec_page(codec.compression_type, [&](size_t page) {
+      auto page_uncomp_size = pages[page].uncompressed_page_size;
+      total_decomp_size += page_uncomp_size;
+      codec.max_decompressed_size = std::max(codec.max_decompressed_size, page_uncomp_size);
+      codec.num_pages++;
       num_comp_pages++;
     });
-    if (codec.first == parquet::BROTLI && codec.second > 0) {
-      debrotli_scratch.resize(get_gpu_debrotli_scratch_size(codec.second), stream);
+    if (codec.compression_type == parquet::BROTLI && codec.num_pages > 0) {
+      debrotli_scratch.resize(get_gpu_debrotli_scratch_size(codec.num_pages), stream);
     }
   }
 
@@ -952,13 +1016,16 @@ rmm::device_buffer reader::impl::decompress_page_data(
   hostdevice_vector<gpu_inflate_input_s> inflate_in(0, num_comp_pages, stream);
   hostdevice_vector<gpu_inflate_status_s> inflate_out(0, num_comp_pages, stream);
 
+  device_span<gpu_inflate_input_s> inflate_in_view(inflate_in.device_ptr(), inflate_in.size());
+  device_span<gpu_inflate_status_s> inflate_out_view(inflate_out.device_ptr(), inflate_out.size());
+
   size_t decomp_offset = 0;
   int32_t argc         = 0;
   for (const auto &codec : codecs) {
-    if (codec.second > 0) {
+    if (codec.num_pages > 0) {
       int32_t start_pos = argc;
 
-      for_each_codec_page(codec.first, [&](size_t page) {
+      for_each_codec_page(codec.compression_type, [&](size_t page) {
         auto dst_base              = static_cast<uint8_t *>(decomp_pages.data());
         inflate_in[argc].srcDevice = pages[page].page_data;
         inflate_in[argc].srcSize   = pages[page].compressed_page_size;
@@ -984,7 +1051,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
                                sizeof(decltype(inflate_out)::value_type) * (argc - start_pos),
                                cudaMemcpyHostToDevice,
                                stream.value()));
-      switch (codec.first) {
+      switch (codec.compression_type) {
         case parquet::GZIP:
           CUDA_TRY(gpuinflate(inflate_in.device_ptr(start_pos),
                               inflate_out.device_ptr(start_pos),
@@ -993,10 +1060,10 @@ rmm::device_buffer reader::impl::decompress_page_data(
                               stream))
           break;
         case parquet::SNAPPY:
-          CUDA_TRY(gpu_unsnap(inflate_in.device_ptr(start_pos),
-                              inflate_out.device_ptr(start_pos),
-                              argc - start_pos,
-                              stream));
+          snappy_decompress(inflate_in_view.subspan(start_pos, argc - start_pos),
+                            inflate_out_view.subspan(start_pos, argc - start_pos),
+                            codec.max_decompressed_size,
+                            stream);
           break;
         case parquet::BROTLI:
           CUDA_TRY(gpu_debrotli(inflate_in.device_ptr(start_pos),
