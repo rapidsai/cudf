@@ -216,7 +216,6 @@ struct SkipRowTest {
 
 }  // namespace
 
-/*
 TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn)
 {
   auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
@@ -1027,7 +1026,6 @@ TEST_F(OrcStatisticsTest, Basic)
   validate_statistics(stats.stripes_stats[0]);
 }
 
-
 TEST_F(OrcWriterTest, SlicedValidMask)
 {
   std::vector<const char*> strings;
@@ -1063,7 +1061,6 @@ TEST_F(OrcWriterTest, SlicedValidMask)
   CUDF_TEST_EXPECT_TABLES_EQUAL(tbl, result.tbl->view());
   EXPECT_EQ(expected_metadata.column_names, result.metadata.column_names);
 }
-*/
 
 TEST_F(OrcReaderTest, SingleInputs)
 {
@@ -1082,7 +1079,6 @@ TEST_F(OrcReaderTest, SingleInputs)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *table1);
 }
 
-/*
 TEST_F(OrcReaderTest, MultipleInputs)
 {
   srand(31537);
@@ -1107,6 +1103,5 @@ TEST_F(OrcReaderTest, MultipleInputs)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
-*/
 
 CUDF_TEST_PROGRAM_MAIN()

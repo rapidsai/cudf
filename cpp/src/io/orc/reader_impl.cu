@@ -36,7 +36,6 @@
 
 #include <algorithm>
 #include <array>
-#include <regex>
 
 namespace cudf {
 namespace io {
@@ -157,38 +156,20 @@ size_t gather_stream_info(const size_t stripe_index,
                           hostdevice_vector<gpu::ColumnDesc> &chunks,
                           std::vector<orc_stream_info> &stream_info)
 {
-  int cols_read          = 0;
-  int stream_index       = 0;
   int num_index_columns  = 0;
   const auto num_columns = gdf2orc.size();
-  printf("\n\nNum columns: %lu\n", num_columns);
-  uint64_t src_offset = 0;
-  uint64_t dst_offset = 0;
-  printf("Number of stripefooter streams %lu\n", stripefooter->streams.size());
-  printf("orc2gdf Data ....{");
-  for (int i : orc2gdf) { printf("%d, ", i); }
-  printf("}\n");
-  printf("gdf2orc Data ....{");
-  for (int i : gdf2orc) { printf("%d, ", i); }
-  printf("}\n");
+  uint64_t src_offset    = 0;
+  uint64_t dst_offset    = 0;
   for (const auto &stream : stripefooter->streams) {
-    printf("\n");
-    printf("Stream Index: %d\n", stream_index);
-    stream_index++;
-    auto const column_id = *stream.column_id;
-    printf("ColumnId: %d\n", column_id);
     if (!stream.column_id || *stream.column_id >= orc2gdf.size()) {
-      printf("This thing\n");
       dst_offset += stream.length;
       continue;
     }
 
-    // auto const column_id = *stream.column_id;
-    // printf("ColumnId: %d\n", column_id);
-    auto col = orc2gdf[column_id];
-    printf("Col: %d\n", col);
+    auto const column_id = *stream.column_id;
+    auto col             = orc2gdf[column_id];
+
     if (col == -1) {
-      printf("Alright, adding PRESENT stream for column\n");
       // A struct-type column has no data itself, but rather child columns
       // for each of its fields. There is only a PRESENT stream, which
       // needs to be included for the reader.
@@ -211,11 +192,8 @@ size_t gather_stream_info(const size_t stripe_index,
       if (src_offset >= stripeinfo->indexLength || use_index) {
         // NOTE: skip_count field is temporarily used to track index ordering
         auto &chunk = chunks[stripe_index * num_columns + col];
-        printf("Access Chunk at index: %d\n", static_cast<int>(stripe_index * num_columns + col));
         const auto idx =
           get_index_type_and_pos(stream.kind, chunk.skip_count, col == orc2gdf[column_id]);
-        printf("Stream Type: %d\n", idx.first);
-        if (idx.first == gpu::CI_DATA) { cols_read++; }
         if (idx.first < gpu::CI_NUM_STREAMS) {
           chunk.strm_id[idx.first]  = stream_info.size();
           chunk.strm_len[idx.first] = stream.length;
@@ -227,9 +205,6 @@ size_t gather_stream_info(const size_t stripe_index,
             *num_dictionary_entries += stripefooter->columns[column_id].dictionarySize;
           }
         }
-      } else {
-        printf("Index column\n");
-        num_index_columns++;
       }
       stream_info.emplace_back(
         stripeinfo->offset + src_offset, dst_offset, stream.length, col, stripe_index);
@@ -237,9 +212,6 @@ size_t gather_stream_info(const size_t stripe_index,
     }
     src_offset += stream.length;
   }
-
-  printf("Number of Index Columns: %d\n", num_index_columns);
-  printf("Data Columns read: %d\n", cols_read);
 
   return dst_offset;
 }
@@ -271,7 +243,6 @@ class aggregate_orc_metadata {
       sources.cbegin(), sources.cend(), std::back_inserter(metadatas), [](auto const &source) {
         return cudf::io::orc::metadata(source.get());
       });
-
     return metadatas;
   }
 
@@ -450,8 +421,6 @@ class aggregate_orc_metadata {
           size_t sf_length = 0;
           auto sf_data     = per_file_metadata[mapping.source_idx].decompressor->Decompress(
             buffer->data(), sf_comp_length, &sf_length);
-          printf("stripeFooters size: %lu\n",
-                 per_file_metadata[mapping.source_idx].stripefooters.size());
           ProtobufReader(sf_data, sf_length)
             .read(per_file_metadata[mapping.source_idx].stripefooters[stripe_idx]);
           mapping.stripe_info[stripe_idx].second =
@@ -472,9 +441,8 @@ class aggregate_orc_metadata {
    * @return input column information, output column information, list of output column schema
    * indices
    */
-  auto select_columns(std::vector<std::string> const &use_names,
-                      bool &has_timestamp_column,
-                      bool use_np_dtypes) const
+  std::vector<int> select_columns(std::vector<std::string> const &use_names,
+                                  bool &has_timestamp_column) const
   {
     auto const &pfm = per_file_metadata[0];
 
@@ -505,39 +473,7 @@ class aggregate_orc_metadata {
       }
     }
 
-    // construct input and output column info
-    std::vector<column_buffer> output_columns;
-    output_columns.reserve(output_column_schema_idxs.size());
-    std::vector<input_column_info> input_columns;
-
-    for (int schema_idx : output_column_schema_idxs) {
-      auto const &schema = get_schema(schema_idx);
-
-      // XXX: What TIMESTAMP TYPE should be used here? I just randomly choose nanoseconds but that
-      // can't be right
-      auto const col_type = to_type_id(schema, use_np_dtypes, type_id::TIMESTAMP_NANOSECONDS);
-      auto const dtype =
-        col_type == type_id::DECIMAL32 || col_type == type_id::DECIMAL64
-          ? data_type{col_type, numeric::scale_type{static_cast<int>(-schema.scale)}}
-          : data_type{col_type};
-      output_columns.emplace_back(
-        dtype, true);  // XXX: Hardcoded value of "true" for is nullable needs to be changed
-      column_buffer &output_col = output_columns.back();
-      output_col.name = get_column_name(0, schema_idx);  // XXX: Surely there is a better way to get
-                                                         // the name of the input column than this?
-
-      // if I have no children, we're at a leaf and I'm an input column (that is, one with actual
-      // data stored) so add me to the list.
-      if (schema.subtypes.size() == 0) {
-        input_columns.emplace_back(input_column_info{schema_idx, get_column_name(0, schema_idx)});
-      } else {
-        // XXX: Very likely need to iterate the schema subtypes here for things like structs, maps,
-        // etc. Get team input
-      }
-    }
-
-    return std::make_tuple(
-      std::move(input_columns), std::move(output_columns), std::move(output_column_schema_idxs));
+    return output_column_schema_idxs;
   }
 };
 
@@ -716,6 +652,9 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
   // Open and parse the source(s) dataset metadata
   _metadata = std::make_unique<aggregate_orc_metadata>(_sources);
 
+  // Select only columns required by the options
+  _selected_columns = _metadata->select_columns(options.get_columns(), _has_timestamp_column);
+
   // Override output timestamp resolution if requested
   if (options.get_timestamp_type().id() != type_id::EMPTY) {
     _timestamp_type = options.get_timestamp_type();
@@ -726,15 +665,11 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
 
   // Enable or disable the conversion to numpy-compatible dtypes
   _use_np_dtypes = options.is_enabled_use_np_dtypes();
-
-  // Select only columns required by the options
-  std::tie(_input_columns, _output_columns, _selected_columns) =
-    _metadata->select_columns(options.get_columns(), _has_timestamp_column, _use_np_dtypes);
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,
                                        size_type num_rows,
-                                       std::vector<std::vector<size_type>> const &stripes,
+                                       const std::vector<std::vector<size_type>> &stripes,
                                        rmm::cuda_stream_view stream)
 {
   std::vector<std::unique_ptr<column>> out_columns;
@@ -747,7 +682,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   const auto selected_stripes = _metadata->select_stripes(stripes, skip_rows, num_rows);
 
   // Association between each ORC column and its cudf::column
-  std::vector<int32_t> orc_col_map(_selected_columns.size(), -1);
+  std::vector<int32_t> orc_col_map(_metadata->get_num_cols(), -1);
 
   // Get a list of column data types
   std::vector<data_type> column_types;
@@ -760,15 +695,14 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // sign of the scale is changed since cuDF follows c++ libraries like CNL
     // which uses negative scaling, but liborc and other libraries
     // follow positive scaling.
-    /*
-    auto scale =
-      (col_type == type_id::DECIMAL64) ? -static_cast<int32_t>(_metadata->get_types()[col].scale) :
-    0; column_types.emplace_back(col_type, scale);
-    */
-    // https://github.com/rapidsai/cudf/blob/57a8ad2cbc0a8df1e95031d06b74d44dceaa06d6/cpp/include/cudf/utilities/traits.hpp#L383
-    // XXX: Waiting to hear back on team about this. For now just consider of int type
-
-    column_types.emplace_back(col_type);
+    auto scale = (col_type == type_id::DECIMAL64)
+                   ? -static_cast<int32_t>(_metadata->get_types()[col].scale)
+                   : 0;
+    if (col_type == type_id::DECIMAL32 || col_type == type_id::DECIMAL64) {
+      column_types.emplace_back(col_type, scale);
+    } else {
+      column_types.emplace_back(col_type);
+    }
 
     // Map each ORC column to its column
     orc_col_map[col] = column_types.size() - 1;
@@ -782,10 +716,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                    [](auto const &dtype) { return make_empty_column(dtype); });
   } else {
     const auto num_columns = _selected_columns.size();
-    printf("Selected Columns size: %lu\n", _selected_columns.size());
-    printf("Selected stripes size: %lu\n", selected_stripes.size());
-    const auto num_chunks = selected_stripes.size() * num_columns;
-    printf("Number of chunks created: %lu\n", num_chunks);
+    const auto num_chunks  = selected_stripes.size() * num_columns;
     hostdevice_vector<gpu::ColumnDesc> chunks(num_chunks, stream);
     memset(chunks.host_ptr(), 0, chunks.memory_size());
 
