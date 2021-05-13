@@ -23,6 +23,7 @@ import cudf
 from cudf import _lib as libcudf
 
 from dask_cudf import sorting
+from dask_cudf.accessors import ListMethods
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
@@ -413,6 +414,10 @@ class Series(_Frame, dd.core.Series):
         from .groupby import CudfSeriesGroupBy
 
         return CudfSeriesGroupBy(self, *args, **kwargs)
+
+    @property
+    def list(self):
+        return ListMethods(self)
 
 
 class Index(Series, dd.core.Index):
