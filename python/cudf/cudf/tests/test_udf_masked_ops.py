@@ -109,11 +109,14 @@ def test_apply_NA_conditional():
         'b':[4,5,None, None]
     })
 
-    pdf = gdf.to_pandas()
+    pdf = gdf.to_pandas(nullable=True)
 
     expect = pdf.apply(lambda row: func_pdf(row['a'], row['b']), axis=1)
     obtain = gdf.apply(lambda row: func_gdf(row['a'], row['b']), axis=1)
 
+    # using a UDF on a nullable dtype in pandas casts to object
+    expect = expect.astype(pd.Int64Dtype())
+    obtain = obtain.to_pandas(nullable=True)
     assert_eq(expect, obtain)
 
 
