@@ -147,6 +147,19 @@ class MaskedScalarAdd(AbstractTemplate):
                 MaskedType(args[1].value_type),
             )
 
+
+@cuda_decl_registry.register_global(operator.is_)
+class MaskedScalarIsNull(AbstractTemplate):
+    '''
+    Typing for `Masked is cudf.NA`
+    '''
+    def generic(self, args, kws):
+        if isinstance(args[0], MaskedType) and isinstance(args[1], NAType):
+            return nb_signature(
+                types.boolean, 
+                MaskedType(args[0].value_type), 
+                NAType())
+
 @cuda_decl_registry.register_global(operator.add)
 class MaskedScalarAddNull(AbstractTemplate):
     def generic(self, args, kws):

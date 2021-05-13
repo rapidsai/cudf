@@ -96,6 +96,24 @@ def masked_scalar_add_constant_impl(context, builder, sig, input_values):
 
     return result._getvalue()
 
+@cuda_lower(operator.is_, MaskedType, NAType)
+def masked_scalar_is_null_impl(context, builder, sig, args):
+    '''
+    Implement `MaskedType` + constant
+    '''
+    masked_type, na = sig.args
+    indata = cgutils.create_struct_proxy(masked_type)(
+        context, builder, value=args[0]
+    )
+    result = context.get_constant(types.boolean, 1)
+
+    with builder.if_else(indata.valid) as (then, otherwise):
+        with then:
+            result = context.get_constant(types.boolean, 0)
+        with otherwise:
+            result = context.get_constant(types.boolean, 1)
+    return result
+
 # To handle the unification, we need to support casting from any type to an
 # extension type. The cast implementation takes the value passed in and returns
 # an extension struct wrapping that value.
