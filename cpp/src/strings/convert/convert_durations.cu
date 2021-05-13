@@ -271,7 +271,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
     return str;
   }
 
-  __device__ char* int_to_2digitstr(char* str, int min_digits, int8_t value)
+  __device__ char* int_to_2digitstr(char* str, int, int8_t value)
   {
     assert(value >= -99 && value <= 99);
     value  = std::abs(value);
@@ -446,11 +446,8 @@ struct dispatch_from_durations_fn {
   }
 
   // non-duration types throw an exception
-  template <typename T, std::enable_if_t<not cudf::is_duration<T>()>* = nullptr>
-  std::unique_ptr<column> operator()(column_view const&,
-                                     std::string const& format,
-                                     rmm::cuda_stream_view,
-                                     rmm::mr::device_memory_resource*) const
+  template <typename T, typename... Args>
+  std::enable_if_t<not  cudf::is_duration<T>(), std::unique_ptr<column>> operator()(Args&&...) const
   {
     CUDF_FAIL("Values for from_durations function must be a duration type.");
   }
