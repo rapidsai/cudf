@@ -8,7 +8,9 @@ from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr, shared_ptr, make_shared
 from libcpp.vector cimport vector
 from libcpp.utility cimport move
-from libc.stdint cimport int32_t, int64_t
+from libc.stdint cimport int32_t, int64_t, uint8_t
+
+from rmm._lib.device_buffer cimport DeviceBuffer
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_device_scalar
@@ -740,6 +742,26 @@ def segmented_gather(Column source_column, Column gather_map):
 
 
 cdef class PackedColumns:
+
+    def serialize(self):
+        header = {}
+        cdef uint8_t[::1] mv = (<uint8_t[:self.data.metadata_.get()[0].size()]>
+                                self.data.metadata_.get()[0].data())
+        header["metadata-vector"] = [
+            mv[i]
+            for i in range(self.data.metadata_.get()[0].size())
+        ]
+        frames = [
+            DeviceBuffer.c_from_unique_ptr(move(self.data.gpu_data))
+        ]
+        return header, frames
+
+    def deserialize(cls, header, frames):
+        cdef vector[uint8_t] v
+        for ui in header["metadata-vector"]:
+            v.push_back(ui)
+        cdef cpp_copying.metadata m = cpp_copying.metadata(v)
+        return cls.from_members(m, frames[0])
 
     @staticmethod
     cdef PackedColumns from_table(Table input_table, keep_index=False):

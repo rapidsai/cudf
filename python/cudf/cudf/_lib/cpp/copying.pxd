@@ -3,7 +3,7 @@
 from rmm._lib.device_buffer cimport device_buffer
 
 from libcpp cimport bool
-from libc.stdint cimport int32_t, int64_t
+from libc.stdint cimport int32_t, int64_t, uint8_t
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
@@ -111,7 +111,13 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         vector[size_type] splits
     ) except +
 
+    cdef struct metadata:
+        metadata(vector[uint8_t]&& v)
+        const uint8_t* data () except +
+        size_type size () except +
+
     cdef struct packed_columns:
+        unique_ptr[metadata] metadata_
         unique_ptr[device_buffer] gpu_data
 
     cdef struct contiguous_split_result:
