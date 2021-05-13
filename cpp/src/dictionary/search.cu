@@ -99,15 +99,8 @@ struct find_index_fn {
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*) const
   {
-    if constexpr (std::is_same_v<Element, dictionary32>) {
-      CUDF_FAIL("dictionary column cannot be the keys column of a dictionary");
-    }
-    if constexpr (std::is_same_v<Element, list_view>) {
-      CUDF_FAIL("list_view column cannot be the keys column of a dictionary");
-    }
-    if constexpr (std::is_same_v<Element, struct_view>) {
-      CUDF_FAIL("struct_view column cannot be the keys column of a dictionary");
-    }
+    CUDF_FAIL(
+      "dictionary, list_view, and struct_view columns cannot be the keys column of a dictionary");
   }
 };
 
@@ -148,15 +141,8 @@ struct find_insert_index_fn {
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*) const
   {
-    if constexpr (std::is_same_v<Element, dictionary32>) {
-      CUDF_FAIL("dictionary column cannot be the keys for a dictionary");
-    }
-    if constexpr (std::is_same_v<Element, list_view>) {
-      CUDF_FAIL("list_view column cannot be the keys for a dictionary");
-    }
-    if constexpr (std::is_same_v<Element, struct_view>) {
-      CUDF_FAIL("struct_view column cannot be the keys for a dictionary");
-    }
+    CUDF_FAIL("dictionary, list_view, and struct_view columns cannot be the keys for a dictionary");
+  }
   }
 };
 
