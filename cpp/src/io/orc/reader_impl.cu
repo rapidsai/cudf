@@ -696,7 +696,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       // sign of the scale is changed since cuDF follows c++ libraries like CNL
       // which uses negative scaling, but liborc and other libraries
       // follow positive scaling.
-      auto const scale = -static_cast<int32_t>(_metadata->ff.types[col].scale);
+      auto const scale = -static_cast<int32_t>(_metadata->get_types()[col].scale);
       column_types.emplace_back(col_type, scale);
     } else {
       column_types.emplace_back(col_type);
