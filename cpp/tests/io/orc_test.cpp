@@ -1065,6 +1065,24 @@ TEST_F(OrcWriterTest, SlicedValidMask)
 }
 */
 
+TEST_F(OrcReaderTest, SingleInputs)
+{
+  srand(31533);
+  auto table1 = create_random_fixed_table<int>(5, 5, true);
+
+  auto filepath1 = temp_env->get_temp_filepath("SimpleTable1.orc");
+  cudf_io::chunked_orc_writer_options opts1 =
+    cudf_io::chunked_orc_writer_options::builder(cudf_io::sink_info{filepath1});
+  cudf_io::orc_chunked_writer(opts1).write(*table1);
+
+  cudf_io::orc_reader_options read_opts =
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{{filepath1}});
+  auto result = cudf_io::read_orc(read_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *table1);
+}
+
+/*
 TEST_F(OrcReaderTest, MultipleInputs)
 {
   srand(31537);
@@ -1089,5 +1107,6 @@ TEST_F(OrcReaderTest, MultipleInputs)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
+*/
 
 CUDF_TEST_PROGRAM_MAIN()

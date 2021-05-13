@@ -19,6 +19,7 @@
  * @brief cuDF-IO ORC reader class implementation
  */
 
+#include "io/orc/orc_gpu.h"
 #include "reader_impl.hpp"
 #include "timezone.cuh"
 
@@ -156,18 +157,38 @@ size_t gather_stream_info(const size_t stripe_index,
                           hostdevice_vector<gpu::ColumnDesc> &chunks,
                           std::vector<orc_stream_info> &stream_info)
 {
+  int cols_read          = 0;
+  int stream_index       = 0;
+  int num_index_columns  = 0;
   const auto num_columns = gdf2orc.size();
-  uint64_t src_offset    = 0;
-  uint64_t dst_offset    = 0;
+  printf("\n\nNum columns: %lu\n", num_columns);
+  uint64_t src_offset = 0;
+  uint64_t dst_offset = 0;
+  printf("Number of stripefooter streams %lu\n", stripefooter->streams.size());
+  printf("orc2gdf Data ....{");
+  for (int i : orc2gdf) { printf("%d, ", i); }
+  printf("}\n");
+  printf("gdf2orc Data ....{");
+  for (int i : gdf2orc) { printf("%d, ", i); }
+  printf("}\n");
   for (const auto &stream : stripefooter->streams) {
+    printf("\n");
+    printf("Stream Index: %d\n", stream_index);
+    stream_index++;
+    auto const column_id = *stream.column_id;
+    printf("ColumnId: %d\n", column_id);
     if (!stream.column_id || *stream.column_id >= orc2gdf.size()) {
+      printf("This thing\n");
       dst_offset += stream.length;
       continue;
     }
 
-    auto const column_id = *stream.column_id;
-    auto col             = orc2gdf[column_id];
+    // auto const column_id = *stream.column_id;
+    // printf("ColumnId: %d\n", column_id);
+    auto col = orc2gdf[column_id];
+    printf("Col: %d\n", col);
     if (col == -1) {
+      printf("Alright, adding PRESENT stream for column\n");
       // A struct-type column has no data itself, but rather child columns
       // for each of its fields. There is only a PRESENT stream, which
       // needs to be included for the reader.
@@ -190,8 +211,11 @@ size_t gather_stream_info(const size_t stripe_index,
       if (src_offset >= stripeinfo->indexLength || use_index) {
         // NOTE: skip_count field is temporarily used to track index ordering
         auto &chunk = chunks[stripe_index * num_columns + col];
+        printf("Access Chunk at index: %d\n", static_cast<int>(stripe_index * num_columns + col));
         const auto idx =
           get_index_type_and_pos(stream.kind, chunk.skip_count, col == orc2gdf[column_id]);
+        printf("Stream Type: %d\n", idx.first);
+        if (idx.first == gpu::CI_DATA) { cols_read++; }
         if (idx.first < gpu::CI_NUM_STREAMS) {
           chunk.strm_id[idx.first]  = stream_info.size();
           chunk.strm_len[idx.first] = stream.length;
@@ -203,6 +227,9 @@ size_t gather_stream_info(const size_t stripe_index,
             *num_dictionary_entries += stripefooter->columns[column_id].dictionarySize;
           }
         }
+      } else {
+        printf("Index column\n");
+        num_index_columns++;
       }
       stream_info.emplace_back(
         stripeinfo->offset + src_offset, dst_offset, stream.length, col, stripe_index);
@@ -210,6 +237,9 @@ size_t gather_stream_info(const size_t stripe_index,
     }
     src_offset += stream.length;
   }
+
+  printf("Number of Index Columns: %d\n", num_index_columns);
+  printf("Data Columns read: %d\n", cols_read);
 
   return dst_offset;
 }
@@ -752,7 +782,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                    [](auto const &dtype) { return make_empty_column(dtype); });
   } else {
     const auto num_columns = _selected_columns.size();
-    const auto num_chunks  = selected_stripes.size() * num_columns;
+    printf("Selected Columns size: %lu\n", _selected_columns.size());
+    printf("Selected stripes size: %lu\n", selected_stripes.size());
+    const auto num_chunks = selected_stripes.size() * num_columns;
+    printf("Number of chunks created: %lu\n", num_chunks);
     hostdevice_vector<gpu::ColumnDesc> chunks(num_chunks, stream);
     memset(chunks.host_ptr(), 0, chunks.memory_size());
 
@@ -775,10 +808,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     size_t stripe_start_row = 0;
     size_t num_dict_entries = 0;
     size_t num_rowgroups    = 0;
+    int stripe_idx          = 0;
 
     for (auto &stripe_source_mapping : selected_stripes) {
       // Iterate through the source files selected stripes
-      int stripe_idx = 0;
       for (auto &stripe : stripe_source_mapping.stripe_info) {
         const auto stripe_info   = stripe.first;
         const auto stripe_footer = stripe.second;
@@ -932,13 +965,12 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   for (size_t i = 0; i < _selected_columns.size(); i++) {
     out_metadata.column_names[i] = _metadata->get_column_name(0, _selected_columns[i]);
   }
-  /*
-  // Return user metadata
-  for (const auto &kv : _metadata->ff.metadata) {
-    out_metadata.user_data.insert({kv.name, kv.value});
 
+  // XXX: Review question. Should metadata from all input files be included here as I am doing or
+  // just a single input file? Return user metadata
+  for (const auto &meta : _metadata->per_file_metadata) {
+    for (const auto &kv : meta.ff.metadata) { out_metadata.user_data.insert({kv.name, kv.value}); }
   }
-  */
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }

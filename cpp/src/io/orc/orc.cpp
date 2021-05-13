@@ -471,7 +471,6 @@ metadata::metadata(datasource *const src) : source(src)
 
 void metadata::init_column_names() const
 {
-  printf("INIT COLUMN NAMES!!!!\n");
   auto const schema_idxs = get_schema_indexes();
   auto const &types      = ff.types;
   for (int32_t col_id = 0; col_id < get_num_columns(); ++col_id) {
@@ -493,8 +492,6 @@ void metadata::init_column_names() const
     // If we have no name (root column), generate a name
     column_names.push_back(col_name.empty() ? "col" + std::to_string(col_id) : col_name);
   }
-
-  for (const auto &name : column_names) { printf("Column Name: %s\n", name.c_str()); }
 }
 
 std::vector<metadata::schema_indexes> metadata::get_schema_indexes() const
