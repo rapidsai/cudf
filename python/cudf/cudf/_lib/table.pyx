@@ -5,7 +5,7 @@ import itertools
 import numpy as np
 
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.internals.arrays import ArrayAccessor, array
+from cudf.internals.arrays import ArrayAccessor, asarray
 
 from cython.operator cimport dereference
 from libc.stdint cimport uintptr_t

@@ -29,6 +29,9 @@ class Array:
     def dtype(self):
         return self._column.dtype
 
+    def __len__(self):
+        return len(self._column)
+
 
 class IntegerArray(Array):
     pass
@@ -70,7 +73,7 @@ class StructArray(Array):
     pass
 
 
-def array(data, dtype=None):
+def asarray(data, dtype=None):
     from cudf.core.column import as_column
 
     column = as_column(data, dtype)

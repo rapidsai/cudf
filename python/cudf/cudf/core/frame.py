@@ -2187,7 +2187,7 @@ class Frame(libcudf.table.Table):
                 to_replace=to_replace,
                 value=replacement,
                 columns_dtype_map={
-                    col: copy_data._data[col].dtype for col in copy_data._data
+                    col: copy_data[col].dtype for col in copy_data
                 },
             )
 
