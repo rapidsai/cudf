@@ -399,8 +399,7 @@ class ColumnBase(Column, Serializable):
             "None"
         ]
 
-        if isinstance(result.dtype, cudf.Decimal64Dtype):
-            result.dtype.precision = array.type.precision
+        result = _copy_type_metadata_from_arrow(array, result)
         return result
 
     def _get_mask_as_column(self) -> ColumnBase:
@@ -2346,3 +2345,38 @@ def full(size: int, fill_value: ScalarLike, dtype: Dtype = None) -> ColumnBase:
     dtype: int8
     """
     return ColumnBase.from_scalar(cudf.Scalar(fill_value, dtype), size)
+
+
+def _copy_type_metadata_from_arrow(
+    arrow_array: pa.array, cudf_column: ColumnBase
+) -> ColumnBase:
+    """
+    Similar to `Column._copy_type_metadata`, except copies type metadata
+    from arrow array into a cudf column. Recursive for every level.
+    * When `arrow_array` is struct type and `cudf_column` is StructDtype, copy
+    field names.
+    * When `arrow_array` is decimal type and `cudf_column` is
+    Decimal64Dtype, copy precisions.
+    """
+
+    if pa.types.is_decimal(arrow_array.type) and isinstance(
+        cudf_column, cudf.core.column.DecimalColumn
+    ):
+        cudf_column.dtype.precision = arrow_array.type.precision
+    elif pa.types.is_struct(arrow_array.type) and isinstance(
+        cudf_column, cudf.core.column.StructColumn
+    ):
+        cudf_column._rename_fields([field.name for field in arrow_array.type])
+    elif pa.types.is_list(arrow_array.type) and isinstance(
+        cudf_column, cudf.core.column.ListColumn
+    ):
+        if arrow_array.values and cudf_column.base_children:
+            base_children = (
+                cudf_column.base_children[0],
+                _copy_type_metadata_from_arrow(
+                    arrow_array.values, cudf_column.base_children[1]
+                ),
+            )
+            cudf_column.set_base_children(base_children)
+
+    return cudf_column
