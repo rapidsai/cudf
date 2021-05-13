@@ -692,13 +692,11 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // Remove this once we support Decimal128 data type
     CUDF_EXPECTS((col_type != type_id::DECIMAL64) or (_metadata->get_types()[col].precision <= 18),
                  "Decimal data has precision > 18, Decimal64 data type doesn't support it.");
-    // sign of the scale is changed since cuDF follows c++ libraries like CNL
-    // which uses negative scaling, but liborc and other libraries
-    // follow positive scaling.
-    auto scale = (col_type == type_id::DECIMAL64)
-                   ? -static_cast<int32_t>(_metadata->get_types()[col].scale)
-                   : 0;
-    if (col_type == type_id::DECIMAL32 || col_type == type_id::DECIMAL64) {
+    if (col_type == type_id::DECIMAL64) {
+      // sign of the scale is changed since cuDF follows c++ libraries like CNL
+      // which uses negative scaling, but liborc and other libraries
+      // follow positive scaling.
+      auto const scale = -static_cast<int32_t>(_metadata->ff.types[col].scale);
       column_types.emplace_back(col_type, scale);
     } else {
       column_types.emplace_back(col_type);
@@ -840,8 +838,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                  row_groups,
                                  _metadata->get_row_index_stride(),
                                  stream);
-        stripe_data.clear();  // XXX: This could be causing problems? Starts out with size 2 and
-                              // then gets reduced to 1 in the merge files unit test
+        stripe_data.clear();
         stripe_data.push_back(std::move(decomp_data));
       } else {
         if (not row_groups.is_empty()) {
@@ -909,6 +906,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 // Forward to implementation
 reader::reader(std::vector<std::string> const &filepaths,
                orc_reader_options const &options,
+               rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource *mr)
 {
   _impl = std::make_unique<impl>(datasource::create(filepaths), options, mr);
@@ -917,6 +915,7 @@ reader::reader(std::vector<std::string> const &filepaths,
 // Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                orc_reader_options const &options,
+               rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource *mr)
 {
   _impl = std::make_unique<impl>(std::move(sources), options, mr);

@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cub/cub.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -119,17 +120,14 @@ __global__ void build_hash_table(multimap_type multi_map,
  * @param[in] probe_table_num_rows The number of rows in the probe table
  * @param[out] output_size The resulting output size
  */
-template <join_kind JoinKind,
-          typename multimap_type,
-          int block_size,
-          typename estimate_size_type = int64_t>
+template <join_kind JoinKind, typename multimap_type, int block_size>
 __global__ void compute_join_output_size(multimap_type multi_map,
                                          table_device_view build_table,
                                          table_device_view probe_table,
                                          row_hash hash_probe,
                                          row_equality check_row_equality,
                                          const cudf::size_type probe_table_num_rows,
-                                         estimate_size_type* output_size)
+                                         std::size_t* output_size)
 {
   // This kernel probes multiple elements in the probe_table and store the number of matches found
   // inside a register. A block reduction is used at the end to calculate the matches per thread
@@ -193,9 +191,9 @@ __global__ void compute_join_output_size(multimap_type multi_map,
     }
   }
 
-  using BlockReduce = cub::BlockReduce<estimate_size_type, block_size>;
+  using BlockReduce = cub::BlockReduce<std::size_t, block_size>;
   __shared__ typename BlockReduce::TempStorage temp_storage;
-  estimate_size_type block_counter = BlockReduce(temp_storage).Sum(thread_counter);
+  std::size_t block_counter = BlockReduce(temp_storage).Sum(thread_counter);
 
   // Add block counter to global counter
   if (threadIdx.x == 0) atomicAdd(output_size, block_counter);
@@ -311,7 +309,7 @@ __global__ void probe_hash_table(multimap_type multi_map,
                                  size_type* join_output_l,
                                  size_type* join_output_r,
                                  cudf::size_type* current_idx,
-                                 const cudf::size_type max_size)
+                                 const std::size_t max_size)
 {
   constexpr int num_warps = block_size / detail::warp_size;
   __shared__ size_type current_idx_shared[num_warps];

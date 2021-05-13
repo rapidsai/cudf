@@ -16,7 +16,6 @@
 
 #include <strings/char_types/char_cases.h>
 #include <strings/char_types/char_flags.h>
-#include <strings/utilities.cuh>
 #include <strings/utilities.hpp>
 
 #include <cudf/column/column_device_view.cuh>

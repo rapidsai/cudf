@@ -9,7 +9,7 @@ import pytest
 
 import dask
 from dask import dataframe as dd
-from dask.utils import natural_sort_key, parse_bytes
+from dask.utils import natural_sort_key
 
 import cudf
 
@@ -294,7 +294,6 @@ def test_chunksize(tmpdir, chunksize, metadata):
     nparts = 2
     df_size = 100
     row_group_size = 5
-    row_group_byte_size = 451  # Empirically measured
 
     df = pd.DataFrame(
         {
@@ -334,12 +333,7 @@ def test_chunksize(tmpdir, chunksize, metadata):
     if not chunksize:
         assert ddf2.npartitions == num_row_groups
     else:
-        # Check that we are really aggregating
-        df_byte_size = row_group_byte_size * num_row_groups
-        expected = df_byte_size // parse_bytes(chunksize)
-        remainder = (df_byte_size % parse_bytes(chunksize)) > 0
-        expected += int(remainder) * nparts
-        assert ddf2.npartitions == max(nparts, expected)
+        assert ddf2.npartitions < num_row_groups
 
 
 @pytest.mark.parametrize("row_groups", [1, 3, 10, 12])
