@@ -446,6 +446,13 @@ struct buf_info_functor {
     return {current + 1, offset_stack_pos + offset_depth};
   }
 
+  template <typename T, typename... Args>
+  std::enable_if_t<std::is_same<T, cudf::dictionary32>::value, std::pair<src_buf_info*, size_type>>
+  operator()(Args&&...)
+  {
+    CUDF_FAIL("Unsupported type");
+  }
+
  private:
   std::pair<src_buf_info*, size_type> add_null_buffer(column_view const& col,
                                                       src_buf_info* current,
@@ -598,16 +605,6 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::struct_vi
                                offset_depth);
 }
 
-template <>
-std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::dictionary32>(
-  column_view const& col,
-  src_buf_info* current,
-  int offset_stack_pos,
-  int parent_offset_index,
-  int offset_depth)
-{
-  CUDF_FAIL("Unsupported type");
-}
 
 template <typename InputIter>
 std::pair<src_buf_info*, size_type> setup_source_buf_info(InputIter begin,
