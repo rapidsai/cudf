@@ -36,8 +36,6 @@
 #include <thrust/optional.h>
 #include <thrust/transform.h>
 
-#include <cctype>
-
 namespace cudf {
 namespace strings {
 namespace detail {
