@@ -8,6 +8,7 @@ from numba.core import cgutils
 from numba.cuda.cudaimpl import registry as cuda_impl_registry
 import operator
 from numba.extending import types
+from llvmlite import ir
 
 @cuda_lowering_registry.lower_constant(NAType)
 def constant_dummy(context, builder, ty, pyval):
@@ -105,13 +106,14 @@ def masked_scalar_is_null_impl(context, builder, sig, args):
     indata = cgutils.create_struct_proxy(masked_type)(
         context, builder, value=args[0]
     )
-
+    result = cgutils.alloca_once(builder, ir.IntType(1))
     with builder.if_else(indata.valid) as (then, otherwise):
         with then:
-            result = context.get_constant(types.boolean, 0)
+            builder.store(context.get_constant(types.boolean, 0), result)
         with otherwise:
-            result = context.get_constant(types.boolean, 1)
-    return result
+            builder.store(context.get_constant(types.boolean, 1), result)
+
+    return builder.load(result)
 
 # To handle the unification, we need to support casting from any type to an
 # extension type. The cast implementation takes the value passed in and returns
@@ -121,6 +123,7 @@ def cast_primitive_to_masked(context, builder, fromty, toty, val):
     casted = context.cast(builder, val, fromty, toty.value_type)
     ext = cgutils.create_struct_proxy(toty)(context, builder)
     ext.value = casted
+    ext.valid = context.get_constant(types.boolean, 1)
     return ext._getvalue()
 
 @cuda_impl_registry.lower_cast(NAType, MaskedType)
