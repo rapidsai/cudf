@@ -195,6 +195,7 @@ ConfigureTest(SORT_TEST
 # - copying tests ---------------------------------------------------------------------------------
 ConfigureTest(COPYING_TEST
     copying/concatenate_tests.cu
+    copying/copy_if_else_nested_tests.cpp
     copying/copy_range_tests.cpp
     copying/copy_tests.cu
     copying/detail_gather_tests.cu
@@ -341,7 +342,7 @@ ConfigureTest(STRINGS_TEST
     strings/fixed_point_tests.cpp
     strings/floats_tests.cpp
     strings/hash_string.cu
-    strings/integers_tests.cu
+    strings/integers_tests.cpp
     strings/ipv4_tests.cpp
     strings/json_tests.cpp
     strings/pad_tests.cpp
@@ -374,7 +375,8 @@ ConfigureTest(TEXT_TEST
 ConfigureTest(BITMASK_TEST
     bitmask/valid_if_tests.cu
     bitmask/set_nullmask_tests.cu
-    bitmask/bitmask_tests.cu)
+    bitmask/bitmask_tests.cpp
+    bitmask/is_element_valid_tests.cpp)
 
 
 ###################################################################################################

@@ -18,6 +18,7 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -32,11 +33,8 @@
 template <typename T>
 class TypedScatterListsTest : public cudf::test::BaseFixture {
 };
-using FixedWidthTypes = cudf::test::Concat<cudf::test::IntegralTypes,
-                                           cudf::test::FloatingPointTypes,
-                                           cudf::test::DurationTypes,
-                                           cudf::test::TimestampTypes>;
-TYPED_TEST_CASE(TypedScatterListsTest, FixedWidthTypes);
+
+TYPED_TEST_CASE(TypedScatterListsTest, cudf::test::FixedWidthTypes);
 
 class ScatterListsTest : public cudf::test::BaseFixture {
 };
@@ -60,6 +58,41 @@ TYPED_TEST(TypedScatterListsTest, ListsOfFixedWidth)
     ret->get_column(0),
     lists_column_wrapper<T, int32_t>{
       {8, 8, 8}, {1, 1}, {9, 9, 9, 9}, {3, 3}, {4, 4}, {5, 5}, {6, 6}});
+}
+
+TYPED_TEST(TypedScatterListsTest, SlicedInputLists)
+{
+  using namespace cudf::test;
+  using T = TypeParam;
+
+  auto src_list_column =
+    lists_column_wrapper<T, int32_t>{{0, 0, 0, 0}, {9, 9, 9, 9}, {8, 8, 8}, {7, 7, 7}}.release();
+  auto src_sliced =
+    cudf::detail::slice(src_list_column->view(), {1, 3}, rmm::cuda_stream_default).front();
+
+  auto target_list_column =
+    lists_column_wrapper<T, int32_t>{{0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}}
+      .release();
+
+  auto scatter_map = fixed_width_column_wrapper<cudf::size_type>{2, 0};
+
+  auto ret_1 = cudf::scatter(
+    cudf::table_view({src_sliced}), scatter_map, cudf::table_view({target_list_column->view()}));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    ret_1->get_column(0),
+    lists_column_wrapper<T, int32_t>{
+      {8, 8, 8}, {1, 1}, {9, 9, 9, 9}, {3, 3}, {4, 4}, {5, 5}, {6, 6}});
+
+  auto target_sliced =
+    cudf::detail::slice(target_list_column->view(), {1, 6}, rmm::cuda_stream_default);
+
+  auto ret_2 =
+    cudf::scatter(cudf::table_view({src_sliced}), scatter_map, cudf::table_view({target_sliced}));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    ret_2->get_column(0),
+    lists_column_wrapper<T, int32_t>{{8, 8, 8}, {2, 2}, {9, 9, 9, 9}, {4, 4}, {5, 5}});
 }
 
 TYPED_TEST(TypedScatterListsTest, EmptyListsOfFixedWidth)
