@@ -105,7 +105,6 @@ def masked_scalar_is_null_impl(context, builder, sig, args):
     indata = cgutils.create_struct_proxy(masked_type)(
         context, builder, value=args[0]
     )
-    result = context.get_constant(types.boolean, 1)
 
     with builder.if_else(indata.valid) as (then, otherwise):
         with then:
