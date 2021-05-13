@@ -36,6 +36,9 @@ namespace cudf {
 
 namespace binops {
 namespace compiled {
+// Defined in util.cpp
+data_type get_common_type(data_type out, data_type lhs, data_type rhs);
+
 namespace {
 // Struct to launch only defined operations.
 template <typename BinaryOperator>
@@ -129,30 +132,31 @@ struct operator_dispatcher {
       case binary_operator::TRUE_DIV:             dispatch_single_double<ops::TrueDiv>(i); break;
       case binary_operator::FLOOR_DIV:            dispatch_single_double<ops::FloorDiv>(i); break;
       case binary_operator::MOD:                  dispatch_single_double<ops::Mod>(i); break;
+      case binary_operator::PYMOD:                dispatch_single_double<ops::PyMod>(i); break;
+      case binary_operator::POW:                  dispatch_single_double<ops::Pow>(i); break;
+      case binary_operator::EQUAL:                dispatch_single_double<ops::Equal>(i); break;
+      case binary_operator::NOT_EQUAL:            dispatch_single_double<ops::NotEqual>(i); break;
+      case binary_operator::LESS:                 dispatch_single_double<ops::Less>(i); break;
+      case binary_operator::GREATER:              dispatch_single_double<ops::Greater>(i); break;
+      case binary_operator::LESS_EQUAL:           dispatch_single_double<ops::LessEqual>(i); break;
+      case binary_operator::GREATER_EQUAL:        dispatch_single_double<ops::GreaterEqual>(i); break;
+      case binary_operator::BITWISE_AND:          dispatch_single_double<ops::BitwiseAnd>(i); break;
+      case binary_operator::BITWISE_OR:           dispatch_single_double<ops::BitwiseOr>(i); break;
+      case binary_operator::BITWISE_XOR:          dispatch_single_double<ops::BitwiseXor>(i); break;
+      case binary_operator::LOGICAL_AND:          dispatch_single_double<ops::LogicalAnd>(i); break;
+      case binary_operator::LOGICAL_OR:           dispatch_single_double<ops::LogicalOr>(i); break;
+      case binary_operator::SHIFT_LEFT:           dispatch_single_double<ops::ShiftLeft>(i); break;
+      case binary_operator::SHIFT_RIGHT:          dispatch_single_double<ops::ShiftRight>(i); break;
+      case binary_operator::SHIFT_RIGHT_UNSIGNED: dispatch_single_double<ops::ShiftRightUnsigned>(i); break;
+      case binary_operator::LOG_BASE:             dispatch_single_double<ops::LogBase>(i); break;
+      case binary_operator::ATAN2:                dispatch_single_double<ops::ATan2>(i); break;
+      case binary_operator::PMOD:                 dispatch_single_double<ops::PMod>(i); break;
       /*
-      case binary_operator::PYMOD:                PyMod;
-      case binary_operator::POW:                  Pow;
-      case binary_operator::EQUAL:                Equal;
-      case binary_operator::NOT_EQUAL:            NotEqual;
-      case binary_operator::LESS:                 Less;
-      case binary_operator::GREATER:              Greater;
-      case binary_operator::LESS_EQUAL:           LessEqual;
-      case binary_operator::GREATER_EQUAL:        GreaterEqual;
-      case binary_operator::BITWISE_AND:          BitwiseAnd;
-      case binary_operator::BITWISE_OR:           BitwiseOr;
-      case binary_operator::BITWISE_XOR:          BitwiseXor;
-      case binary_operator::LOGICAL_AND:          LogicalAnd;
-      case binary_operator::LOGICAL_OR:           LogicalOr;
-      case binary_operator::GENERIC_BINARY:       UserDefinedOp;
-      case binary_operator::SHIFT_LEFT:           ShiftLeft;
-      case binary_operator::SHIFT_RIGHT:          ShiftRight;
-      case binary_operator::SHIFT_RIGHT_UNSIGNED: ShiftRightUnsigned;
-      case binary_operator::LOG_BASE:             LogBase;
-      case binary_operator::ATAN2:                ATan2;
-      case binary_operator::PMOD:                 PMod;
-      case binary_operator::NULL_EQUALS:          NullEquals;
-      case binary_operator::NULL_MAX:             NullMax;
-      case binary_operator::NULL_MIN:             NullMin; */
+      case binary_operator::NULL_EQUALS:          dispatch_single_double<ops::NullEquals>(i); break;
+      case binary_operator::NULL_MAX:             dispatch_single_double<ops::NullMax>(i); break;
+      case binary_operator::NULL_MIN:             dispatch_single_double<ops::NullMin>(i); break;
+      case binary_operator::GENERIC_BINARY:       dispatch_single_double<ops::UserDefinedOp>(i); break;
+      */
       default:                                    ;
     }
     // clang-format on

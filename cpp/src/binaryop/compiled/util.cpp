@@ -33,6 +33,10 @@ struct common_type_functor {
       if constexpr (cudf::has_common_type_v<TypeOut, TypeLhs, TypeRhs>) {
         using TypeCommon = typename std::common_type<TypeOut, TypeLhs, TypeRhs>::type;
         return data_type{type_to_id<TypeCommon>()};
+      } else if constexpr (cudf::has_common_type_v<TypeLhs, TypeRhs>) {
+        using TypeCommon = typename std::common_type<TypeLhs, TypeRhs>::type;
+        // Eg. d=t-t
+        return data_type{type_to_id<TypeCommon>()};
       }
       return data_type{type_id::EMPTY};
     }
