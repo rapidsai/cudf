@@ -796,45 +796,6 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &
   stream.synchronize();
 }
 
-template <typename T>
-void print(rmm::device_uvector<T> const &d_vec, std::string label = "")
-{
-  std::vector<T> h_vec(d_vec.size());
-  cudaMemcpy(h_vec.data(), d_vec.data(), d_vec.size() * sizeof(T), cudaMemcpyDeviceToHost);
-  printf("%s (%lu)\t", label.c_str(), h_vec.size());
-  for (auto &&i : h_vec) std::cout << (int)i << " ";
-  printf("\n");
-}
-
-template <typename T>
-void print(rmm::device_vector<T> const &d_vec, std::string label = "")
-{
-  thrust::host_vector<T> h_vec = d_vec;
-  printf("%s \t", label.c_str());
-  for (auto &&i : h_vec) std::cout << i << " ";
-  printf("\n");
-}
-
-struct printer {
-  template <typename T>
-  std::enable_if_t<cudf::is_numeric<T>(), void> operator()(column_view const &col,
-                                                           std::string label = "")
-  {
-    auto d_vec = rmm::device_vector<T>(col.begin<T>(), col.end<T>());
-    print(d_vec, label);
-  }
-  template <typename T>
-  std::enable_if_t<!cudf::is_numeric<T>(), void> operator()(column_view const &col,
-                                                            std::string label = "")
-  {
-    CUDF_FAIL("no strings");
-  }
-};
-void print(column_view const &col, std::string label = "")
-{
-  cudf::type_dispatcher(col.type(), printer{}, col, label);
-}
-
 void snappy_compress(device_span<gpu_inflate_input_s> comp_in,
                      device_span<gpu_inflate_status_s> comp_stat,
                      rmm::cuda_stream_view stream)
@@ -900,7 +861,7 @@ void snappy_compress(device_span<gpu_inflate_input_s> comp_in,
   thrust::for_each(rmm::exec_policy(stream),
                    comp_stat.begin(),
                    comp_stat.end(),
-                   [] __device__(gpu_inflate_status_s stat) { stat.status = 1; });
+                   [] __device__(gpu_inflate_status_s & stat) { stat.status = 1; });
 }
 
 void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
