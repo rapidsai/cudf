@@ -36,6 +36,8 @@
 #include <thrust/optional.h>
 #include <thrust/transform.h>
 
+#include <cctype>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -52,15 +54,15 @@ struct string_to_decimal_base {
    * @param[in] end End of characters to parse
    * @return Integer component and exponent offset.
    */
-  __device__ thrust::pair<uint64_t, int> parse_integer(char const*& iter,
-                                                       char const* iter_end) const
+  __device__ thrust::pair<uint64_t, int32_t> parse_integer(char const*& iter,
+                                                           char const* iter_end) const
   {
     // highest value where another decimal digit cannot be appended without an overflow;
     // this preserves the most digits when scaling the final result
     constexpr uint64_t decimal_max = (std::numeric_limits<uint64_t>::max() - 9L) / 10L;
 
     uint64_t value     = 0;  // for checking overflow
-    int exp_offset     = 0;
+    int32_t exp_offset = 0;
     bool decimal_found = false;
 
     while (iter < iter_end) {
@@ -74,10 +76,10 @@ struct string_to_decimal_base {
         break;
       }
       if (value > decimal_max) {
-        exp_offset += static_cast<int>(!decimal_found);
+        exp_offset += static_cast<int32_t>(!decimal_found);
       } else {
         value = (value * 10) + static_cast<uint64_t>(ch - '0');
-        exp_offset -= static_cast<int>(decimal_found);
+        exp_offset -= static_cast<int32_t>(decimal_found);
       }
     }
     return {value, exp_offset};
@@ -99,12 +101,12 @@ struct string_to_decimal_base {
    * @return Integer value of the exponent
    */
   template <bool check_only = false>
-  __device__ thrust::optional<int> parse_exponent(char const* iter, char const* iter_end) const
+  __device__ thrust::optional<int32_t> parse_exponent(char const* iter, char const* iter_end) const
   {
     constexpr uint32_t exponent_max = static_cast<uint32_t>(std::numeric_limits<int32_t>::max());
 
     // get optional exponent sign
-    int const exp_sign = [&iter] {
+    int32_t const exp_sign = [&iter] {
       auto const ch = *iter;
       if (ch != '-' && ch != '+') { return 1; }
       ++iter;
@@ -112,7 +114,7 @@ struct string_to_decimal_base {
     }();
 
     // parse exponent integer
-    int exp_ten = 0;
+    int32_t exp_ten = 0;
     while (iter < iter_end) {
       auto const ch = *iter++;
       if (ch < '0' || ch > '9') {
@@ -122,7 +124,7 @@ struct string_to_decimal_base {
 
       uint32_t exp_check = static_cast<uint32_t>(exp_ten * 10) + static_cast<uint32_t>(ch - '0');
       if (check_only && (exp_check > exponent_max)) { return thrust::nullopt; }  // check overflow
-      exp_ten = static_cast<int>(exp_check);
+      exp_ten = static_cast<int32_t>(exp_check);
     }
 
     return exp_ten * exp_sign;
@@ -164,7 +166,7 @@ struct string_to_decimal_fn : string_to_decimal_base {
     if (value == 0) { return DecimalType{0}; }
 
     // check for exponent
-    int exp_ten = 0;
+    int32_t exp_ten = 0;
     if ((iter < iter_end) && (*iter == 'e' || *iter == 'E')) {
       ++iter;
       if (iter < iter_end) { exp_ten = parse_exponent<false>(iter, iter_end).value(); }
@@ -214,7 +216,7 @@ struct string_to_decimal_check_fn : string_to_decimal_base {
     if ((iter < iter_end) && (*iter != 'e' && *iter != 'E')) { return false; }
     ++iter;
 
-    int exp_ten = 0;  // check exponent overflow
+    int32_t exp_ten = 0;  // check exponent overflow
     if (iter < iter_end) {
       auto exp_result = parse_exponent<true>(iter, iter_end);
       if (!exp_result) { return false; }
