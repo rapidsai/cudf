@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -21,9 +22,10 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/reduction.hpp>
+#include <cudf/replace.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -130,7 +132,7 @@ get_gather_map_for_map_values(column_view const &input, string_scalar &lookup_ke
 /**
  * @brief a defensive check for the map column that is going to be processed
  */
-void map_check(column_view const &map_column, rmm::cuda_stream_view stream) {
+void map_input_check(column_view const &map_column, rmm::cuda_stream_view stream) {
   CUDF_EXPECTS(map_column.type().id() == type_id::LIST, "Expected LIST<STRUCT<key,value>>.");
 
   lists_column_view lcv{map_column};
@@ -149,11 +151,11 @@ void map_check(column_view const &map_column, rmm::cuda_stream_view stream) {
 
 namespace jni {
 
-std::unique_ptr<scalar> map_contains(column_view const &map_column, string_scalar lookup_key,
+std::unique_ptr<column> map_contains(column_view const &map_column, string_scalar lookup_key,
                                      bool has_nulls, rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource *mr) {
   // Defensive checks.
-  map_check(map_column, stream);
+  map_input_check(map_column, stream);
 
   lists_column_view lcv(map_column);
   structs_column_view scv(lcv.child());
@@ -165,10 +167,14 @@ std::unique_ptr<scalar> map_contains(column_view const &map_column, string_scala
   column_view list_of_keys(map_column.type(), map_column.size(),
     nullptr, map_column.null_mask(), map_column.null_count(), 0, children);
   auto contains_column  = lists::contains(list_of_keys, lookup_key);
-  // null will skipped in all-aggregation, so mask all nulls with 0.
-  contains_column->set_null_mask(rmm::device_buffer{0}, 0);
-  auto result = cudf::reduce(contains_column->view(), make_all_aggregation(),
-    cudf::data_type{type_id::BOOL8});
+  // null will be skipped in all-aggregation when checking if all rows contain the key,
+  // so replace all nulls with 0.
+  std::unique_ptr<cudf::scalar> replacement =
+        cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::BOOL8));
+  replacement->set_valid(true);
+  using ScalarType = cudf::scalar_type_t<int8_t>;
+  static_cast<ScalarType *>(replacement.get())->set_value(0);
+  auto result = cudf::replace_nulls(contains_column->view(), *replacement);
   return result;
 }
 
@@ -176,7 +182,7 @@ std::unique_ptr<column> map_lookup(column_view const &map_column, string_scalar 
                                    bool has_nulls, rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource *mr) {
   // Defensive checks.
-  map_check(map_column, stream);
+  map_input_check(map_column, stream);
 
   lists_column_view lcv{map_column};
   column_view structs_column = lcv.get_sliced_child(stream);

@@ -1179,7 +1179,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapContains(JNIEnv *env, 
     cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
     cudf::string_scalar *ss_key = reinterpret_cast<cudf::string_scalar *>(lookup_key);
 
-    std::unique_ptr<cudf::scalar> result = cudf::jni::map_contains(*cv, *ss_key);
+    std::unique_ptr<cudf::column> result = cudf::jni::map_contains(*cv, *ss_key);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

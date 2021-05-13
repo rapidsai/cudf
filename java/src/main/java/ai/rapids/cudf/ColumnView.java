@@ -2529,14 +2529,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /** For a column of type List<Struct<String, String>> and a passed in String key, return a boolean
    * scalar for all keys in the structs, true if the key exists in all maps in the column.
    * @param key the String scalar to lookup in the column
-   * @return a boolean scalar based on the lookup result
+   * @return a boolean column based on the lookup result
    */
-  public final Scalar getMapKeyExistence(Scalar key) {
+  public final ColumnVector getMapKeyExistence(Scalar key) {
     assert type.equals(DType.LIST) : "column type must be a LIST";
     assert key != null : "target string may not be null";
     assert key.getType().equals(DType.STRING) : "target must be a string scalar";
 
-    return new Scalar(DType.BOOL8, mapContains(getNativeView(), key.getScalarHandle()));
+    return new ColumnVector(mapContains(getNativeView(), key.getScalarHandle()));
   }
 
   /**
@@ -2861,7 +2861,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Native method for check the existence of a key over a column of List<Struct<String,String>>
    * @param columnView the column view handle of the map
    * @param key the string scalar that is the key for lookup
-   * @return an boolean scalar handle of the resultant
+   * @return an boolean column handle of the resultant
    * @throws CudfException
    */
   private static native long mapContains(long columnView, long key) throws CudfException;
