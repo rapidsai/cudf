@@ -268,6 +268,10 @@ def test_typecast_from_decimal(data, from_dtype, to_dtype):
             1,
             pa.lib.ArrowInvalid,
         ),
+        # We will allow for setting scalars into decimal columns
+        (["1", "2", "3"], Decimal64Dtype(1, 0), 5, 1, ["1", "5", "3"]),
+        # But not if it has too many digits to fit the precision
+        (["1", "2", "3"], Decimal64Dtype(1, 0), 50, 1, pa.lib.ArrowInvalid),
     ],
 )
 def test_series_setitem_decimal(args):
