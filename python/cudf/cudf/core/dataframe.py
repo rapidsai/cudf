@@ -207,6 +207,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         """
         super().__init__()
 
+        #
         if isinstance(columns, (Series, cudf.Index)):
             columns = columns.to_pandas()
 
