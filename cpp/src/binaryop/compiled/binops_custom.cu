@@ -38,6 +38,7 @@ namespace binops {
 namespace compiled {
 // Defined in util.cpp
 data_type get_common_type(data_type out, data_type lhs, data_type rhs);
+bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op);
 
 namespace {
 // Struct to launch only defined operations.
@@ -80,6 +81,7 @@ struct ops2_wrapper {
     TypeLhs x   = lhs.element<TypeLhs>(i);
     TypeRhs y   = rhs.element<TypeRhs>(i);
     auto result = BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(x, y);
+    //(void)result;
     type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
   }
 
@@ -182,10 +184,8 @@ void binary_operation_compiled(mutable_column_view& out,
     // auto binop_func = device_dispatch_functor<cudf::binops::jit::Add2>{*lhsd, *rhsd, *outd};
 
     auto common_dtype = get_common_type(out.type(), lhs.type(), rhs.type());
-    if (not(op == binary_operator::ADD or op == binary_operator::SUB or
-            op == binary_operator::MUL or op == binary_operator::DIV or
-            op == binary_operator::TRUE_DIV))
-      CUDF_FAIL("Unsupported operator");
+    if (not is_supported_operation(out.type(), lhs.type(), rhs.type(), op))
+      CUDF_FAIL("Unsupported operator for these types");
     // Execute it on every element
     thrust::for_each(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),

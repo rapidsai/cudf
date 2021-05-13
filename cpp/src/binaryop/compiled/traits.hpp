@@ -50,6 +50,27 @@ constexpr bool is_op_supported(void)
   return std::is_invocable_v<BinaryFunctor, T1, T2>;
 }
 
+template <typename BinaryOperator>
+struct is_binary_operation_supported {
+  template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+  inline constexpr bool operator()(void)
+  {
+    if constexpr (is_op_supported<TypeLhs, TypeRhs, BinaryOperator>()) {
+      using ReturnType = std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>;
+      return std::is_constructible_v<TypeOut, ReturnType>;
+    } else {
+      return false;
+    }
+
+    // return (has_common_type_v<TypeOut, TypeLhs, TypeRhs> and
+    //         is_op_supported<TypeLhs, TypeRhs, BinaryOperator>())
+    //        or
+    //        // double dispatch
+    //        (!has_common_type_v<TypeLhs, TypeRhs> and
+    //          is_op_supported<TypeLhs, TypeRhs, BinaryOperator>() and
+    //          std::is_constructible_v<TypeOut, ReturnType>);
+  }
+};
 // has ::operate
 
 template <typename T, typename T1, typename T2, typename T3, typename = T>
