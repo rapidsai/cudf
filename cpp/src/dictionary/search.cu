@@ -45,7 +45,7 @@ struct dispatch_scalar_index {
   template <typename IndexType,
             typename... Args,
             std::enable_if_t<not is_index_type<IndexType>()>* = nullptr>
-  std::unique_ptr<scalar> operator()(Args&&... args)
+  std::unique_ptr<scalar> operator()(Args&&...)
   {
     CUDF_FAIL("indices must be an integral type");
   }
@@ -89,33 +89,25 @@ struct find_index_fn {
                            stream,
                            mr);
   }
-  template <typename Element,
-            std::enable_if_t<std::is_same<Element, dictionary32>::value>* = nullptr>
-  std::unique_ptr<scalar> operator()(dictionary_column_view const& input,
-                                     scalar const& key,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
-  {
-    CUDF_FAIL("dictionary column cannot be the keys column of another dictionary");
-  }
-
-  template <typename Element, std::enable_if_t<std::is_same<Element, list_view>::value>* = nullptr>
-  std::unique_ptr<scalar> operator()(dictionary_column_view const& input,
-                                     scalar const& key,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
-  {
-    CUDF_FAIL("list_view column cannot be the keys column of a dictionary");
-  }
 
   template <typename Element,
-            std::enable_if_t<std::is_same<Element, struct_view>::value>* = nullptr>
-  std::unique_ptr<scalar> operator()(dictionary_column_view const& input,
-                                     scalar const& key,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
+            std::enable_if_t<std::is_same<Element, dictionary32>::value or
+                             std::is_same<Element, list_view>::value or
+                             std::is_same<Element, struct_view>::value>* = nullptr>
+  std::unique_ptr<scalar> operator()(dictionary_column_view const&,
+                                     scalar const&,
+                                     rmm::cuda_stream_view,
+                                     rmm::mr::device_memory_resource*) const
   {
-    CUDF_FAIL("struct_view column cannot be the keys column of a dictionary");
+    if constexpr (std::is_same_v<Element, dictionary32>) {
+      CUDF_FAIL("dictionary column cannot be the keys column of a dictionary");
+    }
+    if constexpr (std::is_same_v<Element, list_view>) {
+      CUDF_FAIL("list_view column cannot be the keys column of a dictionary");
+    }
+    if constexpr (std::is_same_v<Element, struct_view>) {
+      CUDF_FAIL("struct_view column cannot be the keys column of a dictionary");
+    }
   }
 };
 
@@ -151,12 +143,20 @@ struct find_insert_index_fn {
             std::enable_if_t<std::is_same<Element, dictionary32>::value or
                              std::is_same<Element, list_view>::value or
                              std::is_same<Element, struct_view>::value>* = nullptr>
-  std::unique_ptr<scalar> operator()(dictionary_column_view const& input,
-                                     scalar const& key,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
+  std::unique_ptr<scalar> operator()(dictionary_column_view const&,
+                                     scalar const&,
+                                     rmm::cuda_stream_view,
+                                     rmm::mr::device_memory_resource*) const
   {
-    CUDF_FAIL("column cannot be the keys for dictionary");
+    if constexpr (std::is_same_v<Element, dictionary32>) {
+      CUDF_FAIL("dictionary column cannot be the keys for a dictionary");
+    }
+    if constexpr (std::is_same_v<Element, list_view>) {
+      CUDF_FAIL("list_view column cannot be the keys for a dictionary");
+    }
+    if constexpr (std::is_same_v<Element, struct_view>) {
+      CUDF_FAIL("struct_view column cannot be the keys for a dictionary");
+    }
   }
 };
 
