@@ -82,13 +82,13 @@ struct DeviceRolling {
   {
     return cudf::detail::is_valid_aggregation<T, O>() && has_corresponding_operator<O>() &&
              // MIN/MAX supports all fixed width types
-             ((op == aggregation::MIN || op == aggregation::MAX) && cudf::is_fixed_width<T>()) ||
+             ((O == aggregation::MIN || O == aggregation::MAX) && cudf::is_fixed_width<T>()) ||
 
            // SUM supports all fixed width types except timestamps
-           ((op == aggregation::SUM) && (cudf::is_fixed_width<T>() && !cudf::is_timestamp<T>())) ||
+           ((O == aggregation::SUM) && (cudf::is_fixed_width<T>() && !cudf::is_timestamp<T>())) ||
 
            // MEAN supports numeric and duration
-           ((op == aggregation::MEAN) && (cudf::is_numeric<T>() || cudf::is_duration<T>()));
+           ((O == aggregation::MEAN) && (cudf::is_numeric<T>() || cudf::is_duration<T>()));
   }
 
   // operations we do support
@@ -575,9 +575,9 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
   // NOTE : all other aggregations are passed through unchanged via the default
   // visit() function in the simple_aggregations_collector.
 
-  // MIN aggregations with strings are processed in 2 passes. the first pass performs
+  // MIN aggregations with strings are processed in 2 passes. The first pass performs
   // the rolling operation on a ARGMIN aggregation to generate indices instead of values.
-  // and then a second pass uses those indices to gather the final strings.  this step
+  // Then a second pass uses those indices to gather the final strings.  This step
   // translates the the MIN -> ARGMIN aggregation
   std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                   cudf::detail::min_aggregation const& agg) override
@@ -588,9 +588,9 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
     return aggs;
   }
 
-  // MAX aggregations with strings are processed in 2 passes. the first pass performs
+  // MAX aggregations with strings are processed in 2 passes. The first pass performs
   // the rolling operation on a ARGMAX aggregation to generate indices instead of values.
-  // and then a second pass uses those indices to gather the final strings.  this step
+  // Then a second pass uses those indices to gather the final strings.  This step
   // translates the the MAX -> ARGMAX aggregation
   std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                   cudf::detail::max_aggregation const& agg) override
@@ -666,7 +666,7 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
   void visit(cudf::detail::min_aggregation const& agg) override
   {
     if (result_type.id() == type_id::STRING) {
-      // The rows that represent null elements will be having negative values in gather map,
+      // The rows that represent null elements will have negative values in gather map,
       // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
       auto output_table = detail::gather(table_view{{input}},
                                          intermediate->view(),

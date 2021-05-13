@@ -73,7 +73,7 @@ std::unique_ptr<column> create_collect_offsets(size_type input_size,
                     preceding_begin + input_size,
                     following_begin,
                     mutable_sizes.begin<size_type>(),
-                    [min_periods] __device__(auto preceding, auto following) {
+                    [min_periods] __device__(auto const preceding, auto const following) {
                       return (preceding + following) < min_periods ? 0 : (preceding + following);
                     });
 

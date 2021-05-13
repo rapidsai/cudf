@@ -21,7 +21,7 @@
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/utilities/traits.hpp>
 
-// return true the aggregation is valid for the specified ColumnType
+// return true if the aggregation is valid for the specified ColumnType
 // valid aggregations may still be further specialized (eg, is_string_specialized)
 template <typename ColumnType, class AggOp, cudf::aggregation::Kind op>
 static constexpr bool is_rolling_supported()
