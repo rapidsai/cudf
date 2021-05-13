@@ -461,16 +461,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_binaryOpSV(JNIEnv *env, jclas
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeListScalar(JNIEnv *env, jclass,
                                                                   jlong view_handle,
                                                                   jboolean is_valid) {
-  if (is_valid) {
-    JNI_NULL_CHECK(env, view_handle,
-                  "list scalar is set to `valid` but column view is null", 0);
-  }
+  JNI_NULL_CHECK(env, view_handle, "Column view should NOT be null", 0);
   try {
     cudf::jni::auto_set_device(env);
     auto col_view = reinterpret_cast<cudf::column_view *>(view_handle);
 
-    cudf::scalar* s = is_valid ? new cudf::list_scalar(*col_view)
-                               : new cudf::list_scalar();
+    // Instead of calling the `cudf::empty_like` to create an empty column when `is_valid`
+    // is false, always passes the input view to the scalar, to avoid copying the column
+    // twice.
+    // Let the Java layer make sure the view is empty when `is_valid` is false.
+    cudf::scalar* s = new cudf::list_scalar(*col_view);
     s->set_valid(is_valid);
     return reinterpret_cast<jlong>(s);
   }
