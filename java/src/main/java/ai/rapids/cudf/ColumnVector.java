@@ -525,13 +525,23 @@ public final class ColumnVector extends ColumnView {
     return new ColumnVector(stringConcatenation(column_views, separator.getScalarHandle(), narep.getScalarHandle()));
   }
 
+  /**
+   * Concatenate columns of strings together using a separator specified for each row
+   * and returns the result as a string column.
+   * @param columns array of columns containing strings, must be more than 1 columns
+   * @param sep_col strings column that provides the separator for a given row
+   * @param separator_narep String that should be used in place of a null separator for a given
+   *                        row. 
+   * @param col_narep string String that should be used in place of any null strings
+   *                         found in any column.
+   * @return A new java column vector containing the concatenated strings with separator between.
+   */
   public static ColumnVector stringConcatenateWs(ColumnView[] columns, ColumnView sep_col, Scalar separator_narep, Scalar col_narep) {
-    // TODO fix asserts
-    assert columns.length >= 2 : ".stringConcatenate() operation requires at least 2 columns";
-    // assert separator_narep != null : "separator scalar provided may not be null";
-    // assert separator.getType().equals(DType.STRING) : "separator scalar must be a string scalar";
-    // assert narep != null : "narep scalar provided may not be null";
-    // assert narep.getType().equals(DType.STRING) : "narep scalar must be a string scalar";
+    assert columns.length >= 1 : ".stringConcatenate() operation requires at least 1 column";
+    assert separator_narep != null : "separator narep scalar provided may not be null";
+    assert col_narep != null : "column narep scalar provided may not be null";
+    assert separator_narep.getType().equals(DType.STRING) : "separator naprep scalar must be a string scalar";
+    assert col_narep.getType().equals(DType.STRING) : "column narep scalar must be a string scalar";
 
     long[] column_views = new long[columns.length];
     for(int i = 0; i < columns.length; i++) {
@@ -539,7 +549,8 @@ public final class ColumnVector extends ColumnView {
       column_views[i] = columns[i].getNativeView();
     }
 
-    return new ColumnVector(stringConcatenationWs(column_views, sep_col.getNativeView(), separator_narep.getScalarHandle(), col_narep.getScalarHandle()));
+    return new ColumnVector(stringConcatenationWs(column_views, sep_col.getNativeView(),
+      separator_narep.getScalarHandle(), col_narep.getScalarHandle()));
   }
 
   /**
@@ -743,6 +754,17 @@ public final class ColumnVector extends ColumnView {
    */
   private static native long stringConcatenation(long[] columnViews, long separator, long narep);
 
+  /**
+   * Native method to concatenate columns of strings together using a separator specified for each row
+   * and returns the result as a string column.
+   * @param columns array of longs holding the native handles of the column_views to combine.
+   * @param sep_column long holding the native handle of the strings_column_view used as separators.
+   * @param separator_narep String scalar that should be used in place of a null separator for a given
+   *                        row.
+   * @param col_narep string String scalar that should be used in place of any null strings
+   *                         found in any column.
+   * @return A new java column vector containing the concatenated strings with separator between.
+   */
   private static native long stringConcatenationWs(long[] columnViews, long sep_column, long separator_narep, long col_narep);
 
   /**

@@ -2154,6 +2154,31 @@ public class ColumnVectorTest extends CudfTestBase {
     }
   }
 
+  @Test
+  void testStringConcatWsSingleCol() {
+    try (ColumnVector sv1 = ColumnVector.fromStrings("a", "c", "e");
+         ColumnVector sep_col = ColumnVector.fromStrings("-", "-", "-");
+         ColumnVector e_concat = ColumnVector.fromStrings("a", "c", "e");
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar nullEmptyString = Scalar.fromString(null);
+         ColumnVector concat = ColumnVector.stringConcatenateWs(new ColumnView[]{sv1}, sep_col, separatorString, nullEmptyString)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsNullSepNaRep() {
+    try (ColumnVector sv1 = ColumnVector.fromStrings("a", "c", "e");
+         ColumnVector sep_col = ColumnVector.fromStrings("-", "-", "-");
+         ColumnVector e_concat = ColumnVector.fromStrings("a", "c", "e");
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar nullEmptyString = Scalar.fromString(null);
+         ColumnVector concat = ColumnVector.stringConcatenateWs(new ColumnView[]{sv1}, sep_col, separatorString, nullEmptyString)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+
   /*
   @Test
   void testStringConcatWsNullValueInArray() {
@@ -3880,7 +3905,8 @@ public class ColumnVectorTest extends CudfTestBase {
   @Test
   void testIsFloat() {
     String[] floatStrings = {"A", "nan", "Inf", "-Inf", "Infinity", "infinity", "-0.0", "0.0",
-        "3.4028235E38", "3.4028236E38", "-3.4028235E38", "-3.4028236E38", "1.2e-24", "NULL", "null", null, "423"};
+        "3.4028235E38", "3.4028236E38", "-3.4028235E38", "-3.4028236E38", "1.2e-24", "NULL", "null",
+        null, "423"};
     try (ColumnVector floatStringCV = ColumnVector.fromStrings(floatStrings);
          ColumnVector isFloat = floatStringCV.isFloat();
          ColumnVector floats = floatStringCV.asFloats();
