@@ -19,7 +19,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/replace.hpp>

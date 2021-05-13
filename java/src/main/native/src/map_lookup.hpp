@@ -54,7 +54,7 @@ map_lookup(column_view const &map_column, string_scalar lookup_key, bool has_nul
 
 /**
  * @brief Looks up a "map" column by specified key to see if the key exists or not,
- *        and returns a cudf scalar of bool value.
+ *        and returns a cudf column of bool value.
  *
  * The map-column is represented as follows:
  *
@@ -64,6 +64,8 @@ map_lookup(column_view const &map_column, string_scalar lookup_key, bool has_nul
  * The string_view struct members are the key and value, respectively.
  * For each row in the input list column, if the key is not found, false will be returned for that 
  * row.
+ * Note: when search for the scalar key of "null", a column full of "false" will be returned because 
+ *       of cudf::list:contains
  *
  * @param map_column The input "map" column to be searched. Must be of
  *                   type list_view<struct_view<string_view, string_view>>.
