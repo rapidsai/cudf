@@ -4422,8 +4422,7 @@ public class ColumnVectorTest extends CudfTestBase {
                 new HostColumnVector.BasicType(true, DType.STRING)));
         try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3, list4, list5, list6);
              ColumnVector res = cv.getMapKeyExistence(Scalar.fromString("a"));
-             ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, false, true, true, false);
-        ) {
+             ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, false, true, true, false)) {
             assertColumnsAreEqual(expected, res);
         }
     }
