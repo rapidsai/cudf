@@ -2358,7 +2358,6 @@ def _copy_type_metadata_from_arrow(
     * When `arrow_array` is decimal type and `cudf_column` is
     Decimal64Dtype, copy precisions.
     """
-
     if pa.types.is_decimal(arrow_array.type) and isinstance(
         cudf_column, cudf.core.column.DecimalColumn
     ):
@@ -2366,7 +2365,14 @@ def _copy_type_metadata_from_arrow(
     elif pa.types.is_struct(arrow_array.type) and isinstance(
         cudf_column, cudf.core.column.StructColumn
     ):
-        cudf_column._rename_fields([field.name for field in arrow_array.type])
+        cudf_column = cudf_column._rename_fields(
+            [field.name for field in arrow_array.type]
+        )
+        base_children = tuple(
+            _copy_type_metadata_from_arrow(arrow_array.field(i), col_child)
+            for i, col_child in enumerate(cudf_column.base_children)
+        )
+        cudf_column.set_base_children(base_children)
     elif pa.types.is_list(arrow_array.type) and isinstance(
         cudf_column, cudf.core.column.ListColumn
     ):
