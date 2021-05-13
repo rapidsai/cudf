@@ -116,7 +116,7 @@ struct out_of_place_copy_range_dispatch {
   std::enable_if_t<not cudf::is_rep_layout_compatible<T>(), std::unique_ptr<cudf::column>>
   operator()(Args...)
   {
-    if constexpr (std::is_same_v<T, cudf::struct_view>) {
+    if constexpr (std::is_same_v<T, cudf::list_view>) {
       CUDF_FAIL("list_view type not supported");
     }
     CUDF_FAIL("Unsupported type for out of place copy.");
