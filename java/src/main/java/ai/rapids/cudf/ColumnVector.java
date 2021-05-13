@@ -525,6 +525,23 @@ public final class ColumnVector extends ColumnView {
     return new ColumnVector(stringConcatenation(column_views, separator.getScalarHandle(), narep.getScalarHandle()));
   }
 
+  public static ColumnVector stringConcatenateWs(ColumnView[] columns, ColumnView sep_col, Scalar separator_narep, Scalar col_narep) {
+    // TODO fix asserts
+    assert columns.length >= 2 : ".stringConcatenate() operation requires at least 2 columns";
+    // assert separator_narep != null : "separator scalar provided may not be null";
+    // assert separator.getType().equals(DType.STRING) : "separator scalar must be a string scalar";
+    // assert narep != null : "narep scalar provided may not be null";
+    // assert narep.getType().equals(DType.STRING) : "narep scalar must be a string scalar";
+
+    long[] column_views = new long[columns.length];
+    for(int i = 0; i < columns.length; i++) {
+      assert columns[i] != null : "Column vectors passed may not be null";
+      column_views[i] = columns[i].getNativeView();
+    }
+
+    return new ColumnVector(stringConcatenationWs(column_views, sep_col.getNativeView(), separator_narep.getScalarHandle(), col_narep.getScalarHandle()));
+  }
+
   /**
    * Concatenate columns of lists horizontally (row by row), combining a corresponding row
    * from each column into a single list row of a new column.
@@ -725,6 +742,8 @@ public final class ColumnVector extends ColumnView {
    * by the stringConcatenate method.
    */
   private static native long stringConcatenation(long[] columnViews, long separator, long narep);
+
+  private static native long stringConcatenationWs(long[] columnViews, long sep_column, long separator_narep, long col_narep);
 
   /**
    * Native method to hash each row of the given table. Hashing function dispatched on the

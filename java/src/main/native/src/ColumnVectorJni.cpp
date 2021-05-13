@@ -125,6 +125,36 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, 
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenationWs(JNIEnv *env, jclass,
+                                                                             jlongArray column_handles,
+                                                                             jlong sep_handle,
+                                                                             jlong separator_narep,
+                                                                             jlong col_narep) {
+  JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
+  JNI_NULL_CHECK(env, sep_handle, "separator column handle is null", 0);
+  JNI_NULL_CHECK(env, separator_narep, "separator narep string scalar object is null", 0);
+  JNI_NULL_CHECK(env, col_narep, "column narep string scalar object is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    const auto& separator_narep_scalar = *reinterpret_cast<cudf::string_scalar*>(separator_narep);
+    const auto& col_narep_scalar     = *reinterpret_cast<cudf::string_scalar*>(col_narep);
+
+    cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
+    std::vector<cudf::column_view> column_views;
+    std::transform(n_cudf_columns.data(),
+                   n_cudf_columns.data() + n_cudf_columns.size(),
+                   std::back_inserter(column_views),
+                   [](auto const &p_column) { return *p_column; });
+
+    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(sep_handle);
+    cudf::strings_column_view strings_column(*column);
+    std::unique_ptr<cudf::column> result =
+      cudf::strings::concatenate(cudf::table_view(column_views), strings_column, separator_narep_scalar, col_narep_scalar);
+      // cudf::strings::concatenate(cudf::table_view(column_views), strings_column);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenation(JNIEnv *env, jclass,
                                                                              jlongArray column_handles,
