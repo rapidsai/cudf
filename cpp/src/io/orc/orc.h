@@ -107,18 +107,18 @@ struct StripeFooter {
 /**
  * @brief Contains per-column ORC statistics.
  *
- * At most one of the `***_statistics` members has a non-null value.
+ * At most one of the `***_statistics` members has a value.
  */
 struct column_statistics {
-  std::unique_ptr<uint64_t> number_of_values;
-  std::unique_ptr<integer_statistics> int_stats;
-  std::unique_ptr<double_statistics> double_stats;
-  std::unique_ptr<string_statistics> string_stats;
-  std::unique_ptr<bucket_statistics> bucket_stats;
-  std::unique_ptr<decimal_statistics> decimal_stats;
-  std::unique_ptr<date_statistics> date_stats;
-  std::unique_ptr<binary_statistics> binary_stats;
-  std::unique_ptr<timestamp_statistics> timestamp_stats;
+  std::optional<uint64_t> number_of_values;
+  std::optional<integer_statistics> int_stats;
+  std::optional<double_statistics> double_stats;
+  std::optional<string_statistics> string_stats;
+  std::optional<bucket_statistics> bucket_stats;
+  std::optional<decimal_statistics> decimal_stats;
+  std::optional<date_statistics> date_stats;
+  std::optional<binary_statistics> binary_stats;
+  std::optional<timestamp_statistics> timestamp_stats;
   // TODO: hasNull (issue #7087)
 };
 
