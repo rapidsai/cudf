@@ -244,8 +244,8 @@ struct interleave_list_entries_fn {
         auto const& data_col = lists_col.child(lists_column_view::child_column_index);
 
         // The range of indices of the entries within the source list.
-        auto const start_idx   = list_offsets[list_id];
-        auto const end_idx     = list_offsets[list_id + 1];
+        auto const start_idx = list_offsets[list_id];
+        auto const end_idx   = list_offsets[list_id + 1];
 
         auto const write_start = d_offsets[idx];
 
