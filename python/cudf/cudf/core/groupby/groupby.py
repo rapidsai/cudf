@@ -600,7 +600,29 @@ class GroupBy(Serializable):
     def describe(self):
         """Return descriptive stats of the values in each group"""
 
-        return self.agg(["count", "mean", "std", "min", "max"])
+        def func1(x):
+            return x.quantile(0.25)
+
+        def func2(x):
+            return x.quantile(0.5)
+
+        def func3(x):
+            return x.quantile(0.75)
+
+        res = self.agg(
+            ["count", "mean", "std", "min", func1, func2, func3, "max"]
+        )
+        res.columns = [
+            "count",
+            "mean",
+            "std",
+            "min",
+            "25%",
+            "50%",
+            "75%",
+            "max",
+        ]
+        return res
 
     def sum(self):
         """Compute the column-wise sum of the values in each group."""
