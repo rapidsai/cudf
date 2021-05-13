@@ -16,6 +16,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/column/column_view.hpp>
 #include <cudf/detail/gather.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -38,7 +39,7 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
                              make_empty_column(data_type{type_to_id<offset_type>()}),
                              empty_like(value.view()),
                              0,
-                             cudf::create_null_mask(0, mask_state::UNALLOCATED),
+                             cudf::detail::create_null_mask(0, mask_state::UNALLOCATED),
                              stream,
                              mr);
   }
@@ -53,26 +54,32 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
                    m_offsets.end<size_type>(),
                    0,
                    value.view().size());
-  auto child           = std::make_unique<column>(value.view(), stream, mr_final);
   size_type null_count = value.is_valid(stream) ? 0 : 1;
   auto null_mask_state = null_count ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
   auto null_mask       = cudf::detail::create_null_mask(1, null_mask_state, stream, mr_final);
 
   if (size == 1) {
+    auto child = std::make_unique<column>(value.view(), stream, mr_final);
     return make_lists_column(
-      1, std::move(offsets), std::move(child), null_count, std::move(null_mask), stream, mr);
+      1, std::move(offsets), std::move(child), null_count, std::move(null_mask), stream, mr_final);
   }
 
-  auto one_row_col = make_lists_column(
-    1, std::move(offsets), std::move(child), null_count, std::move(null_mask), stream);
+  auto children_views   = std::vector<column_view>{offsets->view(), value.view()};
+  auto one_row_col_view = column_view(data_type{type_id::LIST},
+                                      1,
+                                      nullptr,
+                                      static_cast<bitmask_type const*>(null_mask.data()),
+                                      null_count,
+                                      0,
+                                      children_views);
 
   auto begin = thrust::make_constant_iterator(0);
-  auto res   = cudf::detail::gather(table_view({one_row_col->view()}),
+  auto res   = cudf::detail::gather(table_view({one_row_col_view}),
                                   begin,
                                   begin + size,
                                   out_of_bounds_policy::DONT_CHECK,
                                   stream,
-                                  mr);
+                                  mr_final);
   return std::move(res->release()[0]);
 }
 
