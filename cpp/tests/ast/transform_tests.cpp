@@ -18,6 +18,7 @@
 #include <cudf/ast/transform.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -29,6 +30,8 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 #include <limits>
 #include <type_traits>
@@ -55,6 +58,22 @@ TEST_F(TransformTest, BasicAddition)
   cudf::test::expect_columns_equal(expected, result->view(), true);
 }
 
+TEST_F(TransformTest, BasicAdditionLarge)
+{
+  auto a     = thrust::make_counting_iterator(0);
+  auto col   = column_wrapper<int32_t>(a, a + 2000);
+  auto table = cudf::table_view{{col, col}};
+
+  auto col_ref    = cudf::ast::column_reference(0);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::ADD, col_ref, col_ref);
+
+  auto b        = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
+  auto expected = column_wrapper<int32_t>(b, b + 2000);
+  auto result   = cudf::ast::compute_column(table, expression);
+
+  cudf::test::expect_columns_equal(expected, result->view(), true);
+}
+
 TEST_F(TransformTest, LessComparator)
 {
   auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
@@ -66,6 +85,25 @@ TEST_F(TransformTest, LessComparator)
   auto expression = cudf::ast::expression(cudf::ast::ast_operator::LESS, col_ref_0, col_ref_1);
 
   auto expected = column_wrapper<bool>{true, false, true, false};
+  auto result   = cudf::ast::compute_column(table, expression);
+
+  cudf::test::expect_columns_equal(expected, result->view(), true);
+}
+
+TEST_F(TransformTest, LessComparatorLarge)
+{
+  auto a     = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
+  auto b     = thrust::make_counting_iterator(500);
+  auto c_0   = column_wrapper<int32_t>(a, a + 2000);
+  auto c_1   = column_wrapper<int32_t>(b, b + 2000);
+  auto table = cudf::table_view{{c_0, c_1}};
+
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::LESS, col_ref_0, col_ref_1);
+
+  auto c        = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i < 500; });
+  auto expected = column_wrapper<bool>(c, c + 2000);
   auto result   = cudf::ast::compute_column(table, expression);
 
   cudf::test::expect_columns_equal(expected, result->view(), true);
@@ -93,6 +131,34 @@ TEST_F(TransformTest, MultiLevelTreeArithmetic)
 
   auto result   = cudf::ast::compute_column(table, expression_tree);
   auto expected = column_wrapper<int32_t>{7, 73, 22, -99};
+
+  cudf::test::expect_columns_equal(expected, result->view(), true);
+}
+
+TEST_F(TransformTest, MultiLevelTreeArithmeticLarge)
+{
+  using namespace cudf::ast;
+
+  auto a     = thrust::make_counting_iterator(0);
+  auto b     = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i + 1; });
+  auto c     = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
+  auto c_0   = column_wrapper<int32_t>(a, a + 2000);
+  auto c_1   = column_wrapper<int32_t>(b, b + 2000);
+  auto c_2   = column_wrapper<int32_t>(c, c + 2000);
+  auto table = cudf::table_view{{c_0, c_1, c_2}};
+
+  auto col_ref_0 = column_reference(0);
+  auto col_ref_1 = column_reference(1);
+  auto col_ref_2 = column_reference(2);
+
+  auto expr_left_subtree  = expression(cudf::ast::ast_operator::MUL, col_ref_0, col_ref_1);
+  auto expr_right_subtree = expression(cudf::ast::ast_operator::ADD, col_ref_2, col_ref_0);
+  auto expr_tree          = expression(ast_operator::SUB, expr_left_subtree, expr_right_subtree);
+
+  auto result = cudf::ast::compute_column(table, expr_tree);
+  auto calc   = [](auto i) { return (i * (i + 1)) - (i + (i * 2)); };
+  auto d      = cudf::detail::make_counting_transform_iterator(0, [&](auto i) { return calc(i); });
+  auto expected = column_wrapper<int32_t>(d, d + 2000);
 
   cudf::test::expect_columns_equal(expected, result->view(), true);
 }

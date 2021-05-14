@@ -13,13 +13,14 @@
  * the License.
  */
 #include <tests/iterator/iterator_tests.cuh>
+#include "cudf/detail/utilities/vector_factories.hpp"
 
 // tests for non-null iterator (pointer of device array)
 template <typename T>
 void non_null_iterator(IteratorTest<T>& testFixture)
 {
   auto host_array = cudf::test::make_type_param_vector<T>({0, 6, 0, -14, 13, 64, -13, -20, 45});
-  thrust::device_vector<T> dev_array(host_array);
+  auto dev_array  = cudf::detail::make_device_uvector_sync(host_array);
 
   // calculate the expected value by CPU.
   thrust::host_vector<T> replaced_array(host_array);
