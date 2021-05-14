@@ -760,8 +760,9 @@ cdef class PackedColumns:
         cdef vector[uint8_t] v
         for ui in header["metadata-vector"]:
             v.push_back(ui)
-        cdef cpp_copying.metadata m = cpp_copying.metadata(v)
-        return cls.from_members(m, frames[0])
+        cdef unique_ptr[cpp_copying.metadata] m = move(
+            make_unique[cpp_copying.metadata](v)
+        )
 
     @staticmethod
     cdef PackedColumns from_table(Table input_table, keep_index=False):

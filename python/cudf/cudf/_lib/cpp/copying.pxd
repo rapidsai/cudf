@@ -20,6 +20,12 @@ from cudf._lib.cpp.types cimport size_type
 
 ctypedef const scalar constscalar
 
+cdef extern from "cudf/copying.hpp" namespace "cudf::packed_columns" nogil:
+    cdef struct metadata:
+        metadata(vector[uint8_t]&& v)
+        const uint8_t* data () except +
+        size_type size () except +
+
 cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
     ctypedef enum out_of_bounds_policy:
         NULLIFY 'cudf::out_of_bounds_policy::NULLIFY'
@@ -110,11 +116,6 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         table_view input_table,
         vector[size_type] splits
     ) except +
-
-    cdef struct metadata:
-        metadata(vector[uint8_t]&& v)
-        const uint8_t* data () except +
-        size_type size () except +
 
     cdef struct packed_columns:
         unique_ptr[metadata] metadata_
