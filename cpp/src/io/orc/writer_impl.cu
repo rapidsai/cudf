@@ -1125,6 +1125,7 @@ encoder_decimal_info decimal_chunk_sizes(table_view const &table,
 {
   std::map<uint32_t, rmm::device_uvector<uint32_t>> elem_sizes;
 
+  auto const d_table = table_device_view::create(table, stream);
   // Compute per-element offsets (within each row group) on the device
   for (size_t col_idx = 0; col_idx < orc_columns.size(); ++col_idx) {
     auto &orc_col = orc_columns[col_idx];
@@ -1133,26 +1134,25 @@ encoder_decimal_info decimal_chunk_sizes(table_view const &table,
       auto &current_sizes =
         elem_sizes.insert({col_idx, rmm::device_uvector<uint32_t>(col.size(), stream)})
           .first->second;
-      auto d_column = column_device_view::create(col, stream);
-      thrust::transform(rmm::exec_policy(stream),
-                        thrust::make_counting_iterator<size_type>(0),
-                        thrust::make_counting_iterator<size_type>(col.size()),
-                        current_sizes.begin(),
-                        [d_col = *d_column] __device__(auto idx) {
-                          if (!d_col.is_valid(idx)) return 0u;
-                          int64_t const element = (d_col.type().id() == type_id::DECIMAL32)
-                                                    ? d_col.element<int32_t>(idx)
-                                                    : d_col.element<int64_t>(idx);
-                          int64_t const sign      = (element < 0) ? 1 : 0;
-                          uint64_t zigzaged_value = ((element ^ -sign) * 2) + sign;
+      thrust::tabulate(rmm::exec_policy(stream),
+                       current_sizes.begin(),
+                       current_sizes.end(),
+                       [table = *d_table, col_idx] __device__(auto idx) {
+                         auto const &col = table.column(col_idx);
+                         if (col.is_null(idx)) return 0u;
+                         int64_t const element = (col.type().id() == type_id::DECIMAL32)
+                                                   ? col.element<int32_t>(idx)
+                                                   : col.element<int64_t>(idx);
+                         int64_t const sign      = (element < 0) ? 1 : 0;
+                         uint64_t zigzaged_value = ((element ^ -sign) * 2) + sign;
 
-                          uint32_t encoded_length = 1;
-                          while (zigzaged_value > 127) {
-                            zigzaged_value >>= 7u;
-                            ++encoded_length;
-                          }
-                          return encoded_length;
-                        });
+                         uint32_t encoded_length = 1;
+                         while (zigzaged_value > 127) {
+                           zigzaged_value >>= 7u;
+                           ++encoded_length;
+                         }
+                         return encoded_length;
+                       });
 
       // Compute element offsets within each row group
       thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
@@ -1172,11 +1172,10 @@ encoder_decimal_info decimal_chunk_sizes(table_view const &table,
   std::map<uint32_t, std::vector<uint32_t>> rg_sizes;
   for (auto const &[col_idx, esizes] : elem_sizes) {
     // Copy last elem in each row group - equal to row group size
-    thrust::transform(
+    thrust::tabulate(
       rmm::exec_policy(stream),
-      thrust::make_counting_iterator<size_type>(0),
-      thrust::make_counting_iterator<size_type>(num_rowgroups),
       d_tmp_rowgroup_sizes.begin(),
+      d_tmp_rowgroup_sizes.end(),
       [src = esizes.data(), num_rows = esizes.size(), rg_size = rowgroup_size] __device__(
         auto idx) { return src[thrust::min<size_type>(num_rows, rg_size * (idx + 1)) - 1]; });
 
