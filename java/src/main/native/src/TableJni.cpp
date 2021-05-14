@@ -728,16 +728,6 @@ bool valid_window_parameters(native_jintArray const &values,
          values.size() == preceding.size() && values.size() == following.size();
 }
 
-// Check that window parameters are valid.
-bool valid_window_parameters(native_jintArray const &values,
-                             native_jpointerArray<cudf::aggregation> const &ops,
-                             native_jintArray const &min_periods,
-                             native_jpointerArray<cudf::scalar> const &preceding,
-                             native_jpointerArray<cudf::scalar> const &following) {
-  return values.size() == ops.size() && values.size() == min_periods.size() &&
-         values.size() == preceding.size() && values.size() == following.size();
-}
-
 // Generate gather maps needed to manifest the result of a join between two tables.
 // The resulting Java long array contains the following at each index:
 //   0: Size of each gather map in bytes
@@ -2325,22 +2315,20 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rollingWindowAggregate(
   CATCH_STD(env, NULL);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rangeRollingWindowAggregate(
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_timeRangeRollingWindowAggregate(
     JNIEnv *env, jclass, jlong j_input_table, jintArray j_keys,
-    jintArray j_orderby_column_indices, jbooleanArray j_is_orderby_ascending,
+    jintArray j_timestamp_column_indices, jbooleanArray j_is_timestamp_ascending,
     jintArray j_aggregate_column_indices, jlongArray j_agg_instances, jintArray j_min_periods,
-    jlongArray j_preceding, jlongArray j_following,
-    jbooleanArray j_unbounded_preceding, jbooleanArray j_unbounded_following,
+    jintArray j_preceding, jintArray j_following, 
+    jbooleanArray j_unbounded_preceding, jbooleanArray j_unbounded_following, 
     jboolean ignore_null_keys) {
 
   JNI_NULL_CHECK(env, j_input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, j_keys, "input keys are null", NULL);
-  JNI_NULL_CHECK(env, j_orderby_column_indices, "input orderby_column_indices are null", NULL);
-  JNI_NULL_CHECK(env, j_is_orderby_ascending, "input orderby_ascending is null", NULL);
+  JNI_NULL_CHECK(env, j_timestamp_column_indices, "input timestamp_column_indices are null", NULL);
+  JNI_NULL_CHECK(env, j_is_timestamp_ascending, "input timestamp_ascending is null", NULL);
   JNI_NULL_CHECK(env, j_aggregate_column_indices, "input aggregate_column_indices are null", NULL);
   JNI_NULL_CHECK(env, j_agg_instances, "agg_instances are null", NULL);
-  JNI_NULL_CHECK(env, j_preceding, "preceding are null", NULL);
-  JNI_NULL_CHECK(env, j_following, "following are null", NULL);
 
   try {
     cudf::jni::auto_set_device(env);
@@ -2350,15 +2338,15 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rangeRollingWindowAggrega
     // Convert from j-types to native.
     cudf::table_view *input_table{reinterpret_cast<cudf::table_view *>(j_input_table)};
     cudf::jni::native_jintArray keys{env, j_keys};
-    cudf::jni::native_jintArray orderbys{env, j_orderby_column_indices};
-    cudf::jni::native_jbooleanArray orderbys_ascending{env, j_is_orderby_ascending};
+    cudf::jni::native_jintArray timestamps{env, j_timestamp_column_indices};
+    cudf::jni::native_jbooleanArray timestamp_ascending{env, j_is_timestamp_ascending};
     cudf::jni::native_jintArray values{env, j_aggregate_column_indices};
     cudf::jni::native_jpointerArray<cudf::aggregation> agg_instances(env, j_agg_instances);
     cudf::jni::native_jintArray min_periods{env, j_min_periods};
+    cudf::jni::native_jintArray preceding{env, j_preceding};
+    cudf::jni::native_jintArray following{env, j_following};
     cudf::jni::native_jbooleanArray unbounded_preceding{env, j_unbounded_preceding};
     cudf::jni::native_jbooleanArray unbounded_following{env, j_unbounded_following};
-    cudf::jni::native_jpointerArray<cudf::scalar> preceding(env, j_preceding);
-    cudf::jni::native_jpointerArray<cudf::scalar> following(env, j_following);
 
     if (not valid_window_parameters(values, agg_instances, min_periods, preceding, following)) {
       JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
@@ -2373,48 +2361,21 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_rangeRollingWindowAggrega
     std::vector<std::unique_ptr<cudf::column>> result_columns;
     for (int i(0); i < values.size(); ++i) {
       int agg_column_index = values[i];
-      cudf::column_view const &order_by_column = input_table->column(orderbys[i]);
-      cudf::data_type order_by_type = order_by_column.type();
-      cudf::data_type unbounded_type = order_by_type;
-
-      if (unbounded_preceding[i] || unbounded_following[i]) {
-        switch (order_by_type.id()) {
-          case cudf::type_id::TIMESTAMP_DAYS:
-            unbounded_type = cudf::data_type{cudf::type_id::DURATION_DAYS};
-            break;
-          case cudf::type_id::TIMESTAMP_SECONDS:
-            unbounded_type =cudf::data_type{cudf::type_id::DURATION_SECONDS};
-            break;
-          case cudf::type_id::TIMESTAMP_MILLISECONDS:
-            unbounded_type = cudf::data_type{cudf::type_id::DURATION_MILLISECONDS};
-            break;
-          case cudf::type_id::TIMESTAMP_MICROSECONDS:
-            unbounded_type = cudf::data_type{cudf::type_id::DURATION_MICROSECONDS};
-            break;
-          case cudf::type_id::TIMESTAMP_NANOSECONDS:
-            unbounded_type = cudf::data_type{cudf::type_id::DURATION_NANOSECONDS};
-            break;
-          default:
-            break;
-        }
-      }
 
       cudf::rolling_aggregation * agg = dynamic_cast<cudf::rolling_aggregation *>(agg_instances[i]);
       JNI_ARG_CHECK(env, agg != nullptr, "aggregation is not an instance of rolling_aggregation", nullptr);
 
       result_columns.emplace_back(
         std::move(
-          cudf::grouped_range_rolling_window(
-              groupby_keys,
-              order_by_column,
-              orderbys_ascending[i] ? cudf::order::ASCENDING : cudf::order::DESCENDING,
-              input_table->column(agg_column_index),
-              unbounded_preceding[i] ? cudf::range_window_bounds::unbounded(unbounded_type) :
-              cudf::range_window_bounds::get(*preceding[i]),
-              unbounded_following[i] ? cudf::range_window_bounds::unbounded(unbounded_type) :
-              cudf::range_window_bounds::get(*following[i]),
-              min_periods[i],
-              *agg
+          cudf::grouped_time_range_rolling_window(
+            groupby_keys, 
+            input_table->column(timestamps[i]),
+            timestamp_ascending[i] ? cudf::order::ASCENDING : cudf::order::DESCENDING,
+            input_table->column(agg_column_index), 
+            unbounded_preceding[i] ? cudf::window_bounds::unbounded() : cudf::window_bounds::get(preceding[i]), 
+            unbounded_following[i] ? cudf::window_bounds::unbounded() : cudf::window_bounds::get(following[i]), 
+            min_periods[i],
+            *agg
           )
         )
       );

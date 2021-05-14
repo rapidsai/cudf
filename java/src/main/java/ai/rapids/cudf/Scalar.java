@@ -620,7 +620,6 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       case UINT32:
       case TIMESTAMP_DAYS:
       case DECIMAL32:
-      case DURATION_DAYS:
         valueHash = getInt();
         break;
       case INT64:
@@ -630,10 +629,6 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       case TIMESTAMP_MICROSECONDS:
       case TIMESTAMP_NANOSECONDS:
       case DECIMAL64:
-      case DURATION_MICROSECONDS:
-      case DURATION_SECONDS:
-      case DURATION_MILLISECONDS:
-      case DURATION_NANOSECONDS:
         valueHash = Long.hashCode(getLong());
         break;
       case FLOAT32:
