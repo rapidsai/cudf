@@ -25,8 +25,7 @@ function(find_and_configure_nvcomp VERSION)
         VERSION         ${VERSION}
         GIT_REPOSITORY  https://github.com/NVIDIA/nvcomp.git
         GIT_TAG         v${VERSION}
-        GIT_SHALLOW     TRUE
-        OPTIONS         )
+        GIT_SHALLOW     TRUE)
 
     if(NOT TARGET nvCOMP::nvcomp)
         add_library(nvCOMP::nvcomp ALIAS nvcomp)
