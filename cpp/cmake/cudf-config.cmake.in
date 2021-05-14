@@ -83,7 +83,6 @@ find_dependency(ArrowCUDA @CUDF_VERSION_Arrow@)
 
 find_dependency(rmm @CUDF_MIN_VERSION_rmm@)
 
-find_dependency(nvCOMP @CUDF_MIN_VERSION_nvCOMP@)
 include("${CMAKE_CURRENT_LIST_DIR}/cudf-nvcomp-target.cmake")
 
 set(Thrust_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../include/libcudf/Thrust")

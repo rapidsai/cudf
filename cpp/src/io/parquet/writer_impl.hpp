@@ -186,6 +186,7 @@ class writer::impl {
    *
    * @param chunks column chunk array
    * @param pages encoder pages array
+   * @param max_page_uncomp_data_size maximum uncompressed size of any page's data
    * @param pages_in_batch number of pages in this batch
    * @param first_page_in_batch first page in batch
    * @param rowgroups_in_batch number of rowgroups in this batch
@@ -195,6 +196,7 @@ class writer::impl {
    */
   void encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                     device_span<gpu::EncPage> pages,
+                    size_t max_page_uncomp_data_size,
                     uint32_t pages_in_batch,
                     uint32_t first_page_in_batch,
                     uint32_t rowgroups_in_batch,

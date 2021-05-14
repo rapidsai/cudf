@@ -798,13 +798,14 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &
 
 void snappy_compress(device_span<gpu_inflate_input_s> comp_in,
                      device_span<gpu_inflate_status_s> comp_stat,
+                     size_t max_page_uncomp_data_size,
                      rmm::cuda_stream_view stream)
 {
   size_t num_comp_pages = comp_in.size();
   do {
     size_t temp_size;
     nvcompError_t nvcomp_error =
-      nvcompBatchedSnappyCompressGetTempSize(num_comp_pages, 1 << 20, &temp_size);
+      nvcompBatchedSnappyCompressGetTempSize(num_comp_pages, max_page_uncomp_data_size, &temp_size);
     if (nvcomp_error != nvcompError_t::nvcompSuccess) { break; }
 
     // Not needed now but nvcomp API makes no promises about future
@@ -816,7 +817,7 @@ void snappy_compress(device_span<gpu_inflate_input_s> comp_in,
     // Analogous to comp_in.dstDevice
     rmm::device_uvector<void *> compressed_data_ptrs(num_comp_pages, stream);
     // Analogous to comp_stat.bytes_written
-    rmm::device_vector<size_t> compressed_bytes_written(num_comp_pages);
+    rmm::device_uvector<size_t> compressed_bytes_written(num_comp_pages, stream);
     // nvcomp does not currently use comp_in.dstSize. Cannot assume that the output will fit in
     // the space allocated unless one uses the API nvcompBatchedSnappyCompressGetOutputSize()
 
@@ -837,7 +838,7 @@ void snappy_compress(device_span<gpu_inflate_input_s> comp_in,
                                                     scratch.data(),  // Not needed rn but future
                                                     scratch.size(),
                                                     compressed_data_ptrs.data(),
-                                                    compressed_bytes_written.data().get(),
+                                                    compressed_bytes_written.data(),
                                                     stream.value());
 
     if (nvcomp_error != nvcompError_t::nvcompSuccess) { break; }
@@ -866,6 +867,7 @@ void snappy_compress(device_span<gpu_inflate_input_s> comp_in,
 
 void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
                                 device_span<gpu::EncPage> pages,
+                                size_t max_page_uncomp_data_size,
                                 uint32_t pages_in_batch,
                                 uint32_t first_page_in_batch,
                                 uint32_t rowgroups_in_batch,
@@ -891,7 +893,9 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks
 
   gpu::EncodePages(batch_pages, comp_in, comp_stat, stream);
   switch (compression_) {
-    case parquet::Compression::SNAPPY: snappy_compress(comp_in, comp_stat, stream); break;
+    case parquet::Compression::SNAPPY:
+      snappy_compress(comp_in, comp_stat, max_page_uncomp_data_size, stream);
+      break;
     default: break;
   }
   // TBD: Not clear if the official spec actually allows dynamically turning off compression at the
@@ -1277,6 +1281,7 @@ void writer::impl::write(table_view const &table)
     encode_pages(
       chunks,
       {pages.data(), pages.size()},
+      max_page_uncomp_data_size,
       pages_in_batch,
       first_page_in_batch,
       batch_list[b],
