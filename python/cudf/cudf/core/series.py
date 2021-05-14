@@ -1290,10 +1290,17 @@ class Series(SingleColumnFrame, Serializable):
                 na_rep=cudf._NA_REP,
             )
         else:
+            if is_categorical_dtype(self.index):
+                if is_interval_dtype(
+                    self.index.dtype.categories
+                ) and is_struct_dtype(preprocess.index.categories):
+                    # with a series input the IntervalIndex's are turn
+                    # into a struct dtype this line will change the
+                    # categories back to an intervalIndex.
+                    preprocess.index.dtype._categories = self.index.dtype.categories
             output = preprocess.to_pandas().__repr__()
 
         lines = output.split("\n")
-
         if isinstance(preprocess._column, cudf.core.column.CategoricalColumn):
             category_memory = lines[-1]
             if preprocess._column.categories.dtype.kind == "f":
@@ -5272,8 +5279,8 @@ class Series(SingleColumnFrame, Serializable):
         dtype: int32
         """
         if bins is not None:
-            raise NotImplementedError("bins is not yet supported")
-
+            self = cudf.cut(self,bins, include_lowest=True)
+            
         if dropna and self.null_count == len(self):
             return Series(
                 [],
@@ -5290,6 +5297,11 @@ class Series(SingleColumnFrame, Serializable):
 
         if normalize:
             res = res / float(res._column.sum())
+        
+        #we this is how we can get the same index dtype as pandas
+        if bins is not None:
+            res.index = res.index.categories
+            
         return res
 
     def scale(self):
