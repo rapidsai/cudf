@@ -174,7 +174,7 @@ struct dispatch_compute_indices {
                             std::unique_ptr<column>>
   operator()(Args&&...)
   {
-    CUDF_FAIL("list_view as keys for dictionary not supported");
+    CUDF_FAIL("dictionary concatenate not supported for this column type");
   }
 };
 

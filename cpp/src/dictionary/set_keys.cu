@@ -90,7 +90,7 @@ struct dispatch_compute_indices {
                             std::unique_ptr<column>>
   operator()(Args&&...)
   {
-    CUDF_FAIL("list_view dictionary set_keys not supported yet");
+    CUDF_FAIL("dictionary set_keys not supported for this column type");
   }
 };
 
