@@ -5271,7 +5271,6 @@ class Series(SingleColumnFrame, Serializable):
         1.0     1
         dtype: int32
         """
-        breakpoint()
         if bins is not None:
             raise NotImplementedError("bins is not yet supported")
 
