@@ -292,7 +292,9 @@ add_library(cudf
     src/reductions/nth_element.cu
     src/reductions/product.cu
     src/reductions/reductions.cpp
-    src/reductions/scan.cu
+    src/reductions/scan/scan.cpp
+    src/reductions/scan/scan_exclusive.cu
+    src/reductions/scan/scan_inclusive.cu
     src/reductions/std.cu
     src/reductions/sum.cu
     src/reductions/sum_of_squares.cu
