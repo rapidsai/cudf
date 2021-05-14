@@ -1476,8 +1476,7 @@ class CategoricalColumn(column.ColumnBase):
         # Combine and de-dupe the categories
         cats = (
             cudf.concat([o.cat().categories for o in objs])
-            .to_series()
-            .drop_duplicates(ignore_index=True)
+            .drop_duplicates()
             ._column
         )
         objs = [
