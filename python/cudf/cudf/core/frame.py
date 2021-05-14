@@ -28,8 +28,8 @@ from cudf.core.join import merge
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
-    is_numerical_dtype,
     is_decimal_dtype,
+    is_numerical_dtype,
     is_scalar,
     min_scalar_type,
 )
@@ -3363,6 +3363,10 @@ class SingleColumnFrame(Frame):
             f"The truth value of a {type(self)} is ambiguous. Use "
             "a.empty, a.bool(), a.item(), a.any() or a.all()."
         )
+
+    @property
+    def _num_columns(self):
+        return 1
 
     @property
     def _column(self):

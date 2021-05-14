@@ -1132,29 +1132,6 @@ class Index(SingleColumnFrame, Serializable):
             name=self.name if name is None else name,
         )
 
-    @property
-    def empty(self):
-        """
-        Indicator whether Index is empty.
-
-        True if Index is entirely empty (no items).
-
-        Returns
-        -------
-        out : bool
-            If Index is empty, return True, if not return False.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> index = cudf.Index([])
-        >>> index
-        Float64Index([], dtype='float64')
-        >>> index.empty
-        True
-        """
-        return not self.size
-
     def get_slice_bound(self, label, side, kind):
         """
         Calculate slice bound that corresponds to given label.
@@ -1239,36 +1216,6 @@ class Index(SingleColumnFrame, Serializable):
         result = self.to_series().isin(values).values
 
         return result
-
-    def where(self, cond, other=None):
-        """
-        Replace values where the condition is False.
-
-        Parameters
-        ----------
-        cond : bool array-like with the same length as self
-            Where cond is True, keep the original value.
-            Where False, replace with corresponding value from other.
-            Callables are not supported.
-        other: scalar, or array-like
-            Entries where cond is False are replaced with
-            corresponding value from other. Callables are not
-            supported. Default is None.
-
-        Returns
-        -------
-        Same type as caller
-
-        Examples
-        --------
-        >>> import cudf
-        >>> index = cudf.Index([4, 3, 2, 1, 0])
-        >>> index
-        Int64Index([4, 3, 2, 1, 0], dtype='int64')
-        >>> index.where(index > 2, 15)
-        Int64Index([4, 3, 15, 15, 15], dtype='int64')
-        """
-        return super().where(cond=cond, other=other)
 
     def memory_usage(self, deep=False):
         """
@@ -1461,10 +1408,6 @@ class RangeIndex(Index):
         The value of the step parameter.
         """
         return self._step
-
-    @property
-    def _num_columns(self):
-        return 1
 
     @property
     def _num_rows(self):
