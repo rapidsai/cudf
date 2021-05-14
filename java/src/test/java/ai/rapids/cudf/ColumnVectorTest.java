@@ -4436,7 +4436,6 @@ public class ColumnVectorTest extends CudfTestBase {
            ColumnVector resNullKey = cv.getMapKeyExistence(null)) {
       }
     });
-    System.out.println(e.getMessage());
     assertTrue(e.getMessage().contains("target string may not be null"));
   }
 
