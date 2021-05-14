@@ -2527,7 +2527,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /** For a column of type List<Struct<String, String>> and a passed in String key, return a boolean
-   * column for all keys in the structs, true if the key exists in all maps in the column.
+   * column for all keys in the structs, It is true if the key exists in the corresponding map for
+   * that row, false otherwise. It will never return null for a row.
    * @param key the String scalar to lookup in the column
    * @return a boolean column based on the lookup result
    */
