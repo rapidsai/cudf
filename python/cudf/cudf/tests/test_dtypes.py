@@ -222,6 +222,33 @@ def assert_column_array_dtype_equal(column: ColumnBase, array: pa.array):
             None,
             [{"human?": None, "deets": {"weight": 6.9, "age": None}}],
         ],
+        [
+            {
+                "name": "var0",
+                "val": [
+                    {"name": "var1", "val": None, "type": "optional<struct>"}
+                ],
+                "type": "list",
+            },
+            {},
+            {
+                "name": "var2",
+                "val": [
+                    {
+                        "name": "var3",
+                        "val": {"field": 42},
+                        "type": "optional<struct>",
+                    },
+                    {
+                        "name": "var4",
+                        "val": {"field": 3.14},
+                        "type": "optional<struct>",
+                    },
+                ],
+                "type": "list",
+            },
+            None,
+        ],
     ],
 )
 def test_lists_of_structs_dtype(data):
