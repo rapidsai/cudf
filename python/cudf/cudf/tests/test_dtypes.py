@@ -227,4 +227,6 @@ def test_lists_of_structs_dtype(data):
     expected = pa.array(data)
 
     assert_column_array_dtype_equal(got._column, expected)
+    # TODO: use assert_eq after
+    # https://github.com/pandas-dev/pandas/issues/41466 resolved
     assert expected.equals(got._column.to_arrow())
