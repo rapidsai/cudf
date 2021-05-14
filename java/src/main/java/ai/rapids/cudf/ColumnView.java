@@ -1299,13 +1299,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
     long nativePtr = agg.createNativeInstance();
     try {
+      Scalar p = options.getPrecedingScalar();
+      Scalar f = options.getFollowingScalar();
       return new ColumnVector(
           rollingWindow(this.getNativeView(),
               agg.getDefaultOutput(),
               options.getMinPeriods(),
               nativePtr,
-              options.getPreceding(),
-              options.getFollowing(),
+              p == null || !p.isValid() ? 0 : p.getInt(),
+              f == null || !f.isValid() ? 0 : f.getInt(),
               options.getPrecedingCol() == null ? 0 : options.getPrecedingCol().getNativeView(),
               options.getFollowingCol() == null ? 0 : options.getFollowingCol().getNativeView()));
     } finally {

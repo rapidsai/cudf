@@ -26,8 +26,6 @@ public class WindowOptions implements AutoCloseable {
   enum FrameType {ROWS, RANGE}
 
   private final int minPeriods;
-  private final int preceding;
-  private final int following;
   private final Scalar precedingScalar;
   private final Scalar followingScalar;
   private final ColumnVector precedingCol;
@@ -38,11 +36,8 @@ public class WindowOptions implements AutoCloseable {
   private final boolean isUnboundedPreceding;
   private final boolean isUnboundedFollowing;
 
-
   private WindowOptions(Builder builder) {
     this.minPeriods = builder.minPeriods;
-    this.preceding = builder.preceding;
-    this.following = builder.following;
     this.precedingScalar = builder.precedingScalar;
     if (precedingScalar != null) {
       precedingScalar.incRefCount();
@@ -73,9 +68,7 @@ public class WindowOptions implements AutoCloseable {
       return true;
     } else if (other instanceof WindowOptions) {
       WindowOptions o = (WindowOptions) other;
-      boolean ret = this.preceding == o.preceding &&
-              this.following == o.following &&
-              this.minPeriods == o.minPeriods &&
+      boolean ret = this.minPeriods == o.minPeriods &&
               this.orderByColumnIndex == o.orderByColumnIndex &&
               this.orderByOrderAscending == o.orderByOrderAscending &&
               this.frameType == o.frameType &&
@@ -101,8 +94,6 @@ public class WindowOptions implements AutoCloseable {
   @Override
   public int hashCode() {
     int ret = 7;
-    ret = 31 * ret + preceding;
-    ret = 31 * ret + following;
     ret = 31 * ret + minPeriods;
     ret = 31 * ret + orderByColumnIndex;
     ret = 31 * ret + Boolean.hashCode(orderByOrderAscending);
@@ -130,10 +121,6 @@ public class WindowOptions implements AutoCloseable {
 
   int getMinPeriods() { return  this.minPeriods; }
 
-  int getPreceding() { return this.preceding; }
-
-  int getFollowing() { return this.following; }
-
   Scalar getPrecedingScalar() { return this.precedingScalar; }
 
   Scalar getFollowingScalar() { return this.followingScalar; }
@@ -160,8 +147,6 @@ public class WindowOptions implements AutoCloseable {
 
   public static class Builder {
     private int minPeriods = 1;
-    private int preceding = 0;
-    private int following = 1;
     // for range window
     private Scalar precedingScalar = null;
     private Scalar followingScalar = null;
@@ -210,10 +195,15 @@ public class WindowOptions implements AutoCloseable {
      *                        the followingScalar will be live outside of WindowOptions
      */
     public Builder window(Scalar precedingScalar, Scalar followingScalar) {
-      assert (precedingScalar != null && precedingScalar.isValid());
-      assert (followingScalar != null && followingScalar.isValid());
+      if (precedingScalar == null || !precedingScalar.isValid()) {
+        throw new IllegalArgumentException("preceding cannot be null");
+      }
+      if (followingScalar == null || !followingScalar.isValid()) {
+        throw new IllegalArgumentException("following cannot be null");
+      }
       this.precedingScalar = precedingScalar;
       this.followingScalar = followingScalar;
+      staticSet = true;
       return this;
     }
 
@@ -266,44 +256,22 @@ public class WindowOptions implements AutoCloseable {
       return this;
     }
 
-    public Builder preceding(int preceding) {
-      this.preceding = preceding;
-      return this;
-    }
-
-    public Builder following(int following) {
-      this.following = following;
-      return this;
-    }
-
     /**
      * Set the relative number preceding the current row for range window
-     * @param preceding
-     * @return Builder
+     * @return this for chaining
      */
     public Builder preceding(Scalar preceding) {
       this.precedingScalar = preceding;
+      staticSet = true;
       return this;
     }
 
     /**
      * Set the relative number following the current row for range window
-     * @param following
-     * @return Builder
+     * @return this for chaining
      */
     public Builder following(Scalar following) {
       this.followingScalar = following;
-      return this;
-    }
-
-    /**
-     * Set the size of the window.
-     * @param preceding the number of rows preceding the current row
-     * @param following the number of rows following the current row.
-     */
-    public Builder window(int preceding, int following) {
-      this.preceding = preceding;
-      this.following = following;
       staticSet = true;
       return this;
     }
