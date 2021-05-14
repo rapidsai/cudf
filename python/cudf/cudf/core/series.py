@@ -22,7 +22,6 @@ from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
 from cudf.core.column import (
-    ColumnBase,
     DatetimeColumn,
     TimeDeltaColumn,
     arange,
@@ -2148,7 +2147,7 @@ class Series(SingleColumnFrame, Serializable):
         """Returns a *column* (not a Series) or scalar for performing
         binary operations with self._column.
         """
-        if isinstance(other, ColumnBase):
+        if isinstance(other, column.ColumnBase):
             return other
         if isinstance(other, Series):
             return other._column
