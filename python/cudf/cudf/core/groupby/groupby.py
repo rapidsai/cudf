@@ -12,6 +12,21 @@ from cudf.core.abc import Serializable
 from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
+# The three functions below return the quantiles [25%, 50%, 75%]
+# respectively, which are called in the describe() method to ouput
+# the summary stats of a GroupBy object
+def _quantile_25(x):
+    return x.quantile(0.25)
+
+
+def _quantile_50(x):
+    return x.quantile(0.50)
+
+
+def _quantile_75(x):
+    return x.quantile(0.75)
+
+
 # Note that all valid aggregation methods (e.g. GroupBy.min) are bound to the
 # class after its definition (see below).
 class GroupBy(Serializable):
@@ -600,17 +615,17 @@ class GroupBy(Serializable):
     def describe(self):
         """Return descriptive stats of the values in each group"""
 
-        def func1(x):
-            return x.quantile(0.25)
-
-        def func2(x):
-            return x.quantile(0.5)
-
-        def func3(x):
-            return x.quantile(0.75)
-
         res = self.agg(
-            ["count", "mean", "std", "min", func1, func2, func3, "max"]
+            [
+                "count",
+                "mean",
+                "std",
+                "min",
+                _quantile_25,
+                _quantile_50,
+                _quantile_75,
+                "max",
+            ]
         )
         res.columns = [
             "count",
