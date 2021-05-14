@@ -2206,9 +2206,28 @@ public class ColumnVectorTest extends CudfTestBase {
   void testStringConcatWsSingleListCol() {
     try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
            new HostColumnVector.BasicType(true, DType.STRING)),
-           Arrays.asList("aaa"), Arrays.asList("b", "c", "d"));
+           Arrays.asList("aaa"), Arrays.asList("b", "c", "d"), Arrays.asList("\u0480\u0481", null, "asdfbe", null));
+         ColumnVector sep_col = ColumnVector.fromStrings("-", "-", "*");
+         // ColumnVector e_concat = ColumnVector.fromStrings("aaa", "b-c-d", "\u0480\u0481*asdfbe");
+         // TODO - this is different then spark, should be above line for null
+         ColumnVector e_concat = ColumnVector.fromStrings("aaa", "b-c-d", null);
+         // ColumnVector e_concat = ColumnVector.fromStrings("aaa", "b-c-d", "\u0480\u0481**asdfbe*");
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar nullEmptyString = Scalar.fromString(null);
+         ColumnVector concat = ColumnVector.stringConcatenateListElementsWs(cv1, sep_col, separatorString, nullEmptyString)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsSingleListColAllNulls() {
+    try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+           new HostColumnVector.BasicType(true, DType.STRING)),
+           Arrays.asList("aaa"), Arrays.asList(null, null, null));
          ColumnVector sep_col = ColumnVector.fromStrings("-", "-");
-         ColumnVector e_concat = ColumnVector.fromStrings("aaa", "b-c-d");
+         // TODO - SPARK expects empty string when all nulls, not null
+         // ColumnVector e_concat = ColumnVector.fromStrings("aaa", "");
+         ColumnVector e_concat = ColumnVector.fromStrings("aaa", null);
          Scalar separatorString = Scalar.fromString(null);
          Scalar nullEmptyString = Scalar.fromString(null);
          ColumnVector concat = ColumnVector.stringConcatenateListElementsWs(cv1, sep_col, separatorString, nullEmptyString)) {
