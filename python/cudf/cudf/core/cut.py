@@ -1,13 +1,15 @@
 from cudf._lib.labeling import label_bins
-from cudf.core.column import as_column
+from cudf.core.column import as_column, arange
 from cudf.core.column import build_categorical_column
 from cudf.core.index import IntervalIndex
 from pandas.core.indexes.interval import IntervalIndex as pandas_IntervalIndex
-from cudf.utils.dtypes import is_list_like
+from cudf.utils.dtypes import is_list_like, find_common_type
 import cupy
 import cudf
+import numpy as np
 import pandas as pd
 from collections import Sequence
+from cudf._lib.filling import sequence
 
 
 def cut(
@@ -96,7 +98,6 @@ def cut(
     """
     left_inclusive = False
     right_inclusive = True
-
     # saving the original input x for use in case its a series
     orig_x = x
 
@@ -122,9 +123,6 @@ def cut(
                 # get unique values but maintain list dtype
                 bins = cupy.unique(bins).tolist()
 
-    # turn input into a cupy array to make for easier handling
-    x = cupy.asarray(x)
-
     # if bins is an intervalIndex we ignore the value of right
     if (
         right is False
@@ -132,16 +130,34 @@ def cut(
         and bins.closed == "right"
     ):
         right = True
-
+    
     # create bins if given an int or single scalar
     if not isinstance(bins, pandas_IntervalIndex):
         if not isinstance(bins, (Sequence)):
-            rng = (x.min(), x.max())
-            mn, mx = [mi + 0.0 for mi in rng]
-            bins = cupy.linspace(mn, mx, bins + 1, endpoint=True)
-            # extend the range of x by 0.1% on each side to include
-            # the minimum and maximum values of x.
-            adj = (mx - mn) * 0.001
+            if isinstance(x, (pd.Series,cudf.Series,np.ndarray,cupy.ndarray)):
+                #changing to scalars and using sequence to get the bins 
+                #because this allows masked arrays from value_counts to
+                #also be able to be handled by cut correctly
+                #pandas by default seems to turn all bins into a float
+                mn = cudf.Scalar(x.min(), dtype="float64")
+                mx = cudf.Scalar(x.max(), dtype="float64")
+            else:
+                mn = cudf.Scalar(min(x) , dtype="float64")
+                mx = cudf.Scalar(max(x), dtype="float64")
+            step = cudf.Scalar((mx -mn)/bins, dtype="float64")
+            # if step.dtype != mn.dtype:
+            #     step = step.astype(mn.dtype)
+            bins = sequence(size=bins + 1, init=mn.device_value,step=step.device_value).values
+            adj = (mx - mn).value * 0.001
+            # # else:
+            # # turn input into a cupy array to make for easier handling
+            # x = cupy.asarray(x)
+            # rng = (x.min(), x.max())
+            # mn, mx = [mi + 0.0 for mi in rng]
+            # bins = cupy.linspace(mn, mx, bins + 1, endpoint=True)
+            # # extend the range of x by 0.1% on each side to include
+            # # the minimum and maximum values of x.
+            # adj = (mx - mn) * 0.001
             if right:
                 bins[0] -= adj
             else:
@@ -158,6 +174,7 @@ def cut(
         # if right is false the last bin edge is not included
         if right is False:
             right_edge = bins[len(bins) - 1]
+            x = cupy.asarray(x)
             x[x == right_edge.item()] = right_edge.item() + 1
 
     # the inputs is a column of the values in the array x
@@ -204,8 +221,8 @@ def cut(
         # get the left and right edges of the bins as columns
         # we cannot typecast an IntervalIndex, so we need to
         # make the edges the same type as the input array
-        left_edges = as_column(bins.left).astype(x.dtype)
-        right_edges = as_column(bins.right).astype(x.dtype)
+        left_edges = as_column(bins.left).astype(input_arr.dtype)
+        right_edges = as_column(bins.right).astype(input_arr.dtype)
     else:
         # get the left and right edges of the bins as columns
         left_edges = as_column(bins[:-1:])
