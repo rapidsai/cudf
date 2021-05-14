@@ -21,6 +21,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/valid_if.cuh>
+#include <cudf/lists/detail/copying.hpp>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/utilities.cuh>
@@ -351,7 +352,7 @@ struct list_child_constructor {
     print("scatter_rows ", list_vector, stream);
 #endif  // NDEBUG
 
-    auto child_column = cudf::make_fixed_width_column(cudf::data_type{cudf::type_to_id<T>()},
+    auto child_column = cudf::make_fixed_width_column(source_lists_column_view.child().type(),
                                                       num_child_rows,
                                                       child_null_mask.first,
                                                       child_null_mask.second,
@@ -430,6 +431,8 @@ struct list_child_constructor {
 
     auto const num_child_rows{
       cudf::detail::get_value<size_type>(list_offsets, list_offsets.size() - 1, stream)};
+
+    if (num_child_rows == 0) { return make_empty_column(data_type{type_id::STRING}); }
 
     auto string_views = rmm::device_uvector<string_view>(num_child_rows, stream);
 
@@ -520,6 +523,14 @@ struct list_child_constructor {
 
     auto const num_child_rows{
       cudf::detail::get_value<size_type>(list_offsets, list_offsets.size() - 1, stream)};
+
+    if (num_child_rows == 0) {
+      // make an empty lists column using the input child type
+      return make_empty_lists_column(
+        source_lists_column_view.child().child(lists_column_view::child_column_index).type(),
+        stream,
+        mr);
+    }
 
     auto child_list_views = rmm::device_uvector<unbound_list_view>(num_child_rows, stream, mr);
 

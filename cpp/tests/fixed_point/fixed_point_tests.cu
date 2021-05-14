@@ -35,6 +35,8 @@
 #include <numeric>
 #include <type_traits>
 #include <vector>
+#include "cudf/detail/utilities/vector_factories.hpp"
+#include "rmm/cuda_stream_view.hpp"
 
 using namespace numeric;
 
@@ -507,37 +509,39 @@ TEST_F(FixedPointTest, DecimalXXThrustOnDevice)
 {
   using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
 
-  thrust::device_vector<decimal32> vec1(1000, decimal32{1, scale_type{-2}});
+  std::vector<decimal32> vec1(1000, decimal32{1, scale_type{-2}});
+  auto d_vec1 = cudf::detail::make_device_uvector_sync(vec1);
 
   auto const sum = thrust::reduce(
-    rmm::exec_policy(), std::cbegin(vec1), std::cend(vec1), decimal32{0, scale_type{-2}});
+    rmm::exec_policy(), std::cbegin(d_vec1), std::cend(d_vec1), decimal32{0, scale_type{-2}});
 
   EXPECT_EQ(static_cast<int32_t>(sum), 1000);
 
   // TODO: Once nvbugs/1990211 is fixed (ExclusiveSum initial_value = 0 bug)
   //       change inclusive scan to run on device (avoid copying to host)
-  thrust::host_vector<decimal32> vec1_host = vec1;
+  thrust::inclusive_scan(std::cbegin(vec1), std::cend(vec1), std::begin(vec1));
 
-  thrust::inclusive_scan(std::cbegin(vec1_host), std::cend(vec1_host), std::begin(vec1_host));
-
-  vec1 = vec1_host;
+  d_vec1 = cudf::detail::make_device_uvector_sync(vec1);
 
   std::vector<int32_t> vec2(1000);
   std::iota(std::begin(vec2), std::end(vec2), 1);
 
   auto const res1 = thrust::reduce(
-    rmm::exec_policy(), std::cbegin(vec1), std::cend(vec1), decimal32{0, scale_type{-2}});
+    rmm::exec_policy(), std::cbegin(d_vec1), std::cend(d_vec1), decimal32{0, scale_type{-2}});
 
   auto const res2 = std::accumulate(std::cbegin(vec2), std::cend(vec2), 0);
 
   EXPECT_EQ(static_cast<int32_t>(res1), res2);
 
-  thrust::device_vector<int32_t> vec3(1000);
+  rmm::device_uvector<int32_t> d_vec3(1000, rmm::cuda_stream_default);
 
-  thrust::transform(
-    rmm::exec_policy(), std::cbegin(vec1), std::cend(vec1), std::begin(vec3), cast_to_int32_fn{});
+  thrust::transform(rmm::exec_policy(),
+                    std::cbegin(d_vec1),
+                    std::cend(d_vec1),
+                    std::begin(d_vec3),
+                    cast_to_int32_fn{});
 
-  thrust::host_vector<int32_t> vec3_host = vec3;
+  auto vec3 = cudf::detail::make_std_vector_sync(d_vec3);
 
   EXPECT_EQ(vec2, vec3);
 }
