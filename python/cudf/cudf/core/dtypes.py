@@ -178,10 +178,10 @@ class ListDtype(_BaseDtype):
         return self._typ.equals(other._typ)
 
     def __repr__(self):
-        if isinstance(self.element_type, ListDtype):
-            return f"ListDtype({self.element_type.__repr__()})"
+        if isinstance(self.element_type, (ListDtype, StructDtype)):
+            return f"{type(self).__name__}({self.element_type.__repr__()})"
         else:
-            return f"ListDtype({self.element_type})"
+            return f"{type(self).__name__}({self.element_type})"
 
     def __hash__(self):
         return hash(self._typ)

@@ -40,7 +40,12 @@ from cudf._lib.transform import bools_to_mask
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
-from cudf.core.dtypes import CategoricalDtype, IntervalDtype
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    IntervalDtype,
+    ListDtype,
+    StructDtype,
+)
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
     check_cast_unsupported_dtype,
@@ -2365,14 +2370,20 @@ def _copy_type_metadata_from_arrow(
     elif pa.types.is_struct(arrow_array.type) and isinstance(
         cudf_column, cudf.core.column.StructColumn
     ):
-        cudf_column = cudf_column._rename_fields(
-            [field.name for field in arrow_array.type]
-        )
         base_children = tuple(
             _copy_type_metadata_from_arrow(arrow_array.field(i), col_child)
             for i, col_child in enumerate(cudf_column.base_children)
         )
         cudf_column.set_base_children(base_children)
+        return cudf.core.column.StructColumn(
+            data=None,
+            size=cudf_column.base_size,
+            dtype=StructDtype.from_arrow(arrow_array.type),
+            mask=cudf_column.base_mask,
+            offset=cudf_column.offset,
+            null_count=cudf_column.null_count,
+            children=base_children,
+        )
     elif pa.types.is_list(arrow_array.type) and isinstance(
         cudf_column, cudf.core.column.ListColumn
     ):
@@ -2383,6 +2394,13 @@ def _copy_type_metadata_from_arrow(
                     arrow_array.values, cudf_column.base_children[1]
                 ),
             )
-            cudf_column.set_base_children(base_children)
+            return cudf.core.column.ListColumn(
+                size=cudf_column.base_size,
+                dtype=ListDtype.from_arrow(arrow_array.type),
+                mask=cudf_column.base_mask,
+                offset=cudf_column.offset,
+                null_count=cudf_column.null_count,
+                children=base_children,
+            )
 
     return cudf_column
