@@ -161,9 +161,10 @@ def test_interval_dtype_pyarrow_round_trip(fields, closed):
 
 def assert_column_array_dtype_equal(column: ColumnBase, array: pa.array):
     """
-    In cudf, each column holds dtype of itself, plus dtype of all child
-    columns. This method tests that every level of `column` matches the
-    type of the given `array`.
+    In cudf, each column holds its dtype. And since column may have child
+    columns, child columns also holds there datatype. This method tests
+    that every level of `column` matches the type of the given `array`
+    recursively.
     """
 
     if isinstance(column.dtype, ListDtype):
@@ -218,6 +219,7 @@ def assert_column_array_dtype_equal(column: ColumnBase, array: pa.array):
                 {"human?": False, "deets": None},
             ],
             [],
+            None,
             [{"human?": None, "deets": {"weight": 6.9, "age": None}}],
         ],
     ],
