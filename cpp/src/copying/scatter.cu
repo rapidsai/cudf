@@ -149,7 +149,6 @@ struct column_scalar_scatterer_impl<list_view, MapIterator> {
   }
 };
 
-
 template <typename MapIterator>
 struct column_scalar_scatterer_impl<struct_view, MapIterator> {
   template <typename... Args>

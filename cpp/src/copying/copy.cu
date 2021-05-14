@@ -241,14 +241,13 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
   //   1. Struct scalars are not yet available.
   //   2. List scalars do not yet support explosion to a full column.
   CUDF_FAIL("Scalars of nested types are not currently supported!");
-  (void) lhs;
-  (void) rhs;
-  (void) size;
-  (void) is_left;
-  (void) stream;
-  (void) mr;
+  (void)lhs;
+  (void)rhs;
+  (void)size;
+  (void)is_left;
+  (void)stream;
+  (void)mr;
 }
-
 
 /**
  * @brief Functor called by the `type_dispatcher` to invoke copy_if_else on combinations

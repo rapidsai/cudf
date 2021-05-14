@@ -121,13 +121,11 @@ struct segmented_shift_functor {
   template <typename... Args>
   std::unique_ptr<column> operator()(Args&&...)
   {
-    if constexpr( std::is_same_v<T, cudf::list_view> )
-    {
+    if constexpr (std::is_same_v<T, cudf::list_view>) {
       CUDF_FAIL("segmented_shift does not support list_view yet");
     }
 
-    if constexpr( std::is_same_v<T, cudf::struct_view> )
-    {
+    if constexpr (std::is_same_v<T, cudf::struct_view>) {
       CUDF_FAIL("segmented_shift does not support struct_view yet");
     }
 

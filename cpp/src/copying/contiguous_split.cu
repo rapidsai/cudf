@@ -605,7 +605,6 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::struct_vi
                                offset_depth);
 }
 
-
 template <typename InputIter>
 std::pair<src_buf_info*, size_type> setup_source_buf_info(InputIter begin,
                                                           InputIter end,
