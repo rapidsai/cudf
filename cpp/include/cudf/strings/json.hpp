@@ -36,7 +36,7 @@ class get_json_object_options {
   bool allow_single_quotes = false;
 
   // individual string values are returned with quotes stripped.
-  bool strip_quotes_from_single_strings = false;
+  bool strip_quotes_from_single_strings = true;
 
  public:
   /**

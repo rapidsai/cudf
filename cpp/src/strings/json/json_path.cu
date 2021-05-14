@@ -290,9 +290,27 @@ class json_state : private parser {
     return parse_result::ERROR;
   }
 
-  // a name means:
-  // - a string followed by a :
-  // - no string
+  /**
+   * @brief Parse a name field for a JSON element.
+   *
+   * When parsing JSON objects, it is not always a requirement that the name
+   * actually exists.  For example, the outer object bounded by {} here has
+   * no name, while the inner element "a" does.
+   *
+   * {
+   *    "a" : "b"
+   * }
+   *
+   * The user can specify whether or not the name string must be present via
+   * the `can_be_empty` flag.
+   *
+   * When a name is present, it must be followed by a :
+   *
+   * @param name (Output) The resulting name.
+   * @param can_be_empty Parameter indicating whether it is valid for the name
+   * to not be present.
+   * @returns A result code indicating success, failure or other result.
+   */
   CUDA_HOST_DEVICE_CALLABLE parse_result parse_name(string_view& name, bool can_be_empty)
   {
     char const quote = options.get_allow_single_quotes() ? 0 : '\"';
@@ -313,9 +331,15 @@ class json_state : private parser {
   }
 
  private:
-  // numbers, true, false, null.
-  // this function is not particularly strong. badly formed values will get
-  // consumed without throwing any errors
+  /**
+   * @brief Parse a non-string JSON value.
+   *
+   * Non-string values include numbers, true, false, or null. This function does not
+   * do any validation of the value.
+   *
+   * @param val (Output) The string containing the parsed value
+   * @returns A result code indicating success, failure or other result.
+   */
   CUDA_HOST_DEVICE_CALLABLE parse_result parse_non_string_value(string_view& val)
   {
     if (!parse_whitespace()) { return parse_result::ERROR; }
@@ -402,7 +426,7 @@ class json_state : private parser {
 
   CUDA_HOST_DEVICE_CALLABLE bool is_quote(char c)
   {
-    return options.get_allow_single_quotes() ? (c == '\"' || c == '\'') : c == '\"';
+    return (c == '\"') || (options.get_allow_single_quotes() && (c == '\''));
   }
 
   const char* cur_el_start;          // pointer to the first character of the -value- of the current

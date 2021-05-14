@@ -442,7 +442,7 @@ TEST_F(JsonTests, GetJsonObjectFilter)
     auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
     auto result     = drop_whitespace(*result_raw);
 
-    cudf::test::strings_column_wrapper expected_raw{"\"fiction\""};
+    cudf::test::strings_column_wrapper expected_raw{"fiction"};
     auto expected = drop_whitespace(expected_raw);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
@@ -459,7 +459,7 @@ TEST_F(JsonTests, GetJsonObjectNullInputs)
     auto result_raw = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
     auto result     = drop_whitespace(*result_raw);
 
-    cudf::test::strings_column_wrapper expected_raw({"\"b\"", "", "\"b\"", ""}, {1, 0, 1, 0});
+    cudf::test::strings_column_wrapper expected_raw({"b", "", "b", ""}, {1, 0, 1, 0});
     auto expected = drop_whitespace(expected_raw);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
@@ -501,7 +501,7 @@ TEST_F(JsonTests, GetJsonObjectEmptyInputsAndOutputs)
     std::string json_path("$.store.bicycle");
     auto result = cudf::strings::get_json_object(cudf::strings_column_view(input), json_path);
 
-    cudf::test::strings_column_wrapper expected({"\"\""}, {1});
+    cudf::test::strings_column_wrapper expected({""}, {1});
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
   }
@@ -671,7 +671,7 @@ TEST_F(JsonTests, MixedOutput)
       "{\"b\" : \"c\"}",
       "",
       "[\"y\",500]",
-      "\"\"",
+      "",
       "{"
          "\"z\": {\"i\": 10, \"j\": 100},"
          "\"b\": [\"c\",null,true,-1]"
@@ -708,8 +708,8 @@ TEST_F(JsonTests, MixedOutput)
 
     // clang-format off
     cudf::test::strings_column_wrapper expected({
-      "\"c\"", 
-      "\"c\"", 
+      "c", 
+      "c", 
       "", 
       "", 
       "", 
@@ -763,22 +763,22 @@ TEST_F(JsonTests, MixedOutput)
 TEST_F(JsonTests, StripQuotes)
 {
   // we normally expect our outputs here to be
-  // "b"     (with quotes)
-  // but with string_quotes_from_single_strings set, we expect
-  // b       (no quotes)
+  // b     (no quotes)
+  // but with string_quotes_from_single_strings false, we expect
+  // "b"   (with quotes)
   {
     std::string str("{\"a\" : \"b\"}");
     cudf::test::strings_column_wrapper input({str, str});
 
     cudf::strings::get_json_object_options options;
-    options.set_strip_quotes_from_single_strings(true);
+    options.set_strip_quotes_from_single_strings(false);
 
     std::string json_path("$.a");
     auto result_raw =
       cudf::strings::get_json_object(cudf::strings_column_view(input), json_path, options);
     auto result = drop_whitespace(*result_raw);
 
-    cudf::test::strings_column_wrapper expected_raw({"b", "b"});
+    cudf::test::strings_column_wrapper expected_raw({"\"b\"", "\"b\""});
     auto expected = drop_whitespace(expected_raw);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
@@ -853,7 +853,7 @@ TEST_F(JsonTests, AllowSingleQuotes)
       "{\'b\' : \"c\"}",
       "",
       "[\'y\',500]",
-      "\"\"",
+      "",
       "{"
          "\'z\': {\'i\': 10, \'j\': 100},"
          "\'b\': [\'c\',null,true,-1]"
