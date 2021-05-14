@@ -457,30 +457,33 @@ struct_scalar::struct_scalar(table_view const& data,
                              rmm::mr::device_memory_resource* mr)
   : scalar(data_type(type_id::STRUCT), is_valid, stream, mr), _data(data, stream, mr)
 {
-  CUDF_EXPECTS(
-    std::all_of(data.begin(), data.end(), [](column_view const& col) { return col.size() == 1; }),
-    "Struct scalar inputs must have exactly 1 row");
-
-  // validity pushdown
-  if (!is_valid) { superimpose_nulls(stream, mr); }
+  init(is_valid, stream, mr);
 }
 
-struct_scalar::struct_scalar(host_span<const column_view> data,
+struct_scalar::struct_scalar(host_span<column_view const> data,
                              bool is_valid,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
   : scalar(data_type(type_id::STRUCT), is_valid, stream, mr),
     _data(table_view{std::vector<column_view>{data.begin(), data.end()}}, stream, mr)
 {
+  init(is_valid, stream, mr);
+}
+
+table_view struct_scalar::view() const { return _data.view(); }
+
+void struct_scalar::init(bool is_valid,
+                         rmm::cuda_stream_view stream,
+                         rmm::mr::device_memory_resource* mr)
+{
+  table_view tv = static_cast<table_view>(_data);
   CUDF_EXPECTS(
-    std::all_of(data.begin(), data.end(), [](column_view const& col) { return col.size() == 1; }),
+    std::all_of(tv.begin(), tv.end(), [](column_view const& col) { return col.size() == 1; }),
     "Struct scalar inputs must have exactly 1 row");
 
   // validity pushdown
   if (!is_valid) { superimpose_nulls(stream, mr); }
 }
-
-table_view struct_scalar::view() const { return _data.view(); }
 
 void struct_scalar::superimpose_nulls(rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
@@ -491,7 +494,7 @@ void struct_scalar::superimpose_nulls(rmm::cuda_stream_view stream,
   auto iter     = thrust::make_counting_iterator(0);
   std::for_each(iter, iter + _data.num_columns(), [&](size_type i) {
     cudf::structs::detail::superimpose_parent_nulls(
-      validity.data(), 1, 1, _data.get_column(i), stream, mr);
+      validity.data(), 1, _data.get_column(i), stream, mr);
   });
 }
 

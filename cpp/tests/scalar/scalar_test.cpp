@@ -246,16 +246,14 @@ TEST_F(StructScalarTest, Basic)
 
   // table_view constructor
   {
-    auto s     = cudf::struct_scalar(children, true);
-    auto sview = s.view();
+    auto s = cudf::struct_scalar(children, true);
     EXPECT_TRUE(s.is_valid());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(cudf::table_view{children}, s.view());
   }
 
   // host_span constructor
   {
-    auto s     = cudf::struct_scalar(cudf::host_span<cudf::column_view const>{children}, true);
-    auto sview = s.view();
+    auto s = cudf::struct_scalar(cudf::host_span<cudf::column_view const>{children}, true);
     EXPECT_TRUE(s.is_valid());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(cudf::table_view{children}, s.view());
   }
@@ -288,15 +286,13 @@ TEST_F(StructScalarTest, BasicNulls)
 
   // table_view constructor
   {
-    auto s     = cudf::struct_scalar(cudf::table_view{src_children}, true);
-    auto sview = s.view();
+    auto s = cudf::struct_scalar(cudf::table_view{src_children}, true);
     EXPECT_TRUE(s.is_valid());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(cudf::table_view{valid_children}, s.view());
   }
   // host_span constructor
   {
-    auto s     = cudf::struct_scalar(cudf::host_span<cudf::column_view const>{src_children}, true);
-    auto sview = s.view();
+    auto s = cudf::struct_scalar(cudf::host_span<cudf::column_view const>{src_children}, true);
     EXPECT_TRUE(s.is_valid());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(cudf::table_view{valid_children}, s.view());
   }
@@ -308,16 +304,14 @@ TEST_F(StructScalarTest, BasicNulls)
 
   // table_view constructor
   {
-    auto s     = cudf::struct_scalar(cudf::table_view{src_children}, false);
-    auto sview = s.view();
+    auto s = cudf::struct_scalar(cudf::table_view{src_children}, false);
     EXPECT_TRUE(!s.is_valid());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(cudf::table_view{invalid_children}, s.view());
   }
 
   // host_span constructor
   {
-    auto s     = cudf::struct_scalar(cudf::host_span<cudf::column_view const>{src_children}, false);
-    auto sview = s.view();
+    auto s = cudf::struct_scalar(cudf::host_span<cudf::column_view const>{src_children}, false);
     EXPECT_TRUE(!s.is_valid());
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(cudf::table_view{invalid_children}, s.view());
   }

@@ -192,7 +192,7 @@ std::unique_ptr<scalar> make_struct_scalar(
  * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
  */
 std::unique_ptr<scalar> make_struct_scalar(
-  host_span<const column_view> data,
+  host_span<column_view const> data,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

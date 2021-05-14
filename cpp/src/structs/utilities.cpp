@@ -171,7 +171,6 @@ flatten_nested_columns(table_view const& input,
 // Helper function to superimpose validity of parent struct
 // over the specified member (child) column.
 void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
-                              std::size_t parent_null_mask_size,
                               size_type parent_null_count,
                               column& child,
                               rmm::cuda_stream_view stream,
@@ -179,7 +178,8 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
 {
   if (!child.nullable()) {
     // Child currently has no null mask. Copy parent's null mask.
-    child.set_null_mask(rmm::device_buffer{parent_null_mask, parent_null_mask_size, stream, mr});
+    child.set_null_mask(rmm::device_buffer{
+      parent_null_mask, cudf::bitmask_allocation_size_bytes(child.size()), stream, mr});
     child.set_null_count(parent_null_count);
   } else {
     // Child should have a null mask.
@@ -206,13 +206,9 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
     const auto current_child_mask = child.mutable_view().null_mask();
     std::for_each(thrust::make_counting_iterator(0),
                   thrust::make_counting_iterator(child.num_children()),
-                  [&current_child_mask, &child, parent_null_mask_size, stream, mr](auto i) {
-                    superimpose_parent_nulls(current_child_mask,
-                                             parent_null_mask_size,
-                                             UNKNOWN_NULL_COUNT,
-                                             child.child(i),
-                                             stream,
-                                             mr);
+                  [&current_child_mask, &child, stream, mr](auto i) {
+                    superimpose_parent_nulls(
+                      current_child_mask, UNKNOWN_NULL_COUNT, child.child(i), stream, mr);
                   });
   }
 }

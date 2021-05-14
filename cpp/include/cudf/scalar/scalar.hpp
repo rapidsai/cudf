@@ -610,7 +610,7 @@ class struct_scalar : public scalar {
    * @param stream CUDA stream used for device memory operations.
    * @param mr Device memory resource to use for device memory allocation
    */
-  struct_scalar(host_span<const column_view> data,
+  struct_scalar(host_span<column_view const> data,
                 bool is_valid                       = true,
                 rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
@@ -623,6 +623,7 @@ class struct_scalar : public scalar {
  private:
   table _data;
 
+  void init(bool is_valid, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
   void superimpose_nulls(rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
 };
 
