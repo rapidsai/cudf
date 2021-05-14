@@ -1484,30 +1484,27 @@ class CategoricalColumn(column.ColumnBase):
             o.cat()._set_categories(o.cat().categories, cats, is_unique=True)
             for o in objs
         ]
-        # Map `objs` into a list of the codes until we port Categorical to
-        # use the libcudf++ Category data type.
-        objs = [o.cat().codes._column for o in objs]
-        head = head.cat().codes._column
+        codes = [o.codes for o in objs]
 
-        newsize = sum(map(len, objs))
+        newsize = sum(map(len, codes))
         if newsize > libcudf.MAX_COLUMN_SIZE:
             raise MemoryError(
                 f"Result of concat cannot have "
                 f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
             )
         elif newsize == 0:
-            col = column.column_empty(0, head.dtype, masked=True)
+            codes_col = column.column_empty(0, head.codes.dtype, masked=True)
         else:
             # Filter out inputs that have 0 length, then concatenate.
-            objs = [o for o in objs if len(o)]
-            col = libcudf.concat.concat_columns(objs)
+            codes = [o for o in codes if len(o)]
+            codes_col = libcudf.concat.concat_columns(objs)
 
         return column.build_categorical_column(
             categories=column.as_column(cats),
-            codes=column.as_column(col.base_data, dtype=col.dtype),
-            mask=col.base_mask,
-            size=col.size,
-            offset=col.offset,
+            codes=column.as_column(codes_col.base_data, dtype=codes_col.dtype),
+            mask=codes_col.base_mask,
+            size=codes_col.size,
+            offset=codes_col.offset,
         )
 
 
