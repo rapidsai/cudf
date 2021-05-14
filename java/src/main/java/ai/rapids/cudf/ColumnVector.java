@@ -1276,6 +1276,16 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
+   * Create a new string vector from the given values.  This API
+   * supports inline nulls.
+   */
+  public static ColumnVector fromUTF8StringsBytes(byte[]... values) {
+    try (HostColumnVector host = HostColumnVector.fromUTF8StringsBytes(values)) {
+      return host.copyToDevice();
+    }
+  }
+
+  /**
    * Create a new vector from the given values.  This API supports inline nulls,
    * but is much slower than building from primitive array of unscaledValues.
    * Notice:

@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -173,6 +174,19 @@ public class ColumnVectorTest extends CudfTestBase {
          HostColumnVector host = cv.copyToHost();
          ColumnVector backAgain = host.copyToDevice()) {
       TableTest.assertColumnsAreEqual(cv, backAgain);
+    }
+  }
+
+  @Test
+  void testUTF8StringCreation() {
+    try (ColumnVector cv = ColumnVector.fromUTF8StringsBytes(
+            "d".getBytes(StandardCharsets.UTF_8),
+            "sd".getBytes(StandardCharsets.UTF_8),
+            "sde".getBytes(StandardCharsets.UTF_8),
+            null,
+            "END".getBytes(StandardCharsets.UTF_8));
+         ColumnVector expected = ColumnVector.fromStrings("d", "sd", "sde", null, "END")) {
+      TableTest.assertColumnsAreEqual(expected, cv);
     }
   }
 
