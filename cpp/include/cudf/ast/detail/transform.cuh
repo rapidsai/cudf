@@ -165,11 +165,17 @@ struct two_table_evaluator {
   __device__ two_table_evaluator(
     table_device_view const& left,
     device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals,
+    device_span<const detail::device_data_reference> data_references,
+    device_span<const ast_operator> operators,
+    device_span<const cudf::size_type> operator_source_indices,
     std::int64_t* thread_intermediate_storage,
     mutable_column_device_view* output_column,
     table_device_view const& right)
     : left(left),
       literals(literals),
+      data_references(data_references),
+      operators(operators),
+      operator_source_indices(operator_source_indices),
       thread_intermediate_storage(thread_intermediate_storage),
       output_column(output_column),
       right(right)
@@ -180,10 +186,16 @@ struct two_table_evaluator {
   __device__ two_table_evaluator(
     table_device_view const& left,
     device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals,
+    device_span<const detail::device_data_reference> data_references,
+    device_span<const ast_operator> operators,
+    device_span<const cudf::size_type> operator_source_indices,
     std::int64_t* thread_intermediate_storage,
     mutable_column_device_view* output_column)
     : left(left),
       literals(literals),
+      data_references(data_references),
+      operators(operators),
+      operator_source_indices(operator_source_indices),
       thread_intermediate_storage(thread_intermediate_storage),
       output_column(output_column),
       // TODO: Decide if this should be stored at all, or if not what to do.
@@ -354,10 +366,111 @@ struct two_table_evaluator {
     cudf_assert(false && "Invalid binary dispatch operator for the provided input.");
   }
 
+  /**
+   * @brief Evaluate an expression applied to a row.
+   *
+   * This function performs an n-ary transform for one row on one thread.
+   *
+   * @param evaluator The row evaluator used for evaluation.
+   * @param data_references Array of data references.
+   * @param operators Array of operators to perform.
+   * @param operator_source_indices Array of source indices for the operators.
+   * @param num_operators Number of operators.
+   * @param row_index Row index of data column(s).
+   */
+  __device__ inline void evaluate_row_expression(cudf::size_type row_index)
+  {
+    auto operator_source_index = static_cast<cudf::size_type>(0);
+    for (cudf::size_type operator_index = 0; operator_index < operators.size(); operator_index++) {
+      // Execute operator
+      auto const op    = operators[operator_index];
+      auto const arity = ast_operator_arity(op);
+      if (arity == 1) {
+        // Unary operator
+        auto const input  = data_references[operator_source_indices[operator_source_index]];
+        auto const output = data_references[operator_source_indices[operator_source_index + 1]];
+        operator_source_index += arity + 1;
+        type_dispatcher(input.data_type, *this, row_index, input, output, op);
+      } else if (arity == 2) {
+        // Binary operator
+        auto const lhs    = data_references[operator_source_indices[operator_source_index]];
+        auto const rhs    = data_references[operator_source_indices[operator_source_index + 1]];
+        auto const output = data_references[operator_source_indices[operator_source_index + 2]];
+        operator_source_index += arity + 1;
+        type_dispatcher(lhs.data_type,
+                        detail::single_dispatch_binary_operator{},
+                        *this,
+                        row_index,
+                        lhs,
+                        rhs,
+                        output,
+                        op);
+      } else {
+        cudf_assert(false && "Invalid operator arity.");
+      }
+    }
+  }
+
+  /**
+   * @brief Evaluate an expression applied to a row.
+   *
+   * This function performs an n-ary transform for one row on one thread.
+   *
+   * @param evaluator The row evaluator used for evaluation.
+   * @param data_references Array of data references.
+   * @param operators Array of operators to perform.
+   * @param operator_source_indices Array of source indices for the operators.
+   * @param num_operators Number of operators.
+   * @param row_index Row index of data column(s).
+   */
+  __device__ inline void evaluate_join_expression(cudf::size_type left_row_index,
+                                                  cudf::size_type right_row_index,
+                                                  cudf::size_type output_row_index)
+  {
+    auto operator_source_index = static_cast<cudf::size_type>(0);
+    for (cudf::size_type operator_index = 0; operator_index < operators.size(); operator_index++) {
+      // Execute operator
+      auto const op    = operators[operator_index];
+      auto const arity = ast_operator_arity(op);
+      if (arity == 1) {
+        // Unary operator
+        auto const input  = data_references[operator_source_indices[operator_source_index]];
+        auto const output = data_references[operator_source_indices[operator_source_index + 1]];
+        operator_source_index += arity + 1;
+        // TODO: Error checking of table_reference::RIGHT/OUTPUT.
+        auto input_row_index =
+          input.table_source == table_reference::LEFT ? left_row_index : right_row_index;
+        type_dispatcher(
+          input.data_type, *this, input_row_index, input, output, output_row_index, op);
+      } else if (arity == 2) {
+        // Binary operator
+        auto const lhs    = data_references[operator_source_indices[operator_source_index]];
+        auto const rhs    = data_references[operator_source_indices[operator_source_index + 1]];
+        auto const output = data_references[operator_source_indices[operator_source_index + 2]];
+        operator_source_index += arity + 1;
+        type_dispatcher(lhs.data_type,
+                        detail::single_dispatch_binary_operator{},
+                        *this,
+                        left_row_index,
+                        right_row_index,
+                        lhs,
+                        rhs,
+                        output,
+                        output_row_index,
+                        op);
+      } else {
+        cudf_assert(false && "Invalid operator arity.");
+      }
+    }
+  }
+
  private:
   table_device_view const& left;
   table_device_view const& right;
   device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals;
+  device_span<const detail::device_data_reference> data_references;
+  device_span<const ast_operator> operators;
+  device_span<const cudf::size_type> operator_source_indices;
   std::int64_t* thread_intermediate_storage;
   mutable_column_device_view* output_column;
 };
@@ -377,114 +490,6 @@ __device__ void two_table_output::resolve_output(
     std::int64_t tmp;
     memcpy(&tmp, &result, sizeof(Element));
     evaluator.thread_intermediate_storage[device_data_reference.data_index] = tmp;
-  }
-}
-
-/**
- * @brief Evaluate an expression applied to a row.
- *
- * This function performs an n-ary transform for one row on one thread.
- *
- * @param evaluator The row evaluator used for evaluation.
- * @param data_references Array of data references.
- * @param operators Array of operators to perform.
- * @param operator_source_indices Array of source indices for the operators.
- * @param num_operators Number of operators.
- * @param row_index Row index of data column(s).
- */
-__device__ inline void evaluate_row_expression(
-  detail::two_table_evaluator const& evaluator,
-  device_span<const detail::device_data_reference> data_references,
-  device_span<const ast_operator> operators,
-  device_span<const cudf::size_type> operator_source_indices,
-  cudf::size_type row_index)
-{
-  auto operator_source_index = static_cast<cudf::size_type>(0);
-  for (cudf::size_type operator_index = 0; operator_index < operators.size(); operator_index++) {
-    // Execute operator
-    auto const op    = operators[operator_index];
-    auto const arity = ast_operator_arity(op);
-    if (arity == 1) {
-      // Unary operator
-      auto const input  = data_references[operator_source_indices[operator_source_index]];
-      auto const output = data_references[operator_source_indices[operator_source_index + 1]];
-      operator_source_index += arity + 1;
-      type_dispatcher(input.data_type, evaluator, row_index, input, output, op);
-    } else if (arity == 2) {
-      // Binary operator
-      auto const lhs    = data_references[operator_source_indices[operator_source_index]];
-      auto const rhs    = data_references[operator_source_indices[operator_source_index + 1]];
-      auto const output = data_references[operator_source_indices[operator_source_index + 2]];
-      operator_source_index += arity + 1;
-      type_dispatcher(lhs.data_type,
-                      detail::single_dispatch_binary_operator{},
-                      evaluator,
-                      row_index,
-                      lhs,
-                      rhs,
-                      output,
-                      op);
-    } else {
-      cudf_assert(false && "Invalid operator arity.");
-    }
-  }
-}
-
-/**
- * @brief Evaluate an expression applied to a row.
- *
- * This function performs an n-ary transform for one row on one thread.
- *
- * @param evaluator The row evaluator used for evaluation.
- * @param data_references Array of data references.
- * @param operators Array of operators to perform.
- * @param operator_source_indices Array of source indices for the operators.
- * @param num_operators Number of operators.
- * @param row_index Row index of data column(s).
- */
-__device__ inline void evaluate_join_expression(
-  detail::two_table_evaluator const& evaluator,
-  device_span<const detail::device_data_reference> data_references,
-  device_span<const ast_operator> operators,
-  device_span<const cudf::size_type> operator_source_indices,
-  cudf::size_type left_row_index,
-  cudf::size_type right_row_index,
-  cudf::size_type output_row_index)
-{
-  auto operator_source_index = static_cast<cudf::size_type>(0);
-  for (cudf::size_type operator_index = 0; operator_index < operators.size(); operator_index++) {
-    // Execute operator
-    auto const op    = operators[operator_index];
-    auto const arity = ast_operator_arity(op);
-    if (arity == 1) {
-      // Unary operator
-      auto const input  = data_references[operator_source_indices[operator_source_index]];
-      auto const output = data_references[operator_source_indices[operator_source_index + 1]];
-      operator_source_index += arity + 1;
-      // TODO: Error checking of table_reference::RIGHT/OUTPUT.
-      auto input_row_index =
-        input.table_source == table_reference::LEFT ? left_row_index : right_row_index;
-      type_dispatcher(
-        input.data_type, evaluator, input_row_index, input, output, output_row_index, op);
-    } else if (arity == 2) {
-      // Binary operator
-      auto const lhs    = data_references[operator_source_indices[operator_source_index]];
-      auto const rhs    = data_references[operator_source_indices[operator_source_index + 1]];
-      auto const output = data_references[operator_source_indices[operator_source_index + 2]];
-      operator_source_index += arity + 1;
-      type_dispatcher(lhs.data_type,
-                      detail::single_dispatch_binary_operator{},
-                      evaluator,
-                      left_row_index,
-                      right_row_index,
-                      lhs,
-                      rhs,
-                      output,
-                      output_row_index,
-                      op);
-    } else {
-      cudf_assert(false && "Invalid operator arity.");
-    }
   }
 }
 

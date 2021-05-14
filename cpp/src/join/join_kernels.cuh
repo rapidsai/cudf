@@ -591,20 +591,20 @@ __global__ void nested_loop_predicate_join(
   cudf::size_type left_row_index = threadIdx.x + blockIdx.x * blockDim.x;
 
   const unsigned int activemask = __ballot_sync(0xffffffff, left_row_index < left_num_rows);
-  auto const evaluator          = cudf::ast::detail::two_table_evaluator(
-    left_table, literals, thread_intermediate_storage, &operator_outputs, right_table);
+  auto evaluator                = cudf::ast::detail::two_table_evaluator(left_table,
+                                                          literals,
+                                                          data_references,
+                                                          operators,
+                                                          operator_source_indices,
+                                                          thread_intermediate_storage,
+                                                          &operator_outputs,
+                                                          right_table);
 
   if (left_row_index < left_num_rows) {
     bool found_match = false;
     for (size_type right_row_index(0); right_row_index < right_num_rows; right_row_index++) {
       auto output_row_index = left_row_index * right_num_rows + right_row_index;
-      cudf::ast::detail::evaluate_join_expression(evaluator,
-                                                  data_references,
-                                                  operators,
-                                                  operator_source_indices,
-                                                  left_row_index,
-                                                  right_row_index,
-                                                  output_row_index);
+      evaluator.evaluate_join_expression(left_row_index, right_row_index, output_row_index);
 
       if (operator_outputs.element<bool>(output_row_index)) {
         // If the rows are equal, then we have found a true match
