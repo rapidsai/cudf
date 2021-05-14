@@ -310,60 +310,20 @@ struct two_table_evaluator {
   }
 
   /**
-   * @brief Callable to perform a unary operation.
+   * @brief Evaluate an expression applied to a row.
    *
-   * @tparam OperatorFunctor Functor that performs desired operation when `operator()` is called.
-   * @tparam Input Type of input value.
-   * @param row_index Row index of data column(s).
-   * @param input Input data reference.
-   * @param output Output data reference.
-   */
-  template <typename Input>
-  __device__ void operator()(cudf::size_type row_index,
-                             detail::device_data_reference input,
-                             detail::device_data_reference output,
-                             ast_operator op) const
-  {
-    auto const typed_input = resolve_input<Input>(input, row_index);
-    ast_operator_dispatcher(
-      op, unary_two_table_output<Input>(*this), row_index, typed_input, output);
-  }
-
-  /**
-   * @brief Callable to perform a binary operation.
+   * This function performs an n-ary transform for one row on one thread.
    *
-   * @tparam OperatorFunctor Functor that performs desired operation when `operator()` is called.
-   * @tparam LHS Type of left input value.
-   * @tparam RHS Type of right input value.
+   * @param evaluator The row evaluator used for evaluation.
+   * @param data_references Array of data references.
+   * @param operators Array of operators to perform.
+   * @param operator_source_indices Array of source indices for the operators.
+   * @param num_operators Number of operators.
    * @param row_index Row index of data column(s).
-   * @param lhs Left input data reference.
-   * @param rhs Right input data reference.
-   * @param output Output data reference.
    */
-  template <typename LHS, typename RHS>
-  __device__ void operator()(cudf::size_type row_index,
-                             detail::device_data_reference lhs,
-                             detail::device_data_reference rhs,
-                             detail::device_data_reference output,
-                             ast_operator op) const
+  __device__ void evaluate_row_expression(cudf::size_type row_index)
   {
-    auto const typed_lhs = resolve_input<LHS>(lhs, row_index);
-    auto const typed_rhs = resolve_input<RHS>(rhs, row_index);
-    ast_operator_dispatcher(
-      op, binary_two_table_output<LHS, RHS>(*this), row_index, typed_lhs, typed_rhs, output);
-  }
-
-  template <typename OperatorFunctor,
-            typename LHS,
-            typename RHS,
-            std::enable_if_t<!detail::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
-  __device__ void operator()(cudf::size_type row_index,
-                             detail::device_data_reference lhs,
-                             detail::device_data_reference rhs,
-                             detail::device_data_reference output,
-                             ast_operator op) const
-  {
-    cudf_assert(false && "Invalid binary dispatch operator for the provided input.");
+    evaluate_join_expression(row_index, row_index, row_index);
   }
 
   /**
@@ -378,54 +338,9 @@ struct two_table_evaluator {
    * @param num_operators Number of operators.
    * @param row_index Row index of data column(s).
    */
-  __device__ inline void evaluate_row_expression(cudf::size_type row_index)
-  {
-    auto operator_source_index = static_cast<cudf::size_type>(0);
-    for (cudf::size_type operator_index = 0; operator_index < operators.size(); operator_index++) {
-      // Execute operator
-      auto const op    = operators[operator_index];
-      auto const arity = ast_operator_arity(op);
-      if (arity == 1) {
-        // Unary operator
-        auto const input  = data_references[operator_source_indices[operator_source_index]];
-        auto const output = data_references[operator_source_indices[operator_source_index + 1]];
-        operator_source_index += arity + 1;
-        type_dispatcher(input.data_type, *this, row_index, input, output, op);
-      } else if (arity == 2) {
-        // Binary operator
-        auto const lhs    = data_references[operator_source_indices[operator_source_index]];
-        auto const rhs    = data_references[operator_source_indices[operator_source_index + 1]];
-        auto const output = data_references[operator_source_indices[operator_source_index + 2]];
-        operator_source_index += arity + 1;
-        type_dispatcher(lhs.data_type,
-                        detail::single_dispatch_binary_operator{},
-                        *this,
-                        row_index,
-                        lhs,
-                        rhs,
-                        output,
-                        op);
-      } else {
-        cudf_assert(false && "Invalid operator arity.");
-      }
-    }
-  }
-
-  /**
-   * @brief Evaluate an expression applied to a row.
-   *
-   * This function performs an n-ary transform for one row on one thread.
-   *
-   * @param evaluator The row evaluator used for evaluation.
-   * @param data_references Array of data references.
-   * @param operators Array of operators to perform.
-   * @param operator_source_indices Array of source indices for the operators.
-   * @param num_operators Number of operators.
-   * @param row_index Row index of data column(s).
-   */
-  __device__ inline void evaluate_join_expression(cudf::size_type left_row_index,
-                                                  cudf::size_type right_row_index,
-                                                  cudf::size_type output_row_index)
+  __device__ void evaluate_join_expression(cudf::size_type left_row_index,
+                                           cudf::size_type right_row_index,
+                                           cudf::size_type output_row_index)
   {
     auto operator_source_index = static_cast<cudf::size_type>(0);
     for (cudf::size_type operator_index = 0; operator_index < operators.size(); operator_index++) {
