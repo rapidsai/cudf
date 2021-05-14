@@ -242,6 +242,8 @@ class orc_column_view {
   gpu::DictionaryChunk *d_dict             = nullptr;
   gpu::StripeDictionary *d_stripe_dict     = nullptr;
 
+  // Offsets for encoded decimal elements. Used to enable direct writing of encoded decimal elements
+  // into the output stream.
   uint32_t *d_decimal_offsets = nullptr;
 };
 
