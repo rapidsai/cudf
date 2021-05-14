@@ -4227,60 +4227,7 @@ class Series(SingleColumnFrame, Serializable):
             skipna=skipna, dtype=dtype, min_count=min_count
         )
 
-    def prod(
-        self,
-        axis=None,
-        skipna=None,
-        dtype=None,
-        level=None,
-        numeric_only=None,
-        min_count=0,
-        **kwargs,
-    ):
-        """
-        Return product of the values in the series
-
-        Parameters
-        ----------
-
-        skipna : bool, default True
-            Exclude NA/null values when computing the result.
-
-        dtype : data type
-            Data type to cast the result to.
-
-        min_count : int, default 0
-            The required number of valid values to perform the operation.
-            If fewer than min_count non-NA values are present the result
-            will be NA.
-
-            The default being 0. This means the sum of an all-NA or empty
-            Series is 0, and the product of an all-NA or empty Series is 1.
-
-        Returns
-        -------
-        scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level`, `numeric_only`.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 5, 2, 4, 3])
-        >>> ser.prod()
-        120
-        """
-        return self.product(
-            axis=axis,
-            skipna=skipna,
-            dtype=dtype,
-            level=level,
-            numeric_only=numeric_only,
-            min_count=min_count,
-            **kwargs,
-        )
+    prod = product
 
     def cummin(self, axis=None, skipna=True, *args, **kwargs):
         """
