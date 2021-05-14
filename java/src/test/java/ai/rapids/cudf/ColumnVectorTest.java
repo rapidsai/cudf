@@ -2380,11 +2380,10 @@ public class ColumnVectorTest extends CudfTestBase {
          Scalar two = Scalar.fromInt(2);
          Scalar three = Scalar.fromInt(3);
          ColumnVector arraywindowCol = ColumnVector.fromBoxedInts(1, 2, 3 ,1, 1)) {
-      assertThrows(IllegalArgumentException.class, () -> {
+      assertThrows(IllegalStateException.class, () -> {
         try (WindowOptions options = WindowOptions.builder()
             .window(three, two).minPeriods(3)
             .window(arraywindowCol, arraywindowCol).build()) {
-
         }
       });
 

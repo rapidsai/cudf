@@ -150,7 +150,6 @@ public class WindowOptions implements AutoCloseable {
     // for range window
     private Scalar precedingScalar = null;
     private Scalar followingScalar = null;
-    boolean staticSet = false;
     private ColumnVector precedingCol = null;
     private ColumnVector followingCol = null;
     private int orderByColumnIndex = -1;
@@ -180,8 +179,18 @@ public class WindowOptions implements AutoCloseable {
      *                     following will be live outside of WindowOptions.
      */
     public Builder window(ColumnVector precedingCol, ColumnVector followingCol) {
-      assert (precedingCol != null && precedingCol.getNullCount() == 0);
-      assert (followingCol != null && followingCol.getNullCount() == 0);
+      if (precedingCol == null || precedingCol.hasNulls()) {
+        throw new IllegalArgumentException("preceding cannot be null or have nulls");
+      }
+      if (followingCol == null || followingCol.hasNulls()) {
+        throw new IllegalArgumentException("following cannot be null or have nulls");
+      }
+      if (isUnboundedPreceding || precedingScalar != null) {
+        throw new IllegalStateException("preceding has already been set a different way");
+      }
+      if (isUnboundedFollowing || followingScalar != null) {
+        throw new IllegalStateException("following has already been set a different way");
+      }
       this.precedingCol = precedingCol;
       this.followingCol = followingCol;
       return this;
@@ -195,16 +204,7 @@ public class WindowOptions implements AutoCloseable {
      *                        the followingScalar will be live outside of WindowOptions
      */
     public Builder window(Scalar precedingScalar, Scalar followingScalar) {
-      if (precedingScalar == null || !precedingScalar.isValid()) {
-        throw new IllegalArgumentException("preceding cannot be null");
-      }
-      if (followingScalar == null || !followingScalar.isValid()) {
-        throw new IllegalArgumentException("following cannot be null");
-      }
-      this.precedingScalar = precedingScalar;
-      this.followingScalar = followingScalar;
-      staticSet = true;
-      return this;
+      return preceding(precedingScalar).following(followingScalar);
     }
 
     /**
@@ -247,11 +247,17 @@ public class WindowOptions implements AutoCloseable {
     }
 
     public Builder unboundedPreceding() {
+      if (precedingCol != null || precedingScalar != null) {
+        throw new IllegalStateException("preceding has already been set a different way");
+      }
       this.isUnboundedPreceding = true;
       return this;
     }
 
     public Builder unboundedFollowing() {
+      if (followingCol != null || followingScalar != null) {
+        throw new IllegalStateException("following has already been set a different way");
+      }
       this.isUnboundedFollowing = true;
       return this;
     }
@@ -261,8 +267,13 @@ public class WindowOptions implements AutoCloseable {
      * @return this for chaining
      */
     public Builder preceding(Scalar preceding) {
+      if (preceding == null || !preceding.isValid()) {
+        throw new IllegalArgumentException("preceding cannot be null");
+      }
+      if (isUnboundedPreceding || precedingCol != null) {
+        throw new IllegalStateException("preceding has already been set a different way");
+      }
       this.precedingScalar = preceding;
-      staticSet = true;
       return this;
     }
 
@@ -271,16 +282,17 @@ public class WindowOptions implements AutoCloseable {
      * @return this for chaining
      */
     public Builder following(Scalar following) {
+      if (following == null || !following.isValid()) {
+        throw new IllegalArgumentException("following cannot be null");
+      }
+      if (isUnboundedFollowing || followingCol != null) {
+        throw new IllegalStateException("following has already been set a different way");
+      }
       this.followingScalar = following;
-      staticSet = true;
       return this;
     }
 
     public WindowOptions build() {
-      if (staticSet && precedingCol != null) {
-        throw new IllegalArgumentException("Cannot set both a static window and a non-static window");
-      }
-
       return new WindowOptions(this);
     }
   }
