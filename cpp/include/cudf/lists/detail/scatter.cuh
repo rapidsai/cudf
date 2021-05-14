@@ -19,7 +19,9 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/debug_printers.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/detail/copying.hpp>
 #include <cudf/lists/list_device_view.cuh>
@@ -359,55 +361,25 @@ struct list_child_constructor {
                                                       stream,
                                                       mr);
 
-    auto copy_child_values_for_list_index = [d_scattered_lists =
-                                               list_vector.begin(),  // unbound_list_view*
-                                             d_child_column =
-                                               child_column->mutable_view().data<T>(),
-                                             d_offsets = list_offsets.template data<int32_t>(),
-                                             source_lists,
-                                             target_lists] __device__(auto const& row_index) {
-      auto const unbound_list_row = d_scattered_lists[row_index];
-      auto const actual_list_row  = unbound_list_row.bind_to_column(source_lists, target_lists);
-      auto const& bound_column =
-        (unbound_list_row.label() == unbound_list_view::label_type::SOURCE ? source_lists
-                                                                           : target_lists);
-      auto const list_begin_offset =
-        bound_column.offsets().template element<size_type>(unbound_list_row.row_index());
-      auto const list_end_offset =
-        bound_column.offsets().template element<size_type>(unbound_list_row.row_index() + 1);
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(child_column->size()),
+                      child_column->mutable_view().begin<T>(),
+                      [offset_begin  = list_offsets.begin<offset_type>(),
+                       offset_size   = list_offsets.size(),
+                       d_list_vector = list_vector.begin(),
+                       source_lists,
+                       target_lists] __device__(auto index) {
+                        auto const list_index_iter = thrust::upper_bound(
+                          thrust::seq, offset_begin, offset_begin + offset_size, index);
+                        auto const list_index = thrust::distance(offset_begin, list_index_iter) - 1;
+                        auto const intra_index = index - offset_begin[list_index];
+                        auto actual_list_row =
+                          d_list_vector[list_index].bind_to_column(source_lists, target_lists);
+                        return actual_list_row.template element<T>(intra_index);
+                      });
 
-#ifndef NDEBUG
-      printf(
-        "%d: Unbound == %s[%d](%d), Bound size == %d, calc_begin==%d, calc_end=%d, calc_size=%d\n",
-        row_index,
-        (unbound_list_row.label() == unbound_list_view::label_type::SOURCE ? "S" : "T"),
-        unbound_list_row.row_index(),
-        unbound_list_row.size(),
-        actual_list_row.size(),
-        list_begin_offset,
-        list_end_offset,
-        list_end_offset - list_begin_offset);
-#endif  // NDEBUG
-
-      // Copy all elements in this list row, to "appropriate" offset in child-column.
-      auto const destination_start_offset = d_offsets[row_index];
-      thrust::for_each_n(thrust::seq,
-                         thrust::make_counting_iterator<size_type>(0),
-                         actual_list_row.size(),
-                         [actual_list_row, d_child_column, destination_start_offset] __device__(
-                           auto const& list_element_index) {
-                           d_child_column[destination_start_offset + list_element_index] =
-                             actual_list_row.template element<T>(list_element_index);
-                         });
-    };
-
-    // For each list-row, copy underlying elements to the child column.
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       list_vector.size(),
-                       copy_child_values_for_list_index);
-
-    return std::make_unique<column>(child_column->view());
+    return child_column;
   }
 
   /**
