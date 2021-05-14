@@ -143,10 +143,9 @@ struct find_insert_index_fn {
   {
     CUDF_FAIL("dictionary, list_view, and struct_view columns cannot be the keys for a dictionary");
   }
-}
-};  // namespace
+};
 
-}  // namespace detail
+}  // namespace
 
 std::unique_ptr<scalar> get_index(dictionary_column_view const& dictionary,
                                   scalar const& key,
@@ -170,7 +169,7 @@ std::unique_ptr<scalar> get_insert_index(dictionary_column_view const& dictionar
     dictionary.keys().type(), find_insert_index_fn(), dictionary, key, stream, mr);
 }
 
-}  // namespace dictionary
+}  // namespace detail
 
 // external API
 
@@ -182,5 +181,5 @@ std::unique_ptr<scalar> get_index(dictionary_column_view const& dictionary,
   return detail::get_index(dictionary, key, rmm::cuda_stream_default, mr);
 }
 
-}  // namespace cudf
+}  // namespace dictionary
 }  // namespace cudf
