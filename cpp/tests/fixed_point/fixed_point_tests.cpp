@@ -331,6 +331,68 @@ TYPED_TEST(FixedPointTestBothReps, BoolConversion)
   EXPECT_EQ(!falsy_value, true);
 }
 
+// These two overflow tests only work in a Debug build.
+// Unfortunately, in a full debug build, the test will each take about
+// an hour to run.
+// Therefore they are disabled here and can be enabled in an appropriate
+// debug build when required.
+TEST_F(FixedPointTest, DISABLED_OverflowDecimal32)
+{
+  // This flag is needed to avoid warnings with ASSERT_DEATH
+  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+
+  using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
+
+  decimal32 num0{2, scale_type{-9}};
+  decimal32 num1{-2, scale_type{-9}};
+
+  ASSERT_DEATH(num0 + num0, ".*");
+  ASSERT_DEATH(num1 - num0, ".*");
+
+  decimal32 min{std::numeric_limits<int32_t>::min(), scale_type{0}};
+  decimal32 max{std::numeric_limits<int32_t>::max(), scale_type{0}};
+  decimal32 NEG_ONE{-1, scale_type{0}};
+  decimal32 ONE{1, scale_type{0}};
+  decimal32 TWO{2, scale_type{0}};
+
+  ASSERT_DEATH(min / NEG_ONE, ".*");
+  ASSERT_DEATH(max * TWO, ".*");
+  ASSERT_DEATH(min * TWO, ".*");
+  ASSERT_DEATH(max + ONE, ".*");
+  ASSERT_DEATH(max - NEG_ONE, ".*");
+  ASSERT_DEATH(min - ONE, ".*");
+  ASSERT_DEATH(max - NEG_ONE, ".*");
+}
+
+// See comment above for OverflowDecimal32 test.
+TEST_F(FixedPointTest, DISABLED_OverflowDecimal64)
+{
+  // This flag is needed to avoid warnings with ASSERT_DEATH
+  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+
+  using decimal64 = fixed_point<int64_t, Radix::BASE_10>;
+
+  decimal64 num0{5, scale_type{-18}};
+  decimal64 num1{-5, scale_type{-18}};
+
+  ASSERT_DEATH(num0 + num0, ".*");
+  ASSERT_DEATH(num1 - num0, ".*");
+
+  decimal64 min{std::numeric_limits<int64_t>::min(), scale_type{0}};
+  decimal64 max{std::numeric_limits<int64_t>::max(), scale_type{0}};
+  decimal64 NEG_ONE{-1, scale_type{0}};
+  decimal64 ONE{1, scale_type{0}};
+  decimal64 TWO{2, scale_type{0}};
+
+  ASSERT_DEATH(min / NEG_ONE, ".*");
+  ASSERT_DEATH(max * TWO, ".*");
+  ASSERT_DEATH(min * TWO, ".*");
+  ASSERT_DEATH(max + ONE, ".*");
+  ASSERT_DEATH(max - NEG_ONE, ".*");
+  ASSERT_DEATH(min - ONE, ".*");
+  ASSERT_DEATH(max - NEG_ONE, ".*");
+}
+
 template <typename ValueType, typename Binop>
 void integer_vector_test(ValueType const initial_value,
                          int32_t const size,
