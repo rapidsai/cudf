@@ -654,7 +654,7 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
   void visit(cudf::detail::max_aggregation const& agg) override
   {
     if (result_type.id() == type_id::STRING) {
-      // The rows that represent null elements will be having negative values in gather map,
+      // The rows that represent null elements will have negative values in gather map,
       // and that's why nullify_out_of_bounds/ignore_out_of_bounds is true.
       auto output_table = detail::gather(table_view{{input}},
                                          intermediate->view(),
