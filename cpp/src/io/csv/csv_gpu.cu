@@ -119,14 +119,19 @@ __device__ __inline__ bool is_datetime(
  *
  * @param len Number of non special-symbol or numeric characters
  * @param digit_count Number of digits characters
- * @param decimal_count Number of '.' characters
+ * @param decimal_count Number of occurrences of the decimal point character
+ * @param thousands_count Number of occurrences of the thousands separator character
  * @param dash_count Number of '-' characters
  * @param exponent_count Number of 'e or E' characters
  *
  * @return `true` if it is floating point-like, `false` otherwise
  */
-__device__ __inline__ bool is_floatingpoint(
-  long len, long digit_count, long decimal_count, long dash_count, long exponent_count)
+__device__ __inline__ bool is_floatingpoint(long len,
+                                            long digit_count,
+                                            long decimal_count,
+                                            long thousands_count,
+                                            long dash_count,
+                                            long exponent_count)
 {
   // Can't have more than one exponent and one decimal point
   if (decimal_count > 1) return false;
@@ -139,7 +144,9 @@ __device__ __inline__ bool is_floatingpoint(
   if (dash_count > 1 + exponent_count) return false;
 
   // If anything other than these characters is present, it's not a float
-  if (digit_count + decimal_count + dash_count + exponent_count != len) { return false; }
+  if (digit_count + decimal_count + dash_count + exponent_count + thousands_count != len) {
+    return false;
+  }
 
   // Needs at least 1 digit, 2 if exponent is present
   if (digit_count < 1 + exponent_count) return false;
@@ -200,14 +207,15 @@ __global__ void __launch_bounds__(csvparse_block_dim)
       } else if (cudf::io::is_infinity(field_start, next_delimiter)) {
         atomicAdd(&d_column_data[actual_col].float_count, 1);
       } else {
-        long count_number   = 0;
-        long count_decimal  = 0;
-        long count_slash    = 0;
-        long count_dash     = 0;
-        long count_plus     = 0;
-        long count_colon    = 0;
-        long count_string   = 0;
-        long count_exponent = 0;
+        long count_number    = 0;
+        long count_decimal   = 0;
+        long count_thousands = 0;
+        long count_slash     = 0;
+        long count_dash      = 0;
+        long count_plus      = 0;
+        long count_colon     = 0;
+        long count_string    = 0;
+        long count_exponent  = 0;
 
         // Modify field_start & end to ignore whitespace and quotechars
         // This could possibly result in additional empty fields
@@ -219,9 +227,16 @@ __global__ void __launch_bounds__(csvparse_block_dim)
             count_number++;
             continue;
           }
+          if (*cur == opts.decimal) {
+            count_decimal++;
+            continue;
+          }
+          if (*cur == opts.thousands) {
+            count_thousands++;
+            continue;
+          }
           // Looking for unique characters that will help identify column types.
           switch (*cur) {
-            case '.': count_decimal++; break;
             case '-': count_dash++; break;
             case '+': count_plus++; break;
             case '/': count_slash++; break;
@@ -237,9 +252,10 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
         // Integers have to have the length of the string
         // Off by one if they start with a minus sign
-        auto const int_req_number_cnt = trimmed_field_len - ((*trimmed_field_range.first == '-' ||
-                                                              *trimmed_field_range.first == '+') &&
-                                                             trimmed_field_len > 1);
+        auto const int_req_number_cnt =
+          trimmed_field_len - count_thousands -
+          ((*trimmed_field_range.first == '-' || *trimmed_field_range.first == '+') &&
+           trimmed_field_len > 1);
 
         if (column_flags[col] & column_parse::as_datetime) {
           // PANDAS uses `object` dtype if the date is unparseable
@@ -258,6 +274,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
         } else if (is_floatingpoint(trimmed_field_len,
                                     count_number,
                                     count_decimal,
+                                    count_thousands,
                                     count_dash + count_plus,
                                     count_exponent)) {
           atomicAdd(&d_column_data[actual_col].float_count, 1);
