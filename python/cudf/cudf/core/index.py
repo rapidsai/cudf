@@ -1213,9 +1213,7 @@ class Index(SingleColumnFrame, Serializable):
         array([ True, False, False])
         """
 
-        result = self.to_series().isin(values).values
-
-        return result
+        return self._values.isin(values).values
 
     def memory_usage(self, deep=False):
         """
