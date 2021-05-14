@@ -786,14 +786,63 @@ class Index(SingleColumnFrame, Serializable):
 
         return difference
 
-    def _apply_op(self, fn, other=None):
+    def _binaryop(self, other, fn, fill_value=None, reflect=False):
+        # TODO: Rather than including an allowlist of acceptable types, we
+        # should instead return NotImplemented for __all__ other types. That
+        # will allow other types to support binops with cudf objects if they so
+        # choose, and just as importantly will allow better error messages if
+        # they don't support it.
+        if isinstance(other, (cudf.DataFrame, cudf.Series)):
+            return NotImplemented
 
-        idx_series = cudf.Series(self, name=self.name)
-        op = getattr(idx_series, fn)
-        if other is not None:
-            return as_index(op(other))
-        else:
-            return as_index(op())
+        return super()._binaryop(other, fn, fill_value, reflect)
+
+    def _copy_construct(self, **kwargs):
+        # Need to override the parent behavior because pandas allows operations
+        # on unsigned types to return signed values, forcing us to choose the
+        # right index type here.
+        data = kwargs.get("data")
+        cls = self.__class__
+
+        if data is not None:
+            if self.dtype != data.dtype:
+                # TODO: This logic is largely copied from `as_index`. The two
+                # should be unified via a centralized type dispatching scheme.
+                if isinstance(data, NumericalColumn):
+                    try:
+                        cls = _dtype_to_index[data.dtype.type]
+                    except KeyError:
+                        cls = GenericIndex
+                        # TODO: GenericIndex has a different API for __new__
+                        # than other Index types. Refactoring Index types will
+                        # be necessary to clean this up.
+                        kwargs["values"] = kwargs.pop("data")
+                elif isinstance(data, StringColumn):
+                    cls = StringIndex
+                elif isinstance(data, DatetimeColumn):
+                    cls = DatetimeIndex
+                elif isinstance(data, TimeDeltaColumn):
+                    cls = TimedeltaIndex
+                elif isinstance(data, CategoricalColumn):
+                    cls = CategoricalIndex
+            elif cls is RangeIndex:
+                # RangeIndex must convert to other numerical types for ops
+
+                # TODO: The one exception to the output type selected here is
+                # that scalar multiplication of a RangeIndex in pandas results
+                # in another RangeIndex. Propagating that information through
+                # cudf with the current internals is possible, but requires
+                # significant hackery since we'd need _copy_construct or some
+                # other constructor to be intrinsically capable of processing
+                # operations. We should fix this behavior once we've completed
+                # a more thorough refactoring of the various Index classes that
+                # makes it easier to propagate this logic.
+                try:
+                    cls = _dtype_to_index[data.dtype.type]
+                except KeyError:
+                    cls = GenericIndex
+
+        return cls(**{**self._copy_construct_defaults, **kwargs})
 
     def sort_values(self, return_indexer=False, ascending=True, key=None):
         """
@@ -889,74 +938,6 @@ class Index(SingleColumnFrame, Serializable):
         Index without duplicates
         """
         return as_index(self._values.unique(), name=self.name)
-
-    def __add__(self, other):
-        return self._apply_op("__add__", other)
-
-    def __radd__(self, other):
-        return self._apply_op("__radd__", other)
-
-    def __sub__(self, other):
-        return self._apply_op("__sub__", other)
-
-    def __rsub__(self, other):
-        return self._apply_op("__rsub__", other)
-
-    def __mul__(self, other):
-        return self._apply_op("__mul__", other)
-
-    def __rmul__(self, other):
-        return self._apply_op("__rmul__", other)
-
-    def __mod__(self, other):
-        return self._apply_op("__mod__", other)
-
-    def __rmod__(self, other):
-        return self._apply_op("__rmod__", other)
-
-    def __pow__(self, other):
-        return self._apply_op("__pow__", other)
-
-    def __floordiv__(self, other):
-        return self._apply_op("__floordiv__", other)
-
-    def __rfloordiv__(self, other):
-        return self._apply_op("__rfloordiv__", other)
-
-    def __truediv__(self, other):
-        return self._apply_op("__truediv__", other)
-
-    def __rtruediv__(self, other):
-        return self._apply_op("__rtruediv__", other)
-
-    __div__ = __truediv__
-
-    def __and__(self, other):
-        return self._apply_op("__and__", other)
-
-    def __or__(self, other):
-        return self._apply_op("__or__", other)
-
-    def __xor__(self, other):
-        return self._apply_op("__xor__", other)
-
-    def __eq__(self, other):
-        return self._apply_op("__eq__", other)
-
-    def __ne__(self, other):
-        return self._apply_op("__ne__", other)
-
-    def __lt__(self, other):
-        return self._apply_op("__lt__", other)
-
-    def __le__(self, other):
-        return self._apply_op("__le__", other)
-
-    def __gt__(self, other):
-        return self._apply_op("__gt__", other)
-
-    def __ge__(self, other):
-        return self._apply_op("__ge__", other)
 
     def join(
         self, other, how="left", level=None, return_indexers=False, sort=False
@@ -1426,6 +1407,10 @@ class Index(SingleColumnFrame, Serializable):
         else:
             return as_index(table)
 
+    @property
+    def _copy_construct_defaults(self):
+        return {"data": self._column, "name": self.name}
+
     @classmethod
     def _from_data(cls, data, index=None):
         return cls._from_table(SingleColumnFrame(data=data))
@@ -1626,9 +1611,6 @@ class RangeIndex(Index):
             index = column.as_column(index)
 
         return as_index(self._values[index], name=self.name)
-
-    def __eq__(self, other):
-        return super(type(self), self).__eq__(other)
 
     def equals(self, other):
         if isinstance(other, RangeIndex):
@@ -2960,7 +2942,7 @@ def as_index(arbitrary, **kwargs) -> Index:
     )
 
 
-_dtype_to_index = {
+_dtype_to_index: Dict[Any, Type[Index]] = {
     np.int8: Int8Index,
     np.int16: Int16Index,
     np.int32: Int32Index,
@@ -2971,7 +2953,7 @@ _dtype_to_index = {
     np.uint64: UInt64Index,
     np.float32: Float32Index,
     np.float64: Float64Index,
-}  # type: Dict[Any, Type[Index]]
+}
 
 _index_to_dtype = {
     Int8Index: np.int8,
