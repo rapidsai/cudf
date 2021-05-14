@@ -369,13 +369,15 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_LIST>(aggregation
   auto null_handling =
     dynamic_cast<cudf::detail::collect_list_aggregation const&>(agg)._null_handling;
   agg.do_hash();
-  CUDF_EXPECTS(null_handling == null_policy::INCLUDE,
-               "null exclusion is not supported on groupby COLLECT_LIST aggregation.");
 
   if (cache.has_result(col_idx, agg)) return;
 
-  auto result = detail::group_collect(
-    get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr);
+  auto result = detail::group_collect(get_grouped_values(),
+                                      helper.group_offsets(stream),
+                                      helper.num_groups(stream),
+                                      null_handling,
+                                      stream,
+                                      mr);
 
   cache.add_result(col_idx, agg, std::move(result));
 };
@@ -385,13 +387,15 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation 
 {
   auto const null_handling =
     dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._null_handling;
-  CUDF_EXPECTS(null_handling == null_policy::INCLUDE,
-               "null exclusion is not supported on groupby COLLECT_SET aggregation.");
 
   if (cache.has_result(col_idx, agg)) { return; }
 
-  auto const collect_result = detail::group_collect(
-    get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr);
+  auto const collect_result = detail::group_collect(get_grouped_values(),
+                                                    helper.group_offsets(stream),
+                                                    helper.num_groups(stream),
+                                                    null_handling,
+                                                    stream,
+                                                    mr);
   auto const nulls_equal =
     dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._nulls_equal;
   auto const nans_equal =
