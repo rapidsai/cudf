@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+/**
+ * @file statistics_type_identification.cuh
+ * @brief Utility classes to identify extrema, aggregate and conversion types for ORC and PARQUET
+ */
+
 #pragma once
 
 #include <cudf/fixed_point/fixed_point.hpp>
@@ -61,7 +66,12 @@ struct conversion_map<io_file_format::PARQUET> {
                            std::pair<cudf::duration_ns, cudf::duration_us>>;
 };
 
-// Functor to convert timestamp and duration types to their representation type
+/**
+ * @brief Utility class to help conversion of timestamps and durations to their
+ * representation type
+ *
+ * @tparam conversion A conversion_map structure
+ */
 template <typename conversion>
 class type_conversion {
   using type_selector = ConversionTypeSelect<typename conversion::types>;
@@ -90,6 +100,11 @@ template <class T>
 struct dependent_false : std::false_type {
 };
 
+/**
+ * @brief Utility class to convert a leaf column element into its extrema type
+ *
+ * @tparam T Column type
+ */
 template <typename T>
 class extrema_type {
  private:
@@ -120,6 +135,9 @@ class extrema_type {
   using type = typename std::
     conditional_t<std::is_arithmetic_v<T>, arithmetic_extrema_type, non_arithmetic_extrema_type>;
 
+  /**
+   * @brief Function that converts an element of a leaf column into its extrema type
+   */
   __device__ static type convert(const T& val)
   {
     if constexpr (std::is_arithmetic_v<T> or std::is_same_v<T, string_view>) {
@@ -137,6 +155,11 @@ class extrema_type {
   }
 };
 
+/**
+ * @brief Utility class to convert a leaf column element into its aggregate type
+ *
+ * @tparam T Column type
+ */
 template <typename T>
 class aggregation_type {
  private:
@@ -170,6 +193,9 @@ class aggregation_type {
                                            arithmetic_aggregation_type,
                                            non_arithmetic_aggregation_type>;
 
+  /**
+   * @brief Function that converts an element of a leaf column into its aggregate type
+   */
   __device__ static type convert(const T& val)
   {
     if constexpr (std::is_same_v<T, string_view>) {
@@ -182,8 +208,10 @@ class aggregation_type {
       return val.value();
     } else if constexpr (cudf::is_duration<T>()) {
       return val.count();
-    } else {
+    } else if constexpr (cudf::is_timestamp<T>()) {
       static_assert(dependent_false<T>::value, "aggregation_type for timestamps do not exist");
+    } else {
+      static_assert(dependent_false<T>::value, "aggregation_type for supplied type do not exist");
     }
     return type{};
   }
@@ -203,6 +231,13 @@ __inline__ __device__ constexpr T maximum_identity()
   return cuda::std::numeric_limits<T>::lowest();
 }
 
+/**
+ * @brief Utility class to identify whether a type T is aggregated or ignored
+ * for ORC or PARQUET
+ *
+ * @tparam T Leaf column type
+ * @tparam IO File format for which statistics calculation is being done
+ */
 template <typename T, io_file_format IO>
 class statistics_type_category {
   // ORC does not calculate the statistics of unsigned integers except bools

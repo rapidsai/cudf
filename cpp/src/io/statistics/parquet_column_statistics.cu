@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+/**
+ * @file parquet_column_statistics.cu
+ * @brief Template specialization for PARQUET statistics calls
+ */
+
 #include "column_statistics.cuh"
 
 namespace cudf {
@@ -21,16 +26,16 @@ namespace io {
 namespace detail {
 
 template <>
-void MergeColumnStatistics<detail::io_file_format::PARQUET>(statistics_chunk *chunks_out,
-                                                            const statistics_chunk *chunks_in,
-                                                            const statistics_merge_group *groups,
-                                                            uint32_t num_chunks,
-                                                            rmm::cuda_stream_view stream);
-template <>
-void GatherColumnStatistics<detail::io_file_format::PARQUET>(statistics_chunk *chunks,
-                                                             const statistics_group *groups,
+void merge_group_statistics<detail::io_file_format::PARQUET>(statistics_chunk *chunks_out,
+                                                             const statistics_chunk *chunks_in,
+                                                             const statistics_merge_group *groups,
                                                              uint32_t num_chunks,
                                                              rmm::cuda_stream_view stream);
+template <>
+void calculate_group_statistics<detail::io_file_format::PARQUET>(statistics_chunk *chunks,
+                                                                 const statistics_group *groups,
+                                                                 uint32_t num_chunks,
+                                                                 rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace io

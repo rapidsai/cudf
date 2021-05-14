@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+/**
+ * @file column_statistics.cuh
+ * @brief Functors for statistics calculation to be used in ORC and PARQUET
+ */
+
 #pragma once
 
 #include "temp_storage_wrapper.cuh"
@@ -26,7 +31,7 @@ namespace cudf {
 namespace io {
 
 /**
- * @brief shared state for statistics gather kernel
+ * @brief shared state for statistics calculation kernel
  */
 struct stats_state_s {
   stats_column_desc col;   ///< Column information
@@ -46,11 +51,23 @@ struct merge_state_s {
 template <int dimension>
 using block_reduce_storage = detail::block_reduce_storage<dimension>;
 
+/**
+ * @brief Functor to calculate the statistics of rows in a column belonging to a
+ * statistics group
+ *
+ * @tparam block_size Dimension of the block
+ * @tparam IO File format for which statistics calculation is being done
+ */
 template <int block_size, detail::io_file_format IO>
-struct gather_statistics {
+struct calculate_group_statistics_functor {
   block_reduce_storage<block_size> &temp_storage;
 
-  __device__ gather_statistics(block_reduce_storage<block_size> &d_temp_storage)
+  /**
+   * @brief Construct a statistics calculator
+   *
+   * @param d_temp_storage Temporary storage to be used by cub calls
+   */
+  __device__ calculate_group_statistics_functor(block_reduce_storage<block_size> &d_temp_storage)
     : temp_storage(d_temp_storage)
   {
   }
@@ -63,6 +80,14 @@ struct gather_statistics {
     // No-op for unsupported aggregation types
   }
 
+  /**
+   * @brief Iterates through the rows specified by statistics group and stores the combined
+   * statistics into the statistics chunk.
+   *
+   * @param s Statistics state which specifies the column, the group being worked and the chunk
+   * the results will be stored into
+   * @param t thread id
+   */
   template <
     typename T,
     std::enable_if_t<not detail::statistics_type_category<T, IO>::ignored_statistics> * = nullptr>
@@ -90,11 +115,18 @@ struct gather_statistics {
   }
 };
 
+/**
+ * @brief Functor to merge the statistics chunks of a column belonging to a
+ * merge group
+ *
+ * @tparam block_size Dimension of the block
+ * @tparam IO File format for which statistics calculation is being done
+ */
 template <int block_size, detail::io_file_format IO>
-struct merge_statistics {
+struct merge_group_statistics_functor {
   block_reduce_storage<block_size> &temp_storage;
 
-  __device__ merge_statistics(block_reduce_storage<block_size> &d_temp_storage)
+  __device__ merge_group_statistics_functor(block_reduce_storage<block_size> &d_temp_storage)
     : temp_storage(d_temp_storage)
   {
   }
@@ -131,6 +163,12 @@ struct merge_statistics {
   }
 };
 
+/**
+ * @brief Function to cooperatively set members of an object to 0
+ *
+ * @param[out] destination Object being set to 0
+ * @tparam T Type of object
+ */
 template <typename T>
 __device__ void cooperative_load(T &destination)
 {
@@ -140,6 +178,13 @@ __device__ void cooperative_load(T &destination)
   }
 }
 
+/**
+ * @brief Function to cooperatively load an object from a reference
+ *
+ * @param[out] destination Object being loaded
+ * @param[in] source Source object
+ * @tparam T Type of object
+ */
 template <typename T>
 __device__ void cooperative_load(T &destination, const T &source)
 {
@@ -150,6 +195,13 @@ __device__ void cooperative_load(T &destination, const T &source)
   }
 }
 
+/**
+ * @brief Function to cooperatively load an object from a pointer
+ *
+ * @param[out] destination Object being loaded
+ * @param[in] source Source object
+ * @tparam T Type of object
+ */
 template <typename T>
 __device__ void cooperative_load(T &destination, const T *source)
 {
@@ -160,16 +212,18 @@ __device__ void cooperative_load(T &destination, const T *source)
 }
 
 /**
- * @brief Launches kernel to gather column statistics
+ * @brief Kernel to calculate group statistics
  *
  * @param[out] chunks Statistics results [num_chunks]
  * @param[in] groups Statistics row groups [num_chunks]
  * @param[in] num_chunks Number of chunks & rowgroups
  * @param[in] stream CUDA stream to use, default 0
+ * @tparam block_size Dimension of the block
+ * @tparam IO File format for which statistics calculation is being done
  */
 template <int block_size, detail::io_file_format IO>
 __global__ void __launch_bounds__(block_size, 1)
-  gpuGatherColumnStatistics(statistics_chunk *chunks, const statistics_group *groups)
+  gpu_calculate_group_statistics(statistics_chunk *chunks, const statistics_group *groups)
 {
   __shared__ __align__(8) stats_state_s state;
   __shared__ block_reduce_storage<block_size> storage;
@@ -182,8 +236,10 @@ __global__ void __launch_bounds__(block_size, 1)
   __syncthreads();
 
   // Calculate statistics
-  type_dispatcher(
-    state.col.leaf_column->type(), gather_statistics<block_size, IO>(storage), state, threadIdx.x);
+  type_dispatcher(state.col.leaf_column->type(),
+                  calculate_group_statistics_functor<block_size, IO>(storage),
+                  state,
+                  threadIdx.x);
   __syncthreads();
 
   cooperative_load(chunks[blockIdx.x], state.ck);
@@ -191,22 +247,40 @@ __global__ void __launch_bounds__(block_size, 1)
 
 namespace detail {
 
+/**
+ * @brief Launches kernel to calculate group statistics
+ *
+ * @param[out] chunks Statistics results [num_chunks]
+ * @param[in] groups Statistics row groups [num_chunks]
+ * @param[in] num_chunks Number of chunks & rowgroups
+ * @param[in] stream CUDA stream to use
+ * @tparam IO File format for which statistics calculation is being done
+ */
 template <detail::io_file_format IO>
-void GatherColumnStatistics(statistics_chunk *chunks,
-                            const statistics_group *groups,
-                            uint32_t num_chunks,
-                            rmm::cuda_stream_view stream)
+void calculate_group_statistics(statistics_chunk *chunks,
+                                const statistics_group *groups,
+                                uint32_t num_chunks,
+                                rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 256;
-  gpuGatherColumnStatistics<block_size, IO>
+  gpu_calculate_group_statistics<block_size, IO>
     <<<num_chunks, block_size, 0, stream.value()>>>(chunks, groups);
 }
 
+/**
+ * @brief Kernel to merge column statistics
+ *
+ * @param[out] chunks_out Statistics results [num_chunks]
+ * @param[out] chunks_in Input statistics
+ * @param[in] groups Statistics groups [num_chunks]
+ * @tparam block_size Dimension of the block
+ * @tparam IO File format for which statistics calculation is being done
+ */
 template <int block_size, detail::io_file_format IO>
 __global__ void __launch_bounds__(block_size, 1)
-  gpuMergeColumnStatistics(statistics_chunk *chunks_out,
-                           const statistics_chunk *chunks_in,
-                           const statistics_merge_group *groups)
+  gpu_merge_group_statistics(statistics_chunk *chunks_out,
+                             const statistics_chunk *chunks_in,
+                             const statistics_merge_group *groups)
 {
   __shared__ __align__(8) merge_state_s state;
   __shared__ block_reduce_storage<block_size> storage;
@@ -217,7 +291,7 @@ __global__ void __launch_bounds__(block_size, 1)
   __syncthreads();
 
   type_dispatcher(state.col.leaf_column->type(),
-                  merge_statistics<block_size, IO>(storage),
+                  merge_group_statistics_functor<block_size, IO>(storage),
                   state,
                   chunks_in + state.group.start_chunk,
                   state.group.num_chunks,
@@ -234,17 +308,18 @@ __global__ void __launch_bounds__(block_size, 1)
  * @param[out] chunks_in Input statistics
  * @param[in] groups Statistics groups [num_chunks]
  * @param[in] num_chunks Number of chunks & groups
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use
+ * @tparam IO File format for which statistics calculation is being done
  */
 template <detail::io_file_format IO>
-void MergeColumnStatistics(statistics_chunk *chunks_out,
-                           const statistics_chunk *chunks_in,
-                           const statistics_merge_group *groups,
-                           uint32_t num_chunks,
-                           rmm::cuda_stream_view stream)
+void merge_group_statistics(statistics_chunk *chunks_out,
+                            const statistics_chunk *chunks_in,
+                            const statistics_merge_group *groups,
+                            uint32_t num_chunks,
+                            rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 256;
-  gpuMergeColumnStatistics<block_size, IO>
+  gpu_merge_group_statistics<block_size, IO>
     <<<num_chunks, block_size, 0, stream.value()>>>(chunks_out, chunks_in, groups);
 }
 

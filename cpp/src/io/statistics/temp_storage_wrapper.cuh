@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+/**
+ * @file temp_storage_wrapper.cuh
+ * @brief Temporary storage for cub calls and helper wrapper class
+ */
+
 #pragma once
 
 #include <cudf/fixed_point/fixed_point.hpp>
@@ -36,6 +41,12 @@ using cub_temp_storage = typename cub::BlockReduce<T, block_size>::TempStorage;
 
 #define DECLARE_MEMBER(TYPE) cub_temp_storage<TYPE, block_size> MEMBER_NAME(TYPE);
 
+/**
+ * @brief Templated union to hold temporary storage to be used by cub reduce
+ * calls
+ *
+ * @tparam block_size Dimension of the block
+ */
 template <int block_size>
 union block_reduce_storage {
   DECLARE_MEMBER(bool)
@@ -59,6 +70,12 @@ union block_reduce_storage {
     return storage.MEMBER_NAME(TYPE);                                                             \
   }
 
+/**
+ * @brief Templated wrapper for block_reduce_storage to return member reference based on requested
+ * type
+ *
+ * @tparam block_size Dimension of the block
+ */
 template <int block_size>
 struct storage_wrapper {
   block_reduce_storage<block_size>& storage;

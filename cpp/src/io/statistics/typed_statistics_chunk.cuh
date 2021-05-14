@@ -14,6 +14,12 @@
  * limitations under the License.
  */
 
+/**
+ * @file typed_statistics_chunk
+ * @brief Templated wrapper to generalize statistics chunk reduction and aggregation
+ * across different leaf column types
+ */
+
 #pragma once
 
 #include "statistics.cuh"
@@ -28,6 +34,9 @@
 namespace cudf {
 namespace io {
 
+/**
+ * @brief Class used to get reference to members of unions related to statistics calculations
+ */
 class union_member {
   template <typename U, typename V>
   using reference_type = std::conditional_t<std::is_const_v<U>, const V&, V&>;
@@ -69,6 +78,14 @@ template <typename T, typename Enable = void>
 struct typed_statistics_chunk {
 };
 
+/**
+ * @brief Templated structure used for merging and gathering of statistics chunks
+ *
+ * This uses the reduce function to compute the minimum, maximum and aggregate
+ * values simultaneously.
+ *
+ * @tparam T The input type associated with the chunk
+ */
 template <typename T>
 struct typed_statistics_chunk<
   T,
@@ -123,6 +140,14 @@ struct typed_statistics_chunk<
   }
 };
 
+/**
+ * @brief Templated structure used for merging and gathering of statistics chunks
+ *
+ * This uses the reduce function to compute the minimum and maximum values
+ * simultaneously.
+ *
+ * @tparam T The input type associated with the chunk
+ */
 template <typename T>
 struct typed_statistics_chunk<T, typename std::enable_if<cudf::is_timestamp<T>()>::type> {
   using E = typename detail::extrema_type<T>::type;
@@ -168,6 +193,14 @@ struct typed_statistics_chunk<T, typename std::enable_if<cudf::is_timestamp<T>()
   }
 };
 
+/**
+ * @brief Function to reduce members of a typed_statistics_chunk across a thread block
+ *
+ * @tparam T Type associated with typed_statistics_chunk
+ * @tparam block_size Dimension of the thread block
+ * @param chunk The input typed_statistics_chunk
+ * @param storage Temporary storage to be used by cub calls
+ */
 template <typename T, int block_size>
 __inline__ __device__ typed_statistics_chunk<T> block_reduce(
   typed_statistics_chunk<T>& chunk, detail::storage_wrapper<block_size>& storage)
@@ -203,6 +236,12 @@ __inline__ __device__ typed_statistics_chunk<T> block_reduce(
   return output_chunk;
 }
 
+/**
+ * @brief Function to convert typed_statistics_chunk into statistics_chunk
+ *
+ * @tparam T Type associated with typed_statistics_chunk
+ * @param chunk The input typed_statistics_chunk
+ */
 template <typename T>
 __inline__ __device__ statistics_chunk get_untyped_chunk(const typed_statistics_chunk<T>& chunk)
 {

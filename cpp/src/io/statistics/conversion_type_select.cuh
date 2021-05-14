@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+/**
+ * @file conversion_type_select.cuh
+ * @brief Utility classes for timestamp and duration conversion for PARQUET and ORC
+ */
+
 #pragma once
 
 #include <tuple>
@@ -23,23 +28,6 @@
 namespace cudf {
 namespace io {
 namespace detail {
-
-///////////////////////
-// Utility to detect multiple occurences of a type in the first element of pairs in a tuple
-// For eg. with the following tuple :
-//
-// using conversion_types =
-// std::tuple<
-//  std::pair<int, A>,
-//  std::pair<char, B>,
-//  std::pair<int, C>,
-//  std::pair<int, D>,
-//  std::pair<unsigned, E>,
-//  std::pair<unsigned, F>>;
-//
-// Detect<conversion_types>::is_duplicate will evaluate to true at compile time.
-// Here std::pair<int, A>, std::pair<int, C> and std::pair<int, D> are treated as duplicates
-// and std::pair<unsigned, E> and std::pair<unsigned, F>> are treated as duplicates.
 
 template <int, int, typename>
 class DetectInnerIteration;
@@ -81,27 +69,31 @@ class DetectIteration<N, std::tuple<T...>> {
 template <typename>
 class Detect;
 
+/**
+ * @brief Utility class to detect multiple occurences of a type in the first element of pairs in a
+ * tuple For eg. with the following tuple :
+ *
+ * using conversion_types =
+ * std::tuple<
+ *  std::pair<int, A>,
+ *  std::pair<char, B>,
+ *  std::pair<int, C>,
+ *  std::pair<int, D>,
+ *  std::pair<unsigned, E>,
+ *  std::pair<unsigned, F>>;
+ *
+ * Detect<conversion_types>::is_duplicate will evaluate to true at compile time.
+ * Here std::pair<int, A>, std::pair<int, C> and std::pair<int, D> are treated as duplicates
+ * and std::pair<unsigned, E> and std::pair<unsigned, F>> are treated as duplicates.
+ *
+ * @tparam T... Parameter pack of pairs of types
+ */
 template <typename... T>
 class Detect<std::tuple<T...>> {
  public:
   static constexpr bool is_duplicate =
     DetectIteration<(sizeof...(T) - 1), std::tuple<T...>>::is_duplicate;
 };
-
-///////////////////////
-// Utility to select between types based on an input type
-
-// using Conversion = std::tuple<
-//  std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
-//  std::pair<cudf::timestamp_ns, cudf::timestamp_us>,
-//  std::pair<cudf::duration_s, cudf::duration_ms>,
-//  std::pair<cudf::duration_ns, cudf::duration_us>>
-//
-// using type = ConversionTypeSelect<Conversion>::type<cudf::duration_ns>
-// Here type will resolve to cudf::duration_us
-// If the type passed does not match any entries the type is returned as it is
-// This utility takes advantage of Detect class to reject any tuple with duplicate first
-// entries at compile time
 
 template <typename>
 class ConversionTypeSelect;
@@ -115,6 +107,23 @@ class ConversionTypeSelect<std::tuple<I0>> {
                                   T>;
 };
 
+/**
+ * @brief Utility to select between types based on an input type
+ *
+ * using Conversion = std::tuple<
+ *  std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
+ *  std::pair<cudf::timestamp_ns, cudf::timestamp_us>,
+ *  std::pair<cudf::duration_s, cudf::duration_ms>,
+ *  std::pair<cudf::duration_ns, cudf::duration_us>>
+ *
+ * using type = ConversionTypeSelect<Conversion>::type<cudf::duration_ns>
+ * Here type will resolve to cudf::duration_us
+ * If the type passed does not match any entries the type is returned as it is
+ * This utility takes advantage of Detect class to reject any tuple with duplicate first
+ * entries at compile time
+ *
+ * @tparam T... Parameter pack of pairs of types
+ */
 template <typename I0, typename... In>
 class ConversionTypeSelect<std::tuple<I0, In...>> {
  public:

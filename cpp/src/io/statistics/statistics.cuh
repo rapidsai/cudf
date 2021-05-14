@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+/**
+ * @file statistics.cuh
+ * @brief Common structures and utility functions for statistics
+ */
+
 #pragma once
 #include <stdint.h>
 
