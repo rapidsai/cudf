@@ -816,7 +816,7 @@ void snappy_compress(device_span<gpu_inflate_input_s> comp_in,
     // Analogous to comp_in.dstDevice
     rmm::device_uvector<void *> compressed_data_ptrs(num_comp_pages, stream);
     // Analogous to comp_stat.bytes_written
-    rmm::device_vector<size_t> compressed_bytes_written(num_comp_pages);
+    rmm::device_uvector<size_t> compressed_bytes_written(num_comp_pages, stream);
     // nvcomp does not currently use comp_in.dstSize. Cannot assume that the output will fit in
     // the space allocated unless one uses the API nvcompBatchedSnappyCompressGetOutputSize()
 
@@ -837,7 +837,7 @@ void snappy_compress(device_span<gpu_inflate_input_s> comp_in,
                                                     scratch.data(),  // Not needed rn but future
                                                     scratch.size(),
                                                     compressed_data_ptrs.data(),
-                                                    compressed_bytes_written.data().get(),
+                                                    compressed_bytes_written.data(),
                                                     stream.value());
 
     if (nvcomp_error != nvcompError_t::nvcompSuccess) { break; }
