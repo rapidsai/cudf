@@ -116,8 +116,8 @@ class get_json_object_options {
 std::unique_ptr<cudf::column> get_json_object(
   cudf::strings_column_view const& col,
   cudf::string_scalar const& json_path,
-  thrust::optional<get_json_object_options> options = thrust::nullopt,
-  rmm::mr::device_memory_resource* mr               = rmm::mr::get_current_device_resource());
+  get_json_object_options options     = get_json_object_options{},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

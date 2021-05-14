@@ -177,15 +177,13 @@ class json_state : private parser {
       parent_el_type(json_element_type::NONE)
   {
   }
-  __device__ json_state(const char* _input,
-                        int64_t _input_len,
-                        thrust::optional<get_json_object_options> _options)
+  __device__ json_state(const char* _input, int64_t _input_len, get_json_object_options _options)
     : parser(_input, _input_len),
       cur_el_start(nullptr),
       cur_el_type(json_element_type::NONE),
-      parent_el_type(json_element_type::NONE)
+      parent_el_type(json_element_type::NONE),
+      options(_options)
   {
-    options = _options.value_or(get_json_object_options{});
   }
 
   __device__ json_state(json_state const& j)
@@ -815,7 +813,7 @@ __device__ thrust::pair<parse_result, json_output> get_json_object_single(
   path_operator const* const commands,
   char* out_buf,
   size_t out_buf_size,
-  thrust::optional<get_json_object_options> options)
+  get_json_object_options options)
 {
   json_state j_state(input, input_len, options);
   json_output output{out_buf_size, out_buf};
@@ -848,7 +846,7 @@ __launch_bounds__(block_size) __global__
                               thrust::optional<char*> out_buf,
                               thrust::optional<bitmask_type*> out_validity,
                               thrust::optional<size_type*> out_valid_count,
-                              thrust::optional<get_json_object_options> options)
+                              get_json_object_options options)
 {
   size_type tid    = threadIdx.x + (blockDim.x * blockIdx.x);
   size_type stride = blockDim.x * gridDim.x;
@@ -905,7 +903,7 @@ __launch_bounds__(block_size) __global__
  */
 std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& col,
                                               cudf::string_scalar const& json_path,
-                                              thrust::optional<get_json_object_options> options,
+                                              get_json_object_options options,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
@@ -993,7 +991,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
  */
 std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& col,
                                               cudf::string_scalar const& json_path,
-                                              thrust::optional<get_json_object_options> options,
+                                              get_json_object_options options,
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
