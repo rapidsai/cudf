@@ -84,8 +84,7 @@ std::unique_ptr<column> compute_column(table_view const table,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  auto const expr_linearizer = linearizer(expr, table);                // Linearize the AST
-  auto const plan            = ast_plan{expr_linearizer, stream, mr};  // Create ast_plan
+  auto const expr_linearizer = linearizer(expr, table);  // Linearize the AST
 
   // Create table device view
   auto table_device         = table_device_view::create(table, stream);
@@ -116,7 +115,10 @@ std::unique_ptr<column> compute_column(table_view const table,
   // Execute the kernel
   cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-      *table_device, plan, *mutable_output_device, num_intermediates);
+      *table_device,
+      make_plan(expr_linearizer, stream, mr),
+      *mutable_output_device,
+      num_intermediates);
   CHECK_CUDA(stream.value());
   return output_column;
 }

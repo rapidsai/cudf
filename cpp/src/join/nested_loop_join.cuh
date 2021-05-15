@@ -249,9 +249,8 @@ get_base_nested_loop_predicate_join_indices(table_view const& left,
   // we can reuse the same linearizer for convenience and assume that the left
   // and right tables have all the same data types. We will eventually have to
   // relax this assumption to provide reasonable error checking.
-  auto const expr_linearizer = ast::detail::linearizer(binary_pred, left);  // Linearize the AST
-  auto const plan = ast::detail::ast_plan{expr_linearizer, stream, mr};     // Create ast_plan
-  auto const num_intermediates     = expr_linearizer.intermediate_count();
+  auto const expr_linearizer   = ast::detail::linearizer(binary_pred, left);  // Linearize the AST
+  auto const num_intermediates = expr_linearizer.intermediate_count();
   auto const shmem_size_per_thread = static_cast<int>(sizeof(std::int64_t) * num_intermediates);
 
   // Because we are approximating the number of joined elements, our approximation
@@ -292,7 +291,7 @@ get_base_nested_loop_predicate_join_indices(table_view const& left,
         join_output_r,
         *mutable_output_device,
         write_index.data(),
-        plan,
+        ast::detail::make_plan(expr_linearizer, stream, mr),
         estimated_size,
         num_intermediates);
 

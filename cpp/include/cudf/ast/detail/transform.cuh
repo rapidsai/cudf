@@ -49,72 +49,74 @@ namespace detail {
  *
  */
 struct ast_plan {
-  ast_plan(linearizer const& expr_linearizer,
-           rmm::cuda_stream_view stream,
-           rmm::mr::device_memory_resource* mr)
-  {
-    std::vector<cudf::size_type> _sizes;
-    std::vector<const void*> _data_pointers;
-
-    add_to_plan(expr_linearizer.data_references(), _sizes, _data_pointers);
-    add_to_plan(expr_linearizer.literals(), _sizes, _data_pointers);
-    add_to_plan(expr_linearizer.operators(), _sizes, _data_pointers);
-    add_to_plan(expr_linearizer.operator_source_indices(), _sizes, _data_pointers);
-
-    // Create device buffer
-    auto const buffer_size = std::accumulate(_sizes.cbegin(), _sizes.cend(), 0);
-    auto buffer_offsets    = std::vector<int>(_sizes.size());
-    thrust::exclusive_scan(_sizes.cbegin(), _sizes.cend(), buffer_offsets.begin(), 0);
-
-    auto h_data_buffer = std::make_unique<char[]>(buffer_size);
-    for (unsigned int i = 0; i < _data_pointers.size(); ++i) {
-      std::memcpy(h_data_buffer.get() + buffer_offsets[i], _data_pointers[i], _sizes[i]);
-    }
-
-    _device_data_buffer = rmm::device_buffer(h_data_buffer.get(), buffer_size, stream, mr);
-
-    stream.synchronize();
-
-    // Create device pointers to components of plan
-    auto device_data_buffer_ptr = static_cast<const char*>(_device_data_buffer.data());
-    data_references             = device_span<const detail::device_data_reference>(
-      reinterpret_cast<const detail::device_data_reference*>(device_data_buffer_ptr +
-                                                             buffer_offsets[0]),
-      expr_linearizer.data_references().size());
-    literals = device_span<const cudf::detail::fixed_width_scalar_device_view_base>(
-      reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
-        device_data_buffer_ptr + buffer_offsets[1]),
-      expr_linearizer.literals().size());
-    operators = device_span<const ast_operator>(
-      reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]),
-      expr_linearizer.operators().size());
-    operator_source_indices = device_span<const cudf::size_type>(
-      reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]),
-      expr_linearizer.operator_source_indices().size());
-  }
-
-  /**
-   * @brief Helper function for adding components (operators, literals, etc) to AST plan
-   *
-   * @tparam T  The underlying type of the input `std::vector`
-   * @param  v  The `std::vector` containing components (operators, literals, etc)
-   */
-  template <typename T>
-  void add_to_plan(std::vector<T> const& v,
-                   std::vector<cudf::size_type>& _sizes,
-                   std::vector<const void*>& _data_pointers)
-  {
-    auto const data_size = sizeof(T) * v.size();
-    _sizes.push_back(data_size);
-    _data_pointers.push_back(v.data());
-  }
-
   rmm::device_buffer _device_data_buffer;
   device_span<const detail::device_data_reference> data_references;
   device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals;
   device_span<const ast_operator> operators;
   device_span<const cudf::size_type> operator_source_indices;
 };
+
+/**
+ * @brief Helper function for adding components (operators, literals, etc) to AST plan
+ *
+ * @tparam T  The underlying type of the input `std::vector`
+ * @param  v  The `std::vector` containing components (operators, literals, etc)
+ */
+template <typename T>
+void extract_size_and_pointer(std::vector<T> const& v,
+                              std::vector<cudf::size_type>& _sizes,
+                              std::vector<const void*>& _data_pointers)
+{
+  auto const data_size = sizeof(T) * v.size();
+  _sizes.push_back(data_size);
+  _data_pointers.push_back(v.data());
+}
+
+inline ast_plan make_plan(linearizer const& expr_linearizer,
+                          rmm::cuda_stream_view stream,
+                          rmm::mr::device_memory_resource* mr)
+{
+  std::vector<cudf::size_type> _sizes;
+  std::vector<const void*> _data_pointers;
+
+  extract_size_and_pointer(expr_linearizer.data_references(), _sizes, _data_pointers);
+  extract_size_and_pointer(expr_linearizer.literals(), _sizes, _data_pointers);
+  extract_size_and_pointer(expr_linearizer.operators(), _sizes, _data_pointers);
+  extract_size_and_pointer(expr_linearizer.operator_source_indices(), _sizes, _data_pointers);
+
+  // Create device buffer
+  auto const buffer_size = std::accumulate(_sizes.cbegin(), _sizes.cend(), 0);
+  auto buffer_offsets    = std::vector<int>(_sizes.size());
+  thrust::exclusive_scan(_sizes.cbegin(), _sizes.cend(), buffer_offsets.begin(), 0);
+
+  auto h_data_buffer = std::make_unique<char[]>(buffer_size);
+  for (unsigned int i = 0; i < _data_pointers.size(); ++i) {
+    std::memcpy(h_data_buffer.get() + buffer_offsets[i], _data_pointers[i], _sizes[i]);
+  }
+
+  ast_plan plan;
+  plan._device_data_buffer = rmm::device_buffer(h_data_buffer.get(), buffer_size, stream, mr);
+
+  stream.synchronize();
+
+  // Create device pointers to components of plan
+  auto device_data_buffer_ptr = static_cast<const char*>(plan._device_data_buffer.data());
+  plan.data_references        = device_span<const detail::device_data_reference>(
+    reinterpret_cast<const detail::device_data_reference*>(device_data_buffer_ptr +
+                                                           buffer_offsets[0]),
+    expr_linearizer.data_references().size());
+  plan.literals = device_span<const cudf::detail::fixed_width_scalar_device_view_base>(
+    reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
+      device_data_buffer_ptr + buffer_offsets[1]),
+    expr_linearizer.literals().size());
+  plan.operators = device_span<const ast_operator>(
+    reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]),
+    expr_linearizer.operators().size());
+  plan.operator_source_indices = device_span<const cudf::size_type>(
+    reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]),
+    expr_linearizer.operator_source_indices().size());
+  return plan;
+}
 
 // Forward declaration
 struct two_table_evaluator;
