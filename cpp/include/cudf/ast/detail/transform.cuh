@@ -420,12 +420,14 @@ struct ast_plan {
   ast_plan(linearizer const& expr_linearizer,
            rmm::cuda_stream_view stream,
            rmm::mr::device_memory_resource* mr)
-    : _sizes{}, _data_pointers{}
   {
-    add_to_plan(expr_linearizer.data_references());
-    add_to_plan(expr_linearizer.literals());
-    add_to_plan(expr_linearizer.operators());
-    add_to_plan(expr_linearizer.operator_source_indices());
+    std::vector<cudf::size_type> _sizes;
+    std::vector<const void*> _data_pointers;
+
+    add_to_plan(expr_linearizer.data_references(), _sizes, _data_pointers);
+    add_to_plan(expr_linearizer.literals(), _sizes, _data_pointers);
+    add_to_plan(expr_linearizer.operators(), _sizes, _data_pointers);
+    add_to_plan(expr_linearizer.operator_source_indices(), _sizes, _data_pointers);
 
     // Create device buffer
     auto const buffer_size = std::accumulate(_sizes.cbegin(), _sizes.cend(), 0);
@@ -466,15 +468,14 @@ struct ast_plan {
    * @param  v  The `std::vector` containing components (operators, literals, etc)
    */
   template <typename T>
-  void add_to_plan(std::vector<T> const& v)
+  void add_to_plan(std::vector<T> const& v,
+                   std::vector<cudf::size_type>& _sizes,
+                   std::vector<const void*>& _data_pointers)
   {
     auto const data_size = sizeof(T) * v.size();
     _sizes.push_back(data_size);
     _data_pointers.push_back(v.data());
   }
-
-  std::vector<cudf::size_type> _sizes;
-  std::vector<const void*> _data_pointers;
 
   rmm::device_buffer _device_data_buffer;
   device_span<const detail::device_data_reference> _device_data_references;
