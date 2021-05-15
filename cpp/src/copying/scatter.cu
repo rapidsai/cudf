@@ -149,7 +149,8 @@ struct column_scalar_scatterer_impl<list_view, MapIterator> {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
-    CUDF_FAIL("scatter scalar to list_view not implemented");
+    return lists::detail::scatter(
+      source, scatter_iter, scatter_iter + scatter_rows, target, stream, mr);
   }
 };
 

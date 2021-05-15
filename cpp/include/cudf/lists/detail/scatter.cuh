@@ -35,6 +35,8 @@
 #include <thrust/binary_search.h>
 
 #include <cinttypes>
+#include "thrust/iterator/constant_iterator.h"
+#include "thrust/iterator/counting_iterator.h"
 
 namespace cudf {
 namespace lists {
@@ -141,9 +143,12 @@ struct unbound_list_view {
   size_type _size{};       // Number of elements in *this* list row.
 };
 
+template <typename IndexIterator>
 rmm::device_uvector<unbound_list_view> list_vector_from_column(
   unbound_list_view::label_type label,
   cudf::detail::lists_column_device_view const& lists_column,
+  IndexIterator index_begin,
+  IndexIterator index_end,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -152,8 +157,8 @@ rmm::device_uvector<unbound_list_view> list_vector_from_column(
   auto vector = rmm::device_uvector<unbound_list_view>(n_rows, stream, mr);
 
   thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(n_rows),
+                    index_begin,
+                    index_end,
                     vector.begin(),
                     [label, lists_column] __device__(size_type row_index) {
                       return unbound_list_view{label, lists_column, row_index};
@@ -720,59 +725,39 @@ void assert_same_data_type(column_view const& lhs, column_view const& rhs)
   for (int i{0}; i < lhs.num_children(); ++i) { assert_same_data_type(lhs.child(i), rhs.child(i)); }
 }
 
-}  // namespace
-
 /**
- * @brief Scatters lists into a copy of the target column
- * according to a scatter map.
+ * @brief General implementation of scattering into list column
  *
- * The scatter is performed according to the scatter iterator such that row
- * `scatter_map[i]` of the output column is replaced by the source list-row.
- * All other rows of the output column equal corresponding rows of the target table.
+ * Scattering `source` into `target` according to `scatter_map`.
+ * The view order of `source` and `target` can be specified by
+ * `source_vector` and `target_vector` respectively.
  *
- * If the same index appears more than once in the scatter map, the result is
- * undefined.
- *
- * The caller must update the null mask in the output column.
- *
- * @tparam SourceIterator must produce list_view objects
  * @tparam MapIterator must produce index values within the target column.
  *
+ * @param source_vector A vector of `unbound_list_view` into source column
+ * @param target_vector A vector of `unbound_list_view` into target column
+ * @param scatter_map_begin Start iterator of scatter map
+ * @param scatter_map_end End iterator of scatter map
+ * @param source Source column view
+ * @param target Target column view
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New lists column.
  */
 template <typename MapIterator>
-std::unique_ptr<column> scatter(
-  column_view const& source,
+std::unique_ptr<column> scatter_impl(
+  rmm::device_uvector<unbound_list_view> const& source_vector,
+  rmm::device_uvector<unbound_list_view>& target_vector,
   MapIterator scatter_map_begin,
   MapIterator scatter_map_end,
+  column_view const& source,
   column_view const& target,
-  rmm::cuda_stream_view stream        = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  auto const num_rows = target.size();
-
-  if (num_rows == 0) { return cudf::empty_like(target); }
-
-  auto const child_column_type = lists_column_view(target).child().type();
-
   assert_same_data_type(source, target);
 
-  using lists_column_device_view = cudf::detail::lists_column_device_view;
-  using unbound_list_view        = cudf::lists::detail::unbound_list_view;
-
-  auto const source_device_view = column_device_view::create(source, stream);
-  auto const source_vector      = list_vector_from_column(unbound_list_view::label_type::SOURCE,
-                                                     lists_column_device_view(*source_device_view),
-                                                     stream,
-                                                     mr);
-
-  auto const target_device_view = column_device_view::create(target, stream);
-  auto target_vector            = list_vector_from_column(unbound_list_view::label_type::TARGET,
-                                               lists_column_device_view(*target_device_view),
-                                               stream,
-                                               mr);
+  auto const child_column_type = lists_column_view(target).child().type();
 
   // Scatter.
   thrust::scatter(rmm::exec_policy(stream),
@@ -803,13 +788,137 @@ std::unique_ptr<column> scatter(
   auto null_mask =
     target.has_nulls() ? copy_bitmask(target, stream, mr) : rmm::device_buffer{0, stream, mr};
 
-  return cudf::make_lists_column(num_rows,
+  return cudf::make_lists_column(target.size(),
                                  std::move(offsets_column),
                                  std::move(child_column),
                                  cudf::UNKNOWN_NULL_COUNT,
                                  std::move(null_mask),
                                  stream,
                                  mr);
+}
+
+}  // namespace
+
+/**
+ * @brief Scatters lists into a copy of the target column
+ * according to a scatter map.
+ *
+ * The scatter is performed according to the scatter iterator such that row
+ * `scatter_map[i]` of the output column is replaced by the source list-row.
+ * All other rows of the output column equal corresponding rows of the target table.
+ *
+ * If the same index appears more than once in the scatter map, the result is
+ * undefined.
+ *
+ * The caller must update the null mask in the output column.
+ *
+ * @tparam MapIterator must produce index values within the target column.
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New lists column.
+ */
+template <typename MapIterator>
+std::unique_ptr<column> scatter(
+  column_view const& source,
+  MapIterator scatter_map_begin,
+  MapIterator scatter_map_end,
+  column_view const& target,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  auto const num_rows = target.size();
+  if (num_rows == 0) { return cudf::empty_like(target); }
+
+  auto const source_device_view = column_device_view::create(source, stream);
+  auto const source_vector =
+    list_vector_from_column(unbound_list_view::label_type::SOURCE,
+                            cudf::detail::lists_column_device_view(*source_device_view),
+                            thrust::make_counting_iterator(0),
+                            thrust::make_counting_iterator(num_rows),
+                            stream,
+                            mr);
+
+  auto const target_device_view = column_device_view::create(target, stream);
+  auto target_vector =
+    list_vector_from_column(unbound_list_view::label_type::TARGET,
+                            cudf::detail::lists_column_device_view(*target_device_view),
+                            thrust::make_counting_iterator(0),
+                            thrust::make_counting_iterator(num_rows),
+                            stream,
+                            mr);
+
+  return scatter_impl(
+    source_vector, target_vector, scatter_map_begin, scatter_map_end, source, target, stream, mr);
+}
+
+/**
+ * @brief Scatters list scalar (a single row) into a copy of the target column
+ * according to a scatter map.
+ *
+ * The scatter is performed according to the scatter iterator such that row
+ * `scatter_map[i]` of the output column is replaced by the source list-row.
+ * All other rows of the output column equal corresponding rows of the target table.
+ *
+ * If the same index appears more than once in the scatter map, the result is
+ * undefined.
+ *
+ * The caller must update the null mask in the output column.
+ *
+ * @tparam MapIterator must produce index values within the target column.
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New lists column.
+ */
+template <typename MapIterator>
+std::unique_ptr<column> scatter(
+  scalar const& slr,
+  MapIterator scatter_map_begin,
+  MapIterator scatter_map_end,
+  column_view const& target,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  auto const num_rows = target.size();
+  if (num_rows == 0) { return cudf::empty_like(target); }
+
+  auto lv = static_cast<list_scalar const*>(&slr);
+  rmm::device_buffer null_mask{lv->validity_data(), 1, stream, mr};
+  auto offset_column = make_numeric_column(
+    data_type{type_to_id<offset_type>()}, 2, mask_state::UNALLOCATED, stream, mr);
+  thrust::sequence(offset_column->mutable_view().begin<offset_type>(),
+                   offset_column->mutable_view().end<offset_type>(),
+                   0,
+                   lv->view().size());
+  auto wrapped = column_view(data_type{type_id::LIST},
+                             1,
+                             nullptr,
+                             static_cast<bitmask_type const*>(null_mask.data()),
+                             UNKNOWN_NULL_COUNT,
+                             0,
+                             {offset_column->view(), lv->view()});
+
+  auto const source_device_view = column_device_view::create(wrapped, stream);
+  auto const source_vector =
+    list_vector_from_column(unbound_list_view::label_type::SOURCE,
+                            cudf::detail::lists_column_device_view(*source_device_view),
+                            thrust::make_constant_iterator(0),
+                            thrust::make_constant_iterator(0) + num_rows,
+                            stream,
+                            mr);
+
+  auto const target_device_view = column_device_view::create(target, stream);
+  auto target_vector =
+    list_vector_from_column(unbound_list_view::label_type::TARGET,
+                            cudf::detail::lists_column_device_view(*target_device_view),
+                            thrust::make_counting_iterator(0),
+                            thrust::make_counting_iterator(num_rows),
+                            stream,
+                            mr);
+
+  return scatter_impl(
+    source_vector, target_vector, scatter_map_begin, scatter_map_end, wrapped, target, stream, mr);
 }
 
 }  // namespace detail
