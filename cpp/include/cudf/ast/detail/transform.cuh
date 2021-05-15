@@ -40,6 +40,82 @@ namespace ast {
 
 namespace detail {
 
+/**
+ * @brief The AST plan creates a device buffer of data needed to execute an AST.
+ *
+ * On construction, an AST plan creates a single "packed" host buffer of all necessary data arrays,
+ * and copies that to the device with a single host-device memory copy. Because the plan tends to be
+ * small, this is the most efficient approach for low latency.
+ *
+ */
+struct ast_plan {
+  ast_plan(linearizer const& expr_linearizer,
+           rmm::cuda_stream_view stream,
+           rmm::mr::device_memory_resource* mr)
+  {
+    std::vector<cudf::size_type> _sizes;
+    std::vector<const void*> _data_pointers;
+
+    add_to_plan(expr_linearizer.data_references(), _sizes, _data_pointers);
+    add_to_plan(expr_linearizer.literals(), _sizes, _data_pointers);
+    add_to_plan(expr_linearizer.operators(), _sizes, _data_pointers);
+    add_to_plan(expr_linearizer.operator_source_indices(), _sizes, _data_pointers);
+
+    // Create device buffer
+    auto const buffer_size = std::accumulate(_sizes.cbegin(), _sizes.cend(), 0);
+    auto buffer_offsets    = std::vector<int>(_sizes.size());
+    thrust::exclusive_scan(_sizes.cbegin(), _sizes.cend(), buffer_offsets.begin(), 0);
+
+    auto h_data_buffer = std::make_unique<char[]>(buffer_size);
+    for (unsigned int i = 0; i < _data_pointers.size(); ++i) {
+      std::memcpy(h_data_buffer.get() + buffer_offsets[i], _data_pointers[i], _sizes[i]);
+    }
+
+    _device_data_buffer = rmm::device_buffer(h_data_buffer.get(), buffer_size, stream, mr);
+
+    stream.synchronize();
+
+    // Create device pointers to components of plan
+    auto device_data_buffer_ptr = static_cast<const char*>(_device_data_buffer.data());
+    data_references             = device_span<const detail::device_data_reference>(
+      reinterpret_cast<const detail::device_data_reference*>(device_data_buffer_ptr +
+                                                             buffer_offsets[0]),
+      expr_linearizer.data_references().size());
+    literals = device_span<const cudf::detail::fixed_width_scalar_device_view_base>(
+      reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
+        device_data_buffer_ptr + buffer_offsets[1]),
+      expr_linearizer.literals().size());
+    operators = device_span<const ast_operator>(
+      reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]),
+      expr_linearizer.operators().size());
+    operator_source_indices = device_span<const cudf::size_type>(
+      reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]),
+      expr_linearizer.operator_source_indices().size());
+  }
+
+  /**
+   * @brief Helper function for adding components (operators, literals, etc) to AST plan
+   *
+   * @tparam T  The underlying type of the input `std::vector`
+   * @param  v  The `std::vector` containing components (operators, literals, etc)
+   */
+  template <typename T>
+  void add_to_plan(std::vector<T> const& v,
+                   std::vector<cudf::size_type>& _sizes,
+                   std::vector<const void*>& _data_pointers)
+  {
+    auto const data_size = sizeof(T) * v.size();
+    _sizes.push_back(data_size);
+    _data_pointers.push_back(v.data());
+  }
+
+  rmm::device_buffer _device_data_buffer;
+  device_span<const detail::device_data_reference> data_references;
+  device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals;
+  device_span<const ast_operator> operators;
+  device_span<const cudf::size_type> operator_source_indices;
+};
+
 // Forward declaration
 struct two_table_evaluator;
 
@@ -162,20 +238,13 @@ struct two_table_evaluator {
    * storing intermediates.
    * @param output_column The output column where results are stored.
    */
-  __device__ two_table_evaluator(
-    table_device_view const& left,
-    device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals,
-    device_span<const detail::device_data_reference> data_references,
-    device_span<const ast_operator> operators,
-    device_span<const cudf::size_type> operator_source_indices,
-    std::int64_t* thread_intermediate_storage,
-    mutable_column_device_view* output_column,
-    table_device_view const& right)
+  __device__ two_table_evaluator(table_device_view const& left,
+                                 ast_plan const& plan,
+                                 std::int64_t* thread_intermediate_storage,
+                                 mutable_column_device_view* output_column,
+                                 table_device_view const& right)
     : left(left),
-      literals(literals),
-      data_references(data_references),
-      operators(operators),
-      operator_source_indices(operator_source_indices),
+      plan(plan),
       thread_intermediate_storage(thread_intermediate_storage),
       output_column(output_column),
       right(right)
@@ -183,19 +252,12 @@ struct two_table_evaluator {
   }
 
   // Overloaded constructor for single-table case.
-  __device__ two_table_evaluator(
-    table_device_view const& left,
-    device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals,
-    device_span<const detail::device_data_reference> data_references,
-    device_span<const ast_operator> operators,
-    device_span<const cudf::size_type> operator_source_indices,
-    std::int64_t* thread_intermediate_storage,
-    mutable_column_device_view* output_column)
+  __device__ two_table_evaluator(table_device_view const& left,
+                                 ast_plan const& plan,
+                                 std::int64_t* thread_intermediate_storage,
+                                 mutable_column_device_view* output_column)
     : left(left),
-      literals(literals),
-      data_references(data_references),
-      operators(operators),
-      operator_source_indices(operator_source_indices),
+      plan(plan),
       thread_intermediate_storage(thread_intermediate_storage),
       output_column(output_column),
       // TODO: Decide if this should be stored at all, or if not what to do.
@@ -227,7 +289,7 @@ struct two_table_evaluator {
     if (ref_type == detail::device_data_reference_type::COLUMN) {
       return table.column(data_index).element<Element>(row_index);
     } else if (ref_type == detail::device_data_reference_type::LITERAL) {
-      return literals[data_index].value<Element>();
+      return plan.literals[data_index].value<Element>();
     } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
       // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
       // Using a temporary variable ensures that the compiler knows the result is aligned
@@ -343,14 +405,17 @@ struct two_table_evaluator {
                                            cudf::size_type output_row_index)
   {
     auto operator_source_index = static_cast<cudf::size_type>(0);
-    for (cudf::size_type operator_index = 0; operator_index < operators.size(); operator_index++) {
+    for (cudf::size_type operator_index = 0; operator_index < plan.operators.size();
+         operator_index++) {
       // Execute operator
-      auto const op    = operators[operator_index];
+      auto const op    = plan.operators[operator_index];
       auto const arity = ast_operator_arity(op);
       if (arity == 1) {
         // Unary operator
-        auto const input  = data_references[operator_source_indices[operator_source_index]];
-        auto const output = data_references[operator_source_indices[operator_source_index + 1]];
+        auto const input =
+          plan.data_references[plan.operator_source_indices[operator_source_index]];
+        auto const output =
+          plan.data_references[plan.operator_source_indices[operator_source_index + 1]];
         operator_source_index += arity + 1;
         // TODO: Error checking of table_reference::RIGHT/OUTPUT.
         auto input_row_index =
@@ -359,9 +424,11 @@ struct two_table_evaluator {
           input.data_type, *this, input_row_index, input, output, output_row_index, op);
       } else if (arity == 2) {
         // Binary operator
-        auto const lhs    = data_references[operator_source_indices[operator_source_index]];
-        auto const rhs    = data_references[operator_source_indices[operator_source_index + 1]];
-        auto const output = data_references[operator_source_indices[operator_source_index + 2]];
+        auto const lhs = plan.data_references[plan.operator_source_indices[operator_source_index]];
+        auto const rhs =
+          plan.data_references[plan.operator_source_indices[operator_source_index + 1]];
+        auto const output =
+          plan.data_references[plan.operator_source_indices[operator_source_index + 2]];
         operator_source_index += arity + 1;
         type_dispatcher(lhs.data_type,
                         detail::single_dispatch_binary_operator{},
@@ -382,10 +449,7 @@ struct two_table_evaluator {
  private:
   table_device_view const& left;
   table_device_view const& right;
-  device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals;
-  device_span<const detail::device_data_reference> data_references;
-  device_span<const ast_operator> operators;
-  device_span<const cudf::size_type> operator_source_indices;
+  ast_plan const& plan;
   std::int64_t* thread_intermediate_storage;
   mutable_column_device_view* output_column;
 };
@@ -407,82 +471,6 @@ __device__ void two_table_output::resolve_output(
     evaluator.thread_intermediate_storage[device_data_reference.data_index] = tmp;
   }
 }
-
-/**
- * @brief The AST plan creates a device buffer of data needed to execute an AST.
- *
- * On construction, an AST plan creates a single "packed" host buffer of all necessary data arrays,
- * and copies that to the device with a single host-device memory copy. Because the plan tends to be
- * small, this is the most efficient approach for low latency.
- *
- */
-struct ast_plan {
-  ast_plan(linearizer const& expr_linearizer,
-           rmm::cuda_stream_view stream,
-           rmm::mr::device_memory_resource* mr)
-  {
-    std::vector<cudf::size_type> _sizes;
-    std::vector<const void*> _data_pointers;
-
-    add_to_plan(expr_linearizer.data_references(), _sizes, _data_pointers);
-    add_to_plan(expr_linearizer.literals(), _sizes, _data_pointers);
-    add_to_plan(expr_linearizer.operators(), _sizes, _data_pointers);
-    add_to_plan(expr_linearizer.operator_source_indices(), _sizes, _data_pointers);
-
-    // Create device buffer
-    auto const buffer_size = std::accumulate(_sizes.cbegin(), _sizes.cend(), 0);
-    auto buffer_offsets    = std::vector<int>(_sizes.size());
-    thrust::exclusive_scan(_sizes.cbegin(), _sizes.cend(), buffer_offsets.begin(), 0);
-
-    auto h_data_buffer = std::make_unique<char[]>(buffer_size);
-    for (unsigned int i = 0; i < _data_pointers.size(); ++i) {
-      std::memcpy(h_data_buffer.get() + buffer_offsets[i], _data_pointers[i], _sizes[i]);
-    }
-
-    _device_data_buffer = rmm::device_buffer(h_data_buffer.get(), buffer_size, stream, mr);
-
-    stream.synchronize();
-
-    // Create device pointers to components of plan
-    auto device_data_buffer_ptr = static_cast<const char*>(_device_data_buffer.data());
-    _device_data_references     = device_span<const detail::device_data_reference>(
-      reinterpret_cast<const detail::device_data_reference*>(device_data_buffer_ptr +
-                                                             buffer_offsets[0]),
-      expr_linearizer.data_references().size());
-    _device_literals = device_span<const cudf::detail::fixed_width_scalar_device_view_base>(
-      reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
-        device_data_buffer_ptr + buffer_offsets[1]),
-      expr_linearizer.literals().size());
-    _device_operators = device_span<const ast_operator>(
-      reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]),
-      expr_linearizer.operators().size());
-    _device_operator_source_indices = device_span<const cudf::size_type>(
-      reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]),
-      expr_linearizer.operator_source_indices().size());
-  }
-
-  /**
-   * @brief Helper function for adding components (operators, literals, etc) to AST plan
-   *
-   * @tparam T  The underlying type of the input `std::vector`
-   * @param  v  The `std::vector` containing components (operators, literals, etc)
-   */
-  template <typename T>
-  void add_to_plan(std::vector<T> const& v,
-                   std::vector<cudf::size_type>& _sizes,
-                   std::vector<const void*>& _data_pointers)
-  {
-    auto const data_size = sizeof(T) * v.size();
-    _sizes.push_back(data_size);
-    _data_pointers.push_back(v.data());
-  }
-
-  rmm::device_buffer _device_data_buffer;
-  device_span<const detail::device_data_reference> _device_data_references;
-  device_span<const cudf::detail::fixed_width_scalar_device_view_base> _device_literals;
-  device_span<const ast_operator> _device_operators;
-  device_span<const cudf::size_type> _device_operator_source_indices;
-};
 
 /**
  * @brief Compute a new column by evaluating an expression tree on a table.

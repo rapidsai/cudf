@@ -556,20 +556,16 @@ __global__ void nested_loop_join(table_device_view left_table,
  * @param[in] max_size The maximum size of the output
  */
 template <cudf::size_type block_size, cudf::size_type output_cache_size>
-__global__ void nested_loop_predicate_join(
-  table_device_view left_table,
-  table_device_view right_table,
-  join_kind JoinKind,
-  cudf::size_type* join_output_l,
-  cudf::size_type* join_output_r,
-  mutable_column_device_view operator_outputs,
-  cudf::size_type* current_idx,
-  device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals,
-  device_span<const ast::detail::device_data_reference> data_references,
-  device_span<const ast::ast_operator> operators,
-  device_span<const cudf::size_type> operator_source_indices,
-  const cudf::size_type max_size,
-  const cudf::size_type num_intermediates)
+__global__ void nested_loop_predicate_join(table_device_view left_table,
+                                           table_device_view right_table,
+                                           join_kind JoinKind,
+                                           cudf::size_type* join_output_l,
+                                           cudf::size_type* join_output_r,
+                                           mutable_column_device_view operator_outputs,
+                                           cudf::size_type* current_idx,
+                                           cudf::ast::detail::ast_plan plan,
+                                           const cudf::size_type max_size,
+                                           const cudf::size_type num_intermediates)
 {
   constexpr int num_warps = block_size / detail::warp_size;
   __shared__ cudf::size_type current_idx_shared[num_warps];
@@ -591,14 +587,8 @@ __global__ void nested_loop_predicate_join(
   cudf::size_type left_row_index = threadIdx.x + blockIdx.x * blockDim.x;
 
   const unsigned int activemask = __ballot_sync(0xffffffff, left_row_index < left_num_rows);
-  auto evaluator                = cudf::ast::detail::two_table_evaluator(left_table,
-                                                          literals,
-                                                          data_references,
-                                                          operators,
-                                                          operator_source_indices,
-                                                          thread_intermediate_storage,
-                                                          &operator_outputs,
-                                                          right_table);
+  auto evaluator                = cudf::ast::detail::two_table_evaluator(
+    left_table, plan, thread_intermediate_storage, &operator_outputs, right_table);
 
   if (left_row_index < left_num_rows) {
     bool found_match = false;

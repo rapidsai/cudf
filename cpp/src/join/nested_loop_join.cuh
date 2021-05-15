@@ -292,10 +292,7 @@ get_base_nested_loop_predicate_join_indices(table_view const& left,
         join_output_r,
         *mutable_output_device,
         write_index.data(),
-        plan._device_literals,
-        plan._device_data_references,
-        plan._device_operators,
-        plan._device_operator_source_indices,
+        plan,
         estimated_size,
         num_intermediates);
 

@@ -61,26 +61,18 @@ namespace detail {
  * each thread.
  */
 template <cudf::size_type max_block_size>
-__launch_bounds__(max_block_size) __global__ void compute_column_kernel(
-  table_device_view const table,
-  device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals,
-  mutable_column_device_view output_column,
-  device_span<const detail::device_data_reference> data_references,
-  device_span<const ast_operator> operators,
-  device_span<const cudf::size_type> operator_source_indices,
-  cudf::size_type num_intermediates)
+__launch_bounds__(max_block_size) __global__
+  void compute_column_kernel(table_device_view const table,
+                             ast_plan plan,
+                             mutable_column_device_view output_column,
+                             cudf::size_type num_intermediates)
 {
   extern __shared__ std::int64_t intermediate_storage[];
   auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * num_intermediates];
   auto const start_idx = static_cast<cudf::size_type>(threadIdx.x + blockIdx.x * blockDim.x);
   auto const stride    = static_cast<cudf::size_type>(blockDim.x * gridDim.x);
-  auto evaluator       = cudf::ast::detail::two_table_evaluator(table,
-                                                          literals,
-                                                          data_references,
-                                                          operators,
-                                                          operator_source_indices,
-                                                          thread_intermediate_storage,
-                                                          &output_column);
+  auto evaluator       = cudf::ast::detail::two_table_evaluator(
+    table, plan, thread_intermediate_storage, &output_column);
 
   for (cudf::size_type row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
     evaluator.evaluate_row_expression(row_index);
@@ -124,13 +116,7 @@ std::unique_ptr<column> compute_column(table_view const table,
   // Execute the kernel
   cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-      *table_device,
-      plan._device_literals,
-      *mutable_output_device,
-      plan._device_data_references,
-      plan._device_operators,
-      plan._device_operator_source_indices,
-      num_intermediates);
+      *table_device, plan, *mutable_output_device, num_intermediates);
   CHECK_CUDA(stream.value());
   return output_column;
 }
