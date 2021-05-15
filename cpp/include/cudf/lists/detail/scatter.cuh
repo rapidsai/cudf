@@ -33,10 +33,10 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <cinttypes>
-#include "thrust/iterator/constant_iterator.h"
-#include "thrust/iterator/counting_iterator.h"
 
 namespace cudf {
 namespace lists {
