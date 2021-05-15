@@ -63,7 +63,7 @@ namespace detail {
 template <cudf::size_type max_block_size>
 __launch_bounds__(max_block_size) __global__
   void compute_column_kernel(table_device_view const table,
-                             ast_plan plan,
+                             dev_ast_plan plan,
                              mutable_column_device_view output_column,
                              cudf::size_type num_intermediates)
 {
@@ -85,6 +85,7 @@ std::unique_ptr<column> compute_column(table_view const table,
                                        rmm::mr::device_memory_resource* mr)
 {
   auto const expr_linearizer = linearizer(expr, table);  // Linearize the AST
+  auto const plan            = ast_plan{expr_linearizer, stream, mr};
 
   // Create table device view
   auto table_device         = table_device_view::create(table, stream);
@@ -115,10 +116,7 @@ std::unique_ptr<column> compute_column(table_view const table,
   // Execute the kernel
   cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-      *table_device,
-      make_plan(expr_linearizer, stream, mr),
-      *mutable_output_device,
-      num_intermediates);
+      *table_device, plan.dev_plan, *mutable_output_device, num_intermediates);
   CHECK_CUDA(stream.value());
   return output_column;
 }
