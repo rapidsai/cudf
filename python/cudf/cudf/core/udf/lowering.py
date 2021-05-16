@@ -94,11 +94,8 @@ def register_arithmetic_op(op):
     to_lower_op = make_arithmetic_op(op)
     cuda_lower(op, MaskedType, MaskedType)(to_lower_op)
 
-for op in arith_ops:
-    register_arithmetic_op(op)
-
 @cuda_lower(operator.add, MaskedType, NAType)
-def masked_scalar_add_na_impl(context, builder, sig, args):
+def masked_scalar_null_op_impl(context, builder, sig, args):
     '''
     Implement `MaskedType` + `NAType`
     The answer to this is known up front so no actual addition
@@ -114,25 +111,49 @@ def masked_scalar_add_na_impl(context, builder, sig, args):
     result.valid = context.get_constant(types.boolean, 0)
     return result._getvalue()
 
-@cuda_lower(operator.add, MaskedType, types.Integer)
-def masked_scalar_add_constant_impl(context, builder, sig, input_values):
-    '''
-    Implement `MaskedType` + constant
-    '''
-    masked_type, const_type = sig.args
+def make_const_op(op):
+    def masked_scalar_const_op_impl(context, builder, sig, input_values):
+        '''
+        Implement `MaskedType` + constant
+        '''
+        masked_type, const_type = sig.args
 
-    indata = cgutils.create_struct_proxy(MaskedType(masked_type.value_type))(
-        context, builder, value=input_values[0]
-    )
-    result = cgutils.create_struct_proxy(MaskedType(masked_type.value_type))(
-        context, builder
-    )
-    result.valid = context.get_constant(types.boolean, 0)
-    with builder.if_then(indata.valid):
-        result.value = builder.add(indata.value, input_values[1])
-        result.valid = context.get_constant(types.boolean, 1)
+        indata = cgutils.create_struct_proxy(MaskedType(masked_type.value_type))(
+            context, builder, value=input_values[0]
+        )
+        result = cgutils.create_struct_proxy(MaskedType(masked_type.value_type))(
+            context, builder
+        )
+        result.valid = context.get_constant(types.boolean, 0)
+        with builder.if_then(indata.valid):
 
-    return result._getvalue()
+            result.value = context.compile_internal(
+                builder, 
+                lambda x, y: op(x, y), 
+                nb_signature(
+                    masked_type.value_type, 
+                    masked_type.value_type, 
+                    const_type
+                ),
+                (indata.value, input_values[1])
+            )
+            result.valid = context.get_constant(types.boolean, 1)
+
+        return result._getvalue()
+    return masked_scalar_const_op_impl
+
+def register_const_op(op):
+    to_lower_op = make_const_op(op)
+    cuda_lower(op, MaskedType, types.Number)(to_lower_op)
+
+
+# register all lowering at init
+for op in arith_ops:
+    register_arithmetic_op(op)
+    register_const_op(op)
+    # null op impl can be shared between all ops
+    cuda_lower(op, MaskedType, NAType)(masked_scalar_null_op_impl)
+
 
 @cuda_lower(operator.is_, MaskedType, NAType)
 def masked_scalar_is_null_impl(context, builder, sig, args):

@@ -158,24 +158,7 @@ class MaskedScalarArithOp(AbstractTemplate):
                 MaskedType(args[1].value_type),
             )
 
-for op in arith_ops:
-    # Every op shares the same typing class
-    cuda_decl_registry.register_global(op)(MaskedScalarArithOp)
-
-@cuda_decl_registry.register_global(operator.is_)
-class MaskedScalarIsNull(AbstractTemplate):
-    '''
-    Typing for `Masked is cudf.NA`
-    '''
-    def generic(self, args, kws):
-        if isinstance(args[0], MaskedType) and isinstance(args[1], NAType):
-            return nb_signature(
-                types.boolean, 
-                MaskedType(args[0].value_type), 
-                NAType())
-
-@cuda_decl_registry.register_global(operator.add)
-class MaskedScalarAddNull(AbstractTemplate):
+class MaskedScalarNullOp(AbstractTemplate):
     def generic(self, args, kws):
         '''
         Typing for `Masked` + `NA`
@@ -191,8 +174,7 @@ class MaskedScalarAddNull(AbstractTemplate):
                 NAType(),
             )
 
-@cuda_decl_registry.register_global(operator.add)
-class MaskedScalarAddConstant(AbstractTemplate):
+class MaskedScalarConstOp(AbstractTemplate):
     def generic(self, args, kws):
         '''
         Typing for `Masked` + a constant literal
@@ -211,3 +193,21 @@ class MaskedScalarAddConstant(AbstractTemplate):
                 MaskedType(args[0].value_type),
                 args[1],
             )
+
+@cuda_decl_registry.register_global(operator.is_)
+class MaskedScalarIsNull(AbstractTemplate):
+    '''
+    Typing for `Masked is cudf.NA`
+    '''
+    def generic(self, args, kws):
+        if isinstance(args[0], MaskedType) and isinstance(args[1], NAType):
+            return nb_signature(
+                types.boolean, 
+                MaskedType(args[0].value_type), 
+                NAType())
+
+for op in arith_ops:
+    # Every op shares the same typing class
+    cuda_decl_registry.register_global(op)(MaskedScalarArithOp)
+    cuda_decl_registry.register_global(op)(MaskedScalarNullOp)
+    cuda_decl_registry.register_global(op)(MaskedScalarConstOp)
