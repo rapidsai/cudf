@@ -85,6 +85,50 @@ std::unique_ptr<column> rolling_window(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @copydoc std::unique_ptr<column> rolling_window(
+ *            column_view const& input,
+ *            size_type preceding_window,
+ *            size_type following_window,
+ *            size_type min_periods,
+ *            rolling_aggregation const& agg,
+ *            rmm::mr::device_memory_resource* mr)
+ *
+ * @param order_by Table used to order the input column
+ */
+std::unique_ptr<column> rolling_window(
+  column_view const& input,
+  table_view const& order_by,
+  size_type preceding_window,
+  size_type following_window,
+  size_type min_periods,
+  rolling_aggregation const& agg,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc std::unique_ptr<column> rolling_window(
+ *            column_view const& input,
+ *            size_type preceding_window,
+ *            size_type following_window,
+ *            size_type min_periods,
+ *            rolling_aggregation const& agg,
+ *            rmm::mr::device_memory_resource* mr)
+ *
+ * @param default_outputs A column of per-row default values to be returned instead
+ *                        of nulls. Used for LEAD()/LAG(), if the row offset crosses
+ *                        the boundaries of the column.
+ * @param order_by Table used to order the input column
+ */
+std::unique_ptr<column> rolling_window(
+  column_view const& input,
+  column_view const& default_outputs,
+  table_view const& order_by,
+  size_type preceding_window,
+  size_type following_window,
+  size_type min_periods,
+  rolling_aggregation const& agg,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Abstraction for window boundary sizes
  */
 struct window_bounds {
@@ -247,6 +291,98 @@ std::unique_ptr<column> grouped_rolling_window(
  * @copydoc std::unique_ptr<column> grouped_rolling_window(
  *            table_view const& group_keys,
  *            column_view const& input,
+ *            size_type preceding_window,
+ *            size_type following_window,
+ *            size_type min_periods,
+ *            rolling_aggregation const& aggr,
+ *            rmm::mr::device_memory_resource* mr)
+ *
+ * @param default_outputs A column of per-row default values to be returned instead
+ *                        of nulls. Used for LEAD()/LAG(), if the row offset crosses
+ *                        the boundaries of the column or group.
+ */
+std::unique_ptr<column> grouped_rolling_window(
+  table_view const& group_keys,
+  column_view const& input,
+  column_view const& default_outputs,
+  window_bounds preceding_window,
+  window_bounds following_window,
+  size_type min_periods,
+  rolling_aggregation const& aggr,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc std::unique_ptr<column> grouped_rolling_window(
+ *            table_view const& group_keys,
+ *            column_view const& input,
+ *            size_type preceding_window,
+ *            size_type following_window,
+ *            size_type min_periods,
+ *            rolling_aggregation const& agg,
+ *            rmm::mr::device_memory_resource* mr)
+ *
+ * @param order_by The table used to order the input columns
+ */
+std::unique_ptr<column> grouped_rolling_window(
+  table_view const& group_keys,
+  column_view const& input,
+  table_view const& order_by,
+  size_type preceding_window,
+  size_type following_window,
+  size_type min_periods,
+  rolling_aggregation const& agg,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc std::unique_ptr<column> grouped_rolling_window(
+ *            table_view const& group_keys,
+ *            column_view const& input,
+ *            size_type preceding_window,
+ *            size_type following_window,
+ *            size_type min_periods,
+ *            rolling_aggregation const& agg,
+ *            rmm::mr::device_memory_resource* mr)
+ *
+ * @param order_by The table used to order the input columns
+ */
+std::unique_ptr<column> grouped_rolling_window(
+  table_view const& group_keys,
+  column_view const& input,
+  table_view const& order_by,
+  window_bounds preceding_window,
+  window_bounds following_window,
+  size_type min_periods,
+  rolling_aggregation const& agg,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc std::unique_ptr<column> grouped_rolling_window(
+ *            table_view const& group_keys,
+ *            column_view const& input,
+ *            column_view const& default_outputs,
+ *            size_type preceding_window,
+ *            size_type following_window,
+ *            size_type min_periods,
+ *            rolling_aggregation const& agg,
+ *            rmm::mr::device_memory_resource* mr)
+ *
+ * @param order_by The table used to order the input columns
+ */
+std::unique_ptr<column> grouped_rolling_window(
+  table_view const& group_keys,
+  column_view const& input,
+  column_view const& default_outputs,
+  table_view const& order_by,
+  size_type preceding_window,
+  size_type following_window,
+  size_type min_periods,
+  rolling_aggregation const& agg,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc std::unique_ptr<column> grouped_rolling_window(
+ *            table_view const& group_keys,
+ *            column_view const& input,
  *            column_view const& default_outputs,
  *            size_type preceding_window,
  *            size_type following_window,
@@ -258,6 +394,7 @@ std::unique_ptr<column> grouped_rolling_window(
   table_view const& group_keys,
   column_view const& input,
   column_view const& default_outputs,
+  table_view const& order_by,
   window_bounds preceding_window,
   window_bounds following_window,
   size_type min_periods,
@@ -556,6 +693,26 @@ std::unique_ptr<column> grouped_range_rolling_window(
  */
 std::unique_ptr<column> rolling_window(
   column_view const& input,
+  column_view const& preceding_window,
+  column_view const& following_window,
+  size_type min_periods,
+  rolling_aggregation const& agg,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc std::unique_ptr<column> rolling_window(
+ *            column_view const& input,
+ *            column_view preceding_window,
+ *            column_view following_window,
+ *            size_type min_periods,
+ *            rolling_aggregation const& agg,
+ *            rmm::mr::device_memory_resource* mr)
+ *
+ * @param order_by The table used to order the input columns
+ */
+std::unique_ptr<column> rolling_window(
+  column_view const& input,
+  table_view const& order_by,
   column_view const& preceding_window,
   column_view const& following_window,
   size_type min_periods,

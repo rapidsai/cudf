@@ -30,6 +30,7 @@ namespace detail {
 /**
  * @copydoc std::unique_ptr<column> rolling_window(
  *            column_view const& input,
+ *            table_view const& order_by,
  *            column_view const& preceding_window,
  *            column_view const& following_window,
  *            size_type min_periods,
@@ -38,8 +39,9 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> rolling_window(
+std::unique_ptr<column> rolling_window2(
   column_view const& input,
+  table_view const& order_by,
   column_view const& preceding_window,
   column_view const& following_window,
   size_type min_periods,

@@ -267,7 +267,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_quantile(JNIEnv *env, jcl
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_rollingWindow(
     JNIEnv *env, jclass clazz, jlong input_col, jlong default_output_col, 
     jint min_periods, jlong agg_ptr, jint preceding,
-    jint following, jlong preceding_col, jlong following_col) {
+    jint following, jlong preceding_col, jlong following_col, jlongArray order_by) {
 
   JNI_NULL_CHECK(env, input_col, "native handle is null", 0);
   JNI_NULL_CHECK(env, agg_ptr, "aggregation handle is null", 0);
@@ -279,6 +279,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_rollingWindow(
     cudf::column_view *n_preceding_col = reinterpret_cast<cudf::column_view *>(preceding_col);
     cudf::column_view *n_following_col = reinterpret_cast<cudf::column_view *>(following_col);
     cudf::rolling_aggregation * agg = dynamic_cast<cudf::rolling_aggregation *>(reinterpret_cast<cudf::aggregation *>(agg_ptr));
+    cudf::jni::native_jpointerArray<cudf::column_view> n_order_by(env, order_by);
+    std::vector<cudf::column_view> order_by_views;
+    std::transform(n_order_by.data(), n_order_by.data() + n_order_by.size(),
+                   std::back_inserter(order_by_views),
+                   [](auto const &p_column) { return *p_column; });
+    cudf::table_view *order_by_table = new cudf::table_view(order_by_views);
     JNI_ARG_CHECK(env, agg != nullptr, "aggregation is not an instance of rolling_aggregation", 0);
 
     std::unique_ptr<cudf::column> ret;
@@ -288,16 +294,16 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_rollingWindow(
         //ret = cudf::rolling_window(*n_input_col, *n_default_output_col, 
         //        *n_preceding_col, *n_following_col, min_periods, agg);
       } else {
-        ret = cudf::rolling_window(*n_input_col, *n_default_output_col,
+        ret = cudf::rolling_window(*n_input_col, *n_default_output_col, *order_by_table,
                 preceding, following, min_periods, *agg);
       }
 
     } else {
       if (n_preceding_col != nullptr && n_following_col != nullptr) {
-        ret = cudf::rolling_window(*n_input_col, *n_preceding_col, *n_following_col,
+        ret = cudf::rolling_window(*n_input_col, *order_by_table, *n_preceding_col, *n_following_col,
                 min_periods, *agg);
       } else {
-        ret = cudf::rolling_window(*n_input_col, preceding, following, min_periods,
+        ret = cudf::rolling_window(*n_input_col, *order_by_table, preceding, following, min_periods,
                 *agg);
       }
     }

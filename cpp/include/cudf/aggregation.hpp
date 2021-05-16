@@ -76,6 +76,8 @@ class aggregation {
     NUNIQUE,         ///< count number of unique elements
     NTH_ELEMENT,     ///< get the nth element
     ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
+    RANK,            ///< get rank of current index (relative to rolling window)
+    DENSE_RANK,      ///< get dense rank of current index (relative to rolling window)
     COLLECT_LIST,    ///< collect values into a list
     COLLECT_SET,     ///< collect values into a list without duplicate entries
     LEAD,            ///< window function, accesses row at specified offset following current row
@@ -234,6 +236,14 @@ std::unique_ptr<Base> make_nth_element_aggregation(
 /// Factory to create a ROW_NUMBER aggregation
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_row_number_aggregation();
+
+/// Factory to create a RANK aggregation
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_rank_aggregation();
+
+/// Factory to create a DENSE_RANK aggregation
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_dense_rank_aggregation();
 
 /**
  * @brief Factory to create a COLLECT_LIST aggregation

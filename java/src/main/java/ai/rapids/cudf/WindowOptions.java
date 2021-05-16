@@ -35,6 +35,7 @@ public class WindowOptions {
   private final FrameType frameType;
   private final boolean isUnboundedPreceding;
   private final boolean isUnboundedFollowing;
+  private final long[] orderBy;
 
 
   private WindowOptions(Builder builder) {
@@ -48,6 +49,7 @@ public class WindowOptions {
     this.frameType = timestampColumnIndex == -1? FrameType.ROWS : FrameType.RANGE; 
     this.isUnboundedPreceding = builder.isUnboundedPreceding;
     this.isUnboundedFollowing = builder.isUnboundedFollowing;
+    this.orderBy = builder.orderBy;
   }
 
   @Override
@@ -63,7 +65,8 @@ public class WindowOptions {
               this.timestampOrderAscending == o.timestampOrderAscending &&
               this.frameType == o.frameType &&
               this.isUnboundedPreceding == o.isUnboundedPreceding &&
-              this.isUnboundedFollowing == o.isUnboundedFollowing;
+              this.isUnboundedFollowing == o.isUnboundedFollowing &&
+              orderBy.equals(o.orderBy);
       if (precedingCol != null) {
         ret = ret && precedingCol.equals(o.precedingCol);
       }
@@ -117,6 +120,8 @@ public class WindowOptions {
 
   boolean isUnboundedFollowing() { return this.isUnboundedFollowing; }
 
+  long[] getOrderByColArray() { return orderBy; }
+
   FrameType getFrameType() { return frameType; }
 
   public static class Builder {
@@ -130,6 +135,7 @@ public class WindowOptions {
     private boolean timestampOrderAscending = true;
     private boolean isUnboundedPreceding = false;
     private boolean isUnboundedFollowing = false;
+    private long[] orderBy = null;
 
     /**
      * Set the minimum number of observation required to evaluate an element.  If there are not
@@ -190,6 +196,18 @@ public class WindowOptions {
 
     public Builder following(int following) {
       this.following = following;
+      return this;
+    }
+
+    public Builder orderBy(Table orderByTable) {
+      return orderBy(orderByTable.getColumns());
+    }
+
+    public Builder orderBy(ColumnView[] orderBy) {
+      this.orderBy = new long[orderBy.length];
+      for (int i = 0; i < orderBy.length; i++) {
+        this.orderBy[i] = orderBy[i].getNativeView();
+      }
       return this;
     }
 
