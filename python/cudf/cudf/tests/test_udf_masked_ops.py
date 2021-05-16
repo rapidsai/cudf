@@ -54,7 +54,7 @@ def test_arith_masked_vs_masked(op):
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 @pytest.mark.parametrize('op', arith_ops)
-@pytest.mark.parametrize('constant', [1])
+@pytest.mark.parametrize('constant', [1, 1.5])
 def test_arith_masked_vs_constant(op, constant):
     def func_pdf(x):
         return op(x, constant)

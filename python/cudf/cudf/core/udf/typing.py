@@ -181,7 +181,7 @@ class MaskedScalarConstOp(AbstractTemplate):
         handles situations like `x + 1`
         '''
         if isinstance(args[0], MaskedType) and isinstance(
-            args[1], types.Integer
+            args[1], types.Number
         ):
             # In the case of op(Masked, constant), we resolve the type between
             # the Masked value_type and the constant's type directly
