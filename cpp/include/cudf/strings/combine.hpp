@@ -184,28 +184,27 @@ std::unique_ptr<column> concatenate(
  * s = [ {'aa', 'bb', 'cc'}, null, {'', 'dd'}, {'ee', null}, {'ff', 'gg'} ]
  * sep  = ['::', '%%',  '!',  '*',  null]
  *
- * r1 = concatenate(s, sep)
+ * r1 = strings::concatenate_list_elements(s, sep)
  * r1 is ['aa::bb::cc', null, '!dd', null, null]
  *
- * r2 = concatenate(s, sep, ':', '_')
+ * r2 = strings::concatenate_list_elements(s, sep, ':', '_')
  * r2 is ['aa::bb::cc', null,  '!dd', 'ee*_', 'ff:gg']
  * @endcode
  *
  * @throw cudf::logic_error if input column is not lists of strings column.
  * @throw cudf::logic_error if the number of rows from `separators` and `lists_strings_column` do
- * not match
+ *        not match
  *
- * @param lists_strings_column   Column containing lists of strings to concatenate
- * @param separators             Strings column that provides separators for concatenation
- * @param separator_narep        String that should be used to replace null separator, default is an
- * invalid-scalar denoting that rows containing null separator will result in null string in the
- * corresponding output rows
- * @param string_narep           String that should be used to replace null strings in any
- * non-null list row, default is an invalid-scalar denoting that list rows containing null strings
- * will result in null string in the corresponding output rows
- * @param mr                     Device memory resource used to allocate the returned column's
- * device memory
- * @return                       New strings column with concatenated results
+ * @param lists_strings_column Column containing lists of strings to concatenate.
+ * @param separators Strings column that provides separators for concatenation.
+ * @param separator_narep String that should be used to replace null separator, default is an
+ *        invalid-scalar denoting that rows containing null separator will result in null string in
+ *        the corresponding output rows.
+ * @param string_narep String that should be used to replace null strings in any non-null list row,
+ *        default is an invalid-scalar denoting that list rows containing null strings will result
+ *        in null string in the corresponding output rows.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New strings column with concatenated results.
  */
 std::unique_ptr<column> concatenate_list_elements(
   const lists_column_view& lists_strings_column,
@@ -229,25 +228,24 @@ std::unique_ptr<column> concatenate_list_elements(
  * Example:
  * s = [ {'aa', 'bb', 'cc'}, null, {'', 'dd'}, {'ee', null}, {'ff'} ]
  *
- * r1 = concatenate(s)
+ * r1 = strings::concatenate_list_elements(s)
  * r1 is ['aabbcc', null, 'dd', null, 'ff']
  *
- * r2 = concatenate(s, ':', '_')
+ * r2 = strings::concatenate_list_elements(s, ':', '_')
  * r2 is ['aa:bb:cc', null,  ':dd', 'ee:_', 'ff']
  * @endcode
  *
  * @throw cudf::logic_error if input column is not lists of strings column.
  * @throw cudf::logic_error if separator is not valid.
  *
- * @param lists_strings_column   Column containing lists of strings to concatenate
- * @param separator              String that should inserted between strings of each list row,
- * default is an empty string
- * @param narep                  String that should be used to replace null strings in any non-null
- * list row, default is an invalid-scalar denoting that list rows containing null strings will
- * result in null string in the corresponding output rows
- * @param mr                     Device memory resource used to allocate the returned column's
- * device memory
- * @return                       New strings column with concatenated results
+ * @param lists_strings_column Column containing lists of strings to concatenate.
+ * @param separator String that should inserted between strings of each list row, default is an
+ *        empty string.
+ * @param narep String that should be used to replace null strings in any non-null list row, default
+ *        is an invalid-scalar denoting that list rows containing null strings will result in null
+ *        string in the corresponding output rows.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New strings column with concatenated results.
  */
 std::unique_ptr<column> concatenate_list_elements(
   const lists_column_view& lists_strings_column,
