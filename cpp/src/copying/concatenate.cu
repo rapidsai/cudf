@@ -57,9 +57,6 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     column_device_view::create(std::declval<column_view>(), std::declval<rmm::cuda_stream_view>()));
   auto device_view_owners = std::vector<CDViewPtr>(views.size());
   std::transform(views.begin(), views.end(), device_view_owners.begin(), [stream](auto const& col) {
-    // TODO creating this device view can invoke null count computation
-    // even though it isn't used. See this issue:
-    // https://github.com/rapidsai/cudf/issues/4368
     return column_device_view::create(col, stream);
   });
 
@@ -70,10 +67,8 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
                  device_view_owners.cend(),
                  std::back_inserter(device_views),
                  [](auto const& col) { return *col; });
-  // TODO each of these device vector copies invoke stream synchronization
-  // which appears to add unnecessary overhead. See this issue:
-  // https://github.com/rapidsai/rmm/issues/120
-  auto d_views = make_device_uvector_async(device_views);
+
+  auto d_views = make_device_uvector_async(device_views, stream);
 
   // Compute the partition offsets
   auto offsets = thrust::host_vector<size_t>(views.size() + 1);
@@ -84,7 +79,7 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
     std::next(offsets.begin()),
     [](auto const& col) { return col.size(); },
     thrust::plus<size_t>{});
-  auto d_offsets         = make_device_uvector_async(offsets);
+  auto d_offsets         = make_device_uvector_async(offsets, stream);
   auto const output_size = offsets.back();
 
   return std::make_tuple(

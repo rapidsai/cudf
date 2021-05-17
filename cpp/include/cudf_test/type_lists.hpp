@@ -25,6 +25,8 @@
 #include <cudf/wrappers/timestamps.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 
+#include <thrust/host_vector.h>
+
 #include <array>
 #include <tuple>
 
@@ -79,10 +81,10 @@ constexpr auto types_to_ids()
 template <typename TypeParam, typename T>
 typename std::enable_if<cudf::is_fixed_width<TypeParam>() &&
                           !cudf::is_timestamp_t<TypeParam>::value,
-                        std::vector<TypeParam>>::type
+                        thrust::host_vector<TypeParam>>::type
 make_type_param_vector(std::initializer_list<T> const& init_list)
 {
-  std::vector<TypeParam> vec(init_list.size());
+  thrust::host_vector<TypeParam> vec(init_list.size());
   std::transform(std::cbegin(init_list), std::cend(init_list), std::begin(vec), [](auto const& e) {
     if (std::is_unsigned<TypeParam>::value)
       return static_cast<TypeParam>(std::abs(e));
@@ -93,10 +95,11 @@ make_type_param_vector(std::initializer_list<T> const& init_list)
 }
 
 template <typename TypeParam, typename T>
-typename std::enable_if<cudf::is_timestamp_t<TypeParam>::value, std::vector<TypeParam>>::type
+typename std::enable_if<cudf::is_timestamp_t<TypeParam>::value,
+                        thrust::host_vector<TypeParam>>::type
 make_type_param_vector(std::initializer_list<T> const& init_list)
 {
-  std::vector<TypeParam> vec(init_list.size());
+  thrust::host_vector<TypeParam> vec(init_list.size());
   std::transform(std::cbegin(init_list), std::cend(init_list), std::begin(vec), [](auto const& e) {
     return TypeParam{typename TypeParam::duration{e}};
   });

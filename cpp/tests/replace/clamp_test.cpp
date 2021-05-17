@@ -135,8 +135,8 @@ TEST_F(ClampEmptyCaseTest, EmptyInput)
 
 template <class T>
 struct ClampTestNumeric : public cudf::test::BaseFixture {
-  std::unique_ptr<cudf::column> run_clamp(std::vector<T> input,
-                                          std::vector<cudf::size_type> input_validity,
+  std::unique_ptr<cudf::column> run_clamp(cudf::host_span<T const> input,
+                                          cudf::host_span<cudf::size_type const> input_validity,
                                           T lo,
                                           bool lo_validity,
                                           T hi,

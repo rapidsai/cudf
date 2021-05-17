@@ -7,6 +7,18 @@ from numba.core.typing import signature as nb_signature
 
 import operator
 
+arith_ops = [
+    operator.add,
+    operator.sub,
+    operator.mul,
+    operator.truediv,
+    operator.floordiv,
+    operator.mod,
+    operator.pow
+
+]
+
+
 class MaskedType(types.Type):
     '''
     A numba type consiting of a value of some primitive type 
@@ -126,8 +138,7 @@ register_model(NAType)(models.OpaqueModel)
 # The following code accomplishes (1) - it is really just a way of specifying
 # that the `+` operation has a CUDA overload that accepts two `Masked` that
 # are parameterized with `value_type` and what flavor of `Masked` to return.
-@cuda_decl_registry.register_global(operator.add)
-class MaskedScalarAdd(AbstractTemplate):
+class MaskedScalarArithOp(AbstractTemplate):
     def generic(self, args, kws):
         '''
         Typing for `Masked` + `Masked`
@@ -147,21 +158,7 @@ class MaskedScalarAdd(AbstractTemplate):
                 MaskedType(args[1].value_type),
             )
 
-
-@cuda_decl_registry.register_global(operator.is_)
-class MaskedScalarIsNull(AbstractTemplate):
-    '''
-    Typing for `Masked is cudf.NA`
-    '''
-    def generic(self, args, kws):
-        if isinstance(args[0], MaskedType) and isinstance(args[1], NAType):
-            return nb_signature(
-                types.boolean, 
-                MaskedType(args[0].value_type), 
-                NAType())
-
-@cuda_decl_registry.register_global(operator.add)
-class MaskedScalarAddNull(AbstractTemplate):
+class MaskedScalarNullOp(AbstractTemplate):
     def generic(self, args, kws):
         '''
         Typing for `Masked` + `NA`
@@ -177,15 +174,14 @@ class MaskedScalarAddNull(AbstractTemplate):
                 NAType(),
             )
 
-@cuda_decl_registry.register_global(operator.add)
-class MaskedScalarAddConstant(AbstractTemplate):
+class MaskedScalarConstOp(AbstractTemplate):
     def generic(self, args, kws):
         '''
         Typing for `Masked` + a constant literal
         handles situations like `x + 1`
         '''
         if isinstance(args[0], MaskedType) and isinstance(
-            args[1], types.Integer
+            args[1], types.Number
         ):
             # In the case of op(Masked, constant), we resolve the type between
             # the Masked value_type and the constant's type directly
@@ -197,3 +193,21 @@ class MaskedScalarAddConstant(AbstractTemplate):
                 MaskedType(args[0].value_type),
                 args[1],
             )
+
+@cuda_decl_registry.register_global(operator.is_)
+class MaskedScalarIsNull(AbstractTemplate):
+    '''
+    Typing for `Masked is cudf.NA`
+    '''
+    def generic(self, args, kws):
+        if isinstance(args[0], MaskedType) and isinstance(args[1], NAType):
+            return nb_signature(
+                types.boolean, 
+                MaskedType(args[0].value_type), 
+                NAType())
+
+for op in arith_ops:
+    # Every op shares the same typing class
+    cuda_decl_registry.register_global(op)(MaskedScalarArithOp)
+    cuda_decl_registry.register_global(op)(MaskedScalarNullOp)
+    cuda_decl_registry.register_global(op)(MaskedScalarConstOp)

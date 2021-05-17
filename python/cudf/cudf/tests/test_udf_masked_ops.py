@@ -4,92 +4,87 @@ from cudf.tests.utils import assert_eq, NUMERIC_TYPES
 import pandas as pd
 import itertools
 import pytest
+import operator
 
-def test_apply_basic():
+arith_ops = [
+    operator.add,
+    operator.sub,
+    operator.mul,
+    operator.truediv,
+    operator.floordiv,
+    operator.mod,
+    operator.pow
+
+]
+
+def run_masked_udf_test(func_pdf, func_gdf, data, **kwargs):
+    gdf = data
+    pdf = data.to_pandas(nullable=True)
+
+    expect = pdf.apply(
+        lambda row: func_pdf(
+            *[row[i] for i in data.columns]
+        ),
+        axis=1
+    )
+    obtain = gdf.apply(
+        lambda row: func_gdf(
+            *[row[i] for i in data.columns]
+            ),
+            axis=1
+    )
+    assert_eq(expect, obtain, **kwargs)
+
+@pytest.mark.parametrize('op', arith_ops)
+def test_arith_masked_vs_masked(op):
+    # This test should test all the typing
+    # and lowering for arithmetic ops between
+    # two columns 
     def func_pdf(x, y):
-        return x + y
+        return op(x, y)
 
     @nulludf
     def func_gdf(x, y):
-        return x + y
-
-
-    gdf = cudf.DataFrame({
-        'a':[1,2,3],
-        'b':[4,5,6]
-    })
-
-    pdf = gdf.to_pandas()
-
-    expect = pdf.apply(lambda row: func_pdf(row['a'], row['b']), axis=1)
-    obtain = gdf.apply(lambda row: func_gdf(row['a'], row['b']), axis=1)
-
-    assert_eq(expect, obtain)
-
-def test_apply_null():
-    def func_pdf(x, y):
-        return x + y
-
-    @nulludf
-    def func_gdf(x, y):
-        return x + y
-
-
-    gdf = cudf.DataFrame({
-        'a':[1,None,3, None],
-        'b':[4,5,None, None]
-    })
-
-    pdf = gdf.to_pandas()
-
-    expect = pdf.apply(lambda row: func_pdf(row['a'], row['b']), axis=1)
-    obtain = gdf.apply(lambda row: func_gdf(row['a'], row['b']), axis=1)
-    assert_eq(expect, obtain)
-
-
-def test_apply_add_null():
-    def func_pdf(x, y):
-        return x + y + pd.NA
-
-    @nulludf
-    def func_gdf(x, y):
-        return x + y + cudf.NA
-
+        return op(x, y)
 
     gdf = cudf.DataFrame({
         'a':[1,None,3, None],
         'b':[4,5,None, None]
     })
+    run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
-    pdf = gdf.to_pandas()
-
-    expect = pdf.apply(lambda row: func_pdf(row['a'], row['b']), axis=1)
-    obtain = gdf.apply(lambda row: func_gdf(row['a'], row['b']), axis=1)
-    # TODO: dtype mismatch here
-    assert_eq(expect, obtain, check_dtype=False)
-
-
-def test_apply_add_constant():
-    def func_pdf(x, y):
-        return x + y + 1
-
+@pytest.mark.parametrize('op', arith_ops)
+@pytest.mark.parametrize('constant', [1, 1.5])
+def test_arith_masked_vs_constant(op, constant):
+    def func_pdf(x):
+        return op(x, constant)
+    
     @nulludf
-    def func_gdf(x, y):
-        return x + y + 1
+    def func_gdf(x):
+        return op(x, constant)
 
-
+    # Just a single column -> result will be all NA
     gdf = cudf.DataFrame({
-        'a':[1,None,3, None],
-        'b':[4,5,None, None]
+        'data': [1,2,3]
     })
 
-    pdf = gdf.to_pandas()
+    run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
-    expect = pdf.apply(lambda row: func_pdf(row['a'], row['b']), axis=1)
-    obtain = gdf.apply(lambda row: func_gdf(row['a'], row['b']), axis=1)
-    assert_eq(expect, obtain)
+@pytest.mark.parametrize('op', arith_ops)
+def test_arith_masked_vs_null(op):
+    def func_pdf(x):
+        return op(x, pd.NA)
 
-def test_apply_NA_conditional():
+    @nulludf
+    def func_gdf(x):
+        return op(x, cudf.NA)
+
+    gdf = cudf.DataFrame({
+        'data': [1, None, 3]
+    })
+    run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
+
+def test_masked_is_null_conditional():
     def func_pdf(x, y):
         if x is pd.NA:
             return y
@@ -108,16 +103,7 @@ def test_apply_NA_conditional():
         'a':[1,None,3, None],
         'b':[4,5,None, None]
     })
-
-    pdf = gdf.to_pandas(nullable=True)
-
-    expect = pdf.apply(lambda row: func_pdf(row['a'], row['b']), axis=1)
-    obtain = gdf.apply(lambda row: func_gdf(row['a'], row['b']), axis=1)
-
-    # using a UDF on a nullable dtype in pandas casts to object
-    expect = expect.astype(pd.Int64Dtype())
-    obtain = obtain.to_pandas(nullable=True)
-    assert_eq(expect, obtain)
+    run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 
 @pytest.mark.parametrize('dtype_a', list(NUMERIC_TYPES))
