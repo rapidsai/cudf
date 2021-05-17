@@ -122,105 +122,6 @@ struct ast_plan {
   rmm::device_buffer _device_data_buffer;
 };
 
-// Forward declaration
-struct two_table_evaluator;
-
-struct two_table_output {
- public:
-  __device__ two_table_output(two_table_evaluator const& evaluator) : evaluator(evaluator) {}
-
-  /**
-   * @brief Resolves an output data reference and assigns result value.
-   *
-   * Only output columns (COLUMN) and intermediates (INTERMEDIATE) are supported as output reference
-   * types. Intermediates must be of fixed width less than or equal to sizeof(std::int64_t). This
-   * requirement on intermediates is enforced by the linearizer.
-   *
-   * @tparam Element Type of result element.
-   * @param device_data_reference Data reference to resolve.
-   * @param two_table_index Row index of data column.
-   * @param result Value to assign to output.
-   */
-  template <typename Element, CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
-  __device__ void resolve_output(detail::device_data_reference device_data_reference,
-                                 cudf::size_type row_index,
-                                 Element result) const;
-  // Definition below after two_table_evaluator is a complete type
-
-  template <typename Element, CUDF_ENABLE_IF(not is_rep_layout_compatible<Element>())>
-  __device__ void resolve_output(detail::device_data_reference device_data_reference,
-                                 cudf::size_type row_index,
-                                 Element result) const
-  {
-    cudf_assert(false && "Invalid type in resolve_output.");
-  }
-
- private:
-  two_table_evaluator const& evaluator;
-};
-
-template <typename Input>
-struct unary_two_table_output : public two_table_output {
-  __device__ unary_two_table_output(two_table_evaluator const& evaluator)
-    : two_table_output(evaluator)
-  {
-  }
-
-  template <
-    ast_operator op,
-    std::enable_if_t<detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
-  __device__ void operator()(cudf::size_type output_row_index,
-                             Input input,
-                             detail::device_data_reference output) const
-  {
-    using OperatorFunctor = detail::operator_functor<op>;
-    using Out             = cuda::std::invoke_result_t<OperatorFunctor, Input>;
-    resolve_output<Out>(output, output_row_index, OperatorFunctor{}(input));
-  }
-
-  template <
-    ast_operator op,
-    std::enable_if_t<!detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
-  __device__ void operator()(cudf::size_type output_row_index,
-                             Input input,
-                             detail::device_data_reference output) const
-  {
-    cudf_assert(false && "Invalid unary dispatch operator for the provided input.");
-  }
-};
-
-template <typename LHS, typename RHS>
-struct binary_two_table_output : public two_table_output {
-  __device__ binary_two_table_output(two_table_evaluator const& evaluator)
-    : two_table_output(evaluator)
-  {
-  }
-
-  template <
-    ast_operator op,
-    std::enable_if_t<detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* = nullptr>
-  __device__ void operator()(cudf::size_type output_row_index,
-                             LHS lhs,
-                             RHS rhs,
-                             detail::device_data_reference output) const
-  {
-    using OperatorFunctor = detail::operator_functor<op>;
-    using Out             = cuda::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
-    resolve_output<Out>(output, output_row_index, OperatorFunctor{}(lhs, rhs));
-  }
-
-  template <ast_operator op,
-            std::enable_if_t<!detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* =
-              nullptr>
-  __device__ void operator()(cudf::size_type output_row_index,
-                             LHS lhs,
-                             RHS rhs,
-                             detail::device_data_reference output) const
-  {
-    cudf_assert(false && "Invalid binary dispatch operator for the provided input.");
-  }
-};
-
 /**
  * @brief An expression evaluator owned by a single thread operating on rows of two table.
  *
@@ -228,12 +129,6 @@ struct binary_two_table_output : public two_table_output {
  * separate tables, and knows the rows of each one.
  */
 struct two_table_evaluator {
-  friend struct two_table_output;
-  template <typename Input>
-  friend struct unary_two_table_output;
-  template <typename LHS, typename RHS>
-  friend struct binary_two_table_output;
-
  public:
   /**
    * @brief Construct a row evaluator.
@@ -453,30 +348,119 @@ struct two_table_evaluator {
   }
 
  private:
+  struct two_table_output {
+   public:
+    __device__ two_table_output(two_table_evaluator const& evaluator) : evaluator(evaluator) {}
+
+    /**
+     * @brief Resolves an output data reference and assigns result value.
+     *
+     * Only output columns (COLUMN) and intermediates (INTERMEDIATE) are supported as output
+     * reference types. Intermediates must be of fixed width less than or equal to
+     * sizeof(std::int64_t). This requirement on intermediates is enforced by the linearizer.
+     *
+     * @tparam Element Type of result element.
+     * @param device_data_reference Data reference to resolve.
+     * @param two_table_index Row index of data column.
+     * @param result Value to assign to output.
+     */
+    template <typename Element, CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
+    __device__ void resolve_output(detail::device_data_reference device_data_reference,
+                                   cudf::size_type row_index,
+                                   Element result) const
+    {
+      auto const ref_type = device_data_reference.reference_type;
+      if (ref_type == detail::device_data_reference_type::COLUMN) {
+        evaluator.output_column->element<Element>(row_index) = result;
+      } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
+        // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing.
+        // Using a temporary variable ensures that the compiler knows the result is aligned.
+        std::int64_t tmp;
+        memcpy(&tmp, &result, sizeof(Element));
+        evaluator.thread_intermediate_storage[device_data_reference.data_index] = tmp;
+      }
+    }
+
+    template <typename Element, CUDF_ENABLE_IF(not is_rep_layout_compatible<Element>())>
+    __device__ void resolve_output(detail::device_data_reference device_data_reference,
+                                   cudf::size_type row_index,
+                                   Element result) const
+    {
+      cudf_assert(false && "Invalid type in resolve_output.");
+    }
+
+   private:
+    two_table_evaluator const& evaluator;
+  };
+
+  template <typename Input>
+  struct unary_two_table_output : public two_table_output {
+    __device__ unary_two_table_output(two_table_evaluator const& evaluator)
+      : two_table_output(evaluator)
+    {
+    }
+
+    template <
+      ast_operator op,
+      std::enable_if_t<detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
+    __device__ void operator()(cudf::size_type output_row_index,
+                               Input input,
+                               detail::device_data_reference output) const
+    {
+      using OperatorFunctor = detail::operator_functor<op>;
+      using Out             = cuda::std::invoke_result_t<OperatorFunctor, Input>;
+      resolve_output<Out>(output, output_row_index, OperatorFunctor{}(input));
+    }
+
+    template <
+      ast_operator op,
+      std::enable_if_t<!detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
+    __device__ void operator()(cudf::size_type output_row_index,
+                               Input input,
+                               detail::device_data_reference output) const
+    {
+      cudf_assert(false && "Invalid unary dispatch operator for the provided input.");
+    }
+  };
+
+  template <typename LHS, typename RHS>
+  struct binary_two_table_output : public two_table_output {
+    __device__ binary_two_table_output(two_table_evaluator const& evaluator)
+      : two_table_output(evaluator)
+    {
+    }
+
+    template <ast_operator op,
+              std::enable_if_t<
+                detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* = nullptr>
+    __device__ void operator()(cudf::size_type output_row_index,
+                               LHS lhs,
+                               RHS rhs,
+                               detail::device_data_reference output) const
+    {
+      using OperatorFunctor = detail::operator_functor<op>;
+      using Out             = cuda::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
+      resolve_output<Out>(output, output_row_index, OperatorFunctor{}(lhs, rhs));
+    }
+
+    template <ast_operator op,
+              std::enable_if_t<
+                !detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* = nullptr>
+    __device__ void operator()(cudf::size_type output_row_index,
+                               LHS lhs,
+                               RHS rhs,
+                               detail::device_data_reference output) const
+    {
+      cudf_assert(false && "Invalid binary dispatch operator for the provided input.");
+    }
+  };
+
   table_device_view const& left;
   table_device_view const& right;
   dev_ast_plan const& plan;
   std::int64_t* thread_intermediate_storage;
   mutable_column_device_view* output_column;
 };
-
-template <typename Element, std::enable_if_t<is_rep_layout_compatible<Element>()>*>
-__device__ void two_table_output::resolve_output(
-  detail::device_data_reference device_data_reference,
-  cudf::size_type row_index,
-  Element result) const
-{
-  auto const ref_type = device_data_reference.reference_type;
-  if (ref_type == detail::device_data_reference_type::COLUMN) {
-    evaluator.output_column->element<Element>(row_index) = result;
-  } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
-    // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing.
-    // Using a temporary variable ensures that the compiler knows the result is aligned.
-    std::int64_t tmp;
-    memcpy(&tmp, &result, sizeof(Element));
-    evaluator.thread_intermediate_storage[device_data_reference.data_index] = tmp;
-  }
-}
 
 /**
  * @brief Compute a new column by evaluating an expression tree on a table.
