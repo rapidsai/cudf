@@ -298,13 +298,7 @@ TYPED_TEST(BinaryOperationCompiledTest_Mod, Vector_Vector)
 // n n ^ n
 // t
 // d
-// using Pow_types =
-//   cudf::test::Types<cudf::test::Types<int16_t, u_int64_t, u_int64_t>,
-//                     cudf::test::Types<double, int8_t, int64_t>,
-//                     cudf::test::Types<bool, float, u_int32_t>,
-//                     cudf::test::Types<int, int, int>,
-//                     cudf::test::Types<u_int32_t, double, double>>;
-//  Types in binop-integration-test.cpp
+
 using Pow_types = cudf::test::Types<cudf::test::Types<double, int64_t, int64_t>,
                                     cudf::test::Types<float, float, float>,
                                     cudf::test::Types<int, int32_t, float>,
@@ -327,14 +321,13 @@ TYPED_TEST(BinaryOperationCompiledTest_Pow, Pow_Vector_Vector)
 
   using POW = cudf::library::operation::Pow<TypeOut, TypeLhs, TypeRhs>;
 
-  auto lhs = BinaryOperationTest::make_random_wrapped_column<TypeLhs>(col_size);
-  auto rhs = BinaryOperationTest::make_random_wrapped_column<TypeRhs>(col_size);
+  auto lhs = BinaryOperationTest::make_random_wrapped_column<TypeLhs>(100);
+  auto rhs = BinaryOperationTest::make_random_wrapped_column<TypeRhs>(100);
 
   auto out = cudf::binary_operation_compiled(
     lhs, rhs, cudf::binary_operator::POW, data_type(type_to_id<TypeOut>()));
-  // print(lhs); print(rhs); print(*out);
 
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, POW());
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, POW(), NearEqualComparator<TypeOut>{2});
 }
 
 // LOG_BASE
@@ -350,12 +343,17 @@ TYPED_TEST(BinaryOperationCompiledTest_Pow, LogBase_Vector_Vector)
 
   using LOG_BASE = cudf::library::operation::LogBase<TypeOut, TypeLhs, TypeRhs>;
 
-  auto lhs = BinaryOperationTest::make_random_wrapped_column<TypeLhs>(col_size);
-  auto rhs = BinaryOperationTest::make_random_wrapped_column<TypeRhs>(col_size);
+  // Make sure there are no zeros
+  auto elements = cudf::detail::make_counting_transform_iterator(
+    1, [](auto i) { return sizeof(TypeLhs) > 4 ? std::pow(2, i) : i + 30; });
+  fixed_width_column_wrapper<TypeLhs> lhs(elements, elements + 50);
+
+  // Find log to the base 7
+  auto rhs_elements = cudf::detail::make_counting_transform_iterator(0, [](auto) { return 7; });
+  fixed_width_column_wrapper<TypeRhs> rhs(rhs_elements, rhs_elements + 50);
 
   auto out = cudf::binary_operation_compiled(
     lhs, rhs, cudf::binary_operator::LOG_BASE, data_type(type_to_id<TypeOut>()));
-  // print(lhs); print(rhs); print(*out);
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LOG_BASE());
 }
@@ -378,9 +376,8 @@ TYPED_TEST(BinaryOperationCompiledTest_Pow, ATan2_Vector_Vector)
 
   auto out = cudf::binary_operation_compiled(
     lhs, rhs, cudf::binary_operator::ATAN2, data_type(type_to_id<TypeOut>()));
-  // print(lhs); print(rhs); print(*out);
 
-  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ATAN2());
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ATAN2(), NearEqualComparator<TypeOut>{2});
 }
 
 }  // namespace binop
