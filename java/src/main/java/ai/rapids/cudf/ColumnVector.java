@@ -488,7 +488,7 @@ public final class ColumnVector extends ColumnView {
    * Concatenate columns of strings together, combining a corresponding row from each column
    * into a single string row of a new column with no separator string inserted between each
    * combined string and maintaining null values in combined rows.
-   * @param columns array of columns containing strings.
+   * @param columns array of columns containing strings, must be non-empty
    * @return A new java column vector containing the concatenated strings.
    */
   public static ColumnVector stringConcatenate(ColumnView[] columns) {
@@ -505,7 +505,7 @@ public final class ColumnVector extends ColumnView {
    * @param narep string scalar indicating null behavior. If set to null and any string in the row
    *              is null the resulting string will be null. If not null, null values in any column
    *              will be replaced by the specified string.
-   * @param columns array of columns containing strings, must be more than 2 columns
+   * @param columns array of columns containing strings, must be non-empty
    * @return A new java column vector containing the concatenated strings.
    */
   public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnView[] columns) {
@@ -530,7 +530,7 @@ public final class ColumnVector extends ColumnView {
    * from each column into a single list row of a new column.
    * NOTICE: Any concatenation involving a null list element will result in a null list.
    *
-   * @param columns array of columns containing lists, must be more than 2 columns
+   * @param columns array of columns containing lists, must be non-empty
    * @return A new java column vector containing the concatenated lists.
    */
   public static ColumnVector listConcatenateByRow(ColumnView... columns) {
@@ -544,7 +544,7 @@ public final class ColumnVector extends ColumnView {
    * @param ignoreNull whether to ignore null list element of input columns: If true, null list
    *                   will be ignored from concatenation; Otherwise, any concatenation involving
    *                   a null list element will result in a null list
-   * @param columns    array of columns containing lists, must be more than 2 columns
+   * @param columns    array of columns containing lists, must be non-empty
    * @return A new java column vector containing the concatenated lists.
    */
   public static ColumnVector listConcatenateByRow(boolean ignoreNull, ColumnView... columns) {
