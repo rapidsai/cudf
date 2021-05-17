@@ -75,7 +75,7 @@ __launch_bounds__(max_block_size) __global__
     table, plan, thread_intermediate_storage, &output_column);
 
   for (cudf::size_type row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
-    evaluator.evaluate_row_expression(row_index);
+    evaluator.evaluate(row_index);
   }
 }
 

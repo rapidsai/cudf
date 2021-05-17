@@ -288,10 +288,7 @@ struct expression_evaluator {
    * @param num_operators Number of operators.
    * @param row_index Row index of data column(s).
    */
-  __device__ void evaluate_row_expression(cudf::size_type row_index)
-  {
-    evaluate_join_expression(row_index, row_index, row_index);
-  }
+  __device__ void evaluate(cudf::size_type row_index) { evaluate(row_index, row_index, row_index); }
 
   /**
    * @brief Evaluate an expression applied to a row.
@@ -305,9 +302,9 @@ struct expression_evaluator {
    * @param num_operators Number of operators.
    * @param row_index Row index of data column(s).
    */
-  __device__ void evaluate_join_expression(cudf::size_type left_row_index,
-                                           cudf::size_type right_row_index,
-                                           cudf::size_type output_row_index)
+  __device__ void evaluate(cudf::size_type left_row_index,
+                           cudf::size_type right_row_index,
+                           cudf::size_type output_row_index)
   {
     auto operator_source_index = static_cast<cudf::size_type>(0);
     for (cudf::size_type operator_index = 0; operator_index < plan.operators.size();

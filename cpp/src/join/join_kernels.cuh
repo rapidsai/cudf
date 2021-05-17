@@ -594,7 +594,7 @@ __global__ void nested_loop_predicate_join(table_device_view left_table,
     bool found_match = false;
     for (size_type right_row_index(0); right_row_index < right_num_rows; right_row_index++) {
       auto output_row_index = left_row_index * right_num_rows + right_row_index;
-      evaluator.evaluate_join_expression(left_row_index, right_row_index, output_row_index);
+      evaluator.evaluate(left_row_index, right_row_index, output_row_index);
 
       if (operator_outputs.element<bool>(output_row_index)) {
         // If the rows are equal, then we have found a true match
