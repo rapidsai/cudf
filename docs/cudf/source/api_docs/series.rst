@@ -1,3 +1,6 @@
+.. meta::
+   :my-var: a-for-apple
+
 ======
 Series
 ======
@@ -18,21 +21,15 @@ Attributes
    :toctree: api/
 
    Series.index
-   Series.array
    Series.values
    Series.dtype
    Series.shape
-   Series.nbytes
    Series.ndim
    Series.size
-   Series.T
    Series.memory_usage
-   Series.hasnans
+   Series.has_nulls
    Series.empty
-   Series.dtypes
    Series.name
-   Series.flags
-   Series.set_flags
 
 Conversion
 ----------
@@ -40,13 +37,7 @@ Conversion
    :toctree: api/
 
    Series.astype
-   Series.convert_dtypes
-   Series.infer_objects
    Series.copy
-   Series.bool
-   Series.to_numpy
-   Series.to_period
-   Series.to_timestamp
    Series.to_list
    Series.__array__
 
@@ -55,18 +46,12 @@ Indexing, iteration
 .. autosummary::
    :toctree: api/
 
-   Series.get
-   Series.at
-   Series.iat
    Series.loc
    Series.iloc
    Series.__iter__
    Series.items
    Series.iteritems
    Series.keys
-   Series.pop
-   Series.item
-   Series.xs
 
 For more information on ``.at``, ``.iat``, ``.loc``, and
 ``.iloc``,  see the :ref:`indexing documentation <indexing>`.
@@ -79,7 +64,6 @@ Binary operator functions
    Series.add
    Series.sub
    Series.mul
-   Series.div
    Series.truediv
    Series.floordiv
    Series.mod
@@ -87,13 +71,10 @@ Binary operator functions
    Series.radd
    Series.rsub
    Series.rmul
-   Series.rdiv
    Series.rtruediv
    Series.rfloordiv
    Series.rmod
    Series.rpow
-   Series.combine
-   Series.combine_first
    Series.round
    Series.lt
    Series.gt
@@ -102,22 +83,15 @@ Binary operator functions
    Series.ne
    Series.eq
    Series.product
-   Series.dot
 
 Function application, GroupBy & window
 --------------------------------------
 .. autosummary::
    :toctree: api/
 
-   Series.apply
-   Series.agg
-   Series.aggregate
-   Series.transform
    Series.map
    Series.groupby
    Series.rolling
-   Series.expanding
-   Series.ewm
    Series.pipe
 
 .. _api.series.stats:
@@ -130,8 +104,6 @@ Computations / descriptive stats
    Series.abs
    Series.all
    Series.any
-   Series.autocorr
-   Series.between
    Series.clip
    Series.corr
    Series.count
@@ -144,7 +116,6 @@ Computations / descriptive stats
    Series.diff
    Series.factorize
    Series.kurt
-   Series.mad
    Series.max
    Series.mean
    Series.median
@@ -152,11 +123,9 @@ Computations / descriptive stats
    Series.mode
    Series.nlargest
    Series.nsmallest
-   Series.pct_change
    Series.prod
    Series.quantile
    Series.rank
-   Series.sem
    Series.skew
    Series.std
    Series.sum
@@ -175,50 +144,32 @@ Reindexing / selection / label manipulation
 .. autosummary::
    :toctree: api/
 
-   Series.align
    Series.drop
-   Series.droplevel
    Series.drop_duplicates
-   Series.duplicated
    Series.equals
-   Series.first
    Series.head
-   Series.idxmax
-   Series.idxmin
    Series.isin
-   Series.last
    Series.reindex
-   Series.reindex_like
    Series.rename
-   Series.rename_axis
    Series.reset_index
    Series.sample
-   Series.set_axis
    Series.take
    Series.tail
    Series.truncate
    Series.where
    Series.mask
-   Series.add_prefix
-   Series.add_suffix
-   Series.filter
 
 Missing data handling
 ---------------------
 .. autosummary::
    :toctree: api/
 
-   Series.backfill
-   Series.bfill
    Series.dropna
-   Series.ffill
    Series.fillna
-   Series.interpolate
    Series.isna
    Series.isnull
    Series.notna
    Series.notnull
-   Series.pad
    Series.replace
 
 Reshaping, sorting
@@ -227,19 +178,11 @@ Reshaping, sorting
    :toctree: api/
 
    Series.argsort
-   Series.argmin
-   Series.argmax
-   Series.reorder_levels
    Series.sort_values
    Series.sort_index
-   Series.swaplevel
-   Series.unstack
    Series.explode
    Series.searchsorted
-   Series.ravel
    Series.repeat
-   Series.squeeze
-   Series.view
 
 Combining / comparing / joining / merging
 -----------------------------------------
@@ -247,7 +190,6 @@ Combining / comparing / joining / merging
    :toctree: api/
 
    Series.append
-   Series.compare
    Series.update
 
 Time Series-related
@@ -255,18 +197,7 @@ Time Series-related
 .. autosummary::
    :toctree: api/
 
-   Series.asfreq
-   Series.asof
    Series.shift
-   Series.first_valid_index
-   Series.last_valid_index
-   Series.resample
-   Series.tz_convert
-   Series.tz_localize
-   Series.at_time
-   Series.between_time
-   Series.tshift
-   Series.slice_shift
 
 Accessors
 ---------
@@ -278,7 +209,7 @@ to specific data types.
 =========================== =================================
 Data Type                   Accessor
 =========================== =================================
-Datetime, Timedelta, Period :ref:`dt <api.series.dt>`
+Datetime, Timedelta         :ref:`dt <api.series.dt>`
 String                      :ref:`str <api.series.str>`
 Categorical                 :ref:`cat <api.series.cat>`
 Sparse                      :ref:`sparse <api.series.sparse>`
@@ -295,94 +226,41 @@ These can be accessed like ``Series.dt.<property>``.
 
 Datetime properties
 ^^^^^^^^^^^^^^^^^^^
+.. currentmodule:: cudf.core.series.DatetimeProperties
 
 .. autosummary::
    :toctree: api/
-   :template: autosummary/accessor_attribute.rst
 
-   Series.dt.date
-   Series.dt.time
-   Series.dt.timetz
-   Series.dt.year
-   Series.dt.month
-   Series.dt.day
-   Series.dt.hour
-   Series.dt.minute
-   Series.dt.second
-   Series.dt.microsecond
-   Series.dt.nanosecond
-   Series.dt.week
-   Series.dt.weekofyear
-   Series.dt.dayofweek
-   Series.dt.day_of_week
-   Series.dt.weekday
-   Series.dt.dayofyear
-   Series.dt.day_of_year
-   Series.dt.quarter
-   Series.dt.is_month_start
-   Series.dt.is_month_end
-   Series.dt.is_quarter_start
-   Series.dt.is_quarter_end
-   Series.dt.is_year_start
-   Series.dt.is_year_end
-   Series.dt.is_leap_year
-   Series.dt.daysinmonth
-   Series.dt.days_in_month
-   Series.dt.tz
-   Series.dt.freq
+   day
+   dayofweek
+   hour
+   minute
+   month
+   second
+   weekday
+   year
 
 Datetime methods
 ^^^^^^^^^^^^^^^^
 
 .. autosummary::
    :toctree: api/
-   :template: autosummary/accessor_method.rst
 
-   Series.dt.to_period
-   Series.dt.to_pydatetime
-   Series.dt.tz_localize
-   Series.dt.tz_convert
-   Series.dt.normalize
-   Series.dt.strftime
-   Series.dt.round
-   Series.dt.floor
-   Series.dt.ceil
-   Series.dt.month_name
-   Series.dt.day_name
+   strftime
 
-Period properties
-^^^^^^^^^^^^^^^^^
-
-.. autosummary::
-   :toctree: api/
-   :template: autosummary/accessor_attribute.rst
-
-   Series.dt.qyear
-   Series.dt.start_time
-   Series.dt.end_time
 
 Timedelta properties
 ^^^^^^^^^^^^^^^^^^^^
 
+.. currentmodule:: cudf.core.series.TimedeltaProperties
 .. autosummary::
    :toctree: api/
-   :template: autosummary/accessor_attribute.rst
 
-   Series.dt.days
-   Series.dt.seconds
-   Series.dt.microseconds
-   Series.dt.nanoseconds
-   Series.dt.components
-
-Timedelta methods
-^^^^^^^^^^^^^^^^^
-
-.. autosummary::
-   :toctree: api/
-   :template: autosummary/accessor_method.rst
-
-   Series.dt.to_pytimedelta
-   Series.dt.total_seconds
+   components
+   days
+   microseconds
+   nanoseconds
+   seconds
 
 
 .. _api.series.str:
@@ -394,63 +272,90 @@ String handling
 strings and apply several methods to it. These can be accessed like
 ``Series.str.<function/property>``.
 
+.. currentmodule:: cudf.core.column.string.StringMethods
 .. autosummary::
    :toctree: api/
-   :template: autosummary/accessor_method.rst
 
-   Series.str.capitalize
-   Series.str.casefold
-   Series.str.cat
-   Series.str.center
-   Series.str.contains
-   Series.str.count
-   Series.str.decode
-   Series.str.encode
-   Series.str.endswith
-   Series.str.extract
-   Series.str.extractall
-   Series.str.find
-   Series.str.findall
-   Series.str.get
-   Series.str.index
-   Series.str.join
-   Series.str.len
-   Series.str.ljust
-   Series.str.lower
-   Series.str.lstrip
-   Series.str.match
-   Series.str.normalize
-   Series.str.pad
-   Series.str.partition
-   Series.str.repeat
-   Series.str.replace
-   Series.str.rfind
-   Series.str.rindex
-   Series.str.rjust
-   Series.str.rpartition
-   Series.str.rstrip
-   Series.str.slice
-   Series.str.slice_replace
-   Series.str.split
-   Series.str.rsplit
-   Series.str.startswith
-   Series.str.strip
-   Series.str.swapcase
-   Series.str.title
-   Series.str.translate
-   Series.str.upper
-   Series.str.wrap
-   Series.str.zfill
-   Series.str.isalnum
-   Series.str.isalpha
-   Series.str.isdigit
-   Series.str.isspace
-   Series.str.islower
-   Series.str.isupper
-   Series.str.istitle
-   Series.str.isnumeric
-   Series.str.isdecimal
-   Series.str.get_dummies
+   byte_count
+   capitalize
+   cat
+   center
+   character_ngrams
+   character_tokenize
+   code_points
+   contains
+   count
+   detokenize
+   edit_distance
+   endswith
+   extract
+   filter_alphanum
+   filter_characters
+   filter_tokens
+   find
+   findall
+   get
+   get_json_object
+   htoi
+   index
+   insert
+   ip2int
+   is_consonant
+   is_vowel
+   isalnum
+   isalpha
+   isdecimal
+   isdigit
+   isempty
+   isfloat
+   ishex
+   isinteger
+   isipv4
+   isspace
+   islower
+   isnumeric
+   isupper
+   istimestamp
+   join
+   len
+   ljust
+   lower
+   lstrip
+   match
+   ngrams
+   ngrams_tokenize
+   normalize_characters
+   pad
+   partition
+   porter_stemmer_measure
+   replace
+   replace_tokens
+   replace_with_backrefs
+   rfind
+   rindex
+   rjust
+   rpartition
+   rstrip
+   slice
+   slice_from
+   slice_replace
+   split
+   rsplit
+   startswith
+   strip
+   subword_tokenize
+   swapcase
+   title
+   token_count
+   tokenize
+   translate
+   upper
+   url_decode
+   url_encode
+   wrap
+   zfill
+   
+
 
 ..
     The following is needed to ensure the generated pages are created with the
