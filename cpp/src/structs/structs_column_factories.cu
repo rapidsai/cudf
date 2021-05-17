@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "structs/utilities.hpp"
+#include <structs/utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/types.hpp>

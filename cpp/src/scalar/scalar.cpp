@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "structs/utilities.hpp"
+#include <structs/utilities.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
