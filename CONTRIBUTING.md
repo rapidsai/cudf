@@ -309,7 +309,7 @@ flag. Below is a list of the available arguments and their purpose:
 
 | Build Argument | Default Value | Other Value(s) | Purpose |
 | --- | --- | --- | --- |
-| `CUDA_VERSION` | 11.0 | 11.1, 11.2.2 | set CUDA version |
+| `CUDA_VERSION` | 11.0 | 11.2.2 | set CUDA version |
 | `LINUX_VERSION` | ubuntu18.04 | ubuntu20.04 | set Ubuntu version |
 | `CC` & `CXX` | 9 | 10 | set gcc/g++ version |
 | `CUDF_REPO` | This repo | Forks of cuDF | set git URL to use for `git clone` |

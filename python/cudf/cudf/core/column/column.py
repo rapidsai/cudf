@@ -681,7 +681,7 @@ class ColumnBase(Column, Serializable):
             nelem = len(key)
 
         if is_scalar(value):
-            value = self.dtype.type(value) if value is not None else value
+            value = cudf.Scalar(value, dtype=self.dtype)
         else:
             if len(value) != nelem:
                 msg = (
