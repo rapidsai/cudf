@@ -572,7 +572,6 @@ class list_scalar : public scalar {
   cudf::column _data;
 };
 
-std::unique_ptr<cudf::scalar> get_test_list_scalar(column_view in_col);
 
 /** @} */  // end of group
 }  // namespace cudf
