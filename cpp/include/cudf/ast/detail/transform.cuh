@@ -128,7 +128,7 @@ struct ast_plan {
  * This class is designed for n-ary transform evaluation. It operates on two
  * separate tables, and knows the rows of each one.
  */
-struct two_table_evaluator {
+struct expression_evaluator {
  public:
   /**
    * @brief Construct a row evaluator.
@@ -139,11 +139,11 @@ struct two_table_evaluator {
    * storing intermediates.
    * @param output_column The output column where results are stored.
    */
-  __device__ two_table_evaluator(table_device_view const& left,
-                                 dev_ast_plan const& plan,
-                                 std::int64_t* thread_intermediate_storage,
-                                 mutable_column_device_view* output_column,
-                                 table_device_view const& right)
+  __device__ expression_evaluator(table_device_view const& left,
+                                  dev_ast_plan const& plan,
+                                  std::int64_t* thread_intermediate_storage,
+                                  mutable_column_device_view* output_column,
+                                  table_device_view const& right)
     : left(left),
       plan(plan),
       thread_intermediate_storage(thread_intermediate_storage),
@@ -153,10 +153,10 @@ struct two_table_evaluator {
   }
 
   // Overloaded constructor for single-table case.
-  __device__ two_table_evaluator(table_device_view const& left,
-                                 dev_ast_plan const& plan,
-                                 std::int64_t* thread_intermediate_storage,
-                                 mutable_column_device_view* output_column)
+  __device__ expression_evaluator(table_device_view const& left,
+                                  dev_ast_plan const& plan,
+                                  std::int64_t* thread_intermediate_storage,
+                                  mutable_column_device_view* output_column)
     : left(left),
       plan(plan),
       thread_intermediate_storage(thread_intermediate_storage),
@@ -228,7 +228,7 @@ struct two_table_evaluator {
   {
     auto const typed_input = resolve_input<Input>(input, input_row_index);
     ast_operator_dispatcher(
-      op, unary_two_table_output<Input>(*this), output_row_index, typed_input, output);
+      op, unary_expression_output<Input>(*this), output_row_index, typed_input, output);
   }
 
   /**
@@ -253,8 +253,12 @@ struct two_table_evaluator {
   {
     auto const typed_lhs = resolve_input<LHS>(lhs, left_row_index);
     auto const typed_rhs = resolve_input<RHS>(rhs, right_row_index);
-    ast_operator_dispatcher(
-      op, binary_two_table_output<LHS, RHS>(*this), output_row_index, typed_lhs, typed_rhs, output);
+    ast_operator_dispatcher(op,
+                            binary_expression_output<LHS, RHS>(*this),
+                            output_row_index,
+                            typed_lhs,
+                            typed_rhs,
+                            output);
   }
 
   template <typename OperatorFunctor,
@@ -348,9 +352,9 @@ struct two_table_evaluator {
   }
 
  private:
-  struct two_table_output {
+  struct expression_output {
    public:
-    __device__ two_table_output(two_table_evaluator const& evaluator) : evaluator(evaluator) {}
+    __device__ expression_output(expression_evaluator const& evaluator) : evaluator(evaluator) {}
 
     /**
      * @brief Resolves an output data reference and assigns result value.
@@ -361,7 +365,7 @@ struct two_table_evaluator {
      *
      * @tparam Element Type of result element.
      * @param device_data_reference Data reference to resolve.
-     * @param two_table_index Row index of data column.
+     * @param expression_index Row index of data column.
      * @param result Value to assign to output.
      */
     template <typename Element, CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
@@ -390,13 +394,13 @@ struct two_table_evaluator {
     }
 
    private:
-    two_table_evaluator const& evaluator;
+    expression_evaluator const& evaluator;
   };
 
   template <typename Input>
-  struct unary_two_table_output : public two_table_output {
-    __device__ unary_two_table_output(two_table_evaluator const& evaluator)
-      : two_table_output(evaluator)
+  struct unary_expression_output : public expression_output {
+    __device__ unary_expression_output(expression_evaluator const& evaluator)
+      : expression_output(evaluator)
     {
     }
 
@@ -424,9 +428,9 @@ struct two_table_evaluator {
   };
 
   template <typename LHS, typename RHS>
-  struct binary_two_table_output : public two_table_output {
-    __device__ binary_two_table_output(two_table_evaluator const& evaluator)
-      : two_table_output(evaluator)
+  struct binary_expression_output : public expression_output {
+    __device__ binary_expression_output(expression_evaluator const& evaluator)
+      : expression_output(evaluator)
     {
     }
 
