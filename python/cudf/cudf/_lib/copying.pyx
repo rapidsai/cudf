@@ -8,9 +8,9 @@ from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr, shared_ptr, make_shared
 from libcpp.vector cimport vector
 from libcpp.utility cimport move
-from libc.stdint cimport int32_t, int64_t, uint8_t
+from libc.stdint cimport int32_t, int64_t, uint8_t, uintptr_t
 
-from rmm._lib.device_buffer cimport DeviceBuffer
+from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_device_scalar
@@ -743,29 +743,71 @@ def segmented_gather(Column source_column, Column gather_map):
 
 cdef class PackedColumns:
 
+    @property
+    def __cuda_array_interface__(self):
+        cdef dict intf = {
+            "data": (self.gpu_data_ptr, False),
+            "shape": (self.gpu_data_size,),
+            "strides": None,
+            "typestr": "|u1",
+            "version": 0
+        }
+        return intf
+
+    @property
+    def metadata_ptr(self):
+        return int(<uintptr_t>self.c_metadata_ptr())
+
+    @property
+    def metadata_size(self):
+        return int(self.c_metadata_size())
+
+    @property
+    def gpu_data_ptr(self):
+        return int(<uintptr_t>self.c_gpu_data_ptr())
+
+    @property
+    def gpu_data_size(self):
+        return int(self.c_gpu_data_size())
+
     def serialize(self):
         header = {}
-        cdef uint8_t[::1] mv = (<uint8_t[:self.data.metadata_.get()[0].size()]>
-                                self.data.metadata_.get()[0].data())
-        header["metadata-vector"] = [
-            mv[i]
-            for i in range(self.data.metadata_.get()[0].size())
-        ]
-        frames = [
-            DeviceBuffer.c_from_unique_ptr(move(self.data.gpu_data))
-        ]
-        return header, frames
 
-    def deserialize(cls, header, frames):
-        cdef vector[uint8_t] v
-        for ui in header["metadata-vector"]:
-            v.push_back(ui)
-        cdef unique_ptr[cpp_copying.metadata] m = move(
-            make_unique[cpp_copying.metadata](v)
+        header["column-names"] = self.column_names
+        header["index-names"] = self.index_names
+        header["metadata"] = list(
+            <uint8_t[:self.metadata_size]>self.c_metadata_ptr()
         )
 
+        frames = [self]
+
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        cdef PackedColumns p = PackedColumns.__new__(PackedColumns)
+
+        dbuf = DeviceBuffer(
+            size=frames[0].__cuda_array_interface__["shape"][0]
+        )
+        dbuf.copy_from_device(frames[0])
+
+        cdef cpp_copying.packed_columns data_
+        data_.metadata_ = move(
+            make_unique[cpp_copying.metadata](
+                move(<vector[uint8_t]>header["metadata"])
+            )
+        )
+        data_.gpu_data = move(dbuf.c_obj)
+
+        p.c_obj = move(data_)
+        p.column_names = header["column-names"]
+        p.index_names = header["index-names"]
+
+        return p
+
     @staticmethod
-    cdef PackedColumns from_table(Table input_table, keep_index=False):
+    cdef PackedColumns c_from_table(Table input_table, keep_index=False):
         """
         Construct a PackedColumns object from a cudf::Table.
         """
@@ -777,23 +819,35 @@ cdef class PackedColumns:
         else:
             input_table_view = input_table.data_view()
 
-        p.data = move(cpp_copying.pack(input_table_view))
+        p.c_obj = move(cpp_copying.pack(input_table_view))
         p.column_names = input_table._column_names
 
         return p
 
-    cdef Table unpack(self):
+    cdef Table c_unpack(self):
         return Table.from_table_view(
-            cpp_copying.unpack(self.data),
+            cpp_copying.unpack(self.c_obj),
             self,
             self.column_names,
             self.index_names
         )
 
+    cdef const void* c_metadata_ptr(self) except *:
+        return self.c_obj.metadata_.get()[0].data()
+
+    cdef size_t c_metadata_size(self) except *:
+        return self.c_obj.metadata_.get()[0].size()
+
+    cdef void* c_gpu_data_ptr(self) except *:
+        return self.c_obj.gpu_data.get()[0].data()
+
+    cdef size_t c_gpu_data_size(self) except *:
+        return self.c_obj.gpu_data.get()[0].size()
+
 
 def pack(Table input_table, keep_index=False):
-    return PackedColumns.from_table(input_table, keep_index)
+    return PackedColumns.c_from_table(input_table, keep_index)
 
 
 def unpack(PackedColumns packed):
-    return cudf.DataFrame._from_table(packed.unpack())
+    return cudf.DataFrame._from_table(packed.c_unpack())
