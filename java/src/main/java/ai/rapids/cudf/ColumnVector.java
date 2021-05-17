@@ -509,7 +509,8 @@ public final class ColumnVector extends ColumnView {
    * @return A new java column vector containing the concatenated strings.
    */
   public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnView[] columns) {
-    assert columns.length >= 2 : ".stringConcatenate() operation requires at least 2 columns";
+    assert columns != null : "input columns should not be null";
+    assert columns.length > 0 : "input columns should not be empty";
     assert separator != null : "separator scalar provided may not be null";
     assert separator.getType().equals(DType.STRING) : "separator scalar must be a string scalar";
     assert narep != null : "narep scalar provided may not be null";
@@ -548,7 +549,7 @@ public final class ColumnVector extends ColumnView {
    */
   public static ColumnVector listConcatenateByRow(boolean ignoreNull, ColumnView... columns) {
     assert columns != null : "input columns should not be null";
-    assert columns.length >= 2 : "listConcatenateByRow requires at least 2 columns";
+    assert columns.length > 0 : "input columns should not be empty";
 
     long[] columnViews = new long[columns.length];
     for(int i = 0; i < columns.length; i++) {
