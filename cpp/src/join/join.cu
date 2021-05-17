@@ -229,7 +229,7 @@ predicate_join(table_view left,
                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return get_base_nested_loop_predicate_join_indices(
+  return get_predicate_join_indices(
     left, right, false, join_kind::INNER_JOIN, binary_pred, null_equality::EQUAL, stream, mr);
 }
 
