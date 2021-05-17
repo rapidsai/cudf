@@ -1015,6 +1015,41 @@ TEST_F(CsvReaderTest, StringInference)
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRING);
 }
 
+TEST_F(CsvReaderTest, TypeInferenceThousands)
+{
+  std::string buffer = "1`400,123,1`234.56\n123`456,123456,12.34";
+  cudf_io::csv_reader_options in_opts =
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+      .header(-1)
+      .thousands('`');
+  const auto result = cudf_io::read_csv(in_opts);
+
+  EXPECT_EQ(result.tbl->num_columns(), 3);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::FLOAT64);
+}
+
+TEST_F(CsvReaderTest, TypeInferenceWithDecimal)
+{
+  // Given that thousands:'`' and decimal(';'), we expect:
+  // col#0 => INT64 (column contains only digits & thousands sep)
+  // col#1 => STRING (contains digits and period character, which is NOT the decimal point here)
+  // col#2 => FLOAT64 (column contains digits and decimal point (i.e., ';'))
+  std::string buffer = "1`400,1.23,1`234;56\n123`456,123.456,12;34";
+  cudf_io::csv_reader_options in_opts =
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+      .header(-1)
+      .thousands('`')
+      .decimal(';');
+  const auto result = cudf_io::read_csv(in_opts);
+
+  EXPECT_EQ(result.tbl->num_columns(), 3);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::STRING);
+  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::FLOAT64);
+}
+
 TEST_F(CsvReaderTest, SkipRowsXorSkipFooter)
 {
   std::string buffer = "1,2,3";
