@@ -20,6 +20,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/detail/copying.hpp>
 #include <cudf/lists/list_device_view.cuh>
@@ -37,6 +38,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <cinttypes>
+#include "cudf/utilities/error.hpp"
 
 namespace cudf {
 namespace lists {
@@ -152,7 +154,7 @@ rmm::device_uvector<unbound_list_view> list_vector_from_column(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  auto n_rows = lists_column.size();
+  auto n_rows = thrust::distance(index_begin, index_end);
 
   auto vector = rmm::device_uvector<unbound_list_view>(n_rows, stream, mr);
 
@@ -759,12 +761,64 @@ std::unique_ptr<column> scatter_impl(
 
   auto const child_column_type = lists_column_view(target).child().type();
 
+#ifndef NDEBUG
+  thrust::for_each(rmm::exec_policy(stream),
+                   source_vector.begin(),
+                   source_vector.end(),
+                   [] __device__(unbound_list_view ulv) {
+                     auto type      = ulv.label();
+                     auto size      = ulv.size();
+                     auto row_index = ulv.row_index();
+                     printf("%s[%d](%d) | ",
+                            type == unbound_list_view::label_type::SOURCE ? "S" : "T",
+                            row_index,
+                            size);
+                   });
+  printf("\n Scatter map: ");
+
+  thrust::for_each(
+    rmm::exec_policy(stream), scatter_map_begin, scatter_map_end, [] __device__(auto i) {
+      printf("%d ", i);
+    });
+  printf("\n");
+
+  thrust::for_each(rmm::exec_policy(stream),
+                   target_vector.begin(),
+                   target_vector.end(),
+                   [] __device__(unbound_list_view ulv) {
+                     auto type      = ulv.label();
+                     auto size      = ulv.size();
+                     auto row_index = ulv.row_index();
+                     printf("%s[%d](%d) | ",
+                            type == unbound_list_view::label_type::SOURCE ? "S" : "T",
+                            row_index,
+                            size);
+                   });
+
+#endif  // NDEBUG
+
   // Scatter.
   thrust::scatter(rmm::exec_policy(stream),
                   source_vector.begin(),
                   source_vector.end(),
                   scatter_map_begin,
                   target_vector.begin());
+
+#ifndef NDEBUG
+  thrust::for_each(rmm::exec_policy(stream),
+                   target_vector.begin(),
+                   target_vector.end(),
+                   [] __device__(unbound_list_view ulv) {
+                     auto type      = ulv.label();
+                     auto size      = ulv.size();
+                     auto row_index = ulv.row_index();
+                     printf("%s[%d](%d) | ",
+                            type == unbound_list_view::label_type::SOURCE ? "S" : "T",
+                            row_index,
+                            size);
+                   });
+  printf("\n");
+#endif  // NDEBUG
 
   auto const source_lists_column_view =
     lists_column_view(source);  // Checks that this is a list column.
@@ -856,9 +910,7 @@ std::unique_ptr<column> scatter(
  * @brief Scatters list scalar (a single row) into a copy of the target column
  * according to a scatter map.
  *
- * The scatter is performed according to the scatter iterator such that row
- * `scatter_map[i]` of the output column is replaced by the source list-row.
- * All other rows of the output column equal corresponding rows of the target table.
+ * TBA
  *
  * If the same index appears more than once in the scatter map, the result is
  * undefined.
@@ -883,11 +935,15 @@ std::unique_ptr<column> scatter(
   auto const num_rows = target.size();
   if (num_rows == 0) { return cudf::empty_like(target); }
 
-  auto lv = static_cast<list_scalar const*>(&slr);
-  rmm::device_buffer null_mask{lv->validity_data(), 1, stream, mr};
+  auto lv        = static_cast<list_scalar const*>(&slr);
+  bool slr_valid = slr.is_valid(stream);
+  rmm::device_buffer null_mask =
+    slr_valid ? cudf::detail::create_null_mask(1, mask_state::UNALLOCATED, stream, mr)
+              : cudf::detail::create_null_mask(1, mask_state::ALL_NULL, stream, mr);
   auto offset_column = make_numeric_column(
     data_type{type_to_id<offset_type>()}, 2, mask_state::UNALLOCATED, stream, mr);
-  thrust::sequence(offset_column->mutable_view().begin<offset_type>(),
+  thrust::sequence(rmm::exec_policy(stream),
+                   offset_column->mutable_view().begin<offset_type>(),
                    offset_column->mutable_view().end<offset_type>(),
                    0,
                    lv->view().size());
@@ -895,16 +951,17 @@ std::unique_ptr<column> scatter(
                              1,
                              nullptr,
                              static_cast<bitmask_type const*>(null_mask.data()),
-                             UNKNOWN_NULL_COUNT,
+                             slr_valid ? 0 : 1,
                              0,
                              {offset_column->view(), lv->view()});
 
   auto const source_device_view = column_device_view::create(wrapped, stream);
+  auto const scatter_map_size   = thrust::distance(scatter_map_begin, scatter_map_end);
   auto const source_vector =
     list_vector_from_column(unbound_list_view::label_type::SOURCE,
                             cudf::detail::lists_column_device_view(*source_device_view),
                             thrust::make_constant_iterator(0),
-                            thrust::make_constant_iterator(0) + num_rows,
+                            thrust::make_constant_iterator(0) + scatter_map_size,
                             stream,
                             mr);
 
