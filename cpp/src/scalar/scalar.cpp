@@ -95,7 +95,6 @@ std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
   return result;
 }
 
-
 template <typename T>
 fixed_point_scalar<T>::fixed_point_scalar() : scalar(data_type(type_to_id<T>())){};
 

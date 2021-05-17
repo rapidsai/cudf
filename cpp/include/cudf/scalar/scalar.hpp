@@ -572,6 +572,5 @@ class list_scalar : public scalar {
   cudf::column _data;
 };
 
-
 /** @} */  // end of group
 }  // namespace cudf
