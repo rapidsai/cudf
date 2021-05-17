@@ -284,13 +284,6 @@
               </includes>
             </resource>
             <resource>
-              <directory>${basedir}</directory>
-              <targetPath>META-INF</targetPath>
-              <includes>
-                <include>LICENSE-bundled</include>
-              </includes>
-            </resource>
-            <resource>
                 <directory>${project.build.directory}/native-deps/</directory>
             </resource>
         </resources>
