@@ -18,6 +18,7 @@ from libcpp.utility cimport move
 from libcpp cimport bool
 
 import cudf
+from cudf.core.dtypes import ListDtype
 from cudf._lib.types import (
     cudf_to_np_types, 
     duration_unit_map
@@ -171,9 +172,18 @@ cdef class DeviceScalar:
                 "Must pass a dtype when constructing from a fixed-point scalar"
             )
         elif cdtype.id() == libcudf_types.LIST:
-            s._dtype = dtype_from_column_view(
-                (<list_scalar*>s.get_raw_ptr())[0].view()
-            )
+            if (<list_scalar*>s.get_raw_ptr())[0].view().type().id() == libcudf_types.LIST:
+                s._dtype = dtype_from_column_view(
+                    (<list_scalar*>s.get_raw_ptr())[0].view()
+                )
+            else:
+                s._dtype = ListDtype(
+                    cudf_to_np_types[
+                        <underlying_type_t_type_id>(
+                            (<list_scalar*>s.get_raw_ptr())[0].view().type().id()   
+                        )
+                    ]
+                )
         else:
             if dtype is not None:
                 s._dtype = dtype
@@ -293,7 +303,8 @@ cdef _get_py_list_from_list(unique_ptr[scalar]& s):
     cdef Table to_arrow_table = Table({"col": list_col})
 
     arrow_table = to_arrow(to_arrow_table, [["col", []]])
-    return arrow_table['col'].to_pylist()
+    result = arrow_table['col'].to_pylist()
+    return _nested_na_replace(result)
 
 cdef _get_py_string_from_string(unique_ptr[scalar]& s):
     if not s.get()[0].is_valid():
@@ -468,12 +479,14 @@ def _create_proxy_nat_scalar(dtype):
     else:
         raise TypeError('NAT only valid for datetime and timedelta')
 
-def test_get_test_list_scalar(Column input_column):
-    cdef column_view in_col = input_column.view()
-
-
-    cdef DeviceScalar result_slr = DeviceScalar.from_unique_ptr(get_test_list_scalar(in_col))
-
-    print(result_slr._dtype.__repr__())
-
-    return result_slr._to_host_scalar()
+def _nested_na_replace(input_list):
+    '''
+    Replace `None` with `cudf.NA` in the result of
+    `__getitem__` calls to list type columns
+    '''
+    for idx, value in enumerate(input_list):
+        if isinstance(value, list):
+            _nested_na_replace(value)
+        elif value is None:
+            input_list[idx] = cudf.NA
+    return input_list
