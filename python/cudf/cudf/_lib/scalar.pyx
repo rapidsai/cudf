@@ -47,7 +47,6 @@ from cudf._lib.cpp.scalar.scalar cimport (
     string_scalar,
     fixed_point_scalar,
     list_scalar,
-    get_test_list_scalar,
 )
 from cudf.utils.dtypes import _decimal_to_int64, is_list_dtype
 cimport cudf._lib.cpp.types as libcudf_types

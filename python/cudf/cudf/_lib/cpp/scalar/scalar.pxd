@@ -67,5 +67,3 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
 
     cdef cppclass list_scalar(scalar):
         column_view view() except +
-
-    cdef unique_ptr[scalar] get_test_list_scalar(column_view in_col)
