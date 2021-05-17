@@ -137,7 +137,9 @@ ConfigureTest(CLAMP_TEST replace/clamp_test.cpp)
 
 ###################################################################################################
 # - fixed_point tests -----------------------------------------------------------------------------
-ConfigureTest(FIXED_POINT_TEST fixed_point/fixed_point_tests.cu)
+ConfigureTest(FIXED_POINT_TEST 
+    fixed_point/fixed_point_tests.cpp
+    fixed_point/fixed_point_tests.cu)
 
 ###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
@@ -195,10 +197,11 @@ ConfigureTest(SORT_TEST
 # - copying tests ---------------------------------------------------------------------------------
 ConfigureTest(COPYING_TEST
     copying/concatenate_tests.cu
+    copying/copy_if_else_nested_tests.cpp
     copying/copy_range_tests.cpp
-    copying/copy_tests.cu    
+    copying/copy_tests.cu
     copying/detail_gather_tests.cu
-    copying/gather_struct_tests.cu        
+    copying/gather_struct_tests.cu
     copying/gather_tests.cu
     copying/gather_str_tests.cu
     copying/gather_list_tests.cu
@@ -230,10 +233,16 @@ ConfigureTest(SPAN_TEST utilities_tests/span_tests.cu)
 ###################################################################################################
 # - iterator tests --------------------------------------------------------------------------------
 ConfigureTest(ITERATOR_TEST
-    iterator/value_iterator_test.cu
-    iterator/pair_iterator_test.cu
+    iterator/value_iterator.cpp
+    iterator/value_iterator_test_chrono.cu
+    iterator/value_iterator_test_numeric.cu
+    iterator/value_iterator_test_strings.cu
+    iterator/value_iterator_test_transform.cu
+    iterator/pair_iterator_test_chrono.cu
+    iterator/pair_iterator_test_numeric.cu
     iterator/scalar_iterator_test.cu
-    iterator/optional_iterator_test.cu
+    iterator/optional_iterator_test_chrono.cu
+    iterator/optional_iterator_test_numeric.cu
     )
 
 ###################################################################################################
@@ -268,8 +277,8 @@ ConfigureTest(STREAM_COMPACTION_TEST
 
 ###################################################################################################
 # - rolling tests ---------------------------------------------------------------------------------
-ConfigureTest(ROLLING_TEST 
-    rolling/rolling_test.cpp 
+ConfigureTest(ROLLING_TEST
+    rolling/rolling_test.cpp
     rolling/grouped_rolling_test.cpp
     rolling/lead_lag_test.cpp
     rolling/range_window_bounds_test.cpp
@@ -335,7 +344,7 @@ ConfigureTest(STRINGS_TEST
     strings/fixed_point_tests.cpp
     strings/floats_tests.cpp
     strings/hash_string.cu
-    strings/integers_tests.cu
+    strings/integers_tests.cpp
     strings/ipv4_tests.cpp
     strings/json_tests.cpp
     strings/pad_tests.cpp
@@ -368,7 +377,8 @@ ConfigureTest(TEXT_TEST
 ConfigureTest(BITMASK_TEST
     bitmask/valid_if_tests.cu
     bitmask/set_nullmask_tests.cu
-    bitmask/bitmask_tests.cu)
+    bitmask/bitmask_tests.cpp
+    bitmask/is_element_valid_tests.cpp)
 
 
 ###################################################################################################

@@ -255,6 +255,11 @@ currently supported by cudf. Each type of value is represented by a separate typ
 which are all derived from `cudf::scalar`. e.g. A `numeric_scalar` holds a single numerical value, 
 a `string_scalar` holds a single string. The data for the stored value resides in device memory.
 
+A `list_scalar` holds the underlying data of a single list. This means the underlying data can be any type
+that cudf supports. For example, a `list_scalar` representing a list of integers stores a `cudf::column`
+of type `INT32`. A `list_scalar` representing a list of lists of integers stores a `cudf::column` of
+type `LIST`, which in turn stores a column of type `INT32`.
+
 |Value type|Scalar class|Notes|
 |-|-|-|
 |fixed-width|`fixed_width_scalar<T>`| `T` can be any fixed-width type|
@@ -263,6 +268,7 @@ a `string_scalar` holds a single string. The data for the stored value resides i
 |timestamp|`timestamp_scalar<T>` | `T` can be `timestamp_D`, `timestamp_s`, etc.|
 |duration|`duration_scalar<T>` | `T` can be `duration_D`, `duration_s`, etc.|
 |string|`string_scalar`| This class object is immutable|
+|list|`list_scalar`| Underlying data can be any type supported by cudf |
 
 ### Construction
 `scalar`s can be created using either their respective constructors or using factory functions like 
@@ -285,10 +291,15 @@ auto s1 = static_cast<ScalarType *>(s.get());
 ```
 
 ### Passing to device
-Each scalar type has a corresponding non-owning device view class which allows access to the value 
-and its validity from the device. This can be obtained using the function 
+Each scalar type, except `list_scalar`, has a corresponding non-owning device view class which allows
+access to the value and its validity from the device. This can be obtained using the function 
 `get_scalar_device_view(ScalarType s)`. Note that a device view is not provided for a base scalar 
 object, only for the derived typed scalar class objects.
+
+The underlying data for `list_scalar` can be accessed via `view()` method. For non-nested data,
+the device view can be obtained via function `column_device_view::create(column_view)`. For nested
+data, a specialized device view for list columns can be constructed via
+`lists_column_device_view(column_device_view)`.
 
 # libcudf++ API and Implementation
 
