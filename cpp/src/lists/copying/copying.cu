@@ -83,6 +83,20 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
                            cudf::UNKNOWN_NULL_COUNT,
                            std::move(null_mask));
 }
+
+std::unique_ptr<cudf::column> make_empty_lists_column(data_type child_type,
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::mr::device_memory_resource* mr)
+{
+  return cudf::make_lists_column(0,
+                                 make_empty_column(data_type{type_to_id<offset_type>()}),
+                                 make_empty_column(child_type),
+                                 0,                                  // Null count
+                                 rmm::device_buffer{0, stream, mr},  // Null mask
+                                 stream,
+                                 mr);
+}
+
 }  // namespace detail
 }  // namespace lists
 }  // namespace cudf

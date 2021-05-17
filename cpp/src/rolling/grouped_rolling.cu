@@ -19,18 +19,19 @@
 #include "rolling_jit_detail.hpp"
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/rolling.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/rolling/range_window_bounds.hpp>
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 
 namespace cudf {
-
 std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                column_view const& input,
                                                size_type preceding_window,
                                                size_type following_window,
                                                size_type min_periods,
-                                               std::unique_ptr<aggregation> const& aggr,
+                                               rolling_aggregation const& aggr,
                                                rmm::mr::device_memory_resource* mr)
 {
   return grouped_rolling_window(group_keys,
@@ -47,7 +48,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                window_bounds preceding_window,
                                                window_bounds following_window,
                                                size_type min_periods,
-                                               std::unique_ptr<aggregation> const& aggr,
+                                               rolling_aggregation const& aggr,
                                                rmm::mr::device_memory_resource* mr)
 {
   return grouped_rolling_window(group_keys,
@@ -66,7 +67,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                size_type preceding_window,
                                                size_type following_window,
                                                size_type min_periods,
-                                               std::unique_ptr<aggregation> const& aggr,
+                                               rolling_aggregation const& aggr,
                                                rmm::mr::device_memory_resource* mr)
 {
   return grouped_rolling_window(group_keys,
@@ -87,7 +88,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                window_bounds preceding_window_bounds,
                                                window_bounds following_window_bounds,
                                                size_type min_periods,
-                                               std::unique_ptr<aggregation> const& aggr,
+                                               rolling_aggregation const& aggr,
                                                rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
 {
@@ -149,13 +150,12 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                d_group_labels  = group_labels.data(),
                                following_window] __device__(size_type idx) {
     auto group_label = d_group_labels[idx];
-    auto group_end =
-      d_group_offsets[group_label +
-                      1];  // Cannot fall off the end, since offsets is capped with `input.size()`.
+    auto group_end   = d_group_offsets[group_label + 1];  // Cannot fall off the end, since offsets
+                                                          // is capped with `input.size()`.
     return thrust::minimum<size_type>{}(following_window, (group_end - 1) - idx);
   };
 
-  if (aggr->kind == aggregation::CUDA || aggr->kind == aggregation::PTX) {
+  if (aggr.kind == aggregation::CUDA || aggr.kind == aggregation::PTX) {
     cudf::detail::preceding_window_wrapper grouped_preceding_window{
       group_offsets.data(), group_labels.data(), preceding_window};
 
@@ -192,7 +192,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                                window_bounds preceding_window_bounds,
                                                window_bounds following_window_bounds,
                                                size_type min_periods,
-                                               std::unique_ptr<aggregation> const& aggr,
+                                               rolling_aggregation const& aggr,
                                                rmm::mr::device_memory_resource* mr)
 {
   return detail::grouped_rolling_window(group_keys,
@@ -309,17 +309,16 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
                                          T following_window,
                                          bool following_window_is_unbounded,
                                          size_type min_periods,
-                                         std::unique_ptr<aggregation> const& aggr,
+                                         rolling_aggregation const& aggr,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  size_type nulls_begin_idx, nulls_end_idx;
-  std::tie(nulls_begin_idx, nulls_end_idx) = get_null_bounds_for_orderby_column(orderby_column);
+  auto [h_nulls_begin_idx, h_nulls_end_idx] = get_null_bounds_for_orderby_column(orderby_column);
 
   auto preceding_calculator =
-    [nulls_begin_idx,
-     nulls_end_idx,
-     d_orderby = orderby_column.data<T>(),
+    [nulls_begin_idx = h_nulls_begin_idx,
+     nulls_end_idx   = h_nulls_end_idx,
+     d_orderby       = orderby_column.data<T>(),
      preceding_window,
      preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
     if (preceding_window_is_unbounded) {
@@ -351,10 +350,10 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
   auto preceding_column = expand_to_column(preceding_calculator, input.size(), stream, mr);
 
   auto following_calculator =
-    [nulls_begin_idx,
-     nulls_end_idx,
-     num_rows  = input.size(),
-     d_orderby = orderby_column.data<T>(),
+    [nulls_begin_idx = h_nulls_begin_idx,
+     nulls_end_idx   = h_nulls_end_idx,
+     num_rows        = input.size(),
+     d_orderby       = orderby_column.data<T>(),
      following_window,
      following_window_is_unbounded] __device__(size_type idx) -> size_type {
     if (following_window_is_unbounded) { return num_rows - idx - 1; }
@@ -381,36 +380,34 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
 
   auto following_column = expand_to_column(following_calculator, input.size(), stream, mr);
 
-  return cudf::rolling_window(
-    input, preceding_column->view(), following_column->view(), min_periods, aggr, mr);
+  return cudf::detail::rolling_window(
+    input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);
 }
 
-/// Given an orderby column grouped as specified in group_offsets,
-/// return the following two vectors:
-///  1. Vector with one entry per group, indicating the offset in the group
-///     where the null values begin.
-///  2. Vector with one entry per group, indicating the offset in the group
-///     where the null values end. (i.e. 1 past the last null.)
-/// Each group in the input orderby column must be sorted,
-/// with null values clustered at either the start or the end of each group.
-/// If there are no nulls for any given group, (nulls_begin, nulls_end) == (0,0).
-std::tuple<rmm::device_vector<size_type>, rmm::device_vector<size_type>>
+// Given an orderby column grouped as specified in group_offsets,
+// return the following two vectors:
+//  1. Vector with one entry per group, indicating the offset in the group
+//     where the null values begin.
+//  2. Vector with one entry per group, indicating the offset in the group
+//     where the null values end. (i.e. 1 past the last null.)
+// Each group in the input orderby column must be sorted,
+// with null values clustered at either the start or the end of each group.
+// If there are no nulls for any given group, (nulls_begin, nulls_end) == (0,0).
+std::tuple<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>>
 get_null_bounds_for_orderby_column(column_view const& orderby_column,
-                                   rmm::device_uvector<size_type> const& group_offsets,
+                                   cudf::device_span<size_type const> group_offsets,
                                    rmm::cuda_stream_view stream)
 {
-  // For each group, the null values are themselves clustered
-  // at the beginning or the end of the group.
+  // For each group, the null values are clustered at the beginning or the end of the group.
   // These nulls cannot participate, except in their own window.
 
-  // If the input has n groups, group_offsets will have n+1 values.
-  // null_start and null_end should eventually have 1 entry per group.
-  auto null_start = rmm::device_vector<size_type>(group_offsets.begin(), group_offsets.end() - 1);
-  auto null_end   = rmm::device_vector<size_type>(group_offsets.begin(), group_offsets.end() - 1);
+  auto num_groups = group_offsets.size() - 1;
 
   if (orderby_column.has_nulls()) {
+    auto null_start = rmm::device_uvector<size_type>(num_groups, stream);
+    auto null_end   = rmm::device_uvector<size_type>(num_groups, stream);
+
     auto p_orderby_device_view = column_device_view::create(orderby_column);
-    auto num_groups            = group_offsets.size() - 1;
 
     // Null timestamps exist. Find null bounds, per group.
     thrust::for_each(
@@ -451,9 +448,18 @@ get_null_bounds_for_orderby_column(column_view const& orderby_column,
             [&d_orderby] __device__(auto i) { return d_orderby.is_valid_nocheck(i); });
         }
       });
-  }
 
-  return std::make_tuple(std::move(null_start), std::move(null_end));
+    return std::make_tuple(std::move(null_start), std::move(null_end));
+  } else {
+    // The returned vectors have num_groups items, but the input offsets have num_groups+1
+    // Drop the last element using a span
+    auto group_offsets_span =
+      cudf::device_span<cudf::size_type const>(group_offsets.data(), num_groups);
+
+    // When there are no nulls, just copy the input group offsets to the output.
+    return std::make_tuple(cudf::detail::make_device_uvector_async(group_offsets_span, stream),
+                           cudf::detail::make_device_uvector_async(group_offsets_span, stream));
+  }
 }
 
 // Range window computation, for orderby column in ASCENDING order.
@@ -467,20 +473,19 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
                                          T following_window,
                                          bool following_window_is_unbounded,
                                          size_type min_periods,
-                                         std::unique_ptr<aggregation> const& aggr,
+                                         rolling_aggregation const& aggr,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  rmm::device_vector<size_type> null_start, null_end;
-  std::tie(null_start, null_end) =
+  auto [null_start, null_end] =
     get_null_bounds_for_orderby_column(orderby_column, group_offsets, stream);
 
   auto preceding_calculator =
     [d_group_offsets = group_offsets.data(),
      d_group_labels  = group_labels.data(),
      d_orderby       = orderby_column.data<T>(),
-     d_nulls_begin   = null_start.data().get(),
-     d_nulls_end     = null_end.data().get(),
+     d_nulls_begin   = null_start.data(),
+     d_nulls_end     = null_end.data(),
      preceding_window,
      preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
     auto group_label = d_group_labels[idx];
@@ -519,15 +524,14 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
     [d_group_offsets = group_offsets.data(),
      d_group_labels  = group_labels.data(),
      d_orderby       = orderby_column.data<T>(),
-     d_nulls_begin   = null_start.data().get(),
-     d_nulls_end     = null_end.data().get(),
+     d_nulls_begin   = null_start.data(),
+     d_nulls_end     = null_end.data(),
      following_window,
      following_window_is_unbounded] __device__(size_type idx) -> size_type {
     auto group_label = d_group_labels[idx];
     auto group_start = d_group_offsets[group_label];
-    auto group_end =
-      d_group_offsets[group_label +
-                      1];  // Cannot fall off the end, since offsets is capped with `input.size()`.
+    auto group_end   = d_group_offsets[group_label + 1];  // Cannot fall off the end, since offsets
+                                                          // is capped with `input.size()`.
     auto nulls_begin = d_nulls_begin[group_label];
     auto nulls_end   = d_nulls_end[group_label];
 
@@ -557,8 +561,8 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
 
   auto following_column = expand_to_column(following_calculator, input.size(), stream, mr);
 
-  return cudf::rolling_window(
-    input, preceding_column->view(), following_column->view(), min_periods, aggr, mr);
+  return cudf::detail::rolling_window(
+    input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);
 }
 
 /// Range window computation, with
@@ -573,17 +577,16 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
                                           T following_window,
                                           bool following_window_is_unbounded,
                                           size_type min_periods,
-                                          std::unique_ptr<aggregation> const& aggr,
+                                          rolling_aggregation const& aggr,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
-  size_type nulls_begin_idx, nulls_end_idx;
-  std::tie(nulls_begin_idx, nulls_end_idx) = get_null_bounds_for_orderby_column(orderby_column);
+  auto [h_nulls_begin_idx, h_nulls_end_idx] = get_null_bounds_for_orderby_column(orderby_column);
 
   auto preceding_calculator =
-    [nulls_begin_idx,
-     nulls_end_idx,
-     d_orderby = orderby_column.data<T>(),
+    [nulls_begin_idx = h_nulls_begin_idx,
+     nulls_end_idx   = h_nulls_end_idx,
+     d_orderby       = orderby_column.data<T>(),
      preceding_window,
      preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
     if (preceding_window_is_unbounded) {
@@ -617,10 +620,10 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
   auto preceding_column = expand_to_column(preceding_calculator, input.size(), stream, mr);
 
   auto following_calculator =
-    [nulls_begin_idx,
-     nulls_end_idx,
-     num_rows  = input.size(),
-     d_orderby = orderby_column.data<T>(),
+    [nulls_begin_idx = h_nulls_begin_idx,
+     nulls_end_idx   = h_nulls_end_idx,
+     num_rows        = input.size(),
+     d_orderby       = orderby_column.data<T>(),
      following_window,
      following_window_is_unbounded] __device__(size_type idx) -> size_type {
     if (following_window_is_unbounded) { return (num_rows - idx) - 1; }
@@ -650,8 +653,8 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
 
   auto following_column = expand_to_column(following_calculator, input.size(), stream, mr);
 
-  return cudf::rolling_window(
-    input, preceding_column->view(), following_column->view(), min_periods, aggr, mr);
+  return cudf::detail::rolling_window(
+    input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);
 }
 
 // Range window computation, for rows in DESCENDING order.
@@ -665,20 +668,19 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
                                           T following_window,
                                           bool following_window_is_unbounded,
                                           size_type min_periods,
-                                          std::unique_ptr<aggregation> const& aggr,
+                                          rolling_aggregation const& aggr,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
-  rmm::device_vector<size_type> null_start, null_end;
-  std::tie(null_start, null_end) =
+  auto [null_start, null_end] =
     get_null_bounds_for_orderby_column(orderby_column, group_offsets, stream);
 
   auto preceding_calculator =
     [d_group_offsets = group_offsets.data(),
      d_group_labels  = group_labels.data(),
      d_orderby       = orderby_column.data<T>(),
-     d_nulls_begin   = null_start.data().get(),
-     d_nulls_end     = null_end.data().get(),
+     d_nulls_begin   = null_start.data(),
+     d_nulls_end     = null_end.data(),
      preceding_window,
      preceding_window_is_unbounded] __device__(size_type idx) -> size_type {
     auto group_label = d_group_labels[idx];
@@ -719,8 +721,8 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
     [d_group_offsets = group_offsets.data(),
      d_group_labels  = group_labels.data(),
      d_orderby       = orderby_column.data<T>(),
-     d_nulls_begin   = null_start.data().get(),
-     d_nulls_end     = null_end.data().get(),
+     d_nulls_begin   = null_start.data(),
+     d_nulls_end     = null_end.data(),
      following_window,
      following_window_is_unbounded] __device__(size_type idx) -> size_type {
     auto group_label = d_group_labels[idx];
@@ -758,11 +760,11 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
 
   auto following_column = expand_to_column(following_calculator, input.size(), stream, mr);
 
-  if (aggr->kind == aggregation::CUDA || aggr->kind == aggregation::PTX) {
+  if (aggr.kind == aggregation::CUDA || aggr.kind == aggregation::PTX) {
     CUDF_FAIL("Ranged rolling window does NOT (yet) support UDF.");
   } else {
-    return cudf::rolling_window(
-      input, preceding_column->view(), following_column->view(), min_periods, aggr, mr);
+    return cudf::detail::rolling_window(
+      input, preceding_column->view(), following_column->view(), min_periods, aggr, stream, mr);
   }
 }
 
@@ -776,7 +778,7 @@ std::unique_ptr<column> grouped_range_rolling_window_impl(
   range_window_bounds preceding_window,
   range_window_bounds following_window,
   size_type min_periods,
-  std::unique_ptr<aggregation> const& aggr,
+  rolling_aggregation const& aggr,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -929,7 +931,7 @@ namespace detail {
  *               range_window_bounds const& preceding,
  *               range_window_bounds const& following,
  *               size_type min_periods,
- *               std::unique_ptr<aggregation> const& aggr,
+ *               rolling_aggregation const& aggr,
  *               rmm::mr::device_memory_resource* mr );
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
@@ -941,7 +943,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                                      range_window_bounds const& preceding,
                                                      range_window_bounds const& following,
                                                      size_type min_periods,
-                                                     std::unique_ptr<aggregation> const& aggr,
+                                                     rolling_aggregation const& aggr,
                                                      rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource* mr)
 {
@@ -990,7 +992,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
  *              size_type preceding_window_in_days,
  *              size_type following_window_in_days,
  *              size_type min_periods,
- *              std::unique_ptr<aggregation> const& aggr,
+ *              rolling_aggregation const& aggr,
  *              rmm::mr::device_memory_resource* mr);
  */
 std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& group_keys,
@@ -1000,7 +1002,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                                           size_type preceding_window_in_days,
                                                           size_type following_window_in_days,
                                                           size_type min_periods,
-                                                          std::unique_ptr<aggregation> const& aggr,
+                                                          rolling_aggregation const& aggr,
                                                           rmm::mr::device_memory_resource* mr)
 {
   auto preceding = to_range_bounds(preceding_window_in_days, timestamp_column.type());
@@ -1026,7 +1028,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
  *            window_bounds preceding_window_in_days,
  *            window_bounds following_window_in_days,
  *            size_type min_periods,
- *            std::unique_ptr<aggregation> const& aggr,
+ *            rolling_aggregation const& aggr,
  *            rmm::mr::device_memory_resource* mr);
  */
 std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& group_keys,
@@ -1036,7 +1038,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
                                                           window_bounds preceding_window_in_days,
                                                           window_bounds following_window_in_days,
                                                           size_type min_periods,
-                                                          std::unique_ptr<aggregation> const& aggr,
+                                                          rolling_aggregation const& aggr,
                                                           rmm::mr::device_memory_resource* mr)
 {
   range_window_bounds preceding =
@@ -1065,7 +1067,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(table_view const& grou
  *               range_window_bounds const& preceding,
  *               range_window_bounds const& following,
  *               size_type min_periods,
- *               std::unique_ptr<aggregation> const& aggr,
+ *               rolling_aggregation const& aggr,
  *               rmm::mr::device_memory_resource* mr );
  */
 std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_keys,
@@ -1075,7 +1077,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
                                                      range_window_bounds const& preceding,
                                                      range_window_bounds const& following,
                                                      size_type min_periods,
-                                                     std::unique_ptr<aggregation> const& aggr,
+                                                     rolling_aggregation const& aggr,
                                                      rmm::mr::device_memory_resource* mr)
 {
   return detail::grouped_range_rolling_window(group_keys,

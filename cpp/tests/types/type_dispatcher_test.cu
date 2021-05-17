@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
@@ -21,7 +22,8 @@
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <thrust/device_vector.h>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
 struct DispatcherTest : public cudf::test::BaseFixture {
 };
@@ -67,10 +69,10 @@ __global__ void dispatch_test_kernel(cudf::type_id id, bool* d_result)
 
 TYPED_TEST(TypedDispatcherTest, DeviceDispatch)
 {
-  thrust::device_vector<bool> result(1, false);
-  dispatch_test_kernel<<<1, 1>>>(cudf::type_to_id<TypeParam>(), result.data().get());
+  auto result = cudf::detail::make_zeroed_device_uvector_sync<bool>(1);
+  dispatch_test_kernel<<<1, 1>>>(cudf::type_to_id<TypeParam>(), result.data());
   CUDA_TRY(cudaDeviceSynchronize());
-  EXPECT_EQ(true, result[0]);
+  EXPECT_EQ(true, result.front_element(rmm::cuda_stream_default));
 }
 
 struct IdDispatcherTest : public DispatcherTest, public testing::WithParamInterface<cudf::type_id> {
@@ -128,11 +130,11 @@ __global__ void double_dispatch_test_kernel(cudf::type_id id1, cudf::type_id id2
 
 TYPED_TEST(TypedDoubleDispatcherTest, DeviceDoubleDispatch)
 {
-  thrust::device_vector<bool> result(1, false);
+  auto result = cudf::detail::make_zeroed_device_uvector_sync<bool>(1);
   double_dispatch_test_kernel<<<1, 1>>>(
-    cudf::type_to_id<TypeParam>(), cudf::type_to_id<TypeParam>(), result.data().get());
+    cudf::type_to_id<TypeParam>(), cudf::type_to_id<TypeParam>(), result.data());
   CUDA_TRY(cudaDeviceSynchronize());
-  EXPECT_EQ(true, result[0]);
+  EXPECT_EQ(true, result.front_element(rmm::cuda_stream_default));
 }
 
 struct IdDoubleDispatcherTest : public DispatcherTest,

@@ -23,6 +23,7 @@
 
 #include <io/comp/gpuinflate.h>
 
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -30,7 +31,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/device_vector.hpp>
 
 #include <algorithm>
 #include <array>
@@ -1199,8 +1199,8 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
 
   // Build index for string dictionaries since they can't be indexed
   // directly due to variable-sized elements
-  rmm::device_vector<string_index_pair> str_dict_index;
-  if (total_str_dict_indexes > 0) { str_dict_index.resize(total_str_dict_indexes); }
+  auto str_dict_index = cudf::detail::make_zeroed_device_uvector_async<string_index_pair>(
+    total_str_dict_indexes, stream);
 
   // TODO (dm): hd_vec should have begin and end iterator members
   size_t sum_max_depths =
@@ -1225,7 +1225,7 @@ void reader::impl::decode_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chu
                  "Column/page schema index mismatch");
 
     if (is_dict_chunk(chunks[c])) {
-      chunks[c].str_dict_index = str_dict_index.data().get() + str_ofs;
+      chunks[c].str_dict_index = str_dict_index.data() + str_ofs;
       str_ofs += pages[page_count].num_input_values;
     }
 
@@ -1591,6 +1591,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 // Forward to implementation
 reader::reader(std::vector<std::string> const &filepaths,
                parquet_reader_options const &options,
+               rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource *mr)
   : _impl(std::make_unique<impl>(datasource::create(filepaths), options, mr))
 {
@@ -1599,6 +1600,7 @@ reader::reader(std::vector<std::string> const &filepaths,
 // Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                parquet_reader_options const &options,
+               rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource *mr)
   : _impl(std::make_unique<impl>(std::move(sources), options, mr))
 {

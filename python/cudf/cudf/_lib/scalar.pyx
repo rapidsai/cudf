@@ -432,7 +432,7 @@ cdef _get_np_scalar_from_timedelta64(unique_ptr[scalar]& s):
 
 def as_device_scalar(val, dtype=None):
     if dtype:
-        if isinstance(val, (cudf.Scalar, DeviceScalar)):
+        if isinstance(val, (cudf.Scalar, DeviceScalar)) and dtype != val.dtype:
             raise TypeError("Can't update dtype of existing GPU scalar")
         else:
             return cudf.Scalar(value=val, dtype=dtype).device_value

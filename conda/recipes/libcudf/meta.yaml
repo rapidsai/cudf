@@ -39,12 +39,10 @@ requirements:
     - cudatoolkit {{ cuda_version }}.*
     - arrow-cpp 1.0.1
     - arrow-cpp-proc * cuda
-    - boost-cpp 1.72.0
     - dlpack
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
     - arrow-cpp-proc * cuda
-    - {{ pin_compatible('boost-cpp', max_pin='x.x.x') }}
     - {{ pin_compatible('dlpack', max_pin='x.x') }}
 
 test:
@@ -55,7 +53,7 @@ test:
     - test -f $PREFIX/include/cudf/ast/transform.hpp
     - test -f $PREFIX/include/cudf/ast/detail/linearizer.hpp
     - test -f $PREFIX/include/cudf/ast/detail/operators.hpp
-    - test -f $PREFIX/include/cudf/ast/linearizer.hpp
+    - test -f $PREFIX/include/cudf/ast/nodes.hpp
     - test -f $PREFIX/include/cudf/ast/operators.hpp
     - test -f $PREFIX/include/cudf/binaryop.hpp
     - test -f $PREFIX/include/cudf/labeling/label_bins.hpp
@@ -78,6 +76,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/groupby/sort_helper.hpp
     - test -f $PREFIX/include/cudf/detail/hashing.hpp
     - test -f $PREFIX/include/cudf/detail/interop.hpp
+    - test -f $PREFIX/include/cudf/detail/is_element_valid.hpp
     - test -f $PREFIX/include/cudf/detail/null_mask.hpp
     - test -f $PREFIX/include/cudf/detail/nvtx/nvtx3.hpp
     - test -f $PREFIX/include/cudf/detail/nvtx/ranges.hpp
@@ -86,7 +85,9 @@ test:
     - test -f $PREFIX/include/cudf/detail/repeat.hpp
     - test -f $PREFIX/include/cudf/detail/replace.hpp
     - test -f $PREFIX/include/cudf/detail/reshape.hpp
+    - test -f $PREFIX/include/cudf/detail/rolling.hpp
     - test -f $PREFIX/include/cudf/detail/round.hpp
+    - test -f $PREFIX/include/cudf/detail/scan.hpp
     - test -f $PREFIX/include/cudf/detail/scatter.hpp
     - test -f $PREFIX/include/cudf/detail/search.hpp
     - test -f $PREFIX/include/cudf/detail/sequence.hpp
@@ -135,7 +136,9 @@ test:
     - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
     - test -f $PREFIX/include/cudf/lists/detail/drop_list_duplicates.hpp
+    - test -f $PREFIX/include/cudf/lists/detail/interleave_columns.hpp
     - test -f $PREFIX/include/cudf/lists/detail/sorting.hpp
+    - test -f $PREFIX/include/cudf/lists/concatenate_rows.hpp
     - test -f $PREFIX/include/cudf/lists/count_elements.hpp
     - test -f $PREFIX/include/cudf/lists/explode.hpp
     - test -f $PREFIX/include/cudf/lists/drop_list_duplicates.hpp
