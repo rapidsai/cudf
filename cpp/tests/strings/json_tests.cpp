@@ -808,8 +808,8 @@ TEST_F(JsonTests, AllowSingleQuotes)
   // single-quotes only.
 
   // various queries on:
-  // clang-format off
-  std::vector<std::string> input_strings {
+  std::vector<std::string> input_strings{
+    // clang-format off
     "{\'a\': {\'b\' : \'c\'}}",
 
     "{"
@@ -834,9 +834,18 @@ TEST_F(JsonTests, AllowSingleQuotes)
                 "\'z\': {\'i\': 10, \'j\': 100},"
                 "\'b\': [\'c\',null,true,-1]"
               "}"
-    "}"
+    "}",
+    
+    "{"
+      "\'a\': \"abc'def\""
+    "}",
+
+    "{"
+      "\'a\': \"'abc'def'\""
+    "}",
+    // clang-format on
   };
-  // clang-format on
+
   cudf::test::strings_column_wrapper input(input_strings.begin(), input_strings.end());
   {
     std::string json_path("$.a");
@@ -857,9 +866,11 @@ TEST_F(JsonTests, AllowSingleQuotes)
       "{"
          "\'z\': {\'i\': 10, \'j\': 100},"
          "\'b\': [\'c\',null,true,-1]"
-      "}"
+      "}",
+      "abc'def",
+      "'abc'def'"
       }, 
-      {1, 1, 0, 1, 1, 1});
+      {1, 1, 0, 1, 1, 1, 1, 1});
     // clang-format on
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
