@@ -2420,8 +2420,10 @@ public final class Table implements AutoCloseable {
           for (AggregationOverWindow operation: entry.getValue().operations()) {
             aggColumnIndexes[opIndex] = columnIndex;
             aggInstances[opIndex] = operation.createNativeInstance();
-            aggPrecedingWindows[opIndex] = operation.getWindowOptions().getPreceding();
-            aggFollowingWindows[opIndex] = operation.getWindowOptions().getFollowing();
+            Scalar p = operation.getWindowOptions().getPrecedingScalar();
+            aggPrecedingWindows[opIndex] = p == null || !p.isValid() ? 0 : p.getInt();
+            Scalar f = operation.getWindowOptions().getFollowingScalar();
+            aggFollowingWindows[opIndex] = f == null || ! f.isValid() ? 1 : f.getInt();
             aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
             defaultOutputs[opIndex] = operation.getDefaultOutput();
             opIndex++;
@@ -2566,10 +2568,16 @@ public final class Table implements AutoCloseable {
           for (AggregationOverWindow op: entry.getValue().operations()) {
             aggColumnIndexes[opIndex] = columnIndex;
             aggInstances[opIndex] = op.createNativeInstance();
-            aggPrecedingWindows[opIndex] = op.getWindowOptions().getPrecedingScalar() ==
-                null ? 0 : op.getWindowOptions().getPrecedingScalar().getScalarHandle();
-            aggFollowingWindows[opIndex] = op.getWindowOptions().getFollowingScalar() ==
-                null ? 0 : op.getWindowOptions().getFollowingScalar().getScalarHandle();
+            Scalar p = op.getWindowOptions().getPrecedingScalar();
+            Scalar f = op.getWindowOptions().getFollowingScalar();
+            if ((p == null || !p.isValid()) && !op.getWindowOptions().isUnboundedPreceding()) {
+              throw new IllegalArgumentException("Some kind of preceding must be set and a preceding column is not currently supported");
+            }
+            if ((f == null || !f.isValid()) && !op.getWindowOptions().isUnboundedFollowing()) {
+              throw new IllegalArgumentException("some kind of following must be set and a follow column is not currently supported");
+            }
+            aggPrecedingWindows[opIndex] = p == null ? 0 : p.getScalarHandle();
+            aggFollowingWindows[opIndex] = f == null ? 0 : f.getScalarHandle();
             aggPrecedingWindowsUnbounded[opIndex] = op.getWindowOptions().isUnboundedPreceding();
             aggFollowingWindowsUnbounded[opIndex] = op.getWindowOptions().isUnboundedFollowing();
             aggMinPeriods[opIndex] = op.getWindowOptions().getMinPeriods();
