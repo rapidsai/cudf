@@ -45,7 +45,7 @@ TYPED_TEST(RowBitCountTyped, SimpleTypes)
   // expect size of the type per row
   auto expected = make_fixed_width_column(data_type{type_id::INT32}, 16);
   cudf::mutable_column_view mcv(*expected);
-  thrust::fill(rmm::exec_policy(rmm::cuda_stream_default),
+  thrust::fill(rmm::exec_policy(),
                mcv.begin<size_type>(),
                mcv.end<size_type>(),
                sizeof(device_storage_type_t<T>) * CHAR_BIT);
@@ -68,7 +68,7 @@ TYPED_TEST(RowBitCountTyped, SimpleTypesWithNulls)
   // expect size of the type + 1 bit per row
   auto expected = make_fixed_width_column(data_type{type_id::INT32}, 16);
   cudf::mutable_column_view mcv(*expected);
-  thrust::fill(rmm::exec_policy(rmm::cuda_stream_default),
+  thrust::fill(rmm::exec_policy(),
                mcv.begin<size_type>(),
                mcv.end<size_type>(),
                (sizeof(device_storage_type_t<T>) * CHAR_BIT) + 1);
@@ -488,7 +488,7 @@ TEST_F(RowBitCount, Table)
   auto expected   = cudf::make_fixed_width_column(data_type{type_id::INT32}, t.num_rows());
   cudf::mutable_column_view mcv(*expected);
   thrust::transform(
-    rmm::exec_policy(rmm::cuda_stream_default),
+    rmm::exec_policy(),
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(0) + t.num_rows(),
     mcv.begin<size_type>(),
