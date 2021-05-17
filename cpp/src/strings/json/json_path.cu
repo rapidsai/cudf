@@ -98,7 +98,16 @@ class parser {
     return false;
   }
 
-  // if quote = 0, allow either ' or "
+  /**
+   * @brief Parse a quote-enclosed JSON string.
+   *
+   * @param[out] str The resulting string.
+   * @param can_be_empty Parameter indicating whether it is valid for the string
+   * to not be present.
+   * @param quote Character expected as the surrounding quotes.  A value of 0
+   * indicates allowing either single or double quotes (but not a mixture of both).
+   * @returns A result code indicating success, failure or other result.
+   */
   CUDA_HOST_DEVICE_CALLABLE parse_result parse_string(string_view& str,
                                                       bool can_be_empty,
                                                       char quote)
@@ -295,16 +304,18 @@ class json_state : private parser {
    * actually exists.  For example, the outer object bounded by {} here has
    * no name, while the inner element "a" does.
    *
+   * ```
    * {
    *    "a" : "b"
    * }
+   * ```
    *
    * The user can specify whether or not the name string must be present via
    * the `can_be_empty` flag.
    *
-   * When a name is present, it must be followed by a :
+   * When a name is present, it must be followed by a colon `:`
    *
-   * @param name (Output) The resulting name.
+   * @param[out] name The resulting name.
    * @param can_be_empty Parameter indicating whether it is valid for the name
    * to not be present.
    * @returns A result code indicating success, failure or other result.
