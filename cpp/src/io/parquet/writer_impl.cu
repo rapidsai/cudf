@@ -771,11 +771,12 @@ void writer::impl::build_chunk_dictionaries2(
 
   // Allocate slots for each chunk
   // max dict size is 1 << 16. Using 1 << 17 gives the map a 0.5 load factor
-  constexpr size_t dict_hash_map_size = 1 << 17;
+  // constexpr size_t dict_hash_map_size = 1 << 17;
+  // hash map size insufficient. We have to allocate the same size as
   std::vector<rmm::device_uvector<gpu::slot_type>> hash_maps_storage;
   for (auto &chunk : chunks.host_view().flat_view()) {
     // TODO: Currently allocating for every chunk. Should skip allocating for non-dict types
-    auto &inserted_map   = hash_maps_storage.emplace_back(dict_hash_map_size, stream);
+    auto &inserted_map   = hash_maps_storage.emplace_back(chunk.num_values, stream);
     chunk.dict_map_slots = inserted_map.data();
     chunk.dict_map_size  = inserted_map.size();
   }
@@ -786,6 +787,14 @@ void writer::impl::build_chunk_dictionaries2(
   stream.synchronize();
   gpu::BuildChunkDictionaries2(chunks, num_rows, hash_maps_storage[0], stream);
   stream.synchronize();
+
+  // Make decision about which chunks have dictionary
+  chunks.device_to_host(stream);
+  for (auto &ck : chunks.host_view().flat_view()) {
+    ck.has_dictionary = (ck.num_dict_entries < 65535) ? true : false;
+    // calculate size of chunk if dictionary is used
+    // calculate size of chunk if plain encoding is used
+  }
 }
 
 void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,

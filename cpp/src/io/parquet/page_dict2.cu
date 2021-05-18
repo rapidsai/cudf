@@ -165,10 +165,11 @@ __global__ void __launch_bounds__(block_size, 1)
 
   for (size_type i = 0; i < s_num_values; i += block_size) {
     // Check if the num unique values in chunk has already exceeded max dict size and early exit
-    // if (*s_chunk_dict_entries_ptr > 65535) {
-    //   if (t == 0) { printf("early return %d\n", *s_chunk_dict_entries_ptr); }
-    //   return;
-    // }
+    if (*s_chunk_dict_entries_ptr > 65535) {
+      // if (t == 0) { printf("block %d, early return %d\n", blockIdx.x, *s_chunk_dict_entries_ptr);
+      // }
+      return;
+    }
 
     // add the value to hash map
     size_type val_idx = i + t + s_start_value_idx;
@@ -186,8 +187,8 @@ __global__ void __launch_bounds__(block_size, 1)
     }
 
     // TODO: Explore using ballot and popc for this reduction as the value to reduce is 1 or 0
-    // auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
-    // if (t == 0) { atomicAdd(s_chunk_dict_entries_ptr, num_unique); }
+    auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
+    if (t == 0) { atomicAdd(s_chunk_dict_entries_ptr, num_unique); }
     __syncthreads();
   }
 }
