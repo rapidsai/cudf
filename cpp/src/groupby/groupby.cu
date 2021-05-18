@@ -79,6 +79,31 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
 groupby::~groupby() = default;
 
 namespace {
+
+/**
+ * @brief Factory to construct empty result columns.
+ *
+ * Adds special handling for COLLECT_LIST/COLLECT_SET, because:
+ * 1. `make_empty_column()` does not support construction of nested columns.
+ * 2. Empty lists need empty child columns, to persist type information.
+ */
+struct empty_column_constructor {
+  column_view values;
+
+  template <aggregation::Kind k>
+  std::unique_ptr<cudf::column> operator()() const
+  {
+    using namespace cudf;
+
+    if constexpr (k == aggregation::Kind::COLLECT_LIST || k == aggregation::Kind::COLLECT_SET) {
+      return make_lists_column(
+        0, make_empty_column(data_type{type_to_id<offset_type>()}), empty_like(values), 0, {});
+    }
+
+    return make_empty_column(cudf::detail::target_type(values.type(), k));
+  }
+};
+
 /// Make an empty table with appropriate types for requested aggs
 auto empty_results(host_span<aggregation_request const> requests)
 {
@@ -88,13 +113,13 @@ auto empty_results(host_span<aggregation_request const> requests)
     requests.begin(), requests.end(), std::back_inserter(empty_results), [](auto const& request) {
       std::vector<std::unique_ptr<column>> results;
 
-      std::transform(
-        request.aggregations.begin(),
-        request.aggregations.end(),
-        std::back_inserter(results),
-        [&request](auto const& agg) {
-          return make_empty_column(cudf::detail::target_type(request.values.type(), agg->kind));
-        });
+      std::transform(request.aggregations.begin(),
+                     request.aggregations.end(),
+                     std::back_inserter(results),
+                     [&request](auto const& agg) {
+                       return cudf::detail::aggregation_dispatcher(
+                         agg->kind, empty_column_constructor{request.values});
+                     });
 
       return aggregation_result{std::move(results)};
     });
