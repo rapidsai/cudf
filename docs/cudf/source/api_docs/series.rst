@@ -381,126 +381,29 @@ Categorical accessor
 Categorical-dtype specific methods and attributes are available under
 the ``Series.cat`` accessor.
 
-.. autosummary::
-   :toctree: api/
-   :template: autosummary/accessor_attribute.rst
-
-   Series.cat.categories
-   Series.cat.ordered
-   Series.cat.codes
-
-.. autosummary::
-   :toctree: api/
-   :template: autosummary/accessor_method.rst
-
-   Series.cat.rename_categories
-   Series.cat.reorder_categories
-   Series.cat.add_categories
-   Series.cat.remove_categories
-   Series.cat.remove_unused_categories
-   Series.cat.set_categories
-   Series.cat.as_ordered
-   Series.cat.as_unordered
-
-
-.. _api.series.sparse:
-
-Sparse accessor
-~~~~~~~~~~~~~~~
-
-Sparse-dtype specific methods and attributes are provided under the
-``Series.sparse`` accessor.
-
-.. autosummary::
-   :toctree: api/
-   :template: autosummary/accessor_attribute.rst
-
-   Series.sparse.npoints
-   Series.sparse.density
-   Series.sparse.fill_value
-   Series.sparse.sp_values
-
-.. autosummary::
-   :toctree: api/
-   :template: autosummary/accessor_method.rst
-
-   Series.sparse.from_coo
-   Series.sparse.to_coo
-
-.. _api.series.flags:
-
-Flags
-~~~~~
-
-Flags refer to attributes of the pandas object. Properties of the dataset (like
-the date is was recorded, the URL it was accessed from, etc.) should be stored
-in :attr:`Series.attrs`.
-
+.. currentmodule:: cudf.core.column.categorical.CategoricalAccessor
 .. autosummary::
    :toctree: api/
 
-   Flags
-
-.. _api.series.metadata:
-
-Metadata
-~~~~~~~~
-
-:attr:`Series.attrs` is a dictionary for storing global metadata for this Series.
-
-.. warning:: ``Series.attrs`` is considered experimental and may change without warning.
-
-.. autosummary::
-   :toctree: api/
-
-   Series.attrs
+   categories
+   ordered
+   codes
+   reorder_categories
+   add_categories
+   remove_categories
+   set_categories
+   as_ordered
+   as_unordered
 
 
-Plotting
---------
-``Series.plot`` is both a callable method and a namespace attribute for
-specific plotting methods of the form ``Series.plot.<kind>``.
-
-.. autosummary::
-   :toctree: api/
-   :template: autosummary/accessor_callable.rst
-
-   Series.plot
-
-.. autosummary::
-   :toctree: api/
-   :template: autosummary/accessor_method.rst
-
-   Series.plot.area
-   Series.plot.bar
-   Series.plot.barh
-   Series.plot.box
-   Series.plot.density
-   Series.plot.hist
-   Series.plot.kde
-   Series.plot.line
-   Series.plot.pie
-
-.. autosummary::
-   :toctree: api/
-
-   Series.hist
 
 Serialization / IO / conversion
 -------------------------------
+.. currentmodule:: cudf
 .. autosummary::
    :toctree: api/
 
-   Series.to_pickle
-   Series.to_csv
-   Series.to_dict
-   Series.to_excel
    Series.to_frame
-   Series.to_xarray
    Series.to_hdf
-   Series.to_sql
    Series.to_json
    Series.to_string
-   Series.to_clipboard
-   Series.to_latex
-   Series.to_markdown
