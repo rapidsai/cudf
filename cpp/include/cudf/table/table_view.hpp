@@ -257,9 +257,16 @@ class mutable_table_view : public detail::table_view_base<mutable_column_view> {
   mutable_table_view(std::vector<mutable_table_view> const& views);
 };
 
-inline bool has_nulls(table_view view)
+inline bool has_nulls(table_view const& view)
 {
-  return std::any_of(view.begin(), view.end(), [](column_view col) { return col.has_nulls(); });
+  return std::any_of(
+    view.begin(), view.end(), [](column_view const& col) { return col.has_nulls(); });
+}
+
+inline bool has_nested_nulls(table_view const& view)
+{
+  return std::any_of(
+    view.begin(), view.end(), [](column_view const& col) { return col.has_nested_nulls(); });
 }
 
 /**

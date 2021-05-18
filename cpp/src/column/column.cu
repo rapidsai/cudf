@@ -182,6 +182,14 @@ void column::set_null_count(size_type new_null_count)
   _null_count = new_null_count;
 }
 
+bool column::has_nested_nulls() const noexcept
+{
+  return has_nulls() ||
+         std::any_of(_children.cbegin(), _children.cend(), [](auto const &child_col) {
+           return child_col->has_nested_nulls();
+         });
+}
+
 namespace {
 struct create_column_from_view {
   cudf::column_view view;

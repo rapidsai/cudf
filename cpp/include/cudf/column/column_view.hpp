@@ -371,6 +371,14 @@ class column_view : public detail::column_view_base {
    */
   auto child_end() const noexcept { return _children.cend(); }
 
+  /**
+   * @brief Indicates whether the column itself or its children columns contain null elements.
+   *
+   * @return true One or more elements in the column or its children columns are null.
+   * @return false All elements are valid.
+   */
+  bool has_nested_nulls() const;
+
  private:
   friend column_view bit_cast(column_view const& input, data_type type);
 
