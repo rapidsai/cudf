@@ -9,7 +9,6 @@ import pytest
 import cudf
 from cudf.tests.utils import assert_eq
 
-from cudf import NA
 
 @pytest.mark.parametrize(
     "data",
@@ -350,4 +349,5 @@ def test_concatenate_list_with_nonlist():
 ])
 def test_list_getitem(data):
     list_sr = cudf.Series([data])
-    assert data == list_sr[0]
+    # __getitem__ shall fill None with cudf.NA
+    assert pa.scalar(data) == list_sr.to_arrow()[0]
