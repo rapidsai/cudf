@@ -145,19 +145,8 @@ def cut(
                 mn = cudf.Scalar(min(x) , dtype="float64")
                 mx = cudf.Scalar(max(x), dtype="float64")
             step = cudf.Scalar((mx -mn)/bins, dtype="float64")
-            # if step.dtype != mn.dtype:
-            #     step = step.astype(mn.dtype)
             bins = sequence(size=bins + 1, init=mn.device_value,step=step.device_value).values
             adj = (mx - mn).value * 0.001
-            # # else:
-            # # turn input into a cupy array to make for easier handling
-            # x = cupy.asarray(x)
-            # rng = (x.min(), x.max())
-            # mn, mx = [mi + 0.0 for mi in rng]
-            # bins = cupy.linspace(mn, mx, bins + 1, endpoint=True)
-            # # extend the range of x by 0.1% on each side to include
-            # # the minimum and maximum values of x.
-            # adj = (mx - mn) * 0.001
             if right:
                 bins[0] -= adj
             else:
@@ -233,9 +222,6 @@ def cut(
     index_labels = label_bins(
         input_arr, left_edges, left_inclusive, right_edges, right_inclusive
     )
-    # breakpoint()
-    # if index_labels.base_mask and not index_labels.has_nulls:
-    #     index_labels._base_mask = None
 
     if labels is False:
         # if labels is false we return the index labels, we return them
@@ -267,11 +253,12 @@ def cut(
     col = build_categorical_column(
         categories=interval_labels,
         codes=index_labels,
-        ordered=ordered,
+        mask=index_labels.base_mask,
+        offset=index_labels.offset,
         size=index_labels.size,
+        ordered=ordered,
     )
-
-    return col 
+    
     # we return a categorical index, as we don't have a Categorical method
     categorical_index = cudf.core.index.as_index(col)
 
@@ -281,7 +268,6 @@ def cut(
         if retbins:
             return res_series, bins
         else:
-            breakpoint()
             return res_series
     elif retbins:
         # if retbins is true we return the bins as well

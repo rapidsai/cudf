@@ -5280,7 +5280,7 @@ class Series(SingleColumnFrame, Serializable):
         """
         if bins is not None:
             self = cudf.cut(self,bins, include_lowest=True)
-        breakpoint()
+        
         if dropna and self.null_count == len(self):
             return Series(
                 [],
