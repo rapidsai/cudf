@@ -1135,6 +1135,11 @@ class ColumnBase(Column, Serializable):
             f"{other.dtype}."
         )
 
+    def normalize_binop_value(
+        self, other: ScalarLike
+    ) -> Union[ColumnBase, ScalarLike]:
+        raise NotImplementedError
+
     def min(self, skipna: bool = None, dtype: Dtype = None):
         result_col = self._process_for_reduction(skipna=skipna)
         if isinstance(result_col, ColumnBase):
