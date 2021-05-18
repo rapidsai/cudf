@@ -36,8 +36,7 @@ def assert_groupby_results_equal(expect, got, sort=True, **kwargs):
     if sort:
         expect = expect.sort_index()
         got = got.sort_index()
-    else:
-        assert_eq(expect.sort_index(), got.sort_index(), **kwargs)
+    assert_eq(expect, got, **kwargs)
 
 
 def make_frame(
