@@ -44,7 +44,7 @@ dependencies:
   - dask==2021.4.0
   - distributed>=2.22.0,<=2021.4.0
   - streamz
-  - dlpack
+  - dlpack==0.3
   - arrow-cpp=1.0.1
   - arrow-cpp-proc * cuda
   - double-conversion
