@@ -16,6 +16,7 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/unary.hpp>
@@ -163,6 +164,51 @@ flatten_nested_columns(table_view const& input,
     return std::make_tuple(input, column_order, null_precedence, std::move(validity_as_column));
 
   return flattened_table{input, column_order, null_precedence, nullability}();
+}
+
+// Helper function to superimpose validity of parent struct
+// over the specified member (child) column.
+void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
+                              size_type parent_null_count,
+                              column& child,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
+{
+  if (!child.nullable()) {
+    // Child currently has no null mask. Copy parent's null mask.
+    child.set_null_mask(rmm::device_buffer{
+      parent_null_mask, cudf::bitmask_allocation_size_bytes(child.size()), stream, mr});
+    child.set_null_count(parent_null_count);
+  } else {
+    // Child should have a null mask.
+    // `AND` the child's null mask with the parent's.
+
+    auto current_child_mask = child.mutable_view().null_mask();
+
+    std::vector<bitmask_type const*> masks{
+      reinterpret_cast<bitmask_type const*>(parent_null_mask),
+      reinterpret_cast<bitmask_type const*>(current_child_mask)};
+    std::vector<size_type> begin_bits{0, 0};
+    cudf::detail::inplace_bitmask_and(
+      device_span<bitmask_type>(current_child_mask, num_bitmask_words(child.size())),
+      masks,
+      begin_bits,
+      child.size(),
+      stream,
+      mr);
+    child.set_null_count(UNKNOWN_NULL_COUNT);
+  }
+
+  // If the child is also a struct, repeat for all grandchildren.
+  if (child.type().id() == cudf::type_id::STRUCT) {
+    const auto current_child_mask = child.mutable_view().null_mask();
+    std::for_each(thrust::make_counting_iterator(0),
+                  thrust::make_counting_iterator(child.num_children()),
+                  [&current_child_mask, &child, stream, mr](auto i) {
+                    superimpose_parent_nulls(
+                      current_child_mask, UNKNOWN_NULL_COUNT, child.child(i), stream, mr);
+                  });
+  }
 }
 
 }  // namespace detail
