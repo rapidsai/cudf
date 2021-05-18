@@ -1001,47 +1001,41 @@ TEST_F(OrcStatisticsTest, Basic)
 
   auto validate_statistics = [&](std::vector<cudf_io::column_statistics> const& stats) {
     auto& s0 = stats[0];
-    EXPECT_EQ(s0.type(), cudf_io::statistics_type::NONE);
-    EXPECT_EQ(*s0.number_of_values(), 9ul);
+    EXPECT_EQ(*s0.number_of_values, 9ul);
 
     auto& s1 = stats[1];
-    EXPECT_EQ(s1.type(), cudf_io::statistics_type::INT);
-    EXPECT_EQ(*s1.number_of_values(), 4ul);
-    auto ts1 = s1.type_specific_stats<cudf_io::integer_statistics>();
-    EXPECT_EQ(*ts1->minimum(), 1);
-    EXPECT_EQ(*ts1->maximum(), 7);
-    EXPECT_EQ(*ts1->sum(), 16);
+    EXPECT_EQ(*s1.number_of_values, 4ul);
+    auto& ts1 = std::get<cudf_io::integer_statistics>(s1.type_specific_stats);
+    EXPECT_EQ(*ts1.minimum, 1);
+    EXPECT_EQ(*ts1.maximum, 7);
+    EXPECT_EQ(*ts1.sum, 16);
 
     auto& s2 = stats[2];
-    EXPECT_EQ(s2.type(), cudf_io::statistics_type::DOUBLE);
-    EXPECT_EQ(*s2.number_of_values(), 4ul);
-    auto ts2 = s2.type_specific_stats<cudf_io::double_statistics>();
-    EXPECT_EQ(*ts2->minimum(), 1.);
-    EXPECT_EQ(*ts2->maximum(), 7.);
+    EXPECT_EQ(*s2.number_of_values, 4ul);
+    auto& ts2 = std::get<cudf_io::double_statistics>(s2.type_specific_stats);
+    EXPECT_EQ(*ts2.minimum, 1.);
+    EXPECT_EQ(*ts2.maximum, 7.);
     // No sum ATM, filed #7087
-    EXPECT_EQ(ts2->sum(), nullptr);
+    ASSERT_FALSE(ts2.sum);
 
     auto& s3 = stats[3];
-    EXPECT_EQ(s3.type(), cudf_io::statistics_type::STRING);
-    EXPECT_EQ(*s3.number_of_values(), 9ul);
-    auto ts3 = s3.type_specific_stats<cudf_io::string_statistics>();
-    EXPECT_EQ(*ts3->minimum(), "Friday");
-    EXPECT_EQ(*ts3->maximum(), "Wednesday");
-    EXPECT_EQ(*ts3->sum(), 58ul);
+    EXPECT_EQ(*s3.number_of_values, 9ul);
+    auto& ts3 = std::get<cudf_io::string_statistics>(s3.type_specific_stats);
+    EXPECT_EQ(*ts3.minimum, "Friday");
+    EXPECT_EQ(*ts3.maximum, "Wednesday");
+    EXPECT_EQ(*ts3.sum, 58ul);
 
     auto& s4 = stats[4];
-    EXPECT_EQ(s4.type(), cudf_io::statistics_type::BUCKET);
-    EXPECT_EQ(*s4.number_of_values(), 9ul);
-    EXPECT_EQ(*s4.type_specific_stats<cudf_io::bucket_statistics>()->count(0), 8ul);
+    EXPECT_EQ(*s4.number_of_values, 9ul);
+    EXPECT_EQ(std::get<cudf_io::bucket_statistics>(s4.type_specific_stats).count[0], 8ul);
 
     auto& s5 = stats[5];
-    EXPECT_EQ(s5.type(), cudf_io::statistics_type::TIMESTAMP);
-    EXPECT_EQ(*s5.number_of_values(), 4ul);
-    auto ts5 = s5.type_specific_stats<cudf_io::timestamp_statistics>();
-    EXPECT_EQ(*ts5->minimum_utc(), 1000);
-    EXPECT_EQ(*ts5->maximum_utc(), 7000);
-    EXPECT_EQ(ts5->minimum(), nullptr);
-    EXPECT_EQ(ts5->maximum(), nullptr);
+    EXPECT_EQ(*s5.number_of_values, 4ul);
+    auto& ts5 = std::get<cudf_io::timestamp_statistics>(s5.type_specific_stats);
+    EXPECT_EQ(*ts5.minimum_utc, 1000);
+    EXPECT_EQ(*ts5.maximum_utc, 7000);
+    ASSERT_FALSE(ts5.minimum);
+    ASSERT_FALSE(ts5.maximum);
   };
 
   validate_statistics(stats.file_stats);
