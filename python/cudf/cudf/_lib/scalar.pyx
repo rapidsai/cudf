@@ -26,6 +26,11 @@ from cudf._lib.types import (
 from cudf._lib.types import datetime_unit_map
 from cudf._lib.types cimport underlying_type_t_type_id, dtype_from_column_view
 
+from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.table cimport Table
+from cudf._lib.interop import to_arrow
+
 from cudf._lib.cpp.wrappers.timestamps cimport (
     timestamp_s,
     timestamp_ms,
@@ -166,8 +171,9 @@ cdef class DeviceScalar:
                 "Must pass a dtype when constructing from a fixed-point scalar"
             )
         elif cdtype.id() == libcudf_types.LIST:
-            if (<list_scalar*>s.get_raw_ptr())[0]
-            .view().type().id() == libcudf_types.LIST:
+            if (
+                <list_scalar*>s.get_raw_ptr()
+            )[0].view().type().id() == libcudf_types.LIST:
                 s._dtype = dtype_from_column_view(
                     (<list_scalar*>s.get_raw_ptr())[0].view()
                 )
