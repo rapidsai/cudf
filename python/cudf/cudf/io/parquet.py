@@ -5,7 +5,6 @@ from collections import defaultdict
 from uuid import uuid4
 
 from fsspec.core import get_fs_token_paths
-from fsspec.utils import stringify_path
 from pyarrow import dataset as ds, parquet as pq
 
 import cudf
@@ -203,7 +202,11 @@ def read_parquet(
     for source in filepath_or_buffer:
         if ioutils.is_directory(source, **kwargs):
             fs = _ensure_filesystem(passed_filesystem=None, path=source)
-            source = stringify_path(source)
+            source = (
+                source.__fspath__()
+                if hasattr(source, "__fspath__")
+                else source
+            )
             source = fs.sep.join([source, "*.parquet"])
 
         tmp_source, compression = ioutils.get_filepath_or_buffer(

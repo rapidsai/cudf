@@ -1051,7 +1051,11 @@ def _is_local_filesystem(fs):
 def ensure_single_filepath_or_buffer(path_or_data, **kwargs):
     """Return False if `path_or_data` resolves to multiple filepaths or buffers
     """
-    path_or_data = fsspec.utils.stringify_path(path_or_data)
+    path_or_data = (
+        path_or_data.__fspath__()
+        if hasattr(path_or_data, "__fspath__")
+        else path_or_data
+    )
     if isinstance(path_or_data, str):
         storage_options = kwargs.get("storage_options")
         path_or_data = os.path.expanduser(path_or_data)
@@ -1076,7 +1080,11 @@ def ensure_single_filepath_or_buffer(path_or_data, **kwargs):
 def is_directory(path_or_data, **kwargs):
     """Returns True if the provided filepath is a directory
     """
-    path_or_data = fsspec.utils.stringify_path(path_or_data)
+    path_or_data = (
+        path_or_data.__fspath__()
+        if hasattr(path_or_data, "__fspath__")
+        else path_or_data
+    )
     if isinstance(path_or_data, str):
         storage_options = kwargs.get("storage_options")
         path_or_data = os.path.expanduser(path_or_data)
@@ -1121,7 +1129,11 @@ def get_filepath_or_buffer(
     compression : str
         Type of compression algorithm for the content
     """
-    path_or_data = fsspec.utils.stringify_path(path_or_data)
+    path_or_data = (
+        path_or_data.__fspath__()
+        if hasattr(path_or_data, "__fspath__")
+        else path_or_data
+    )
 
     if isinstance(path_or_data, str):
         storage_options = kwargs.get("storage_options")
