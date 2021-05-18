@@ -11,6 +11,7 @@ from cudf._lib import groupby as libgroupby
 from cudf._lib.table import Table
 from cudf.core.abc import Serializable
 from cudf.utils.utils import GetAttrGetItemMixin, cached_property
+from cudf.utils.dtypes import is_list_like
 
 
 # Note that all valid aggregation methods (e.g. GroupBy.min) are bound to the
@@ -713,7 +714,7 @@ class GroupBy(Serializable):
         freq : str, unsupported
         axis : 0, axis to shift
             Shift direction. Only row-wise shift is supported
-        fill_value : optional
+        fill_value : scalar or list of scalars, optional
             The scalar value to use for newly introduced missing values. Should
             match the dtype of columns to fill.
 
@@ -725,6 +726,11 @@ class GroupBy(Serializable):
         Notes
         -----
         Parameter ``freq`` is unsupported.
+
+        Parameter ``fill_value`` can be specified with ``None``, a single value
+        or multiple values. When multiple values are specified, the number of
+        values should match the number of columns to shift. Each column shifted
+        is filled with the corresponding value in the value list.
         """
 
         if freq is not None:
@@ -736,9 +742,15 @@ class GroupBy(Serializable):
         data_names = [
             x for x in self.obj._column_names if x not in self.grouping.names
         ]
+        num_columns_to_shift = len(data_names)
+        if is_list_like(fill_value):
+            if not len(fill_value) == num_columns_to_shift:
+                raise ValueError("Mismatched number of columns and values to fill.")
+        else:
+            fill_value = [fill_value] * num_columns_to_shift
+
         data = self.obj._data.select_by_label(data_names)
-        fill_values = [fill_value] * len(data)
-        result = self._groupby.shift(Table(data), periods, fill_values)
+        result = self._groupby.shift(Table(data), periods, fill_value)
         return self.obj.__class__._from_table(result)
 
 
