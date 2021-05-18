@@ -19,6 +19,15 @@ arith_ops = [
 ]
 
 
+comparison_ops = [
+    operator.eq, 
+    operator.ne,
+    operator.lt,
+    operator.le,
+    operator.gt,
+    operator.ge
+]
+
 class MaskedType(types.Type):
     '''
     A numba type consiting of a value of some primitive type 
@@ -206,7 +215,22 @@ class MaskedScalarIsNull(AbstractTemplate):
                 MaskedType(args[0].value_type), 
                 NAType())
 
-for op in arith_ops:
+@cuda_decl_registry.register_global(operator.truth)
+class MaskedScalarTruth(AbstractTemplate):
+    '''
+    Typing for `if Masked`
+    Used for `if x > y`
+    The truthiness of a MaskedType shall be the truthiness
+    of the `value` stored therein
+    '''
+    def generic(self, args, kws):
+        if isinstance(args[0], MaskedType):
+            return nb_signature(
+                types.boolean,
+                MaskedType(types.boolean)
+            )
+
+for op in arith_ops + comparison_ops:
     # Every op shares the same typing class
     cuda_decl_registry.register_global(op)(MaskedScalarArithOp)
     cuda_decl_registry.register_global(op)(MaskedScalarNullOp)

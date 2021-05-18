@@ -17,6 +17,15 @@ arith_ops = [
 
 ]
 
+comparison_ops = [
+    operator.eq, 
+    operator.ne,
+    operator.lt,
+    operator.le,
+    operator.gt,
+    operator.ge
+]
+
 def run_masked_udf_test(func_pdf, func_gdf, data, **kwargs):
     gdf = data
     pdf = data.to_pandas(nullable=True)
@@ -50,6 +59,27 @@ def test_arith_masked_vs_masked(op):
     gdf = cudf.DataFrame({
         'a':[1,None,3, None],
         'b':[4,5,None, None]
+    })
+    run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
+
+@pytest.mark.parametrize('op', comparison_ops)
+def test_compare_masked_vs_masked(op):
+    # this test should test all the 
+    # typing and lowering for comparisons 
+    # between columns
+
+    def func_pdf(x, y):
+        return op(x, y)
+
+    @nulludf
+    def func_gdf(x, y):
+        return op(x, y)
+
+    # we should get:
+    # [?, ?, <NA>, <NA>, <NA>]
+    gdf = cudf.DataFrame({
+        'a': [1, 0, None, 1, None],
+        'b': [0, 1, 0, None, None]
     })
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
@@ -152,6 +182,9 @@ def test_apply_return_literal(val):
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False) 
 
 def test_apply_return_null():
+    '''
+    Tests casting / unification of Masked and NA
+    '''
     def func_pdf(x):
         if x is pd.NA:
             return pd.NA
@@ -166,5 +199,4 @@ def test_apply_return_null():
             return x
 
     gdf = cudf.DataFrame({'a': [1, None, 3]})
-    breakpoint()
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False) 
