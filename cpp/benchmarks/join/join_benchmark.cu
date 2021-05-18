@@ -277,3 +277,4 @@ BENCHMARK_REGISTER_F(Join, left_semi_join_64bit_nulls)
   ->Args({50'000'000, 50'000'000})
   ->Args({40'000'000, 120'000'000})
   ->UseManualTime();
+  
