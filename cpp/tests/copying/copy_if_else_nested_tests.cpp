@@ -29,7 +29,7 @@ template <typename T>
 struct TypedCopyIfElseNestedTest : CopyIfElseNestedTest {
 };
 
-TYPED_TEST_CASE(TypedCopyIfElseNestedTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_CASE(TypedCopyIfElseNestedTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(TypedCopyIfElseNestedTest, Structs)
 {
