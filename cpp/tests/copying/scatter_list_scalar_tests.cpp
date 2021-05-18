@@ -188,5 +188,90 @@ TEST_F(ScatterListOfStringScalarTest, NullableTargetRow)
   test_single_scalar_scatter(col, *slr, scatter_map, expected);
 }
 
+template <typename T>
+class ScatterListOfListScalarTest : public ScatterListScalarTests {
+};
+
+TYPED_TEST_CASE(ScatterListOfListScalarTest, FixedWidthTypesWithoutFixedPoint);
+
+TYPED_TEST(ScatterListOfListScalarTest, Basic)
+{
+  using LCW = lists_column_wrapper<TypeParam, int32_t>;
+
+  auto slr = std::make_unique<list_scalar>(
+    LCW({LCW{1, 2, 3}, LCW{4}, LCW{}, LCW{5, 6}}, M{1, 1, 0, 1}.begin()), true);
+  LCW col({LCW({LCW{88, 88}, LCW{}, LCW{9, 9, 9}}, M{1, 0, 1}.begin()),
+           LCW{LCW{66}, LCW{}, LCW({77, 77, 77, 77}, M{1, 0, 0, 1}.begin())},
+           LCW{LCW{55, 55}, LCW{}, LCW{10, 10, 10}},
+           LCW{LCW{44, 44}}});
+
+  SM_t scatter_map{1, 2, 3};
+
+  LCW expected({LCW({LCW{88, 88}, LCW{}, LCW{9, 9, 9}}, M{1, 0, 1}.begin()),
+                LCW({LCW{1, 2, 3}, LCW{4}, LCW{}, LCW{5, 6}}, M{1, 1, 0, 1}.begin()),
+                LCW({LCW{1, 2, 3}, LCW{4}, LCW{}, LCW{5, 6}}, M{1, 1, 0, 1}.begin()),
+                LCW({LCW{1, 2, 3}, LCW{4}, LCW{}, LCW{5, 6}}, M{1, 1, 0, 1}.begin())});
+
+  test_single_scalar_scatter(col, *slr, scatter_map, expected);
+}
+
+TYPED_TEST(ScatterListOfListScalarTest, EmptyValidScalar)
+{
+  using LCW = lists_column_wrapper<TypeParam, int32_t>;
+
+  auto slr = std::make_unique<list_scalar>(LCW{}, true);
+  LCW col({LCW({LCW{88, 88}, LCW{}, LCW{9, 9, 9}}, M{1, 0, 1}.begin()),
+           LCW{LCW{66}, LCW{}, LCW({77, 77, 77, 77}, M{1, 0, 0, 1}.begin())},
+           LCW{LCW{55, 55}, LCW{}, LCW{10, 10, 10}},
+           LCW{LCW{44, 44}}});
+
+  SM_t scatter_map{3, 0};
+
+  LCW expected({LCW{},
+                LCW{LCW{66}, LCW{}, LCW({77, 77, 77, 77}, M{1, 0, 0, 1}.begin())},
+                LCW{LCW{55, 55}, LCW{}, LCW{10, 10, 10}},
+                LCW{}});
+
+  test_single_scalar_scatter(col, *slr, scatter_map, expected);
+}
+
+TYPED_TEST(ScatterListOfListScalarTest, NullScalar)
+{
+  using LCW = lists_column_wrapper<TypeParam, int32_t>;
+
+  auto slr = std::make_unique<list_scalar>(LCW{}, false);
+  LCW col({LCW({LCW{88, 88}, LCW{}, LCW{9, 9, 9}}, M{1, 0, 1}.begin()),
+           LCW{LCW{66}, LCW{}, LCW({77, 77, 77, 77}, M{1, 0, 0, 1}.begin())},
+           LCW{LCW{44, 44}}});
+
+  SM_t scatter_map{1, 0};
+
+  LCW expected({LCW{}, LCW{}, LCW{LCW{44, 44}}}, M{0, 0, 1}.begin());
+
+  test_single_scalar_scatter(col, *slr, scatter_map, expected);
+}
+
+TYPED_TEST(ScatterListOfListScalarTest, NullableTargetRows)
+{
+  using LCW = lists_column_wrapper<TypeParam, int32_t>;
+
+  auto slr = std::make_unique<list_scalar>(
+    LCW({LCW{1, 1, 1}, LCW{3, 3}, LCW{}, LCW{4}}, M{1, 1, 0, 1}.begin()), true);
+
+  LCW col({LCW({LCW{88, 88}, LCW{}, LCW{9, 9, 9}}, M{1, 0, 1}.begin()),
+           LCW{LCW{66}, LCW{}, LCW({77, 77, 77, 77}, M{1, 0, 0, 1}.begin())},
+           LCW{LCW{44, 44}}},
+          M{1, 0, 1}.begin());
+
+  SM_t scatter_map{1};
+
+  LCW expected({LCW({LCW{88, 88}, LCW{}, LCW{9, 9, 9}}, M{1, 0, 1}.begin()),
+                LCW({LCW{1, 1, 1}, LCW{3, 3}, LCW{}, LCW{4}}, M{1, 1, 0, 1}.begin()),
+                LCW{LCW{44, 44}}},
+               M{1, 1, 1}.begin());
+
+  test_single_scalar_scatter(col, *slr, scatter_map, expected);
+}
+
 }  // namespace test
 }  // namespace cudf
