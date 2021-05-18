@@ -57,19 +57,9 @@ TEST_F(ConcatenateListElementsTest, InvalidInput)
     EXPECT_THROW(cudf::lists::concatenate_list_elements(col), cudf::logic_error);
   }
 
-  // Input lists is not a 2-level depth lists column.
+  // Input lists is not at least 2-level depth lists column.
   {
     auto const col = IntListsCol{1, 2, 3};
-    EXPECT_THROW(cudf::lists::concatenate_list_elements(col), cudf::logic_error);
-  }
-
-  // Nested typed entries are not supported.
-  {
-    auto row0      = IntListsCol{{IntListsCol{IntListsCol{}, IntListsCol{2, 3}},
-                             IntListsCol{IntListsCol{4, 5}, IntListsCol{6}}}};
-    auto row1      = IntListsCol{{IntListsCol{IntListsCol{}, IntListsCol{2, 3}},
-                             IntListsCol{IntListsCol{4, 5}, IntListsCol{6}}}};
-    auto const col = build_lists_col(row0, row1);
     EXPECT_THROW(cudf::lists::concatenate_list_elements(col), cudf::logic_error);
   }
 }
@@ -93,6 +83,33 @@ TYPED_TEST(ConcatenateListElementsTypedTest, SimpleInputNoNull)
   auto const col      = build_lists_col(row0, row1, row2);
   auto const results  = cudf::lists::concatenate_list_elements(col);
   auto const expected = ListsCol{{1, 2, 3, 4, 5, 6}, {}, {7, 8, 9, 10}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
+}
+
+TYPED_TEST(ConcatenateListElementsTypedTest, SimpleInputNestedManyLevelsNoNull)
+{
+  using ListsCol = cudf::test::lists_column_wrapper<TypeParam>;
+
+  auto row00 = ListsCol{{1, 2}, {3}, {4, 5, 6}};
+  auto row01 = ListsCol{ListsCol{}};
+  auto row02 = ListsCol{{7, 8}, {9, 10}};
+  auto row0  = build_lists_col(row00, row01, row02);
+
+  auto row10 = ListsCol{{1, 2}, {3}, {4, 5, 6}};
+  auto row11 = ListsCol{ListsCol{}};
+  auto row12 = ListsCol{{7, 8}, {9, 10}};
+  auto row1  = build_lists_col(row10, row11, row12);
+
+  auto row20 = ListsCol{{1, 2}, {3}, {4, 5, 6}};
+  auto row21 = ListsCol{ListsCol{}};
+  auto row22 = ListsCol{{7, 8}, {9, 10}};
+  auto row2  = build_lists_col(row20, row21, row22);
+
+  auto const col      = build_lists_col(row0, row1, row2);
+  auto const results  = cudf::lists::concatenate_list_elements(col);
+  auto const expected = ListsCol{ListsCol{{1, 2}, {3}, {4, 5, 6}, {}, {7, 8}, {9, 10}},
+                                 ListsCol{{1, 2}, {3}, {4, 5, 6}, {}, {7, 8}, {9, 10}},
+                                 ListsCol{{1, 2}, {3}, {4, 5, 6}, {}, {7, 8}, {9, 10}}};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
 }
 
@@ -159,6 +176,50 @@ TYPED_TEST(ConcatenateListElementsTypedTest, SimpleInputWithNulls)
                 ListsCol{{1, 2, 3, null, null, null, null, null, null, null},
                          null_at({3, 4, 5, 6, 7, 8, 9})}},
                null_at({0, 2, 3})};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
+  }
+}
+
+TYPED_TEST(ConcatenateListElementsTypedTest, SimpleInputNestedManyLevelsWithNulls)
+{
+  using ListsCol = cudf::test::lists_column_wrapper<TypeParam>;
+
+  auto row00 = ListsCol{{1, 2}, {3}, {4, 5, 6}};
+  auto row01 = ListsCol{ListsCol{}}; /*NULL*/
+  auto row02 = ListsCol{{7, 8}, {9, 10}};
+  auto row0  = ListsCol{{std::move(row00), std::move(row01), std::move(row02)}, null_at(1)};
+
+  auto row10 = ListsCol{{{1, 2}, {3}, {4, 5, 6} /*NULL*/}, null_at(2)};
+  auto row11 = ListsCol{ListsCol{}};
+  auto row12 = ListsCol{{7, 8}, {9, 10}};
+  auto row1  = build_lists_col(row10, row11, row12);
+
+  auto row20 = ListsCol{{1, 2}, {3}, {4, 5, 6}};
+  auto row21 = ListsCol{ListsCol{}};
+  auto row22 = ListsCol{ListsCol{{null, 8}, null_at(0)}, {9, 10}};
+  auto row2  = build_lists_col(row20, row21, row22);
+
+  auto const col = build_lists_col(row0, row1, row2);
+
+  // Ignore null list elements.
+  {
+    auto const results = cudf::lists::concatenate_list_elements(col);
+    auto const expected =
+      ListsCol{ListsCol{{1, 2}, {3}, {4, 5, 6}, {7, 8}, {9, 10}},
+               ListsCol{{{1, 2}, {3}, {} /*NULL*/, {}, {7, 8}, {9, 10}}, null_at(2)},
+               ListsCol{{1, 2}, {3}, {4, 5, 6}, {}, ListsCol{{null, 8}, null_at(0)}, {9, 10}}};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
+  }
+
+  // Null lists result in null rows.
+  {
+    auto const results = cudf::lists::concatenate_list_elements(
+      col, cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW);
+    auto const expected =
+      ListsCol{{ListsCol{ListsCol{}}, /*NULL*/
+                ListsCol{{{1, 2}, {3}, {} /*NULL*/, {}, {7, 8}, {9, 10}}, null_at(2)},
+                ListsCol{{1, 2}, {3}, {4, 5, 6}, {}, ListsCol{{null, 8}, null_at(0)}, {9, 10}}},
+               null_at(0)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
   }
 }

@@ -78,7 +78,8 @@ std::unique_ptr<column> concatenate_rows(
  * @endcode
  *
  * @throws cudf::logic_error if the input column is not a two-level depth lists column.
- * @throws cudf::logic_error if the input lists column contains nested typed entry.
+ * @throws cudf::logic_error if the input lists column contains nested typed entries that are not
+ * lists.
  *
  * @param input The lists column containing lists of list elements to concatenate.
  * @param null_policy The parameter to specify whether a null list element will be ignored from
