@@ -140,8 +140,7 @@ generate_list_offsets_and_validities(column_view const& input,
 }
 
 /**
- * @brief Gather lists from the input column into the output column, ignoring rows that have null
- * list elements.
+ * @brief Gather entries from the input lists column, ignoring rows that have null list elements.
  *
  * This function is called only when (has_null_list == true and null_policy == NULLIFY_OUTPUT_ROW).
  */
@@ -232,7 +231,7 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
   type     = col.type();
   CUDF_EXPECTS(type.id() == type_id::LIST, "Rows of the input column must be lists.");
 
-  col  = lists_column_view(col).child();  // Lowest level entries, which are of non-nested types.
+  col  = lists_column_view(col).child();  // The last level entries what we need to check.
   type = col.type();
   CUDF_EXPECTS(type.id() == type_id::LIST || !cudf::is_nested(type),
                "Entry of the input lists column must be of list or non-nested types.");
