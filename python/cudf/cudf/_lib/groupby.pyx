@@ -220,8 +220,8 @@ cdef class GroupBy:
         d_slrs = []
         c_fill_values.reserve(num_col)
         for val, col in zip(fill_values, values._columns):
-            d_slrs.append(as_device_scalar(val, dtype=col.dtype))
-            d_slr = d_slrs[-1]
+            d_slr = as_device_scalar(val, dtype=col.dtype)
+            d_slrs.append(d_slr)
             c_fill_values.push_back(
                 reference_wrapper[constscalar](d_slr.get_raw_ptr()[0])
             )
