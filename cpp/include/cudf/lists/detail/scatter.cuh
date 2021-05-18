@@ -359,7 +359,7 @@ struct list_child_constructor {
     print("scatter_rows ", list_vector, stream);
 #endif  // NDEBUG
 
-    auto child_column = cudf::make_fixed_width_column(cudf::data_type{cudf::type_to_id<T>()},
+    auto child_column = cudf::make_fixed_width_column(source_lists_column_view.child().type(),
                                                       num_child_rows,
                                                       child_null_mask.first,
                                                       child_null_mask.second,

@@ -51,7 +51,7 @@ namespace detail {
  * memoised sorted and/or grouped values and re-using will save on computation
  * of these values.
  */
-struct aggregrate_result_functor final : store_result_functor {
+struct aggregate_result_functor final : store_result_functor {
   using store_result_functor::store_result_functor;
   template <aggregation::Kind k>
   void operator()(aggregation const& agg)
@@ -61,7 +61,7 @@ struct aggregrate_result_functor final : store_result_functor {
 };
 
 template <>
-void aggregrate_result_functor::operator()<aggregation::COUNT_VALID>(aggregation const& agg)
+void aggregate_result_functor::operator()<aggregation::COUNT_VALID>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
@@ -76,7 +76,7 @@ void aggregrate_result_functor::operator()<aggregation::COUNT_VALID>(aggregation
 }
 
 template <>
-void aggregrate_result_functor::operator()<aggregation::COUNT_ALL>(aggregation const& agg)
+void aggregate_result_functor::operator()<aggregation::COUNT_ALL>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
@@ -87,7 +87,7 @@ void aggregrate_result_functor::operator()<aggregation::COUNT_ALL>(aggregation c
 }
 
 template <>
-void aggregrate_result_functor::operator()<aggregation::SUM>(aggregation const& agg)
+void aggregate_result_functor::operator()<aggregation::SUM>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
@@ -99,7 +99,7 @@ void aggregrate_result_functor::operator()<aggregation::SUM>(aggregation const& 
 };
 
 template <>
-void aggregrate_result_functor::operator()<aggregation::PRODUCT>(aggregation const& agg)
+void aggregate_result_functor::operator()<aggregation::PRODUCT>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
@@ -111,7 +111,7 @@ void aggregrate_result_functor::operator()<aggregation::PRODUCT>(aggregation con
 };
 
 template <>
-void aggregrate_result_functor::operator()<aggregation::ARGMAX>(aggregation const& agg)
+void aggregate_result_functor::operator()<aggregation::ARGMAX>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
@@ -126,7 +126,7 @@ void aggregrate_result_functor::operator()<aggregation::ARGMAX>(aggregation cons
 };
 
 template <>
-void aggregrate_result_functor::operator()<aggregation::ARGMIN>(aggregation const& agg)
+void aggregate_result_functor::operator()<aggregation::ARGMIN>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
@@ -141,7 +141,7 @@ void aggregrate_result_functor::operator()<aggregation::ARGMIN>(aggregation cons
 };
 
 template <>
-void aggregrate_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
+void aggregate_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
@@ -178,7 +178,7 @@ void aggregrate_result_functor::operator()<aggregation::MIN>(aggregation const& 
 };
 
 template <>
-void aggregrate_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
+void aggregate_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
@@ -215,7 +215,7 @@ void aggregrate_result_functor::operator()<aggregation::MAX>(aggregation const& 
 };
 
 template <>
-void aggregrate_result_functor::operator()<aggregation::MEAN>(aggregation const& agg)
+void aggregate_result_functor::operator()<aggregation::MEAN>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
@@ -239,11 +239,11 @@ void aggregrate_result_functor::operator()<aggregation::MEAN>(aggregation const&
 };
 
 template <>
-void aggregrate_result_functor::operator()<aggregation::VARIANCE>(aggregation const& agg)
+void aggregate_result_functor::operator()<aggregation::VARIANCE>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto var_agg   = static_cast<cudf::detail::var_aggregation const&>(agg);
+  auto var_agg   = dynamic_cast<cudf::detail::var_aggregation const&>(agg);
   auto mean_agg  = make_mean_aggregation();
   auto count_agg = make_count_aggregation();
   operator()<aggregation::MEAN>(*mean_agg);
@@ -262,11 +262,11 @@ void aggregrate_result_functor::operator()<aggregation::VARIANCE>(aggregation co
 };
 
 template <>
-void aggregrate_result_functor::operator()<aggregation::STD>(aggregation const& agg)
+void aggregate_result_functor::operator()<aggregation::STD>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto std_agg = static_cast<cudf::detail::std_aggregation const&>(agg);
+  auto std_agg = dynamic_cast<cudf::detail::std_aggregation const&>(agg);
   auto var_agg = make_variance_aggregation(std_agg._ddof);
   operator()<aggregation::VARIANCE>(*var_agg);
   column_view var_result = cache.get_result(col_idx, *var_agg);
@@ -276,14 +276,14 @@ void aggregrate_result_functor::operator()<aggregation::STD>(aggregation const& 
 };
 
 template <>
-void aggregrate_result_functor::operator()<aggregation::QUANTILE>(aggregation const& agg)
+void aggregate_result_functor::operator()<aggregation::QUANTILE>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
   auto count_agg = make_count_aggregation();
   operator()<aggregation::COUNT_VALID>(*count_agg);
   column_view group_sizes = cache.get_result(col_idx, *count_agg);
-  auto quantile_agg       = static_cast<cudf::detail::quantile_aggregation const&>(agg);
+  auto quantile_agg       = dynamic_cast<cudf::detail::quantile_aggregation const&>(agg);
 
   auto result = detail::group_quantiles(get_sorted_values(),
                                         group_sizes,
@@ -297,7 +297,7 @@ void aggregrate_result_functor::operator()<aggregation::QUANTILE>(aggregation co
 };
 
 template <>
-void aggregrate_result_functor::operator()<aggregation::MEDIAN>(aggregation const& agg)
+void aggregate_result_functor::operator()<aggregation::MEDIAN>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
@@ -317,11 +317,11 @@ void aggregrate_result_functor::operator()<aggregation::MEDIAN>(aggregation cons
 };
 
 template <>
-void aggregrate_result_functor::operator()<aggregation::NUNIQUE>(aggregation const& agg)
+void aggregate_result_functor::operator()<aggregation::NUNIQUE>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto nunique_agg = static_cast<cudf::detail::nunique_aggregation const&>(agg);
+  auto nunique_agg = dynamic_cast<cudf::detail::nunique_aggregation const&>(agg);
 
   auto result = detail::group_nunique(get_sorted_values(),
                                       helper.group_labels(stream),
@@ -334,19 +334,20 @@ void aggregrate_result_functor::operator()<aggregation::NUNIQUE>(aggregation con
 };
 
 template <>
-void aggregrate_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation const& agg)
+void aggregate_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation const& agg)
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto nth_element_agg = static_cast<cudf::detail::nth_element_aggregation const&>(agg);
+  auto nth_element_agg = dynamic_cast<cudf::detail::nth_element_aggregation const&>(agg);
 
   auto count_agg = make_count_aggregation(nth_element_agg._null_handling);
-  if (count_agg->kind == aggregation::COUNT_VALID)
+  if (count_agg->kind == aggregation::COUNT_VALID) {
     operator()<aggregation::COUNT_VALID>(*count_agg);
-  else if (count_agg->kind == aggregation::COUNT_ALL)
+  } else if (count_agg->kind == aggregation::COUNT_ALL) {
     operator()<aggregation::COUNT_ALL>(*count_agg);
-  else
+  } else {
     CUDF_FAIL("Wrong count aggregation kind");
+  }
   column_view group_sizes = cache.get_result(col_idx, *count_agg);
 
   cache.add_result(col_idx,
@@ -363,37 +364,42 @@ void aggregrate_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation
 }
 
 template <>
-void aggregrate_result_functor::operator()<aggregation::COLLECT_LIST>(aggregation const& agg)
+void aggregate_result_functor::operator()<aggregation::COLLECT_LIST>(aggregation const& agg)
 {
   auto null_handling =
-    static_cast<cudf::detail::collect_list_aggregation const&>(agg)._null_handling;
-  CUDF_EXPECTS(null_handling == null_policy::INCLUDE,
-               "null exclusion is not supported on groupby COLLECT_LIST aggregation.");
+    dynamic_cast<cudf::detail::collect_list_aggregation const&>(agg)._null_handling;
+  agg.do_hash();
 
   if (cache.has_result(col_idx, agg)) return;
 
-  auto result = detail::group_collect(
-    get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr);
+  auto result = detail::group_collect(get_grouped_values(),
+                                      helper.group_offsets(stream),
+                                      helper.num_groups(stream),
+                                      null_handling,
+                                      stream,
+                                      mr);
 
   cache.add_result(col_idx, agg, std::move(result));
 };
 
 template <>
-void aggregrate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation const& agg)
+void aggregate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation const& agg)
 {
   auto const null_handling =
-    static_cast<cudf::detail::collect_set_aggregation const&>(agg)._null_handling;
-  CUDF_EXPECTS(null_handling == null_policy::INCLUDE,
-               "null exclusion is not supported on groupby COLLECT_SET aggregation.");
+    dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._null_handling;
 
   if (cache.has_result(col_idx, agg)) { return; }
 
-  auto const collect_result = detail::group_collect(
-    get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr);
+  auto const collect_result = detail::group_collect(get_grouped_values(),
+                                                    helper.group_offsets(stream),
+                                                    helper.num_groups(stream),
+                                                    null_handling,
+                                                    stream,
+                                                    mr);
   auto const nulls_equal =
-    static_cast<cudf::detail::collect_set_aggregation const&>(agg)._nulls_equal;
+    dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._nulls_equal;
   auto const nans_equal =
-    static_cast<cudf::detail::collect_set_aggregation const&>(agg)._nans_equal;
+    dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._nans_equal;
   cache.add_result(
     col_idx,
     agg,
@@ -415,7 +421,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort
 
   for (size_t i = 0; i < requests.size(); i++) {
     auto store_functor =
-      detail::aggregrate_result_functor(i, requests[i].values, helper(), cache, stream, mr);
+      detail::aggregate_result_functor(i, requests[i].values, helper(), cache, stream, mr);
     for (size_t j = 0; j < requests[i].aggregations.size(); j++) {
       // TODO (dm): single pass compute all supported reductions
       cudf::detail::aggregation_dispatcher(
