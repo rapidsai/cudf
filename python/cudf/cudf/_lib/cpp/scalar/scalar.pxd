@@ -9,7 +9,6 @@ from libcpp.string cimport string
 from cudf._lib.cpp.types cimport data_type
 from cudf._lib.cpp.wrappers.decimals cimport scale_type
 
-from libcpp.memory cimport unique_ptr
 from cudf._lib.cpp.column.column_view cimport column_view
 
 

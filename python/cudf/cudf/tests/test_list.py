@@ -9,6 +9,7 @@ import pytest
 import cudf
 from cudf.tests.utils import assert_eq
 
+from cudf import NA
 
 @pytest.mark.parametrize(
     "data",
