@@ -22,6 +22,8 @@ function(find_and_configure_rmm VERSION)
 
     if(${VERSION} MATCHES [=[([0-9]+)\.([0-9]+)\.([0-9]+)]=])
         set(MAJOR_AND_MINOR "${CMAKE_MATCH_1}.${CMAKE_MATCH_2}")
+    else()
+        set(MAJOR_AND_MINOR "${VERSION}")
     endif()
 
     # Consumers have two options for local source builds:
