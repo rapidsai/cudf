@@ -39,6 +39,6 @@ function(find_and_configure_rmm VERSION)
     fix_cmake_global_defaults(rmm::rmm)
 endfunction()
 
-set(CUDF_MIN_VERSION_rmm "${CUDF_VERSION_MAJOR}.${CUDF_VERSION_MINOR}")
+set(CUDF_MIN_VERSION_rmm "${CUDF_VERSION_MAJOR}.${CUDF_VERSION_MINOR}.00")
 
 find_and_configure_rmm(${CUDF_MIN_VERSION_rmm})
