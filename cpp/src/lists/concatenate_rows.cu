@@ -37,6 +37,10 @@ namespace cudf {
 namespace lists {
 namespace detail {
 namespace {
+/**
+ * @brief Concatenate lists within the same row into one list, ignoring any null list during
+ * concatenation.
+ */
 std::unique_ptr<column> concatenate_rows_ignore_null(table_view const& input,
                                                      bool has_null_mask,
                                                      rmm::cuda_stream_view stream,
@@ -57,7 +61,7 @@ std::unique_ptr<column> concatenate_rows_ignore_null(table_view const& input,
   auto const d_offsets = list_offsets->mutable_view().template begin<offset_type>();
 
   // The array of int8_t to store validities for list elements.
-  // Since we combine multiple lists, we need to recompute list validities.
+  // Since we combine multiple lists, we may need to recompute list validities.
   auto validities = rmm::device_uvector<int8_t>(has_null_mask ? num_output_lists : 0, stream);
 
   // For an input table of `n` columns, if after interleaving we have the list offsets are
@@ -169,8 +173,8 @@ generate_list_offsets_and_validities(table_view const& input,
  *
  * This functor is called only when (has_null_mask == true and null_policy == NULLIFY_OUTPUT_ROW).
  * It is executed twice. In the first pass, the sizes and validities of the output strings will be
- * computed. In the second pass, this will concatenate the lists of strings of the given table of
- * lists columns in a row-wise manner.
+ * computed. In the second pass, this will concatenate the lists of strings on the same row from the
+ * given input table.
  */
 struct compute_string_sizes_and_concatenate_lists_fn {
   table_device_view const table_dv;
@@ -182,7 +186,7 @@ struct compute_string_sizes_and_concatenate_lists_fn {
   offset_type* d_offsets{nullptr};
 
   // If d_chars == nullptr: only compute sizes and validities of the output strings.
-  // If d_chars != nullptr: only concatenate strings.
+  // If d_chars != nullptr: only concatenate lists of strings.
   char* d_chars{nullptr};
 
   // We need to set `1` or `0` for the validities of the strings in the child column.
@@ -190,8 +194,7 @@ struct compute_string_sizes_and_concatenate_lists_fn {
 
   __device__ void operator()(size_type const idx)
   {
-    // The current row contain null, which has been identified during `dst_list_offsets`
-    // computation.
+    // The current row contain null, which has been identified during offsets computation.
     if (dst_list_offsets[idx + 1] == dst_list_offsets[idx]) { return; }
 
     // read_idx and write_idx are indices of string elements.
@@ -205,7 +208,7 @@ struct compute_string_sizes_and_concatenate_lists_fn {
         auto const str_offsets =
           str_col.child(strings_column_view::offsets_column_index).template data<offset_type>();
 
-        // The indices of the strings within the source list.
+        // The range of indices of the strings within the source list.
         auto const start_str_idx = list_offsets[idx];
         auto const end_str_idx   = list_offsets[idx + 1];
 
@@ -224,8 +227,8 @@ struct compute_string_sizes_and_concatenate_lists_fn {
               start_byte;
             auto const output_ptr = d_chars + d_offsets[write_idx];
             thrust::copy(thrust::seq, input_ptr, input_ptr + end_byte - start_byte, output_ptr);
-            write_idx += end_str_idx - start_str_idx;
           }
+          write_idx += end_str_idx - start_str_idx;
         }
       });
   }
@@ -305,7 +308,7 @@ struct concatenate_lists_fn {
                                       lists_col.offset();
             auto const& data_col = lists_col.child(lists_column_view::child_column_index);
 
-            // The indices of the entries within the source list.
+            // The range of indices of the entries within the source list.
             auto const start_idx = list_offsets[idx];
             auto const end_idx   = list_offsets[idx + 1];
 

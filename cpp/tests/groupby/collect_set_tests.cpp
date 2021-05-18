@@ -31,11 +31,19 @@ namespace test {
 #define LCL_V cudf::test::lists_column_wrapper<TypeParam, int32_t>
 #define LCL_S cudf::test::lists_column_wrapper<cudf::string_view>
 #define VALIDITY std::initializer_list<bool>
-#define COLLECT_SET cudf::make_collect_set_aggregation()
-#define COLLECT_SET_NULL_UNEQUAL \
-  cudf::make_collect_set_aggregation(null_policy::INCLUDE, null_equality::UNEQUAL)
 
 struct CollectSetTest : public cudf::test::BaseFixture {
+  static auto collect_set() { return cudf::make_collect_set_aggregation(); }
+
+  static auto collect_set_null_unequal()
+  {
+    return cudf::make_collect_set_aggregation(null_policy::INCLUDE, null_equality::UNEQUAL);
+  }
+
+  static auto collect_set_null_exclude()
+  {
+    return cudf::make_collect_set_aggregation(null_policy::EXCLUDE);
+  }
 };
 
 template <typename V>
@@ -46,17 +54,6 @@ using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBo
                                                   cudf::test::FloatingPointTypes,
                                                   cudf::test::TimestampTypes>;
 TYPED_TEST_CASE(CollectSetTypedTest, FixedWidthTypesNotBool);
-
-TYPED_TEST(CollectSetTypedTest, ExceptionTests)
-{
-  std::vector<groupby::aggregation_request> agg_requests(1);
-  agg_requests[0].values = COL_V{{1, 2, 3, 4, 5, 6}, {true, false, true, false, true, false}};
-  agg_requests[0].aggregations.push_back(cudf::make_collect_list_aggregation(null_policy::EXCLUDE));
-
-  // groupby cannot exclude nulls
-  groupby::groupby gby{table_view{{COL_K{1, 1, 2, 2, 3, 3}}}};
-  EXPECT_THROW(gby.aggregate(agg_requests), cudf::logic_error);
-}
 
 TYPED_TEST(CollectSetTypedTest, TrivialInput)
 {
@@ -70,7 +67,7 @@ TYPED_TEST(CollectSetTypedTest, TrivialInput)
     COL_V vals{10};
     COL_K keys_expected{1};
     LCL_V vals_expected{LCL_V{10}};
-    test_single_agg(keys, vals, keys_expected, vals_expected, COLLECT_SET);
+    test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
   }
 
   // Non-repeated keys
@@ -79,7 +76,7 @@ TYPED_TEST(CollectSetTypedTest, TrivialInput)
     COL_V vals{20, 10};
     COL_K keys_expected{1, 2};
     LCL_V vals_expected{LCL_V{10}, LCL_V{20}};
-    test_single_agg(keys, vals, keys_expected, vals_expected, COLLECT_SET);
+    test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
   }
 }
 
@@ -91,7 +88,7 @@ TYPED_TEST(CollectSetTypedTest, TypicalInput)
     COL_V vals{10, 11, 10, 10, 20, 21, 21, 20, 30, 33, 32, 31};
     COL_K keys_expected{1, 2, 3};
     LCL_V vals_expected{{10, 11}, {20, 21}, {30, 31, 32, 33}};
-    test_single_agg(keys, vals, keys_expected, vals_expected, COLLECT_SET);
+    test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
   }
 
   // Expect the result keys to be sorted by sort-based groupby
@@ -100,7 +97,7 @@ TYPED_TEST(CollectSetTypedTest, TypicalInput)
     COL_V vals{40, 10, 20, 40, 30, 30, 20, 11};
     COL_K keys_expected{1, 2, 3, 4};
     LCL_V vals_expected{{10, 11}, {20}, {30}, {40}};
-    test_single_agg(keys, vals, keys_expected, vals_expected, COLLECT_SET);
+    test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
   }
 }
 
@@ -114,14 +111,14 @@ TYPED_TEST(CollectSetTypedTest, SlicedColumnsInput)
     auto const vals          = cudf::slice(vals_original, {0, 4})[0];  // { 10, 11, 10, 10 }
     auto const keys_expected = COL_K{1};
     auto const vals_expected = LCL_V{{10, 11}};
-    test_single_agg(keys, vals, keys_expected, vals_expected, COLLECT_SET);
+    test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
   }
   {
     auto const keys = cudf::slice(keys_original, {2, 10})[0];  // { 1, 1, 2, 2, 2, 2, 3, 3 }
     auto const vals = cudf::slice(vals_original, {2, 10})[0];  // { 10, 10, 20, 21, 21, 20, 30, 33 }
     auto const keys_expected = COL_K{1, 2, 3};
     auto const vals_expected = LCL_V{{10}, {20, 21}, {30, 33}};
-    test_single_agg(keys, vals, keys_expected, vals_expected, COLLECT_SET);
+    test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
   }
 }
 
@@ -147,7 +144,7 @@ TEST_F(CollectSetTest, StringInput)
   LCL_S vals_expected{{"String 1, first", "String 1, second"},
                       {"String 2, first", "String 2, second"},
                       {"String 3, first", "String 3, second"}};
-  test_single_agg(keys, vals, keys_expected, vals_expected, COLLECT_SET);
+  test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
 }
 
 TYPED_TEST(CollectSetTypedTest, CollectWithNulls)
@@ -167,13 +164,19 @@ TYPED_TEST(CollectSetTypedTest, CollectWithNulls)
     LCL_V vals_expected{{{10, null}, VALIDITY{true, false}},
                         {{20, null}, VALIDITY{true, false}},
                         {{30, 31}, VALIDITY{true, true}}};
-    test_single_agg(keys, vals, keys_expected, vals_expected, COLLECT_SET);
+    test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
 
     // All nulls per key are kept (nulls are put at the end of each list)
     vals_expected = LCL_V{{{10, null, null}, VALIDITY{true, false, false}},
                           {{20, null, null, null}, VALIDITY{true, false, false, false}},
                           {{30, 31}, VALIDITY{true, true}}};
-    test_single_agg(keys, vals, keys_expected, vals_expected, COLLECT_SET_NULL_UNEQUAL);
+    test_single_agg(
+      keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set_null_unequal());
+
+    // All nulls per key are excluded
+    vals_expected = LCL_V{{10}, {20}, {30, 31}};
+    test_single_agg(
+      keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set_null_exclude());
   }
 
   // Expect the result keys to be sorted by sort-based groupby
@@ -188,14 +191,20 @@ TYPED_TEST(CollectSetTypedTest, CollectWithNulls)
                         {{20, 21}, VALIDITY{true, true}},
                         {{null}, VALIDITY{false}},
                         {{40}, VALIDITY{true}}};
-    test_single_agg(keys, vals, keys_expected, vals_expected, COLLECT_SET);
+    test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
 
     // All nulls per key are kept (nulls are put at the end of each list)
     vals_expected = LCL_V{{{10, null}, VALIDITY{true, false}},
                           {{20, 21}, VALIDITY{true, true}},
                           {{null, null, null, null}, VALIDITY{false, false, false, false}},
                           {{40}, VALIDITY{true}}};
-    test_single_agg(keys, vals, keys_expected, vals_expected, COLLECT_SET_NULL_UNEQUAL);
+    test_single_agg(
+      keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set_null_unequal());
+
+    // All nulls per key are excluded
+    vals_expected = LCL_V{{10}, {20, 21}, {}, {40}};
+    test_single_agg(
+      keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set_null_exclude());
   }
 }
 
