@@ -93,14 +93,6 @@ column_view::column_view(data_type type,
   }
 }
 
-bool column_view::has_nested_nulls() const
-{
-  return has_nulls() ||
-         std::any_of(_children.cbegin(), _children.cend(), [](auto const& child_col) {
-           return child_col.has_nested_nulls();
-         });
-}
-
 // Mutable view constructor
 mutable_column_view::mutable_column_view(data_type type,
                                          size_type size,

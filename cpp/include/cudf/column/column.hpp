@@ -214,14 +214,6 @@ class column {
   bool has_nulls() const noexcept { return (null_count() > 0); }
 
   /**
-   * @brief Indicates whether the column itself or its children columns contain null elements.
-   *
-   * @return true One or more elements are null
-   * @return false Zero elements are null
-   */
-  bool has_nested_nulls() const noexcept;
-
-  /**
    * @brief Returns the number of child columns
    */
   size_type num_children() const noexcept { return _children.size(); }
