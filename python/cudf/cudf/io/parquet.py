@@ -202,11 +202,7 @@ def read_parquet(
     for source in filepath_or_buffer:
         if ioutils.is_directory(source, **kwargs):
             fs = _ensure_filesystem(passed_filesystem=None, path=source)
-            source = (
-                source.__fspath__()
-                if hasattr(source, "__fspath__")
-                else source
-            )
+            source = ioutils.stringify_pathlike(source)
             source = fs.sep.join([source, "*.parquet"])
 
         tmp_source, compression = ioutils.get_filepath_or_buffer(
