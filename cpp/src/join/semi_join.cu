@@ -92,12 +92,22 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
                                                 equality_build);
   auto hash_table     = *hash_table_ptr;
 
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     right_num_rows,
-                     [hash_table] __device__(size_type idx) mutable {
-                       hash_table.insert(thrust::make_pair(idx, true));
-                     });
+  // if compare_nulls == NOT_EQUAL, we can simply ignore any rows that are
+  // entirely NULL as they will never compare to equal.
+  auto const row_bitmask = (compare_nulls == null_equality::EQUAL)
+                             ? rmm::device_buffer{0, stream}
+                             : cudf::detail::bitmask_and(right_flattened_keys, stream);
+  // skip rows that are null here.
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator<size_type>(0),
+    right_num_rows,
+    [hash_table, row_bitmask = static_cast<bitmask_type const*>(row_bitmask.data())] __device__(
+      size_type idx) mutable {
+      if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) {
+        hash_table.insert(thrust::make_pair(idx, true));
+      }
+    });
 
   //
   // Now we have a hash table, we need to iterate over the rows of the left table
