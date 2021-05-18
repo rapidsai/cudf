@@ -123,6 +123,9 @@ std::unique_ptr<column> binary_operation(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+// Defined in util.cpp
+data_type get_common_type(data_type out, data_type lhs, data_type rhs);
+bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op);
 }  // namespace compiled
 }  // namespace binops
 }  // namespace cudf
