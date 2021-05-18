@@ -21,6 +21,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
+#include "cudf/null_mask.hpp"
 
 namespace cudf {
 namespace test {
@@ -39,8 +40,6 @@ void test_single_scalar_scatter(column_view const& target,
   std::vector<std::reference_wrapper<const scalar>> slrs{slr};
   table_view targets{{target}};
   auto result = scatter(slrs, scatter_map, targets, true);
-  cudf::test::print(result->view().column(0));
-  cudf::test::print(expect);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view().column(0), expect);
 }
 
@@ -271,6 +270,158 @@ TYPED_TEST(ScatterListOfListScalarTest, NullableTargetRows)
                M{1, 1, 1}.begin());
 
   test_single_scalar_scatter(col, *slr, scatter_map, expected);
+}
+
+template <typename T>
+class ScatterListOfStructScalarTest : public ScatterListScalarTests {
+ protected:
+  structs_column_wrapper make_test_structs(fixed_width_column_wrapper<T> field0,
+                                           strings_column_wrapper field1,
+                                           lists_column_wrapper<T, int32_t> field2,
+                                           std::vector<valid_type> mask)
+  {
+    return structs_column_wrapper({field0, field1, field2}, mask.begin());
+  }
+};
+
+TYPED_TEST_CASE(ScatterListOfStructScalarTest, FixedWidthTypesWithoutFixedPoint);
+
+TYPED_TEST(ScatterListOfStructScalarTest, Basic)
+{
+  using LCW      = lists_column_wrapper<TypeParam, int32_t>;
+  using offset_t = fixed_width_column_wrapper<offset_type>;
+
+  auto data = this->make_test_structs({{42, 42, 42}, {1, 0, 1}},
+                                      {{"hello", "你好！", "bonjour!"}, {false, true, true}},
+                                      LCW({LCW{88}, LCW{}, LCW{99, 99}}, M{1, 0, 1}.begin()),
+                                      {1, 1, 0});
+  auto slr  = std::make_unique<list_scalar>(data, true);
+
+  auto child = this->make_test_structs(
+    {{1, 1, 2, 3, 3, 3}, {0, 1, 1, 1, 0, 0}},
+    {{"x", "x", "yy", "", "zzz", "zzz"}, {true, true, true, false, true, true}},
+    LCW({LCW{10, 10}, LCW{}, LCW{10}, LCW{20, 20}, LCW{}, LCW{30, 30}},
+        M{1, 0, 1, 1, 0, 1}.begin()),
+    {1, 1, 0, 0, 1, 1});
+  offset_t offsets{0, 2, 2, 3, 6};
+  auto col = make_lists_column(4, offsets.release(), child.release(), 0, rmm::device_buffer{});
+
+  SM_t scatter_map{1, 3};
+
+  auto ex_child = this->make_test_structs(
+    {{1, 1, 42, 42, 42, 2, 42, 42, 42}, {0, 1, 1, 0, 1, 1, 1, 0, 1}},
+    {{"x", "x", "hello", "你好！", "bonjour!", "yy", "hello", "你好！", "bonjour!"},
+     {true, true, false, true, true, true, false, true, true}},
+    LCW({LCW{10, 10}, LCW{}, LCW{88}, LCW{}, LCW{99, 99}, LCW{10}, LCW{88}, LCW{}, LCW{99, 99}},
+        M{1, 0, 1, 0, 1, 1, 1, 0, 1}.begin()),
+    {1, 1, 1, 1, 0, 0, 1, 1, 0});
+  offset_t ex_offsets{0, 2, 5, 6, 9};
+  auto expected =
+    make_lists_column(4, ex_offsets.release(), ex_child.release(), 0, rmm::device_buffer{});
+
+  test_single_scalar_scatter(*col, *slr, scatter_map, *expected);
+}
+
+TYPED_TEST(ScatterListOfStructScalarTest, EmptyValidScalar)
+{
+  using LCW      = lists_column_wrapper<TypeParam, int32_t>;
+  using offset_t = fixed_width_column_wrapper<offset_type>;
+
+  auto data = this->make_test_structs({}, {}, LCW{}, {});
+  auto slr  = std::make_unique<list_scalar>(data, true);
+
+  auto child = this->make_test_structs(
+    {{1, 1, 2, 3, 3, 3}, {0, 1, 1, 1, 0, 0}},
+    {{"x", "x", "yy", "", "zzz", "zzz"}, {true, true, true, false, true, true}},
+    LCW({LCW{10, 10}, LCW{}, LCW{10}, LCW{20, 20}, LCW{}, LCW{30, 30}},
+        M{1, 0, 1, 1, 0, 1}.begin()),
+    {1, 1, 0, 0, 1, 1});
+  offset_t offsets{0, 2, 2, 3, 6};
+  auto col = make_lists_column(4, offsets.release(), child.release(), 0, rmm::device_buffer{});
+
+  SM_t scatter_map{0, 2};
+
+  auto ex_child =
+    this->make_test_structs({{3, 3, 3}, {1, 0, 0}},
+                            {{"", "zzz", "zzz"}, {false, true, true}},
+                            LCW({LCW{20, 20}, LCW{}, LCW{30, 30}}, M{1, 0, 1}.begin()),
+                            {0, 1, 1});
+  offset_t ex_offsets{0, 0, 0, 0, 3};
+  auto expected =
+    make_lists_column(4, ex_offsets.release(), ex_child.release(), 0, rmm::device_buffer{});
+
+  test_single_scalar_scatter(*col, *slr, scatter_map, *expected);
+}
+
+TYPED_TEST(ScatterListOfStructScalarTest, NullScalar)
+{
+  using LCW      = lists_column_wrapper<TypeParam, int32_t>;
+  using offset_t = fixed_width_column_wrapper<offset_type>;
+
+  auto data = this->make_test_structs({}, {}, {}, {});
+  auto slr  = std::make_unique<list_scalar>(data, false);
+
+  auto child = this->make_test_structs(
+    {{1, 1, 2, 3, 3, 3}, {0, 1, 1, 1, 0, 0}},
+    {{"x", "x", "yy", "", "zzz", "zzz"}, {true, true, true, false, true, true}},
+    LCW({LCW{10, 10}, LCW{}, LCW{10}, LCW{20, 20}, LCW{}, LCW{30, 30}},
+        M{1, 0, 1, 1, 0, 1}.begin()),
+    {1, 1, 1, 0, 1, 1});
+  offset_t offsets{0, 2, 2, 3, 6};
+  auto col = make_lists_column(4, offsets.release(), child.release(), 0, rmm::device_buffer{});
+
+  SM_t scatter_map{3, 1, 0};
+
+  auto ex_child = this->make_test_structs({2}, {"yy"}, LCW({10}, M{1}.begin()), {1});
+  offset_t ex_offsets{0, 0, 0, 1, 1};
+
+  auto null_mask = create_null_mask(4, mask_state::ALL_NULL);
+  set_null_mask(static_cast<bitmask_type*>(null_mask.data()), 2, 3, true);
+  auto expected =
+    make_lists_column(4, ex_offsets.release(), ex_child.release(), 3, std::move(null_mask));
+
+  test_single_scalar_scatter(*col, *slr, scatter_map, *expected);
+}
+
+TYPED_TEST(ScatterListOfStructScalarTest, NullableTargetRow)
+{
+  using LCW      = lists_column_wrapper<TypeParam, int32_t>;
+  using offset_t = fixed_width_column_wrapper<offset_type>;
+
+  auto data = this->make_test_structs({{42, 42, 42}, {1, 0, 1}},
+                                      {{"hello", "你好！", "bonjour!"}, {false, true, true}},
+                                      LCW({LCW{88}, LCW{}, LCW{99, 99}}, M{1, 0, 1}.begin()),
+                                      {1, 1, 0});
+  auto slr  = std::make_unique<list_scalar>(data, true);
+
+  auto child = this->make_test_structs(
+    {{1, 1, 2, 3, 3, 3}, {0, 1, 1, 1, 0, 0}},
+    {{"x", "x", "yy", "", "zzz", "zzz"}, {true, true, true, false, true, true}},
+    LCW({LCW{10, 10}, LCW{}, LCW{10}, LCW{20, 20}, LCW{}, LCW{30, 30}},
+        M{1, 0, 1, 1, 0, 1}.begin()),
+    {1, 1, 1, 0, 1, 1});
+  offset_t offsets{0, 2, 2, 3, 6};
+  auto null_mask = create_null_mask(4, mask_state::ALL_VALID);
+  set_null_mask(static_cast<bitmask_type*>(null_mask.data()), 1, 3, false);
+  auto col = make_lists_column(4, offsets.release(), child.release(), 2, std::move(null_mask));
+
+  SM_t scatter_map{3, 2};
+
+  auto ex_child = this->make_test_structs(
+    {{1, 1, 42, 42, 42, 42, 42, 42}, {0, 1, 1, 0, 1, 1, 0, 1}},
+    {{"x", "x", "hello", "你好！", "bonjour!", "hello", "你好！", "bonjour!"},
+     {true, true, false, true, true, false, true, true}},
+    LCW({LCW{10, 10}, LCW{}, LCW{88}, LCW{}, LCW{99, 99}, LCW{88}, LCW{}, LCW{99, 99}},
+        M{1, 0, 1, 0, 1, 1, 0, 1}.begin()),
+    {1, 1, 1, 1, 0, 1, 1, 0});
+  offset_t ex_offsets{0, 2, 2, 5, 8};
+
+  auto ex_null_mask = create_null_mask(4, mask_state::ALL_VALID);
+  set_null_mask(static_cast<bitmask_type*>(ex_null_mask.data()), 1, 2, false);
+  auto expected =
+    make_lists_column(4, ex_offsets.release(), ex_child.release(), 1, std::move(ex_null_mask));
+
+  test_single_scalar_scatter(*col, *slr, scatter_map, *expected);
 }
 
 }  // namespace test
