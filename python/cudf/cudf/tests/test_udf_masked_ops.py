@@ -123,36 +123,23 @@ def test_apply_mixed_dtypes(dtype_a, dtype_b):
     gdf['a'] = gdf['a'].astype(dtype_a)
     gdf['b'] = gdf['b'].astype(dtype_b)
 
-    pdf = gdf.to_pandas()
-
-    expect = pdf.apply(lambda row: func_pdf(row['a'], row['b']), axis=1)
-    obtain = gdf.apply(lambda row: func_gdf(row['a'], row['b']), axis=1)
-
-    # currently, cases where one side is float32 fail, pandas doing some
-    # weird casting here and getting float64 always
-    assert_eq(expect, obtain)
+    run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False) 
 
 
-def test_apply_return_literal():
-    # 1. Casting rule literal -> Masked
-    #  -> a) make it so numba knows that we can even promote literals to Masked ()
-    #  -> b) implement custom lowering to specify how this actually happens (python only)
-
-
-    # 2. Custom unfication code
-
-
-    # numba/core/type
+@pytest.mark.parametrize('val', [
+    5, 5.5
+])
+def test_apply_return_literal(val):
     def func_pdf(x, y):
         if x is pd.NA:
-            return 5
+            return val
         else:
             return x + y
 
     @nulludf
     def func_gdf(x, y):
         if x is cudf.NA:
-            return 5 # Masked(5, True)
+            return val # Masked(5, True)
         else:
             return x + y
 
@@ -162,9 +149,4 @@ def test_apply_return_literal():
         'b':[4,5,None, None]
     })
 
-    pdf = gdf.to_pandas()
-
-    expect = pdf.apply(lambda row: func_pdf(row['a'], row['b']), axis=1)
-    obtain = gdf.apply(lambda row: func_gdf(row['a'], row['b']), axis=1)
-
-    assert_eq(expect, obtain)
+    run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False) 
