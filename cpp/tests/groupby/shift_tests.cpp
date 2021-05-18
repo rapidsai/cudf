@@ -19,6 +19,7 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -419,6 +420,59 @@ TYPED_TEST(groupby_shift_mixed_test, Fill)
   std::vector<std::reference_wrapper<const scalar>> fill_values{*slr1, slr2};
 
   test_groupby_shift_multi(key, value, offset, fill_values, expected);
+}
+
+struct groupby_shift_fixed_point_type_test : public BaseFixture {
+};
+
+TEST_F(groupby_shift_fixed_point_type_test, Matching)
+{
+  fixed_width_column_wrapper<K> key{2, 3, 4, 4, 3, 2, 2, 4};
+  fixed_point_column_wrapper<int32_t> v1{{10, 10, 40, 40, 20, 20, 30, 40}, numeric::scale_type{-1}};
+  fixed_point_column_wrapper<int64_t> v2{{5, 5, 8, 8, 6, 7, 9, 7}, numeric::scale_type{3}};
+  table_view value{{v1, v2}};
+
+  std::vector<size_type> offset{-3, 1};
+  auto slr1 = make_fixed_point_scalar<numeric::decimal32>(-42, numeric::scale_type{-1});
+  auto slr2 = make_fixed_point_scalar<numeric::decimal64>(42, numeric::scale_type{3});
+  std::vector<std::reference_wrapper<const scalar>> fill_values{*slr1, *slr2};
+
+  fixed_point_column_wrapper<int32_t> e1{{-42, -42, -42, -42, -42, -42, -42, -42},
+                                         numeric::scale_type{-1}};
+  fixed_point_column_wrapper<int64_t> e2{{42, 5, 7, 42, 5, 42, 8, 8}, numeric::scale_type{3}};
+  table_view expected{{e1, e2}};
+
+  test_groupby_shift_multi(key, value, offset, fill_values, expected);
+}
+
+TEST_F(groupby_shift_fixed_point_type_test, MismatchScaleType)
+{
+  fixed_width_column_wrapper<K> key{2, 3, 4, 4, 3, 2, 2, 4};
+  fixed_point_column_wrapper<int32_t> v1{{10, 10, 40, 40, 20, 20, 30, 40}, numeric::scale_type{-1}};
+
+  std::vector<size_type> offset{-3};
+  auto slr1 = make_fixed_point_scalar<numeric::decimal32>(-42, numeric::scale_type{-4});
+
+  fixed_point_column_wrapper<int32_t> stub{{-42, -42, -42, -42, -42, -42, -42, -42},
+                                           numeric::scale_type{-1}};
+
+  EXPECT_THROW(test_groupby_shift_multi(key, table_view{{v1}}, offset, {*slr1}, table_view{{stub}}),
+               logic_error);
+}
+
+TEST_F(groupby_shift_fixed_point_type_test, MismatchRepType)
+{
+  fixed_width_column_wrapper<K> key{2, 3, 4, 4, 3, 2, 2, 4};
+  fixed_point_column_wrapper<int64_t> v1{{10, 10, 40, 40, 20, 20, 30, 40}, numeric::scale_type{-1}};
+
+  std::vector<size_type> offset{-3};
+  auto slr1 = make_fixed_point_scalar<numeric::decimal32>(-42, numeric::scale_type{-1});
+
+  fixed_point_column_wrapper<int32_t> stub{{-42, -42, -42, -42, -42, -42, -42, -42},
+                                           numeric::scale_type{-1}};
+
+  EXPECT_THROW(test_groupby_shift_multi(key, table_view{{v1}}, offset, {*slr1}, table_view{{stub}}),
+               logic_error);
 }
 
 }  // namespace test

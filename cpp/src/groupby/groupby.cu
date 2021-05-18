@@ -204,10 +204,9 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
   CUDF_EXPECTS(values.num_columns() == static_cast<size_type>(fill_values.size()),
                "Mismatch number of fill_values and columns.");
   CUDF_EXPECTS(
-    std::all_of(
-      thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(values.num_columns()),
-      [&](auto i) { return values.column(i).type().id() == fill_values[i].get().type().id(); }),
+    std::all_of(thrust::make_counting_iterator(0),
+                thrust::make_counting_iterator(values.num_columns()),
+                [&](auto i) { return values.column(i).type() == fill_values[i].get().type(); }),
     "values and fill_value should have the same type.");
 
   auto stream = rmm::cuda_stream_default;
