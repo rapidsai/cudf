@@ -26,7 +26,7 @@ requirements:
     - cython >=0.29,<0.30
     - setuptools
     - numba >=0.53.1
-    - dlpack
+    - dlpack>=0.5,<0.6.0a0
     - pyarrow 1.0.1
     - libcudf {{ version }}
     - rmm {{ minor_version }}
