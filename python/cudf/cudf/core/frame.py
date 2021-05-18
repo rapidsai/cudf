@@ -32,6 +32,7 @@ from cudf.utils.dtypes import (
     is_decimal_dtype,
     is_scalar,
     min_scalar_type,
+    _find_common_type_decimal,
 )
 
 T = TypeVar("T", bound="Frame")
@@ -3971,14 +3972,17 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
         elif all(
             isinstance(col, cudf.core.column.DecimalColumn) for col in cols
         ):
-            # Find the largest scale and the largest difference between
-            # precision and scale of the columns to be concatenated
-            s = max([col.dtype.scale for col in cols])
-            lhs = max([col.dtype.precision - col.dtype.scale for col in cols])
-            # Combine to get the necessary precision and clip at the maximum
-            # precision
-            p = min(cudf.Decimal64Dtype.MAX_PRECISION, s + lhs)
-            dtypes[idx] = cudf.Decimal64Dtype(p, s)
+            dtypes[idx] = _find_common_type_decimal(
+                [col.dtype for col in cols]
+            )
+        elif all(
+            isinstance(col, cudf.core.column.DecimalColumn)
+            or is_numerical_dtype(col.dtype)
+            for col in cols
+        ):
+            dtypes[idx] = _find_common_type_decimal(
+                [col.dtype for col in cols if is_decimal_dtype(col.dtype)]
+            )
         # Otherwise raise an error if columns have different dtypes
         elif not all(is_dtype_equal(c.dtype, dtypes[idx]) for c in cols):
             raise ValueError("All columns must be the same type")

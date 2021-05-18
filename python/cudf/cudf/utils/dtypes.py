@@ -291,12 +291,19 @@ def is_decimal_dtype(obj):
 
 
 def _decimal_normalize_types(*args):
-    s = max([a.dtype.scale for a in args])
-    lhs = max([a.dtype.precision - a.dtype.scale for a in args])
-    p = min(cudf.Decimal64Dtype.MAX_PRECISION, s + lhs)
-    dtype = cudf.Decimal64Dtype(p, s)
-
+    dtype = _find_common_type_decimal([a.dtype for a in args])
     return [a.astype(dtype) for a in args]
+
+
+def _find_common_type_decimal(dtypes):
+    # Find the largest scale and the largest difference between
+    # precision and scale of the columns to be concatenated
+    s = max([dtype.scale for dtype in dtypes])
+    lhs = max([dtype.precision - dtype.scale for dtype in dtypes])
+    # Combine to get the necessary precision and clip at the maximum
+    # precision
+    p = min(cudf.Decimal64Dtype.MAX_PRECISION, s + lhs)
+    return cudf.Decimal64Dtype(p, s)
 
 
 def cudf_dtype_from_pydata_dtype(dtype):

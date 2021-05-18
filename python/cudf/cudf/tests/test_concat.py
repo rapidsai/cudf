@@ -5,6 +5,7 @@ import re
 import numpy as np
 import pandas as pd
 import pytest
+from decimal import Decimal
 
 import cudf as gd
 from cudf.tests.utils import assert_eq, assert_exceptions_equal
@@ -1262,3 +1263,196 @@ def test_concat_decimal_series(ltype, rtype):
     expected = pd.concat([ps1, ps2])
 
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "df1, df2, df3, expected",
+    [
+        (
+            gd.DataFrame(
+                {"val": [Decimal("42.5"), Decimal("8.7")]},
+                dtype=Decimal64Dtype(5, 2),
+            ),
+            gd.DataFrame(
+                {"val": [Decimal("9.23"), Decimal("-67.49")]},
+                dtype=Decimal64Dtype(6, 4),
+            ),
+            gd.DataFrame({"val": [8, -5]}, dtype="int32"),
+            gd.DataFrame(
+                {
+                    "val": [
+                        Decimal("42.5"),
+                        Decimal("8.7"),
+                        Decimal("9.23"),
+                        Decimal("-67.49"),
+                        Decimal("8"),
+                        Decimal("-5"),
+                    ]
+                },
+                dtype=Decimal64Dtype(7, 4),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.DataFrame(
+                {"val": [Decimal("95.2"), Decimal("23.4")]},
+                dtype=Decimal64Dtype(5, 2),
+            ),
+            gd.DataFrame({"val": [54, 509]}, dtype="uint16"),
+            gd.DataFrame({"val": [24, -48]}, dtype="int32"),
+            gd.DataFrame(
+                {
+                    "val": [
+                        Decimal("95.2"),
+                        Decimal("23.4"),
+                        Decimal("54"),
+                        Decimal("509"),
+                        Decimal("24"),
+                        Decimal("-48"),
+                    ]
+                },
+                dtype=Decimal64Dtype(5, 2),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.DataFrame(
+                {"val": [Decimal("36.56"), Decimal("-59.24")]},
+                dtype=Decimal64Dtype(9, 4),
+            ),
+            gd.DataFrame({"val": [403.21, 45.13]}, dtype="float32"),
+            gd.DataFrame({"val": [52.262, -49.25]}, dtype="float64"),
+            gd.DataFrame(
+                {
+                    "val": [
+                        Decimal("36.56"),
+                        Decimal("-59.24"),
+                        Decimal("403.21"),
+                        Decimal("45.13"),
+                        Decimal("52.262"),
+                        Decimal("-49.25"),
+                    ]
+                },
+                dtype=Decimal64Dtype(9, 4),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.DataFrame(
+                {"val": [Decimal("9563.24"), Decimal("236.633")]},
+                dtype=Decimal64Dtype(9, 4),
+            ),
+            gd.DataFrame({"val": [5393, -95832]}, dtype="int64"),
+            gd.DataFrame({"val": [-29.234, -31.945]}, dtype="float64"),
+            gd.DataFrame(
+                {
+                    "val": [
+                        Decimal("9563.24"),
+                        Decimal("236.633"),
+                        Decimal("5393"),
+                        Decimal("-95832"),
+                        Decimal("-29.234"),
+                        Decimal("-31.945"),
+                    ]
+                },
+                dtype=Decimal64Dtype(9, 4),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+    ],
+)
+def test_concat_decimal_numeric_dataframe(df1, df2, df3, expected):
+    df = gd.concat([df1, df2, df3])
+    assert_eq(df, expected)
+    assert_eq(df.val.dtype, expected.val.dtype)
+
+
+@pytest.mark.parametrize(
+    "s1, s2, s3, expected",
+    [
+        (
+            gd.Series(
+                [Decimal("32.8"), Decimal("-87.7")], dtype=Decimal64Dtype(6, 2)
+            ),
+            gd.Series(
+                [Decimal("101.243"), Decimal("-92.449")],
+                dtype=Decimal64Dtype(9, 6),
+            ),
+            gd.Series([94, -22], dtype="int32"),
+            gd.Series(
+                [
+                    Decimal("32.8"),
+                    Decimal("-87.7"),
+                    Decimal("101.243"),
+                    Decimal("-92.449"),
+                    Decimal("94"),
+                    Decimal("-22"),
+                ],
+                dtype=Decimal64Dtype(10, 6),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("7.2"), Decimal("122.1")], dtype=Decimal64Dtype(5, 2)
+            ),
+            gd.Series([33, 984], dtype="uint32"),
+            gd.Series([593, -702], dtype="int32"),
+            gd.Series(
+                [
+                    Decimal("7.2"),
+                    Decimal("122.1"),
+                    Decimal("33"),
+                    Decimal("984"),
+                    Decimal("593"),
+                    Decimal("-702"),
+                ],
+                dtype=Decimal64Dtype(5, 2),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("982.94"), Decimal("-493.626")],
+                dtype=Decimal64Dtype(9, 4),
+            ),
+            gd.Series([847.98, 254.442], dtype="float32"),
+            gd.Series([5299.262, -2049.25], dtype="float64"),
+            gd.Series(
+                [
+                    Decimal("982.94"),
+                    Decimal("-493.626"),
+                    Decimal("847.98"),
+                    Decimal("254.442"),
+                    Decimal("5299.262"),
+                    Decimal("-2049.25"),
+                ],
+                dtype=Decimal64Dtype(9, 4),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("492.204"), Decimal("-72824.455")],
+                dtype=Decimal64Dtype(9, 4),
+            ),
+            gd.Series([8438, -27462], dtype="int64"),
+            gd.Series([-40.292, 49202.953], dtype="float64"),
+            gd.Series(
+                [
+                    Decimal("492.204"),
+                    Decimal("-72824.455"),
+                    Decimal("8438"),
+                    Decimal("-27462"),
+                    Decimal("-40.292"),
+                    Decimal("49202.953"),
+                ],
+                dtype=Decimal64Dtype(9, 4),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+    ],
+)
+def test_concat_decimal_numeric_series(s1, s2, s3, expected):
+    s = gd.concat([s1, s2, s3])
+    assert_eq(s, expected)
