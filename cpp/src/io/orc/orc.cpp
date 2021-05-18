@@ -227,7 +227,7 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
   if (data_blk >= 0) { sz += put_uint(data_blk); }
   if (data_ofs >= 0) {
     sz += put_uint(data_ofs);
-    if (kind != STRING && kind != FLOAT && kind != DOUBLE) {
+    if (kind != STRING && kind != FLOAT && kind != DOUBLE && kind != DECIMAL) {
       putb(0);  // RLE run pos always zero (assumes RLE aligned with row index boundaries)
       sz++;
       if (kind == BOOLEAN) {
@@ -293,8 +293,8 @@ size_t ProtobufWriter::write(const SchemaType &s)
   w.field_packed_uint(2, s.subtypes);
   w.field_repeated_string(3, s.fieldNames);
   // w.field_uint(4, s.maximumLength);
-  // w.field_uint(5, s.precision);
-  // w.field_uint(6, s.scale);
+  if (s.precision) w.field_uint(5, *s.precision);
+  if (s.scale) w.field_uint(6, *s.scale);
   return w.value();
 }
 

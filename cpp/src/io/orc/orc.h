@@ -56,10 +56,10 @@ struct SchemaType {
   TypeKind kind = INVALID_TYPE_KIND;  // the kind of this type
   std::vector<uint32_t> subtypes;  // the type ids of any subcolumns for list, map, struct, or union
   std::vector<std::string> fieldNames;  // the list of field names for struct
-  uint32_t maximumLength =
-    0;  // optional: the maximum length of the type for varchar or char in UTF-8 characters
-  uint32_t precision = 0;  // optional: the precision and scale for decimal
-  uint32_t scale     = 0;
+  std::optional<uint32_t>
+    maximumLength;  // the maximum length of the type for varchar or char in UTF-8 characters
+  std::optional<uint32_t> precision;  // the precision for decimal
+  std::optional<uint32_t> scale;      // the scale for decimal
 };
 
 struct UserMetadataItem {
