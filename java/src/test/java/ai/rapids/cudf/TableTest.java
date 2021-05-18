@@ -2744,7 +2744,9 @@ public class TableTest extends CudfTestBase {
         .build()) {
       try (Table sorted = unsorted.orderBy(OrderByArg.asc(0), OrderByArg.asc(1), OrderByArg.asc(2));
            Table decSorted = unsorted.orderBy(OrderByArg.asc(0), OrderByArg.asc(4), OrderByArg.asc(5));
-           ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+           ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6);
+           Scalar two = Scalar.fromInt(2);
+           Scalar one = Scalar.fromInt(1)) {
         ColumnVector sortedAggColumn = sorted.getColumn(3);
         assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
         ColumnVector decSortedAggColumn = decSorted.getColumn(3);
@@ -2752,7 +2754,7 @@ public class TableTest extends CudfTestBase {
 
         try (WindowOptions window = WindowOptions.builder()
             .minPeriods(1)
-            .window(2, 1)
+            .window(two, one)
             .build()) {
 
           try (Table windowAggResults = sorted.groupBy(0, 1)
@@ -2782,7 +2784,9 @@ public class TableTest extends CudfTestBase {
       try (Table sorted = unsorted.orderBy(OrderByArg.asc(0), OrderByArg.asc(1), OrderByArg.asc(2));
            Table decSorted = unsorted.orderBy(OrderByArg.asc(0), OrderByArg.asc(4), OrderByArg.asc(5));
            ColumnVector expectSortedAggCol = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6);
-           ColumnVector expectDecSortedAggCol = ColumnVector.decimalFromLongs(2, 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+           ColumnVector expectDecSortedAggCol = ColumnVector.decimalFromLongs(2, 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6);
+           Scalar two = Scalar.fromInt(2);
+           Scalar one = Scalar.fromInt(1)) {
         ColumnVector sortedAggColumn = sorted.getColumn(3);
         assertColumnsAreEqual(expectSortedAggCol, sortedAggColumn);
         ColumnVector decSortedAggColumn = decSorted.getColumn(6);
@@ -2790,7 +2794,7 @@ public class TableTest extends CudfTestBase {
 
         try (WindowOptions window = WindowOptions.builder()
             .minPeriods(1)
-            .window(2, 1)
+            .window(two, one)
             .build()) {
 
           try (Table windowAggResults = sorted.groupBy(0, 1)
@@ -2821,7 +2825,9 @@ public class TableTest extends CudfTestBase {
       try (Table sorted = unsorted.orderBy(OrderByArg.asc(0), OrderByArg.asc(1), OrderByArg.asc(2));
            Table decSorted = unsorted.orderBy(OrderByArg.asc(0), OrderByArg.asc(4), OrderByArg.asc(5));
            ColumnVector expectSortedAggCol = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6);
-           ColumnVector expectDecSortedAggCol = ColumnVector.decimalFromLongs(2, 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+           ColumnVector expectDecSortedAggCol = ColumnVector.decimalFromLongs(2, 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6);
+           Scalar two = Scalar.fromInt(2);
+           Scalar one = Scalar.fromInt(1)) {
         ColumnVector sortedAggColumn = sorted.getColumn(3);
         assertColumnsAreEqual(expectSortedAggCol, sortedAggColumn);
         ColumnVector decSortedAggColumn = decSorted.getColumn(6);
@@ -2829,7 +2835,7 @@ public class TableTest extends CudfTestBase {
 
         try (WindowOptions window = WindowOptions.builder()
             .minPeriods(1)
-            .window(2, 1)
+            .window(two, one)
             .build()) {
 
           try (Table windowAggResults = sorted.groupBy(0, 1)
@@ -2855,13 +2861,15 @@ public class TableTest extends CudfTestBase {
         .column(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
         .build()) {
       try (Table sorted = unsorted.orderBy(OrderByArg.asc(0), OrderByArg.asc(1), OrderByArg.asc(2));
-           ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6)) {
+           ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6);
+           Scalar two = Scalar.fromInt(2);
+           Scalar one = Scalar.fromInt(1)) {
         ColumnVector sortedAggColumn = sorted.getColumn(3);
         assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
 
         try (WindowOptions window = WindowOptions.builder()
             .minPeriods(1)
-            .window(2, 1)
+            .window(two, one)
             .build()) {
 
           try (Table windowAggResults = sorted.groupBy(0, 1)
@@ -2896,8 +2904,10 @@ public class TableTest extends CudfTestBase {
 
         WindowOptions.Builder windowBuilder = WindowOptions.builder().minPeriods(1);
 
-        try (WindowOptions options = windowBuilder.window(2, 1).build();
-        WindowOptions options1 = windowBuilder.window(2, 1).build()) {
+        try (Scalar two = Scalar.fromInt(2);
+             Scalar one = Scalar.fromInt(1);
+             WindowOptions options = windowBuilder.window(two, one).build();
+             WindowOptions options1 = windowBuilder.window(two, one).build()) {
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(Aggregation
                   .rowNumber()
@@ -2914,8 +2924,10 @@ public class TableTest extends CudfTestBase {
           }
         }
 
-        try (WindowOptions options = windowBuilder.window(3, 2).build();
-        WindowOptions options1 = windowBuilder.window(3, 2).build()) {
+        try (Scalar three = Scalar.fromInt(3);
+             Scalar two = Scalar.fromInt(2);
+             WindowOptions options = windowBuilder.window(three, two).build();
+             WindowOptions options1 = windowBuilder.window(three, two).build()) {
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(Aggregation
                   .rowNumber()
@@ -2932,8 +2944,10 @@ public class TableTest extends CudfTestBase {
           }
         }
 
-        try (WindowOptions options = windowBuilder.window(4, 3).build();
-        WindowOptions options1 = windowBuilder.window(4, 3).build()) {
+        try (Scalar four = Scalar.fromInt(4);
+             Scalar three = Scalar.fromInt(3);
+             WindowOptions options = windowBuilder.window(four, three).build();
+             WindowOptions options1 = windowBuilder.window(four, three).build()) {
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(Aggregation
                   .rowNumber()
@@ -2957,10 +2971,12 @@ public class TableTest extends CudfTestBase {
   void testWindowingCollectList() {
     Aggregation aggCollectWithNulls = Aggregation.collectList(NullPolicy.INCLUDE);
     Aggregation aggCollect = Aggregation.collectList();
-    try (WindowOptions winOpts = WindowOptions.builder()
-        .minPeriods(1)
-        .window(2, 1)
-        .build()) {
+    try (Scalar two = Scalar.fromInt(2);
+         Scalar one = Scalar.fromInt(1);
+         WindowOptions winOpts = WindowOptions.builder()
+             .minPeriods(1)
+             .window(two, one)
+             .build()) {
       StructType nestedType = new StructType(false,
           new BasicType(false, DType.INT32), new BasicType(false, DType.STRING));
       try (Table raw = new Table.TestBuilder()
@@ -3050,8 +3066,10 @@ public class TableTest extends CudfTestBase {
 
         WindowOptions.Builder windowBuilder = WindowOptions.builder().minPeriods(1);
 
-        try (WindowOptions options = windowBuilder.window(2, 1).build();
-        WindowOptions options1 = windowBuilder.window(2, 1).build()) {
+        try (Scalar two = Scalar.fromInt(2);
+             Scalar one = Scalar.fromInt(1);
+             WindowOptions options = windowBuilder.window(two, one).build();
+             WindowOptions options1 = windowBuilder.window(two, one).build()) {
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(Aggregation
                   .lead(0)
@@ -3069,8 +3087,10 @@ public class TableTest extends CudfTestBase {
           }
         }
 
-        try (WindowOptions options = windowBuilder.window(0,1).build();
-        WindowOptions options1 = windowBuilder.window(0,1).build()) {
+        try (Scalar zero = Scalar.fromInt(0);
+             Scalar one = Scalar.fromInt(1);
+             WindowOptions options = windowBuilder.window(zero, one).build();
+             WindowOptions options1 = windowBuilder.window(zero, one).build()) {
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(Aggregation
                   .lead(1)
@@ -3088,8 +3108,10 @@ public class TableTest extends CudfTestBase {
           }
         }
 
-        try (WindowOptions options = windowBuilder.window(0,1).build();
-        WindowOptions options1 = windowBuilder.window(0,1).build()) {
+        try (Scalar zero = Scalar.fromInt(0);
+             Scalar one = Scalar.fromInt(1);
+             WindowOptions options = windowBuilder.window(zero, one).build();
+             WindowOptions options1 = windowBuilder.window(zero, one).build()) {
           try (ColumnVector defaultOutput = ColumnVector.fromBoxedInts(0, -1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11);
                ColumnVector decDefaultOutput = ColumnVector.decimalFromLongs(-2, 0, -1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11);
                Table windowAggResults = sorted.groupBy(0, 1)
@@ -3110,8 +3132,10 @@ public class TableTest extends CudfTestBase {
         }
 
         // Outside bounds
-        try (WindowOptions options = windowBuilder.window(0,1).build();
-        WindowOptions options1 = windowBuilder.window(0,1).build()) {
+        try (Scalar zero = Scalar.fromInt(0);
+             Scalar one = Scalar.fromInt(1);
+             WindowOptions options = windowBuilder.window(zero, one).build();
+             WindowOptions options1 = windowBuilder.window(zero, one).build()) {
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(Aggregation
                   .lead(3)
@@ -3155,8 +3179,10 @@ public class TableTest extends CudfTestBase {
 
         WindowOptions.Builder windowBuilder = WindowOptions.builder().minPeriods(1);
 
-        try (WindowOptions options = windowBuilder.window(2,1).build();
-        WindowOptions options1 = windowBuilder.window(2,1).build()) {
+        try (Scalar two = Scalar.fromInt(2);
+             Scalar one = Scalar.fromInt(1);
+             WindowOptions options = windowBuilder.window(two, one).build();
+             WindowOptions options1 = windowBuilder.window(two, one).build()) {
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(Aggregation
                   .lag(0)
@@ -3174,8 +3200,10 @@ public class TableTest extends CudfTestBase {
           }
         }
 
-        try (WindowOptions options = windowBuilder.window(2,0).build();
-        WindowOptions options1 = windowBuilder.window(2,0).build()) {
+        try (Scalar zero = Scalar.fromInt(0);
+             Scalar two = Scalar.fromInt(2);
+             WindowOptions options = windowBuilder.window(two, zero).build();
+             WindowOptions options1 = windowBuilder.window(two, zero).build()) {
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(Aggregation
                   .lag(1)
@@ -3193,8 +3221,10 @@ public class TableTest extends CudfTestBase {
           }
         }
 
-        try (WindowOptions options = windowBuilder.window(2, 0).build();
-        WindowOptions options1 = windowBuilder.window(2, 0).build()) {
+        try (Scalar zero = Scalar.fromInt(0);
+             Scalar two = Scalar.fromInt(2);
+             WindowOptions options = windowBuilder.window(two, zero).build();
+             WindowOptions options1 = windowBuilder.window(two, zero).build()) {
           try (ColumnVector defaultOutput = ColumnVector.fromBoxedInts(0, -1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11);
                ColumnVector decDefaultOutput = ColumnVector.decimalFromLongs(-2, 0, -1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11);
                Table windowAggResults = sorted.groupBy(0, 1)
@@ -3215,8 +3245,10 @@ public class TableTest extends CudfTestBase {
         }
 
         // Outside bounds
-        try (WindowOptions options = windowBuilder.window(1, 0).build();
-        WindowOptions options1 = windowBuilder.window(1, 0).build()) {
+        try (Scalar zero = Scalar.fromInt(0);
+             Scalar one = Scalar.fromInt(1);
+             WindowOptions options = windowBuilder.window(one, zero).build();
+             WindowOptions options1 = windowBuilder.window(one, zero).build()) {
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(Aggregation
                   .lag(3)
@@ -3249,10 +3281,12 @@ public class TableTest extends CudfTestBase {
         ColumnVector sortedAggColumn = sorted.getColumn(3);
         assertColumnsAreEqual(expectedSortedAggCol, sortedAggColumn);
 
-        try (WindowOptions window = WindowOptions.builder()
-            .minPeriods(1)
-            .window(2, 1)
-            .build();) {
+        try (Scalar one = Scalar.fromInt(1);
+             Scalar two = Scalar.fromInt(2);
+             WindowOptions window = WindowOptions.builder()
+                 .minPeriods(1)
+                 .window(two, one)
+                 .build()) {
 
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(Aggregation.mean().onColumn(3).overWindow(window));
@@ -3266,7 +3300,8 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testWindowingOnMultipleDifferentColumns() {
-    try (Table unsorted = new Table.TestBuilder().column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+    try (Table unsorted = new Table.TestBuilder()
+        .column( 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
         .column( 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
         .column( 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6) // OBY Key
         .column( 7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6) // Agg Column
@@ -3276,24 +3311,26 @@ public class TableTest extends CudfTestBase {
         ColumnVector sortedAggColumn = sorted.getColumn(3);
         assertColumnsAreEqual(expectedSortedAggCol, sortedAggColumn);
 
-        try (
-        // Window (1,1), with a minimum of 1 reading.
-        WindowOptions window_1 = WindowOptions.builder()
-            .minPeriods(1)
-            .window(2, 1)
-            .build();
+        try (Scalar one = Scalar.fromInt(1);
+             Scalar two = Scalar.fromInt(2);
+             Scalar three = Scalar.fromInt(3);
+             // Window (1,1), with a minimum of 1 reading.
+             WindowOptions window_1 = WindowOptions.builder()
+                 .minPeriods(1)
+                 .window(two, one)
+                 .build();
 
-        // Window (2,2), with a minimum of 2 readings.
-        WindowOptions window_2 = WindowOptions.builder()
-            .minPeriods(2)
-            .window(3, 2)
-            .build();
+             // Window (2,2), with a minimum of 2 readings.
+             WindowOptions window_2 = WindowOptions.builder()
+                 .minPeriods(2)
+                 .window(three, two)
+                 .build();
 
-        // Window (1,1), with a minimum of 3 readings.
-        WindowOptions window_3 = WindowOptions.builder()
-            .minPeriods(3)
-            .window(2, 1)
-            .build();) {
+             // Window (1,1), with a minimum of 3 readings.
+             WindowOptions window_3 = WindowOptions.builder()
+                 .minPeriods(3)
+                 .window(two, one)
+                 .build()) {
 
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(
@@ -3327,10 +3364,12 @@ public class TableTest extends CudfTestBase {
         ColumnVector sortedAggColumn = sorted.getColumn(1);
         assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
 
-        try (WindowOptions window = WindowOptions.builder()
-            .minPeriods(1)
-            .window(2, 1)
-            .build();) {
+        try (Scalar one = Scalar.fromInt(1);
+             Scalar two = Scalar.fromInt(2);
+             WindowOptions window = WindowOptions.builder()
+                 .minPeriods(1)
+                 .window(two, one)
+                 .build()) {
 
           try (Table windowAggResults = sorted.groupBy().aggregateWindows(
               Aggregation.sum().onColumn(1).overWindow(window));
@@ -3504,10 +3543,12 @@ public class TableTest extends CudfTestBase {
               }
             }
 
-            try (WindowOptions window = WindowOptions.builder()
-                .minPeriods(1)
-                .window(2, 1)
-                .build();) {
+            try (Scalar one = Scalar.fromInt(1);
+                 Scalar two = Scalar.fromInt(2);
+                 WindowOptions window = WindowOptions.builder()
+                     .minPeriods(1)
+                     .window(two, one)
+                     .build()) {
 
               try (Table windowAggResults = sorted.groupBy(0, 1)
                   .aggregateWindows(Aggregation.max().onColumn(2).overWindow(window));
@@ -3675,11 +3716,12 @@ public class TableTest extends CudfTestBase {
         .column(true, false, true, false, true, false, true, false, false, false, false, false, false) // orderBy Key
         .build()) {
 
-      try (WindowOptions rangeBasedWindow = WindowOptions.builder()
-          .minPeriods(1)
-          .window(1, 1)
-          .orderByColumnIndex(3)
-          .build();) {
+      try (Scalar one = Scalar.fromInt(1);
+           WindowOptions rangeBasedWindow = WindowOptions.builder()
+               .minPeriods(1)
+               .window(one, one)
+               .orderByColumnIndex(3)
+               .build()) {
 
         assertThrows(IllegalArgumentException.class,
             () -> table
@@ -3691,18 +3733,27 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testInvalidWindowTypeExceptions() {
-    try (Table table = new Table.TestBuilder().column(             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
-        .column(             0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2) // GBY Key
-        .timestampDayColumn( 1, 1, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7) // Timestamp Key
-        .column(             7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8) // Agg Column
-        .build()) {
+    try (Scalar one = Scalar.fromInt(1);
+         Table table = new Table.TestBuilder()
+             .column(             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+             .column(             0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2) // GBY Key
+             .timestampDayColumn( 1, 1, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7) // Timestamp Key
+             .column(             7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8) // Agg Column
+             .build()) {
 
 
-      try (WindowOptions rowBasedWindow = WindowOptions.builder().minPeriods(1).window(1,1).build();) {
+      try (WindowOptions rowBasedWindow = WindowOptions.builder()
+          .minPeriods(1)
+          .window(one, one)
+          .build()) {
         assertThrows(IllegalArgumentException.class, () -> table.groupBy(0, 1).aggregateWindowsOverRanges(Aggregation.max().onColumn(3).overWindow(rowBasedWindow)));
       }
 
-      try (WindowOptions rangeBasedWindow = WindowOptions.builder().minPeriods(1).window(1,1).orderByColumnIndex(2).build();) {
+      try (WindowOptions rangeBasedWindow = WindowOptions.builder()
+          .minPeriods(1)
+          .window(one, one)
+          .orderByColumnIndex(2)
+          .build()) {
         assertThrows(IllegalArgumentException.class, () -> table.groupBy(0, 1).aggregateWindows(Aggregation.max().onColumn(3).overWindow(rangeBasedWindow)));
       }
     }
