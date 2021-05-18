@@ -379,7 +379,9 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
           Initialized_resource, allocation_alignment, alignment_threshold);
     }
 
-    auto wrapped = make_tracking_adaptor(Initialized_resource.get(), RMM_ALLOC_SIZE_ALIGNMENT);
+    auto wrapped = make_tracking_adaptor(
+        Initialized_resource.get(),
+        std::max(RMM_ALLOC_SIZE_ALIGNMENT, static_cast<std::size_t>(allocation_alignment)));
     Tracking_memory_resource.reset(wrapped);
 
     auto resource = Tracking_memory_resource.get();
