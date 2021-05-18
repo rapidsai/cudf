@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -347,7 +347,6 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
     bool use_pool_alloc = allocation_mode & 1;
     bool use_managed_mem = allocation_mode & 2;
     bool use_arena_alloc = allocation_mode & 4;
-    bool use_aligned_adapter = allocation_mode & 8;
     if (use_pool_alloc) {
       auto pool_limit = (max_pool_size > 0) ?
                             thrust::optional<std::size_t>{static_cast<std::size_t>(max_pool_size)} :
@@ -375,7 +374,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
       Initialized_resource = std::make_shared<rmm::mr::cuda_memory_resource>();
     }
 
-    if (use_aligned_adapter) {
+    if (allocation_alignment != 0) {
       Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::aligned_resource_adaptor>(
           Initialized_resource, allocation_alignment, alignment_threshold);
     }

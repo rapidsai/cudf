@@ -32,8 +32,4 @@ public class RmmAllocationMode {
    * Use arena suballocation strategy
    */
   public static final int ARENA = 0x00000004;
-  /**
-   * Use aligned resource adapter for allocation
-   */
-  public static final int ALIGNED = 0x00000008;
 }
