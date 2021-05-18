@@ -212,7 +212,7 @@ _timedelta_to_str_typecast_functions = {
 }
 
 
-ParentType = Union["cudf.Series", "cudf.Index"]
+ParentType = Union["cudf.Series", "cudf.core.index.BaseIndex"]
 
 
 class StringMethods(ColumnMethodsMixin):
