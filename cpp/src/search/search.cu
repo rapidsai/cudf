@@ -38,12 +38,12 @@
 
 namespace cudf {
 namespace {
-bool check_null_recursively(table_view const& input)
+bool has_nested_nulls(table_view const& input)
 {
   return std::any_of(input.begin(), input.end(), [](auto const& col) {
     return col.has_nulls() ||
            std::any_of(col.child_begin(), col.child_end(), [](auto const& child_col) {
-             return check_null_recursively(table_view{{child_col}});
+             return has_nested_nulls(table_view{{child_col}});
            });
   });
 }
@@ -111,7 +111,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   auto const matched = dictionary::detail::match_dictionaries({t, values}, stream);
 
   // Prepare to flatten the structs column
-  auto const has_null_elements   = check_null_recursively(t) or check_null_recursively(values);
+  auto const has_null_elements   = has_nested_nulls(t) or has_nested_nulls(values);
   auto const flatten_nullability = has_null_elements
                                      ? structs::detail::column_nullability::FORCE
                                      : structs::detail::column_nullability::MATCH_INCOMING;
