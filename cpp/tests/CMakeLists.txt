@@ -330,7 +330,7 @@ ConfigureTest(STRINGS_TEST
     strings/chars_types_tests.cpp
     strings/combine/concatenate_list_elements_tests.cpp
     strings/combine/concatenate_tests.cpp
-    strings/combine/join_strings_tests
+    strings/combine/join_strings_tests.cpp
     strings/concatenate_tests.cpp
     strings/contains_tests.cpp
     strings/datetime_tests.cpp
