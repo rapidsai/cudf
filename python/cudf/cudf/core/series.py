@@ -21,7 +21,6 @@ from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
 from cudf.core.column import (
-    ColumnBase,
     DatetimeColumn,
     TimeDeltaColumn,
     arange,
@@ -33,6 +32,7 @@ from cudf.core.column import (
 from cudf.core.column.categorical import (
     CategoricalAccessor as CategoricalAccessor,
 )
+from cudf.core.column.column import _concat_columns
 from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
@@ -2407,7 +2407,7 @@ class Series(SingleColumnFrame, Serializable):
                 else:
                     objs = numeric_normalize_types(*objs)
 
-        col = ColumnBase._concat([o._column for o in objs])
+        col = _concat_columns([o._column for o in objs])
 
         if isinstance(col, cudf.core.column.DecimalColumn):
             col = objs[0]._column._copy_type_metadata(col)
