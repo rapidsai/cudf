@@ -333,20 +333,18 @@ def test_concatenate_list_with_nonlist():
         gdf2 = cudf.DataFrame({"A": ["a", "b", "c"]})
         gdf1["A"] + gdf2["A"]
 
-@pytest.mark.parametrize('data', [
-    [1],
-    [1, 2, 3],
+
+@pytest.mark.parametrize(
+    "data",
     [
+        [1],
         [1, 2, 3],
-        [4, 5, 6]
-    ],
-    [None],
-    [1, None, 3],
-    [
+        [[1, 2, 3], [4, 5, 6]],
+        [None],
         [1, None, 3],
-        [None, 5, 6]
-    ]
-])
+        [[1, None, 3], [None, 5, 6]],
+    ],
+)
 def test_list_getitem(data):
     list_sr = cudf.Series([data])
     # __getitem__ shall fill None with cudf.NA

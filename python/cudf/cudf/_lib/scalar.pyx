@@ -20,7 +20,7 @@ from libcpp cimport bool
 import cudf
 from cudf.core.dtypes import ListDtype
 from cudf._lib.types import (
-    cudf_to_np_types, 
+    cudf_to_np_types,
     duration_unit_map
 )
 from cudf._lib.types import datetime_unit_map
@@ -50,11 +50,6 @@ from cudf._lib.cpp.scalar.scalar cimport (
 )
 from cudf.utils.dtypes import _decimal_to_int64, is_list_dtype
 cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.table cimport Table
-from cudf._lib.interop import to_arrow
-
 
 cdef class DeviceScalar:
 
@@ -171,7 +166,8 @@ cdef class DeviceScalar:
                 "Must pass a dtype when constructing from a fixed-point scalar"
             )
         elif cdtype.id() == libcudf_types.LIST:
-            if (<list_scalar*>s.get_raw_ptr())[0].view().type().id() == libcudf_types.LIST:
+            if (<list_scalar*>s.get_raw_ptr())[0]
+            .view().type().id() == libcudf_types.LIST:
                 s._dtype = dtype_from_column_view(
                     (<list_scalar*>s.get_raw_ptr())[0].view()
                 )
@@ -179,7 +175,8 @@ cdef class DeviceScalar:
                 s._dtype = ListDtype(
                     cudf_to_np_types[
                         <underlying_type_t_type_id>(
-                            (<list_scalar*>s.get_raw_ptr())[0].view().type().id()   
+                            (<list_scalar*>s.get_raw_ptr())[0]
+                            .view().type().id()
                         )
                     ]
                 )
@@ -477,6 +474,7 @@ def _create_proxy_nat_scalar(dtype):
         return result
     else:
         raise TypeError('NAT only valid for datetime and timedelta')
+
 
 def _nested_na_replace(input_list):
     '''
