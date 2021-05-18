@@ -133,6 +133,7 @@ test:
     - test -f $PREFIX/include/cudf/io/types.hpp
     - test -f $PREFIX/include/cudf/ipc.hpp
     - test -f $PREFIX/include/cudf/join.hpp
+    - test -f $PREFIX/include/cudf/lists/detail/combine.hpp
     - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
     - test -f $PREFIX/include/cudf/lists/detail/drop_list_duplicates.hpp
