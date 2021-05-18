@@ -16,6 +16,7 @@
 
 #include <cudf/scalar/scalar_factories.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -27,11 +28,8 @@ namespace test {
 using M    = std::vector<valid_type>;
 using SM_t = fixed_width_column_wrapper<size_type>;
 
-template <typename T>
-class ScatterListOfFixedWidthScalarTest : public cudf::test::BaseFixture {
+class ScatterListScalarTests : public cudf::test::BaseFixture {
 };
-
-TYPED_TEST_CASE(ScatterListOfFixedWidthScalarTest, FixedWidthTypesWithoutFixedPoint);
 
 void test_single_scalar_scatter(column_view const& target,
                                 scalar const& slr,
@@ -43,8 +41,14 @@ void test_single_scalar_scatter(column_view const& target,
   auto result = scatter(slrs, scatter_map, targets, true);
   cudf::test::print(result->view().column(0));
   cudf::test::print(expect);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view().column(0), expect);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view().column(0), expect);
 }
+
+template <typename T>
+class ScatterListOfFixedWidthScalarTest : public ScatterListScalarTests {
+};
+
+TYPED_TEST_CASE(ScatterListOfFixedWidthScalarTest, FixedWidthTypesWithoutFixedPoint);
 
 // Test grid
 // Dim1 : {Fixed width, strings, lists, structs}
@@ -108,7 +112,7 @@ TYPED_TEST(ScatterListOfFixedWidthScalarTest, NullableTargetRow)
   test_single_scalar_scatter(col, *slr, scatter_map, expected);
 }
 
-class ScatterListOfStringScalarTest : public cudf::test::BaseFixture {
+class ScatterListOfStringScalarTest : public ScatterListScalarTests {
 };
 
 TEST_F(ScatterListOfStringScalarTest, Basic)
@@ -128,6 +132,58 @@ TEST_F(ScatterListOfStringScalarTest, Basic)
     LCW({"xx", "yy"}, M{0, 1}.begin()),
     LCW({"Hello!", "", "你好！", "صباح الخير!", "", "こんにちは！"}, M{1, 0, 1, 1, 0, 1}.begin()),
     LCW({"Hello!", "", "你好！", "صباح الخير!", "", "こんにちは！"}, M{1, 0, 1, 1, 0, 1}.begin())};
+
+  test_single_scalar_scatter(col, *slr, scatter_map, expected);
+}
+
+TEST_F(ScatterListOfStringScalarTest, EmptyValidScalar)
+{
+  using LCW      = lists_column_wrapper<string_view, int32_t>;
+  using StringCW = strings_column_wrapper;
+
+  auto slr = std::make_unique<list_scalar>(StringCW{}, true);
+
+  LCW col{LCW({"xx", "yy"}, M{0, 1}.begin()), LCW{""}, LCW{"a", "bab", "bacab"}, LCW{"888", "777"}};
+
+  SM_t scatter_map{0, 3};
+
+  LCW expected{LCW{}, LCW{""}, LCW{"a", "bab", "bacab"}, LCW{}};
+
+  test_single_scalar_scatter(col, *slr, scatter_map, expected);
+}
+
+TEST_F(ScatterListOfStringScalarTest, NullScalar)
+{
+  using LCW      = lists_column_wrapper<string_view, int32_t>;
+  using StringCW = strings_column_wrapper;
+
+  auto slr = std::make_unique<list_scalar>(StringCW{}, false);
+  LCW col{LCW{"xx", "yy"}, LCW({""}, M{0}.begin()), LCW{"a", "bab", "bacab"}, LCW{"888", "777"}};
+
+  SM_t scatter_map{1, 2};
+
+  LCW expected({LCW{"xx", "yy"}, LCW{}, LCW{}, LCW{"888", "777"}}, M{1, 0, 0, 1}.begin());
+
+  test_single_scalar_scatter(col, *slr, scatter_map, expected);
+}
+
+TEST_F(ScatterListOfStringScalarTest, NullableTargetRow)
+{
+  using LCW      = lists_column_wrapper<string_view, int32_t>;
+  using StringCW = strings_column_wrapper;
+
+  auto slr = std::make_unique<list_scalar>(
+    StringCW({"Hello!", "", "こんにちは！"}, {true, false, true}), true);
+  LCW col({LCW{"xx", "yy"}, LCW({""}, M{0}.begin()), LCW{}, LCW{"888", "777"}},
+          M{1, 1, 0, 1}.begin());
+
+  SM_t scatter_map{3, 2};
+
+  LCW expected({LCW{"xx", "yy"},
+                LCW({""}, M{0}.begin()),
+                LCW({"Hello!", "", "こんにちは！"}, M{1, 0, 1}.begin()),
+                LCW({"Hello!", "", "こんにちは！"}, M{1, 0, 1}.begin())},
+               M{1, 1, 1, 1}.begin());
 
   test_single_scalar_scatter(col, *slr, scatter_map, expected);
 }
