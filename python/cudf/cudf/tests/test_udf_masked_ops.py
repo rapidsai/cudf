@@ -150,3 +150,21 @@ def test_apply_return_literal(val):
     })
 
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False) 
+
+def test_apply_return_null():
+    def func_pdf(x):
+        if x is pd.NA:
+            return pd.NA
+        else:
+            return x 
+
+    @nulludf
+    def func_gdf(x):
+        if x is cudf.NA:
+            return cudf.NA
+        else:
+            return x
+
+    gdf = cudf.DataFrame({'a': [1, None, 3]})
+    breakpoint()
+    run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False) 
