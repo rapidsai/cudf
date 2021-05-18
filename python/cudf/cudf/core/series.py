@@ -5280,7 +5280,7 @@ class Series(SingleColumnFrame, Serializable):
         """
         if bins is not None:
             self = cudf.cut(self,bins, include_lowest=True)
-            
+        breakpoint()
         if dropna and self.null_count == len(self):
             return Series(
                 [],
@@ -5301,7 +5301,7 @@ class Series(SingleColumnFrame, Serializable):
         #we this is how we can get the same index dtype as pandas
         if bins is not None:
             res.index = res.index.categories
-            
+
         return res
 
     def scale(self):

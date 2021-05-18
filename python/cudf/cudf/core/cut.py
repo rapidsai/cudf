@@ -270,6 +270,8 @@ def cut(
         ordered=ordered,
         size=index_labels.size,
     )
+
+    return col 
     # we return a categorical index, as we don't have a Categorical method
     categorical_index = cudf.core.index.as_index(col)
 
@@ -279,6 +281,7 @@ def cut(
         if retbins:
             return res_series, bins
         else:
+            breakpoint()
             return res_series
     elif retbins:
         # if retbins is true we return the bins as well
