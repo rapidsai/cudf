@@ -29,6 +29,11 @@ class DecimalColumn(ColumnBase):
     def __truediv__(self, other):
         return self.binary_operator("div", other)
 
+    def __setitem__(self, key, value):
+        if isinstance(value, np.integer):
+            value = int(value)
+        super().__setitem__(key, value)
+
     @classmethod
     def from_arrow(cls, data: pa.Array):
         dtype = Decimal64Dtype.from_arrow(data.type)
