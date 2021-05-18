@@ -189,7 +189,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
     return std::make_unique<column>(value.type(),
                                     size,
                                     rmm::device_buffer{0, stream, mr},
-                                    null_mask,
+                                    std::move(null_mask),
                                     size);
 
   // Create a strings column_view with all nulls and no children.
@@ -197,7 +197,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   // any of the children in the strings column which would otherwise cause an exception.
   column_view sc{
     data_type{type_id::STRING}, size, nullptr, static_cast<bitmask_type*>(null_mask.data()), size};
-  auto sv = static_cast<scalar_type_t<cudf::string_view> const&>(value);
+  auto sv = string_scalar(static_cast<scalar_type_t<cudf::string_view> const&>(value), stream);
   // fill the column with the scalar
   auto output = strings::detail::fill(strings_column_view(sc), 0, size, sv, stream, mr);
   output->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);  // should be no nulls

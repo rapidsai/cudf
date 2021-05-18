@@ -34,6 +34,13 @@ scalar::scalar(data_type type,
 {
 }
 
+scalar::scalar(scalar const& other,
+               rmm::cuda_stream_view stream,
+               rmm::mr::device_memory_resource* mr)
+  : _type(other.type()), _is_valid(other._is_valid, stream, mr)
+{
+}
+
 data_type scalar::type() const noexcept { return _type; }
 
 void scalar::set_valid(bool is_valid, rmm::cuda_stream_view stream)
@@ -54,6 +61,13 @@ string_scalar::string_scalar(std::string const& string,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
   : scalar(data_type(type_id::STRING), is_valid), _data(string.data(), string.size(), stream, mr)
+{
+}
+
+string_scalar::string_scalar(string_scalar const& other,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
+  : scalar(other, stream, mr), _data(other._data, stream, mr)
 {
 }
 
@@ -139,6 +153,14 @@ fixed_point_scalar<T>::fixed_point_scalar(rmm::device_scalar<rep_type>&& data,
 }
 
 template <typename T>
+fixed_point_scalar<T>::fixed_point_scalar(fixed_point_scalar<T> const& other,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr)
+  : scalar{other, stream, mr}, _data(other._data, stream, mr)
+{
+}
+
+template <typename T>
 typename fixed_point_scalar<T>::rep_type fixed_point_scalar<T>::value(
   rmm::cuda_stream_view stream) const
 {
@@ -198,6 +220,14 @@ fixed_width_scalar<T>::fixed_width_scalar(rmm::device_scalar<T>&& data,
                                           rmm::mr::device_memory_resource* mr)
   : scalar(data_type(type_to_id<T>()), is_valid, stream, mr),
     _data{std::forward<rmm::device_scalar<T>>(data)}
+{
+}
+
+template <typename T>
+fixed_width_scalar<T>::fixed_width_scalar(fixed_width_scalar<T> const& other,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr)
+  : scalar{other, stream, mr}, _data(other._data, stream, mr)
 {
 }
 
@@ -282,6 +312,14 @@ numeric_scalar<T>::numeric_scalar(rmm::device_scalar<T>&& data,
 {
 }
 
+template <typename T>
+numeric_scalar<T>::numeric_scalar(numeric_scalar<T> const& other,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
+  : detail::fixed_width_scalar<T>{other, stream, mr}
+{
+}
+
 /**
  * @brief These define the valid numeric scalar types.
  *
@@ -320,6 +358,14 @@ chrono_scalar<T>::chrono_scalar(rmm::device_scalar<T>&& data,
 {
 }
 
+template <typename T>
+chrono_scalar<T>::chrono_scalar(chrono_scalar<T> const& other,
+                                rmm::cuda_stream_view stream,
+                                rmm::mr::device_memory_resource* mr)
+  : detail::fixed_width_scalar<T>{other, stream, mr}
+{
+}
+
 /**
  * @brief These define the valid chrono scalar types.
  *
@@ -345,6 +391,14 @@ duration_scalar<T>::duration_scalar(rep_type value,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
   : chrono_scalar<T>(T{value}, is_valid, stream, mr)
+{
+}
+
+template <typename T>
+duration_scalar<T>::duration_scalar(duration_scalar<T> const& other,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
+  : chrono_scalar<T>{other, stream, mr}
 {
 }
 
@@ -398,6 +452,14 @@ timestamp_scalar<T>::timestamp_scalar(D const& value,
 {
 }
 
+template <typename T>
+timestamp_scalar<T>::timestamp_scalar(timestamp_scalar<T> const& other,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
+  : chrono_scalar<T>{other, stream, mr}
+{
+}
+
 #define TS_CTOR(TimestampType, DurationType)                  \
   template timestamp_scalar<TimestampType>::timestamp_scalar( \
     DurationType const&, bool, rmm::cuda_stream_view, rmm::mr::device_memory_resource*);
@@ -441,6 +503,13 @@ list_scalar::list_scalar(cudf::column&& data,
                          rmm::cuda_stream_view stream,
                          rmm::mr::device_memory_resource* mr)
   : scalar(data_type(type_id::LIST), is_valid, stream, mr), _data(std::move(data))
+{
+}
+
+list_scalar::list_scalar(list_scalar const& other,
+                         rmm::cuda_stream_view stream,
+                         rmm::mr::device_memory_resource* mr)
+  : scalar{other, stream, mr}, _data(other._data, stream, mr)
 {
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -133,8 +133,11 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys,
   auto indices_column = [&] {
     // If the types match, then just commandeer the column's data buffer.
     if (new_type.id() == indices_type) {
-      return std::make_unique<column>(
-        new_type, indices_size, *(contents.data.release()), rmm::device_buffer{0, stream, mr}, 0);
+      return std::make_unique<column>(new_type,
+                                      indices_size,
+                                      std::move(*(contents.data.release())),
+                                      rmm::device_buffer{0, stream, mr},
+                                      0);
     }
     // If the new type does not match, then convert the data.
     cudf::column_view cast_view{cudf::data_type{indices_type}, indices_size, contents.data->data()};

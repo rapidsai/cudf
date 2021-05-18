@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -147,7 +147,7 @@ TYPED_TEST(NumericFactoryTest, NullMaskAsParm)
   rmm::device_buffer null_mask{create_null_mask(this->size(), cudf::mask_state::ALL_NULL)};
   auto column = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                           this->size(),
-                                          null_mask,
+                                          std::move(null_mask),
                                           this->size(),
                                           this->stream(),
                                           this->mr());
@@ -161,10 +161,9 @@ TYPED_TEST(NumericFactoryTest, NullMaskAsParm)
 
 TYPED_TEST(NumericFactoryTest, NullMaskAsEmptyParm)
 {
-  rmm::device_buffer null_mask{};
   auto column = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                           this->size(),
-                                          null_mask,
+                                          rmm::device_buffer{},
                                           0,
                                           this->stream(),
                                           this->mr());
@@ -324,7 +323,7 @@ TYPED_TEST(FixedWidthFactoryTest, NullMaskAsParm)
   rmm::device_buffer null_mask{create_null_mask(this->size(), cudf::mask_state::ALL_NULL)};
   auto column = cudf::make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                               this->size(),
-                                              null_mask,
+                                              std::move(null_mask),
                                               this->size(),
                                               this->stream(),
                                               this->mr());
@@ -338,10 +337,9 @@ TYPED_TEST(FixedWidthFactoryTest, NullMaskAsParm)
 
 TYPED_TEST(FixedWidthFactoryTest, NullMaskAsEmptyParm)
 {
-  rmm::device_buffer null_mask{};
   auto column = cudf::make_fixed_width_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
                                               this->size(),
-                                              null_mask,
+                                              rmm::device_buffer{},
                                               0,
                                               this->stream(),
                                               this->mr());

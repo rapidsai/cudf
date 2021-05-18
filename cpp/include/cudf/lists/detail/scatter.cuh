@@ -337,7 +337,7 @@ struct list_child_constructor {
     auto const num_child_rows{
       cudf::detail::get_value<size_type>(list_offsets, list_offsets.size() - 1, stream)};
 
-    auto const child_null_mask =
+    auto child_null_mask =
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
         ? construct_child_nullmask(
             list_vector, list_offsets, source_lists, target_lists, num_child_rows, stream, mr)
@@ -354,7 +354,7 @@ struct list_child_constructor {
 
     auto child_column = cudf::make_fixed_width_column(cudf::data_type{cudf::type_to_id<T>()},
                                                       num_child_rows,
-                                                      child_null_mask.first,
+                                                      std::move(child_null_mask.first),
                                                       child_null_mask.second,
                                                       stream,
                                                       mr);
@@ -652,7 +652,7 @@ struct list_child_constructor {
                                      std::make_unique<column>(structs_list_offsets, stream, mr),
                                      std::make_unique<column>(structs_member, stream, mr),
                                      structs_list_null_count,
-                                     rmm::device_buffer(structs_list_nullmask),
+                                     rmm::device_buffer(structs_list_nullmask, stream),
                                      stream,
                                      mr);
     };

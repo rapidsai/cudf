@@ -108,7 +108,7 @@ std::unique_ptr<cudf::column> make_structs_column(
     cudf::data_type{type_id::STRUCT},
     num_rows,
     rmm::device_buffer{0, stream, mr},  // Empty data buffer. Structs hold no data.
-    null_mask,
+    std::forward<rmm::device_buffer>(null_mask),
     null_count,
     std::move(child_columns));
 }

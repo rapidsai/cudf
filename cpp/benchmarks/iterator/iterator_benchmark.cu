@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ inline auto reduce_by_cub(OutputIterator result, InputIterator d_in, int num_ite
     nullptr, temp_storage_bytes, d_in, result, num_items, cudf::DeviceSum{}, init);
 
   // Allocate temporary storage
-  rmm::device_buffer d_temp_storage(temp_storage_bytes);
+  rmm::device_buffer d_temp_storage(temp_storage_bytes, rmm::cuda_stream_default);
 
   // Run reduction
   cub::DeviceReduce::Reduce(

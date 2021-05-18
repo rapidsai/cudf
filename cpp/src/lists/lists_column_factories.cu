@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
   return std::make_unique<column>(cudf::data_type{type_id::LIST},
                                   num_rows,
                                   rmm::device_buffer{0, stream, mr},
-                                  null_mask,
+                                  std::forward<rmm::device_buffer>(null_mask),
                                   null_count,
                                   std::move(children));
 }
