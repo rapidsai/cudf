@@ -117,11 +117,11 @@ def make_const_op(op):
         Implement `MaskedType` + constant
         '''
         masked_type, const_type = sig.args
-
+        return_type = sig.return_type
         indata = cgutils.create_struct_proxy(MaskedType(masked_type.value_type))(
             context, builder, value=input_values[0]
         )
-        result = cgutils.create_struct_proxy(MaskedType(masked_type.value_type))(
+        result = cgutils.create_struct_proxy(MaskedType(return_type.value_type))(
             context, builder
         )
         result.valid = context.get_constant(types.boolean, 0)
@@ -131,7 +131,7 @@ def make_const_op(op):
                 builder, 
                 lambda x, y: op(x, y), 
                 nb_signature(
-                    masked_type.value_type, 
+                    return_type.value_type, 
                     masked_type.value_type, 
                     const_type
                 ),
