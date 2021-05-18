@@ -4079,7 +4079,7 @@ class Series(SingleColumnFrame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        return self._column.min(skipna=skipna, dtype=dtype)
+        return self._array.min(skipna=skipna, dtype=dtype)
 
     def max(
         self,
@@ -4129,7 +4129,7 @@ class Series(SingleColumnFrame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        return self._column.max(skipna=skipna, dtype=dtype)
+        return self._array.max(skipna=skipna, dtype=dtype)
 
     def sum(
         self,
@@ -4188,9 +4188,7 @@ class Series(SingleColumnFrame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        return self._column.sum(
-            skipna=skipna, dtype=dtype, min_count=min_count
-        )
+        return self._array.sum(skipna=skipna, dtype=dtype, min_count=min_count)
 
     def product(
         self,
@@ -4249,7 +4247,7 @@ class Series(SingleColumnFrame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        return self._column.product(
+        return self._array.product(
             skipna=skipna, dtype=dtype, min_count=min_count
         )
 
@@ -4582,7 +4580,7 @@ class Series(SingleColumnFrame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        return self._column.mean(skipna=skipna)
+        return self._array.mean(skipna=skipna)
 
     def std(
         self,
@@ -4647,7 +4645,7 @@ class Series(SingleColumnFrame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        return self._column.std(skipna=skipna, ddof=ddof)
+        return self._array.std(skipna=skipna, ddof=ddof)
 
     def var(
         self,
@@ -4710,10 +4708,10 @@ class Series(SingleColumnFrame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        return self._column.var(skipna=skipna, ddof=ddof)
+        return self._array.var(skipna=skipna, ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
-        return self._column.sum_of_squares(dtype=dtype)
+        return self._array.sum_of_squares(dtype=dtype)
 
     def median(
         self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
@@ -4762,7 +4760,7 @@ class Series(SingleColumnFrame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        return self._column.median(skipna=skipna)
+        return self._array.median(skipna=skipna)
 
     def mode(self, dropna=True):
         """
@@ -4907,7 +4905,7 @@ class Series(SingleColumnFrame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        return self._column.kurtosis(skipna=skipna)
+        return self._array.kurtosis(skipna=skipna)
 
     # Alias for kurtosis.
     kurt = kurtosis
@@ -4960,7 +4958,7 @@ class Series(SingleColumnFrame, Serializable):
                 "numeric_only parameter is not implemented yet"
             )
 
-        return self._column.skew(skipna=skipna)
+        return self._array.skew(skipna=skipna)
 
     def cov(self, other, min_periods=None):
         """

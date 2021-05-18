@@ -3370,7 +3370,13 @@ class SingleColumnFrame(Frame):
 
     @_column.setter
     def _column(self, value):
-        self._data[self.name] = value
+        from cudf.internals.arrays import asarray
+
+        self._new_data[0] = asarray(value)
+
+    @property
+    def _array(self):
+        return self._new_data.arrays[0]
 
     @property
     def values(self):

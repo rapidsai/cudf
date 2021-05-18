@@ -602,7 +602,7 @@ class Index(SingleColumnFrame, Serializable):
         >>> idx.min()
         1
         """
-        return self._values.min()
+        return self._array.min()
 
     def max(self):
         """
@@ -627,7 +627,7 @@ class Index(SingleColumnFrame, Serializable):
         >>> idx.max()
         3
         """
-        return self._values.max()
+        return self._array.max()
 
     def sum(self):
         """
@@ -645,7 +645,7 @@ class Index(SingleColumnFrame, Serializable):
         >>> idx.sum()
         6
         """
-        return self._values.sum()
+        return self._array.sum()
 
     @classmethod
     def _concat(cls, objs):

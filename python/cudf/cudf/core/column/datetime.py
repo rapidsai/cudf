@@ -18,13 +18,7 @@ from cudf import _lib as libcudf
 from cudf._typing import DatetimeLikeScalar, Dtype, DtypeObj, ScalarLike
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer import Buffer
-from cudf.core.column import (
-    ColumnBase,
-    as_column,
-    column,
-    column_empty_like,
-    string,
-)
+from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import _fillna_natwise
 
@@ -270,25 +264,6 @@ class DatetimeColumn(column.ColumnBase):
         """
         return np.datetime64("nat", self.time_unit)
 
-    def mean(self, skipna=None, dtype=np.float64) -> ScalarLike:
-        return pd.Timestamp(
-            self.as_numerical.mean(skipna=skipna, dtype=dtype),
-            unit=self.time_unit,
-        )
-
-    def std(
-        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
-    ) -> pd.Timedelta:
-        return pd.Timedelta(
-            self.as_numerical.std(skipna=skipna, ddof=ddof, dtype=dtype)
-            * _numpy_to_pandas_conversion[self.time_unit],
-        )
-
-    def median(self, skipna: bool = None) -> pd.Timestamp:
-        return pd.Timestamp(
-            self.as_numerical.median(skipna=skipna), unit=self.time_unit
-        )
-
     def quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
     ) -> ColumnBase:
@@ -403,23 +378,6 @@ class DatetimeColumn(column.ColumnBase):
             return True
         else:
             return False
-
-    def _make_copy_with_na_as_null(self):
-        """Return a copy with NaN values replaced with nulls."""
-        null = column_empty_like(self, masked=True, newsize=1)
-        out_col = cudf._lib.replace.replace(
-            self,
-            as_column(
-                Buffer(
-                    np.array([self.default_na_value()], dtype=self.dtype).view(
-                        "|u1"
-                    )
-                ),
-                dtype=self.dtype,
-            ),
-            null,
-        )
-        return out_col
 
 
 @annotate("BINARY_OP", color="orange", domain="cudf_python")

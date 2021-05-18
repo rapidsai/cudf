@@ -263,43 +263,6 @@ class NumericalColumn(ColumnBase):
             return self
         return libcudf.unary.cast(self, dtype)
 
-    def reduce(self, op: str, skipna: bool = None, **kwargs) -> float:
-        min_count = kwargs.pop("min_count", 0)
-        preprocessed = self._process_for_reduction(
-            skipna=skipna, min_count=min_count
-        )
-        if isinstance(preprocessed, ColumnBase):
-            return libcudf.reduce.reduce(op, preprocessed, **kwargs)
-        else:
-            return cast(float, preprocessed)
-
-    def sum(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
-    ) -> float:
-        return self.reduce(
-            "sum", skipna=skipna, dtype=dtype, min_count=min_count
-        )
-
-    def product(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
-    ) -> float:
-        return self.reduce(
-            "product", skipna=skipna, dtype=dtype, min_count=min_count
-        )
-
-    def mean(self, skipna: bool = None, dtype: Dtype = np.float64) -> float:
-        return self.reduce("mean", skipna=skipna, dtype=dtype)
-
-    def var(
-        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
-    ) -> float:
-        return self.reduce("var", skipna=skipna, dtype=dtype, ddof=ddof)
-
-    def std(
-        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
-    ) -> float:
-        return self.reduce("std", skipna=skipna, dtype=dtype, ddof=ddof)
-
     def _process_values_for_isin(
         self, values: Sequence
     ) -> Tuple[ColumnBase, ColumnBase]:
@@ -316,8 +279,25 @@ class NumericalColumn(ColumnBase):
 
         return lhs, rhs
 
-    def sum_of_squares(self, dtype: Dtype = None) -> float:
-        return libcudf.reduce.reduce("sum_of_squares", self, dtype=dtype)
+    def sum(self):
+        from cudf.internals.arrays import asarray
+
+        return asarray(self).sum()
+
+    def mean(self):
+        from cudf.internals.arrays import asarray
+
+        return asarray(self).mean()
+
+    def std(self):
+        from cudf.internals.arrays import asarray
+
+        return asarray(self).std()
+
+    def var(self, ddof=1):
+        from cudf.internals.arrays import asarray
+
+        return asarray(self).var(ddof=ddof)
 
     def kurtosis(self, skipna: bool = None) -> float:
         skipna = True if skipna is None else skipna
@@ -408,7 +388,7 @@ class NumericalColumn(ColumnBase):
 
         return cpp_quantile(self, quant, interpolation, sorted_indices, exact)
 
-    def cov(self, other: ColumnBase) -> float:
+    def cov(self, other: NumericalColumn) -> float:
         if (
             len(self) == 0
             or len(other) == 0
@@ -420,7 +400,7 @@ class NumericalColumn(ColumnBase):
         cov_sample = result.sum() / (len(self) - 1)
         return cov_sample
 
-    def corr(self, other: ColumnBase) -> float:
+    def corr(self, other: NumericalColumn) -> float:
         if len(self) == 0 or len(other) == 0:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 

@@ -181,7 +181,7 @@ def is_bool_dtype(obj):
         dtype = np.dtype(obj)
     except TypeError:
         try:
-            return pd.api.types.is_float_dtype(obj)
+            return pd.api.types.is_bool_dtype(obj)
         except TypeError:
             return False
     return dtype.kind == "b"

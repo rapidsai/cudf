@@ -359,17 +359,6 @@ class TimeDeltaColumn(column.ColumnBase):
             return self
         return libcudf.unary.cast(self, dtype=dtype)
 
-    def mean(self, skipna=None, dtype: Dtype = np.float64) -> pd.Timedelta:
-        return pd.Timedelta(
-            self.as_numerical.mean(skipna=skipna, dtype=dtype),
-            unit=self.time_unit,
-        )
-
-    def median(self, skipna: bool = None) -> pd.Timedelta:
-        return pd.Timedelta(
-            self.as_numerical.median(skipna=skipna), unit=self.time_unit
-        )
-
     def isin(self, values: Sequence) -> ColumnBase:
         return cudf.core.tools.datetimes._isin_datetimelike(self, values)
 
@@ -382,24 +371,6 @@ class TimeDeltaColumn(column.ColumnBase):
         if isinstance(q, Number):
             return pd.Timedelta(result, unit=self.time_unit)
         return result.astype(self.dtype)
-
-    def sum(
-        self, skipna: bool = None, dtype: Dtype = None, min_count=0
-    ) -> pd.Timedelta:
-        return pd.Timedelta(
-            self.as_numerical.sum(
-                skipna=skipna, dtype=dtype, min_count=min_count
-            ),
-            unit=self.time_unit,
-        )
-
-    def std(
-        self, skipna: bool = None, ddof: int = 1, dtype: Dtype = np.float64
-    ) -> pd.Timedelta:
-        return pd.Timedelta(
-            self.as_numerical.std(skipna=skipna, ddof=ddof, dtype=dtype),
-            unit=self.time_unit,
-        )
 
     def components(self, index=None) -> "cudf.DataFrame":
         """
