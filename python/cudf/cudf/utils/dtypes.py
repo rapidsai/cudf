@@ -154,6 +154,45 @@ def is_numerical_dtype(obj):
     return dtype.kind in "biuf"
 
 
+def is_integer_dtype(obj):
+    try:
+        dtype = np.dtype(obj)
+    except TypeError:
+        try:
+            return pd.api.types.is_integer_dtype(obj)
+        except TypeError:
+            return False
+    return dtype.kind in "iu"
+
+
+def is_float_dtype(obj):
+    try:
+        dtype = np.dtype(obj)
+    except TypeError:
+        try:
+            return pd.api.types.is_float_dtype(obj)
+        except TypeError:
+            return False
+    return dtype.kind == "f"
+
+
+def is_bool_dtype(obj):
+    try:
+        dtype = np.dtype(obj)
+    except TypeError:
+        try:
+            return pd.api.types.is_float_dtype(obj)
+        except TypeError:
+            return False
+    return dtype.kind == "b"
+
+
+def is_integer(obj):
+    if isinstance(obj, cudf.Scalar):
+        return is_integer_dtype(obj.dtype)
+    return pd.api.types.is_integer(obj)
+
+
 def is_string_dtype(obj):
     return (
         pd.api.types.is_string_dtype(obj)
@@ -276,6 +315,15 @@ def is_decimal_dtype(obj):
     )
 
 
+def _decimal_normalize_types(*args):
+    s = max([a.dtype.scale for a in args])
+    lhs = max([a.dtype.precision - a.dtype.scale for a in args])
+    p = min(cudf.Decimal64Dtype.MAX_PRECISION, s + lhs)
+    dtype = cudf.Decimal64Dtype(p, s)
+
+    return [a.astype(dtype) for a in args]
+
+
 def cudf_dtype_from_pydata_dtype(dtype):
     """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
         Python dtype.
@@ -283,6 +331,8 @@ def cudf_dtype_from_pydata_dtype(dtype):
 
     if is_categorical_dtype(dtype):
         return cudf.core.dtypes.CategoricalDtype
+    elif is_decimal_dtype(dtype):
+        return cudf.core.dtypes.Decimal64Dtype
     elif dtype in cudf._lib.types.np_to_cudf_types:
         return dtype.type
 

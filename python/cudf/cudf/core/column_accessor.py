@@ -20,6 +20,7 @@ import pandas as pd
 
 import cudf
 from cudf.core import column
+from cudf.internals.arrays import ArrayAccessor, asarray
 from cudf.utils.utils import cached_property
 
 if TYPE_CHECKING:
@@ -81,7 +82,7 @@ def _to_flat_dict(d):
 
 class ColumnAccessor(MutableMapping):
 
-    _data: "Dict[Any, ColumnBase]"
+    _data: ArrayAccessor
     multiindex: bool
     _level_names: Tuple[Any, ...]
 
@@ -116,7 +117,7 @@ class ColumnAccessor(MutableMapping):
         else:
             # This code path is performance-critical for copies and should be
             # modified with care.
-            self._data = {}
+            self._data = ArrayAccessor()
             if data:
                 data = dict(data)
                 # Faster than next(iter(data.values()))
@@ -129,7 +130,8 @@ class ColumnAccessor(MutableMapping):
                         v = column.as_column(v)
                     if len(v) != column_length:
                         raise ValueError("All columns must be of equal length")
-                    self._data[k] = v
+                    self._data.names.append(k)
+                    self._data.arrays.append(asarray(v))
 
             self.multiindex = multiindex
             self._level_names = level_names
@@ -144,22 +146,30 @@ class ColumnAccessor(MutableMapping):
         # create a ColumnAccessor without verifying column
         # type or size
         obj = cls()
-        obj._data = data
+        obj._data = ArrayAccessor(
+            list(data.keys()), list(map(asarray, data.values()))
+        )
         obj.multiindex = multiindex
         obj._level_names = level_names
         return obj
 
     def __iter__(self):
-        return self._data.__iter__()
+        return self._data.names.__iter__()
 
     def __getitem__(self, key: Any) -> ColumnBase:
-        return self._data[key]
+        try:
+            index = self._data.names.index(key)
+        except ValueError:
+            raise KeyError(key)
+        return self._data.arrays[index]._column
 
     def __setitem__(self, key: Any, value: Any):
         self.set_by_label(key, value)
 
     def __delitem__(self, key: Any):
-        self._data.__delitem__(key)
+        i = self._data.names.index(key)
+        del self._data.names[i]
+        del self._data.arrays[i]
         self._clear_cache()
 
     def __len__(self) -> int:
@@ -222,13 +232,13 @@ class ColumnAccessor(MutableMapping):
         if self.multiindex:
             return _NestedGetItemDict.from_zip(zip(self.names, self.columns))
         else:
-            return self._data
+            return dict(zip(self.names, self.columns))
 
     @cached_property
     def _column_length(self):
         try:
-            return len(self._data[next(iter(self._data))])
-        except StopIteration:
+            return len(self._data.arrays[0])
+        except IndexError:
             return 0
 
     def _clear_cache(self):
@@ -289,7 +299,7 @@ class ColumnAccessor(MutableMapping):
                 "insert: loc out of bounds: must be  0 <= loc <= ncols"
             )
         # TODO: we should move all insert logic here
-        if name in self._data:
+        if name in self._data.names:
             raise ValueError(f"Cannot insert '{name}', already exists")
         if loc == len(self._data):
             if validate:
@@ -299,11 +309,11 @@ class ColumnAccessor(MutableMapping):
                         raise ValueError("All columns must be of equal length")
                 else:
                     self._column_length = len(value)
-            self._data[name] = value
+            self._data.names.append(name)
+            self._data.arrays.append(asarray(value))
         else:
-            new_keys = self.names[:loc] + (name,) + self.names[loc:]
-            new_values = self.columns[:loc] + (value,) + self.columns[loc:]
-            self._data = self._data.__class__(zip(new_keys, new_values))
+            self._data.names.insert(loc, name)
+            self._data.arrays.insert(loc, asarray(value))
         self._clear_cache()
 
     def copy(self, deep=False) -> ColumnAccessor:
@@ -312,12 +322,15 @@ class ColumnAccessor(MutableMapping):
         """
         if deep:
             return self.__class__(
-                {k: v.copy(deep=True) for k, v in self._data.items()},
+                {
+                    k: v.copy(deep=True)
+                    for k, v in zip(self.names, self.columns)
+                },
                 multiindex=self.multiindex,
                 level_names=self.level_names,
             )
         return self.__class__(
-            self._data.copy(),
+            dict(zip(self.names, self.columns)),
             multiindex=self.multiindex,
             level_names=self.level_names,
         )
@@ -359,13 +372,12 @@ class ColumnAccessor(MutableMapping):
         ColumnAccessor
         """
         if isinstance(index, slice):
-            start, stop, step = index.indices(len(self._data))
-            keys = self.names[start:stop:step]
+            index = list(range(len(self)))[index]
         elif pd.api.types.is_integer(index):
-            keys = self.names[index : index + 1]
+            index = [index]
         else:
-            keys = (self.names[i] for i in index)
-        data = {k: self._data[k] for k in keys}
+            index = list(index)
+        data = {self.names[i]: self.columns[i] for i in index}
         return self.__class__(
             data, multiindex=self.multiindex, level_names=self.level_names,
         )
@@ -393,7 +405,11 @@ class ColumnAccessor(MutableMapping):
             else:
                 self._column_length = len(value)
 
-        self._data[key] = value
+        if key in self._data.names:
+            self._data.arrays[self._data.names.index(key)] = asarray(value)
+        else:
+            self._data.arrays.append(asarray(value))
+            self._data.names.append(key)
         self._clear_cache()
 
     def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
@@ -438,9 +454,11 @@ class ColumnAccessor(MutableMapping):
             if _compare_keys(name, stop):
                 stop_idx = len(self.names) - idx
                 break
-        keys = self.names[start_idx:stop_idx]
         return self.__class__(
-            {k: self._data[k] for k in keys},
+            {
+                self.names[i]: self.columns[i]
+                for i in range(start_idx, stop_idx)
+            },
             multiindex=self.multiindex,
             level_names=self.level_names,
         )
@@ -448,7 +466,11 @@ class ColumnAccessor(MutableMapping):
     def _select_by_label_with_wildcard(self, key: Any) -> ColumnAccessor:
         key = self._pad_key(key, slice(None))
         return self.__class__(
-            {k: self._data[k] for k in self._data if _compare_keys(k, key)},
+            {
+                k: v
+                for k, v in zip(self.names, self.columns)
+                if _compare_keys(k, key)
+            },
             multiindex=self.multiindex,
             level_names=self.level_names,
         )

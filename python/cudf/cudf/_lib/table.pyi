@@ -11,6 +11,9 @@ class Table(object):
     def __init__(self, data: object = None, index: object = None) -> None: ...
 
     @property
+    def _arrays(self) -> cudf.internals.arrays.ColumnAccessor: ...
+
+    @property
     def _num_columns(self) -> int: ...
 
     @property

@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-#include <strings/utilities.cuh>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -112,11 +111,8 @@ std::unique_ptr<column> translate(
 
   auto d_strings = column_device_view::create(strings.parent(), stream);
 
-  auto children = make_strings_children(translate_fn{*d_strings, table.begin(), table.end()},
-                                        strings.size(),
-                                        strings.null_count(),
-                                        stream,
-                                        mr);
+  auto children = make_strings_children(
+    translate_fn{*d_strings, table.begin(), table.end()}, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
                              std::move(children.first),

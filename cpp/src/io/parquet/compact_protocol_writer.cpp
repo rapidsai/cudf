@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <io/parquet/compact_protocol_writer.hpp>
+#include "compact_protocol_writer.hpp"
 
 namespace cudf {
 namespace io {
