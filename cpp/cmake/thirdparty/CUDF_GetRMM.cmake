@@ -20,6 +20,10 @@ function(find_and_configure_rmm VERSION)
         return()
     endif()
 
+    if(${VERSION} MATCHES [=[([0-9]+)\.([0-9]+)\.([0-9]+)]=])
+        set(MAJOR_AND_MINOR "${CMAKE_MATCH_1}.${CMAKE_MATCH_2}")
+    endif()
+
     # Consumers have two options for local source builds:
     # 1. Pass `-D CPM_rmm_SOURCE=/path/to/rmm` to build a local RMM source tree
     # 2. Pass `-D CMAKE_PREFIX_PATH=/path/to/rmm/build` to use an existing local
@@ -27,7 +31,7 @@ function(find_and_configure_rmm VERSION)
     CPMFindPackage(NAME rmm
         VERSION         ${VERSION}
         GIT_REPOSITORY  https://github.com/rapidsai/rmm.git
-        GIT_TAG         branch-${VERSION}
+        GIT_TAG         branch-${MAJOR_AND_MINOR}
         GIT_SHALLOW     TRUE
         OPTIONS         "BUILD_TESTS OFF"
                         "BUILD_BENCHMARKS OFF"
