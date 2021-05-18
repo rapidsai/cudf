@@ -46,7 +46,7 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
 {
   auto const num_rows = input.size();
 
-  static_assert(std::is_same_v<offset_type, int32_t> and std::is_same_v<size_type, int32_t>);
+  static_assert(std::is_same_v<offset_type, int32_t> && std::is_same_v<size_type, int32_t>);
   auto out_offsets = make_numeric_column(
     data_type{type_id::INT32}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
 
@@ -92,7 +92,7 @@ generate_list_offsets_and_validities(column_view const& input,
 {
   auto const num_rows = input.size();
 
-  static_assert(std::is_same_v<offset_type, int32_t> and std::is_same_v<size_type, int32_t>);
+  static_assert(std::is_same_v<offset_type, int32_t> && std::is_same_v<size_type, int32_t>);
   auto out_offsets = make_numeric_column(
     data_type{type_id::INT32}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
 
@@ -126,7 +126,7 @@ generate_list_offsets_and_validities(column_view const& input,
                        iter + d_row_offsets[idx + 1],
                        [&] __device__(auto const list_idx) { return lists_dv.is_valid(list_idx); });
       d_validities[idx] = static_cast<int8_t>(is_valid);
-      if (not is_valid) { return size_type{0}; }
+      if (!is_valid) { return size_type{0}; }
 
       // Compute size of the output list as sum of sizes of all lists in the current input row.
       return d_list_offsets[d_row_offsets[idx + 1]] - d_list_offsets[d_row_offsets[idx]];
@@ -238,8 +238,8 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
 
   if (input.size() == 0) { return cudf::empty_like(input); }
 
-  return (null_policy == concatenate_null_policy::IGNORE or
-          not lists_column_view(input).child().has_nulls())
+  return (null_policy == concatenate_null_policy::IGNORE ||
+          !lists_column_view(input).child().has_nulls())
            ? concatenate_lists_ignore_null(input, stream, mr)
            : concatenate_lists_nullifying_rows(input, stream, mr);
 }
