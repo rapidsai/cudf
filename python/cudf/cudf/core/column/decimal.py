@@ -28,6 +28,9 @@ class DecimalColumn(NumericalBaseColumn):
     dtype: Decimal64Dtype
 
     def __truediv__(self, other):
+        # TODO: This override is not sufficient. While it will change the
+        # behavior of x / y for two decimal columns, it will not affect
+        # col1.binary_operator(col2), which is how Series/Index will call this.
         return self.binary_operator("div", other)
 
     def __setitem__(self, key, value):
@@ -209,6 +212,16 @@ class DecimalColumn(NumericalBaseColumn):
         raise NotImplementedError(
             "Decimals are not yet supported via `__cuda_array_interface__`"
         )
+
+    def _copy_type_metadata(self: ColumnBase, other: ColumnBase) -> ColumnBase:
+        """Copies type metadata from self onto other, returning a new column.
+
+        In addition to the default behavior, if `other` is not a
+        """
+        if isinstance(other, DecimalColumn):
+            other.dtype.precision = self.dtype.precision
+        # Have to ignore typing here because it misdiagnoses super().
+        return super()._copy_type_metadata(other)  # type: ignore
 
 
 def _binop_scale(l_dtype, r_dtype, op):
