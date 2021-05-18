@@ -127,10 +127,6 @@ class DecimalColumn(NumericalBaseColumn):
         else:
             raise TypeError(f"cannot normalize {type(other)}")
 
-    def _apply_scan_op(self, op: str) -> ColumnBase:
-        result = libcudf.reduce.scan(op, self, True)
-        return self._copy_type_metadata(result)
-
     def _decimal_quantile(
         self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
     ) -> ColumnBase:

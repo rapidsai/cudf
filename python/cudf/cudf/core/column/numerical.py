@@ -165,9 +165,6 @@ class NumericalColumn(NumericalBaseColumn):
         lhs, rhs = (self, rhs) if not reflect else (rhs, self)
         return libcudf.binaryop.binaryop(lhs, rhs, binop, out_dtype)
 
-    def _apply_scan_op(self, op: str) -> ColumnBase:
-        return libcudf.reduce.scan(op, self, True)
-
     def normalize_binop_value(
         self, other: ScalarLike
     ) -> Union[ColumnBase, ScalarLike]:

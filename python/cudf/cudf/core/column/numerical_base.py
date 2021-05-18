@@ -195,3 +195,6 @@ class NumericalBaseColumn(ColumnBase):
         """Round the values in the Column to the given number of decimals.
         """
         return libcudf.round.round(self, decimal_places=decimals)
+
+    def _apply_scan_op(self, op: str) -> ColumnBase:
+        return self._copy_type_metadata(libcudf.reduce.scan(op, self, True))
