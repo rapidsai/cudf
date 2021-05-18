@@ -2277,8 +2277,11 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testWindowStatic() {
-    try (WindowOptions options = WindowOptions.builder().window(2, 1)
-        .minPeriods(2).build()) {
+    try (Scalar one = Scalar.fromInt(1);
+         Scalar two = Scalar.fromInt(2);
+         WindowOptions options = WindowOptions.builder()
+             .window(two, one)
+             .minPeriods(2).build()) {
       try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8)) {
         try (ColumnVector expected = ColumnVector.fromLongs(9, 16, 17, 21, 14);
              ColumnVector result = v1.rollingWindow(Aggregation.sum(), options)) {
@@ -2322,8 +2325,11 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testWindowStaticCounts() {
-    try (WindowOptions options = WindowOptions.builder().window(2, 1)
-            .minPeriods(2).build()) {
+    try (Scalar one = Scalar.fromInt(1);
+         Scalar two = Scalar.fromInt(2);
+         WindowOptions options = WindowOptions.builder()
+             .window(two, one)
+             .minPeriods(2).build()) {
       try (ColumnVector v1 = ColumnVector.fromBoxedInts(5, 4, null, 6, 8)) {
         try (ColumnVector expected = ColumnVector.fromInts(2, 2, 2, 2, 2);
              ColumnVector result = v1.rollingWindow(Aggregation.count(NullPolicy.EXCLUDE), options)) {
@@ -2354,8 +2360,11 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testWindowLag() {
-    try (WindowOptions window = WindowOptions.builder().minPeriods(1)
-        .window(2, -1).build()) {
+    try (Scalar negOne = Scalar.fromInt(-1);
+         Scalar two = Scalar.fromInt(2);
+         WindowOptions window = WindowOptions.builder()
+             .minPeriods(1)
+             .window(two, negOne).build()) {
       try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
            ColumnVector expected = ColumnVector.fromBoxedInts(null, 5, 4, 7, 6);
            ColumnVector result = v1.rollingWindow(Aggregation.max(), window)) {
@@ -2381,18 +2390,20 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testWindowThrowsException() {
-    try (ColumnVector arraywindowCol = ColumnVector.fromBoxedInts(1, 2, 3 ,1, 1)) {
-      assertThrows(IllegalArgumentException.class, () -> {
+    try (Scalar one = Scalar.fromInt(1);
+         Scalar two = Scalar.fromInt(2);
+         Scalar three = Scalar.fromInt(3);
+         ColumnVector arraywindowCol = ColumnVector.fromBoxedInts(1, 2, 3 ,1, 1)) {
+      assertThrows(IllegalStateException.class, () -> {
         try (WindowOptions options = WindowOptions.builder()
-            .window(3, 2).minPeriods(3)
+            .window(three, two).minPeriods(3)
             .window(arraywindowCol, arraywindowCol).build()) {
-
         }
       });
 
       assertThrows(IllegalArgumentException.class, () -> {
         try (WindowOptions options = WindowOptions.builder()
-            .window(2, 1)
+            .window(two, one)
             .minPeriods(1)
             .orderByColumnIndex(0)
             .build()) {
