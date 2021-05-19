@@ -111,7 +111,7 @@ TEST_F(DLPackUntypedTests, UnsupportedDeviceTypeFromDlpack)
   unique_managed_tensor tensor(cudf::to_dlpack(input));
 
   // Spoof an unsupported device type
-  tensor->dl_tensor.ctx.device_type = kDLOpenCL;
+  tensor->dl_tensor.device.device_type = kDLOpenCL;
   EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
 }
 
@@ -122,7 +122,7 @@ TEST_F(DLPackUntypedTests, InvalidDeviceIdFromDlpack)
   unique_managed_tensor tensor(cudf::to_dlpack(input));
 
   // Spoof the wrong device ID
-  tensor->dl_tensor.ctx.device_id += 1;
+  tensor->dl_tensor.device.device_id += 1;
   EXPECT_THROW(cudf::from_dlpack(tensor.get()), cudf::logic_error);
 }
 
@@ -242,7 +242,7 @@ TYPED_TEST(DLPackNumericTests, ToDlpack1D)
 
   auto const& tensor = result->dl_tensor;
   validate_dtype<TypeParam>(tensor.dtype);
-  EXPECT_EQ(kDLGPU, tensor.ctx.device_type);
+  EXPECT_EQ(kDLGPU, tensor.device.device_type);
   EXPECT_EQ(1, tensor.ndim);
   EXPECT_EQ(uint64_t{0}, tensor.byte_offset);
   EXPECT_EQ(nullptr, tensor.strides);
@@ -275,7 +275,7 @@ TYPED_TEST(DLPackNumericTests, ToDlpack2D)
 
   auto const& tensor = result->dl_tensor;
   validate_dtype<TypeParam>(tensor.dtype);
-  EXPECT_EQ(kDLGPU, tensor.ctx.device_type);
+  EXPECT_EQ(kDLGPU, tensor.device.device_type);
   EXPECT_EQ(2, tensor.ndim);
   EXPECT_EQ(uint64_t{0}, tensor.byte_offset);
 
@@ -341,7 +341,7 @@ TYPED_TEST(DLPackNumericTests, FromDlpackCpu)
   int64_t strides[2] = {1, 5};
 
   DLManagedTensor tensor{};
-  tensor.dl_tensor.ctx.device_type = kDLCPU;
+  tensor.dl_tensor.device.device_type = kDLCPU;
   tensor.dl_tensor.dtype           = get_dtype<T>();
   tensor.dl_tensor.ndim            = 2;
   tensor.dl_tensor.byte_offset     = offset;
