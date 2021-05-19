@@ -582,7 +582,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
    * Create a new string vector from the given values.  This API
    * supports inline nulls.
    */
-  public static HostColumnVector fromUTF8StringsBytes(byte[]... values) {
+  public static HostColumnVector fromUTF8Strings(byte[]... values) {
     int rows = values.length;
     long nullCount = 0;
     long bufferSize = 0;
@@ -1123,7 +1123,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
         childBuilder.append((List<?>) listElement);
       } else if (listElement instanceof StructData) {
         childBuilder.append((StructData) listElement);
-      } else if (listElement instanceof byte[]) {
+      } else if (listElement instanceof byte[] && DType.STRING.equals(childBuilder.type)) {
         childBuilder.appendUTF8String((byte[]) listElement);
       } else {
         throw new IllegalStateException("Unexpected element type: " + listElement.getClass());

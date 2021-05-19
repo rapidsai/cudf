@@ -179,7 +179,7 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testUTF8StringCreation() {
-    try (ColumnVector cv = ColumnVector.fromUTF8StringsBytes(
+    try (ColumnVector cv = ColumnVector.fromUTF8Strings(
             "d".getBytes(StandardCharsets.UTF_8),
             "sd".getBytes(StandardCharsets.UTF_8),
             "sde".getBytes(StandardCharsets.UTF_8),
