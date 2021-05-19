@@ -24,10 +24,12 @@
 #include <memory>
 
 #include <cuco/allocator.hpp>
-#include <cuco/detail/cuda_memcmp.cuh>
-#ifndef CUDART_VERSION
-#error CUDART_VERSION Undefined!
-#elif (CUDART_VERSION >= 11000) // including with CUDA 10.2 leads to compilation errors
+
+#if defined(CUDART_VERSION) && (CUDART_VERSION >= 11000) && defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 700)
+#define CUCO_HAS_CUDA_BARRIER
+#endif
+
+#if defined(CUCO_HAS_CUDA_BARRIER)
 #include <cuda/barrier>
 #endif
 
@@ -49,7 +51,10 @@ class dynamic_map;
  * concurrent insert and find) from threads in device code.
  *
  * Current limitations:
- * - Requires keys that are Arithmetic
+ * - Requires keys and values that are trivially copyable and have unique object representations
+ *    - Comparisons against the "sentinel" values will always be done with bitwise comparisons.
+ *      Therefore, the objects must have unique, bitwise object representations (e.g., no padding
+ *      bits).
  * - Does not support erasing keys
  * - Capacity is fixed and will not grow automatically
  * - Requires the user to specify sentinel values for both key and mapped value
@@ -112,7 +117,15 @@ template <typename Key,
           cuda::thread_scope Scope = cuda::thread_scope_device,
           typename Allocator       = cuco::cuda_allocator<char>>
 class static_map {
-  static_assert(std::is_arithmetic<Key>::value, "Unsupported, non-arithmetic key type.");
+  template <typename T>
+  static constexpr bool is_CAS_safe =
+    std::is_trivially_copyable_v<T>and std::has_unique_object_representations_v<T>;
+
+  static_assert(is_CAS_safe<Key>,
+                "Key type must be trivially copyable and have unique object representation.");
+  static_assert(is_CAS_safe<Value>,
+                "Value type must be trivially copyable and have unique object representation.");
+
   friend class dynamic_map<Key, Value, Scope, Allocator>;
 
  public:
@@ -668,9 +681,7 @@ class static_map {
                                             pair_atomic_type* const memory_to_use,
                                             device_view source_device_view) noexcept
     {
-#ifndef CUDART_VERSION
-#error CUDART_VERSION Undefined!
-#elif (CUDART_VERSION >= 11000)
+#if defined(CUDA_HAS_CUDA_BARRIER)
       __shared__ cuda::barrier<cuda::thread_scope::thread_scope_block> barrier;
       if (g.thread_rank() == 0) {
         init(&barrier, g.size());
