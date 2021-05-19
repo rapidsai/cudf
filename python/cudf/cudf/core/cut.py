@@ -230,7 +230,7 @@ def cut(
     if labels is False:
         # if labels is false we return the index labels, we return them
         # as a series if we have a series input
-        if isinstance(orig_x, pd.Series) or isinstance(orig_x, cudf.Series):
+        if isinstance(orig_x, (pd.Series, cudf.Series)):
             # need to run more tests but looks like in this case pandas
             # always returns a float64 dtype
             indx_arr_series = cudf.Series(index_labels, dtype="float64")
