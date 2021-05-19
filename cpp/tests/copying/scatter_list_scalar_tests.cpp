@@ -26,8 +26,8 @@
 namespace cudf {
 namespace test {
 
-using M    = std::vector<valid_type>;
-using SM_t = fixed_width_column_wrapper<size_type>;
+using mask_vector  = std::vector<valid_type>;
+using size_column  = fixed_width_column_wrapper<size_type>;
 
 class ScatterListScalarTests : public cudf::test::BaseFixture {
 };
