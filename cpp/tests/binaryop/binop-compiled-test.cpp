@@ -567,15 +567,17 @@ TYPED_TEST(BinaryOperationCompiledTest_Logical, LogicalOr_Vector_Vector)
 
 // Comparison Operations ==, !=, <, >, <=, >=
 // n<!=>n, t<!=>t, d<!=>d, s<!=>s
-using Comparison_types = cudf::test::Types<cudf::test::Types<int16_t, int8_t, int16_t>,
-                                           cudf::test::Types<int64_t, uint32_t, uint16_t>,
-                                           cudf::test::Types<bool, uint64_t, double>,
-                                           // cudf::test::Types<bool, uint64_t, int64_t>, //valid
-                                           cudf::test::Types<bool, timestamp_D, timestamp_s>,
-                                           cudf::test::Types<int, timestamp_ns, timestamp_us>,
-                                           cudf::test::Types<bool, duration_ns, duration_ns>,
-                                           cudf::test::Types<float, duration_us, duration_s>,
-                                           cudf::test::Types<bool, std::string, std::string>>;
+using Comparison_types =
+  cudf::test::Types<cudf::test::Types<int16_t, int8_t, int16_t>,
+                    cudf::test::Types<int64_t, uint32_t, uint16_t>,
+                    cudf::test::Types<bool, uint64_t, double>,
+                    // cudf::test::Types<bool, uint64_t, int64_t>, //valid
+                    cudf::test::Types<bool, timestamp_D, timestamp_s>,
+                    cudf::test::Types<int, timestamp_ns, timestamp_us>,
+                    cudf::test::Types<bool, duration_ns, duration_ns>,
+                    cudf::test::Types<float, duration_us, duration_s>,
+                    cudf::test::Types<bool, std::string, std::string>,
+                    cudf::test::Types<bool, numeric::decimal32, numeric::decimal32>>;
 
 template <typename T>
 auto lhs_random_column()

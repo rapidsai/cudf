@@ -163,8 +163,8 @@ std::unique_ptr<column> binary_operation_compiled(column_view const& lhs,
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
     return binops::compiled::binary_operation(lhs, rhs, op, output_type, stream, mr);
 
-  if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
-    CUDF_FAIL("Not yet supported fixed_point");
+  // if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
+  //  CUDF_FAIL("Not yet supported fixed_point");
   // return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
 
   // Check for datatype
