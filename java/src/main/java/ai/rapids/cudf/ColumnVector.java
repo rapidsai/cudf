@@ -574,14 +574,15 @@ public final class ColumnVector extends ColumnView {
   }
 
   public static ColumnVector stringConcatenateListElementsWs(ColumnView list_column,
-      ColumnView sep_col, Scalar separator_narep, Scalar col_narep, boolean separate_nulls) {
+      ColumnView sep_col, Scalar separator_narep, Scalar col_narep, boolean separate_nulls,
+      boolean empty_string_output_if_empty_list) {
     assert separator_narep != null : "separator narep scalar provided may not be null";
     assert col_narep != null : "column narep scalar provided may not be null";
     assert separator_narep.getType().equals(DType.STRING) : "separator naprep scalar must be a string scalar";
     assert col_narep.getType().equals(DType.STRING) : "column narep scalar must be a string scalar";
 
     return new ColumnVector(stringConcatenationListElementsWs(list_column.getNativeView(), sep_col.getNativeView(),
-      separator_narep.getScalarHandle(), col_narep.getScalarHandle(), separate_nulls));
+      separator_narep.getScalarHandle(), col_narep.getScalarHandle(), separate_nulls, empty_string_output_if_empty_list));
   }
 
   /**
@@ -805,7 +806,8 @@ public final class ColumnVector extends ColumnView {
   private static native long stringConcatenationListElementsWs(long list_column, long sep_column,
                                                                long separator_narep,
                                                                long col_narep,
-                                                               boolean separate_nulls);
+                                                               boolean separate_nulls,
+                                                               boolean empty_string_output_if_empty_list);
 
   /**
    * Native method to hash each row of the given table. Hashing function dispatched on the
