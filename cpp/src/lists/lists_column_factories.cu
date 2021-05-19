@@ -45,7 +45,7 @@ std::unique_ptr<column> make_lists_column(size_type num_rows,
   return std::make_unique<column>(cudf::data_type{type_id::LIST},
                                   num_rows,
                                   rmm::device_buffer{0, stream, mr},
-                                  std::forward<rmm::device_buffer>(null_mask),
+                                  std::move(null_mask),
                                   null_count,
                                   std::move(children));
 }
