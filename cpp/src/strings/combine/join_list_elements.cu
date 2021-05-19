@@ -87,10 +87,10 @@ struct compute_size_and_concatenate_fn {
       return;
     }
 
-    auto const separator      = func.separator(idx);
-    auto const separator_size = separator.size_bytes();
-    auto size_bytes           = size_type{0};
-    char* output_ptr          = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    auto const separator = func.separator(idx);
+    auto size_bytes      = size_type{0};
+    char* output_ptr     = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    bool write_separator = false;
 
     for (size_type str_idx = start_idx; str_idx < end_idx; ++str_idx) {
       bool null_element = strings_dv.is_null(str_idx);
@@ -101,19 +101,19 @@ struct compute_size_and_concatenate_fn {
         return;  // early termination: the entire list of strings will result in a null string
       }
 
+      if (write_separator && (separate_nulls == separator_on_nulls::YES || !null_element)) {
+        if (output_ptr) output_ptr = detail::copy_string(output_ptr, separator);
+        size_bytes += separator.size_bytes();
+        write_separator = false;
+      }
+
       auto const d_str =
         null_element ? string_narep_dv.value() : strings_dv.element<string_view>(str_idx);
       if (output_ptr) output_ptr = detail::copy_string(output_ptr, d_str);
       size_bytes += d_str.size_bytes();
 
-      // Separator is inserted only in between strings
-      if ((str_idx + 1) < end_idx) {
-        if (separate_nulls == separator_on_nulls::YES ||
-            !(null_element || strings_dv.is_null(str_idx + 1))) {
-          if (output_ptr) output_ptr = detail::copy_string(output_ptr, separator);
-          size_bytes += separator_size;
-        }
-      }
+      write_separator =
+        write_separator || (separate_nulls == separator_on_nulls::YES) || !null_element;
     }
 
     if (not d_chars) {
