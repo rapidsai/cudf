@@ -61,8 +61,8 @@ ConfigureTest(GROUPBY_TEST
     groupby/count_scan_tests.cpp
     groupby/count_tests.cpp
     groupby/groups_tests.cpp
-    groupby/keys_tests.cpp    
-    groupby/min_tests.cpp    
+    groupby/keys_tests.cpp
+    groupby/min_tests.cpp
     groupby/max_scan_tests.cpp
     groupby/max_tests.cpp
     groupby/mean_tests.cpp
@@ -137,7 +137,7 @@ ConfigureTest(CLAMP_TEST replace/clamp_test.cpp)
 
 ###################################################################################################
 # - fixed_point tests -----------------------------------------------------------------------------
-ConfigureTest(FIXED_POINT_TEST 
+ConfigureTest(FIXED_POINT_TEST
     fixed_point/fixed_point_tests.cpp
     fixed_point/fixed_point_tests.cu)
 

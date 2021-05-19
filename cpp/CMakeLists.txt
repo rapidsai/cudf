@@ -157,6 +157,7 @@ add_library(cudf
     src/column/column.cu
     src/column/column_device_view.cu
     src/column/column_factories.cpp
+    src/column/column_factories.cu
     src/column/column_view.cpp
     src/comms/ipc/ipc.cpp
     src/copying/concatenate.cu
@@ -375,7 +376,7 @@ add_library(cudf
     src/structs/copying/concatenate.cu
     src/structs/structs_column_factories.cu
     src/structs/structs_column_view.cpp
-    src/structs/utilities.cu
+    src/structs/utilities.cpp
     src/table/table.cpp
     src/table/table_device_view.cu
     src/table/table_view.cpp
