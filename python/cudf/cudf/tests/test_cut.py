@@ -64,10 +64,7 @@ def test_cut_labels(
         include_lowest=include_lowest,
         ordered=ordered,
     )
-    if labels is False:
-        pindex = pcat
-    else:
-        pindex = pd.CategoricalIndex(pcat)
+    pindex = pd.CategoricalIndex(pcat) if labels else pcat
     gindex = cut(
         x=x,
         bins=bins,
