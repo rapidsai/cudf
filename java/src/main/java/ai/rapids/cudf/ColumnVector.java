@@ -536,7 +536,7 @@ public final class ColumnVector extends ColumnView {
   public static ColumnVector stringConcatenateWs(ColumnView[] columns, ColumnView sep_col) {
     try (Scalar nullString = Scalar.fromString(null);
          Scalar emptyString = Scalar.fromString("")) {
-      return stringConcatenateWs(columns, sep_col, nullString, emptyString);
+      return stringConcatenateWs(columns, sep_col, nullString, emptyString, false);
     }
   }
 
@@ -550,11 +550,13 @@ public final class ColumnVector extends ColumnView {
    * @param separator_narep String that should be used in place of a null separator for a given
    *                        row. 
    * @param col_narep string String that should be used in place of any null strings
-   *                         found in any column.
+   *                  found in any column.
+   * @param separate_nulls boolean if true, then the separator is included for null rows if
+   *                       `col_narep` is valid.
    * @return A new java column vector containing the concatenated strings with separator between.
    */
   public static ColumnVector stringConcatenateWs(ColumnView[] columns,
-      ColumnView sep_col, Scalar separator_narep, Scalar col_narep) {
+      ColumnView sep_col, Scalar separator_narep, Scalar col_narep, boolean separate_nulls) {
     assert columns.length >= 1 : ".stringConcatenate() operation requires at least 1 column";
     assert separator_narep != null : "separator narep scalar provided may not be null";
     assert col_narep != null : "column narep scalar provided may not be null";
@@ -568,19 +570,18 @@ public final class ColumnVector extends ColumnView {
     }
 
     return new ColumnVector(stringConcatenationWs(column_views, sep_col.getNativeView(),
-      separator_narep.getScalarHandle(), col_narep.getScalarHandle()));
+      separator_narep.getScalarHandle(), col_narep.getScalarHandle(), separate_nulls));
   }
 
-  public static ColumnVector stringConcatenateListElementsWs(ColumnView list_column, ColumnView sep_col, Scalar separator_narep, Scalar col_narep) {
+  public static ColumnVector stringConcatenateListElementsWs(ColumnView list_column,
+      ColumnView sep_col, Scalar separator_narep, Scalar col_narep, boolean separate_nulls) {
     assert separator_narep != null : "separator narep scalar provided may not be null";
     assert col_narep != null : "column narep scalar provided may not be null";
     assert separator_narep.getType().equals(DType.STRING) : "separator naprep scalar must be a string scalar";
     assert col_narep.getType().equals(DType.STRING) : "column narep scalar must be a string scalar";
-    // TODO
-    // assert type.equals(DType.LIST) : "A column of type LIST is required for .extractListElement()";
 
     return new ColumnVector(stringConcatenationListElementsWs(list_column.getNativeView(), sep_col.getNativeView(),
-      separator_narep.getScalarHandle(), col_narep.getScalarHandle()));
+      separator_narep.getScalarHandle(), col_narep.getScalarHandle(), separate_nulls));
   }
 
   /**
@@ -793,11 +794,18 @@ public final class ColumnVector extends ColumnView {
    *                        row.
    * @param col_narep string String scalar that should be used in place of any null strings
    *                         found in any column.
+   * @param separate_nulls boolean if true, then the separator is included for null rows if
+   *                       `col_narep` is valid.
    * @return A new java column vector containing the concatenated strings with separator between.
    */
-  private static native long stringConcatenationWs(long[] columnViews, long sep_column, long separator_narep, long col_narep);
+  private static native long stringConcatenationWs(long[] columnViews, long sep_column,
+                                                   long separator_narep, long col_narep,
+                                                   boolean separate_nulls);
 
-  private static native long stringConcatenationListElementsWs(long list_column, long sep_column, long separator_narep, long col_narep);
+  private static native long stringConcatenationListElementsWs(long list_column, long sep_column,
+                                                               long separator_narep,
+                                                               long col_narep,
+                                                               boolean separate_nulls);
 
   /**
    * Native method to hash each row of the given table. Hashing function dispatched on the
