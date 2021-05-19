@@ -123,7 +123,6 @@ class NAType(types.Type):
         Masked  <-> NA works from above
         Literal <-> NA -> Masked
         '''
-        breakpoint()
         if isinstance(other, MaskedType):
             # bounce to MaskedType.unify
             return None
@@ -170,8 +169,8 @@ class MaskedScalarArithOp(AbstractTemplate):
             ).return_type
             return nb_signature(
                 MaskedType(return_type),
-                MaskedType(args[0].value_type),
-                MaskedType(args[1].value_type),
+                args[0],
+                args[1],
             )
 
 class MaskedScalarNullOp(AbstractTemplate):
@@ -183,10 +182,9 @@ class MaskedScalarNullOp(AbstractTemplate):
         if isinstance(args[0], MaskedType) and isinstance(args[1], NAType):
             # In the case of op(Masked, NA), the result has the same
             # dtype as the original regardless of what it is
-            return_type = args[0].value_type
             return nb_signature(
-                MaskedType(return_type),
-                MaskedType(args[0].value_type),
+                args[0],
+                args[0],
                 NAType(),
             )
 
@@ -206,7 +204,7 @@ class MaskedScalarConstOp(AbstractTemplate):
             ).return_type
             return nb_signature(
                 MaskedType(return_type),
-                MaskedType(args[0].value_type),
+                args[0],
                 args[1],
             )
 
@@ -219,7 +217,7 @@ class MaskedScalarIsNull(AbstractTemplate):
         if isinstance(args[0], MaskedType) and isinstance(args[1], NAType):
             return nb_signature(
                 types.boolean, 
-                MaskedType(args[0].value_type), 
+                args[0], 
                 NAType())
 
 @cuda_decl_registry.register_global(operator.truth)
