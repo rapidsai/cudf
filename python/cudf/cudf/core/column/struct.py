@@ -118,7 +118,9 @@ class StructColumn(ColumnBase):
         rename the fields of `other` to the field names of `self`.
         """
         if isinstance(other, cudf.core.column.StructColumn):
-            other = other._rename_fields(self.dtype.fields.keys())
+            other = other._rename_fields(
+                self.dtype.fields.keys()
+            )  # type: ignore
         # Have to ignore typing here because it misdiagnoses super().
         return super()._copy_type_metadata(other)  # type: ignore
 

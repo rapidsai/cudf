@@ -212,10 +212,11 @@ class DecimalColumn(NumericalBaseColumn):
     def _copy_type_metadata(self: ColumnBase, other: ColumnBase) -> ColumnBase:
         """Copies type metadata from self onto other, returning a new column.
 
-        In addition to the default behavior, if `other` is not a
+        In addition to the default behavior, if `other` is also a decimal
+        column the precision is copied over.
         """
         if isinstance(other, DecimalColumn):
-            other.dtype.precision = self.dtype.precision
+            other.dtype.precision = self.dtype.precision  # type: ignore
         # Have to ignore typing here because it misdiagnoses super().
         return super()._copy_type_metadata(other)  # type: ignore
 
