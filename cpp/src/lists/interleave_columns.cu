@@ -106,7 +106,7 @@ struct compute_string_sizes_and_interleave_lists_fn {
   offset_type* d_offsets{nullptr};
 
   // If d_chars == nullptr: only compute sizes and validities of the output strings.
-  // If d_chars != nullptr: only concatenate strings.
+  // If d_chars != nullptr: only interleave lists of strings.
   char* d_chars{nullptr};
 
   // We need to set `1` or `0` for the validities of the strings in the child column.
@@ -128,7 +128,7 @@ struct compute_string_sizes_and_interleave_lists_fn {
     auto const str_offsets =
       str_col.child(strings_column_view::offsets_column_index).template data<offset_type>();
 
-    // The indices of the strings within the source list.
+    // The range of indices of the strings within the source list.
     auto const start_str_idx = list_offsets[list_id];
     auto const end_str_idx   = list_offsets[list_id + 1];
 
@@ -243,9 +243,10 @@ struct interleave_list_entries_fn {
           lists_col.offset();
         auto const& data_col = lists_col.child(lists_column_view::child_column_index);
 
-        // The indices of the entries within the source list.
-        auto const start_idx   = list_offsets[list_id];
-        auto const end_idx     = list_offsets[list_id + 1];
+        // The range of indices of the entries within the source list.
+        auto const start_idx = list_offsets[list_id];
+        auto const end_idx   = list_offsets[list_id + 1];
+
         auto const write_start = d_offsets[idx];
 
         // Fill the validities array if necessary.

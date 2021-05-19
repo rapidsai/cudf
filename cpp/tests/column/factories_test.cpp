@@ -15,6 +15,7 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column.hpp>
@@ -458,3 +459,34 @@ TEST_F(ColumnFactoryTest, DictionaryFromStringScalarError)
   cudf::string_scalar value("hello", false);
   EXPECT_THROW(cudf::make_dictionary_from_scalar(value, 1), cudf::logic_error);
 }
+
+void struct_from_scalar(bool is_valid)
+{
+  using LCW = cudf::test::lists_column_wrapper<int>;
+
+  cudf::test::fixed_width_column_wrapper<int> col0{1};
+  cudf::test::strings_column_wrapper col1{"abc"};
+  cudf::test::lists_column_wrapper<int> col2{{1, 2, 3}};
+  cudf::test::lists_column_wrapper<int> col3{LCW{}};
+
+  std::vector<cudf::column_view> src_children({col0, col1, col2, col3});
+  auto value = cudf::struct_scalar(src_children, is_valid);
+  cudf::test::structs_column_wrapper struct_col({col0, col1, col2, col3}, {is_valid});
+
+  auto const num_rows = 32;
+  auto result         = cudf::make_column_from_scalar(value, num_rows);
+
+  // generate a column of size num_rows
+  std::vector<cudf::column_view> cols;
+  auto iter = thrust::make_counting_iterator(0);
+  std::transform(iter, iter + num_rows, std::back_inserter(cols), [&](int i) {
+    return static_cast<cudf::column_view>(struct_col);
+  });
+  auto expected = cudf::concatenate(cols);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
+}
+
+TEST_F(ColumnFactoryTest, FromStructScalar) { struct_from_scalar(true); }
+
+TEST_F(ColumnFactoryTest, FromStructScalarNull) { struct_from_scalar(false); }
