@@ -176,7 +176,7 @@ def cut(
     # checking for the correct inclusivity values
     if right:
         closed = "right"
-    elif not right:
+    else:
         closed = "left"
         left_inclusive = True
 
