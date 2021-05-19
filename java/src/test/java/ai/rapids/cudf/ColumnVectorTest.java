@@ -2110,7 +2110,7 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testStringConcatWsSeparators() {
+  void testStringConcatSeparatorsEmptyStringForNull() {
     try (ColumnVector sv1 = ColumnVector.fromStrings("a", "B", "cd", "\u0480\u0481", "E\tf", null, null, "\\G\u0100");
          ColumnVector sv2 = ColumnVector.fromStrings("b", "C", "\u0500\u0501", "x\nYz", null, null, "", null);
          ColumnVector e_concat = ColumnVector.fromStrings("aA1\t\ud721b", "BA1\t\ud721C", "cdA1\t\ud721\u0500\u0501",
