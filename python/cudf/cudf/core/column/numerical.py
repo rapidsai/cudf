@@ -8,7 +8,6 @@ from typing import Any, Mapping, Sequence, Tuple, Union, cast
 import cupy
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_integer_dtype
 
 import cudf
 from cudf import _lib as libcudf
@@ -33,6 +32,7 @@ from cudf.utils.dtypes import (
 )
 
 from .numerical_base import NumericalBaseColumn
+from ...api.types import is_integer_dtype
 
 
 class NumericalColumn(NumericalBaseColumn):

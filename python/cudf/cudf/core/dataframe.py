@@ -19,7 +19,6 @@ import pyarrow as pa
 from numba import cuda
 from nvtx import annotate
 from pandas._config import get_option
-from pandas.api.types import is_dict_like
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 
@@ -53,6 +52,8 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import GetAttrGetItemMixin
+
+from ..api.types import is_dict_like
 
 T = TypeVar("T", bound="DataFrame")
 

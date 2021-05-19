@@ -14,7 +14,6 @@ import cupy
 import numpy as np
 import pandas as pd
 from pandas._config import get_option
-from pandas.api.types import is_dict_like
 
 import cudf
 from cudf import _lib as libcudf
@@ -58,6 +57,8 @@ from cudf.utils.utils import (
     get_appropriate_dispatched_func,
     get_relevant_submodule,
 )
+
+from ..api.types import is_dict_like
 
 
 class Series(SingleColumnFrame, Serializable):
