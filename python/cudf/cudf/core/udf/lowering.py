@@ -104,7 +104,6 @@ def register_arithmetic_op(op):
     to_lower_op = make_arithmetic_op(op)
     cuda_lower(op, MaskedType, MaskedType)(to_lower_op)
 
-@cuda_lower(operator.add, MaskedType, NAType)
 def masked_scalar_null_op_impl(context, builder, sig, args):
     '''
     Implement `MaskedType` + `NAType`
@@ -163,7 +162,7 @@ for op in arith_ops + comparison_ops:
     register_const_op(op)
     # null op impl can be shared between all ops
     cuda_lower(op, MaskedType, NAType)(masked_scalar_null_op_impl)
-
+    cuda_lower(op, NAType, MaskedType)(masked_scalar_null_op_impl)
 
 @cuda_lower(operator.is_, MaskedType, NAType)
 def masked_scalar_is_null_impl(context, builder, sig, args):

@@ -187,6 +187,12 @@ class MaskedScalarNullOp(AbstractTemplate):
                 args[0],
                 NAType(),
             )
+        elif isinstance(args[0], NAType) and isinstance(args[1], MaskedType):
+            return nb_signature(
+                args[1],
+                NAType(),
+                args[1]
+            )
 
 class MaskedScalarConstOp(AbstractTemplate):
     def generic(self, args, kws):
