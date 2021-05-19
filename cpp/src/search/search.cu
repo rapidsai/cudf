@@ -38,16 +38,6 @@
 
 namespace cudf {
 namespace {
-bool has_nested_nulls(table_view const& input)
-{
-  return std::any_of(input.begin(), input.end(), [](auto const& col) {
-    return col.has_nulls() ||
-           std::any_of(col.child_begin(), col.child_end(), [](auto const& child_col) {
-             return has_nested_nulls(table_view{{child_col}});
-           });
-  });
-}
-
 template <typename DataIterator,
           typename ValuesIterator,
           typename OutputIterator,
