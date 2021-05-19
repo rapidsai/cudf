@@ -28,7 +28,7 @@ elseif(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
   set(CUDF_BUILD_FOR_DETECTED_ARCHS TRUE)
 endif()
 
-project(CUDF VERSION 0.20.0 LANGUAGES C CXX)
+project(CUDF VERSION 21.06.00 LANGUAGES C CXX)
 
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake,
 # causing subsequent runs to have different values for the `Threads::Threads` target.
@@ -121,8 +121,6 @@ find_package(ZLIB REQUIRED)
 find_package(Threads REQUIRED)
 # add third party dependencies using CPM
 include(cmake/thirdparty/CUDF_GetCPM.cmake)
-# find boost
-include(cmake/thirdparty/CUDF_FindBoost.cmake)
 # find jitify
 include(cmake/thirdparty/CUDF_GetJitify.cmake)
 # find thrust/cub
@@ -159,6 +157,7 @@ add_library(cudf
     src/column/column.cu
     src/column/column_device_view.cu
     src/column/column_factories.cpp
+    src/column/column_factories.cu
     src/column/column_view.cpp
     src/comms/ipc/ipc.cpp
     src/copying/concatenate.cu
@@ -294,7 +293,9 @@ add_library(cudf
     src/reductions/nth_element.cu
     src/reductions/product.cu
     src/reductions/reductions.cpp
-    src/reductions/scan.cu
+    src/reductions/scan/scan.cpp
+    src/reductions/scan/scan_exclusive.cu
+    src/reductions/scan/scan_inclusive.cu
     src/reductions/std.cu
     src/reductions/sum.cu
     src/reductions/sum_of_squares.cu
@@ -375,7 +376,7 @@ add_library(cudf
     src/structs/copying/concatenate.cu
     src/structs/structs_column_factories.cu
     src/structs/structs_column_view.cpp
-    src/structs/utilities.cu
+    src/structs/utilities.cpp
     src/table/table.cpp
     src/table/table_device_view.cu
     src/table/table_view.cpp
@@ -476,7 +477,6 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(cudf
            PUBLIC ZLIB::ZLIB
-                  Boost::filesystem
                   ${ARROW_LIBRARIES}
                   cudf::Thrust
                   rmm::rmm)

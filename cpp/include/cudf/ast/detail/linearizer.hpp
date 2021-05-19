@@ -83,10 +83,7 @@ class linearizer;
  * This class is a part of a "visitor" pattern with the `linearizer` class.
  * Nodes inheriting from this class can accept visitors.
  */
-class node {
-  friend class detail::linearizer;
-
- private:
+struct node {
   virtual cudf::size_type accept(detail::linearizer& visitor) const = 0;
 };
 
@@ -102,10 +99,6 @@ class node {
  * resolved into intermediate data storage in shared memory.
  */
 class linearizer {
-  friend class literal;
-  friend class column_reference;
-  friend class expression;
-
  public:
   /**
    * @brief Construct a new linearizer object

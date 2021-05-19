@@ -28,6 +28,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/execution_policy.h>
@@ -55,7 +56,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
     memsize += *itr ? (cudf::size_type)strlen(*itr) : 0;
   cudf::size_type count = (cudf::size_type)h_test_strings.size();
   thrust::host_vector<char> h_buffer(memsize);
-  thrust::device_vector<char> d_buffer(memsize);
+  rmm::device_uvector<char> d_buffer(memsize, rmm::cuda_stream_default);
   thrust::host_vector<thrust::pair<const char*, cudf::size_type>> strings(count);
   thrust::host_vector<cudf::size_type> h_offsets(count + 1);
   cudf::size_type offset = 0;
@@ -69,14 +70,13 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
     } else {
       cudf::size_type length = (cudf::size_type)strlen(str);
       memcpy(h_buffer.data() + offset, str, length);
-      strings[idx] =
-        thrust::pair<const char*, cudf::size_type>{d_buffer.data().get() + offset, length};
+      strings[idx] = thrust::pair<const char*, cudf::size_type>{d_buffer.data() + offset, length};
       offset += length;
     }
     h_offsets[idx + 1] = offset;
   }
-  rmm::device_vector<thrust::pair<const char*, cudf::size_type>> d_strings(strings);
-  CUDA_TRY(cudaMemcpy(d_buffer.data().get(), h_buffer.data(), memsize, cudaMemcpyHostToDevice));
+  auto d_strings = cudf::detail::make_device_uvector_sync(strings);
+  CUDA_TRY(cudaMemcpy(d_buffer.data(), h_buffer.data(), memsize, cudaMemcpyHostToDevice));
   auto column = cudf::make_strings_column(d_strings);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_id::STRING});
   EXPECT_EQ(column->null_count(), nulls);
@@ -133,11 +133,12 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
       null_count++;
     h_offsets[idx + 1] = offset;
   }
+
   std::vector<cudf::bitmask_type> h_nulls{h_null_mask};
-  rmm::device_vector<char> d_buffer(h_buffer);
-  rmm::device_vector<cudf::size_type> d_offsets(h_offsets);
-  rmm::device_vector<cudf::bitmask_type> d_nulls(h_nulls);
-  auto column = cudf::make_strings_column(d_buffer, d_offsets, d_nulls, null_count);
+  auto d_buffer  = cudf::detail::make_device_uvector_sync(h_buffer);
+  auto d_offsets = cudf::detail::make_device_uvector_sync(h_offsets);
+  auto d_nulls   = cudf::detail::make_device_uvector_sync(h_nulls);
+  auto column    = cudf::make_strings_column(d_buffer, d_offsets, d_nulls, null_count);
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_id::STRING});
   EXPECT_EQ(column->null_count(), null_count);
   EXPECT_EQ(2, column->num_children());
@@ -169,14 +170,15 @@ TEST_F(StringsFactoriesTest, CreateScalar)
 
 TEST_F(StringsFactoriesTest, EmptyStringsColumn)
 {
-  rmm::device_vector<char> d_chars;
-  rmm::device_vector<cudf::size_type> d_offsets(1, 0);
-  rmm::device_vector<cudf::bitmask_type> d_nulls;
+  rmm::device_uvector<char> d_chars{0, rmm::cuda_stream_default};
+  auto d_offsets = cudf::detail::make_zeroed_device_uvector_sync<cudf::size_type>(1);
+  rmm::device_uvector<cudf::bitmask_type> d_nulls{0, rmm::cuda_stream_default};
 
   auto results = cudf::make_strings_column(d_chars, d_offsets, d_nulls, 0);
   cudf::test::expect_strings_empty(results->view());
 
-  rmm::device_vector<thrust::pair<const char*, cudf::size_type>> d_strings;
+  rmm::device_uvector<thrust::pair<const char*, cudf::size_type>> d_strings{
+    0, rmm::cuda_stream_default};
   results = cudf::make_strings_column(d_strings);
   cudf::test::expect_strings_empty(results->view());
 }
@@ -224,7 +226,7 @@ TEST_F(StringsFactoriesTest, StringPairWithNullsAndEmpty)
     {0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1});
 
   auto d_column = cudf::column_device_view::create(data);
-  rmm::device_vector<string_pair> pairs(d_column->size());
+  rmm::device_uvector<string_pair> pairs(d_column->size(), rmm::cuda_stream_default);
   thrust::transform(thrust::device,
                     d_column->pair_begin<cudf::string_view, true>(),
                     d_column->pair_end<cudf::string_view, true>(),

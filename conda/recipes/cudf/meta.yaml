@@ -18,6 +18,9 @@ build:
   script_env:
     - VERSION_SUFFIX
     - PARALLEL_LEVEL
+    - CC
+    - CXX
+    - CUDAHOSTCXX
 
 requirements:
   build:
@@ -26,7 +29,7 @@ requirements:
     - cython >=0.29,<0.30
     - setuptools
     - numba >=0.53.1
-    - dlpack
+    - dlpack 0.3
     - pyarrow 1.0.1
     - libcudf {{ version }}
     - rmm {{ minor_version }}
