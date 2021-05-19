@@ -1767,6 +1767,66 @@ def test_groupby_shift_row_mixed(nelem, shift_perc, direction):
 
 
 @pytest.mark.parametrize("nelem", [10, 50, 100, 1000])
+@pytest.mark.parametrize("shift_perc", [0.5, 1.0, 1.5])
+@pytest.mark.parametrize("direction", [1, -1])
+@pytest.mark.parametrize(
+    "fill_value",
+    [
+        [
+            42,
+            "fill",
+            np.datetime64(123, "ns"),
+            cudf.Scalar(456, dtype="timedelta64[ns]"),
+        ]
+    ],
+)
+def test_groupby_shift_row_mixed_fill(
+    nelem, shift_perc, direction, fill_value
+):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "str", "null_frequency": 0.4, "cardinality": 10},
+            {
+                "dtype": "datetime64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "timedelta64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+        ],
+        rows=nelem,
+        use_threads=False,
+    )
+    pdf = t.to_pandas()
+    gdf = cudf.from_pandas(pdf)
+    n_shift = int(nelem * shift_perc) * direction
+
+    # Pandas does not support specifing different fill_value by column, so we
+    # simulate it column by column
+    expected = pdf.copy()
+    for col, single_fill in zip(pdf.iloc[:, 1:], fill_value):
+        if isinstance(single_fill, cudf.Scalar):
+            single_fill = single_fill._host_value
+        expected[col] = (
+            pdf[col]
+            .groupby(pdf["0"])
+            .shift(periods=n_shift, fill_value=single_fill)
+        )
+
+    got = gdf.groupby(["0"]).shift(periods=n_shift, fill_value=fill_value)
+
+    expected.index = gdf["0"].to_pandas()
+    assert_groupby_results_equal(
+        expected[["1", "2", "3", "4"]], got[["1", "2", "3", "4"]]
+    )
+
+
+@pytest.mark.parametrize("nelem", [10, 50, 100, 1000])
 @pytest.mark.parametrize("fill_value", [None, 0, 42])
 def test_groupby_shift_row_zero_shift(nelem, fill_value):
     t = rand_dataframe(
