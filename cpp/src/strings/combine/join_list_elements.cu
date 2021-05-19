@@ -87,13 +87,15 @@ struct compute_size_and_concatenate_fn {
       return;
     }
 
-    auto const separator = func.separator(idx);
-    auto size_bytes      = size_type{0};
-    char* output_ptr     = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    bool write_separator = false;
+    auto const separator   = func.separator(idx);
+    auto size_bytes        = size_type{0};
+    char* output_ptr       = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    bool has_valid_element = false;
+    bool write_separator   = false;
 
     for (size_type str_idx = start_idx; str_idx < end_idx; ++str_idx) {
       bool null_element = strings_dv.is_null(str_idx);
+      has_valid_element = has_valid_element || !null_element;
 
       if (!d_chars && (null_element && !string_narep_dv.is_valid())) {
         d_offsets[idx]    = 0;
@@ -117,8 +119,11 @@ struct compute_size_and_concatenate_fn {
     }
 
     if (!d_chars) {
-      d_offsets[idx]    = size_bytes;
-      d_validities[idx] = true;
+      d_offsets[idx] = size_bytes;
+
+      // If there are all null elements, the output should be the same as having an empty list input
+      d_validities[idx] =
+        has_valid_element || empty_list_policy == output_if_empty_list::EMPTY_STRING;
     }
   }
 };
@@ -131,8 +136,8 @@ struct compute_size_and_concatenate_fn {
 struct scalar_separator_fn {
   string_scalar_device_view const d_separator;
 
-  __device__ bool is_null_list(column_device_view const& lists_dv, size_type const idx) const
-    noexcept
+  __device__ bool is_null_list(column_device_view const& lists_dv,
+                               size_type const idx) const noexcept
   {
     return lists_dv.is_null(idx);
   }
@@ -198,8 +203,8 @@ struct column_separators_fn {
   column_device_view const separators_dv;
   string_scalar_device_view const sep_narep_dv;
 
-  __device__ bool is_null_list(column_device_view const& lists_dv, size_type const idx) const
-    noexcept
+  __device__ bool is_null_list(column_device_view const& lists_dv,
+                               size_type const idx) const noexcept
   {
     return lists_dv.is_null(idx) || (separators_dv.is_null(idx) && !sep_narep_dv.is_valid());
   }
