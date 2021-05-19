@@ -135,6 +135,21 @@ def test_arith_masked_vs_null(op):
     })
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
+@pytest.mark.parametrize('op', arith_ops)
+def test_arith_masked_vs_null_reflected(op):
+    def func_pdf(x):
+        return op(pd.NA, x)
+
+    @nulludf
+    def func_gdf(x):
+        return op(cudf.NA, x)
+
+    gdf = cudf.DataFrame({
+        'data': [1, None, 3]
+    })
+    run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
+
+
 def test_masked_is_null_conditional():
     def func_pdf(x, y):
         if x is pd.NA:
