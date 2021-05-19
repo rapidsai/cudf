@@ -38,7 +38,6 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <cinttypes>
-#include "cudf/utilities/error.hpp"
 
 namespace cudf {
 namespace lists {
