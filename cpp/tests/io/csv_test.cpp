@@ -1022,12 +1022,20 @@ TEST_F(CsvReaderTest, TypeInferenceThousands)
     cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
       .header(-1)
       .thousands('`');
-  const auto result = cudf_io::read_csv(in_opts);
+  const auto result      = cudf_io::read_csv(in_opts);
+  const auto result_view = result.tbl->view();
 
-  EXPECT_EQ(result.tbl->num_columns(), 3);
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
-  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::INT64);
-  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::FLOAT64);
+  EXPECT_EQ(result_view.num_columns(), 3);
+  EXPECT_EQ(result_view.column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result_view.column(1).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result_view.column(2).type().id(), cudf::type_id::FLOAT64);
+
+  auto tsnd_sep_col = std::vector<int64_t>{1400L, 123456L};
+  auto int_col      = std::vector<int64_t>{123L, 123456L};
+  auto dbl_col      = std::vector<double>{1234.56, 12.34};
+  expect_column_data_equal(tsnd_sep_col, result_view.column(0));
+  expect_column_data_equal(int_col, result_view.column(1));
+  expect_column_data_equal(dbl_col, result_view.column(2));
 }
 
 TEST_F(CsvReaderTest, TypeInferenceWithDecimal)
@@ -1042,12 +1050,20 @@ TEST_F(CsvReaderTest, TypeInferenceWithDecimal)
       .header(-1)
       .thousands('`')
       .decimal(';');
-  const auto result = cudf_io::read_csv(in_opts);
+  const auto result      = cudf_io::read_csv(in_opts);
+  const auto result_view = result.tbl->view();
 
-  EXPECT_EQ(result.tbl->num_columns(), 3);
-  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
-  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::STRING);
-  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::FLOAT64);
+  EXPECT_EQ(result_view.num_columns(), 3);
+  EXPECT_EQ(result_view.column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result_view.column(1).type().id(), cudf::type_id::STRING);
+  EXPECT_EQ(result_view.column(2).type().id(), cudf::type_id::FLOAT64);
+
+  auto int_col = std::vector<int64_t>{1400L, 123456L};
+  auto str_col = std::vector<std::string>{"1.23", "123.456"};
+  auto dbl_col = std::vector<double>{1234.56, 12.34};
+  expect_column_data_equal(int_col, result_view.column(0));
+  expect_column_data_equal(str_col, result_view.column(1));
+  expect_column_data_equal(dbl_col, result_view.column(2));
 }
 
 TEST_F(CsvReaderTest, SkipRowsXorSkipFooter)
