@@ -11,11 +11,16 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.core.dtypes.common import infer_dtype_from_object
-from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 import cudf
 from cudf._lib.scalar import DeviceScalar
 from cudf.core._compat import PANDAS_GE_120
+
+from ..api import types as api_types
+
+# TODO: Temporary aliasing, should be removed.
+is_categorical_dtype = api_types.is_categorical_dtype
+
 
 _NA_REP = "<NA>"
 _np_pa_dtypes = {
@@ -194,56 +199,6 @@ def is_timedelta_dtype(obj):
     if not hasattr(obj, "str"):
         return False
     return "m8" in obj.str
-
-
-def is_categorical_dtype(obj):
-    """Infer whether a given pandas, numpy, or cuDF Column, Series, or dtype
-    is a pandas CategoricalDtype.
-    """
-    if obj is None:
-        return False
-    if isinstance(obj, cudf.CategoricalDtype):
-        return True
-    if obj is cudf.CategoricalDtype:
-        return True
-    if isinstance(obj, np.dtype):
-        return False
-    if isinstance(obj, CategoricalDtype):
-        return True
-    if obj is CategoricalDtype:
-        return True
-    if obj is CategoricalDtypeType:
-        return True
-    if isinstance(obj, str) and obj == "category":
-        return True
-    if isinstance(
-        obj,
-        (
-            CategoricalDtype,
-            cudf.core.index.CategoricalIndex,
-            cudf.core.column.CategoricalColumn,
-            pd.Categorical,
-            pd.CategoricalIndex,
-        ),
-    ):
-        return True
-    if isinstance(obj, np.ndarray):
-        return False
-    if isinstance(
-        obj,
-        (
-            cudf.Index,
-            cudf.Series,
-            cudf.core.column.ColumnBase,
-            pd.Index,
-            pd.Series,
-        ),
-    ):
-        return is_categorical_dtype(obj.dtype)
-    if hasattr(obj, "type"):
-        if obj.type is CategoricalDtypeType:
-            return True
-    return pd.api.types.is_categorical_dtype(obj)
 
 
 def is_list_dtype(obj):

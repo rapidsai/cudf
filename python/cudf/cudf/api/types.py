@@ -1,7 +1,68 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 """Define common type operations."""
 
+import numpy as np
+import pandas as pd
 from pandas.api import types as pd_types
+from pandas.core.dtypes.dtypes import (
+    CategoricalDtype as pd_CategoricalDtype,
+    CategoricalDtypeType as pd_CategoricalDtypeType,
+)
+
+import cudf
+
+
+def is_categorical_dtype(obj):
+    """Infer whether a given pandas, numpy, or cuDF Column, Series, or dtype
+    is a pandas CategoricalDtype.
+    """
+    if obj is None:
+        return False
+    if isinstance(obj, cudf.CategoricalDtype):
+        return True
+    if obj is cudf.CategoricalDtype:
+        return True
+    if isinstance(obj, np.dtype):
+        return False
+    if isinstance(obj, pd_CategoricalDtype):
+        return True
+    if obj is pd_CategoricalDtype:
+        return True
+    if obj is pd_CategoricalDtypeType:
+        return True
+    if isinstance(obj, str) and obj == "category":
+        return True
+    if isinstance(
+        obj,
+        (
+            pd_CategoricalDtype,
+            cudf.core.index.CategoricalIndex,
+            cudf.core.column.CategoricalColumn,
+            pd.Categorical,
+            pd.CategoricalIndex,
+        ),
+    ):
+        return True
+    if isinstance(obj, np.ndarray):
+        return False
+    if isinstance(
+        obj,
+        (
+            cudf.Index,
+            cudf.Series,
+            cudf.core.column.ColumnBase,
+            pd.Index,
+            pd.Series,
+        ),
+    ):
+        return is_categorical_dtype(obj.dtype)
+    if hasattr(obj, "type"):
+        if obj.type is pd_CategoricalDtypeType:
+            return True
+    # TODO: A lot of the above checks are probably redundant and should be
+    # farmed out to this function here instead.
+    return pd_types.is_categorical_dtype(obj)
+
 
 # These methods are aliased directly into this namespace, but can be modified
 # later if we determine that there is a need.
@@ -10,7 +71,6 @@ union_categoricals = pd_types.union_categoricals
 infer_dtype = pd_types.infer_dtype
 pandas_dtype = pd_types.pandas_dtype
 is_bool_dtype = pd_types.is_bool_dtype
-is_categorical_dtype = pd_types.is_categorical_dtype
 is_complex_dtype = pd_types.is_complex_dtype
 is_datetime64_any_dtype = pd_types.is_datetime64_any_dtype
 is_datetime64_dtype = pd_types.is_datetime64_dtype
