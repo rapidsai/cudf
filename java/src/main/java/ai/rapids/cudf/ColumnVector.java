@@ -534,8 +534,9 @@ public final class ColumnVector extends ColumnView {
    * @return A new java column vector containing the concatenated strings with separator between.
    */
   public static ColumnVector stringConcatenateWs(ColumnView[] columns, ColumnView sep_col) {
-    try (Scalar nullString = Scalar.fromString(null)) {
-      return stringConcatenateWs(columns, sep_col, nullString, nullString);
+    try (Scalar nullString = Scalar.fromString(null);
+         Scalar emptyString = Scalar.fromString("")) {
+      return stringConcatenateWs(columns, sep_col, nullString, emptyString);
     }
   }
 
@@ -552,7 +553,8 @@ public final class ColumnVector extends ColumnView {
    *                         found in any column.
    * @return A new java column vector containing the concatenated strings with separator between.
    */
-  public static ColumnVector stringConcatenateWs(ColumnView[] columns, ColumnView sep_col, Scalar separator_narep, Scalar col_narep) {
+  public static ColumnVector stringConcatenateWs(ColumnView[] columns,
+      ColumnView sep_col, Scalar separator_narep, Scalar col_narep) {
     assert columns.length >= 1 : ".stringConcatenate() operation requires at least 1 column";
     assert separator_narep != null : "separator narep scalar provided may not be null";
     assert col_narep != null : "column narep scalar provided may not be null";

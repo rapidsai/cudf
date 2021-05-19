@@ -150,7 +150,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenationWs(J
     cudf::column_view *column = reinterpret_cast<cudf::column_view *>(sep_handle);
     cudf::strings_column_view strings_column(*column);
     std::unique_ptr<cudf::column> result =
-      cudf::strings::concatenate(cudf::table_view(column_views), strings_column, separator_narep_scalar, col_narep_scalar);
+      cudf::strings::concatenate(cudf::table_view(column_views), strings_column, separator_narep_scalar, col_narep_scalar, cudf::strings::separator_on_nulls::NO);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -175,7 +175,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenationList
     cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_handle);
     cudf::lists_column_view lcv(*cv);
     std::unique_ptr<cudf::column> result =
-      cudf::strings::concatenate_list_elements(lcv, strings_column, separator_narep_scalar, col_narep_scalar);
+      cudf::strings::join_list_elements(lcv, strings_column, separator_narep_scalar, col_narep_scalar, cudf::strings::separator_on_nulls::NO);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

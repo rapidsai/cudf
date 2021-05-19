@@ -2141,8 +2141,8 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector sep_col = ColumnVector.fromStrings("-*");
          ColumnVector e_concat = ColumnVector.fromStrings("a-*B-*cd-*\u0480\u0481-*E\tf-*M-*\\G\u0100");
          Scalar separatorString = Scalar.fromString(null);
-         Scalar nullString = Scalar.fromString(null);
-         ColumnVector concat = ColumnVector.stringConcatenateWs(new ColumnView[]{sv1, sv2, sv3, sv4, sv5, sv6, sv7}, sep_col, separatorString, nullString)) {
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenateWs(new ColumnView[]{sv1, sv2, sv3, sv4, sv5, sv6, sv7}, sep_col, separatorString, col_narep)) {
       assertColumnsAreEqual(e_concat, concat);
     }
   }
@@ -2155,8 +2155,8 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector sep_col = ColumnVector.fromScalar(nullString, 2);
          ColumnVector e_concat = ColumnVector.fromScalar(nullString, 2);
          Scalar separatorString = Scalar.fromString(null);
-         Scalar nullEmptyString = Scalar.fromString(null);
-         ColumnVector concat = ColumnVector.stringConcatenateWs(new ColumnView[]{sv1, sv2}, sep_col, separatorString, nullEmptyString)) {
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenateWs(new ColumnView[]{sv1, sv2}, sep_col, separatorString, col_narep)) {
       assertColumnsAreEqual(e_concat, concat);
     }
   }
@@ -2168,8 +2168,8 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector sep_col = ColumnVector.fromStrings("-", "-", "-");
          ColumnVector e_concat = ColumnVector.fromStrings("a-b", "c-", "e");
          Scalar separatorString = Scalar.fromString(null);
-         Scalar nullEmptyString = Scalar.fromString(null);
-         ColumnVector concat = ColumnVector.stringConcatenateWs(new ColumnView[]{sv1, sv2}, sep_col, separatorString, nullEmptyString)) {
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenateWs(new ColumnView[]{sv1, sv2}, sep_col, separatorString, col_narep)) {
       assertColumnsAreEqual(e_concat, concat);
     }
   }
@@ -2180,8 +2180,8 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector sep_col = ColumnVector.fromStrings("-", "-", "-");
          ColumnVector e_concat = ColumnVector.fromStrings("a", "c", "e");
          Scalar separatorString = Scalar.fromString(null);
-         Scalar nullEmptyString = Scalar.fromString(null);
-         ColumnVector concat = ColumnVector.stringConcatenateWs(new ColumnView[]{sv1}, sep_col, separatorString, nullEmptyString)) {
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenateWs(new ColumnView[]{sv1}, sep_col, separatorString, col_narep)) {
       assertColumnsAreEqual(e_concat, concat);
     }
   }
@@ -2192,12 +2192,10 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector sv1 = ColumnVector.fromScalar(nullString, 3);
          ColumnVector sv2 = ColumnVector.fromScalar(nullString, 3);
          ColumnVector sep_col = ColumnVector.fromStrings("-", "-", "-");
-         // TODO - Spark expects this to be empty String
-         // ColumnVector e_concat = ColumnVector.fromStrings("", "", "");
-         ColumnVector e_concat = ColumnVector.fromScalar(nullString, 3);
+         ColumnVector e_concat = ColumnVector.fromStrings("", "", "");
          Scalar separatorString = Scalar.fromString(null);
-         Scalar nullEmptyString = Scalar.fromString(null);
-         ColumnVector concat = ColumnVector.stringConcatenateWs(new ColumnView[]{sv1, sv2}, sep_col, separatorString, nullEmptyString)) {
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenateWs(new ColumnView[]{sv1, sv2}, sep_col, separatorString, col_narep)) {
       assertColumnsAreEqual(e_concat, concat);
     }
   }
@@ -2208,13 +2206,11 @@ public class ColumnVectorTest extends CudfTestBase {
            new HostColumnVector.BasicType(true, DType.STRING)),
            Arrays.asList("aaa"), Arrays.asList("b", "c", "d"), Arrays.asList("\u0480\u0481", null, "asdfbe", null));
          ColumnVector sep_col = ColumnVector.fromStrings("-", "-", "*");
-         // ColumnVector e_concat = ColumnVector.fromStrings("aaa", "b-c-d", "\u0480\u0481*asdfbe");
-         // TODO - this is different then spark, should be above line for null
-         ColumnVector e_concat = ColumnVector.fromStrings("aaa", "b-c-d", null);
-         // ColumnVector e_concat = ColumnVector.fromStrings("aaa", "b-c-d", "\u0480\u0481**asdfbe*");
+         // TODO - nulls in middle broken
+         ColumnVector e_concat = ColumnVector.fromStrings("aaa", "b-c-d", "\u0480\u0481*asdfbe");
          Scalar separatorString = Scalar.fromString(null);
-         Scalar nullEmptyString = Scalar.fromString(null);
-         ColumnVector concat = ColumnVector.stringConcatenateListElementsWs(cv1, sep_col, separatorString, nullEmptyString)) {
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenateListElementsWs(cv1, sep_col, separatorString, col_narep)) {
       assertColumnsAreEqual(e_concat, concat);
     }
   }
@@ -2226,11 +2222,11 @@ public class ColumnVectorTest extends CudfTestBase {
            Arrays.asList("aaa"), Arrays.asList(null, null, null));
          ColumnVector sep_col = ColumnVector.fromStrings("-", "-");
          // TODO - SPARK expects empty string when all nulls, not null
-         // ColumnVector e_concat = ColumnVector.fromStrings("aaa", "");
-         ColumnVector e_concat = ColumnVector.fromStrings("aaa", null);
+         ColumnVector e_concat = ColumnVector.fromStrings("aaa", "");
+         // ColumnVector e_concat = ColumnVector.fromStrings("aaa", null);
          Scalar separatorString = Scalar.fromString(null);
-         Scalar nullEmptyString = Scalar.fromString(null);
-         ColumnVector concat = ColumnVector.stringConcatenateListElementsWs(cv1, sep_col, separatorString, nullEmptyString)) {
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenateListElementsWs(cv1, sep_col, separatorString, col_narep)) {
       assertColumnsAreEqual(e_concat, concat);
     }
   }
@@ -2243,8 +2239,8 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector sep_col = ColumnVector.fromStrings("-", "-");
          ColumnVector e_concat = ColumnVector.fromStrings("aaa-bbbb", null);
          Scalar separatorString = Scalar.fromString(null);
-         Scalar nullEmptyString = Scalar.fromString(null);
-         ColumnVector concat = ColumnVector.stringConcatenateListElementsWs(cv1, sep_col, separatorString, nullEmptyString)) {
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenateListElementsWs(cv1, sep_col, separatorString, col_narep)) {
       assertColumnsAreEqual(e_concat, concat);
     }
   }
