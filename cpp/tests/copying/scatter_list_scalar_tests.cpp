@@ -26,8 +26,8 @@
 namespace cudf {
 namespace test {
 
-using mask_vector  = std::vector<valid_type>;
-using size_column  = fixed_width_column_wrapper<size_type>;
+using mask_vector = std::vector<valid_type>;
+using size_column = fixed_width_column_wrapper<size_type>;
 
 class ScatterListScalarTests : public cudf::test::BaseFixture {
 };
@@ -61,12 +61,12 @@ TYPED_TEST(ScatterListOfFixedWidthScalarTest, Basic)
 
   auto slr = std::make_unique<list_scalar>(FCW({2, 2, 2}, {1, 0, 1}), true);
   LCW col{LCW{1, 1, 1}, LCW{8, 8}, LCW{10, 10, 10, 10}, LCW{5}};
-  SM_t scatter_map{3, 1, 0};
+  size_column scatter_map{3, 1, 0};
 
-  LCW expected{LCW({2, 2, 2}, M{1, 0, 1}.begin()),
-               LCW({2, 2, 2}, M{1, 0, 1}.begin()),
+  LCW expected{LCW({2, 2, 2}, mask_vector{1, 0, 1}.begin()),
+               LCW({2, 2, 2}, mask_vector{1, 0, 1}.begin()),
                LCW{10, 10, 10, 10},
-               LCW({2, 2, 2}, M{1, 0, 1}.begin())};
+               LCW({2, 2, 2}, mask_vector{1, 0, 1}.begin())};
   test_single_scalar_scatter(col, *slr, scatter_map, expected);
 }
 
@@ -76,11 +76,15 @@ TYPED_TEST(ScatterListOfFixedWidthScalarTest, EmptyValidScalar)
   using FCW = fixed_width_column_wrapper<TypeParam>;
 
   auto slr = std::make_unique<list_scalar>(FCW{}, true);
-  LCW col{
-    LCW{1, 1, 1}, LCW{8, 8}, LCW({10, 10, 10, 10}, M{1, 0, 1, 0}.begin()), LCW{5}, LCW{42, 42}};
-  SM_t scatter_map{1, 0};
+  LCW col{LCW{1, 1, 1},
+          LCW{8, 8},
+          LCW({10, 10, 10, 10}, mask_vector{1, 0, 1, 0}.begin()),
+          LCW{5},
+          LCW{42, 42}};
+  size_column scatter_map{1, 0};
 
-  LCW expected{LCW{}, LCW{}, LCW({10, 10, 10, 10}, M{1, 0, 1, 0}.begin()), LCW{5}, LCW{42, 42}};
+  LCW expected{
+    LCW{}, LCW{}, LCW({10, 10, 10, 10}, mask_vector{1, 0, 1, 0}.begin()), LCW{5}, LCW{42, 42}};
   test_single_scalar_scatter(col, *slr, scatter_map, expected);
 }
 
@@ -90,11 +94,11 @@ TYPED_TEST(ScatterListOfFixedWidthScalarTest, NullScalar)
   using FCW = fixed_width_column_wrapper<TypeParam>;
 
   auto slr = std::make_unique<list_scalar>(FCW{}, false);
-  LCW col{LCW({1, 1, 1}, M{0, 0, 1}.begin()), LCW{8, 8}, LCW{10, 10, 10, 10}, LCW{5}};
-  SM_t scatter_map{3, 1};
+  LCW col{LCW({1, 1, 1}, mask_vector{0, 0, 1}.begin()), LCW{8, 8}, LCW{10, 10, 10, 10}, LCW{5}};
+  size_column scatter_map{3, 1};
 
-  LCW expected({LCW({1, 1, 1}, M{0, 0, 1}.begin()), LCW{}, LCW{10, 10, 10, 10}, LCW{}},
-               M{1, 0, 1, 0}.begin());
+  LCW expected({LCW({1, 1, 1}, mask_vector{0, 0, 1}.begin()), LCW{}, LCW{10, 10, 10, 10}, LCW{}},
+               mask_vector{1, 0, 1, 0}.begin());
   test_single_scalar_scatter(col, *slr, scatter_map, expected);
 }
 
@@ -104,10 +108,12 @@ TYPED_TEST(ScatterListOfFixedWidthScalarTest, NullableTargetRow)
   using FCW = fixed_width_column_wrapper<TypeParam>;
 
   auto slr = std::make_unique<list_scalar>(FCW{9, 9}, true);
-  LCW col({LCW{4, 4}, LCW{}, LCW{8, 8, 8}, LCW{}, LCW{9, 9, 9}}, M{1, 0, 1, 0, 1}.begin());
-  SM_t scatter_map{0, 1};
+  LCW col({LCW{4, 4}, LCW{}, LCW{8, 8, 8}, LCW{}, LCW{9, 9, 9}},
+          mask_vector{1, 0, 1, 0, 1}.begin());
+  size_column scatter_map{0, 1};
 
-  LCW expected({LCW{9, 9}, LCW{9, 9}, LCW{8, 8, 8}, LCW{}, LCW{9, 9, 9}}, M{1, 1, 1, 0, 1}.begin());
+  LCW expected({LCW{9, 9}, LCW{9, 9}, LCW{8, 8, 8}, LCW{}, LCW{9, 9, 9}},
+               mask_vector{1, 1, 1, 0, 1}.begin());
   test_single_scalar_scatter(col, *slr, scatter_map, expected);
 }
 
@@ -123,14 +129,15 @@ TEST_F(ScatterListOfStringScalarTest, Basic)
     StringCW({"Hello!", "", "你好！", "صباح الخير!", "", "こんにちは！"},
              {true, false, true, true, false, true}),
     true);
-  LCW col{LCW({"xx", "yy"}, M{0, 1}.begin()), LCW{""}, LCW{"a", "bab", "bacab"}};
+  LCW col{LCW({"xx", "yy"}, mask_vector{0, 1}.begin()), LCW{""}, LCW{"a", "bab", "bacab"}};
 
-  SM_t scatter_map{2, 1};
+  size_column scatter_map{2, 1};
 
-  LCW expected{
-    LCW({"xx", "yy"}, M{0, 1}.begin()),
-    LCW({"Hello!", "", "你好！", "صباح الخير!", "", "こんにちは！"}, M{1, 0, 1, 1, 0, 1}.begin()),
-    LCW({"Hello!", "", "你好！", "صباح الخير!", "", "こんにちは！"}, M{1, 0, 1, 1, 0, 1}.begin())};
+  LCW expected{LCW({"xx", "yy"}, mask_vector{0, 1}.begin()),
+               LCW({"Hello!", "", "你好！", "صباح الخير!", "", "こんにちは！"},
+                   mask_vector{1, 0, 1, 1, 0, 1}.begin()),
+               LCW({"Hello!", "", "你好！", "صباح الخير!", "", "こんにちは！"},
+                   mask_vector{1, 0, 1, 1, 0, 1}.begin())};
 
   test_single_scalar_scatter(col, *slr, scatter_map, expected);
 }
@@ -142,9 +149,12 @@ TEST_F(ScatterListOfStringScalarTest, EmptyValidScalar)
 
   auto slr = std::make_unique<list_scalar>(StringCW{}, true);
 
-  LCW col{LCW({"xx", "yy"}, M{0, 1}.begin()), LCW{""}, LCW{"a", "bab", "bacab"}, LCW{"888", "777"}};
+  LCW col{LCW({"xx", "yy"}, mask_vector{0, 1}.begin()),
+          LCW{""},
+          LCW{"a", "bab", "bacab"},
+          LCW{"888", "777"}};
 
-  SM_t scatter_map{0, 3};
+  size_column scatter_map{0, 3};
 
   LCW expected{LCW{}, LCW{""}, LCW{"a", "bab", "bacab"}, LCW{}};
 
@@ -157,11 +167,14 @@ TEST_F(ScatterListOfStringScalarTest, NullScalar)
   using StringCW = strings_column_wrapper;
 
   auto slr = std::make_unique<list_scalar>(StringCW{}, false);
-  LCW col{LCW{"xx", "yy"}, LCW({""}, M{0}.begin()), LCW{"a", "bab", "bacab"}, LCW{"888", "777"}};
+  LCW col{LCW{"xx", "yy"},
+          LCW({""}, mask_vector{0}.begin()),
+          LCW{"a", "bab", "bacab"},
+          LCW{"888", "777"}};
 
-  SM_t scatter_map{1, 2};
+  size_column scatter_map{1, 2};
 
-  LCW expected({LCW{"xx", "yy"}, LCW{}, LCW{}, LCW{"888", "777"}}, M{1, 0, 0, 1}.begin());
+  LCW expected({LCW{"xx", "yy"}, LCW{}, LCW{}, LCW{"888", "777"}}, mask_vector{1, 0, 0, 1}.begin());
 
   test_single_scalar_scatter(col, *slr, scatter_map, expected);
 }
@@ -173,16 +186,16 @@ TEST_F(ScatterListOfStringScalarTest, NullableTargetRow)
 
   auto slr = std::make_unique<list_scalar>(
     StringCW({"Hello!", "", "こんにちは！"}, {true, false, true}), true);
-  LCW col({LCW{"xx", "yy"}, LCW({""}, M{0}.begin()), LCW{}, LCW{"888", "777"}},
-          M{1, 1, 0, 1}.begin());
+  LCW col({LCW{"xx", "yy"}, LCW({""}, mask_vector{0}.begin()), LCW{}, LCW{"888", "777"}},
+          mask_vector{1, 1, 0, 1}.begin());
 
-  SM_t scatter_map{3, 2};
+  size_column scatter_map{3, 2};
 
   LCW expected({LCW{"xx", "yy"},
-                LCW({""}, M{0}.begin()),
-                LCW({"Hello!", "", "こんにちは！"}, M{1, 0, 1}.begin()),
-                LCW({"Hello!", "", "こんにちは！"}, M{1, 0, 1}.begin())},
-               M{1, 1, 1, 1}.begin());
+                LCW({""}, mask_vector{0}.begin()),
+                LCW({"Hello!", "", "こんにちは！"}, mask_vector{1, 0, 1}.begin()),
+                LCW({"Hello!", "", "こんにちは！"}, mask_vector{1, 0, 1}.begin())},
+               mask_vector{1, 1, 1, 1}.begin());
 
   test_single_scalar_scatter(col, *slr, scatter_map, expected);
 }
@@ -198,18 +211,18 @@ TYPED_TEST(ScatterListOfListScalarTest, Basic)
   using LCW = lists_column_wrapper<TypeParam, int32_t>;
 
   auto slr = std::make_unique<list_scalar>(
-    LCW({LCW{1, 2, 3}, LCW{4}, LCW{}, LCW{5, 6}}, M{1, 1, 0, 1}.begin()), true);
-  LCW col({LCW({LCW{88, 88}, LCW{}, LCW{9, 9, 9}}, M{1, 0, 1}.begin()),
-           LCW{LCW{66}, LCW{}, LCW({77, 77, 77, 77}, M{1, 0, 0, 1}.begin())},
+    LCW({LCW{1, 2, 3}, LCW{4}, LCW{}, LCW{5, 6}}, mask_vector{1, 1, 0, 1}.begin()), true);
+  LCW col({LCW({LCW{88, 88}, LCW{}, LCW{9, 9, 9}}, mask_vector{1, 0, 1}.begin()),
+           LCW{LCW{66}, LCW{}, LCW({77, 77, 77, 77}, mask_vector{1, 0, 0, 1}.begin())},
            LCW{LCW{55, 55}, LCW{}, LCW{10, 10, 10}},
            LCW{LCW{44, 44}}});
 
-  SM_t scatter_map{1, 2, 3};
+  size_column scatter_map{1, 2, 3};
 
-  LCW expected({LCW({LCW{88, 88}, LCW{}, LCW{9, 9, 9}}, M{1, 0, 1}.begin()),
-                LCW({LCW{1, 2, 3}, LCW{4}, LCW{}, LCW{5, 6}}, M{1, 1, 0, 1}.begin()),
-                LCW({LCW{1, 2, 3}, LCW{4}, LCW{}, LCW{5, 6}}, M{1, 1, 0, 1}.begin()),
-                LCW({LCW{1, 2, 3}, LCW{4}, LCW{}, LCW{5, 6}}, M{1, 1, 0, 1}.begin())});
+  LCW expected({LCW({LCW{88, 88}, LCW{}, LCW{9, 9, 9}}, mask_vector{1, 0, 1}.begin()),
+                LCW({LCW{1, 2, 3}, LCW{4}, LCW{}, LCW{5, 6}}, mask_vector{1, 1, 0, 1}.begin()),
+                LCW({LCW{1, 2, 3}, LCW{4}, LCW{}, LCW{5, 6}}, mask_vector{1, 1, 0, 1}.begin()),
+                LCW({LCW{1, 2, 3}, LCW{4}, LCW{}, LCW{5, 6}}, mask_vector{1, 1, 0, 1}.begin())});
 
   test_single_scalar_scatter(col, *slr, scatter_map, expected);
 }
@@ -219,15 +232,15 @@ TYPED_TEST(ScatterListOfListScalarTest, EmptyValidScalar)
   using LCW = lists_column_wrapper<TypeParam, int32_t>;
 
   auto slr = std::make_unique<list_scalar>(LCW{}, true);
-  LCW col({LCW({LCW{88, 88}, LCW{}, LCW{9, 9, 9}}, M{1, 0, 1}.begin()),
-           LCW{LCW{66}, LCW{}, LCW({77, 77, 77, 77}, M{1, 0, 0, 1}.begin())},
+  LCW col({LCW({LCW{88, 88}, LCW{}, LCW{9, 9, 9}}, mask_vector{1, 0, 1}.begin()),
+           LCW{LCW{66}, LCW{}, LCW({77, 77, 77, 77}, mask_vector{1, 0, 0, 1}.begin())},
            LCW{LCW{55, 55}, LCW{}, LCW{10, 10, 10}},
            LCW{LCW{44, 44}}});
 
-  SM_t scatter_map{3, 0};
+  size_column scatter_map{3, 0};
 
   LCW expected({LCW{},
-                LCW{LCW{66}, LCW{}, LCW({77, 77, 77, 77}, M{1, 0, 0, 1}.begin())},
+                LCW{LCW{66}, LCW{}, LCW({77, 77, 77, 77}, mask_vector{1, 0, 0, 1}.begin())},
                 LCW{LCW{55, 55}, LCW{}, LCW{10, 10, 10}},
                 LCW{}});
 
@@ -239,13 +252,13 @@ TYPED_TEST(ScatterListOfListScalarTest, NullScalar)
   using LCW = lists_column_wrapper<TypeParam, int32_t>;
 
   auto slr = std::make_unique<list_scalar>(LCW{}, false);
-  LCW col({LCW({LCW{88, 88}, LCW{}, LCW{9, 9, 9}}, M{1, 0, 1}.begin()),
-           LCW{LCW{66}, LCW{}, LCW({77, 77, 77, 77}, M{1, 0, 0, 1}.begin())},
+  LCW col({LCW({LCW{88, 88}, LCW{}, LCW{9, 9, 9}}, mask_vector{1, 0, 1}.begin()),
+           LCW{LCW{66}, LCW{}, LCW({77, 77, 77, 77}, mask_vector{1, 0, 0, 1}.begin())},
            LCW{LCW{44, 44}}});
 
-  SM_t scatter_map{1, 0};
+  size_column scatter_map{1, 0};
 
-  LCW expected({LCW{}, LCW{}, LCW{LCW{44, 44}}}, M{0, 0, 1}.begin());
+  LCW expected({LCW{}, LCW{}, LCW{LCW{44, 44}}}, mask_vector{0, 0, 1}.begin());
 
   test_single_scalar_scatter(col, *slr, scatter_map, expected);
 }
@@ -255,19 +268,19 @@ TYPED_TEST(ScatterListOfListScalarTest, NullableTargetRows)
   using LCW = lists_column_wrapper<TypeParam, int32_t>;
 
   auto slr = std::make_unique<list_scalar>(
-    LCW({LCW{1, 1, 1}, LCW{3, 3}, LCW{}, LCW{4}}, M{1, 1, 0, 1}.begin()), true);
+    LCW({LCW{1, 1, 1}, LCW{3, 3}, LCW{}, LCW{4}}, mask_vector{1, 1, 0, 1}.begin()), true);
 
-  LCW col({LCW({LCW{88, 88}, LCW{}, LCW{9, 9, 9}}, M{1, 0, 1}.begin()),
-           LCW{LCW{66}, LCW{}, LCW({77, 77, 77, 77}, M{1, 0, 0, 1}.begin())},
+  LCW col({LCW({LCW{88, 88}, LCW{}, LCW{9, 9, 9}}, mask_vector{1, 0, 1}.begin()),
+           LCW{LCW{66}, LCW{}, LCW({77, 77, 77, 77}, mask_vector{1, 0, 0, 1}.begin())},
            LCW{LCW{44, 44}}},
-          M{1, 0, 1}.begin());
+          mask_vector{1, 0, 1}.begin());
 
-  SM_t scatter_map{1};
+  size_column scatter_map{1};
 
-  LCW expected({LCW({LCW{88, 88}, LCW{}, LCW{9, 9, 9}}, M{1, 0, 1}.begin()),
-                LCW({LCW{1, 1, 1}, LCW{3, 3}, LCW{}, LCW{4}}, M{1, 1, 0, 1}.begin()),
+  LCW expected({LCW({LCW{88, 88}, LCW{}, LCW{9, 9, 9}}, mask_vector{1, 0, 1}.begin()),
+                LCW({LCW{1, 1, 1}, LCW{3, 3}, LCW{}, LCW{4}}, mask_vector{1, 1, 0, 1}.begin()),
                 LCW{LCW{44, 44}}},
-               M{1, 1, 1}.begin());
+               mask_vector{1, 1, 1}.begin());
 
   test_single_scalar_scatter(col, *slr, scatter_map, expected);
 }
@@ -291,29 +304,30 @@ TYPED_TEST(ScatterListOfStructScalarTest, Basic)
   using LCW      = lists_column_wrapper<TypeParam, int32_t>;
   using offset_t = fixed_width_column_wrapper<offset_type>;
 
-  auto data = this->make_test_structs({{42, 42, 42}, {1, 0, 1}},
-                                      {{"hello", "你好！", "bonjour!"}, {false, true, true}},
-                                      LCW({LCW{88}, LCW{}, LCW{99, 99}}, M{1, 0, 1}.begin()),
-                                      {1, 1, 0});
-  auto slr  = std::make_unique<list_scalar>(data, true);
+  auto data =
+    this->make_test_structs({{42, 42, 42}, {1, 0, 1}},
+                            {{"hello", "你好！", "bonjour!"}, {false, true, true}},
+                            LCW({LCW{88}, LCW{}, LCW{99, 99}}, mask_vector{1, 0, 1}.begin()),
+                            {1, 1, 0});
+  auto slr = std::make_unique<list_scalar>(data, true);
 
   auto child = this->make_test_structs(
     {{1, 1, 2, 3, 3, 3}, {0, 1, 1, 1, 0, 0}},
     {{"x", "x", "yy", "", "zzz", "zzz"}, {true, true, true, false, true, true}},
     LCW({LCW{10, 10}, LCW{}, LCW{10}, LCW{20, 20}, LCW{}, LCW{30, 30}},
-        M{1, 0, 1, 1, 0, 1}.begin()),
+        mask_vector{1, 0, 1, 1, 0, 1}.begin()),
     {1, 1, 0, 0, 1, 1});
   offset_t offsets{0, 2, 2, 3, 6};
   auto col = make_lists_column(4, offsets.release(), child.release(), 0, rmm::device_buffer{});
 
-  SM_t scatter_map{1, 3};
+  size_column scatter_map{1, 3};
 
   auto ex_child = this->make_test_structs(
     {{1, 1, 42, 42, 42, 2, 42, 42, 42}, {0, 1, 1, 0, 1, 1, 1, 0, 1}},
     {{"x", "x", "hello", "你好！", "bonjour!", "yy", "hello", "你好！", "bonjour!"},
      {true, true, false, true, true, true, false, true, true}},
     LCW({LCW{10, 10}, LCW{}, LCW{88}, LCW{}, LCW{99, 99}, LCW{10}, LCW{88}, LCW{}, LCW{99, 99}},
-        M{1, 0, 1, 0, 1, 1, 1, 0, 1}.begin()),
+        mask_vector{1, 0, 1, 0, 1, 1, 1, 0, 1}.begin()),
     {1, 1, 1, 1, 0, 0, 1, 1, 0});
   offset_t ex_offsets{0, 2, 5, 6, 9};
   auto expected =
@@ -334,17 +348,17 @@ TYPED_TEST(ScatterListOfStructScalarTest, EmptyValidScalar)
     {{1, 1, 2, 3, 3, 3}, {0, 1, 1, 1, 0, 0}},
     {{"x", "x", "yy", "", "zzz", "zzz"}, {true, true, true, false, true, true}},
     LCW({LCW{10, 10}, LCW{}, LCW{10}, LCW{20, 20}, LCW{}, LCW{30, 30}},
-        M{1, 0, 1, 1, 0, 1}.begin()),
+        mask_vector{1, 0, 1, 1, 0, 1}.begin()),
     {1, 1, 0, 0, 1, 1});
   offset_t offsets{0, 2, 2, 3, 6};
   auto col = make_lists_column(4, offsets.release(), child.release(), 0, rmm::device_buffer{});
 
-  SM_t scatter_map{0, 2};
+  size_column scatter_map{0, 2};
 
   auto ex_child =
     this->make_test_structs({{3, 3, 3}, {1, 0, 0}},
                             {{"", "zzz", "zzz"}, {false, true, true}},
-                            LCW({LCW{20, 20}, LCW{}, LCW{30, 30}}, M{1, 0, 1}.begin()),
+                            LCW({LCW{20, 20}, LCW{}, LCW{30, 30}}, mask_vector{1, 0, 1}.begin()),
                             {0, 1, 1});
   offset_t ex_offsets{0, 0, 0, 0, 3};
   auto expected =
@@ -365,14 +379,14 @@ TYPED_TEST(ScatterListOfStructScalarTest, NullScalar)
     {{1, 1, 2, 3, 3, 3}, {0, 1, 1, 1, 0, 0}},
     {{"x", "x", "yy", "", "zzz", "zzz"}, {true, true, true, false, true, true}},
     LCW({LCW{10, 10}, LCW{}, LCW{10}, LCW{20, 20}, LCW{}, LCW{30, 30}},
-        M{1, 0, 1, 1, 0, 1}.begin()),
+        mask_vector{1, 0, 1, 1, 0, 1}.begin()),
     {1, 1, 1, 0, 1, 1});
   offset_t offsets{0, 2, 2, 3, 6};
   auto col = make_lists_column(4, offsets.release(), child.release(), 0, rmm::device_buffer{});
 
-  SM_t scatter_map{3, 1, 0};
+  size_column scatter_map{3, 1, 0};
 
-  auto ex_child = this->make_test_structs({2}, {"yy"}, LCW({10}, M{1}.begin()), {1});
+  auto ex_child = this->make_test_structs({2}, {"yy"}, LCW({10}, mask_vector{1}.begin()), {1});
   offset_t ex_offsets{0, 0, 0, 1, 1};
 
   auto null_mask = create_null_mask(4, mask_state::ALL_NULL);
@@ -388,31 +402,32 @@ TYPED_TEST(ScatterListOfStructScalarTest, NullableTargetRow)
   using LCW      = lists_column_wrapper<TypeParam, int32_t>;
   using offset_t = fixed_width_column_wrapper<offset_type>;
 
-  auto data = this->make_test_structs({{42, 42, 42}, {1, 0, 1}},
-                                      {{"hello", "你好！", "bonjour!"}, {false, true, true}},
-                                      LCW({LCW{88}, LCW{}, LCW{99, 99}}, M{1, 0, 1}.begin()),
-                                      {1, 1, 0});
-  auto slr  = std::make_unique<list_scalar>(data, true);
+  auto data =
+    this->make_test_structs({{42, 42, 42}, {1, 0, 1}},
+                            {{"hello", "你好！", "bonjour!"}, {false, true, true}},
+                            LCW({LCW{88}, LCW{}, LCW{99, 99}}, mask_vector{1, 0, 1}.begin()),
+                            {1, 1, 0});
+  auto slr = std::make_unique<list_scalar>(data, true);
 
   auto child = this->make_test_structs(
     {{1, 1, 2, 3, 3, 3}, {0, 1, 1, 1, 0, 0}},
     {{"x", "x", "yy", "", "zzz", "zzz"}, {true, true, true, false, true, true}},
     LCW({LCW{10, 10}, LCW{}, LCW{10}, LCW{20, 20}, LCW{}, LCW{30, 30}},
-        M{1, 0, 1, 1, 0, 1}.begin()),
+        mask_vector{1, 0, 1, 1, 0, 1}.begin()),
     {1, 1, 1, 0, 1, 1});
   offset_t offsets{0, 2, 2, 3, 6};
   auto null_mask = create_null_mask(4, mask_state::ALL_VALID);
   set_null_mask(static_cast<bitmask_type*>(null_mask.data()), 1, 3, false);
   auto col = make_lists_column(4, offsets.release(), child.release(), 2, std::move(null_mask));
 
-  SM_t scatter_map{3, 2};
+  size_column scatter_map{3, 2};
 
   auto ex_child = this->make_test_structs(
     {{1, 1, 42, 42, 42, 42, 42, 42}, {0, 1, 1, 0, 1, 1, 0, 1}},
     {{"x", "x", "hello", "你好！", "bonjour!", "hello", "你好！", "bonjour!"},
      {true, true, false, true, true, false, true, true}},
     LCW({LCW{10, 10}, LCW{}, LCW{88}, LCW{}, LCW{99, 99}, LCW{88}, LCW{}, LCW{99, 99}},
-        M{1, 0, 1, 0, 1, 1, 0, 1}.begin()),
+        mask_vector{1, 0, 1, 0, 1, 1, 0, 1}.begin()),
     {1, 1, 1, 1, 0, 1, 1, 0});
   offset_t ex_offsets{0, 2, 2, 5, 8};
 
