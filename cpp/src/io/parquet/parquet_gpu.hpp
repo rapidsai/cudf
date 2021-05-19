@@ -308,7 +308,7 @@ struct EncColumnChunk {
   uint32_t compressed_size;                    //!< Compressed buffer size
   uint32_t start_row;                          //!< First row of chunk
   uint32_t num_rows;                           //!< Number of rows in chunk
-  uint32_t num_values;      //!< Number of values in chunk. Different from num_rows for nested types
+  size_type num_values;     //!< Number of values in chunk. Different from num_rows for nested types
   uint32_t first_fragment;  //!< First fragment of chunk
   EncPage *pages;           //!< Ptr to pages that belong to this chunk
   uint32_t first_page;      //!< First page of chunk
@@ -324,6 +324,10 @@ struct EncColumnChunk {
   slot_type *dict_map_slots;
   size_t dict_map_size;
   size_type num_dict_entries;
+  size_type uniq_data_size;
+  size_type num_non_null_values;
+  size_type plain_data_size;
+  bool use_dictionary;
 };
 
 /**

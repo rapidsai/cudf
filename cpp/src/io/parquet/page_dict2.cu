@@ -32,6 +32,7 @@ __global__ void __launch_bounds__(block_size, 1)
 {
   auto chunk = chunks[blockIdx.x];
   auto t     = threadIdx.x;
+  // TODO: Now that per-chunk dict is same size as ck.num_values, try to not use one block per chunk
   for (size_t i = 0; i < chunk.dict_map_size; i += block_size) {
     if (t + i < chunk.dict_map_size) {
       new (&chunk.dict_map_slots[t + i].first) map_type::atomic_key_type{KEY_SENTINEL};
@@ -65,7 +66,7 @@ struct map_insert_fn {
     if constexpr (column_device_view::has_element_accessor<T>()) {
       auto hash_fn     = hash_functor<T>{col};
       auto equality_fn = equality_functor<T>{col};
-      return map.insert(thrust::make_pair(i, i), hash_fn, equality_fn);
+      return map.insert(std::make_pair(i, i), hash_fn, equality_fn);
     } else {
       cudf_assert(false && "Unsupported type to insert in map");
     }
@@ -105,6 +106,8 @@ __global__ void __launch_bounds__(block_size, 1)
                      // not rely on the chunk being a multiple of 5000. Preferably latter
 
   __shared__ EncColumnChunk s_chunk;
+  // TODO: reduce this ptr proliferation by only keeping a ptr to the chunk
+  __shared__ size_type *s_chunk_uniq_data_size_ptr;
   __shared__ size_type *s_chunk_dict_entries_ptr;
   __shared__ parquet_column_device_view s_col;
   __shared__ size_type s_start_value_idx;
@@ -120,8 +123,9 @@ __global__ void __launch_bounds__(block_size, 1)
       }
       ++rg_idx;
     }
-    s_chunk                  = chunks[rg_idx][col_idx];
-    s_chunk_dict_entries_ptr = &chunks[rg_idx][col_idx].num_dict_entries;
+    s_chunk                    = chunks[rg_idx][col_idx];
+    s_chunk_uniq_data_size_ptr = &chunks[rg_idx][col_idx].uniq_data_size;
+    s_chunk_dict_entries_ptr   = &chunks[rg_idx][col_idx].num_dict_entries;
     // printf("rg %d, col %d, %p\n", rg_idx, col_idx, s_chunk.col_desc);
     s_col = *(s_chunk.col_desc);
 
@@ -177,18 +181,40 @@ __global__ void __launch_bounds__(block_size, 1)
       (i + t < s_num_values && val_idx < data_col.size()) ? data_col.is_valid(val_idx) : false;
 
     // insert element at val_idx to hash map and count successful insertions
-    size_type is_unique = 0;
+    size_type is_unique      = 0;
+    size_type uniq_elem_size = 0;
     if (is_valid) {
       auto found_slot = type_dispatcher(data_col.type(), map_find_fn{hash_map}, data_col, val_idx);
       if (found_slot == hash_map.end()) {
         is_unique =
           type_dispatcher(data_col.type(), map_insert_fn{hash_map_mutable}, data_col, val_idx);
+        uniq_elem_size = [&]() -> size_type {
+          if (not is_unique) { return 0; }
+          switch (s_col.physical_type) {
+            case Type::INT32: return 4;
+            case Type::INT64: return 8;
+            case Type::INT96: return 12;
+            case Type::FLOAT: return 4;
+            case Type::DOUBLE: return 8;
+            case Type::BYTE_ARRAY:
+              if (data_col.type().id() == type_id::STRING) {
+                return data_col.element<string_view>(val_idx).size_bytes();
+              }
+            case Type::FIXED_LEN_BYTE_ARRAY:
+            default: cudf_assert(false && "Unsupported type for dictionary encoding"); return 0;
+          }
+        }();
       }
     }
 
     // TODO: Explore using ballot and popc for this reduction as the value to reduce is 1 or 0
-    auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
-    if (t == 0) { atomicAdd(s_chunk_dict_entries_ptr, num_unique); }
+    auto num_unique     = block_reduce(reduce_storage).Sum(is_unique);
+    auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
+    if (t == 0) {
+      atomicAdd(s_chunk_dict_entries_ptr, num_unique);
+      // TODO: move out of loop. We don't have to update other blocks about this
+      atomicAdd(s_chunk_uniq_data_size_ptr, uniq_data_size);
+    }
     __syncthreads();
   }
 }

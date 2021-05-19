@@ -789,12 +789,46 @@ void writer::impl::build_chunk_dictionaries2(
   stream.synchronize();
 
   // Make decision about which chunks have dictionary
+  // TODO: We wouldn't have to synchronize if the decision also took place in a kernel.
+  // needs just a thrust::foreach but cannot happen here because this is a private class function.
+  // maybe it shouldn't be.
   chunks.device_to_host(stream);
+  stream.synchronize();
+
   for (auto &ck : chunks.host_view().flat_view()) {
-    ck.has_dictionary = (ck.num_dict_entries < 65535) ? true : false;
-    // calculate size of chunk if dictionary is used
-    // calculate size of chunk if plain encoding is used
+    std::cout << "num_dict " << ck.num_dict_entries << std::endl;
+    std::cout << "dict_size " << ck.uniq_data_size << std::endl;
+    ck.use_dictionary = [&]() {
+      // We don't use dictionary if the indices are > 16 bits
+      if (ck.num_dict_entries > std::numeric_limits<uint16_t>::max()) { return false; }
+
+      // calculate size of chunk if dictionary is used
+      auto count_bits = [](uint16_t number) {
+        int16_t nbits = 0;
+        while (number > 0) {
+          nbits++;
+          number >>= 1;
+        }
+        return nbits;
+      };
+      auto nbits = count_bits(ck.num_dict_entries);
+
+      // ceil to (1/2/4/8/12/16)
+      auto allowed_bitsizes = std::array<size_type, 6>{1, 2, 4, 8, 12, 16};
+      auto rle_bits = *std::upper_bound(allowed_bitsizes.begin(), allowed_bitsizes.end(), nbits);
+      auto rle_byte_size = util::div_rounding_up_safe(ck.num_values * rle_bits, 8);
+
+      auto dict_enc_size = ck.uniq_data_size + rle_byte_size;
+
+      return (ck.plain_data_size > dict_enc_size);
+    }();
+    std::cout << "use_dict " << std::boolalpha << ck.use_dictionary << std::endl;
+
+    // TODO:  Deallocate dictionary storage for chunks that don't use it and clear pointers.
+    // If decide to use a kernel for this loop then move this cleanup outside
   }
+
+  // compact maps
 }
 
 void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
@@ -1086,6 +1120,14 @@ void writer::impl::write(table_view const &table)
       ck->num_values =
         std::accumulate(chunk_fragments.begin(), chunk_fragments.end(), 0, [](uint32_t l, auto r) {
           return l + r.num_values;
+        });
+      ck->num_non_null_values = std::accumulate(
+        chunk_fragments.begin(), chunk_fragments.end(), 0, [](int sum, gpu::PageFragment frag) {
+          return sum + frag.non_nulls;
+        });
+      ck->plain_data_size = std::accumulate(
+        chunk_fragments.begin(), chunk_fragments.end(), 0, [](int sum, gpu::PageFragment frag) {
+          return sum + frag.fragment_data_size;
         });
       ck->dictionary_id = num_dictionaries;
       if (col_desc[i].dict_data) {
