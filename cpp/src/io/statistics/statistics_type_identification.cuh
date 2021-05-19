@@ -240,24 +240,18 @@ __inline__ __device__ constexpr T maximum_identity()
  */
 template <typename T, io_file_format IO>
 class statistics_type_category {
-  // ORC does not calculate the statistics of unsigned integers except bools
-  // and durations
-  static constexpr bool ignore_aggregated_statistics =
-    (IO == io_file_format::ORC) and
-    (((not std::is_same_v<T, bool>)and(std::is_integral_v<T> and std::is_unsigned_v<T>)) or
-     cudf::is_duration<T>());
-
  public:
   // Types that calculate the sum of elements encountered
-  static constexpr bool aggregated_statistics =
-    (not ignore_aggregated_statistics) and aggregation_type<T>::is_supported;
+  static constexpr bool is_aggregated =
+    (IO == io_file_format::PARQUET) ? false : aggregation_type<T>::is_supported;
 
   // Types for which sum does not make sense
-  static constexpr bool non_aggregated_statistics = cudf::is_timestamp<T>();
+  static constexpr bool is_not_aggregated =
+    (IO == io_file_format::PARQUET) ? aggregation_type<T>::is_supported or cudf::is_timestamp<T>()
+                                    : cudf::is_timestamp<T>();
 
   // Do not calculate statistics for any other type
-  static constexpr bool ignored_statistics =
-    not(aggregated_statistics or non_aggregated_statistics);
+  static constexpr bool is_ignored = not(is_aggregated or is_not_aggregated);
 };
 
 }  // namespace detail

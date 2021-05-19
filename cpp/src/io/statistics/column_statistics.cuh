@@ -72,9 +72,8 @@ struct calculate_group_statistics_functor {
   {
   }
 
-  template <
-    typename T,
-    std::enable_if_t<detail::statistics_type_category<T, IO>::ignored_statistics> * = nullptr>
+  template <typename T,
+            std::enable_if_t<detail::statistics_type_category<T, IO>::is_ignored> * = nullptr>
   __device__ void operator()(stats_state_s &s, uint32_t t)
   {
     // No-op for unsupported aggregation types
@@ -88,21 +87,21 @@ struct calculate_group_statistics_functor {
    * the results will be stored into
    * @param t thread id
    */
-  template <
-    typename T,
-    std::enable_if_t<not detail::statistics_type_category<T, IO>::ignored_statistics> * = nullptr>
+  template <typename T,
+            std::enable_if_t<not detail::statistics_type_category<T, IO>::is_ignored> * = nullptr>
   __device__ void operator()(stats_state_s &s, uint32_t t)
   {
     detail::storage_wrapper<block_size> storage(temp_storage);
 
     using type_convert = detail::type_conversion<detail::conversion_map<IO>>;
     using CT           = typename type_convert::template type<T>;
-    typed_statistics_chunk<CT> chunk(s.group.num_rows);
+    typed_statistics_chunk<CT, detail::statistics_type_category<T, IO>::is_aggregated> chunk(
+      s.group.num_rows);
 
     for (uint32_t i = 0; i < s.group.num_rows; i += block_size) {
-      uint32_t r        = i + t;
-      uint32_t row      = r + s.group.start_row;
-      uint32_t is_valid = (r < s.group.num_rows) ? s.col.leaf_column->is_valid(row) : 0;
+      uint32_t r          = i + t;
+      uint32_t row        = r + s.group.start_row;
+      auto const is_valid = (r < s.group.num_rows) ? s.col.leaf_column->is_valid(row) : 0;
       if (is_valid) {
         auto converted_value = type_convert::convert(s.col.leaf_column->element<T>(row));
         chunk.reduce(converted_value);
@@ -111,7 +110,7 @@ struct calculate_group_statistics_functor {
 
     chunk = block_reduce(chunk, storage);
 
-    if (threadIdx.x == 0) { s.ck = get_untyped_chunk(chunk); }
+    if (t == 0) { s.ck = get_untyped_chunk(chunk); }
   }
 };
 
@@ -131,9 +130,8 @@ struct merge_group_statistics_functor {
   {
   }
 
-  template <
-    typename T,
-    std::enable_if_t<detail::statistics_type_category<T, IO>::ignored_statistics> * = nullptr>
+  template <typename T,
+            std::enable_if_t<detail::statistics_type_category<T, IO>::is_ignored> * = nullptr>
   __device__ void operator()(merge_state_s &s,
                              const statistics_chunk *chunks,
                              const uint32_t num_chunks,
@@ -142,9 +140,8 @@ struct merge_group_statistics_functor {
     // No-op for unsupported aggregation types
   }
 
-  template <
-    typename T,
-    std::enable_if_t<not detail::statistics_type_category<T, IO>::ignored_statistics> * = nullptr>
+  template <typename T,
+            std::enable_if_t<not detail::statistics_type_category<T, IO>::is_ignored> * = nullptr>
   __device__ void operator()(merge_state_s &s,
                              const statistics_chunk *chunks,
                              const uint32_t num_chunks,
@@ -152,62 +149,39 @@ struct merge_group_statistics_functor {
   {
     detail::storage_wrapper<block_size> storage(temp_storage);
 
-    typed_statistics_chunk<T> chunk;
+    typed_statistics_chunk<T, detail::statistics_type_category<T, IO>::is_aggregated> chunk;
 
     for (uint32_t i = t; i < num_chunks; i += block_size) { chunk.reduce(chunks[i]); }
     chunk.has_minmax = (chunk.minimum_value <= chunk.maximum_value);
 
     chunk = block_reduce(chunk, storage);
 
-    if (threadIdx.x == 0) { s.ck = get_untyped_chunk(chunk); }
+    if (t == 0) { s.ck = get_untyped_chunk(chunk); }
   }
 };
 
 /**
- * @brief Function to cooperatively set members of an object to 0
- *
- * @param[out] destination Object being set to 0
- * @tparam T Type of object
- */
-template <typename T>
-__device__ void cooperative_load(T &destination)
-{
-  using load_type = std::conditional_t<((sizeof(T) % sizeof(uint32_t)) == 0), uint32_t, uint8_t>;
-  for (auto i = threadIdx.x; i < sizeof(T) / sizeof(load_type); i += blockDim.x) {
-    reinterpret_cast<load_type *>(&destination)[i] = load_type{0};
-  }
-}
-
-/**
- * @brief Function to cooperatively load an object from a reference
- *
- * @param[out] destination Object being loaded
- * @param[in] source Source object
- * @tparam T Type of object
- */
-template <typename T>
-__device__ void cooperative_load(T &destination, const T &source)
-{
-  using load_type = std::conditional_t<((sizeof(T) % sizeof(uint32_t)) == 0), uint32_t, uint8_t>;
-  for (auto i = threadIdx.x; i < (sizeof(T) / sizeof(load_type)); i += blockDim.x) {
-    reinterpret_cast<load_type *>(&destination)[i] =
-      reinterpret_cast<const load_type *>(&source)[i];
-  }
-}
-
-/**
  * @brief Function to cooperatively load an object from a pointer
  *
+ * If the pointer is nullptr then the members of the object are set to 0
+ *
  * @param[out] destination Object being loaded
  * @param[in] source Source object
  * @tparam T Type of object
  */
 template <typename T>
-__device__ void cooperative_load(T &destination, const T *source)
+__device__ void cooperative_load(T &destination, const T *source = nullptr)
 {
   using load_type = std::conditional_t<((sizeof(T) % sizeof(uint32_t)) == 0), uint32_t, uint8_t>;
-  for (auto i = threadIdx.x; i < (sizeof(T) / sizeof(load_type)); i += blockDim.x) {
-    reinterpret_cast<load_type *>(&destination)[i] = reinterpret_cast<const load_type *>(source)[i];
+  if (source == nullptr) {
+    for (auto i = threadIdx.x; i < (sizeof(T) / sizeof(load_type)); i += blockDim.x) {
+      reinterpret_cast<load_type *>(&destination)[i] = load_type{0};
+    }
+  } else {
+    for (auto i = threadIdx.x; i < sizeof(T) / sizeof(load_type); i += blockDim.x) {
+      reinterpret_cast<load_type *>(&destination)[i] =
+        reinterpret_cast<const load_type *>(source)[i];
+    }
   }
 }
 
@@ -216,8 +190,6 @@ __device__ void cooperative_load(T &destination, const T *source)
  *
  * @param[out] chunks Statistics results [num_chunks]
  * @param[in] groups Statistics row groups [num_chunks]
- * @param[in] num_chunks Number of chunks & rowgroups
- * @param[in] stream CUDA stream to use, default 0
  * @tparam block_size Dimension of the block
  * @tparam IO File format for which statistics calculation is being done
  */
@@ -229,7 +201,7 @@ __global__ void __launch_bounds__(block_size, 1)
   __shared__ block_reduce_storage<block_size> storage;
 
   // Load state members
-  cooperative_load(state.group, groups[blockIdx.x]);
+  cooperative_load(state.group, &groups[blockIdx.x]);
   cooperative_load(state.ck);
   __syncthreads();
   cooperative_load(state.col, state.group.col);
@@ -242,7 +214,7 @@ __global__ void __launch_bounds__(block_size, 1)
                   threadIdx.x);
   __syncthreads();
 
-  cooperative_load(chunks[blockIdx.x], state.ck);
+  cooperative_load(chunks[blockIdx.x], &state.ck);
 }
 
 namespace detail {
@@ -271,7 +243,7 @@ void calculate_group_statistics(statistics_chunk *chunks,
  * @brief Kernel to merge column statistics
  *
  * @param[out] chunks_out Statistics results [num_chunks]
- * @param[out] chunks_in Input statistics
+ * @param[in] chunks_in Input statistics
  * @param[in] groups Statistics groups [num_chunks]
  * @tparam block_size Dimension of the block
  * @tparam IO File format for which statistics calculation is being done
@@ -285,7 +257,7 @@ __global__ void __launch_bounds__(block_size, 1)
   __shared__ __align__(8) merge_state_s state;
   __shared__ block_reduce_storage<block_size> storage;
 
-  cooperative_load(state.group, groups[blockIdx.x]);
+  cooperative_load(state.group, &groups[blockIdx.x]);
   __syncthreads();
   cooperative_load(state.col, state.group.col);
   __syncthreads();
@@ -298,14 +270,14 @@ __global__ void __launch_bounds__(block_size, 1)
                   threadIdx.x);
   __syncthreads();
 
-  cooperative_load(chunks_out[blockIdx.x], state.ck);
+  cooperative_load(chunks_out[blockIdx.x], &state.ck);
 }
 
 /**
  * @brief Launches kernel to merge column statistics
  *
  * @param[out] chunks_out Statistics results [num_chunks]
- * @param[out] chunks_in Input statistics
+ * @param[in] chunks_in Input statistics
  * @param[in] groups Statistics groups [num_chunks]
  * @param[in] num_chunks Number of chunks & groups
  * @param[in] stream CUDA stream to use

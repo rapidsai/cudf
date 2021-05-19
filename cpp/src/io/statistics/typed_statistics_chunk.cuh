@@ -74,10 +74,6 @@ class union_member {
   }
 };
 
-template <typename T, typename Enable = void>
-struct typed_statistics_chunk {
-};
-
 /**
  * @brief Templated structure used for merging and gathering of statistics chunks
  *
@@ -85,11 +81,14 @@ struct typed_statistics_chunk {
  * values simultaneously.
  *
  * @tparam T The input type associated with the chunk
+ * @tparam is_aggregation_supported Set to true if input type is meant to be aggregated
  */
+template <typename T, bool is_aggregation_supported>
+struct typed_statistics_chunk {
+};
+
 template <typename T>
-struct typed_statistics_chunk<
-  T,
-  typename std::enable_if_t<detail::aggregation_type<T>::is_supported>> {
+struct typed_statistics_chunk<T, true> {
   using E = typename detail::extrema_type<T>::type;
   using A = typename detail::aggregation_type<T>::type;
 
@@ -140,16 +139,8 @@ struct typed_statistics_chunk<
   }
 };
 
-/**
- * @brief Templated structure used for merging and gathering of statistics chunks
- *
- * This uses the reduce function to compute the minimum and maximum values
- * simultaneously.
- *
- * @tparam T The input type associated with the chunk
- */
 template <typename T>
-struct typed_statistics_chunk<T, typename std::enable_if<cudf::is_timestamp<T>()>::type> {
+struct typed_statistics_chunk<T, false> {
   using E = typename detail::extrema_type<T>::type;
 
   uint32_t num_rows;    //!< number of non-null values in chunk
@@ -201,11 +192,11 @@ struct typed_statistics_chunk<T, typename std::enable_if<cudf::is_timestamp<T>()
  * @param chunk The input typed_statistics_chunk
  * @param storage Temporary storage to be used by cub calls
  */
-template <typename T, int block_size>
-__inline__ __device__ typed_statistics_chunk<T> block_reduce(
-  typed_statistics_chunk<T>& chunk, detail::storage_wrapper<block_size>& storage)
+template <typename T, bool is_aggregated, int block_size>
+__inline__ __device__ typed_statistics_chunk<T, is_aggregated> block_reduce(
+  typed_statistics_chunk<T, is_aggregated>& chunk, detail::storage_wrapper<block_size>& storage)
 {
-  typed_statistics_chunk<T> output_chunk = chunk;
+  typed_statistics_chunk<T, is_aggregated> output_chunk = chunk;
 
   using E              = typename detail::extrema_type<T>::type;
   using extrema_reduce = cub::BlockReduce<E, block_size>;
@@ -225,7 +216,7 @@ __inline__ __device__ typed_statistics_chunk<T> block_reduce(
   output_chunk.has_minmax = __syncthreads_or(output_chunk.has_minmax);
 
   // FIXME : Is another syncthreads needed here?
-  if constexpr (detail::aggregation_type<T>::is_supported) {
+  if constexpr (is_aggregated) {
     if (output_chunk.has_minmax) {
       using A                = typename detail::aggregation_type<T>::type;
       using aggregate_reduce = cub::BlockReduce<A, block_size>;
@@ -242,8 +233,9 @@ __inline__ __device__ typed_statistics_chunk<T> block_reduce(
  * @tparam T Type associated with typed_statistics_chunk
  * @param chunk The input typed_statistics_chunk
  */
-template <typename T>
-__inline__ __device__ statistics_chunk get_untyped_chunk(const typed_statistics_chunk<T>& chunk)
+template <typename T, bool is_aggregated>
+__inline__ __device__ statistics_chunk
+get_untyped_chunk(const typed_statistics_chunk<T, is_aggregated>& chunk)
 {
   statistics_chunk stat;
   stat.non_nulls  = chunk.non_nulls;
@@ -262,7 +254,7 @@ __inline__ __device__ statistics_chunk get_untyped_chunk(const typed_statistics_
       union_member::get<E>(stat.min_value) = chunk.minimum_value;
       union_member::get<E>(stat.max_value) = chunk.maximum_value;
     }
-    if constexpr (detail::aggregation_type<T>::is_supported) {
+    if constexpr (is_aggregated) {
       using A                        = typename detail::aggregation_type<T>::type;
       union_member::get<A>(stat.sum) = chunk.aggregate;
     }
