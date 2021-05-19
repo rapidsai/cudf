@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-#include <cudf/scalar/scalar_factories.hpp>
-
-#include <cudf/column/column_factories.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
-#include "cudf/null_mask.hpp"
+
+#include <cudf/column/column_factories.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 
 namespace cudf {
 namespace test {
