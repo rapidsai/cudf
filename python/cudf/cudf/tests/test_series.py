@@ -572,6 +572,21 @@ def test_series_value_counts(dropna, normalize):
         assert_eq(expect, got, check_dtype=False, check_index_type=False)
 
 
+@pytest.mark.parametrize("bins", [1, 2, 3])
+@pytest.mark.parametrize("dropna", [True, False])
+def test_series_value_counts_bins(dropna, bins):
+    psr = pd.Series([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, None])
+    gsr = cudf.from_pandas(psr)
+
+    expected = psr.value_counts(
+        bins, dropna=dropna
+    )
+    got = gsr.value_counts(
+        bins, dropna=dropna
+    )
+
+    assert_eq(expected, got)
+
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("dropna", [True, False])
 @pytest.mark.parametrize("normalize", [True, False])
