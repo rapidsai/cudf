@@ -118,10 +118,11 @@ struct compute_size_and_concatenate_fn {
         write_separator || (separate_nulls == separator_on_nulls::YES) || !null_element;
     }
 
+    // If there are all null elements, the output should be the same as having an empty list input:
+    // a null or an empty string
     if (!d_chars) {
-      d_offsets[idx] = size_bytes;
+      d_offsets[idx] = has_valid_element ? size_bytes : 0;
 
-      // If there are all null elements, the output should be the same as having an empty list input
       d_validities[idx] =
         has_valid_element || empty_list_policy == output_if_empty_list::EMPTY_STRING;
     }
