@@ -565,6 +565,147 @@ TYPED_TEST(BinaryOperationCompiledTest_Logical, LogicalOr_Vector_Vector)
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LOGICAL_OR());
 }
 
+// Comparison Operations ==, !=, <, >, <=, >=
+// n<!=>n, t<!=>t, d<!=>d, s<!=>s
+using Comparison_types = cudf::test::Types<cudf::test::Types<int16_t, int8_t, int16_t>,
+                                           cudf::test::Types<int64_t, uint32_t, uint16_t>,
+                                           cudf::test::Types<bool, uint64_t, double>,
+                                           // cudf::test::Types<bool, uint64_t, int64_t>, //valid
+                                           cudf::test::Types<bool, timestamp_D, timestamp_s>,
+                                           cudf::test::Types<int, timestamp_ns, timestamp_us>,
+                                           cudf::test::Types<bool, duration_ns, duration_ns>,
+                                           cudf::test::Types<float, duration_us, duration_s>,
+                                           cudf::test::Types<bool, std::string, std::string>>;
+
+template <typename T>
+auto lhs_random_column()
+{
+  return BinaryOperationTest::make_random_wrapped_column<T>(col_size);
+}
+
+template <>
+auto lhs_random_column<std::string>()
+{
+  return cudf::test::strings_column_wrapper({"eee", "bb", "<null>", "", "aa", "bbb", "ééé"});
+}
+template <typename T>
+auto rhs_random_column()
+{
+  return BinaryOperationTest::make_random_wrapped_column<T>(col_size);
+}
+template <>
+auto rhs_random_column<std::string>()
+{
+  return cudf::test::strings_column_wrapper({"ééé", "bbb", "aa", "", "<null>", "bb", "eee"});
+}
+
+template <typename T>
+struct BinaryOperationCompiledTest_Comparison : public BinaryOperationCompiledTest<T> {
+};
+TYPED_TEST_CASE(BinaryOperationCompiledTest_Comparison, Comparison_types);
+
+TYPED_TEST(BinaryOperationCompiledTest_Comparison, Equal_Vector_Vector)
+{
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  using EQUAL = cudf::library::operation::Equal<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = lhs_random_column<TypeLhs>();
+  auto rhs = lhs_random_column<TypeRhs>();
+
+  auto out = cudf::binary_operation_compiled(
+    lhs, rhs, cudf::binary_operator::EQUAL, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, EQUAL());
+}
+
+TYPED_TEST(BinaryOperationCompiledTest_Comparison, NotEqual_Vector_Vector)
+{
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  using NOT_EQUAL = cudf::library::operation::NotEqual<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = lhs_random_column<TypeLhs>();
+  auto rhs = lhs_random_column<TypeRhs>();
+
+  auto out = cudf::binary_operation_compiled(
+    lhs, rhs, cudf::binary_operator::NOT_EQUAL, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, NOT_EQUAL());
+}
+
+TYPED_TEST(BinaryOperationCompiledTest_Comparison, Less_Vector_Vector)
+{
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  using LESS = cudf::library::operation::Less<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = lhs_random_column<TypeLhs>();
+  auto rhs = lhs_random_column<TypeRhs>();
+
+  auto out = cudf::binary_operation_compiled(
+    lhs, rhs, cudf::binary_operator::LESS, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS());
+}
+
+TYPED_TEST(BinaryOperationCompiledTest_Comparison, Greater_Vector_Vector)
+{
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  using GREATER = cudf::library::operation::Greater<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = lhs_random_column<TypeLhs>();
+  auto rhs = lhs_random_column<TypeRhs>();
+
+  auto out = cudf::binary_operation_compiled(
+    lhs, rhs, cudf::binary_operator::GREATER, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, GREATER());
+}
+
+TYPED_TEST(BinaryOperationCompiledTest_Comparison, LessEqual_Vector_Vector)
+{
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  using LESS_EQUAL = cudf::library::operation::LessEqual<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = lhs_random_column<TypeLhs>();
+  auto rhs = lhs_random_column<TypeRhs>();
+
+  auto out = cudf::binary_operation_compiled(
+    lhs, rhs, cudf::binary_operator::LESS_EQUAL, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LESS_EQUAL());
+}
+
+TYPED_TEST(BinaryOperationCompiledTest_Comparison, GreaterEqual_Vector_Vector)
+{
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  using GREATER_EQUAL = cudf::library::operation::GreaterEqual<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = lhs_random_column<TypeLhs>();
+  auto rhs = lhs_random_column<TypeRhs>();
+
+  auto out = cudf::binary_operation_compiled(
+    lhs, rhs, cudf::binary_operator::GREATER_EQUAL, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, GREATER_EQUAL());
+}
+
 }  // namespace binop
 }  // namespace test
 }  // namespace cudf

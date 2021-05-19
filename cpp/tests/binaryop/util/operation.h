@@ -210,6 +210,11 @@ struct Equal {
 };
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+struct NotEqual {
+  TypeOut operator()(TypeLhs x, TypeRhs y) { return (x != y); }
+};
+
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
 struct Less {
   TypeOut operator()(TypeLhs x, TypeRhs y) { return (x < y); }
 };
