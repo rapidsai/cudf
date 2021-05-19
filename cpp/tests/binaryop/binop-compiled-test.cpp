@@ -400,6 +400,7 @@ using Bit_types = cudf::test::Types<cudf::test::Types<int16_t, int8_t, int16_t>,
                                     cudf::test::Types<int64_t, int32_t, uint16_t>,
                                     cudf::test::Types<int64_t, uint64_t, int64_t>,
                                     cudf::test::Types<int16_t, uint32_t, uint8_t>,
+                                    // cudf::test::Types<bool, int8_t, uint8_t>, // valid
                                     cudf::test::Types<uint16_t, int8_t, int16_t>,
                                     cudf::test::Types<uint64_t, int32_t, uint16_t>,
                                     cudf::test::Types<uint64_t, uint64_t, int64_t>,
@@ -510,6 +511,58 @@ TYPED_TEST(BinaryOperationCompiledTest_Bit, ShiftRightUnsigned_Vector_Vector)
     lhs, rhs, cudf::binary_operator::SHIFT_RIGHT_UNSIGNED, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT_UNSIGNED());
+}
+
+// Logical Operations
+//     n      t     d
+// n n . n
+// t
+// d
+using Logical_types = cudf::test::Types<cudf::test::Types<int16_t, int8_t, int16_t>,
+                                        cudf::test::Types<int64_t, int32_t, uint16_t>,
+                                        cudf::test::Types<int64_t, uint64_t, double>,
+                                        cudf::test::Types<uint16_t, int8_t, int16_t>,
+                                        cudf::test::Types<float, int32_t, uint16_t>,
+                                        cudf::test::Types<bool, uint64_t, int64_t>,
+                                        cudf::test::Types<uint16_t, uint8_t, uint32_t>,
+                                        cudf::test::Types<duration_ns, uint64_t, int64_t>>;
+template <typename T>
+struct BinaryOperationCompiledTest_Logical : public BinaryOperationCompiledTest<T> {
+};
+TYPED_TEST_CASE(BinaryOperationCompiledTest_Logical, Logical_types);
+
+TYPED_TEST(BinaryOperationCompiledTest_Logical, LogicalAnd_Vector_Vector)
+{
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  using LOGICAL_AND = cudf::library::operation::LogicalAnd<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = BinaryOperationTest::make_random_wrapped_column<TypeLhs>(col_size);
+  auto rhs = BinaryOperationTest::make_random_wrapped_column<TypeRhs>(col_size);
+
+  auto out = cudf::binary_operation_compiled(
+    lhs, rhs, cudf::binary_operator::LOGICAL_AND, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LOGICAL_AND());
+}
+
+TYPED_TEST(BinaryOperationCompiledTest_Logical, LogicalOr_Vector_Vector)
+{
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  using LOGICAL_OR = cudf::library::operation::LogicalOr<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = BinaryOperationTest::make_random_wrapped_column<TypeLhs>(col_size);
+  auto rhs = BinaryOperationTest::make_random_wrapped_column<TypeRhs>(col_size);
+
+  auto out = cudf::binary_operation_compiled(
+    lhs, rhs, cudf::binary_operator::LOGICAL_OR, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LOGICAL_OR());
 }
 
 }  // namespace binop
