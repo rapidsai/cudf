@@ -2236,6 +2236,20 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testStringConcatWsSingleListColEmptyArray() {
+    try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+           new HostColumnVector.BasicType(true, DType.STRING)),
+           Arrays.asList("aaa", "bbbb"), Arrays.asList());
+         ColumnVector sep_col = ColumnVector.fromStrings("-", "-");
+         ColumnVector e_concat = ColumnVector.fromStrings("aaa-bbbb", null);
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar nullEmptyString = Scalar.fromString(null);
+         ColumnVector concat = ColumnVector.stringConcatenateListElementsWs(cv1, sep_col, separatorString, nullEmptyString)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
   void testListConcatByRow() {
     try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
             new HostColumnVector.BasicType(true, DType.INT32)),
