@@ -30,12 +30,12 @@ namespace {
 // Struct to launch only defined operations.
 template <typename BinaryOperator>
 struct ops_wrapper {
+  mutable_column_device_view& out;
+  column_device_view const& lhs;
+  column_device_view const& rhs;
   template <typename TypeCommon,
             std::enable_if_t<is_op_supported<TypeCommon, TypeCommon, BinaryOperator>()>* = nullptr>
-  __device__ void operator()(size_type i,
-                             column_device_view const lhs,
-                             column_device_view const rhs,
-                             mutable_column_device_view const out)
+  __device__ void operator()(size_type i)
   {
     TypeCommon x = type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs);
     TypeCommon y = type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs);
@@ -55,14 +55,14 @@ struct ops_wrapper {
 // TODO merge these 2 structs somehow.
 template <typename BinaryOperator>
 struct ops2_wrapper {
+  mutable_column_device_view& out;
+  column_device_view const& lhs;
+  column_device_view const& rhs;
   template <typename TypeLhs,
             typename TypeRhs,
             std::enable_if_t<!has_common_type_v<TypeLhs, TypeRhs> and
                              is_op_supported<TypeLhs, TypeRhs, BinaryOperator>()>* = nullptr>
-  __device__ void operator()(size_type i,
-                             column_device_view const lhs,
-                             column_device_view const rhs,
-                             mutable_column_device_view const out)
+  __device__ void operator()(size_type i)
   {
     TypeLhs x   = lhs.element<TypeLhs>(i);
     TypeRhs y   = rhs.element<TypeRhs>(i);
@@ -85,15 +85,15 @@ template <class BinaryOperator>
 struct device_type_dispatcher {
   //, OperatorType type)
   // (type == OperatorType::Direct ? operator_name : 'R' + operator_name);
-  data_type common_data_type;
   mutable_column_device_view out;
   column_device_view lhs;
   column_device_view rhs;
-  device_type_dispatcher(data_type ct,
-                         mutable_column_device_view ot,
+  data_type common_data_type;
+  device_type_dispatcher(mutable_column_device_view ot,
                          column_device_view lt,
-                         column_device_view rt)
-    : common_data_type(ct), out(ot), lhs(lt), rhs(rt)
+                         column_device_view rt,
+                         data_type ct)
+    : out(ot), lhs(lt), rhs(rt), common_data_type(ct)
   {
   }
 
@@ -101,9 +101,9 @@ struct device_type_dispatcher {
   {
     if (common_data_type == data_type{type_id::EMPTY}) {
       double_type_dispatcher(
-        lhs.type(), rhs.type(), ops2_wrapper<BinaryOperator>{}, i, lhs, rhs, out);
+        lhs.type(), rhs.type(), ops2_wrapper<BinaryOperator>{out, lhs, rhs}, i);
     } else {
-      type_dispatcher(common_data_type, ops_wrapper<BinaryOperator>{}, i, lhs, rhs, out);
+      type_dispatcher(common_data_type, ops_wrapper<BinaryOperator>{out, lhs, rhs}, i);
     }
   }
 };
@@ -118,7 +118,7 @@ void dispatch_single_double(mutable_column_device_view& outd,
   auto common_dtype = get_common_type(outd.type(), lhsd.type(), rhsd.type());
 
   // Create binop functor instance
-  auto binop_func = device_type_dispatcher<BinaryOperator>{common_dtype, outd, lhsd, rhsd};
+  auto binop_func = device_type_dispatcher<BinaryOperator>{outd, lhsd, rhsd, common_dtype};
   // Execute it on every element
   thrust::for_each(rmm::exec_policy(stream),
                    thrust::make_counting_iterator<size_type>(0),
