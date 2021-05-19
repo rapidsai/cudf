@@ -213,7 +213,19 @@ class MaskedScalarConstOp(AbstractTemplate):
                 args[0],
                 args[1],
             )
-
+        elif isinstance(args[0], types.Number) and isinstance(
+            args[1], MaskedType
+        ):
+            breakpoint()
+            return_type = self.context.resolve_function_type(
+                self.key, (args[1].value_type, args[0]), kws
+            ).return_type
+            return nb_signature(
+                MaskedType(return_type),
+                args[0],
+                args[1],
+            )
+            
 @cuda_decl_registry.register_global(operator.is_)
 class MaskedScalarIsNull(AbstractTemplate):
     '''
