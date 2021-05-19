@@ -75,13 +75,13 @@ struct compute_size_and_concatenate_fn {
   __device__ void operator()(size_type const idx) const noexcept
   {
     // If this is the second pass, and the row `idx` is known to be a null string
-    if (d_chars and not d_validities[idx]) { return; }
+    if (d_chars && !d_validities[idx]) { return; }
 
     // Indices of the strings within the list row
     auto const start_idx = list_offsets[idx];
     auto const end_idx   = list_offsets[idx + 1];
 
-    if (not d_chars and output_is_null(idx, start_idx, end_idx)) {
+    if (!d_chars && output_is_null(idx, start_idx, end_idx)) {
       d_offsets[idx]    = 0;
       d_validities[idx] = false;
       return;
@@ -95,7 +95,7 @@ struct compute_size_and_concatenate_fn {
     for (size_type str_idx = start_idx; str_idx < end_idx; ++str_idx) {
       bool null_element = strings_dv.is_null(str_idx);
 
-      if (not d_chars and (null_element and not string_narep_dv.is_valid())) {
+      if (!d_chars && (null_element && !string_narep_dv.is_valid())) {
         d_offsets[idx]    = 0;
         d_validities[idx] = false;
         return;  // early termination: the entire list of strings will result in a null string
@@ -116,7 +116,7 @@ struct compute_size_and_concatenate_fn {
         write_separator || (separate_nulls == separator_on_nulls::YES) || !null_element;
     }
 
-    if (not d_chars) {
+    if (!d_chars) {
       d_offsets[idx]    = size_bytes;
       d_validities[idx] = true;
     }
@@ -201,7 +201,7 @@ struct column_separators_fn {
   __device__ bool is_null_list(column_device_view const& lists_dv,
                                size_type const idx) const noexcept
   {
-    return lists_dv.is_null(idx) or (separators_dv.is_null(idx) and not sep_narep_dv.is_valid());
+    return lists_dv.is_null(idx) || (separators_dv.is_null(idx) && !sep_narep_dv.is_valid());
   }
 
   __device__ string_view separator(size_type const idx) const noexcept
