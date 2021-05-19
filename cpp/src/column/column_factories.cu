@@ -21,7 +21,6 @@
 #include <cudf/lists/lists_column_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/fill.hpp>
-#include "cudf/utilities/error.hpp"
 
 namespace cudf {
 
