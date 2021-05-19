@@ -76,17 +76,18 @@ class MaskedType(types.Type):
                 return x + y
         
         numba now sees this as
-        f(x: MaskedType, y: MaskedType) -> MaskedType OR literal 
+        f(x: MaskedType(dtype_1), y: MaskedType(dtype_2))
+          -> MaskedType(dtype_unified) 
         '''
         
         # If we have Masked and NA, the output should be a 
         # MaskedType with the original type as its value_type
         if isinstance(other, NAType):
-            return MaskedType(self.value_type)
+            return self
 
-        # if we have MaskedType and Literal, the output should be
-        # determined from the MaskedType.value_type (which is a 
-        # primitive type) and other
+        # if we have MaskedType and something that results in a
+        # scalar, unify between the MaskedType's value_type
+        # and that other thing
         unified = context.unify_pairs(self.value_type, other)
         if unified is None:
             return None
@@ -122,9 +123,15 @@ class NAType(types.Type):
         Masked  <-> NA works from above
         Literal <-> NA -> Masked
         '''
-        if isinstance(other, types.abstract.Literal):
-            return MaskedType(other.literal_type)
-
+        breakpoint()
+        if isinstance(other, MaskedType):
+            # bounce to MaskedType.unify
+            return None
+        elif isinstance(other, NAType):
+            # unify {NA, NA} -> NA
+            return self
+        else:
+            return MaskedType(other)
 
 @typeof_impl.register(_NAType)
 def typeof_na(val, c):

@@ -32,7 +32,7 @@ comparison_ops = [
 ]
 
 @cuda_lowering_registry.lower_constant(NAType)
-def constant_dummy(context, builder, ty, pyval):
+def constant_na(context, builder, ty, pyval):
     # This handles None, etc.
     return context.get_dummy_value()
 
