@@ -44,7 +44,7 @@ enum class separator_on_nulls {
  * by an optional separator string.
  *
  * This returns a column with one string. Any null entries are ignored unless
- * the narep parameter specifies a replacement string.
+ * the @p narep parameter specifies a replacement string.
  *
  * @code{.pseudo}
  * Example:
@@ -79,11 +79,9 @@ std::unique_ptr<column> join_strings(
  *
  * - If row separator for a given row is null, output column for that row is null, unless
  *   there is a valid @p separator_narep
- * - If all column values for a given row is null, output column for that row is null, unless
- *   there is a valid @p col_narep
- * - null column values for a given row are skipped, if the column replacement isn't valid
- * - The separator is only applied between two valid column values
- * - If valid @p separator_narep and @p col_narep are provided, the output column is always
+ * - The separator is applied between two output row values if the @p separate_nulls
+ *   is `YES` or only between valid rows if @p separate_nulls is `NO`.
+ * - If @p separator_narep and @p col_narep are both valid, the output column is always
  *   non nullable
  *
  * @code{.pseudo}
@@ -92,16 +90,23 @@ std::unique_ptr<column> join_strings(
  * c1   = [null, 'cc', 'dd', null, null, 'gg']
  * c2   = ['bb', '',   null, null, null, 'hh']
  * sep  = ['::', '%%', '^^', '!',  '*',  null]
- * out0 = concatenate([c0, c1, c2], sep)
- * out0 is ['aa::bb', 'cc%%', '^^dd', 'ee', null, null]
+ * out = concatenate({c0, c1, c2}, sep)
+ * // all rows have at least one null or sep[i]==null
+ * out is [null, null, null, null, null, null]
  *
  * sep_rep = '+'
- * out1    = concatenate([c0, c1, c2], sep, sep_rep)
- * out1 is ['aa::bb', 'cc%%', '^^dd', 'ee', null, 'ff+gg+hh']
+ * out = concatenate({c0, c1, c2}, sep, sep_rep)
+ * // all rows with at least one null output as null
+ * out is [null, null, null, null, null, 'ff+gg+hh']
  *
  * col_rep = '-'
- * out2    = concatenate([c0, c1, c2], sep, invalid_sep_rep, col_rep)
- * out2 is ['aa::-::bb', '-%%cc%%', '^^dd^^-', 'ee!-!-', '-*-*-', null]
+ * out = concatenate({c0, c1, c2}, sep, col_rep)
+ * out is ['aa::-::bb', '-%%cc%%', '^^dd^^-', 'ee!-!-', '-*-*-', null]
+ *
+ * col_rep = ''
+ * out = concatenate({c0, c1, c2}, sep, col_rep, separator_on_nulls:NO)
+ * // parameter suppresses separator for null rows
+ * out is ['aa::bb', 'cc%%', '^^dd', 'ee', '', null]
  * @endcode
  *
  * @throw cudf::logic_error if no input columns are specified - table view is empty
@@ -130,13 +135,6 @@ std::unique_ptr<column> concatenate(
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
 
 /**
- * @addtogroup strings_combine
- * @{
- * @file strings/combine.hpp
- * @brief Strings APIs for concatenate and join
- */
-
-/**
  * @brief Row-wise concatenates the given list of strings columns and
  * returns a single strings column result.
  *
@@ -147,16 +145,22 @@ std::unique_ptr<column> concatenate(
  * row to be null entry unless a narep string is specified to be used
  * in its place.
  *
- * The number of strings in the columns provided must be the same.
+ * If @p separate_nulls is set to `NO` and @p narep is valid then
+ * separators are not added to the output between null elements.
+ * Otherwise, separators are always added if @p narep is valid.
  *
  * @code{.pseudo}
  * Example:
- * s1 = ['aa', null, '', 'aa']
- * s2 = ['', 'bb', 'bb', null]
- * r1 = concatenate([s1,s2])
- * r1 is ['aa', null, 'bb', null]
- * r2 = concatenate([s1,s2],':','_')
- * r2 is ['aa:', '_:bb', ':bb', 'aa:_']
+ * s1 = ['aa', null, '', 'dd']
+ * s2 = ['', 'bb', 'cc', null]
+ * out = concatenate({s1, s2})
+ * out is ['aa', null, 'cc', null]
+ *
+ * out = concatenate({s1, s2}, ':', '_')
+ * out is ['aa:', '_:bb', ':cc', 'dd:_']
+ *
+ * out = concatenate({s1, s2}, ':', '', separator_on_nulls::NO)
+ * out is ['aa:', 'bb', ':cc', 'dd']
  * @endcode
  *
  * @throw cudf::logic_error if input columns are not all strings columns.
@@ -184,24 +188,30 @@ std::unique_ptr<column> concatenate(
  * within each row and returns a single strings column result.
  *
  * Each new string is created by concatenating the strings from the same row (same list element)
- * delimited by the row separator provided in the `separators` strings column.
+ * delimited by the row separator provided in the @p separators strings column.
  *
  * A null list row will always result in a null string in the output row. Any non-null list row
  * having a null element will result in the corresponding output row to be null unless a valid
- * `string_narep` scalar is provided to be used in its place. Any null row in the `separators`
- * column will also result in a null output row unless a valid `separator_narep` scalar is provided
+ * @p string_narep scalar is provided to be used in its place. Any null row in the @p separators
+ * column will also result in a null output row unless a valid @p separator_narep scalar is provided
  * to be used in place of the null separators.
+ *
+ * If @p separate_nulls is set to `NO` and @p narep is valid then separators are not added to the
+ * output between null elements. Otherwise, separators are always added if @p narep is valid.
  *
  * @code{.pseudo}
  * Example:
- * s = [ {'aa', 'bb', 'cc'}, null, {'', 'dd'}, {'ee', null}, {'ff', 'gg'} ]
+ * s = [ ['aa', 'bb', 'cc'], null, ['', 'dd'], ['ee', null], ['ff', 'gg'] ]
  * sep  = ['::', '%%',  '!',  '*',  null]
  *
- * r1 = strings::join_list_elements(s, sep)
- * r1 is ['aa::bb::cc', null, '!dd', null, null]
+ * out = join_list_elements(s, sep)
+ * out is ['aa::bb::cc', null, '!dd', null, null]
  *
- * r2 = strings::join_list_elements(s, sep, ':', '_')
- * r2 is ['aa::bb::cc', null,  '!dd', 'ee*_', 'ff:gg']
+ * out = join_list_elements(s, sep, ':', '_')
+ * out is ['aa::bb::cc', null,  '!dd', 'ee*_', 'ff:gg']
+ *
+ * out = join_list_elements(s, sep, ':', '', separator_on_nulls::NO)
+ * out is ['aa::bb::cc', null,  '!dd', 'ee', 'ff:gg']
  * @endcode
  *
  * @throw cudf::logic_error if input column is not lists of strings column.
@@ -233,21 +243,27 @@ std::unique_ptr<column> join_list_elements(
  * within each row and returns a single strings column result.
  *
  * Each new string is created by concatenating the strings from the same row (same list element)
- * delimited by the separator provided.
+ * delimited by the @p separator provided.
  *
  * A null list row will always result in a null string in the output row. Any non-null list row
- * having a null elenent will result in the corresponding output row to be null unless a narep
- * string is specified to be used in its place.
+ * having a null elenent will result in the corresponding output row to be null unless a
+ * @p narep string is specified to be used in its place.
+ *
+ * If @p separate_nulls is set to `NO` and @p narep is valid then separators are not added to the
+ * output between null elements. Otherwise, separators are always added if @p narep is valid.
  *
  * @code{.pseudo}
  * Example:
- * s = [ {'aa', 'bb', 'cc'}, null, {'', 'dd'}, {'ee', null}, {'ff'} ]
+ * s = [ ['aa', 'bb', 'cc'], null, ['', 'dd'], ['ee', null], ['ff'] ]
  *
- * r1 = strings::join_list_elements(s)
- * r1 is ['aabbcc', null, 'dd', null, 'ff']
+ * out = join_list_elements(s)
+ * out is ['aabbcc', null, 'dd', null, 'ff']
  *
- * r2 = strings::join_list_elements(s, ':', '_')
- * r2 is ['aa:bb:cc', null,  ':dd', 'ee:_', 'ff']
+ * out = join_list_elements(s, ':', '_')
+ * out is ['aa:bb:cc', null,  ':dd', 'ee:_', 'ff']
+ *
+ * out = join_list_elements(s, ':', '', separator_on_nulls::NO)
+ * out is ['aa:bb:cc', null,  ':dd', 'ee', 'ff']
  * @endcode
  *
  * @throw cudf::logic_error if input column is not lists of strings column.
