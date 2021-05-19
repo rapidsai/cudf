@@ -221,3 +221,20 @@ def test_apply_return_null():
 
     gdf = cudf.DataFrame({'a': [1, None, 3]})
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False) 
+
+def test_apply_return_either_null_or_literal():
+    def func_pdf(x):
+        if x > 5:
+            return 2
+        else:
+            return pd.NA
+
+    @nulludf
+    def func_gdf(x):
+        if x > 5:
+            return 2
+        else:
+            return cudf.NA
+
+    gdf = cudf.DataFrame({'a': [1, 3, 6]})
+    run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False) 
