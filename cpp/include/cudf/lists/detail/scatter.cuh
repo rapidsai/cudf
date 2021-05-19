@@ -211,43 +211,6 @@ std::pair<rmm::device_buffer, size_type> construct_child_nullmask(
                                 mr);
 }
 
-#ifndef NDEBUG
-void print(std::string const& msg, column_view const& col, rmm::cuda_stream_view stream)
-{
-  if (col.type().id() != type_id::INT32) {
-    std::cout << "[Cannot print non-INT32 column.]" << std::endl;
-    return;
-  }
-
-  std::cout << msg << " = [";
-  thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    col.size(),
-    [c = col.template data<int32_t>()] __device__(auto const& i) { printf("%d,", c[i]); });
-  std::cout << "]" << std::endl;
-}
-
-void print(std::string const& msg,
-           rmm::device_uvector<unbound_list_view> const& scatter,
-           rmm::cuda_stream_view stream)
-{
-  std::cout << msg << " == [";
-
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     scatter.size(),
-                     [s = scatter.begin()] __device__(auto const& i) {
-                       auto si = s[i];
-                       printf("%s[%d](%d), ",
-                              (si.label() == unbound_list_view::label_type::SOURCE ? "S" : "T"),
-                              si.row_index(),
-                              si.size());
-                     });
-  std::cout << "]" << std::endl;
-}
-#endif  // NDEBUG
-
 /**
  * @brief (type_dispatch endpoint) Functor that constructs the child column result
  *        of `scatter()`ing a list column.
@@ -350,15 +313,6 @@ struct list_child_constructor {
             list_vector, list_offsets, source_lists, target_lists, num_child_rows, stream, mr)
         : std::make_pair(rmm::device_buffer{}, 0);
 
-#ifndef NDEBUG
-    print("list_offsets ", list_offsets, stream);
-    print("source_lists.child() ", source_lists_column_view.child(), stream);
-    print("source_lists.offsets() ", source_lists_column_view.offsets(), stream);
-    print("target_lists.child() ", target_lists_column_view.child(), stream);
-    print("target_lists.offsets() ", target_lists_column_view.offsets(), stream);
-    print("scatter_rows ", list_vector, stream);
-#endif  // NDEBUG
-
     auto child_column = cudf::make_fixed_width_column(source_lists_column_view.child().type(),
                                                       num_child_rows,
                                                       child_null_mask.first,
@@ -366,47 +320,33 @@ struct list_child_constructor {
                                                       stream,
                                                       mr);
 
-    auto copy_child_values_for_list_index = [d_scattered_lists =
-                                               list_vector.begin(),  // unbound_list_view*
-                                             d_child_column =
-                                               child_column->mutable_view().data<T>(),
-                                             d_offsets = list_offsets.template data<int32_t>(),
-                                             source_lists,
-                                             target_lists] __device__(auto const& row_index) {
-      auto const unbound_list_row = d_scattered_lists[row_index];
-      auto const actual_list_row  = unbound_list_row.bind_to_column(source_lists, target_lists);
-      auto const& bound_column =
-        (unbound_list_row.label() == unbound_list_view::label_type::SOURCE ? source_lists
-                                                                           : target_lists);
-      auto const list_begin_offset =
-        bound_column.offsets().template element<size_type>(unbound_list_row.row_index());
-      auto const list_end_offset =
-        bound_column.offsets().template element<size_type>(unbound_list_row.row_index() + 1);
+    auto copy_child_values_for_list_index =
+      [d_scattered_lists = list_vector.begin(),  // unbound_list_view*
+       d_child_column    = child_column->mutable_view().data<T>(),
+       d_offsets         = list_offsets.template data<int32_t>(),
+       source_lists,
+       target_lists] __device__(auto const& row_index) {
+        auto const unbound_list_row = d_scattered_lists[row_index];
+        auto const actual_list_row  = unbound_list_row.bind_to_column(source_lists, target_lists);
+        auto const& bound_column =
+          (unbound_list_row.label() == unbound_list_view::label_type::SOURCE ? source_lists
+                                                                             : target_lists);
+        auto const list_begin_offset =
+          bound_column.offsets().template element<size_type>(unbound_list_row.row_index());
+        auto const list_end_offset =
+          bound_column.offsets().template element<size_type>(unbound_list_row.row_index() + 1);
 
-#ifndef NDEBUG
-      printf(
-        "%d: Unbound == %s[%d](%d), Bound size == %d, calc_begin==%d, calc_end=%d, calc_size=%d\n",
-        row_index,
-        (unbound_list_row.label() == unbound_list_view::label_type::SOURCE ? "S" : "T"),
-        unbound_list_row.row_index(),
-        unbound_list_row.size(),
-        actual_list_row.size(),
-        list_begin_offset,
-        list_end_offset,
-        list_end_offset - list_begin_offset);
-#endif  // NDEBUG
-
-      // Copy all elements in this list row, to "appropriate" offset in child-column.
-      auto const destination_start_offset = d_offsets[row_index];
-      thrust::for_each_n(thrust::seq,
-                         thrust::make_counting_iterator<size_type>(0),
-                         actual_list_row.size(),
-                         [actual_list_row, d_child_column, destination_start_offset] __device__(
-                           auto const& list_element_index) {
-                           d_child_column[destination_start_offset + list_element_index] =
-                             actual_list_row.template element<T>(list_element_index);
-                         });
-    };
+        // Copy all elements in this list row, to "appropriate" offset in child-column.
+        auto const destination_start_offset = d_offsets[row_index];
+        thrust::for_each_n(thrust::seq,
+                           thrust::make_counting_iterator<size_type>(0),
+                           actual_list_row.size(),
+                           [actual_list_row, d_child_column, destination_start_offset] __device__(
+                             auto const& list_element_index) {
+                             d_child_column[destination_start_offset + list_element_index] =
+                               actual_list_row.template element<T>(list_element_index);
+                           });
+      };
 
     // For each list-row, copy underlying elements to the child column.
     thrust::for_each_n(rmm::exec_policy(stream),
@@ -763,64 +703,12 @@ std::unique_ptr<column> scatter_impl(
 
   auto const child_column_type = lists_column_view(target).child().type();
 
-#ifndef NDEBUG
-  thrust::for_each(rmm::exec_policy(stream),
-                   source_vector.begin(),
-                   source_vector.end(),
-                   [] __device__(unbound_list_view ulv) {
-                     auto type      = ulv.label();
-                     auto size      = ulv.size();
-                     auto row_index = ulv.row_index();
-                     printf("%s[%d](%d) | ",
-                            type == unbound_list_view::label_type::SOURCE ? "S" : "T",
-                            row_index,
-                            size);
-                   });
-  printf("\n Scatter map: ");
-
-  thrust::for_each(
-    rmm::exec_policy(stream), scatter_map_begin, scatter_map_end, [] __device__(auto i) {
-      printf("%d ", i);
-    });
-  printf("\n");
-
-  thrust::for_each(rmm::exec_policy(stream),
-                   target_vector.begin(),
-                   target_vector.end(),
-                   [] __device__(unbound_list_view ulv) {
-                     auto type      = ulv.label();
-                     auto size      = ulv.size();
-                     auto row_index = ulv.row_index();
-                     printf("%s[%d](%d) | ",
-                            type == unbound_list_view::label_type::SOURCE ? "S" : "T",
-                            row_index,
-                            size);
-                   });
-
-#endif  // NDEBUG
-
   // Scatter.
   thrust::scatter(rmm::exec_policy(stream),
                   source_vector.begin(),
                   source_vector.end(),
                   scatter_map_begin,
                   target_vector.begin());
-
-#ifndef NDEBUG
-  thrust::for_each(rmm::exec_policy(stream),
-                   target_vector.begin(),
-                   target_vector.end(),
-                   [] __device__(unbound_list_view ulv) {
-                     auto type      = ulv.label();
-                     auto size      = ulv.size();
-                     auto row_index = ulv.row_index();
-                     printf("%s[%d](%d) | ",
-                            type == unbound_list_view::label_type::SOURCE ? "S" : "T",
-                            row_index,
-                            size);
-                   });
-  printf("\n");
-#endif  // NDEBUG
 
   auto const source_lists_column_view =
     lists_column_view(source);  // Checks that this is a list column.
