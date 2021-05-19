@@ -7,6 +7,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf import NA
 from cudf.tests.utils import assert_eq
 
 
@@ -335,17 +336,17 @@ def test_concatenate_list_with_nonlist():
 
 
 @pytest.mark.parametrize(
-    "data",
+    "indata,expect",
     [
-        [1],
-        [1, 2, 3],
-        [[1, 2, 3], [4, 5, 6]],
-        [None],
-        [1, None, 3],
-        [[1, None, 3], [None, 5, 6]],
+        ([1], [1]),
+        ([1, 2, 3], [1, 2, 3]),
+        ([[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]),
+        ([None], [NA]),
+        ([1, None, 3], [1, NA, 3]),
+        ([[1, None, 3], [None, 5, 6]], [[1, NA, 3], [NA, 5, 6]]),
     ],
 )
-def test_list_getitem(data):
-    list_sr = cudf.Series([data])
+def test_list_getitem(indata, expect):
+    list_sr = cudf.Series([indata])
     # __getitem__ shall fill None with cudf.NA
-    assert pa.scalar(data) == list_sr.to_arrow()[0]
+    assert list_sr[0] == expect
