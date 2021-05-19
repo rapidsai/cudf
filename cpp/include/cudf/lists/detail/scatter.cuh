@@ -757,6 +757,10 @@ std::unique_ptr<column> scatter_impl(
  *
  * @tparam MapIterator must produce index values within the target column.
  *
+ * @param source Source column view
+ * @param scatter_map_begin Start iterator of scatter map
+ * @param scatter_map_end End iterator of scatter map
+ * @param target Target column view
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New lists column.
@@ -799,7 +803,8 @@ std::unique_ptr<column> scatter(
  * @brief Scatters list scalar (a single row) into a copy of the target column
  * according to a scatter map.
  *
- * TBA
+ * Returns a copy of the target column where every row specified in the `scatter_map`
+ * is replaced by the row value.
  *
  * If the same index appears more than once in the scatter map, the result is
  * undefined.
@@ -808,6 +813,10 @@ std::unique_ptr<column> scatter(
  *
  * @tparam MapIterator must produce index values within the target column.
  *
+ * @param slr Source scalar, specifying row data
+ * @param scatter_map_begin Start iterator of scatter map
+ * @param scatter_map_end End iterator of scatter map
+ * @param target Target column view
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New lists column.
