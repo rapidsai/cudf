@@ -97,18 +97,18 @@ TEST_F(StringsCombineTest, Concatenate)
 
 TEST_F(StringsCombineTest, ConcatenateSkipNulls)
 {
-  std::vector<const char*> h_strings1;
   cudf::test::strings_column_wrapper strings1({"eee", "", "", "", "aa", "bbb", "ééé"},
                                               {1, 0, 0, 1, 1, 1, 1});
-  std::vector<const char*> h_strings2;
   cudf::test::strings_column_wrapper strings2({"xyz", "", "d", "éa", "", "", "f"},
                                               {1, 0, 1, 1, 1, 0, 1});
+  cudf::test::strings_column_wrapper strings3({"q", "", "s", "t", "u", "", "w"},
+                                              {1, 1, 1, 1, 1, 0, 1});
 
-  cudf::table_view table({strings1, strings2});
+  cudf::table_view table({strings1, strings2, strings3});
 
   {
     cudf::test::strings_column_wrapper expected(
-      {"eee+xyz", "+", "+d", "+éa", "aa+", "bbb+", "ééé+f"});
+      {"eee+xyz+q", "++", "+d+s", "+éa+t", "aa++u", "bbb++", "ééé+f+w"});
     auto results = cudf::strings::concatenate(table,
                                               cudf::string_scalar("+"),
                                               cudf::string_scalar(""),
@@ -116,7 +116,8 @@ TEST_F(StringsCombineTest, ConcatenateSkipNulls)
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
   }
   {
-    cudf::test::strings_column_wrapper expected({"eee+xyz", "", "d", "+éa", "aa+", "bbb", "ééé+f"});
+    cudf::test::strings_column_wrapper expected(
+      {"eee+xyz+q", "", "d+s", "+éa+t", "aa++u", "bbb", "ééé+f+w"});
     auto results = cudf::strings::concatenate(table,
                                               cudf::string_scalar("+"),
                                               cudf::string_scalar(""),
@@ -124,8 +125,8 @@ TEST_F(StringsCombineTest, ConcatenateSkipNulls)
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
   }
   {
-    cudf::test::strings_column_wrapper expected({"eee+xyz", "", "", "+éa", "aa+", "", "ééé+f"},
-                                                {1, 0, 0, 1, 1, 0, 1});
+    cudf::test::strings_column_wrapper expected(
+      {"eee+xyz+q", "", "", "+éa+t", "aa++u", "", "ééé+f+w"}, {1, 0, 0, 1, 1, 0, 1});
     auto results = cudf::strings::concatenate(table,
                                               cudf::string_scalar("+"),
                                               cudf::string_scalar("", false),
@@ -140,7 +141,8 @@ TEST_F(StringsCombineTest, ConcatenateSkipNulls)
                                               cudf::string_scalar(""),
                                               cudf::strings::separator_on_nulls::NO);
 
-    cudf::test::strings_column_wrapper expected({"eee+xyz", "", "d", "@éa", "aa*", "bbb", "ééé#f"});
+    cudf::test::strings_column_wrapper expected(
+      {"eee+xyz+q", "", "d.s", "@éa@t", "aa**u", "bbb", "ééé#f#w"});
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
   }
 }

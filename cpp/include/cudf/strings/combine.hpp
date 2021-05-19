@@ -99,12 +99,12 @@ std::unique_ptr<column> join_strings(
  * // all rows with at least one null output as null
  * out is [null, null, null, null, null, 'ff+gg+hh']
  *
- * col_rep = '-'
- * out = concatenate({c0, c1, c2}, sep, col_rep)
+ * col_narep = '-'
+ * out = concatenate({c0, c1, c2}, sep, col_narep)
  * out is ['aa::-::bb', '-%%cc%%', '^^dd^^-', 'ee!-!-', '-*-*-', null]
  *
- * col_rep = ''
- * out = concatenate({c0, c1, c2}, sep, col_rep, separator_on_nulls:NO)
+ * col_narep = ''
+ * out = concatenate({c0, c1, c2}, sep, col_narep, separator_on_nulls:NO)
  * // parameter suppresses separator for null rows
  * out is ['aa::bb', 'cc%%', '^^dd', 'ee', '', null]
  * @endcode
@@ -122,7 +122,8 @@ std::unique_ptr<column> join_strings(
  * @param col_narep String that should be used in place of any null strings
  *        found in any column. Default of invalid-scalar means no null column value replacements.
  *        Default is an invalid string.
- * @param separate_nulls If YES, then the separator is included for null rows if `narep` is valid.
+ * @param separate_nulls If YES, then the separator is included for null rows
+ *        if `col_narep` is valid.
  * @param mr Resource for allocating device memory.
  * @return New column with concatenated results.
  */

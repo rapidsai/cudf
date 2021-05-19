@@ -68,27 +68,27 @@ struct concat_strings_base {
       return;
     }
 
-    char* d_buffer    = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    offset_type bytes = 0;
+    char* d_buffer       = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    offset_type bytes    = 0;
+    bool write_separator = false;
 
     for (auto itr = d_table.begin(); itr < d_table.end(); ++itr) {
       auto const d_column     = *itr;
       bool const null_element = d_column.is_null(idx);
+
+      if (write_separator && (separate_nulls == separator_on_nulls::YES || !null_element)) {
+        if (d_buffer) d_buffer = detail::copy_string(d_buffer, d_separator);
+        bytes += d_separator.size_bytes();
+        write_separator = false;
+      }
 
       // write out column's row data (or narep if the row is null)
       auto const d_str = null_element ? d_narep.value() : d_column.element<string_view>(idx);
       if (d_buffer) d_buffer = detail::copy_string(d_buffer, d_str);
       bytes += d_str.size_bytes();
 
-      // separator goes only in between elements
-      if ((itr + 1) < d_table.end()) {
-        // check if we should suppress the separator between null elements
-        if (separate_nulls == separator_on_nulls::YES ||
-            !(null_element || (itr + 1)->is_null(idx))) {
-          if (d_buffer) d_buffer = detail::copy_string(d_buffer, d_separator);
-          bytes += d_separator.size_bytes();
-        }
-      }
+      write_separator =
+        write_separator || (separate_nulls == separator_on_nulls::YES) || !null_element;
     }
 
     if (!d_chars) d_offsets[idx] = bytes;

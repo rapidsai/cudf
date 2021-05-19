@@ -127,12 +127,19 @@ TEST_F(StringsListsConcatenateTest, AllNullsStringsInput)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
 }
 
+auto null_at(std::initializer_list<cudf::size_type> indices)
+{
+  return cudf::detail::make_counting_transform_iterator(
+    0, [indices](auto i) { return std::find(indices.begin(), indices.end(), i) == indices.end(); });
+}
+
 TEST_F(StringsListsConcatenateTest, ScalarSeparator)
 {
   auto const string_lists = STR_LISTS{{STR_LISTS{{"a", "bb" /*NULL*/, "ccc"}, null_at(1)},
                                        STR_LISTS{}, /*NULL*/
                                        STR_LISTS{{"ddd" /*NULL*/, "efgh", "ijk"}, null_at(0)},
-                                       STR_LISTS{"zzz", "xxxxx"}},
+                                       STR_LISTS{"zzz", "xxxxx"},
+                                       STR_LISTS{{"v", "", "", "w"}, null_at({1, 2})}},
                                       null_at(1)}
                               .release();
   auto const string_lv = cudf::lists_column_view(string_lists->view());
@@ -140,7 +147,7 @@ TEST_F(StringsListsConcatenateTest, ScalarSeparator)
   // No null replacement
   {
     auto const results = cudf::strings::join_list_elements(string_lv, cudf::string_scalar("+++"));
-    std::vector<const char*> h_expected{nullptr, nullptr, nullptr, "zzz+++xxxxx"};
+    std::vector<const char*> h_expected{nullptr, nullptr, nullptr, "zzz+++xxxxx", nullptr};
     auto const expected =
       STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
@@ -151,7 +158,7 @@ TEST_F(StringsListsConcatenateTest, ScalarSeparator)
     auto const results = cudf::strings::join_list_elements(
       string_lv, cudf::string_scalar("+++"), cudf::string_scalar("___"));
     std::vector<const char*> h_expected{
-      "a+++___+++ccc", nullptr, "___+++efgh+++ijk", "zzz+++xxxxx"};
+      "a+++___+++ccc", nullptr, "___+++efgh+++ijk", "zzz+++xxxxx", "v+++___+++___+++w"};
     auto const expected =
       STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
@@ -163,7 +170,7 @@ TEST_F(StringsListsConcatenateTest, ScalarSeparator)
                                                            cudf::string_scalar("+++"),
                                                            cudf::string_scalar(""),
                                                            cudf::strings::separator_on_nulls::NO);
-    std::vector<const char*> h_expected{"accc", nullptr, "efgh+++ijk", "zzz+++xxxxx"};
+    std::vector<const char*> h_expected{"a+++ccc", nullptr, "efgh+++ijk", "zzz+++xxxxx", "v+++w"};
     auto const expected =
       STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
@@ -376,7 +383,7 @@ TEST_F(StringsListsConcatenateTest, ColumnSeparators)
                                                            cudf::string_scalar(""),
                                                            cudf::strings::separator_on_nulls::NO);
     std::vector<const char*> h_expected{
-      "accc", nullptr, "0a0b0c+++xyzééé", "efgh+++ijk", "ááá%%%ííí", "zzz^^^xxxxx"};
+      "a+++ccc", nullptr, "0a0b0c+++xyzééé", "efgh+++ijk", "ááá%%%ííí", "zzz^^^xxxxx"};
     auto const expected =
       STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
