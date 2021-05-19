@@ -93,6 +93,12 @@ class MaskedType(types.Type):
             return None
 
         return MaskedType(unified)
+    
+    def __eq__(self, other):
+        if not isinstance(other, MaskedType):
+            return False
+
+        return self.value_type == other.value_type
 
 # Tell numba how `MaskedType` is constructed on the backend in terms
 # of primitive things that exist at the LLVM level

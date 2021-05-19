@@ -213,3 +213,13 @@ def cast_na_to_masked(context, builder, fromty, toty, val):
     result.valid = context.get_constant(types.boolean, 0)
 
     return result._getvalue()
+
+@cuda_impl_registry.lower_cast(MaskedType, MaskedType)
+def cast_masked_to_masked(context, builder, fromty, toty, val):
+    operand = cgutils.create_struct_proxy(fromty)(context, builder, value=val)
+    casted = context.cast(builder, operand.value, fromty.value_type,
+                          toty.value_type)
+    ext = cgutils.create_struct_proxy(toty)(context, builder)
+    ext.value = casted
+    ext.valid = operand.valid
+    return ext._getvalue()
