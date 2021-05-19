@@ -206,8 +206,15 @@ std::unique_ptr<column> concatenate(
  * column will also result in a null output row unless a valid @p separator_narep scalar is provided
  * to be used in place of the null separators.
  *
- * If @p separate_nulls is set to `NO` and @p narep is valid then separators are not added to the
- * output between null elements. Otherwise, separators are always added if @p narep is valid.
+ * If @p separate_nulls is set to `NO` and @p string_narep is valid then separators are not added to
+ * the output between null elements. Otherwise, separators are always added if @p string_narep is
+ * valid.
+ *
+ * If @p empty_list_policy is set to `EMPTY_STRING`, any row that is an empty list will result in
+ * an empty output string. Otherwise, the output will be a null.
+ *
+ * In the special case when the input list row contains all null elements, the output will be the
+ * same as in case of empty input list regardless of @p string_narep and @p separate_nulls values.
  *
  * @code{.pseudo}
  * Example:
@@ -264,6 +271,12 @@ std::unique_ptr<column> join_list_elements(
  *
  * If @p separate_nulls is set to `NO` and @p narep is valid then separators are not added to the
  * output between null elements. Otherwise, separators are always added if @p narep is valid.
+ *
+ * If @p empty_list_policy is set to `EMPTY_STRING`, any row that is an empty list will result in
+ * an empty output string. Otherwise, the output will be a null.
+ *
+ * In the special case when the input list row contains all null elements, the output will be the
+ * same as in case of empty input list regardless of @p narep and @p separate_nulls values.
  *
  * @code{.pseudo}
  * Example:
