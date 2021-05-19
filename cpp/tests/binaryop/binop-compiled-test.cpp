@@ -77,6 +77,7 @@ using Add_types = cudf::test::Types<cudf::test::Types<bool, bool, float>,
                                     cudf::test::Types<timestamp_s, timestamp_s, duration_s>,
                                     cudf::test::Types<timestamp_ns, duration_ms, timestamp_us>,
                                     cudf::test::Types<duration_us, duration_us, duration_D>,
+                                    // cudf::test::Types<duration_s, int16_t, int64_t>, //valid
                                     // Extras
                                     cudf::test::Types<duration_D, duration_D, duration_D>,
                                     cudf::test::Types<timestamp_D, timestamp_D, duration_D>,
@@ -180,9 +181,8 @@ using Div_types = cudf::test::Types<cudf::test::Types<int16_t, u_int64_t, u_int6
                                     cudf::test::Types<double, int8_t, int64_t>,
                                     cudf::test::Types<duration_ms, duration_s, u_int32_t>,
                                     cudf::test::Types<duration_ns, duration_D, int16_t>,
-                                    // These should work, but not working
-                                    // cudf::test::Types<double, duration_D, duration_ns>, TODO
-                                    // cudf::test::Types<float, duration_ms, duration_ns>, TODO
+                                    cudf::test::Types<double, duration_D, duration_ns>,
+                                    cudf::test::Types<float, duration_ms, duration_ns>,
                                     cudf::test::Types<u_int64_t, duration_us, duration_ns>>;
 template <typename T>
 struct BinaryOperationCompiledTest_Div : public BinaryOperationCompiledTest<T> {
@@ -214,7 +214,6 @@ TYPED_TEST(BinaryOperationCompiledTest_Div, Vector_Vector)
 using TrueDiv_types = cudf::test::Types<cudf::test::Types<int16_t, u_int64_t, u_int64_t>,
                                         cudf::test::Types<double, int8_t, int64_t>,
                                         cudf::test::Types<int8_t, bool, u_int32_t>,
-                                        // cudf::test::Types<duration_s, int16_t, int32_t>, TODO
                                         cudf::test::Types<u_int64_t, float, int16_t>>;
 template <typename T>
 struct BinaryOperationCompiledTest_TrueDiv : public BinaryOperationCompiledTest<T> {
@@ -321,7 +320,16 @@ TYPED_TEST(BinaryOperationCompiledTest_Pow, Pow_Vector_Vector)
 
   using POW = cudf::library::operation::Pow<TypeOut, TypeLhs, TypeRhs>;
 
-  auto lhs = BinaryOperationTest::make_random_wrapped_column<TypeLhs>(100);
+  auto lhs = []() {
+    // resulting value can not be represented by the target type => behavior is undefined
+    // -2147483648 in host, 2147483647 in device
+    if constexpr (std::is_same_v<TypeOut, int>) {
+      auto elements =
+        cudf::detail::make_counting_transform_iterator(1, [](auto i) { return i % 5; });
+      return fixed_width_column_wrapper<TypeLhs>(elements, elements + 100);
+    }
+    return BinaryOperationTest::make_random_wrapped_column<TypeLhs>(100);
+  }();
   auto rhs = BinaryOperationTest::make_random_wrapped_column<TypeRhs>(100);
 
   auto out = cudf::binary_operation_compiled(
