@@ -342,11 +342,11 @@ TYPED_TEST(DLPackNumericTests, FromDlpackCpu)
 
   DLManagedTensor tensor{};
   tensor.dl_tensor.device.device_type = kDLCPU;
-  tensor.dl_tensor.dtype           = get_dtype<T>();
-  tensor.dl_tensor.ndim            = 2;
-  tensor.dl_tensor.byte_offset     = offset;
-  tensor.dl_tensor.shape           = shape;
-  tensor.dl_tensor.strides         = strides;
+  tensor.dl_tensor.dtype              = get_dtype<T>();
+  tensor.dl_tensor.ndim               = 2;
+  tensor.dl_tensor.byte_offset        = offset;
+  tensor.dl_tensor.shape              = shape;
+  tensor.dl_tensor.strides            = strides;
 
   thrust::host_vector<T> host_vector(data.begin(), data.end());
   tensor.dl_tensor.data = host_vector.data();
