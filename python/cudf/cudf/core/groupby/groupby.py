@@ -10,8 +10,8 @@ import cudf
 from cudf._lib import groupby as libgroupby
 from cudf._lib.table import Table
 from cudf.core.abc import Serializable
-from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 from cudf.utils.dtypes import is_list_like
+from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
 # Note that all valid aggregation methods (e.g. GroupBy.min) are bound to the
@@ -739,18 +739,20 @@ class GroupBy(Serializable):
         if not axis == 0:
             raise NotImplementedError("Only axis=0 is supported.")
 
-        data_names = [
+        value_column_names = [
             x for x in self.obj._column_names if x not in self.grouping.names
         ]
-        num_columns_to_shift = len(data_names)
+        num_columns_to_shift = len(value_column_names)
         if is_list_like(fill_value):
             if not len(fill_value) == num_columns_to_shift:
-                raise ValueError("Mismatched number of columns and values to fill.")
+                raise ValueError(
+                    "Mismatched number of columns and values to fill."
+                )
         else:
             fill_value = [fill_value] * num_columns_to_shift
 
-        data = self.obj._data.select_by_label(data_names)
-        result = self._groupby.shift(Table(data), periods, fill_value)
+        value_columns = self.obj._data.select_by_label(value_column_names)
+        result = self._groupby.shift(Table(value_columns), periods, fill_value)
         return self.obj.__class__._from_table(result)
 
 

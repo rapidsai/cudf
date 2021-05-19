@@ -47,7 +47,6 @@ _DECIMAL_AGGS = {"COUNT", "SUM", "ARGMIN", "ARGMAX", "MIN", "MAX", "NUNIQUE",
 
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
-ctypedef vector[reference_wrapper[constscalar]] slrcref_vec_t
 
 cdef class GroupBy:
     cdef unique_ptr[libcudf_groupby.groupby] c_obj
@@ -215,7 +214,7 @@ cdef class GroupBy:
         cdef size_type num_col = view.num_columns()
         cdef vector[size_type] offsets = vector[size_type](num_col, periods)
 
-        cdef slrcref_vec_t c_fill_values
+        cdef vector[reference_wrapper[constscalar]] c_fill_values
         cdef DeviceScalar d_slr
         d_slrs = []
         c_fill_values.reserve(num_col)
