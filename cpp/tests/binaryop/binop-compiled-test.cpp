@@ -380,6 +380,130 @@ TYPED_TEST(BinaryOperationCompiledTest_Pow, ATan2_Vector_Vector)
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ATAN2(), NearEqualComparator<TypeOut>{2});
 }
 
+// Bit Operations
+//     n      t     d
+// n n . n
+// t
+// d
+
+// i.i, i.u, u.i, u.u -> i
+// i.i, i.u, u.i, u.u -> u
+using Bit_types = cudf::test::Types<cudf::test::Types<int16_t, int8_t, int16_t>,
+                                    cudf::test::Types<int64_t, int32_t, uint16_t>,
+                                    cudf::test::Types<int64_t, uint64_t, int64_t>,
+                                    cudf::test::Types<int16_t, uint32_t, uint8_t>,
+                                    cudf::test::Types<uint16_t, int8_t, int16_t>,
+                                    cudf::test::Types<uint64_t, int32_t, uint16_t>,
+                                    cudf::test::Types<uint64_t, uint64_t, int64_t>,
+                                    cudf::test::Types<uint16_t, uint8_t, uint32_t>>;
+template <typename T>
+struct BinaryOperationCompiledTest_Bit : public BinaryOperationCompiledTest<T> {
+};
+TYPED_TEST_CASE(BinaryOperationCompiledTest_Bit, Bit_types);
+
+TYPED_TEST(BinaryOperationCompiledTest_Bit, BitwiseAnd_Vector_Vector)
+{
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  using BITWISE_AND = cudf::library::operation::BitwiseAnd<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = BinaryOperationTest::make_random_wrapped_column<TypeLhs>(col_size);
+  auto rhs = BinaryOperationTest::make_random_wrapped_column<TypeRhs>(col_size);
+
+  auto out = cudf::binary_operation_compiled(
+    lhs, rhs, cudf::binary_operator::BITWISE_AND, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, BITWISE_AND());
+}
+
+TYPED_TEST(BinaryOperationCompiledTest_Bit, BitwiseOr_Vector_Vector)
+{
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  using BITWISE_OR = cudf::library::operation::BitwiseOr<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = BinaryOperationTest::make_random_wrapped_column<TypeLhs>(col_size);
+  auto rhs = BinaryOperationTest::make_random_wrapped_column<TypeRhs>(col_size);
+
+  auto out = cudf::binary_operation_compiled(
+    lhs, rhs, cudf::binary_operator::BITWISE_OR, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, BITWISE_OR());
+}
+
+TYPED_TEST(BinaryOperationCompiledTest_Bit, BitwiseXor_Vector_Vector)
+{
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  using BITWISE_XOR = cudf::library::operation::BitwiseXor<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = BinaryOperationTest::make_random_wrapped_column<TypeLhs>(col_size);
+  auto rhs = BinaryOperationTest::make_random_wrapped_column<TypeRhs>(col_size);
+
+  auto out = cudf::binary_operation_compiled(
+    lhs, rhs, cudf::binary_operator::BITWISE_XOR, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, BITWISE_XOR());
+}
+
+TYPED_TEST(BinaryOperationCompiledTest_Bit, ShiftLeft_Vector_Vector)
+{
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  using SHIFT_LEFT = cudf::library::operation::ShiftLeft<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = BinaryOperationTest::make_random_wrapped_column<TypeLhs>(col_size);
+  auto rhs = BinaryOperationTest::make_random_wrapped_column<TypeRhs>(col_size);
+
+  auto out = cudf::binary_operation_compiled(
+    lhs, rhs, cudf::binary_operator::SHIFT_LEFT, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_LEFT());
+}
+
+TYPED_TEST(BinaryOperationCompiledTest_Bit, ShiftRight_Vector_Vector)
+{
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  using SHIFT_RIGHT = cudf::library::operation::ShiftRight<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = BinaryOperationTest::make_random_wrapped_column<TypeLhs>(col_size);
+  auto rhs = BinaryOperationTest::make_random_wrapped_column<TypeRhs>(col_size);
+
+  auto out = cudf::binary_operation_compiled(
+    lhs, rhs, cudf::binary_operator::SHIFT_RIGHT, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT());
+}
+
+TYPED_TEST(BinaryOperationCompiledTest_Bit, ShiftRightUnsigned_Vector_Vector)
+{
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  using SHIFT_RIGHT_UNSIGNED =
+    cudf::library::operation::ShiftRightUnsigned<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = BinaryOperationTest::make_random_wrapped_column<TypeLhs>(col_size);
+  auto rhs = BinaryOperationTest::make_random_wrapped_column<TypeRhs>(col_size);
+
+  auto out = cudf::binary_operation_compiled(
+    lhs, rhs, cudf::binary_operator::SHIFT_RIGHT_UNSIGNED, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, SHIFT_RIGHT_UNSIGNED());
+}
+
 }  // namespace binop
 }  // namespace test
 }  // namespace cudf
