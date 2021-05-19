@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2021, NVIDIA CORPORATION.
 
 """
 Test related to Cut
@@ -64,10 +64,7 @@ def test_cut_labels(
         include_lowest=include_lowest,
         ordered=ordered,
     )
-    if labels is False:
-        pindex = pcat
-    else:
-        pindex = pd.CategoricalIndex(pcat)
+    pindex = pd.CategoricalIndex(pcat) if labels else pcat
     gindex = cut(
         x=x,
         bins=bins,
