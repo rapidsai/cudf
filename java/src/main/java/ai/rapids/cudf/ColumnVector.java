@@ -639,7 +639,7 @@ public final class ColumnVector extends ColumnView {
     assert separator_narep.getType().equals(DType.STRING) : "separator naprep scalar must be a string scalar";
     assert col_narep.getType().equals(DType.STRING) : "column narep scalar must be a string scalar";
 
-    return new ColumnVector(stringConcatenationListElements(list_column.getNativeView(),
+    return new ColumnVector(stringConcatenationListElementsSepCol(list_column.getNativeView(),
       sep_col.getNativeView(), separator_narep.getScalarHandle(), col_narep.getScalarHandle(),
       separate_nulls, empty_string_output_if_empty_list));
   }
@@ -668,7 +668,7 @@ public final class ColumnVector extends ColumnView {
     assert narep != null : "column narep scalar provided may not be null";
     assert narep.getType().equals(DType.STRING) : "narep scalar must be a string scalar";
 
-    return new ColumnVector(stringConcatenationListElementsScalarSep(list_column.getNativeView(),
+    return new ColumnVector(stringConcatenationListElements(list_column.getNativeView(),
         separator.getScalarHandle(), narep.getScalarHandle(), separate_nulls,
         empty_string_output_if_empty_list));
   }
@@ -915,12 +915,12 @@ public final class ColumnVector extends ColumnView {
    *                          will result in an empty string. Otherwise, it will result in a null.
    * @return native handle of the resulting cudf column, used to construct the Java column.
    */
-  private static native long stringConcatenationListElements(long list_column,
-                                                             long sep_column,
-                                                             long separator_narep,
-                                                             long col_narep,
-                                                             boolean separate_nulls,
-                                                             boolean empty_string_output_if_empty_list);
+  private static native long stringConcatenationListElementsSepCol(long list_column,
+                                                                   long sep_column,
+                                                                   long separator_narep,
+                                                                   long col_narep,
+                                                                   boolean separate_nulls,
+                                                                   boolean empty_string_output_if_empty_list);
 
   /**
    * Native method to concatenate a list column of strings (each row is a list of strings),
@@ -941,7 +941,7 @@ public final class ColumnVector extends ColumnView {
    *                                          result in a null.
    * @return native handle of the resulting cudf column, used to construct the Java column.
    */
-  private static native long stringConcatenationListElementsScalarSep(long list_column,
+  private static native long stringConcatenationListElements(long list_column,
                                                                       long separator,
                                                                       long narep,
                                                                       boolean separate_nulls,

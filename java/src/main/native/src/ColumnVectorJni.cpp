@@ -190,13 +190,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenationSepC
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenationListElements(JNIEnv *env, jclass,
-                                                                                         jlong column_handle,
-                                                                                         jlong sep_handle,
-                                                                                         jlong separator_narep,
-                                                                                         jlong col_narep,
-                                                                                         jboolean separate_nulls,
-                                                                                         jboolean empty_string_output_if_empty_list) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenationListElementsSepCol(JNIEnv *env, jclass,
+                                                                                               jlong column_handle,
+                                                                                               jlong sep_handle,
+                                                                                               jlong separator_narep,
+                                                                                               jlong col_narep,
+                                                                                               jboolean separate_nulls,
+                                                                                               jboolean empty_string_output_if_empty_list) {
   JNI_NULL_CHECK(env, column_handle, "column handle is null", 0);
   JNI_NULL_CHECK(env, sep_handle, "separator column handle is null", 0);
   JNI_NULL_CHECK(env, separator_narep, "separator narep string scalar object is null", 0);
@@ -223,12 +223,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenationList
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenationListElementsScalarSep(JNIEnv *env, jclass,
-                                                                                                  jlong column_handle,
-                                                                                                  jlong separator,
-                                                                                                  jlong narep,
-                                                                                                  jboolean separate_nulls,
-                                                                                                  jboolean empty_string_output_if_empty_list) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenationListElements(JNIEnv *env, jclass,
+                                                                                         jlong column_handle,
+                                                                                         jlong separator,
+                                                                                         jlong narep,
+                                                                                         jboolean separate_nulls,
+                                                                                         jboolean empty_string_output_if_empty_list) {
   JNI_NULL_CHECK(env, column_handle, "column handle is null", 0);
   JNI_NULL_CHECK(env, separator, "separator string scalar object is null", 0);
   JNI_NULL_CHECK(env, narep, "separator narep string scalar object is null", 0);
