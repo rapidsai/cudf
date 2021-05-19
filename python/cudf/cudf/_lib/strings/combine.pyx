@@ -16,7 +16,7 @@ from cudf._lib.table cimport Table
 from cudf._lib.cpp.strings.combine cimport (
     concatenate as cpp_concatenate,
     join_strings as cpp_join_strings,
-    join_list_elements as cpp_join_list_elements
+    concatenate_list_elements as cpp_concatenate_list_elements
 )
 
 
@@ -105,7 +105,7 @@ def join_lists_with_scalar(
     )
 
     with nogil:
-        c_result = move(cpp_join_list_elements(
+        c_result = move(cpp_concatenate_list_elements(
             source_view,
             scalar_separator[0],
             scalar_narep[0]
@@ -142,7 +142,7 @@ def join_lists_with_column(
     )
 
     with nogil:
-        c_result = move(cpp_join_list_elements(
+        c_result = move(cpp_concatenate_list_elements(
             source_view,
             separator_view,
             scalar_separator_narep[0],

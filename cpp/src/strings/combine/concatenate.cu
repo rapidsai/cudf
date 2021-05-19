@@ -41,75 +41,48 @@ namespace strings {
 namespace detail {
 namespace {
 
-struct concat_strings_base {
+/**
+ * @brief Concatenate strings functor
+ *
+ * This will concatenate the strings from each row of the given table
+ * and apply the separator. The null-replacement string `d_narep` is
+ * used in place of any string in a row that contains a null entry.
+ */
+struct concat_strings_fn {
   table_device_view const d_table;
+  string_view const d_separator;
   string_scalar_device_view const d_narep;
-  separator_on_nulls separate_nulls;
   offset_type* d_offsets{};
   char* d_chars{};
 
-  /**
-   * @brief Concatenate each table row to a single output string.
-   *
-   * This will concatenate the strings from each row of the given table
-   * and apply the separator. The null-replacement string `d_narep` is
-   * used in place of any string in a row that contains a null entry.
-   *
-   * @param idx The current row to process
-   * @param d_separator String to place in between each column's row
-   */
-  __device__ void process_row(size_type idx, string_view const d_separator)
+  __device__ void operator()(size_type idx)
   {
-    if (!d_narep.is_valid() &&
-        thrust::any_of(thrust::seq, d_table.begin(), d_table.end(), [idx](auto const& col) {
-          return col.is_null(idx);
-        })) {
+    bool const null_element =
+      thrust::any_of(thrust::seq, d_table.begin(), d_table.end(), [idx](auto const& col) {
+        return col.is_null(idx);
+      });
+    // handle a null row
+    if (null_element && !d_narep.is_valid()) {
       if (!d_chars) d_offsets[idx] = 0;
       return;
     }
 
-    char* d_buffer       = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    offset_type bytes    = 0;
-    bool write_separator = false;
-
+    char* d_buffer  = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    size_type bytes = 0;
     for (auto itr = d_table.begin(); itr < d_table.end(); ++itr) {
-      auto const d_column     = *itr;
-      bool const null_element = d_column.is_null(idx);
-
-      if (write_separator && (separate_nulls == separator_on_nulls::YES || !null_element)) {
-        if (d_buffer) d_buffer = detail::copy_string(d_buffer, d_separator);
-        bytes += d_separator.size_bytes();
-        write_separator = false;
-      }
-
-      // write out column's row data (or narep if the row is null)
-      auto const d_str = null_element ? d_narep.value() : d_column.element<string_view>(idx);
+      auto const d_column = *itr;
+      auto const d_str =
+        d_column.is_null(idx) ? d_narep.value() : d_column.element<string_view>(idx);
       if (d_buffer) d_buffer = detail::copy_string(d_buffer, d_str);
       bytes += d_str.size_bytes();
-
-      write_separator =
-        write_separator || (separate_nulls == separator_on_nulls::YES) || !null_element;
+      // separator goes only in between elements
+      if (itr + 1 < d_table.end()) {
+        if (d_buffer) d_buffer = detail::copy_string(d_buffer, d_separator);
+        bytes += d_separator.size_bytes();
+      }
     }
-
     if (!d_chars) d_offsets[idx] = bytes;
   }
-};
-
-/**
- * @brief Single separator concatenate functor
- */
-struct concat_strings_fn : concat_strings_base {
-  string_view const d_separator;
-
-  concat_strings_fn(table_device_view const& d_table,
-                    string_view const& d_separator,
-                    string_scalar_device_view const& d_narep,
-                    separator_on_nulls separate_nulls)
-    : concat_strings_base{d_table, d_narep, separate_nulls}, d_separator(d_separator)
-  {
-  }
-
-  __device__ void operator()(size_type idx) { process_row(idx, d_separator); }
 };
 
 }  // namespace
@@ -117,7 +90,6 @@ struct concat_strings_fn : concat_strings_base {
 std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     string_scalar const& separator,
                                     string_scalar const& narep,
-                                    separator_on_nulls separate_nulls,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
@@ -140,7 +112,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 
   // Create device views from the strings columns.
   auto d_table = table_device_view::create(strings_columns, stream);
-  concat_strings_fn fn{*d_table, d_separator, d_narep, separate_nulls};
+  concat_strings_fn fn{*d_table, d_separator, d_narep};
   auto children = make_strings_children(fn, strings_count, stream, mr);
 
   // create resulting null mask
@@ -148,9 +120,9 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
     [d_table = *d_table, d_narep] __device__(size_type idx) {
-      if (d_narep.is_valid()) return true;
-      return !thrust::any_of(
+      bool null_element = thrust::any_of(
         thrust::seq, d_table.begin(), d_table.end(), [idx](auto col) { return col.is_null(idx); });
+      return (!null_element || d_narep.is_valid());
     },
     stream,
     mr);
@@ -173,42 +145,68 @@ namespace {
  * when a separator row is null `d_separator_narep`. The `d_narep` is
  * used in place of a null entry in the strings columns.
  */
-struct multi_separator_concat_fn : concat_strings_base {
+struct multi_separator_concat_fn {
+  table_device_view const d_table;
   column_device_view const d_separators;
   string_scalar_device_view const d_separator_narep;
-
-  multi_separator_concat_fn(table_device_view const& d_table,
-                            column_device_view const& d_separators,
-                            string_scalar_device_view const& d_separator_narep,
-                            string_scalar_device_view const& d_narep,
-                            separator_on_nulls separate_nulls)
-    : concat_strings_base{d_table, d_narep, separate_nulls},
-      d_separators(d_separators),
-      d_separator_narep(d_separator_narep)
-  {
-  }
+  string_scalar_device_view const d_narep;
+  offset_type* d_offsets{};
+  char* d_chars{};
 
   __device__ void operator()(size_type idx)
   {
-    if (d_separators.is_null(idx) && !d_separator_narep.is_valid()) {
+    bool const all_nulls =
+      thrust::all_of(thrust::seq, d_table.begin(), d_table.end(), [idx](auto const& col) {
+        return col.is_null(idx);
+      });
+
+    if ((d_separators.is_null(idx) && !d_separator_narep.is_valid()) ||
+        (all_nulls && !d_narep.is_valid())) {
       if (!d_chars) d_offsets[idx] = 0;
       return;
     }
 
+    // point to output location
+    char* d_buffer    = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    offset_type bytes = 0;
+
+    // there is at least one non-null column value
     auto const d_separator = d_separators.is_valid(idx) ? d_separators.element<string_view>(idx)
                                                         : d_separator_narep.value();
-    // base class utility function handles the rest
-    process_row(idx, d_separator);
+    auto const d_null_rep = d_narep.is_valid() ? d_narep.value() : string_view{};
+
+    // write output entry for this row
+    bool colval_written = false;  // state variable for writing separators
+    for (auto const d_column : d_table) {
+      // if the row is null and if there is no replacement, skip it
+      if (d_column.is_null(idx) && !d_narep.is_valid()) continue;
+
+      // separator in this row is written only after the first output
+      if (colval_written) {
+        if (d_buffer) d_buffer = detail::copy_string(d_buffer, d_separator);
+        bytes += d_separator.size_bytes();
+      }
+
+      // write out column's row data (or narep if the row is null)
+      string_view const d_str =
+        d_column.is_null(idx) ? d_null_rep : d_column.element<string_view>(idx);
+      if (d_buffer) d_buffer = detail::copy_string(d_buffer, d_str);
+      bytes += d_str.size_bytes();
+
+      // column's string or narep could by empty so we need this flag
+      // to know we got this far even if no actual bytes were copied
+      colval_written = true;  // use the separator before the next column
+    }
+
+    if (!d_chars) d_offsets[idx] = bytes;
   }
 };
-
 }  // namespace
 
 std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     strings_column_view const& separators,
                                     string_scalar const& separator_narep,
                                     string_scalar const& col_narep,
-                                    separator_on_nulls separate_nulls,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
@@ -236,19 +234,20 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   // Create device views from the strings columns.
   auto d_table = table_device_view::create(strings_columns, stream);
 
-  multi_separator_concat_fn mscf{
-    *d_table, separator_col_view, separator_rep, col_rep, separate_nulls};
+  multi_separator_concat_fn mscf{*d_table, separator_col_view, separator_rep, col_rep};
   auto children = make_strings_children(mscf, strings_count, stream, mr);
 
   // Create resulting null mask
   auto [null_mask, null_count] = cudf::detail::valid_if(
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
-    [d_table = *d_table, separator_col_view, separator_rep, col_rep] __device__(size_type idx) {
-      if (!separator_col_view.is_valid(idx) && !separator_rep.is_valid()) return false;
-      if (col_rep.is_valid()) return true;
-      return !thrust::any_of(
-        thrust::seq, d_table.begin(), d_table.end(), [idx](auto col) { return col.is_null(idx); });
+    [d_table = *d_table, separator_col_view, separator_rep, col_rep] __device__(size_type ridx) {
+      if (!separator_col_view.is_valid(ridx) && !separator_rep.is_valid()) return false;
+      bool all_nulls =
+        thrust::all_of(thrust::seq, d_table.begin(), d_table.end(), [ridx](auto const& col) {
+          return col.is_null(ridx);
+        });
+      return all_nulls ? col_rep.is_valid() : true;
     },
     stream,
     mr);
@@ -269,29 +268,21 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     string_scalar const& separator,
                                     string_scalar const& narep,
-                                    separator_on_nulls separate_nulls,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(
-    strings_columns, separator, narep, separate_nulls, rmm::cuda_stream_default, mr);
+  return detail::concatenate(strings_columns, separator, narep, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     strings_column_view const& separators,
                                     string_scalar const& separator_narep,
                                     string_scalar const& col_narep,
-                                    separator_on_nulls separate_nulls,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(strings_columns,
-                             separators,
-                             separator_narep,
-                             col_narep,
-                             separate_nulls,
-                             rmm::cuda_stream_default,
-                             mr);
+  return detail::concatenate(
+    strings_columns, separators, separator_narep, col_narep, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

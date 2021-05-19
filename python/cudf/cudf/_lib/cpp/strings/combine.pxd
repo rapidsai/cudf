@@ -18,13 +18,13 @@ cdef extern from "cudf/strings/combine.hpp" namespace "cudf::strings" nogil:
         string_scalar separator,
         string_scalar narep) except +
 
-    cdef unique_ptr[column] join_list_elements(
+    cdef unique_ptr[column] concatenate_list_elements(
         column_view lists_strings_column,
         column_view separators,
         string_scalar separator_narep,
         string_scalar string_narep) except +
 
-    cdef unique_ptr[column] join_list_elements(
+    cdef unique_ptr[column] concatenate_list_elements(
         column_view lists_strings_column,
         string_scalar separator,
         string_scalar narep) except +

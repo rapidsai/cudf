@@ -95,58 +95,6 @@ TEST_F(StringsCombineTest, Concatenate)
   }
 }
 
-TEST_F(StringsCombineTest, ConcatenateSkipNulls)
-{
-  cudf::test::strings_column_wrapper strings1({"eee", "", "", "", "aa", "bbb", "ééé"},
-                                              {1, 0, 0, 1, 1, 1, 1});
-  cudf::test::strings_column_wrapper strings2({"xyz", "", "d", "éa", "", "", "f"},
-                                              {1, 0, 1, 1, 1, 0, 1});
-  cudf::test::strings_column_wrapper strings3({"q", "", "s", "t", "u", "", "w"},
-                                              {1, 1, 1, 1, 1, 0, 1});
-
-  cudf::table_view table({strings1, strings2, strings3});
-
-  {
-    cudf::test::strings_column_wrapper expected(
-      {"eee+xyz+q", "++", "+d+s", "+éa+t", "aa++u", "bbb++", "ééé+f+w"});
-    auto results = cudf::strings::concatenate(table,
-                                              cudf::string_scalar("+"),
-                                              cudf::string_scalar(""),
-                                              cudf::strings::separator_on_nulls::YES);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
-  }
-  {
-    cudf::test::strings_column_wrapper expected(
-      {"eee+xyz+q", "", "d+s", "+éa+t", "aa++u", "bbb", "ééé+f+w"});
-    auto results = cudf::strings::concatenate(table,
-                                              cudf::string_scalar("+"),
-                                              cudf::string_scalar(""),
-                                              cudf::strings::separator_on_nulls::NO);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
-  }
-  {
-    cudf::test::strings_column_wrapper expected(
-      {"eee+xyz+q", "", "", "+éa+t", "aa++u", "", "ééé+f+w"}, {1, 0, 0, 1, 1, 0, 1});
-    auto results = cudf::strings::concatenate(table,
-                                              cudf::string_scalar("+"),
-                                              cudf::string_scalar("", false),
-                                              cudf::strings::separator_on_nulls::NO);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
-  }
-  {
-    cudf::test::strings_column_wrapper sep_col({"+", "-", ".", "@", "*", "^^", "#"});
-    auto results = cudf::strings::concatenate(table,
-                                              cudf::strings_column_view(sep_col),
-                                              cudf::string_scalar(""),
-                                              cudf::string_scalar(""),
-                                              cudf::strings::separator_on_nulls::NO);
-
-    cudf::test::strings_column_wrapper expected(
-      {"eee+xyz+q", "", "d.s", "@éa@t", "aa**u", "bbb", "ééé#f#w"});
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
-  }
-}
-
 TEST_F(StringsCombineTest, ConcatZeroSizeStringsColumns)
 {
   cudf::column_view zero_size_strings_column(
@@ -347,20 +295,12 @@ TEST_F(StringsConcatenateWithColSeparatorTest, MultiColumnEmptyAndNullStringsNoR
   auto sep_col = cudf::test::strings_column_wrapper(
     {"", "", "", "", "", "", "", ""}, {true, false, true, false, true, false, true, false});
 
-  auto exp_results1 = cudf::test::strings_column_wrapper(
-    {"", "", "", "", "", "", "", ""}, {false, false, true, false, false, false, false, false});
+  auto exp_results = cudf::test::strings_column_wrapper(
+    {"", "", "", "", "", "", "", ""}, {false, false, true, false, true, false, true, false});
+
   auto results =
     cudf::strings::concatenate(cudf::table_view{{col0, col1}}, cudf::strings_column_view(sep_col));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results1, true);
-
-  auto exp_results2 = cudf::test::strings_column_wrapper(
-    {"", "", "", "", "", "", "", ""}, {true, false, true, false, true, false, true, false});
-  results = cudf::strings::concatenate(cudf::table_view{{col0, col1}},
-                                       cudf::strings_column_view(sep_col),
-                                       cudf::string_scalar("", false),
-                                       cudf::string_scalar(""),
-                                       cudf::strings::separator_on_nulls::NO);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results2, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
 }
 
 TEST_F(StringsConcatenateWithColSeparatorTest, MultiColumnStringMixNoReplacements)
@@ -375,23 +315,13 @@ TEST_F(StringsConcatenateWithColSeparatorTest, MultiColumnStringMixNoReplacement
     {"", "~~~", "", "@", "", "", "", "^^^^", "", "--", "*****", "######"},
     {true, true, false, true, false, true, false, true, true, true, true, true});
 
-  auto exp_results1 = cudf::test::strings_column_wrapper(
-    {"eeexyzfoo", "<null>~~~", "", "", "", "", "", "", "", "", "", ""},
-    {true, true, false, false, false, false, false, false, false, false, false, false});
+  auto exp_results = cudf::test::strings_column_wrapper(
+    {"eeexyzfoo", "<null>~~~", "", "éééf", "", "", "", "valid", "doo", "", "", ""},
+    {true, true, false, true, false, true, false, true, true, false, false, false});
 
   auto results =
     cudf::strings::concatenate(cudf::table_view{{col0, col1}}, cudf::strings_column_view(sep_col));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results1, true);
-
-  auto exp_results2 = cudf::test::strings_column_wrapper(
-    {"eeexyzfoo", "<null>~~~", "", "éééf", "", "", "", "valid", "doo", "", "", ""},
-    {true, true, false, true, false, true, false, true, true, true, true, true});
-  results = cudf::strings::concatenate(cudf::table_view{{col0, col1}},
-                                       cudf::strings_column_view(sep_col),
-                                       cudf::string_scalar("", false),
-                                       cudf::string_scalar(""),
-                                       cudf::strings::separator_on_nulls::NO);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results2, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
 }
 
 TEST_F(StringsConcatenateWithColSeparatorTest, MultiColumnStringMixSeparatorReplacement)
@@ -405,26 +335,26 @@ TEST_F(StringsConcatenateWithColSeparatorTest, MultiColumnStringMixSeparatorRepl
   auto sep_col = cudf::test::strings_column_wrapper(
     {"", "~~~", "", "@", "", "", "", "^^^^", "", "--", "*****", "######"},
     {true, true, false, true, false, true, false, true, true, true, true, true});
-  auto sep_rep = cudf::string_scalar("!!!!!!!");
+  auto sep_rep = cudf::string_scalar("!!!!!!!!!!");
 
-  auto exp_results1 = cudf::test::strings_column_wrapper(
-    {"eeexyzfoo", "<null>~~~", "!!!!!!!éaff", "éééf", "éa", "", "éaff", "valid", "doo", "", "", ""},
-    {true, true, true, false, false, false, false, false, false, false, false, false});
+  auto exp_results = cudf::test::strings_column_wrapper(
+    {"eeexyzfoo",
+     "<null>~~~",
+     "!!!!!!!!!!éaff",
+     "éééf",
+     "éa",
+     "",
+     "éaff",
+     "valid",
+     "doo",
+     "",
+     "",
+     ""},
+    {true, true, true, true, true, true, true, true, true, false, false, false});
 
   auto results = cudf::strings::concatenate(
     cudf::table_view{{col0, col1}}, cudf::strings_column_view(sep_col), sep_rep);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results1, true);
-
-  auto exp_results2 = cudf::test::strings_column_wrapper(
-    {"eeexyzfoo", "<null>~~~", "!!!!!!!éaff", "éééf", "éa", "", "éaff", "valid", "doo", "", "", ""},
-    {true, true, true, true, true, true, true, true, true, true, true, true});
-
-  results = cudf::strings::concatenate(cudf::table_view{{col0, col1}},
-                                       cudf::strings_column_view(sep_col),
-                                       sep_rep,
-                                       cudf::string_scalar(""),
-                                       cudf::strings::separator_on_nulls::NO);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results2, true);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);
 }
 
 TEST_F(StringsConcatenateWithColSeparatorTest, MultiColumnStringMixColumnReplacement)
