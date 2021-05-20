@@ -743,6 +743,9 @@ def segmented_gather(Column source_column, Column gather_map):
 
 cdef class PackedColumns:
 
+    def __reduce__(self):
+        return self.deserialize, self.serialize()
+
     @property
     def __cuda_array_interface__(self):
         cdef dict intf = {
@@ -775,22 +778,22 @@ cdef class PackedColumns:
 
         header["column-names"] = self.column_names
         header["index-names"] = self.index_names
+        header["gpu-data-ptr"] = self.gpu_data_ptr
+        header["gpu-data-size"] = self.gpu_data_size
         header["metadata"] = list(
             <uint8_t[:self.metadata_size]>self.c_metadata_ptr()
         )
 
-        frames = [self]
-
-        return header, frames
+        return header, []
 
     @classmethod
     def deserialize(cls, header, frames):
         cdef PackedColumns p = PackedColumns.__new__(PackedColumns)
 
         dbuf = DeviceBuffer(
-            size=frames[0].__cuda_array_interface__["shape"][0]
+            ptr=header["gpu-data-ptr"],
+            size=header["gpu-data-size"]
         )
-        dbuf.copy_from_device(frames[0])
 
         cdef cpp_copying.packed_columns data_
         data_.metadata_ = move(
