@@ -137,7 +137,9 @@ ConfigureTest(CLAMP_TEST replace/clamp_test.cpp)
 
 ###################################################################################################
 # - fixed_point tests -----------------------------------------------------------------------------
-ConfigureTest(FIXED_POINT_TEST fixed_point/fixed_point_tests.cu)
+ConfigureTest(FIXED_POINT_TEST
+    fixed_point/fixed_point_tests.cpp
+    fixed_point/fixed_point_tests.cu)
 
 ###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
@@ -329,7 +331,7 @@ ConfigureTest(STRINGS_TEST
     strings/chars_types_tests.cpp
     strings/combine/concatenate_list_elements_tests.cpp
     strings/combine/concatenate_tests.cpp
-    strings/combine/join_strings_tests
+    strings/combine/join_strings_tests.cpp
     strings/concatenate_tests.cpp
     strings/contains_tests.cpp
     strings/datetime_tests.cpp
@@ -343,7 +345,7 @@ ConfigureTest(STRINGS_TEST
     strings/fixed_point_tests.cpp
     strings/floats_tests.cpp
     strings/hash_string.cu
-    strings/integers_tests.cu
+    strings/integers_tests.cpp
     strings/ipv4_tests.cpp
     strings/json_tests.cpp
     strings/pad_tests.cpp
@@ -376,7 +378,7 @@ ConfigureTest(TEXT_TEST
 ConfigureTest(BITMASK_TEST
     bitmask/valid_if_tests.cu
     bitmask/set_nullmask_tests.cu
-    bitmask/bitmask_tests.cu
+    bitmask/bitmask_tests.cpp
     bitmask/is_element_valid_tests.cpp)
 
 

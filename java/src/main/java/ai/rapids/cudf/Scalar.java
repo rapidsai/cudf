@@ -329,10 +329,19 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   }
 
   public static Scalar fromString(String value) {
+    return fromUTF8String(value == null ? null : value.getBytes(StandardCharsets.UTF_8));
+  }
+
+  /**
+   * Creates a String scalar from an array of UTF8 bytes.
+   * @param value the array of UTF8 bytes
+   * @return a String scalar
+   */
+  public static Scalar fromUTF8String(byte[] value) {
     if (value == null) {
       return fromNull(DType.STRING);
     }
-    return new Scalar(DType.STRING, makeStringScalar(value.getBytes(StandardCharsets.UTF_8), true));
+    return new Scalar(DType.STRING, makeStringScalar(value, true));
   }
 
   /**
@@ -620,6 +629,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       case UINT32:
       case TIMESTAMP_DAYS:
       case DECIMAL32:
+      case DURATION_DAYS:
         valueHash = getInt();
         break;
       case INT64:
@@ -629,6 +639,10 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       case TIMESTAMP_MICROSECONDS:
       case TIMESTAMP_NANOSECONDS:
       case DECIMAL64:
+      case DURATION_MICROSECONDS:
+      case DURATION_SECONDS:
+      case DURATION_MILLISECONDS:
+      case DURATION_NANOSECONDS:
         valueHash = Long.hashCode(getLong());
         break;
       case FLOAT32:

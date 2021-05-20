@@ -488,7 +488,7 @@ public final class ColumnVector extends ColumnView {
    * Concatenate columns of strings together, combining a corresponding row from each column
    * into a single string row of a new column with no separator string inserted between each
    * combined string and maintaining null values in combined rows.
-   * @param columns array of columns containing strings.
+   * @param columns array of columns containing strings, must be non-empty
    * @return A new java column vector containing the concatenated strings.
    */
   public static ColumnVector stringConcatenate(ColumnView[] columns) {
@@ -505,11 +505,12 @@ public final class ColumnVector extends ColumnView {
    * @param narep string scalar indicating null behavior. If set to null and any string in the row
    *              is null the resulting string will be null. If not null, null values in any column
    *              will be replaced by the specified string.
-   * @param columns array of columns containing strings, must be more than 2 columns
+   * @param columns array of columns containing strings, must be non-empty
    * @return A new java column vector containing the concatenated strings.
    */
   public static ColumnVector stringConcatenate(Scalar separator, Scalar narep, ColumnView[] columns) {
-    assert columns.length >= 2 : ".stringConcatenate() operation requires at least 2 columns";
+    assert columns != null : "input columns should not be null";
+    assert columns.length > 0 : "input columns should not be empty";
     assert separator != null : "separator scalar provided may not be null";
     assert separator.getType().equals(DType.STRING) : "separator scalar must be a string scalar";
     assert narep != null : "narep scalar provided may not be null";
@@ -529,7 +530,7 @@ public final class ColumnVector extends ColumnView {
    * from each column into a single list row of a new column.
    * NOTICE: Any concatenation involving a null list element will result in a null list.
    *
-   * @param columns array of columns containing lists, must be more than 2 columns
+   * @param columns array of columns containing lists, must be non-empty
    * @return A new java column vector containing the concatenated lists.
    */
   public static ColumnVector listConcatenateByRow(ColumnView... columns) {
@@ -543,12 +544,12 @@ public final class ColumnVector extends ColumnView {
    * @param ignoreNull whether to ignore null list element of input columns: If true, null list
    *                   will be ignored from concatenation; Otherwise, any concatenation involving
    *                   a null list element will result in a null list
-   * @param columns    array of columns containing lists, must be more than 2 columns
+   * @param columns    array of columns containing lists, must be non-empty
    * @return A new java column vector containing the concatenated lists.
    */
   public static ColumnVector listConcatenateByRow(boolean ignoreNull, ColumnView... columns) {
     assert columns != null : "input columns should not be null";
-    assert columns.length >= 2 : "listConcatenateByRow requires at least 2 columns";
+    assert columns.length > 0 : "input columns should not be empty";
 
     long[] columnViews = new long[columns.length];
     for(int i = 0; i < columns.length; i++) {
@@ -1271,6 +1272,16 @@ public final class ColumnVector extends ColumnView {
    */
   public static ColumnVector fromStrings(String... values) {
     try (HostColumnVector host = HostColumnVector.fromStrings(values)) {
+      return host.copyToDevice();
+    }
+  }
+
+  /**
+   * Create a new string vector from the given values.  This API
+   * supports inline nulls.
+   */
+  public static ColumnVector fromUTF8Strings(byte[]... values) {
+    try (HostColumnVector host = HostColumnVector.fromUTF8Strings(values)) {
       return host.copyToDevice();
     }
   }
