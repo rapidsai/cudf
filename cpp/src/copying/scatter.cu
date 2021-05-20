@@ -142,8 +142,12 @@ struct column_scalar_scatterer_impl<string_view, MapIterator> {
 
 template <typename MapIterator>
 struct column_scalar_scatterer_impl<list_view, MapIterator> {
-  template <typename... Args>
-  std::unique_ptr<column> operator()(Args&&...) const
+  std::unique_ptr<column> operator()(std::reference_wrapper<const scalar> const& source,
+                                     MapIterator scatter_iter,
+                                     size_type scatter_rows,
+                                     column_view const& target,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
   {
     return lists::detail::scatter(
       source, scatter_iter, scatter_iter + scatter_rows, target, stream, mr);
