@@ -119,7 +119,8 @@ struct column_to_strings_fn {
     return not((std::is_same<column_type, cudf::string_view>::value) ||
                (std::is_integral<column_type>::value) ||
                (std::is_floating_point<column_type>::value) ||
-               (cudf::is_timestamp<column_type>()) || (cudf::is_duration<column_type>()));
+               (cudf::is_fixed_point<column_type>()) || (cudf::is_timestamp<column_type>()) ||
+               (cudf::is_duration<column_type>()));
   }
 
   explicit column_to_strings_fn(
@@ -187,6 +188,15 @@ struct column_to_strings_fn {
     column_view const& column) const
   {
     return cudf::strings::detail::from_floats(column, stream_, mr_);
+  }
+
+  // fixed point:
+  //
+  template <typename column_type>
+  std::enable_if_t<cudf::is_fixed_point<column_type>(), std::unique_ptr<column>> operator()(
+    column_view const& column) const
+  {
+    return cudf::strings::detail::from_fixed_point(column, stream_, mr_);
   }
 
   // timestamps:
