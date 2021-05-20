@@ -78,11 +78,26 @@ public class CuFile {
    * @param path        The file path to copy to.
    * @param file_offset The file offset from which to write the buffer.
    * @param buffer      The device buffer to copy from.
-   * @return The file offset from which the buffer was appended.
+   * @deprecated Use writeDeviceMemoryToFile instead.
    */
   public static void writeDeviceBufferToFile(File path, long file_offset,
                                              BaseDeviceMemoryBuffer buffer) {
-    writeToFile(path.getAbsolutePath(), file_offset, buffer.getAddress(), buffer.getLength());
+    writeDeviceMemoryToFile(path, file_offset, buffer.getAddress(), buffer.getLength());
+  }
+
+  /**
+   * Write device memory to a given file path synchronously.
+   * <p>
+   * This method is NOT thread safe if the path points to the same file on disk.
+   *
+   * @param path        The file path to copy to.
+   * @param file_offset The file offset from which to write the buffer.
+   * @param address     The device memory address to copy from.
+   * @param length      The length to copy.
+   */
+  public static void writeDeviceMemoryToFile(File path, long file_offset, long address,
+                                             long length) {
+    writeToFile(path.getAbsolutePath(), file_offset, address, length);
   }
 
   /**
@@ -93,9 +108,24 @@ public class CuFile {
    * @param path   The file path to copy to.
    * @param buffer The device buffer to copy from.
    * @return The file offset from which the buffer was appended.
+   * @deprecated Use appendDeviceMemoryToFile instead.
    */
   public static long appendDeviceBufferToFile(File path, BaseDeviceMemoryBuffer buffer) {
-    return appendToFile(path.getAbsolutePath(), buffer.getAddress(), buffer.getLength());
+    return appendDeviceMemoryToFile(path, buffer.getAddress(), buffer.getLength());
+  }
+
+  /**
+   * Append device memory to a given file path synchronously.
+   * <p>
+   * This method is NOT thread safe if the path points to the same file on disk.
+   *
+   * @param path    The file path to copy to.
+   * @param address The device memory address to copy from.
+   * @param length  The length to copy.
+   * @return The file offset from which the buffer was appended.
+   */
+  public static long appendDeviceMemoryToFile(File path, long address, long length) {
+    return appendToFile(path.getAbsolutePath(), address, length);
   }
 
   /**
@@ -106,10 +136,25 @@ public class CuFile {
    * @param buffer     The device buffer to copy into.
    * @param path       The file path to copy from.
    * @param fileOffset The file offset from which to copy the content.
+   * @deprecated Use readFileToDeviceMemory instead.
    */
   public static void readFileToDeviceBuffer(BaseDeviceMemoryBuffer buffer, File path,
                                             long fileOffset) {
-    readFromFile(buffer.getAddress(), buffer.getLength(), path.getAbsolutePath(), fileOffset);
+    readFileToDeviceMemory(buffer.getAddress(), buffer.getLength(), path, fileOffset);
+  }
+
+  /**
+   * Read a file into device memory synchronously.
+   * <p>
+   * This method is NOT thread safe if the path points to the same file on disk.
+   *
+   * @param address The device memory address to read into.
+   * @param length  The length to read.
+   * @param path       The file path to copy from.
+   * @param fileOffset The file offset from which to copy the content.
+   */
+  public static void readFileToDeviceMemory(long address, long length, File path, long fileOffset) {
+    readFromFile(address, length, path.getAbsolutePath(), fileOffset);
   }
 
   private static native void writeToFile(String path, long file_offset, long address, long length);
