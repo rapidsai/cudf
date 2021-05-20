@@ -795,12 +795,15 @@ void writer::impl::build_chunk_dictionaries2(
   chunks.device_to_host(stream);
   stream.synchronize();
 
+  // Only these bit sizes are allowed for RLE encoding because it's compute optimized
+  auto allowed_bitsizes = std::array<size_type, 6>{1, 2, 4, 8, 12, 16};
+
   for (auto &ck : chunks.host_view().flat_view()) {
-    std::cout << "num_dict " << ck.num_dict_entries << std::endl;
-    std::cout << "dict_size " << ck.uniq_data_size << std::endl;
+    // std::cout << "num_dict " << ck.num_dict_entries << std::endl;
+    // std::cout << "uniq_size " << ck.uniq_data_size << std::endl;
     ck.use_dictionary = [&]() {
       // We don't use dictionary if the indices are > 16 bits
-      if (ck.num_dict_entries > std::numeric_limits<uint16_t>::max()) { return false; }
+      if (ck.num_dict_entries > MAX_DICT_SIZE) { return false; }
 
       // calculate size of chunk if dictionary is used
       auto count_bits = [](uint16_t number) {
@@ -814,7 +817,6 @@ void writer::impl::build_chunk_dictionaries2(
       auto nbits = count_bits(ck.num_dict_entries);
 
       // ceil to (1/2/4/8/12/16)
-      auto allowed_bitsizes = std::array<size_type, 6>{1, 2, 4, 8, 12, 16};
       auto rle_bits = *std::upper_bound(allowed_bitsizes.begin(), allowed_bitsizes.end(), nbits);
       auto rle_byte_size = util::div_rounding_up_safe(ck.num_values * rle_bits, 8);
 
@@ -822,13 +824,30 @@ void writer::impl::build_chunk_dictionaries2(
 
       return (ck.plain_data_size > dict_enc_size);
     }();
-    std::cout << "use_dict " << std::boolalpha << ck.use_dictionary << std::endl;
+    // std::cout << "use_dict " << std::boolalpha << ck.use_dictionary << std::endl;
 
     // TODO:  Deallocate dictionary storage for chunks that don't use it and clear pointers.
     // If decide to use a kernel for this loop then move this cleanup outside
   }
 
-  // compact maps
+  // Collect populated entries from hash map
+  std::vector<rmm::device_uvector<size_type>> dict_data;
+  std::vector<rmm::device_uvector<size_type>> dict_data_idx;
+  for (auto &chunk : chunks.host_view().flat_view()) {
+    // TODO: Currently allocating for every chunk. Should skip allocating for non-dict types
+    auto &inserted_dict_data     = dict_data.emplace_back(MAX_DICT_SIZE, stream);
+    auto &inserted_dict_data_idx = dict_data_idx.emplace_back(MAX_DICT_SIZE, stream);
+    chunk.dict_data              = inserted_dict_data.data();
+    chunk.dict_data_size         = inserted_dict_data.size();
+    chunk.dict_data_idx          = inserted_dict_data_idx.data();
+  }
+  chunks.host_to_device(stream);
+  gpu::CollectMapEntries(chunks.device_view().flat_view(), stream);
+  chunks.device_to_host(stream);
+  stream.synchronize();
+  for (auto &chunk : chunks.host_view().flat_view()) {
+    // std::cout << "dict_size " << chunk.dict_data_size << std::endl;
+  }
 }
 
 void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,

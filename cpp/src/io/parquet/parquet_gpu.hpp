@@ -44,6 +44,8 @@ namespace parquet {
 
 using cudf::io::detail::string_index_pair;
 
+constexpr size_type MAX_DICT_SIZE = std::numeric_limits<uint16_t>::max();
+
 /**
  * @brief Struct representing an input column in the file.
  */
@@ -327,6 +329,9 @@ struct EncColumnChunk {
   size_type uniq_data_size;
   size_type num_non_null_values;
   size_type plain_data_size;
+  size_type *dict_data;
+  size_type *dict_data_idx;
+  size_type dict_data_size;
   bool use_dictionary;
 };
 
@@ -572,6 +577,7 @@ void BuildChunkDictionaries2(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                              size_type num_rows,
                              rmm::device_uvector<gpu::slot_type> &onemap,
                              rmm::cuda_stream_view stream);
+void CollectMapEntries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
 }  // namespace gpu
 }  // namespace parquet
 }  // namespace io

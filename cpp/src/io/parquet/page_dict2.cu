@@ -219,6 +219,36 @@ __global__ void __launch_bounds__(block_size, 1)
   }
 }
 
+template <int block_size>
+__global__ void __launch_bounds__(block_size, 1)
+  gpuCollectMapEntries(device_span<EncColumnChunk> chunks)
+{
+  auto &chunk = chunks[blockIdx.x];
+  if (not chunk.use_dictionary) { return; }
+
+  auto t = threadIdx.x;
+  auto map =
+    map_type::device_view(chunk.dict_map_slots, chunk.dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
+
+  __shared__ size_type counter;
+  if (t == 0) counter = 0;
+  __syncthreads();
+  for (size_t i = 0; i < chunk.dict_map_size; i += block_size) {
+    if (t + i < chunk.dict_map_size) {
+      auto slot = map.begin_slot() + t + i;
+      auto key  = static_cast<map_type::key_type>(slot->first);
+      if (key != KEY_SENTINEL) {
+        auto loc = atomicAdd(&counter, 1);
+        cudf_assert(loc < MAX_DICT_SIZE && "Number of filled slots exceeds max dict size");
+        chunk.dict_data[loc]     = key;
+        chunk.dict_data_idx[loc] = t + i;
+      }
+    }
+  }
+  __syncthreads();
+  if (t == 0) { chunk.dict_data_size = counter; }
+}
+
 template <typename T>
 void print(rmm::device_uvector<T> const &d_vec, std::string label = "")
 {
@@ -301,6 +331,12 @@ void BuildChunkDictionaries2(cudf::detail::device_2dspan<EncColumnChunk> chunks,
   //     return slot.first.load();
   //   });
   // print(temp, "slots");
+}
+
+void CollectMapEntries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
+{
+  constexpr int block_size = 1024;
+  gpuCollectMapEntries<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
 }
 
 }  // namespace gpu
