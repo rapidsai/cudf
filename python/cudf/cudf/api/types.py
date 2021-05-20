@@ -126,28 +126,6 @@ TODO: There a number of things we need to check:
 """
 
 
-def is_integer_dtype(obj):
-    """Check whether the provided array or dtype is of an integer dtype.
-
-    Parameters
-    ----------
-    obj : array-like or dtype
-        The array or dtype to check.
-
-    Returns
-    -------
-    bool
-        Whether or not the array or dtype is of an integer dtype.
-    """
-    if (
-        (isclass(obj) and issubclass(obj, _BaseDtype))
-        or isinstance(obj, _BaseDtype)
-        or isinstance(getattr(obj, "dtype", None), _BaseDtype)
-    ):
-        return False
-    return pd.api.types.is_integer_dtype(obj)
-
-
 def is_integer(obj):
     """Return True if given object is integer.
 
@@ -361,6 +339,7 @@ is_extension_type = pd_types.is_extension_type
 is_extension_array_dtype = pd_types.is_extension_array_dtype
 is_float_dtype = pd_types.is_float_dtype
 is_int64_dtype = pd_types.is_int64_dtype
+is_integer_dtype = _wrap_pandas_is_dtype_api(pd_types.is_integer_dtype)
 is_object_dtype = pd_types.is_object_dtype
 is_period_dtype = pd_types.is_period_dtype
 is_signed_integer_dtype = pd_types.is_signed_integer_dtype
