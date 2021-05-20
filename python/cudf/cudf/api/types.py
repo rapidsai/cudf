@@ -2,7 +2,6 @@
 """Define common type operations."""
 
 import datetime as dt
-from collections.abc import Sequence
 from functools import wraps
 from inspect import isclass
 from numbers import Number
@@ -116,7 +115,7 @@ def is_numeric_dtype(obj):
 TODO: There a number of things we need to check:
     1. Should any of the following methods be falling back to pd.api.types
        functions:
-       is_datetime_dtype, is_timedelta_dtype, is_interval_dtype, is_scalar.
+       is_interval_dtype, is_scalar.
     2. The following methods have implementations, but could possibly just
        alias pd.api.types functions directly: is_list_like
     3. The following methods in pd.api.types probably need to be overridden:
@@ -201,7 +200,7 @@ def is_struct_dtype(obj):
     """
     return (
         isinstance(obj, cudf.core.dtypes.StructDtype)
-        or obj is cudf.core.dtypes.StructDtype
+        or (isclass(obj) and issubclass(obj, cudf.core.dtypes.StructDtype))
         or (isinstance(obj, str) and obj == cudf.core.dtypes.StructDtype.name)
         or (hasattr(obj, "dtype") and is_struct_dtype(obj.dtype))
     )
@@ -287,23 +286,6 @@ def is_scalar(val):
     )
 
 
-def is_list_like(obj):
-    """Return `True` if the given `obj` is list-like (list, tuple, Series...).
-
-    Parameters
-    ----------
-    obj : object of any type which needs to be validated.
-
-    Returns
-    -------
-    bool
-        Return True if given object is list-like.
-    """
-    return isinstance(obj, (Sequence, np.ndarray)) and not isinstance(
-        obj, (str, bytes)
-    )
-
-
 # These methods are aliased directly into this namespace, but can be modified
 # later if we determine that there is a need.
 
@@ -348,6 +330,7 @@ is_timedelta64_dtype = pd_types.is_timedelta64_dtype
 is_timedelta64_ns_dtype = pd_types.is_timedelta64_ns_dtype
 is_unsigned_integer_dtype = pd_types.is_unsigned_integer_dtype
 is_sparse = pd_types.is_sparse
+is_list_like = pd_types.is_list_like
 is_dict_like = pd_types.is_dict_like
 is_file_like = pd_types.is_file_like
 is_named_tuple = pd_types.is_named_tuple
