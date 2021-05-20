@@ -29,7 +29,7 @@ from cudf._lib import string_casting as str_cast, strings as libstrings
 from cudf._lib.column import Column
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
-from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.column.methods import ColumnMethods
 from cudf.utils import utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -88,7 +88,7 @@ _timedelta_to_str_typecast_functions = {
 }
 
 
-class StringMethods(ColumnMethodsMixin):
+class StringMethods(ColumnMethods):
     _column: StringColumn
 
     def __init__(self, parent=None):

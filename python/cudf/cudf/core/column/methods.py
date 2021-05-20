@@ -9,7 +9,9 @@ from typing_extensions import Literal
 import cudf
 
 
-class ColumnMethodsMixin:
+class ColumnMethods:
+    # Encapsulates common behaviour for Series/Index accessor classes
+
     _parent: Union["cudf.Series", "cudf.Index"]
 
     def __init__(self, parent: Union["cudf.Series", "cudf.Index"]):

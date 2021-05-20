@@ -19,7 +19,7 @@ from cudf._lib.table import Table
 from cudf._typing import BinaryOperand
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
-from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import ListDtype
 from cudf.utils.dtypes import is_list_dtype, is_numerical_dtype
 
@@ -231,7 +231,7 @@ class ListColumn(ColumnBase):
         )
 
 
-class ListMethods(ColumnMethodsMixin):
+class ListMethods(ColumnMethods):
     """
     List methods for Series
     """

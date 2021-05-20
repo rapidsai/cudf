@@ -5,7 +5,7 @@ import pyarrow as pa
 
 import cudf
 from cudf.core.column import ColumnBase
-from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.column.methods import ColumnMethods
 from cudf.utils.dtypes import is_struct_dtype
 
 
@@ -109,7 +109,7 @@ class StructColumn(ColumnBase):
         )
 
 
-class StructMethods(ColumnMethodsMixin):
+class StructMethods(ColumnMethods):
     """
     Struct methods for Series
     """
