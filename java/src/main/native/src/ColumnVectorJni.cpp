@@ -23,7 +23,7 @@
 #include <cudf/reshape.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/detail/interop.hpp>
-#include <cudf/lists/concatenate_rows.hpp>
+#include <cudf/lists/combine.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar_factories.hpp>

@@ -407,7 +407,8 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 ###################################################################################################
 # - lists tests ----------------------------------------------------------------------------------
 ConfigureTest(LISTS_TEST
-    lists/concatenate_rows_tests.cpp
+    lists/combine/concatenate_list_elements_tests.cpp
+    lists/combine/concatenate_rows_tests.cpp
     lists/contains_tests.cpp
     lists/count_elements_tests.cpp
     lists/drop_list_duplicates_tests.cpp
