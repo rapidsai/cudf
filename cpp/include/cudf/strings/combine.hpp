@@ -152,6 +152,9 @@ std::unique_ptr<column> concatenate(
  * separators are not added to the output between null elements.
  * Otherwise, separators are always added if @p narep is valid.
  *
+ * More than one column must be specified in the input @p strings_columns
+ * table.
+ *
  * @code{.pseudo}
  * Example:
  * s1 = ['aa', null, '', 'dd']
@@ -168,6 +171,7 @@ std::unique_ptr<column> concatenate(
  *
  * @throw cudf::logic_error if input columns are not all strings columns.
  * @throw cudf::logic_error if separator is not valid.
+ * @throw cudf::logic_error if only one column is specified
  *
  * @param strings_columns List of string columns to concatenate.
  * @param separator String that should inserted between each string from each row.

@@ -211,7 +211,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     rmm::mr::device_memory_resource* mr)
 {
   auto const num_columns = strings_columns.num_columns();
-  CUDF_EXPECTS(num_columns > 1, "At least two columns must be specified");
+  CUDF_EXPECTS(num_columns > 0, "At least one column must be specified");
   // Check if all columns are of type string
   CUDF_EXPECTS(std::all_of(strings_columns.begin(),
                            strings_columns.end(),
