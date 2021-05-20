@@ -79,9 +79,9 @@ def check_packed_unique_pointers(df):
 def assert_packed_frame_unique_pointers(df):
     unpacked = unpack(pack(df))
 
-    assert all(
-        [df._data[col].data.ptr != unpacked._data[col].data.ptr for col in df]
-    )
+    for col in df:
+        if df._data[col].data:
+            assert df._data[col].data.ptr != unpacked._data[col].data.ptr
 
 
 def test_packed_dataframe_unique_pointers_numeric():
