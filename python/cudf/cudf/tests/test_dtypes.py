@@ -162,7 +162,7 @@ def test_interval_dtype_pyarrow_round_trip(fields, closed):
 def assert_column_array_dtype_equal(column: ColumnBase, array: pa.array):
     """
     In cudf, each column holds its dtype. And since column may have child
-    columns, child columns also holds there datatype. This method tests
+    columns, child columns also holds their datatype. This method tests
     that every level of `column` matches the type of the given `array`
     recursively.
     """
@@ -256,6 +256,4 @@ def test_lists_of_structs_dtype(data):
     expected = pa.array(data)
 
     assert_column_array_dtype_equal(got._column, expected)
-    # TODO: use assert_eq after
-    # https://github.com/pandas-dev/pandas/issues/41466 resolved
     assert expected.equals(got._column.to_arrow())
