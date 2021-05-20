@@ -14,6 +14,7 @@ class ColumnMethodsMixin:
 
     def __init__(self, parent: Union["cudf.Series", "cudf.Index"]):
         self._parent = parent
+        self._column = self._parent._column
 
     @overload
     def _return_or_inplace(
@@ -60,7 +61,7 @@ class ColumnMethodsMixin:
                 )
                 return None
             else:
-                self._parent._column._mimic_inplace(new_col, inplace=True)
+                self._column._mimic_inplace(new_col, inplace=True)
                 return None
         else:
             if self._parent is None:

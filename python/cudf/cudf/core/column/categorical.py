@@ -12,7 +12,6 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
-    Union,
     cast,
 )
 
@@ -38,6 +37,7 @@ from cudf.utils.dtypes import (
 )
 
 if TYPE_CHECKING:
+    from cudf._typing import SeriesOrIndex
     from cudf.core.column import (
         ColumnBase,
         DatetimeColumn,
@@ -47,13 +47,10 @@ if TYPE_CHECKING:
     )
 
 
-ParentType = Union["cudf.Series", "cudf.Index"]
-
-
 class CategoricalAccessor(ColumnMethodsMixin):
     _column: CategoricalColumn
 
-    def __init__(self, parent: ParentType):
+    def __init__(self, parent: SeriesOrIndex):
         """
         Accessor object for categorical properties of the Series values.
         Be aware that assigning to `categories` is a inplace operation,
@@ -118,7 +115,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         """
         The categories of this categorical.
         """
-        return cudf.core.index.as_index(self._parent._column.categories)
+        return cudf.core.index.as_index(self._column.categories)
 
     @property
     def codes(self) -> "cudf.Series":
@@ -130,16 +127,16 @@ class CategoricalAccessor(ColumnMethodsMixin):
             if isinstance(self._parent, cudf.Series)
             else None
         )
-        return cudf.Series(self._parent._column.codes, index=index)
+        return cudf.Series(self._column.codes, index=index)
 
     @property
     def ordered(self) -> Optional[bool]:
         """
         Whether the categories have an ordered relationship.
         """
-        return self._parent._column.ordered
+        return self._column.ordered
 
-    def as_ordered(self, inplace: bool = False) -> Optional[ParentType]:
+    def as_ordered(self, inplace: bool = False) -> Optional[SeriesOrIndex]:
         """
         Set the Categorical to be ordered.
 
@@ -193,10 +190,10 @@ class CategoricalAccessor(ColumnMethodsMixin):
         Categories (3, int64): [1 < 2 < 10]
         """
         return self._return_or_inplace(
-            self._parent._column.as_ordered(), inplace=inplace
+            self._column.as_ordered(), inplace=inplace
         )
 
-    def as_unordered(self, inplace: bool = False) -> Optional[ParentType]:
+    def as_unordered(self, inplace: bool = False) -> Optional[SeriesOrIndex]:
         """
         Set the Categorical to be unordered.
 
@@ -261,12 +258,12 @@ class CategoricalAccessor(ColumnMethodsMixin):
         Categories (3, int64): [1, 2, 10]
         """
         return self._return_or_inplace(
-            self._parent._column.as_unordered(), inplace=inplace
+            self._column.as_unordered(), inplace=inplace
         )
 
     def add_categories(
         self, new_categories: Any, inplace: bool = False
-    ) -> Optional[ParentType]:
+    ) -> Optional[SeriesOrIndex]:
         """
         Add new categories.
 
@@ -318,7 +315,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         Categories (5, int64): [1, 2, 0, 3, 4]
         """
 
-        old_categories = self._parent._column.categories
+        old_categories = self._column.categories
         new_categories = column.as_column(
             new_categories,
             dtype=old_categories.dtype if len(new_categories) == 0 else None,
@@ -343,7 +340,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
             raise ValueError("new categories must not include old categories")
 
         new_categories = old_categories.append(new_categories)
-        out_col = self._parent._column
+        out_col = self._column
         if not out_col._categories_equal(new_categories):
             out_col = out_col._set_categories(new_categories)
 
@@ -351,7 +348,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
 
     def remove_categories(
         self, removals: Any, inplace: bool = False,
-    ) -> Optional[ParentType]:
+    ) -> Optional[SeriesOrIndex]:
         """
         Remove the specified categories.
 
@@ -433,7 +430,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
             raise ValueError(f"removals must all be in old categories: {vals}")
 
         new_categories = cats[~cats.isin(removals)]._column
-        out_col = self._parent._column
+        out_col = self._column
         if not out_col._categories_equal(new_categories):
             out_col = out_col._set_categories(new_categories)
 
@@ -445,7 +442,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         ordered: bool = False,
         rename: bool = False,
         inplace: bool = False,
-    ) -> Optional[ParentType]:
+    ) -> Optional[SeriesOrIndex]:
         """
         Set the categories to the specified new_categories.
 
@@ -538,7 +535,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         # categories.
         if rename:
             # enforce same length
-            if len(new_categories) != len(self._parent._column.categories):
+            if len(new_categories) != len(self._column.categories):
                 raise ValueError(
                     "new_categories must have the same "
                     "number of items as old categories"
@@ -546,19 +543,19 @@ class CategoricalAccessor(ColumnMethodsMixin):
 
             out_col = column.build_categorical_column(
                 categories=new_categories,
-                codes=self._parent._column.base_children[0],
-                mask=self._parent._column.base_mask,
-                size=self._parent._column.size,
-                offset=self._parent._column.offset,
+                codes=self._column.base_children[0],
+                mask=self._column.base_mask,
+                size=self._column.size,
+                offset=self._column.offset,
                 ordered=ordered,
             )
         else:
-            out_col = self._parent._column
+            out_col = self._column
             if not (type(out_col.categories) is type(new_categories)):
                 # If both categories are of different Column types,
                 # return a column full of Nulls.
                 out_col = _create_empty_categorical_column(
-                    self._parent._column,
+                    self._column,
                     CategoricalDtype(
                         categories=new_categories, ordered=ordered
                     ),
@@ -577,7 +574,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         new_categories: Any,
         ordered: bool = False,
         inplace: bool = False,
-    ) -> Optional[ParentType]:
+    ) -> Optional[SeriesOrIndex]:
         """
         Reorder categories as specified in new_categories.
 
@@ -648,21 +645,14 @@ class CategoricalAccessor(ColumnMethodsMixin):
         # Ignore order for comparison because we're only interested
         # in whether new_categories has all the same values as the
         # current set of categories.
-        if not self._parent._column._categories_equal(
-            new_categories, ordered=False
-        ):
+        if not self._column._categories_equal(new_categories, ordered=False):
             raise ValueError(
                 "items in new_categories are not the same as in "
                 "old categories"
             )
-        out_col = self._parent._column._set_categories(
-            new_categories, ordered=ordered
-        )
+        out_col = self._column._set_categories(new_categories, ordered=ordered)
 
         return self._return_or_inplace(out_col, inplace=inplace)
-
-    def _decategorize(self) -> ColumnBase:
-        return self._parent._column._get_decategorized_column()
 
 
 class CategoricalColumn(column.ColumnBase):

@@ -148,9 +148,9 @@ class StructMethods(ColumnMethodsMixin):
         1    3
         dtype: int64
         """
-        fields = list(self._parent._column.dtype.fields.keys())
+        fields = list(self._column.dtype.fields.keys())
         if key in fields:
             pos = fields.index(key)
-            return self._return_or_inplace(self._parent._column.children[pos])
+            return self._return_or_inplace(self._column.children[pos])
         else:
-            return self._return_or_inplace(self._parent._column.children[key])
+            return self._return_or_inplace(self._column.children[key])

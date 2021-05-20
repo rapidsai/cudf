@@ -270,7 +270,7 @@ class ListMethods(ColumnMethodsMixin):
         min_col_list_len = self.len().min()
         if -min_col_list_len <= index < min_col_list_len:
             return self._return_or_inplace(
-                extract_element(self._parent._column, index)
+                extract_element(self._column, index)
             )
         else:
             raise IndexError("list index out of range")
@@ -299,7 +299,7 @@ class ListMethods(ColumnMethodsMixin):
         search_key = cudf.Scalar(search_key)
         try:
             res = self._return_or_inplace(
-                contains_scalar(self._parent._column, search_key)
+                contains_scalar(self._column, search_key)
             )
         except RuntimeError as e:
             if (
@@ -336,11 +336,11 @@ class ListMethods(ColumnMethodsMixin):
         5       6
         dtype: int64
         """
-        if type(self._parent._column.elements) is ListColumn:
-            return self._parent._column.elements.elements
+        if type(self._column.elements) is ListColumn:
+            return self._column.elements.elements
         else:
             return self._return_or_inplace(
-                self._parent._column.elements, retain_index=False
+                self._column.elements, retain_index=False
             )
 
     def len(self):
@@ -365,7 +365,7 @@ class ListMethods(ColumnMethodsMixin):
         2       2
         dtype: int32
         """
-        return self._return_or_inplace(count_elements(self._parent._column))
+        return self._return_or_inplace(count_elements(self._column))
 
     def take(self, lists_indices):
         """
@@ -398,7 +398,7 @@ class ListMethods(ColumnMethodsMixin):
         lists_indices_col = as_column(lists_indices)
         if not isinstance(lists_indices_col, ListColumn):
             raise ValueError("lists_indices should be list type array.")
-        if not lists_indices_col.size == self._parent._column.size:
+        if not lists_indices_col.size == self._column.size:
             raise ValueError(
                 "lists_indices and list column is of different " "size."
             )
@@ -413,7 +413,7 @@ class ListMethods(ColumnMethodsMixin):
 
         try:
             res = self._return_or_inplace(
-                segmented_gather(self._parent._column, lists_indices_col)
+                segmented_gather(self._column, lists_indices_col)
             )
         except RuntimeError as e:
             if "contains nulls" in str(e):
@@ -448,12 +448,12 @@ class ListMethods(ColumnMethodsMixin):
         dtype: list
         """
 
-        if is_list_dtype(self._parent._column.children[1].dtype):
+        if is_list_dtype(self._column.children[1].dtype):
             raise NotImplementedError("Nested lists unique is not supported.")
 
         return self._return_or_inplace(
             drop_list_duplicates(
-                self._parent._column, nulls_equal=True, nans_all_equal=True
+                self._column, nulls_equal=True, nans_all_equal=True
             )
         )
 
@@ -503,10 +503,10 @@ class ListMethods(ColumnMethodsMixin):
             raise NotImplementedError("`kind` not currently implemented.")
         if na_position not in {"first", "last"}:
             raise ValueError(f"Unknown `na_position` value {na_position}")
-        if is_list_dtype(self._parent._column.children[1].dtype):
+        if is_list_dtype(self._column.children[1].dtype):
             raise NotImplementedError("Nested lists sort is not supported.")
 
         return self._return_or_inplace(
-            sort_lists(self._parent._column, ascending, na_position),
+            sort_lists(self._column, ascending, na_position),
             retain_index=not ignore_index,
         )
