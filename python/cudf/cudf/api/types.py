@@ -3,6 +3,7 @@
 
 import datetime as dt
 from collections.abc import Sequence
+from inspect import isclass
 from numbers import Number
 
 import cupy as cp
@@ -16,6 +17,7 @@ from pandas.core.dtypes.dtypes import (
 
 import cudf
 from cudf._lib.scalar import DeviceScalar
+from cudf.core.dtypes import _BaseDtype
 
 
 def is_categorical_dtype(obj):
@@ -92,13 +94,21 @@ def is_numeric_dtype(obj):
     bool
         Whether or not the array or dtype is of a numeric dtype.
     """
-    # TODO: we should handle objects with a `.dtype` attribute,
-    # e.g., arrays, here.
-    try:
-        dtype = np.dtype(obj)
-    except TypeError:
-        return False
-    return dtype.kind in "biuf"
+    if isclass(obj):
+        if issubclass(obj, cudf.Decimal64Dtype):
+            return True
+        if issubclass(obj, _BaseDtype):
+            return False
+    else:
+        if isinstance(obj, cudf.Decimal64Dtype) or isinstance(
+            getattr(obj, "dtype", None), cudf.Decimal64Dtype
+        ):
+            return True
+        if isinstance(obj, _BaseDtype) or isinstance(
+            getattr(obj, "dtype", None), _BaseDtype
+        ):
+            return False
+    return pd_types.is_numeric_dtype(obj)
 
 
 """
@@ -128,11 +138,13 @@ def is_integer_dtype(obj):
     bool
         Whether or not the array or dtype is of an integer dtype.
     """
-    try:
-        dtype = np.dtype(obj)
-    except TypeError:
-        return pd.api.types.is_integer_dtype(obj)
-    return dtype.kind in "iu"
+    if (
+        (isclass(obj) and issubclass(obj, _BaseDtype))
+        or isinstance(obj, _BaseDtype)
+        or isinstance(getattr(obj, "dtype", None), _BaseDtype)
+    ):
+        return False
+    return pd.api.types.is_integer_dtype(obj)
 
 
 def is_integer(obj):
