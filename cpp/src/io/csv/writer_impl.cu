@@ -28,6 +28,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/converters.hpp>
+#include <cudf/strings/detail/replace.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -407,11 +408,16 @@ void writer::impl::write(table_view const& table,
       // (using null representation and delimiter):
       //
       std::string delimiter_str{options_.get_inter_column_delimiter()};
-      auto str_concat_col = cudf::strings::detail::concatenate(str_table_view,
-                                                               delimiter_str,
-                                                               options_.get_na_rep(),
-                                                               strings::separator_on_nulls::YES,
-                                                               stream);
+      auto str_concat_col = [&] {
+        if (str_table_view.num_columns() > 1)
+          return cudf::strings::detail::concatenate(str_table_view,
+                                                    delimiter_str,
+                                                    options_.get_na_rep(),
+                                                    strings::separator_on_nulls::YES,
+                                                    stream);
+        cudf::string_scalar narep{options_.get_na_rep()};
+        return cudf::strings::detail::replace_nulls(str_table_view.column(0), narep, stream);
+      }();
 
       write_chunked(str_concat_col->view(), metadata, stream);
     }
