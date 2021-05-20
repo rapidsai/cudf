@@ -2122,14 +2122,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * concatenating the strings from the same row (same list element) delimited by the separator
    * provided. This version of the function relaces nulls with empty string and returns null
    * for empty list.
-   * @param list_column column containing lists of strings to concatenate.
-   * @param sep_col strings column that provides separators for concatenation.
+   * @param sepCol strings column that provides separators for concatenation.
    * @return A new java column vector containing the concatenated strings with separator between.
    */
-  public final ColumnVector stringConcatenateListElements(ColumnView sep_col) {
+  public final ColumnVector stringConcatenateListElements(ColumnView sepCol) {
     try (Scalar nullString = Scalar.fromString(null);
          Scalar emptyString = Scalar.fromString("")) {
-      return stringConcatenateListElements(sep_col, nullString, emptyString,
+      return stringConcatenateListElements(sepCol, nullString, emptyString,
           false, false);
     }
   }
@@ -2138,33 +2137,33 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Given a lists column of strings (each row is a list of strings), concatenates the strings
    * within each row and returns a single strings column result.
    * Each new string is created by concatenating the strings from the same row (same list element)
-   * delimited by the row separator provided in the sep_col strings column.
-   * @param sep_col strings column that provides separators for concatenation.
-   * @param separator_narep string scalar indicating null behavior when a separator is null.
+   * delimited by the row separator provided in the sepCol strings column.
+   * @param sepCol strings column that provides separators for concatenation.
+   * @param separatorNarep string scalar indicating null behavior when a separator is null.
    *                        If set to null and the separator is null the resulting string will
    *                        be null. If not null, this string will be used in place of a null
    *                        separator.
-   * @param string_narep string that should be used to replace null strings in any non-null list
+   * @param stringNarep string that should be used to replace null strings in any non-null list
    *                     row. If set to null and the string is null the resulting string will
    *                     be null. If not null, this string will be used in place of a null value.
-   * @param separate_nulls if true, then the separator is included for null rows if
-   *                       `string_narep` is valid.
-   * @param empty_string_output_if_empty_list if set to true, any input row that is an empty list
+   * @param separateNulls if true, then the separator is included for null rows if
+   *                       `stringNarep` is valid.
+   * @param emptyStringOutputIfEmptyList if set to true, any input row that is an empty list
    *                          will result in an empty string. Otherwise, it will result in a null.
    * @return A new java column vector containing the concatenated strings with separator between.
    */
-  public final ColumnVector stringConcatenateListElements(ColumnView sep_col,
-      Scalar separator_narep, Scalar string_narep, boolean separate_nulls,
-      boolean empty_string_output_if_empty_list) {
+  public final ColumnVector stringConcatenateListElements(ColumnView sepCol,
+      Scalar separatorNarep, Scalar stringNarep, boolean separateNulls,
+      boolean emptyStringOutputIfEmptyList) {
     assert type.equals(DType.LIST) : "column type must be a list";
-    assert separator_narep != null : "separator narep scalar provided may not be null";
-    assert string_narep != null : "string narep scalar provided may not be null";
-    assert separator_narep.getType().equals(DType.STRING) : "separator naprep scalar must be a string scalar";
-    assert string_narep.getType().equals(DType.STRING) : "string narep scalar must be a string scalar";
+    assert separatorNarep != null : "separator narep scalar provided may not be null";
+    assert stringNarep != null : "string narep scalar provided may not be null";
+    assert separatorNarep.getType().equals(DType.STRING) : "separator naprep scalar must be a string scalar";
+    assert stringNarep.getType().equals(DType.STRING) : "string narep scalar must be a string scalar";
 
     return new ColumnVector(stringConcatenationListElementsSepCol(getNativeView(),
-      sep_col.getNativeView(), separator_narep.getScalarHandle(), string_narep.getScalarHandle(),
-      separate_nulls, empty_string_output_if_empty_list));
+      sepCol.getNativeView(), separatorNarep.getScalarHandle(), stringNarep.getScalarHandle(),
+      separateNulls, emptyStringOutputIfEmptyList));
   }
 
   /**
@@ -2177,22 +2176,22 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *              is null the resulting string will be null. If not null, null values in any
    *              column will be replaced by the specified string. The underlying value in the
    *              string scalar may be null, but the object passed in may not.
-   * @param separate_nulls if true, then the separator is included for null rows if
+   * @param separateNulls if true, then the separator is included for null rows if
    *                       `narep` is valid.
-   * @param empty_string_output_if_empty_list if set to true, any input row that is an empty list
+   * @param emptyStringOutputIfEmptyList if set to true, any input row that is an empty list
    *                          will result in an empty string. Otherwise, it will result in a null.
    * @return A new java column vector containing the concatenated strings with separator between.
    */
   public final ColumnVector stringConcatenateListElements(Scalar separator,
-      Scalar narep, boolean separate_nulls, boolean empty_string_output_if_empty_list) {
+      Scalar narep, boolean separateNulls, boolean emptyStringOutputIfEmptyList) {
     assert type.equals(DType.LIST) : "column type must be a list";
     assert separator != null : "separator scalar provided may not be null";
     assert narep != null : "column narep scalar provided may not be null";
     assert narep.getType().equals(DType.STRING) : "narep scalar must be a string scalar";
 
     return new ColumnVector(stringConcatenationListElements(getNativeView(),
-        separator.getScalarHandle(), narep.getScalarHandle(), separate_nulls,
-        empty_string_output_if_empty_list));
+        separator.getScalarHandle(), narep.getScalarHandle(), separateNulls,
+        emptyStringOutputIfEmptyList));
   }
 
    /**
