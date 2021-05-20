@@ -1,10 +1,8 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 """Define common type operations."""
 
-import datetime as dt
 from functools import wraps
 from inspect import isclass
-from numbers import Number
 
 import cupy as cp
 import numpy as np
@@ -200,7 +198,7 @@ def is_struct_dtype(obj):
     """
     return (
         isinstance(obj, cudf.core.dtypes.StructDtype)
-        or obj is cudf.core.dtypes.StructDtype
+        or (isclass(obj) and issubclass(obj, cudf.core.dtypes.StructDtype))
         or (isinstance(obj, str) and obj == cudf.core.dtypes.StructDtype.name)
         or (hasattr(obj, "dtype") and is_struct_dtype(obj.dtype))
     )
@@ -272,19 +270,12 @@ def is_scalar(val):
     # TODO: This function deviates from pandas in a number of ways, but those
     # ways may be breaking for us so we'll have to be careful about changing.
     return (
-        val is None
-        or isinstance(val, DeviceScalar)
+        isinstance(val, DeviceScalar)
         or isinstance(val, cudf.Scalar)
-        or isinstance(val, str)
-        or isinstance(val, Number)
-        or np.isscalar(val)
+        # TODO: These two deviate from pandas behavior.
         or (isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0)
-        or isinstance(val, pd.Timestamp)
         or (isinstance(val, pd.Categorical) and len(val) == 1)
-        or (isinstance(val, pd.Timedelta))
-        or (isinstance(val, pd.Timestamp))
-        or (isinstance(val, dt.datetime))
-        or (isinstance(val, dt.timedelta))
+        or pd_types.is_scalar(val)
     )
 
 
