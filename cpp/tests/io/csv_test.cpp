@@ -352,7 +352,7 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumn)
 
   read_result_file.close();
 
-  ASSERT_EQ(result_strings, reference_strings);
+  EXPECT_EQ(result_strings, reference_strings);
 }
 
 TEST_F(CsvReaderTest, MultiColumn)
