@@ -96,9 +96,10 @@ generate_list_offsets_and_validities(column_view const& input,
   auto out_offsets = make_numeric_column(
     data_type{type_id::INT32}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
 
-  auto const lists_dv_ptr   = column_device_view::create(lists_column_view(input).child());
-  auto const d_out_offsets  = out_offsets->mutable_view().template begin<offset_type>();
-  auto const d_row_offsets  = lists_column_view(input).offsets_begin();
+  auto const lists_of_lists_dv_ptr = column_device_view::create(input);
+  auto const lists_dv_ptr          = column_device_view::create(lists_column_view(input).child());
+  auto const d_out_offsets         = out_offsets->mutable_view().template begin<offset_type>();
+  auto const d_row_offsets         = lists_column_view(input).offsets_begin();
   auto const d_list_offsets = lists_column_view(lists_column_view(input).child()).offsets_begin();
 
   // The array of int8_t stores validities for the output list elements.
@@ -111,12 +112,14 @@ generate_list_offsets_and_validities(column_view const& input,
     iter,
     iter + num_rows,
     d_out_offsets,
-    [lists_dv = *lists_dv_ptr,
+    [lists_of_lists_dv = *lists_of_lists_dv_ptr,
+     lists_dv          = *lists_dv_ptr,
      d_row_offsets,
      d_list_offsets,
      d_validities = validities.begin(),
      iter] __device__(auto const idx) {
-      if (d_row_offsets[idx] == d_row_offsets[idx + 1]) {  // This is a null row.
+      if (d_row_offsets[idx] == d_row_offsets[idx + 1]) {  // This is a null/empty row.
+        d_validities[idx] = static_cast<int8_t>(lists_of_lists_dv.is_valid(idx));
         return size_type{0};
       }
       // The output row will not be null only if all lists on the input row are not null.
@@ -167,7 +170,7 @@ std::unique_ptr<column> gather_list_entries(column_view const& input,
      d_indices = gather_map.begin(),
      d_out_list_offsets =
        output_list_offsets.template begin<offset_type>()] __device__(size_type const idx) {
-      // The output row has been identified as a null list during list size computation.
+      // The output row has been identified as a null/empty list during list size computation.
       if (d_out_list_offsets[idx + 1] == d_out_list_offsets[idx]) { return; }
 
       // The indices of the list elements on the row `idx` of the input column.
