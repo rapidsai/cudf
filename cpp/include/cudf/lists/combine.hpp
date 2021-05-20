@@ -77,9 +77,10 @@ std::unique_ptr<column> concatenate_rows(
  * r is [ {1, 2, 3, 4, 5}, {6, 7, 8, 9} ]
  * @endcode
  *
- * @throws cudf::logic_error if the input column is not a two-level depth lists column.
+ * @throws cudf::logic_error if the input column is not at least two-level depth lists column (i.e.,
+ *         each row must be a list of list).
  * @throws cudf::logic_error if the input lists column contains nested typed entries that are not
- * lists.
+ *         lists.
  *
  * @param input The lists column containing lists of list elements to concatenate.
  * @param null_policy The parameter to specify whether a null list element will be ignored from
