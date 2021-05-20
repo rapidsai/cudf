@@ -27,6 +27,7 @@ import ai.rapids.cudf.HostColumnVector.StructType;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
@@ -237,6 +238,16 @@ public class ScalarTest extends CudfTestBase {
   @Test
   public void testString() {
     try (Scalar s = Scalar.fromString("TEST")) {
+      assertEquals(DType.STRING, s.getType());
+      assertTrue(s.isValid());
+      assertEquals("TEST", s.getJavaString());
+      assertArrayEquals(new byte[]{'T', 'E', 'S', 'T'}, s.getUTF8());
+    }
+  }
+
+  @Test
+  public void testUTF8String() {
+    try (Scalar s = Scalar.fromUTF8String("TEST".getBytes(StandardCharsets.UTF_8))) {
       assertEquals(DType.STRING, s.getType());
       assertTrue(s.isValid());
       assertEquals("TEST", s.getJavaString());
