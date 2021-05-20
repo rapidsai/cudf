@@ -3,6 +3,7 @@
 import numpy as np
 import pandas as pd
 import pytest
+from pandas.api import types as ptypes
 
 import cudf
 from cudf.api import types as types
@@ -205,11 +206,7 @@ def test_is_categorical_dtype(obj, expect):
         (cudf.Series(dtype="timedelta64[s]"), False),
         (cudf.Series(dtype="category"), False),
         (cudf.Series(dtype=cudf.Decimal64Dtype(5, 2)), True),
-        # TODO: Currently creating an empty Series of list type ignores the
-        # provided type and instead makes a float64 Series.
         (cudf.Series([[1, 2], [3, 4, 5]]), False),
-        # TODO: Currently creating an empty Series of struct type fails because
-        # it uses a numpy utility that doesn't understand StructDtype.
         (cudf.Series([{"a": 1, "b": 2}, {"c": 3}]), False),
         (cudf.Series(dtype=cudf.IntervalDtype(int)), False),
     ),
@@ -310,11 +307,7 @@ def test_is_numeric_dtype(obj, expect):
         (cudf.Series(dtype="timedelta64[s]"), False),
         (cudf.Series(dtype="category"), False),
         (cudf.Series(dtype=cudf.Decimal64Dtype(5, 2)), False),
-        # TODO: Currently creating an empty Series of list type ignores the
-        # provided type and instead makes a float64 Series.
         (cudf.Series([[1, 2], [3, 4, 5]]), False),
-        # TODO: Currently creating an empty Series of struct type fails because
-        # it uses a numpy utility that doesn't understand StructDtype.
         (cudf.Series([{"a": 1, "b": 2}, {"c": 3}]), False),
         (cudf.Series(dtype=cudf.IntervalDtype(int)), False),
     ),
@@ -415,11 +408,7 @@ def test_is_integer_dtype(obj, expect):
         (cudf.Series(dtype="timedelta64[s]"), False),
         (cudf.Series(dtype="category"), False),
         (cudf.Series(dtype=cudf.Decimal64Dtype(5, 2)), False),
-        # TODO: Currently creating an empty Series of list type ignores the
-        # provided type and instead makes a float64 Series.
         (cudf.Series([[1, 2], [3, 4, 5]]), False),
-        # TODO: Currently creating an empty Series of struct type fails because
-        # it uses a numpy utility that doesn't understand StructDtype.
         (cudf.Series([{"a": 1, "b": 2}, {"c": 3}]), False),
         (cudf.Series(dtype=cudf.IntervalDtype(int)), False),
     ),
@@ -521,11 +510,7 @@ def test_is_integer(obj, expect):
         (cudf.Series(dtype="timedelta64[s]"), False),
         (cudf.Series(dtype="category"), False),
         (cudf.Series(dtype=cudf.Decimal64Dtype(5, 2)), False),
-        # TODO: Currently creating an empty Series of list type ignores the
-        # provided type and instead makes a float64 Series.
         (cudf.Series([[1, 2], [3, 4, 5]]), False),
-        # TODO: Currently creating an empty Series of struct type fails because
-        # it uses a numpy utility that doesn't understand StructDtype.
         (cudf.Series([{"a": 1, "b": 2}, {"c": 3}]), False),
         (cudf.Series(dtype=cudf.IntervalDtype(int)), False),
     ),
@@ -626,11 +611,7 @@ def test_is_string_dtype(obj, expect):
         (cudf.Series(dtype="timedelta64[s]"), False),
         (cudf.Series(dtype="category"), False),
         (cudf.Series(dtype=cudf.Decimal64Dtype(5, 2)), False),
-        # TODO: Currently creating an empty Series of list type ignores the
-        # provided type and instead makes a float64 Series.
         (cudf.Series([[1, 2], [3, 4, 5]]), False),
-        # TODO: Currently creating an empty Series of struct type fails because
-        # it uses a numpy utility that doesn't understand StructDtype.
         (cudf.Series([{"a": 1, "b": 2}, {"c": 3}]), False),
         (cudf.Series(dtype=cudf.IntervalDtype(int)), False),
     ),
@@ -731,11 +712,7 @@ def test_is_datetime_dtype(obj, expect):
         (cudf.Series(dtype="timedelta64[s]"), False),
         (cudf.Series(dtype="category"), False),
         (cudf.Series(dtype=cudf.Decimal64Dtype(5, 2)), False),
-        # TODO: Currently creating an empty Series of list type ignores the
-        # provided type and instead makes a float64 Series.
         (cudf.Series([[1, 2], [3, 4, 5]]), True),
-        # TODO: Currently creating an empty Series of struct type fails because
-        # it uses a numpy utility that doesn't understand StructDtype.
         (cudf.Series([{"a": 1, "b": 2}, {"c": 3}]), False),
         (cudf.Series(dtype=cudf.IntervalDtype(int)), False),
     ),
@@ -836,11 +813,7 @@ def test_is_list_dtype(obj, expect):
         (cudf.Series(dtype="timedelta64[s]"), False),
         (cudf.Series(dtype="category"), False),
         (cudf.Series(dtype=cudf.Decimal64Dtype(5, 2)), False),
-        # TODO: Currently creating an empty Series of list type ignores the
-        # provided type and instead makes a float64 Series.
         (cudf.Series([[1, 2], [3, 4, 5]]), False),
-        # TODO: Currently creating an empty Series of struct type fails because
-        # it uses a numpy utility that doesn't understand StructDtype.
         (cudf.Series([{"a": 1, "b": 2}, {"c": 3}]), True),
         (cudf.Series(dtype=cudf.IntervalDtype(int)), True),
     ),
@@ -941,14 +914,96 @@ def test_is_struct_dtype(obj, expect):
         (cudf.Series(dtype="timedelta64[s]"), False),
         (cudf.Series(dtype="category"), False),
         (cudf.Series(dtype=cudf.Decimal64Dtype(5, 2)), True),
-        # TODO: Currently creating an empty Series of list type ignores the
-        # provided type and instead makes a float64 Series.
         (cudf.Series([[1, 2], [3, 4, 5]]), False),
-        # TODO: Currently creating an empty Series of struct type fails because
-        # it uses a numpy utility that doesn't understand StructDtype.
         (cudf.Series([{"a": 1, "b": 2}, {"c": 3}]), False),
         (cudf.Series(dtype=cudf.IntervalDtype(int)), False),
     ),
 )
 def test_is_decimal_dtype(obj, expect):
     assert types.is_decimal_dtype(obj) == expect
+
+
+@pytest.mark.parametrize(
+    "obj",
+    (
+        # Base Python objects.
+        bool(),
+        int(),
+        float(),
+        complex(),
+        str(),
+        "",
+        r"",
+        object(),
+        # Base Python types.
+        bool,
+        int,
+        float,
+        complex,
+        str,
+        object,
+        # NumPy types.
+        np.bool_,
+        np.int_,
+        np.float64,
+        np.complex128,
+        np.str_,
+        np.unicode_,
+        np.datetime64,
+        np.timedelta64,
+        # NumPy scalars.
+        np.bool_(),
+        np.int_(),
+        np.float64(),
+        np.complex128(),
+        np.str_(),
+        np.unicode_(),
+        np.datetime64(),
+        np.timedelta64(),
+        # NumPy dtype objects.
+        np.dtype("bool"),
+        np.dtype("int"),
+        np.dtype("float"),
+        np.dtype("complex"),
+        np.dtype("str"),
+        np.dtype("unicode"),
+        np.dtype("datetime64"),
+        np.dtype("timedelta64"),
+        np.dtype("object"),
+        # NumPy arrays.
+        np.array([], dtype=np.bool_),
+        np.array([], dtype=np.int_),
+        np.array([], dtype=np.float64),
+        np.array([], dtype=np.complex128),
+        np.array([], dtype=np.str_),
+        np.array([], dtype=np.unicode_),
+        np.array([], dtype=np.datetime64),
+        np.array([], dtype=np.timedelta64),
+        np.array([], dtype=object),
+        # Pandas dtypes.
+        # TODO: pandas does not consider these to be categoricals.
+        # pd.core.dtypes.dtypes.CategoricalDtypeType,
+        # pd.CategoricalDtype,
+        # Pandas objects.
+        pd.Series(dtype="bool"),
+        pd.Series(dtype="int"),
+        pd.Series(dtype="float"),
+        pd.Series(dtype="complex"),
+        pd.Series(dtype="str"),
+        pd.Series(dtype="unicode"),
+        pd.Series(dtype="datetime64[s]"),
+        pd.Series(dtype="timedelta64[s]"),
+        pd.Series(dtype="category"),
+        pd.Series(dtype="object"),
+    ),
+)
+def test_pandas_agreement(obj):
+    assert types.is_categorical_dtype(obj) == ptypes.is_categorical_dtype(obj)
+    assert types.is_numeric_dtype(obj) == ptypes.is_numeric_dtype(obj)
+    assert types.is_integer_dtype(obj) == ptypes.is_integer_dtype(obj)
+    assert types.is_integer(obj) == ptypes.is_integer(obj)
+    assert types.is_string_dtype(obj) == ptypes.is_string_dtype(obj)
+
+
+# TODO: Add test of interval.
+# TODO: Add test of Scalar.
