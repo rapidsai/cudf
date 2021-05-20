@@ -114,7 +114,7 @@ def is_numeric_dtype(obj):
 """
 TODO: There a number of things we need to check:
     1. Should any of the following methods be falling back to pd.api.types
-       functions: is_integer_dtype, is_integer, is_string_dtype,
+       functions:
        is_datetime_dtype, is_timedelta_dtype, is_interval_dtype, is_scalar.
     2. The following methods have implementations, but could possibly just
        alias pd.api.types functions directly: is_list_like
