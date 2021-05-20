@@ -27,7 +27,14 @@ namespace binops {
 namespace compiled {
 
 namespace {
-// Struct to launch only defined operations.
+
+// Functors to launch only defined operations.
+
+/**
+ * @brief Functor to launch only defined operations with common type.
+ *
+ * @tparam BinaryOperator binary operator functor
+ */
 template <typename BinaryOperator>
 struct ops_wrapper {
   mutable_column_device_view& out;
@@ -52,7 +59,11 @@ struct ops_wrapper {
   }
 };
 
-// TODO merge these 2 structs somehow.
+/**
+ * @brief Functor to launch only defined operations without common type.
+ *
+ * @tparam BinaryOperator binary operator functor
+ */
 template <typename BinaryOperator>
 struct ops2_wrapper {
   mutable_column_device_view& out;
@@ -67,7 +78,6 @@ struct ops2_wrapper {
     TypeLhs x   = lhs.element<TypeLhs>(i);
     TypeRhs y   = rhs.element<TypeRhs>(i);
     auto result = BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(x, y);
-    //(void)result;
     type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
   }
 
@@ -81,6 +91,14 @@ struct ops2_wrapper {
   }
 };
 
+/**
+ * @brief Functor which does single, and double type dispatcher in device code
+ *
+ * single type dispatcher for lhs and rhs with common types.
+ * double type dispatcher for lhs and rhs without common types.
+ *
+ * @tparam BinaryOperator binary operator functor
+ */
 template <class BinaryOperator>
 struct device_type_dispatcher {
   //, OperatorType type)
@@ -108,7 +126,17 @@ struct device_type_dispatcher {
   }
 };
 }  // namespace
-
+/**
+ * @brief Functor that runs binary operation on each element of @p lhsd and @p rhsd columns.
+ *
+ * This template is instantiated for each binary operator.
+ *
+ * @tparam BinaryOperator Binary operator functor
+ * @param outd mutable device view of output column
+ * @param lhsd device view of left operand column
+ * @param rhsd device view of right operand column
+ * @param stream CUDA stream used for device memory operations
+ */
 template <class BinaryOperator>
 void dispatch_single_double(mutable_column_device_view& outd,
                             column_device_view const& lhsd,
@@ -124,7 +152,7 @@ void dispatch_single_double(mutable_column_device_view& outd,
                    thrust::make_counting_iterator<size_type>(0),
                    thrust::make_counting_iterator<size_type>(outd.size()),
                    binop_func);
-  //"cudf::binops::jit::kernel_v_v")  //
+  //"cudf::binops::jit::kernel_v_v")  //TODO v_s, s_v.
 }
 
 }  // namespace compiled

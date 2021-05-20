@@ -133,10 +133,10 @@ void binary_operation_compiled(mutable_column_view& out,
 {
   if (is_null_dependent(op)) {
     CUDF_FAIL("Unsupported yet");
-    // cudf::binops::jit::kernel_v_v_with_validity
+    // TODO cudf::binops::jit::kernel_v_v_with_validity
   } else {
     operator_dispatcher(out, lhs, rhs, op, stream);
-    //"cudf::binops::jit::kernel_v_v")  //
+    //"cudf::binops::jit::kernel_v_v")  //TODO v_s, s_v.
   }
 }
 }  // namespace compiled
@@ -160,24 +160,24 @@ std::unique_ptr<column> binary_operation_compiled(column_view const& lhs,
 {
   CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes don't match");
 
-  if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
-    return binops::compiled::binary_operation(lhs, rhs, op, output_type, stream, mr);
+  // if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
+  //  return binops::compiled::binary_operation(lhs, rhs, op, output_type, stream, mr);
 
+  // TODO check if scale conversion required?
   // if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
   //  CUDF_FAIL("Not yet supported fixed_point");
   // return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
 
   // Check for datatype
-  CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
-  CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
-  CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
+  // CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
+  // CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
+  // CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
   auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
 
   if (lhs.is_empty() or rhs.is_empty()) return out;
 
   auto out_view = out->mutable_view();
-  // CUDF_FAIL("Not yet supported fixed_width");
   binops::compiled::binary_operation_compiled(out_view, lhs, rhs, op, stream);
   return out;
 }

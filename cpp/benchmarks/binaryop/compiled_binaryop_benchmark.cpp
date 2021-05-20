@@ -30,7 +30,6 @@ class COMPILED_BINARYOP : public cudf::benchmark {
 template <typename TypeLhs, typename TypeRhs, typename TypeOut>
 void BM_compiled_binaryop(benchmark::State& state, cudf::binary_operator binop)
 {
-  // std::cout<<"compiled\n";
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
   auto data_it = thrust::make_counting_iterator(0);

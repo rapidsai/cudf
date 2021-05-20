@@ -30,6 +30,10 @@ namespace cudf {
 namespace binops {
 namespace compiled {
 
+/**
+ * @brief Type casts each element of the column to `CastType`
+ *
+ */
 template <typename CastType>
 struct type_casted_accessor {
   template <typename Element>
@@ -42,6 +46,10 @@ struct type_casted_accessor {
   }
 };
 
+/**
+ * @brief Type casts value to column type and stores in `i`th row of the column
+ *
+ */
 template <typename FromType>
 struct typed_casted_writer {
   template <typename Element>
@@ -58,6 +66,7 @@ struct typed_casted_writer {
   }
 };
 
+// All binary operations
 namespace ops {
 
 struct Add {
@@ -219,6 +228,7 @@ struct PMod {
     return rem;
   }
 };
+
 struct Pow {
   template <typename TypeLhs,
             typename TypeRhs,
@@ -294,7 +304,6 @@ struct LogicalOr {
   }
 };
 
-// TODO check if TypeOut typecast really affects the output
 struct BitwiseAnd {
   template <typename TypeLhs, typename TypeRhs>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x & y)
@@ -319,7 +328,6 @@ struct BitwiseXor {
   }
 };
 
-// TODO check if TypeOut typecast really affects the output
 struct ShiftLeft {
   template <typename TypeLhs, typename TypeRhs>
   CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x << y)

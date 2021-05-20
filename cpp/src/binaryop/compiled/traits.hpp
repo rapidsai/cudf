@@ -17,7 +17,6 @@
 #pragma once
 
 #include <type_traits>
-//#include <cuda/std/type_traits>
 
 namespace cudf {
 
