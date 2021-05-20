@@ -115,12 +115,7 @@ def is_numeric_dtype(obj):
 
 """
 TODO: There a number of things we need to check:
-    1. Should any of the following methods be falling back to pd.api.types
-       functions:
-       is_interval_dtype, is_scalar.
-    2. The following methods have implementations, but could possibly just
-       alias pd.api.types functions directly: is_list_like
-    3. The following methods in pd.api.types probably need to be overridden:
+    1. The following methods in pd.api.types probably need to be overridden:
        is_interval, is_number, infer_dtype, pandas_dtype (maybe as cudf_dtype?)
     2. For datetime/timedelta, do we need to be more general than pandas with
        respect to the different time resolutions?
