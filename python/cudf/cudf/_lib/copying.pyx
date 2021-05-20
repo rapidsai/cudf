@@ -808,13 +808,17 @@ cdef class PackedColumns:
         return p
 
     @staticmethod
-    cdef PackedColumns c_from_table(Table input_table, keep_index=False):
+    cdef PackedColumns c_from_table(Table input_table, keep_index=True):
         """
         Construct a PackedColumns object from a cudf::Table.
         """
+        from cudf.core import RangeIndex
+
         cdef PackedColumns p = PackedColumns.__new__(PackedColumns)
 
-        if keep_index:
+        if keep_index and not input_table.index.equals(
+            RangeIndex(start=0, stop=len(input_table), step=1)
+        ):
             input_table_view = input_table.view()
             p.index_names = input_table._index_names
         else:
@@ -846,7 +850,7 @@ cdef class PackedColumns:
         return self.c_obj.gpu_data.get()[0].size()
 
 
-def pack(Table input_table, keep_index=False):
+def pack(Table input_table, keep_index=True):
     return PackedColumns.c_from_table(input_table, keep_index)
 
 
