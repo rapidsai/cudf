@@ -38,7 +38,7 @@ class Join : public cudf::benchmark {
 };
 
 template <typename key_type, typename payload_type, bool Nullable, typename Join>
-static void BM_join(Join JoinFunc, benchmark::State& state)
+static void BM_join(benchmark::State& state, Join JoinFunc)
 {
   const cudf::size_type build_table_size{(cudf::size_type)state.range(0)};
   const cudf::size_type probe_table_size{(cudf::size_type)state.range(1)};
@@ -121,7 +121,7 @@ static void BM_join(Join JoinFunc, benchmark::State& state)
                    cudf::null_equality compare_nulls) {                       \
       return cudf::inner_join(left, right, left_on, right_on, compare_nulls); \
     };                                                                        \
-    BM_join<key_type, payload_type, nullable>(join, st);                      \
+    BM_join<key_type, payload_type, nullable>(st, join);                      \
   }
 
 JOIN_BENCHMARK_DEFINE(join_32bit, int32_t, int32_t, false);
@@ -140,7 +140,7 @@ JOIN_BENCHMARK_DEFINE(join_64bit_nulls, int64_t, int64_t, true);
                    cudf::null_equality compare_nulls) {                           \
       return cudf::left_anti_join(left, right, left_on, right_on, compare_nulls); \
     };                                                                            \
-    BM_join<key_type, payload_type, nullable>(join, st);                          \
+    BM_join<key_type, payload_type, nullable>(st, join);                          \
   }
 
 LEFT_ANTI_JOIN_BENCHMARK_DEFINE(left_anti_join_32bit, int32_t, int32_t, false);
@@ -159,7 +159,7 @@ LEFT_ANTI_JOIN_BENCHMARK_DEFINE(left_anti_join_64bit_nulls, int64_t, int64_t, tr
                    cudf::null_equality compare_nulls) {                           \
       return cudf::left_semi_join(left, right, left_on, right_on, compare_nulls); \
     };                                                                            \
-    BM_join<key_type, payload_type, nullable>(join, st);                          \
+    BM_join<key_type, payload_type, nullable>(st, join);                          \
   }
 
 LEFT_SEMI_JOIN_BENCHMARK_DEFINE(left_semi_join_32bit, int32_t, int32_t, false);
@@ -277,4 +277,3 @@ BENCHMARK_REGISTER_F(Join, left_semi_join_64bit_nulls)
   ->Args({50'000'000, 50'000'000})
   ->Args({40'000'000, 120'000'000})
   ->UseManualTime();
-  

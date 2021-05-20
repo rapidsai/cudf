@@ -93,9 +93,9 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   auto hash_table     = *hash_table_ptr;
 
   // if compare_nulls == NOT_EQUAL, we can simply ignore any rows that are
-  // entirely NULL as they will never compare to equal.
+  // contain a NULL in any column as they will never compare to equal.
   auto const row_bitmask = (compare_nulls == null_equality::EQUAL)
-                             ? rmm::device_buffer{0, stream}
+                             ? rmm::device_buffer{}
                              : cudf::detail::bitmask_and(right_flattened_keys, stream);
   // skip rows that are null here.
   thrust::for_each_n(
