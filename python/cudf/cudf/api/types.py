@@ -155,7 +155,7 @@ def is_integer(obj):
     bool
     """
     if isinstance(obj, cudf.Scalar):
-        return is_integer_dtype(obj.dtype)
+        return pd.api.types.is_integer(obj.dtype)
     return pd.api.types.is_integer(obj)
 
 
