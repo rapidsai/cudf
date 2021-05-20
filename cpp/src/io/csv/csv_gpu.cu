@@ -21,7 +21,6 @@
 #include <io/utilities/block_utils.cuh>
 #include <io/utilities/parsing_utils.cuh>
 
-#include <cudf/detail/utilities/trie.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.cuh>
@@ -33,6 +32,7 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <io/utilities/trie.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -119,14 +119,19 @@ __device__ __inline__ bool is_datetime(
  *
  * @param len Number of non special-symbol or numeric characters
  * @param digit_count Number of digits characters
- * @param decimal_count Number of '.' characters
+ * @param decimal_count Number of occurrences of the decimal point character
+ * @param thousands_count Number of occurrences of the thousands separator character
  * @param dash_count Number of '-' characters
  * @param exponent_count Number of 'e or E' characters
  *
  * @return `true` if it is floating point-like, `false` otherwise
  */
-__device__ __inline__ bool is_floatingpoint(
-  long len, long digit_count, long decimal_count, long dash_count, long exponent_count)
+__device__ __inline__ bool is_floatingpoint(long len,
+                                            long digit_count,
+                                            long decimal_count,
+                                            long thousands_count,
+                                            long dash_count,
+                                            long exponent_count)
 {
   // Can't have more than one exponent and one decimal point
   if (decimal_count > 1) return false;
@@ -139,7 +144,9 @@ __device__ __inline__ bool is_floatingpoint(
   if (dash_count > 1 + exponent_count) return false;
 
   // If anything other than these characters is present, it's not a float
-  if (digit_count + decimal_count + dash_count + exponent_count != len) { return false; }
+  if (digit_count + decimal_count + dash_count + exponent_count + thousands_count != len) {
+    return false;
+  }
 
   // Needs at least 1 digit, 2 if exponent is present
   if (digit_count < 1 + exponent_count) return false;
@@ -157,14 +164,14 @@ __device__ __inline__ bool is_floatingpoint(
  * @param csv_text The entire CSV data to read
  * @param column_flags Per-column parsing behavior flags
  * @param row_offsets The start the CSV data of interest
- * @param d_columnData The count for each column data type
+ * @param d_column_data The count for each column data type
  */
 __global__ void __launch_bounds__(csvparse_block_dim)
   data_type_detection(parse_options_view const opts,
                       device_span<char const> csv_text,
                       device_span<column_parse::flags const> const column_flags,
                       device_span<uint64_t const> const row_offsets,
-                      device_span<column_type_histogram> d_columnData)
+                      device_span<column_type_histogram> d_column_data)
 {
   auto const raw_csv = csv_text.data();
 
@@ -193,21 +200,22 @@ __global__ void __launch_bounds__(csvparse_block_dim)
       // points to last character in the field
       auto const field_len = static_cast<size_t>(next_delimiter - field_start);
       if (serialized_trie_contains(opts.trie_na, {field_start, field_len})) {
-        atomicAdd(&d_columnData[actual_col].null_count, 1);
+        atomicAdd(&d_column_data[actual_col].null_count, 1);
       } else if (serialized_trie_contains(opts.trie_true, {field_start, field_len}) ||
                  serialized_trie_contains(opts.trie_false, {field_start, field_len})) {
-        atomicAdd(&d_columnData[actual_col].bool_count, 1);
+        atomicAdd(&d_column_data[actual_col].bool_count, 1);
       } else if (cudf::io::is_infinity(field_start, next_delimiter)) {
-        atomicAdd(&d_columnData[actual_col].float_count, 1);
+        atomicAdd(&d_column_data[actual_col].float_count, 1);
       } else {
-        long countNumber   = 0;
-        long countDecimal  = 0;
-        long countSlash    = 0;
-        long countDash     = 0;
-        long countPlus     = 0;
-        long countColon    = 0;
-        long countString   = 0;
-        long countExponent = 0;
+        long count_number    = 0;
+        long count_decimal   = 0;
+        long count_thousands = 0;
+        long count_slash     = 0;
+        long count_dash      = 0;
+        long count_plus      = 0;
+        long count_colon     = 0;
+        long count_string    = 0;
+        long count_exponent  = 0;
 
         // Modify field_start & end to ignore whitespace and quotechars
         // This could possibly result in additional empty fields
@@ -216,53 +224,62 @@ __global__ void __launch_bounds__(csvparse_block_dim)
 
         for (auto cur = trimmed_field_range.first; cur < trimmed_field_range.second; ++cur) {
           if (is_digit(*cur)) {
-            countNumber++;
+            count_number++;
+            continue;
+          }
+          if (*cur == opts.decimal) {
+            count_decimal++;
+            continue;
+          }
+          if (*cur == opts.thousands) {
+            count_thousands++;
             continue;
           }
           // Looking for unique characters that will help identify column types.
           switch (*cur) {
-            case '.': countDecimal++; break;
-            case '-': countDash++; break;
-            case '+': countPlus++; break;
-            case '/': countSlash++; break;
-            case ':': countColon++; break;
+            case '-': count_dash++; break;
+            case '+': count_plus++; break;
+            case '/': count_slash++; break;
+            case ':': count_colon++; break;
             case 'e':
             case 'E':
               if (cur > trimmed_field_range.first && cur < trimmed_field_range.second - 1)
-                countExponent++;
+                count_exponent++;
               break;
-            default: countString++; break;
+            default: count_string++; break;
           }
         }
 
         // Integers have to have the length of the string
         // Off by one if they start with a minus sign
-        auto const int_req_number_cnt = trimmed_field_len - ((*trimmed_field_range.first == '-' ||
-                                                              *trimmed_field_range.first == '+') &&
-                                                             trimmed_field_len > 1);
+        auto const int_req_number_cnt =
+          trimmed_field_len - count_thousands -
+          ((*trimmed_field_range.first == '-' || *trimmed_field_range.first == '+') &&
+           trimmed_field_len > 1);
 
         if (column_flags[col] & column_parse::as_datetime) {
           // PANDAS uses `object` dtype if the date is unparseable
-          if (is_datetime(countString, countDecimal, countColon, countDash, countSlash)) {
-            atomicAdd(&d_columnData[actual_col].datetime_count, 1);
+          if (is_datetime(count_string, count_decimal, count_colon, count_dash, count_slash)) {
+            atomicAdd(&d_column_data[actual_col].datetime_count, 1);
           } else {
-            atomicAdd(&d_columnData[actual_col].string_count, 1);
+            atomicAdd(&d_column_data[actual_col].string_count, 1);
           }
-        } else if (countNumber == int_req_number_cnt) {
+        } else if (count_number == int_req_number_cnt) {
           auto const is_negative = (*trimmed_field_range.first == '-');
           auto const data_begin =
             trimmed_field_range.first + (is_negative || (*trimmed_field_range.first == '+'));
           cudf::size_type *ptr = cudf::io::gpu::infer_integral_field_counter(
-            data_begin, data_begin + countNumber, is_negative, d_columnData[actual_col]);
+            data_begin, data_begin + count_number, is_negative, d_column_data[actual_col]);
           atomicAdd(ptr, 1);
         } else if (is_floatingpoint(trimmed_field_len,
-                                    countNumber,
-                                    countDecimal,
-                                    countDash + countPlus,
-                                    countExponent)) {
-          atomicAdd(&d_columnData[actual_col].float_count, 1);
+                                    count_number,
+                                    count_decimal,
+                                    count_thousands,
+                                    count_dash + count_plus,
+                                    count_exponent)) {
+          atomicAdd(&d_column_data[actual_col].float_count, 1);
         } else {
-          atomicAdd(&d_columnData[actual_col].string_count, 1);
+          atomicAdd(&d_column_data[actual_col].string_count, 1);
         }
       }
       actual_col++;
@@ -520,16 +537,13 @@ struct decode_op {
  *
  * Data is processed one record at a time
  *
- * @param[in] raw_csv The entire CSV data to read
- * @param[in] opts A set of parsing options
- * @param[in] num_records The number of lines/rows of CSV data
- * @param[in] num_columns The number of columns of CSV data
+ * @param[in] options A set of parsing options
+ * @param[in] data The entire CSV data to read
  * @param[in] column_flags Per-column parsing behavior flags
- * @param[in] recStart The start the CSV data of interest
- * @param[in] dtype The data type of the column
- * @param[out] data The output column data
- * @param[out] valid The bitmaps indicating whether column fields are valid
- * @param[out] num_valid The numbers of valid fields in columns
+ * @param[in] row_offsets The start the CSV data of interest
+ * @param[in] dtypes The data type of the column
+ * @param[out] columns The output column data
+ * @param[out] valids The bitmaps indicating whether column fields are valid
  */
 __global__ void __launch_bounds__(csvparse_block_dim)
   convert_csv_to_cudf(cudf::io::parse_options_view options,
