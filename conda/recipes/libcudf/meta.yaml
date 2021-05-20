@@ -133,12 +133,14 @@ test:
     - test -f $PREFIX/include/cudf/io/types.hpp
     - test -f $PREFIX/include/cudf/ipc.hpp
     - test -f $PREFIX/include/cudf/join.hpp
+    - test -f $PREFIX/include/cudf/lists/detail/combine.hpp
     - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
+    - test -f $PREFIX/include/cudf/lists/lists_column_factories.hpp
     - test -f $PREFIX/include/cudf/lists/detail/drop_list_duplicates.hpp
     - test -f $PREFIX/include/cudf/lists/detail/interleave_columns.hpp
     - test -f $PREFIX/include/cudf/lists/detail/sorting.hpp
-    - test -f $PREFIX/include/cudf/lists/concatenate_rows.hpp
+    - test -f $PREFIX/include/cudf/lists/combine.hpp
     - test -f $PREFIX/include/cudf/lists/count_elements.hpp
     - test -f $PREFIX/include/cudf/lists/explode.hpp
     - test -f $PREFIX/include/cudf/lists/drop_list_duplicates.hpp
