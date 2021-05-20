@@ -78,7 +78,6 @@ public class CuFile {
    * @param path        The file path to copy to.
    * @param file_offset The file offset from which to write the buffer.
    * @param buffer      The device buffer to copy from.
-   * @deprecated Use writeDeviceMemoryToFile instead.
    */
   public static void writeDeviceBufferToFile(File path, long file_offset,
                                              BaseDeviceMemoryBuffer buffer) {
@@ -108,7 +107,6 @@ public class CuFile {
    * @param path   The file path to copy to.
    * @param buffer The device buffer to copy from.
    * @return The file offset from which the buffer was appended.
-   * @deprecated Use appendDeviceMemoryToFile instead.
    */
   public static long appendDeviceBufferToFile(File path, BaseDeviceMemoryBuffer buffer) {
     return appendDeviceMemoryToFile(path, buffer.getAddress(), buffer.getLength());
@@ -136,7 +134,6 @@ public class CuFile {
    * @param buffer     The device buffer to copy into.
    * @param path       The file path to copy from.
    * @param fileOffset The file offset from which to copy the content.
-   * @deprecated Use readFileToDeviceMemory instead.
    */
   public static void readFileToDeviceBuffer(BaseDeviceMemoryBuffer buffer, File path,
                                             long fileOffset) {
