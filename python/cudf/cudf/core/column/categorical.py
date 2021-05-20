@@ -1554,7 +1554,7 @@ def _create_empty_categorical_column(
             cudf.utils.utils.scalar_broadcast_to(
                 categorical_column.default_na_value(),
                 categorical_column.size,
-                np.dtype(categorical_column.codes),
+                categorical_column.codes.dtype,
             )
         ),
         offset=categorical_column.offset,
