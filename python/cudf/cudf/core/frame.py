@@ -157,6 +157,15 @@ class Frame(libcudf.table.Table):
         return self._num_columns * self._num_rows
 
     @property
+    def _is_homogeneous(self):
+        # make sure that the dataframe has columns
+        if not self._data.columns:
+            return True
+
+        first_type = self._data.columns[0].dtype
+        return all(x.dtype == first_type for x in self._data.columns)
+
+    @property
     def empty(self):
         """
         Indicator whether DataFrame or Series is empty.
