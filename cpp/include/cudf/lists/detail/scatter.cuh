@@ -407,49 +407,80 @@ struct list_child_constructor {
 
     auto string_views = rmm::device_uvector<string_view>(num_child_rows, stream);
 
-    auto populate_string_views = [d_scattered_lists = list_vector.begin(),  // unbound_list_view*
-                                  d_list_offsets    = list_offsets.template data<int32_t>(),
-                                  d_string_views    = string_views.data(),
-                                  source_lists,
-                                  target_lists] __device__(auto const& row_index) {
-      auto unbound_list_view    = d_scattered_lists[row_index];
-      auto actual_list_row      = unbound_list_view.bind_to_column(source_lists, target_lists);
-      auto lists_column         = actual_list_row.get_column();
-      auto lists_offsets_column = lists_column.offsets();
-      auto child_strings_column = lists_column.child();
-      auto string_offsets_column =
-        child_strings_column.child(cudf::strings_column_view::offsets_column_index);
-      auto string_chars_column =
-        child_strings_column.child(cudf::strings_column_view::chars_column_index);
+    // auto populate_string_views = [d_scattered_lists = list_vector.begin(),  // unbound_list_view*
+    //                               d_list_offsets    = list_offsets.template data<int32_t>(),
+    //                               d_string_views    = string_views.data(),
+    //                               source_lists,
+    //                               target_lists] __device__(auto const& row_index) {
+    //   auto unbound_list_view    = d_scattered_lists[row_index];
+    //   auto actual_list_row      = unbound_list_view.bind_to_column(source_lists, target_lists);
+    //   auto lists_column         = actual_list_row.get_column();
+    //   auto lists_offsets_column = lists_column.offsets();
+    //   auto child_strings_column = lists_column.child();
+    //   auto string_offsets_column =
+    //     child_strings_column.child(cudf::strings_column_view::offsets_column_index);
+    //   auto string_chars_column =
+    //     child_strings_column.child(cudf::strings_column_view::chars_column_index);
 
-      auto output_start_offset =
-        d_list_offsets[row_index];  // Offset in `string_views` at which string_views are
-                                    // to be written for this list row_index.
-      auto input_list_start =
-        lists_offsets_column.template element<int32_t>(unbound_list_view.row_index());
+    //   auto output_start_offset =
+    //     d_list_offsets[row_index];  // Offset in `string_views` at which string_views are
+    //                                 // to be written for this list row_index.
+    //   auto input_list_start =
+    //     lists_offsets_column.template element<int32_t>(unbound_list_view.row_index());
 
-      thrust::for_each_n(
-        thrust::seq,
-        thrust::make_counting_iterator<size_type>(0),
-        actual_list_row.size(),
-        [output_start_offset,
-         d_string_views,
-         input_list_start,
-         d_string_offsets = string_offsets_column.template data<int32_t>(),
-         d_string_chars =
-           string_chars_column.template data<char>()] __device__(auto const& string_idx) {
-          auto string_start_idx = d_string_offsets[input_list_start + string_idx];
-          auto string_end_idx   = d_string_offsets[input_list_start + string_idx + 1];
+    //   thrust::for_each_n(
+    //     thrust::seq,
+    //     thrust::make_counting_iterator<size_type>(0),
+    //     actual_list_row.size(),
+    //     [output_start_offset,
+    //      d_string_views,
+    //      input_list_start,
+    //      d_string_offsets = string_offsets_column.template data<int32_t>(),
+    //      d_string_chars =
+    //        string_chars_column.template data<char>()] __device__(auto const& string_idx) {
+    //       auto string_start_idx = d_string_offsets[input_list_start + string_idx];
+    //       auto string_end_idx   = d_string_offsets[input_list_start + string_idx + 1];
 
-          d_string_views[output_start_offset + string_idx] =
-            string_view{d_string_chars + string_start_idx, string_end_idx - string_start_idx};
-        });
-    };
+    //       d_string_views[output_start_offset + string_idx] =
+    //         string_view{d_string_chars + string_start_idx, string_end_idx - string_start_idx};
+    //     });
+    // };
 
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       list_vector.size(),
-                       populate_string_views);
+    // thrust::for_each_n(rmm::exec_policy(stream),
+    //                    thrust::make_counting_iterator<size_type>(0),
+    //                    list_vector.size(),
+    //                    populate_string_views);
+  
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(string_views.size()),
+                      string_views.begin(),
+                      [offset_begin  = list_offsets.begin<offset_type>(),
+                      offset_size   = list_offsets.size(),
+                      d_list_vector = list_vector.begin(),
+                      source_lists,
+                      target_lists] __device__(auto index) {
+                        auto const list_index_iter = thrust::upper_bound(
+                          thrust::seq, offset_begin, offset_begin + offset_size, index);
+                        auto const list_index = thrust::distance(offset_begin, list_index_iter) - 1;
+                        auto const intra_index = index - offset_begin[list_index];
+                        auto row_index = d_list_vector[list_index].row_index();
+                        auto actual_list_row =
+                          d_list_vector[list_index].bind_to_column(source_lists, target_lists);
+                        auto lists_column = actual_list_row.get_column();
+                        auto lists_offsets_ptr = lists_column.offsets().template data<offset_type>();
+                        auto child_strings_column = lists_column.child();
+                        auto string_offsets_ptr =
+                          child_strings_column.child(cudf::strings_column_view::offsets_column_index).template data<offset_type>();
+                        auto string_chars_ptr =
+                          child_strings_column.child(cudf::strings_column_view::chars_column_index).template data<char>();
+                        
+                        auto strings_offset = lists_offsets_ptr[row_index];
+                        auto char_offset = string_offsets_ptr[strings_offset + intra_index];
+                        auto char_ptr = string_chars_ptr + char_offset;
+                        auto string_size = string_offsets_ptr[strings_offset + 1] - string_offsets_ptr[strings_offset];
+                        return string_view{char_ptr, string_size};
+                      });
 
     // string_views should now have been populated with source and target references.
 
