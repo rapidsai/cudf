@@ -1363,7 +1363,7 @@ class CategoricalColumn(column.ColumnBase):
     @staticmethod
     def _concat(objs: MutableSequence[CategoricalColumn]) -> CategoricalColumn:
         # TODO: This function currently assumes it is being called from
-        # column._concat_columns, at least to the extent that all the
+        # column.concat_columns, at least to the extent that all the
         # preprocessing in that function has already been done. That should be
         # improved as the concatenation API is solidified.
 
@@ -1371,9 +1371,7 @@ class CategoricalColumn(column.ColumnBase):
         head = next((obj for obj in objs if obj.valid_count), objs[0])
 
         # Combine and de-dupe the categories
-        cats = (
-            cudf.concat([o.categories for o in objs]).drop_duplicates()._column
-        )
+        cats = column.concat_columns([o.categories for o in objs]).unique()
         objs = [o._set_categories(cats, is_unique=True) for o in objs]
         codes = [o.codes for o in objs]
 

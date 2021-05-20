@@ -195,13 +195,13 @@ def _convert_str_col(col, errors, _downcast=None):
     if not is_string_dtype(col):
         raise TypeError("col must be string dtype.")
 
-    is_integer = libstrings.isinteger(col)
+    is_integer = libstrings.is_integer(col)
     if is_integer.all():
         return col.as_numerical_column(dtype=np.dtype("i8"))
 
     col = _proc_inf_empty_strings(col)
 
-    is_float = libstrings.isfloat(col)
+    is_float = libstrings.is_float(col)
     if is_float.all():
         if _downcast in {"unsigned", "signed", "integer"}:
             warnings.warn(
@@ -226,7 +226,7 @@ def _convert_str_col(col, errors, _downcast=None):
 def _proc_inf_empty_strings(col):
     """Handles empty and infinity strings
     """
-    col = libstrings.lower(col)
+    col = libstrings.to_lower(col)
     col = _proc_empty_strings(col)
     col = _proc_inf_strings(col)
     return col
@@ -244,7 +244,7 @@ def _proc_inf_strings(col):
     """Convert "inf/infinity" strings into "Inf", the native string
     representing infinity in libcudf
     """
-    col = libstrings.replace.replace_muli(
+    col = libstrings.replace_multi(
         col, as_column(["+", "inf", "inity"]), as_column(["", "Inf", ""]),
     )
     return col

@@ -27,7 +27,7 @@ from cudf.core.column import (
     arange,
     column,
 )
-from cudf.core.column.column import _concat_columns
+from cudf.core.column.column import concat_columns
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import SingleColumnFrame
@@ -639,7 +639,7 @@ class Index(SingleColumnFrame, Serializable):
 
     @classmethod
     def _concat(cls, objs):
-        data = _concat_columns([o._values for o in objs])
+        data = concat_columns([o._values for o in objs])
         names = {obj.name for obj in objs}
         if len(names) == 1:
             [name] = names
@@ -2474,11 +2474,9 @@ class CategoricalIndex(GenericIndex):
             dtype = None
 
         if categories is not None:
-            data.set_categories(categories, ordered=ordered, inplace=True)
+            data = data.set_categories(categories, ordered=ordered)
         elif isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
-            data.set_categories(
-                dtype.categories, ordered=ordered, inplace=True
-            )
+            data = data.set_categories(dtype.categories, ordered=ordered)
         elif ordered is True and data.ordered is False:
             data = data.as_ordered()
         elif ordered is False and data.ordered is True:
@@ -2500,7 +2498,7 @@ class CategoricalIndex(GenericIndex):
         """
         The categories of this categorical.
         """
-        return cudf.Series(self._values.categories)
+        return as_index(self._values.categories)
 
 
 def interval_range(

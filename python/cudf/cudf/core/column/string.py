@@ -5264,7 +5264,7 @@ class StringColumn(column.ColumnBase):
             return super().fillna(method=method)
 
     def _find_first_and_last(self, value: ScalarLike) -> Tuple[int, int]:
-        found_indices = libstrings.contains(self, f"^{value}$")
+        found_indices = libstrings.contains_re(self, f"^{value}$")
         found_indices = libcudf.unary.cast(found_indices, dtype=np.int32)
         first = column.as_column(found_indices).find_first_value(1)
         last = column.as_column(found_indices).find_last_value(1)
