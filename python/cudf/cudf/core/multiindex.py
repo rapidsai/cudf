@@ -204,6 +204,11 @@ class MultiIndex(Index):
             )
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
+    @property
+    def _num_columns(self):
+        # MultiIndex is not a single-columned frame.
+        return super(SingleColumnFrame, self)._num_columns
+
     def rename(self, names, inplace=False):
         """
         Alter MultiIndex level names
