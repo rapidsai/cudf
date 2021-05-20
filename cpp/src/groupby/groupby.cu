@@ -90,17 +90,30 @@ namespace {
 struct empty_column_constructor {
   column_view values;
 
-  template <aggregation::Kind k>
+  template <typename ValuesType, aggregation::Kind k>
   std::unique_ptr<cudf::column> operator()() const
   {
     using namespace cudf;
+    using namespace cudf::detail;
 
     if constexpr (k == aggregation::Kind::COLLECT_LIST || k == aggregation::Kind::COLLECT_SET) {
       return make_lists_column(
         0, make_empty_column(data_type{type_to_id<offset_type>()}), empty_like(values), 0, {});
     }
 
-    return make_empty_column(cudf::detail::target_type(values.type(), k));
+    // If `values` is LIST typed, and the aggregation results match the type,
+    // construct empty results based on `values`.
+    // Most generally, this applies if input type matches output type.
+    //
+    // Note: `target_type_t` is not recursive, and `ValuesType` does not consider children.
+    //       It is important that `COLLECT_LIST` and `COLLECT_SET` are handled before this
+    //       point, because `COLLECT_LIST(LIST)` produces `LIST<LIST>`, but `target_type_t`
+    //       wouldn't know the difference.
+    if constexpr (std::is_same_v<target_type_t<ValuesType, k>, ValuesType>) {
+      return empty_like(values);
+    }
+
+    return make_empty_column(target_type(values.type(), k));
   }
 };
 
@@ -113,13 +126,14 @@ auto empty_results(host_span<aggregation_request const> requests)
     requests.begin(), requests.end(), std::back_inserter(empty_results), [](auto const& request) {
       std::vector<std::unique_ptr<column>> results;
 
-      std::transform(request.aggregations.begin(),
-                     request.aggregations.end(),
-                     std::back_inserter(results),
-                     [&request](auto const& agg) {
-                       return cudf::detail::aggregation_dispatcher(
-                         agg->kind, empty_column_constructor{request.values});
-                     });
+      std::transform(
+        request.aggregations.begin(),
+        request.aggregations.end(),
+        std::back_inserter(results),
+        [&request](auto const& agg) {
+          return cudf::detail::dispatch_type_and_aggregation(
+            request.values.type(), agg->kind, empty_column_constructor{request.values});
+        });
 
       return aggregation_result{std::move(results)};
     });
