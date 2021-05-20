@@ -100,13 +100,15 @@ std::unique_ptr<column> join_strings(
  * out is [null, null, null, null, null, 'ff+gg+hh']
  *
  * col_narep = '-'
- * out = concatenate({c0, c1, c2}, sep, col_narep)
+ * sep_na = non-valid scalar
+ * out = concatenate({c0, c1, c2}, sep, sep_na, col_narep)
+ * // only the null entry in the sep column produces a null row
  * out is ['aa::-::bb', '-%%cc%%', '^^dd^^-', 'ee!-!-', '-*-*-', null]
  *
  * col_narep = ''
- * out = concatenate({c0, c1, c2}, sep, col_narep, separator_on_nulls:NO)
+ * out = concatenate({c0, c1, c2}, sep, sep_rep, col_narep, separator_on_nulls:NO)
  * // parameter suppresses separator for null rows
- * out is ['aa::bb', 'cc%%', '^^dd', 'ee', '', null]
+ * out is ['aa::bb', 'cc%%', '^^dd', 'ee', '', 'ff+gg+hh']
  * @endcode
  *
  * @throw cudf::logic_error if no input columns are specified - table view is empty
