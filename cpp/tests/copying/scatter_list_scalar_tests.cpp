@@ -32,15 +32,14 @@ using size_column = fixed_width_column_wrapper<size_type>;
 class ScatterListScalarTests : public cudf::test::BaseFixture {
 };
 
-void test_single_scalar_scatter(column_view const& target,
-                                scalar const& slr,
-                                column_view const& scatter_map,
-                                column_view expect)
+std::unique_ptr<column> single_scalar_scatter(column_view const& target,
+                                              scalar const& slr,
+                                              column_view const& scatter_map)
 {
   std::vector<std::reference_wrapper<const scalar>> slrs{slr};
   table_view targets{{target}};
   auto result = scatter(slrs, scatter_map, targets, true);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view().column(0), expect);
+  return std::move(result->release()[0]);
 }
 
 template <typename T>
@@ -67,7 +66,8 @@ TYPED_TEST(ScatterListOfFixedWidthScalarTest, Basic)
                LCW({2, 2, 2}, mask_vector{1, 0, 1}.begin()),
                LCW{10, 10, 10, 10},
                LCW({2, 2, 2}, mask_vector{1, 0, 1}.begin())};
-  test_single_scalar_scatter(col, *slr, scatter_map, expected);
+  auto result = single_scalar_scatter(col, *slr, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
 TYPED_TEST(ScatterListOfFixedWidthScalarTest, EmptyValidScalar)
@@ -85,7 +85,8 @@ TYPED_TEST(ScatterListOfFixedWidthScalarTest, EmptyValidScalar)
 
   LCW expected{
     LCW{}, LCW{}, LCW({10, 10, 10, 10}, mask_vector{1, 0, 1, 0}.begin()), LCW{5}, LCW{42, 42}};
-  test_single_scalar_scatter(col, *slr, scatter_map, expected);
+  auto result = single_scalar_scatter(col, *slr, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
 TYPED_TEST(ScatterListOfFixedWidthScalarTest, NullScalar)
@@ -99,7 +100,8 @@ TYPED_TEST(ScatterListOfFixedWidthScalarTest, NullScalar)
 
   LCW expected({LCW({1, 1, 1}, mask_vector{0, 0, 1}.begin()), LCW{}, LCW{10, 10, 10, 10}, LCW{}},
                mask_vector{1, 0, 1, 0}.begin());
-  test_single_scalar_scatter(col, *slr, scatter_map, expected);
+  auto result = single_scalar_scatter(col, *slr, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
 TYPED_TEST(ScatterListOfFixedWidthScalarTest, NullableTargetRow)
@@ -114,7 +116,8 @@ TYPED_TEST(ScatterListOfFixedWidthScalarTest, NullableTargetRow)
 
   LCW expected({LCW{9, 9}, LCW{9, 9}, LCW{8, 8, 8}, LCW{}, LCW{9, 9, 9}},
                mask_vector{1, 1, 1, 0, 1}.begin());
-  test_single_scalar_scatter(col, *slr, scatter_map, expected);
+  auto result = single_scalar_scatter(col, *slr, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
 class ScatterListOfStringScalarTest : public ScatterListScalarTests {
@@ -139,7 +142,8 @@ TEST_F(ScatterListOfStringScalarTest, Basic)
                LCW({"Hello!", "", "你好！", "صباح الخير!", "", "こんにちは！"},
                    mask_vector{1, 0, 1, 1, 0, 1}.begin())};
 
-  test_single_scalar_scatter(col, *slr, scatter_map, expected);
+  auto result = single_scalar_scatter(col, *slr, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
 TEST_F(ScatterListOfStringScalarTest, EmptyValidScalar)
@@ -158,7 +162,8 @@ TEST_F(ScatterListOfStringScalarTest, EmptyValidScalar)
 
   LCW expected{LCW{}, LCW{""}, LCW{"a", "bab", "bacab"}, LCW{}};
 
-  test_single_scalar_scatter(col, *slr, scatter_map, expected);
+  auto result = single_scalar_scatter(col, *slr, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
 TEST_F(ScatterListOfStringScalarTest, NullScalar)
@@ -176,7 +181,8 @@ TEST_F(ScatterListOfStringScalarTest, NullScalar)
 
   LCW expected({LCW{"xx", "yy"}, LCW{}, LCW{}, LCW{"888", "777"}}, mask_vector{1, 0, 0, 1}.begin());
 
-  test_single_scalar_scatter(col, *slr, scatter_map, expected);
+  auto result = single_scalar_scatter(col, *slr, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
 TEST_F(ScatterListOfStringScalarTest, NullableTargetRow)
@@ -197,7 +203,8 @@ TEST_F(ScatterListOfStringScalarTest, NullableTargetRow)
                 LCW({"Hello!", "", "こんにちは！"}, mask_vector{1, 0, 1}.begin())},
                mask_vector{1, 1, 1, 1}.begin());
 
-  test_single_scalar_scatter(col, *slr, scatter_map, expected);
+  auto result = single_scalar_scatter(col, *slr, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
 template <typename T>
@@ -224,7 +231,8 @@ TYPED_TEST(ScatterListOfListScalarTest, Basic)
                 LCW({LCW{1, 2, 3}, LCW{4}, LCW{}, LCW{5, 6}}, mask_vector{1, 1, 0, 1}.begin()),
                 LCW({LCW{1, 2, 3}, LCW{4}, LCW{}, LCW{5, 6}}, mask_vector{1, 1, 0, 1}.begin())});
 
-  test_single_scalar_scatter(col, *slr, scatter_map, expected);
+  auto result = single_scalar_scatter(col, *slr, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
 TYPED_TEST(ScatterListOfListScalarTest, EmptyValidScalar)
@@ -244,7 +252,8 @@ TYPED_TEST(ScatterListOfListScalarTest, EmptyValidScalar)
                 LCW{LCW{55, 55}, LCW{}, LCW{10, 10, 10}},
                 LCW{}});
 
-  test_single_scalar_scatter(col, *slr, scatter_map, expected);
+  auto result = single_scalar_scatter(col, *slr, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
 TYPED_TEST(ScatterListOfListScalarTest, NullScalar)
@@ -260,7 +269,8 @@ TYPED_TEST(ScatterListOfListScalarTest, NullScalar)
 
   LCW expected({LCW{}, LCW{}, LCW{LCW{44, 44}}}, mask_vector{0, 0, 1}.begin());
 
-  test_single_scalar_scatter(col, *slr, scatter_map, expected);
+  auto result = single_scalar_scatter(col, *slr, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
 TYPED_TEST(ScatterListOfListScalarTest, NullableTargetRows)
@@ -282,7 +292,8 @@ TYPED_TEST(ScatterListOfListScalarTest, NullableTargetRows)
                 LCW{LCW{44, 44}}},
                mask_vector{1, 1, 1}.begin());
 
-  test_single_scalar_scatter(col, *slr, scatter_map, expected);
+  auto result = single_scalar_scatter(col, *slr, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
 }
 
 template <typename T>
@@ -333,7 +344,8 @@ TYPED_TEST(ScatterListOfStructScalarTest, Basic)
   auto expected =
     make_lists_column(4, ex_offsets.release(), ex_child.release(), 0, rmm::device_buffer{});
 
-  test_single_scalar_scatter(*col, *slr, scatter_map, *expected);
+  auto result = single_scalar_scatter(*col, *slr, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
 }
 
 TYPED_TEST(ScatterListOfStructScalarTest, EmptyValidScalar)
@@ -364,7 +376,8 @@ TYPED_TEST(ScatterListOfStructScalarTest, EmptyValidScalar)
   auto expected =
     make_lists_column(4, ex_offsets.release(), ex_child.release(), 0, rmm::device_buffer{});
 
-  test_single_scalar_scatter(*col, *slr, scatter_map, *expected);
+  auto result = single_scalar_scatter(*col, *slr, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
 }
 
 TYPED_TEST(ScatterListOfStructScalarTest, NullScalar)
@@ -394,7 +407,8 @@ TYPED_TEST(ScatterListOfStructScalarTest, NullScalar)
   auto expected =
     make_lists_column(4, ex_offsets.release(), ex_child.release(), 3, std::move(null_mask));
 
-  test_single_scalar_scatter(*col, *slr, scatter_map, *expected);
+  auto result = single_scalar_scatter(*col, *slr, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
 }
 
 TYPED_TEST(ScatterListOfStructScalarTest, NullableTargetRow)
@@ -436,7 +450,8 @@ TYPED_TEST(ScatterListOfStructScalarTest, NullableTargetRow)
   auto expected =
     make_lists_column(4, ex_offsets.release(), ex_child.release(), 1, std::move(ex_null_mask));
 
-  test_single_scalar_scatter(*col, *slr, scatter_map, *expected);
+  auto result = single_scalar_scatter(*col, *slr, scatter_map);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, *expected);
 }
 
 }  // namespace test
