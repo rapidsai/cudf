@@ -290,11 +290,6 @@ def is_decimal_dtype(obj):
     )
 
 
-def _decimal_normalize_types(*args):
-    dtype = _find_common_type_decimal([a.dtype for a in args])
-    return [a.astype(dtype) for a in args]
-
-
 def _find_common_type_decimal(dtypes):
     # Find the largest scale and the largest difference between
     # precision and scale of the columns to be concatenated
@@ -697,9 +692,15 @@ def find_common_type(dtypes):
     dtypes = set(dtypes)
 
     if any(is_decimal_dtype(dtype) for dtype in dtypes):
-        raise NotImplementedError(
-            "DecimalDtype is not yet supported in find_common_type"
-        )
+        if all(
+            is_decimal_dtype(dtype) or is_numerical_dtype(dtype)
+            for dtype in dtypes
+        ):
+            return _find_common_type_decimal(
+                [dtype for dtype in dtypes if is_decimal_dtype(dtype)]
+            )
+        else:
+            return np.dtype("O")
 
     # Corner case 1:
     # Resort to np.result_type to handle "M" and "m" types separately

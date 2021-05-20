@@ -45,17 +45,14 @@ from cudf.core.window import Rolling
 from cudf.utils import cudautils, docutils, ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    _decimal_normalize_types,
     can_convert_to_column,
-    is_numerical_dtype,
     is_decimal_dtype,
     is_list_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
     is_scalar,
     min_scalar_type,
-    numeric_normalize_types,
-    _find_common_type_decimal,
+    find_common_type,
 )
 from cudf.utils.utils import (
     get_appropriate_dispatched_func,
@@ -2404,30 +2401,8 @@ class Series(SingleColumnFrame, Serializable):
                     )
 
             if dtype_mismatch:
-                if all(
-                    [
-                        isinstance(obj._column, cudf.core.column.DecimalColumn)
-                        for obj in objs
-                    ]
-                ):
-                    objs = _decimal_normalize_types(*objs)
-                elif all([is_numerical_dtype(obj.dtype) for obj in objs]):
-                    objs = numeric_normalize_types(*objs)
-                elif all(
-                    [
-                        isinstance(obj._column, cudf.core.column.DecimalColumn)
-                        or is_numerical_dtype(obj.dtype)
-                        for obj in objs
-                    ]
-                ):
-                    decimal_type = _find_common_type_decimal(
-                        [
-                            obj.dtype
-                            for obj in objs
-                            if is_decimal_dtype(obj.dtype)
-                        ]
-                    )
-                    objs = [obj.astype(decimal_type) for obj in objs]
+                common_dtype = find_common_type([obj.dtype for obj in objs])
+                objs = [obj.astype(common_dtype) for obj in objs]
 
         col = _concat_columns([o._column for o in objs])
 
