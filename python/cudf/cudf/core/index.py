@@ -2474,17 +2474,15 @@ class CategoricalIndex(GenericIndex):
             dtype = None
 
         if categories is not None:
-            data.cat().set_categories(
-                categories, ordered=ordered, inplace=True
-            )
+            data.set_categories(categories, ordered=ordered, inplace=True)
         elif isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
-            data.cat().set_categories(
+            data.set_categories(
                 dtype.categories, ordered=ordered, inplace=True
             )
         elif ordered is True and data.ordered is False:
-            data.cat().as_ordered(inplace=True)
+            data = data.as_ordered()
         elif ordered is False and data.ordered is True:
-            data.cat().as_unordered(inplace=True)
+            data = data.as_unordered()
 
         out._initialize(data, **kwargs)
 
@@ -2495,14 +2493,14 @@ class CategoricalIndex(GenericIndex):
         """
         The category codes of this categorical.
         """
-        return self._values.cat().codes
+        return as_index(self._values.codes)
 
     @property
     def categories(self):
         """
         The categories of this categorical.
         """
-        return self._values.cat().categories
+        return cudf.Series(self._values.categories)
 
 
 def interval_range(
@@ -2782,7 +2780,7 @@ class StringIndex(GenericIndex):
     @copy_docstring(StringMethods.__init__)  # type: ignore
     @property
     def str(self):
-        return StringMethods(column=self._values, parent=self)
+        return StringMethods(parent=self)
 
     def _clean_nulls_from_index(self):
         """

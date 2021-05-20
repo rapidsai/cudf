@@ -84,9 +84,6 @@ class StructColumn(ColumnBase):
             result = result._rename_fields(self.dtype.fields.keys())
         return result
 
-    def struct(self, parent=None):
-        return StructMethods(self, parent=parent)
-
     def _rename_fields(self, names):
         """
         Return a StructColumn with the same field values as this StructColumn,
@@ -117,12 +114,12 @@ class StructMethods(ColumnMethodsMixin):
     Struct methods for Series
     """
 
-    def __init__(self, column, parent=None):
-        if not is_struct_dtype(column.dtype):
+    def __init__(self, parent=None):
+        if not is_struct_dtype(parent.dtype):
             raise AttributeError(
                 "Can only use .struct accessor with a 'struct' dtype"
             )
-        super().__init__(column=column, parent=parent)
+        super().__init__(parent=parent)
 
     def field(self, key):
         """
@@ -151,9 +148,9 @@ class StructMethods(ColumnMethodsMixin):
         1    3
         dtype: int64
         """
-        fields = list(self._column.dtype.fields.keys())
+        fields = list(self._parent._column.dtype.fields.keys())
         if key in fields:
             pos = fields.index(key)
-            return self._return_or_inplace(self._column.children[pos])
+            return self._return_or_inplace(self._parent._column.children[pos])
         else:
-            return self._return_or_inplace(self._column.children[key])
+            return self._return_or_inplace(self._parent._column.children[key])

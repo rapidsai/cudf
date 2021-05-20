@@ -4037,7 +4037,7 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
         ):
             # Combine and de-dupe the categories
             categories[idx] = (
-                cudf.concat([col.cat().categories for col in cols])
+                cudf.concat([col.categories for col in cols])
                 .to_series()
                 .drop_duplicates(ignore_index=True)
                 ._column
@@ -4079,12 +4079,7 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
                 if idx in categories:
                     cols[idx] = (
                         cols[idx]
-                        .cat()
-                        ._set_categories(
-                            cols[idx].cat().categories,
-                            categories[idx],
-                            is_unique=True,
-                        )
+                        ._set_categories(categories[idx], is_unique=True,)
                         .codes
                     )
                 cols[idx] = cols[idx].astype(dtype)

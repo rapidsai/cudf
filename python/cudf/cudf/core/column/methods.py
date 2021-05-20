@@ -2,26 +2,17 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union, overload
+from typing import Optional, Union, overload
 
 from typing_extensions import Literal
 
 import cudf
 
-if TYPE_CHECKING:
-    from cudf.core.column import ColumnBase
-
 
 class ColumnMethodsMixin:
-    _column: ColumnBase
-    _parent: Optional[Union["cudf.Series", "cudf.Index"]]
+    _parent: Union["cudf.Series", "cudf.Index"]
 
-    def __init__(
-        self,
-        column: ColumnBase,
-        parent: Union["cudf.Series", "cudf.Index"] = None,
-    ):
-        self._column = column
+    def __init__(self, parent: Union["cudf.Series", "cudf.Index"]):
         self._parent = parent
 
     @overload
@@ -69,7 +60,7 @@ class ColumnMethodsMixin:
                 )
                 return None
             else:
-                self._column._mimic_inplace(new_col, inplace=True)
+                self._parent._column._mimic_inplace(new_col, inplace=True)
                 return None
         else:
             if self._parent is None:
