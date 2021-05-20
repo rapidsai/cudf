@@ -54,20 +54,14 @@ class ColumnMethods:
         of the owner (Series or Index) to mimic an inplace operation
         """
         if inplace:
-            if self._parent is not None:
-                self._parent._mimic_inplace(
-                    self._parent.__class__._from_table(
-                        cudf._lib.table.Table({self._parent.name: new_col})
-                    ),
-                    inplace=True,
-                )
-                return None
-            else:
-                self._column._mimic_inplace(new_col, inplace=True)
-                return None
+            self._parent._mimic_inplace(
+                self._parent.__class__._from_table(
+                    cudf._lib.table.Table({self._parent.name: new_col})
+                ),
+                inplace=True,
+            )
+            return None
         else:
-            if self._parent is None:
-                return new_col
             if expand or isinstance(
                 self._parent, (cudf.DataFrame, cudf.MultiIndex)
             ):
