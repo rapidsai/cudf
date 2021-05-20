@@ -1123,7 +1123,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
         childBuilder.append((List<?>) listElement);
       } else if (listElement instanceof StructData) {
         childBuilder.append((StructData) listElement);
-      } else if (listElement instanceof byte[] && DType.STRING.equals(childBuilder.type)) {
+      } else if (listElement instanceof byte[]) {
         childBuilder.appendUTF8String((byte[]) listElement);
       } else {
         throw new IllegalStateException("Unexpected element type: " + listElement.getClass());
