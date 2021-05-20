@@ -2184,6 +2184,20 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testStringConcatWsOneCol() {
+    try (ColumnVector sv1 = ColumnVector.fromStrings("a");
+         ColumnVector sep_col = ColumnVector.fromStrings("-*");
+         ColumnVector e_concat = ColumnVector.fromStrings("a");
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenate(
+             new ColumnView[]{sv1}, sep_col, separatorString,
+             col_narep, false)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
   void testStringConcatWsNullSep() {
     try (ColumnVector sv1 = ColumnVector.fromStrings("a", "c");
          ColumnVector sv2 = ColumnVector.fromStrings("b", "d");
