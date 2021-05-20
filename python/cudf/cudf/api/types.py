@@ -3,6 +3,7 @@
 
 import datetime as dt
 from collections.abc import Sequence
+from functools import wraps
 from inspect import isclass
 from numbers import Number
 
@@ -184,48 +185,8 @@ def is_string_dtype(obj):
     )
 
 
-def is_datetime_dtype(obj):
-    """Check whether an array-like or dtype is of the datetime64 dtype.
-
-    Parameters
-    ----------
-    obj : array-like or dtype
-        The array-like or dtype to check.
-
-    Returns
-    -------
-    bool
-        Whether or not the array-like or dtype is of the datetime64 dtype.
-    """
-    if obj is None:
-        return False
-    if not hasattr(obj, "str"):
-        return False
-    return "M8" in obj.str
-
-
-def is_timedelta_dtype(obj):
-    """Check whether an array-like or dtype is of the timedelta dtype.
-
-    Parameters
-    ----------
-    obj : array-like or dtype
-        The array-like or dtype to check.
-
-    Returns
-    -------
-    bool
-        Whether or not the array-like or dtype is of the timedelta64 dtype.
-    """
-    if obj is None:
-        return False
-    if not hasattr(obj, "str"):
-        return False
-    return "m8" in obj.str
-
-
 def is_list_dtype(obj):
-    """Check whether an array-like or dtype is of the timedelta64 dtype.
+    """Check whether an array-like or dtype is of the list dtype.
 
     Parameters
     ----------
@@ -235,7 +196,7 @@ def is_list_dtype(obj):
     Returns
     -------
     bool
-        Whether or not the array-like or dtype is of the timedelta64 dtype.
+        Whether or not the array-like or dtype is of the list dtype.
     """
     return (
         type(obj) is cudf.core.dtypes.ListDtype
@@ -248,7 +209,7 @@ def is_list_dtype(obj):
 
 
 def is_struct_dtype(obj):
-    """Check whether an array-like or dtype is of the timedelta64 dtype.
+    """Check whether an array-like or dtype is of the struct dtype.
 
     Parameters
     ----------
@@ -258,7 +219,7 @@ def is_struct_dtype(obj):
     Returns
     -------
     bool
-        Whether or not the array-like or dtype is of the timedelta64 dtype.
+        Whether or not the array-like or dtype is of the struct dtype.
     """
     return (
         isinstance(obj, cudf.core.dtypes.StructDtype)
@@ -269,7 +230,7 @@ def is_struct_dtype(obj):
 
 
 def is_interval_dtype(obj):
-    """Check whether an array-like or dtype is of the Interval dtype.
+    """Check whether an array-like or dtype is of the interval dtype.
 
     Parameters
     ----------
@@ -279,7 +240,7 @@ def is_interval_dtype(obj):
     Returns
     -------
     bool
-        Whether or not the array-like or dtype is of the Interval dtype.
+        Whether or not the array-like or dtype is of the interval dtype.
     """
     # TODO: Should there be any branch in this function that calls
     # pd.api.types.is_interval_dtype?
@@ -295,7 +256,7 @@ def is_interval_dtype(obj):
 
 
 def is_decimal_dtype(obj):
-    """Check whether an array-like or dtype is of the Interval dtype.
+    """Check whether an array-like or dtype is of the decimal dtype.
 
     Parameters
     ----------
@@ -305,7 +266,7 @@ def is_decimal_dtype(obj):
     Returns
     -------
     bool
-        Whether or not the array-like or dtype is of the Interval dtype.
+        Whether or not the array-like or dtype is of the decimal dtype.
     """
     return (
         type(obj) is cudf.core.dtypes.Decimal64Dtype
@@ -368,12 +329,30 @@ def is_list_like(obj):
 # These methods are aliased directly into this namespace, but can be modified
 # later if we determine that there is a need.
 
+
+def _wrap_pandas_is_dtype_api(func):
+    """Wrap a pandas dtype checking function to ignore cudf types."""
+
+    @wraps(func)
+    def wrapped_func(obj):
+        if (
+            (isclass(obj) and issubclass(obj, _BaseDtype))
+            or isinstance(obj, _BaseDtype)
+            or isinstance(getattr(obj, "dtype", None), _BaseDtype)
+        ):
+            return False
+        return func(obj)
+
+    return wrapped_func
+
+
 union_categoricals = pd_types.union_categoricals
 infer_dtype = pd_types.infer_dtype
 pandas_dtype = pd_types.pandas_dtype
 is_bool_dtype = pd_types.is_bool_dtype
 is_complex_dtype = pd_types.is_complex_dtype
 # TODO: Evaluate which of the datetime types need special handling for cudf.
+is_datetime_dtype = _wrap_pandas_is_dtype_api(pd_types.is_datetime64_dtype)
 is_datetime64_any_dtype = pd_types.is_datetime64_any_dtype
 is_datetime64_dtype = pd_types.is_datetime64_dtype
 is_datetime64_ns_dtype = pd_types.is_datetime64_ns_dtype
@@ -385,6 +364,7 @@ is_int64_dtype = pd_types.is_int64_dtype
 is_object_dtype = pd_types.is_object_dtype
 is_period_dtype = pd_types.is_period_dtype
 is_signed_integer_dtype = pd_types.is_signed_integer_dtype
+is_timedelta_dtype = _wrap_pandas_is_dtype_api(pd_types.is_timedelta64_dtype)
 is_timedelta64_dtype = pd_types.is_timedelta64_dtype
 is_timedelta64_ns_dtype = pd_types.is_timedelta64_ns_dtype
 is_unsigned_integer_dtype = pd_types.is_unsigned_integer_dtype
