@@ -47,6 +47,7 @@ from cudf.core.dtypes import (
     Decimal64Dtype,
     ListDtype,
     StructDtype,
+    IntervalDtype,
 )
 from cudf.core.groupby import Grouper
 from cudf.core.ops import (
