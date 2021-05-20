@@ -39,7 +39,7 @@ requirements:
     - cudatoolkit {{ cuda_version }}.*
     - arrow-cpp 1.0.1
     - arrow-cpp-proc * cuda
-    - dlpack
+    - dlpack 0.3
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
     - arrow-cpp-proc * cuda
@@ -53,7 +53,7 @@ test:
     - test -f $PREFIX/include/cudf/ast/transform.hpp
     - test -f $PREFIX/include/cudf/ast/detail/linearizer.hpp
     - test -f $PREFIX/include/cudf/ast/detail/operators.hpp
-    - test -f $PREFIX/include/cudf/ast/linearizer.hpp
+    - test -f $PREFIX/include/cudf/ast/nodes.hpp
     - test -f $PREFIX/include/cudf/ast/operators.hpp
     - test -f $PREFIX/include/cudf/binaryop.hpp
     - test -f $PREFIX/include/cudf/labeling/label_bins.hpp
@@ -87,6 +87,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/reshape.hpp
     - test -f $PREFIX/include/cudf/detail/rolling.hpp
     - test -f $PREFIX/include/cudf/detail/round.hpp
+    - test -f $PREFIX/include/cudf/detail/scan.hpp
     - test -f $PREFIX/include/cudf/detail/scatter.hpp
     - test -f $PREFIX/include/cudf/detail/search.hpp
     - test -f $PREFIX/include/cudf/detail/sequence.hpp
@@ -134,6 +135,7 @@ test:
     - test -f $PREFIX/include/cudf/join.hpp
     - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
+    - test -f $PREFIX/include/cudf/lists/lists_column_factories.hpp
     - test -f $PREFIX/include/cudf/lists/detail/drop_list_duplicates.hpp
     - test -f $PREFIX/include/cudf/lists/detail/interleave_columns.hpp
     - test -f $PREFIX/include/cudf/lists/detail/sorting.hpp
