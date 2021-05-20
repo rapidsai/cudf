@@ -2,8 +2,6 @@
 
 import pandas as pd
 
-import cudf
-
 from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr, shared_ptr, make_shared
 from libcpp.vector cimport vector
@@ -853,4 +851,6 @@ def pack(Table input_table, keep_index=False):
 
 
 def unpack(PackedColumns packed):
-    return cudf.DataFrame._from_table(packed.c_unpack())
+    from cudf.core.dataframe import DataFrame
+
+    return DataFrame._from_table(packed.c_unpack())
