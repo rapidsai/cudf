@@ -2319,7 +2319,7 @@ public class ColumnVectorTest extends CudfTestBase {
            new HostColumnVector.BasicType(true, DType.STRING)),
            Arrays.asList("aaa"), Arrays.asList(null, null, null));
          ColumnVector sep_col = ColumnVector.fromStrings("-", "-");
-         ColumnVector e_concat = ColumnVector.fromStrings("aaa", "");
+         ColumnVector e_concat = ColumnVector.fromStrings("aaa", null);
          Scalar separatorString = Scalar.fromString(null);
          Scalar col_narep = Scalar.fromString("");
          ColumnVector concat = ColumnVector.stringConcatenateListElements(cv1, sep_col,
@@ -2333,7 +2333,7 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
            new HostColumnVector.BasicType(true, DType.STRING)),
            Arrays.asList("aaa"), Arrays.asList(null, null, null));
-         ColumnVector e_concat = ColumnVector.fromStrings("aaa", "");
+         ColumnVector e_concat = ColumnVector.fromStrings("aaa", null);
          Scalar separatorString = Scalar.fromString("-");
          Scalar narep = Scalar.fromString("");
          ColumnVector concat = ColumnVector.stringConcatenateListElements(cv1,
@@ -2348,7 +2348,7 @@ public class ColumnVectorTest extends CudfTestBase {
            new HostColumnVector.BasicType(true, DType.STRING)),
            Arrays.asList("aaa"), Arrays.asList(null, null, null));
          ColumnVector sep_col = ColumnVector.fromStrings("-", "-");
-         ColumnVector e_concat = ColumnVector.fromStrings("aaa", "--");
+         ColumnVector e_concat = ColumnVector.fromStrings("aaa", null);
          Scalar separatorString = Scalar.fromString(null);
          Scalar col_narep = Scalar.fromString("");
          ColumnVector concat = ColumnVector.stringConcatenateListElements(cv1, sep_col,
