@@ -12,29 +12,93 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import cudf
+import numpy as np
+import pandas as pd
+
 from cudf._lib.copying import pack, unpack
+from cudf.core import DataFrame, GenericIndex
 from cudf.tests.utils import assert_eq
 
 
-def test_unpacked_equality():
-    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    pdf = gdf.to_pandas()
+def check_packed_equality(df):
+    # basic
+    assert_packed_frame_equality(df)
+    # sliced
+    assert_packed_frame_equality(df[:-1])
+    assert_packed_frame_equality(df[1:])
+    assert_packed_frame_equality(df[2:-2])
+    # sorted
+    sortvaldf = df.sort_values("vals")
+    assert isinstance(sortvaldf.index, GenericIndex)
+    assert_packed_frame_equality(sortvaldf)
 
-    packed = pack(gdf)
-    del gdf
+
+def assert_packed_frame_equality(df):
+    pdf = df.to_pandas()
+
+    packed = pack(df)
+    del df
     unpacked = unpack(packed)
 
     assert_eq(unpacked, pdf)
 
 
-def test_unpacked_unique_pointers():
-    gdf = cudf.DataFrame({"a": [1, 2, 3, None], "b": [4, 5, 6, None]})
-    unpacked = unpack(pack(gdf))
+def test_packed_dataframe_equality_numeric():
+    np.random.seed(0)
+    df = DataFrame()
+    nelem = 10
+    df["keys"] = np.arange(nelem, dtype=np.float64)
+    df["vals"] = np.random.random(nelem)
+
+    check_packed_equality(df)
+
+
+def test_packed_dataframe_equality_categorical():
+    np.random.seed(0)
+
+    df = DataFrame()
+    df["keys"] = pd.Categorical("aaabababac")
+    df["vals"] = np.random.random(len(df))
+
+    check_packed_equality(df)
+
+
+def check_packed_unique_pointers(df):
+    # basic
+    assert_packed_frame_unique_pointers(df)
+    # sliced
+    assert_packed_frame_unique_pointers(df[:-1])
+    assert_packed_frame_unique_pointers(df[1:])
+    assert_packed_frame_unique_pointers(df[2:-2])
+    # sorted
+    sortvaldf = df.sort_values("vals")
+    assert isinstance(sortvaldf.index, GenericIndex)
+    assert_packed_frame_unique_pointers(sortvaldf)
+
+
+def assert_packed_frame_unique_pointers(df):
+    unpacked = unpack(pack(df))
 
     assert all(
-        [
-            gdf._data[col].data.ptr != unpacked._data[col].data.ptr
-            for col in gdf
-        ]
+        [df._data[col].data.ptr != unpacked._data[col].data.ptr for col in df]
     )
+
+
+def test_packed_dataframe_unique_pointers_numeric():
+    np.random.seed(0)
+    df = DataFrame()
+    nelem = 10
+    df["keys"] = np.arange(nelem, dtype=np.float64)
+    df["vals"] = np.random.random(nelem)
+
+    check_packed_unique_pointers(df)
+
+
+def test_packed_dataframe_unique_pointers_categorical():
+    np.random.seed(0)
+
+    df = DataFrame()
+    df["keys"] = pd.Categorical("aaabababac")
+    df["vals"] = np.random.random(len(df))
+
+    check_packed_unique_pointers(df)

@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from cudf._lib.copying import pack, unpack
 from cudf.core import DataFrame, GenericIndex, Series
 from cudf.core.buffer import Buffer
 from cudf.tests.utils import assert_eq
@@ -68,6 +69,55 @@ def test_pickle_dataframe_categorical():
     check_serialization(df)
 
 
+def check_packed_serialization(df):
+    # basic
+    assert_packed_frame_picklable(df)
+    # sliced
+    assert_packed_frame_picklable(df[:-1])
+    assert_packed_frame_picklable(df[1:])
+    assert_packed_frame_picklable(df[2:-2])
+    # sorted
+    sortvaldf = df.sort_values("vals")
+    assert isinstance(sortvaldf.index, GenericIndex)
+    assert_packed_frame_picklable(sortvaldf)
+    # out-of-band
+    if pickle.HIGHEST_PROTOCOL >= 5:
+        buffers = []
+        serialbytes = pickle.dumps(
+            pack(df), protocol=5, buffer_callback=buffers.append
+        )
+        for b in buffers:
+            assert isinstance(b, pickle.PickleBuffer)
+        loaded = unpack(pickle.loads(serialbytes, buffers=buffers))
+        assert_eq(loaded, df)
+
+
+def assert_packed_frame_picklable(df):
+    serialbytes = pickle.dumps(pack(df))
+    loaded = unpack(pickle.loads(serialbytes))
+    assert_eq(loaded, df)
+
+
+def test_pickle_packed_dataframe_numeric():
+    np.random.seed(0)
+    df = DataFrame()
+    nelem = 10
+    df["keys"] = np.arange(nelem, dtype=np.float64)
+    df["vals"] = np.random.random(nelem)
+
+    check_packed_serialization(df)
+
+
+def test_pickle_packed_dataframe_categorical():
+    np.random.seed(0)
+
+    df = DataFrame()
+    df["keys"] = pd.Categorical("aaabababac")
+    df["vals"] = np.random.random(len(df))
+
+    check_packed_serialization(df)
+
+
 def test_sizeof_dataframe():
     np.random.seed(0)
     df = DataFrame()
@@ -80,6 +130,26 @@ def test_sizeof_dataframe():
     assert sizeof >= nbytes
 
     serialized_nbytes = len(pickle.dumps(df, protocol=pickle.HIGHEST_PROTOCOL))
+
+    # assert at least sizeof bytes were serialized
+    assert serialized_nbytes >= sizeof
+
+
+def test_sizeof_packed_dataframe():
+    np.random.seed(0)
+    df = DataFrame()
+    nelem = 1000
+    df["keys"] = hkeys = np.arange(nelem, dtype=np.float64)
+    df["vals"] = hvals = np.random.random(nelem)
+    packed = pack(df)
+
+    nbytes = hkeys.nbytes + hvals.nbytes
+    sizeof = sys.getsizeof(packed)
+    assert sizeof < nbytes
+
+    serialized_nbytes = len(
+        pickle.dumps(packed, protocol=pickle.HIGHEST_PROTOCOL)
+    )
 
     # assert at least sizeof bytes were serialized
     assert serialized_nbytes >= sizeof
