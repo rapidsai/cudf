@@ -1,6 +1,7 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 """Define common type operations."""
 
+from collections.abc import Sequence
 from functools import wraps
 from inspect import isclass
 
@@ -92,6 +93,9 @@ def is_numeric_dtype(obj):
     bool
         Whether or not the array or dtype is of a numeric dtype.
     """
+    # TODO: I've changed this function to return true for decimals because it
+    # seems like the expected behavior, but we depend on it returning false
+    # internally. We need to decide how to handle that.
     if isclass(obj):
         if issubclass(obj, cudf.Decimal64Dtype):
             return True
@@ -198,7 +202,7 @@ def is_struct_dtype(obj):
     """
     return (
         isinstance(obj, cudf.core.dtypes.StructDtype)
-        or (isclass(obj) and issubclass(obj, cudf.core.dtypes.StructDtype))
+        or obj is cudf.core.dtypes.StructDtype
         or (isinstance(obj, str) and obj == cudf.core.dtypes.StructDtype.name)
         or (hasattr(obj, "dtype") and is_struct_dtype(obj.dtype))
     )
@@ -279,6 +283,25 @@ def is_scalar(val):
     )
 
 
+# TODO: We should be able to reuse the pandas function for this, need to figure
+# out why we can't.
+def is_list_like(obj):
+    """Return `True` if the given `obj` is list-like (list, tuple, Series...).
+
+    Parameters
+    ----------
+    obj : object of any type which needs to be validated.
+
+    Returns
+    -------
+    bool
+        Return True if given object is list-like.
+    """
+    return isinstance(obj, (Sequence, np.ndarray)) and not isinstance(
+        obj, (str, bytes)
+    )
+
+
 # These methods are aliased directly into this namespace, but can be modified
 # later if we determine that there is a need.
 
@@ -323,7 +346,7 @@ is_timedelta64_dtype = pd_types.is_timedelta64_dtype
 is_timedelta64_ns_dtype = pd_types.is_timedelta64_ns_dtype
 is_unsigned_integer_dtype = pd_types.is_unsigned_integer_dtype
 is_sparse = pd_types.is_sparse
-is_list_like = pd_types.is_list_like
+# is_list_like = pd_types.is_list_like
 is_dict_like = pd_types.is_dict_like
 is_file_like = pd_types.is_file_like
 is_named_tuple = pd_types.is_named_tuple
