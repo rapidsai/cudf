@@ -603,6 +603,15 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         return cls(dict(zip(column_names, columns)), index=index)
 
     @property
+    def _is_homogeneous(self):
+        # make sure that the dataframe has columns
+        if not self._data.columns:
+            return True
+
+        first_type = self._data.columns[0].dtype
+        return all(x.dtype == first_type for x in self._data.columns)
+
+    @property
     def dtypes(self):
         """
         Return the dtypes in this object.

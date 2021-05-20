@@ -8579,3 +8579,19 @@ def test_dataframe_init_from_series(data, columns, index):
         actual,
         check_index_type=False if len(expected) == 0 else True,
     )
+
+
+@pytest.mark.parametrize(
+    "data,expected",
+    [
+        ({"a": [1, 2, 3, 4], "b": [5, 6, 7, 8], "c": [1.2, 1, 2, 3]}, False),
+        ({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}, True),
+        ({"a": ["a", "b", "c"], "b": [4, 5, 6], "c": [7, 8, 9]}, False),
+        ({"a": [True, False, False], "b": [False, False, True]}, True),
+        ({}, True),
+    ],
+)
+def test_is_homogeneous(data, expected):
+    actual = cudf.DataFrame(data)._is_homogeneous
+
+    assert actual == expected
