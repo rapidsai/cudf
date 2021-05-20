@@ -52,6 +52,8 @@ struct typed_casted_writer {
     if constexpr (mutable_column_device_view::has_element_accessor<Element>() and
                   std::is_constructible_v<Element, FromType>) {
       col.element<Element>(i) = static_cast<Element>(val);
+    } else if constexpr (is_fixed_point<Element>() and is_fixed_point<FromType>()) {
+      col.data<Element::rep>()[i] = val.value();
     }
   }
 };

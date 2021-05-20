@@ -72,18 +72,21 @@ struct BinaryOperationCompiledTest : public BinaryOperationTest {
 // t      	     	t + d
 // d      	d + t	d + d
 
-using Add_types = cudf::test::Types<cudf::test::Types<bool, bool, float>,
-                                    cudf::test::Types<int16_t, double, uint8_t>,
-                                    cudf::test::Types<timestamp_s, timestamp_s, duration_s>,
-                                    cudf::test::Types<timestamp_ns, duration_ms, timestamp_us>,
-                                    cudf::test::Types<duration_us, duration_us, duration_D>,
-                                    // cudf::test::Types<duration_s, int16_t, int64_t>, //valid
-                                    // Extras
-                                    cudf::test::Types<duration_D, duration_D, duration_D>,
-                                    cudf::test::Types<timestamp_D, timestamp_D, duration_D>,
-                                    cudf::test::Types<timestamp_s, timestamp_D, duration_s>,
-                                    cudf::test::Types<timestamp_ms, timestamp_ms, duration_s>,
-                                    cudf::test::Types<timestamp_ns, timestamp_ms, duration_ns>>;
+using Add_types =
+  cudf::test::Types<cudf::test::Types<bool, bool, float>,
+                    cudf::test::Types<int16_t, double, uint8_t>,
+                    cudf::test::Types<timestamp_s, timestamp_s, duration_s>,
+                    cudf::test::Types<timestamp_ns, duration_ms, timestamp_us>,
+                    cudf::test::Types<duration_us, duration_us, duration_D>,
+                    // cudf::test::Types<duration_s, int16_t, int64_t>, //valid
+                    cudf::test::Types<numeric::decimal32, numeric::decimal32, numeric::decimal32>,
+                    cudf::test::Types<int, numeric::decimal32, numeric::decimal32>,
+                    // Extras
+                    cudf::test::Types<duration_D, duration_D, duration_D>,
+                    cudf::test::Types<timestamp_D, timestamp_D, duration_D>,
+                    cudf::test::Types<timestamp_s, timestamp_D, duration_s>,
+                    cudf::test::Types<timestamp_ms, timestamp_ms, duration_s>,
+                    cudf::test::Types<timestamp_ns, timestamp_ms, duration_ns>>;
 template <typename T>
 struct BinaryOperationCompiledTest_Add : public BinaryOperationCompiledTest<T> {
 };
@@ -113,12 +116,13 @@ TYPED_TEST(BinaryOperationCompiledTest_Add, Vector_Vector)
 // d      	     	d - d
 
 using Sub_types =
-  cudf::test::Types<cudf::test::Types<int32_t, bool, float>,  // n - n
-                                                              // FIXME why is t-t failing?
-                    cudf::test::Types<duration_D, timestamp_D, timestamp_D>,   // t - t
-                    cudf::test::Types<timestamp_s, timestamp_D, duration_s>,   // t - d
-                    cudf::test::Types<duration_ns, duration_us, duration_s>,   // d - d
-                    cudf::test::Types<duration_us, duration_us, duration_s>>;  // d - d
+  cudf::test::Types<cudf::test::Types<int32_t, bool, float>,                  // n - n
+                    cudf::test::Types<duration_D, timestamp_D, timestamp_D>,  // t - t
+                    cudf::test::Types<timestamp_s, timestamp_D, duration_s>,  // t - d
+                    cudf::test::Types<duration_ns, duration_us, duration_s>,  // d - d
+                    cudf::test::Types<duration_us, duration_us, duration_s>,  // d - d
+                    cudf::test::Types<numeric::decimal32, numeric::decimal32, numeric::decimal32>,
+                    cudf::test::Types<int, numeric::decimal32, numeric::decimal32>>;
 template <typename T>
 struct BinaryOperationCompiledTest_Sub : public BinaryOperationCompiledTest<T> {
 };
@@ -146,10 +150,13 @@ TYPED_TEST(BinaryOperationCompiledTest_Sub, Vector_Vector)
 // n n * n	     	n * d
 // t
 // d d * n
-using Mul_types = cudf::test::Types<cudf::test::Types<int32_t, u_int64_t, float>,
-                                    cudf::test::Types<duration_s, u_int64_t, duration_s>,
-                                    cudf::test::Types<duration_ms, duration_D, int16_t>,
-                                    cudf::test::Types<duration_ns, duration_us, uint8_t>>;
+using Mul_types =
+  cudf::test::Types<cudf::test::Types<int32_t, u_int64_t, float>,
+                    cudf::test::Types<duration_s, u_int64_t, duration_s>,
+                    cudf::test::Types<duration_ms, duration_D, int16_t>,
+                    cudf::test::Types<duration_ns, duration_us, uint8_t>,
+                    cudf::test::Types<numeric::decimal32, numeric::decimal32, numeric::decimal32>,
+                    cudf::test::Types<int, numeric::decimal32, numeric::decimal32>>;
 template <typename T>
 struct BinaryOperationCompiledTest_Mul : public BinaryOperationCompiledTest<T> {
 };
@@ -177,13 +184,16 @@ TYPED_TEST(BinaryOperationCompiledTest_Mul, Vector_Vector)
 // n n / n
 // t
 // d d / n	     	d / d
-using Div_types = cudf::test::Types<cudf::test::Types<int16_t, u_int64_t, u_int64_t>,
-                                    cudf::test::Types<double, int8_t, int64_t>,
-                                    cudf::test::Types<duration_ms, duration_s, u_int32_t>,
-                                    cudf::test::Types<duration_ns, duration_D, int16_t>,
-                                    cudf::test::Types<double, duration_D, duration_ns>,
-                                    cudf::test::Types<float, duration_ms, duration_ns>,
-                                    cudf::test::Types<u_int64_t, duration_us, duration_ns>>;
+using Div_types =
+  cudf::test::Types<cudf::test::Types<int16_t, u_int64_t, u_int64_t>,
+                    cudf::test::Types<double, int8_t, int64_t>,
+                    cudf::test::Types<duration_ms, duration_s, u_int32_t>,
+                    cudf::test::Types<duration_ns, duration_D, int16_t>,
+                    cudf::test::Types<double, duration_D, duration_ns>,
+                    cudf::test::Types<float, duration_ms, duration_ns>,
+                    cudf::test::Types<u_int64_t, duration_us, duration_ns>,
+                    cudf::test::Types<numeric::decimal32, numeric::decimal32, numeric::decimal32>,
+                    cudf::test::Types<int, numeric::decimal32, numeric::decimal32>>;
 template <typename T>
 struct BinaryOperationCompiledTest_Div : public BinaryOperationCompiledTest<T> {
 };
@@ -566,7 +576,7 @@ TYPED_TEST(BinaryOperationCompiledTest_Logical, LogicalOr_Vector_Vector)
 }
 
 // Comparison Operations ==, !=, <, >, <=, >=
-// n<!=>n, t<!=>t, d<!=>d, s<!=>s
+// n<!=>n, t<!=>t, d<!=>d, s<!=>s, dc<!=>dc
 using Comparison_types =
   cudf::test::Types<cudf::test::Types<int16_t, int8_t, int16_t>,
                     cudf::test::Types<int64_t, uint32_t, uint16_t>,

@@ -57,22 +57,18 @@ struct is_binary_operation_supported {
   {
     if constexpr (is_op_supported<TypeLhs, TypeRhs, BinaryOperator>()) {
       using ReturnType = std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>;
-      return std::is_constructible_v<TypeOut, ReturnType>;
+      return column_device_view::has_element_accessor<TypeLhs>() and
+             column_device_view::has_element_accessor<TypeRhs>() and
+             (mutable_column_device_view::has_element_accessor<TypeOut>() or
+              (is_fixed_point<TypeOut>() and is_fixed_point<ReturnType>())) and
+             std::is_constructible_v<TypeOut, ReturnType>;
     } else {
       return false;
     }
-
-    // return (has_common_type_v<TypeOut, TypeLhs, TypeRhs> and
-    //         is_op_supported<TypeLhs, TypeRhs, BinaryOperator>())
-    //        or
-    //        // double dispatch
-    //        (!has_common_type_v<TypeLhs, TypeRhs> and
-    //          is_op_supported<TypeLhs, TypeRhs, BinaryOperator>() and
-    //          std::is_constructible_v<TypeOut, ReturnType>);
   }
 };
-// has ::operate
 
+// has ::operate
 template <typename T, typename T1, typename T2, typename T3, typename = T>
 struct has_operate : std::false_type {
 };

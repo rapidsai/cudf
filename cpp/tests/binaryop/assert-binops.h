@@ -36,31 +36,21 @@ namespace binop {
 // result returned by the binop operation into string, which is then used for display purposes
 // when the values do not match.
 struct stringify_out_values {
-  template <typename TypeOut, std::enable_if_t<!is_chrono<TypeOut>()>* = nullptr>
+  template <typename TypeOut>
   std::string operator()(size_type i, TypeOut lhs, TypeOut rhs) const
   {
     std::stringstream out_str;
     out_str << "[" << i << "]:\n";
-    out_str << "lhs: " << lhs << "\nrhs: " << rhs;
-    return out_str.str();
-  }
-
-  template <typename TypeOut, std::enable_if_t<is_timestamp<TypeOut>()>* = nullptr>
-  std::string operator()(size_type i, TypeOut lhs, TypeOut rhs) const
-  {
-    std::stringstream out_str;
-    out_str << "[" << i << "]:\n";
-    out_str << "lhs: " << lhs.time_since_epoch().count()
-            << "\nrhs: " << rhs.time_since_epoch().count();
-    return out_str.str();
-  }
-
-  template <typename TypeOut, std::enable_if_t<is_duration<TypeOut>()>* = nullptr>
-  std::string operator()(size_type i, TypeOut lhs, TypeOut rhs) const
-  {
-    std::stringstream out_str;
-    out_str << "[" << i << "]:\n";
-    out_str << "lhs: " << lhs.count() << "\nrhs: " << rhs.count();
+    if constexpr (is_fixed_point<TypeOut>()) {
+      out_str << "lhs: " << std::string(lhs) << "\nrhs: " << std::string(rhs);
+    } else if constexpr (is_timestamp<TypeOut>()) {
+      out_str << "lhs: " << lhs.time_since_epoch().count()
+              << "\nrhs: " << rhs.time_since_epoch().count();
+    } else if constexpr (is_duration<TypeOut>()) {
+      out_str << "lhs: " << lhs.count() << "\nrhs: " << rhs.count();
+    } else {
+      out_str << "lhs: " << lhs << "\nrhs: " << rhs;
+    }
     return out_str.str();
   }
 };
