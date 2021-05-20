@@ -2116,6 +2116,85 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(substringColumn(getNativeView(), start.getNativeView(), end.getNativeView()));
   }
 
+  /**
+   * Given a lists column of strings (each row is a list of strings), concatenates the strings
+   * within each row and returns a single strings column result. Each new string is created by
+   * concatenating the strings from the same row (same list element) delimited by the separator
+   * provided. This version of the function relaces nulls with empty string and returns null
+   * for empty list.
+   * @param list_column column containing lists of strings to concatenate.
+   * @param sep_col strings column that provides separators for concatenation.
+   * @return A new java column vector containing the concatenated strings with separator between.
+   */
+  public final ColumnVector stringConcatenateListElements(ColumnView sep_col) {
+    try (Scalar nullString = Scalar.fromString(null);
+         Scalar emptyString = Scalar.fromString("")) {
+      return stringConcatenateListElements(sep_col, nullString, emptyString,
+          false, false);
+    }
+  }
+
+  /**
+   * Given a lists column of strings (each row is a list of strings), concatenates the strings
+   * within each row and returns a single strings column result.
+   * Each new string is created by concatenating the strings from the same row (same list element)
+   * delimited by the row separator provided in the sep_col strings column.
+   * @param sep_col strings column that provides separators for concatenation.
+   * @param separator_narep string scalar indicating null behavior when a separator is null.
+   *                        If set to null and the separator is null the resulting string will
+   *                        be null. If not null, this string will be used in place of a null
+   *                        separator.
+   * @param string_narep string that should be used to replace null strings in any non-null list
+   *                     row. If set to null and the string is null the resulting string will
+   *                     be null. If not null, this string will be used in place of a null value.
+   * @param separate_nulls if true, then the separator is included for null rows if
+   *                       `string_narep` is valid.
+   * @param empty_string_output_if_empty_list if set to true, any input row that is an empty list
+   *                          will result in an empty string. Otherwise, it will result in a null.
+   * @return A new java column vector containing the concatenated strings with separator between.
+   */
+  public final ColumnVector stringConcatenateListElements(ColumnView sep_col,
+      Scalar separator_narep, Scalar string_narep, boolean separate_nulls,
+      boolean empty_string_output_if_empty_list) {
+    assert type.equals(DType.LIST) : "column type must be a list";
+    assert separator_narep != null : "separator narep scalar provided may not be null";
+    assert string_narep != null : "string narep scalar provided may not be null";
+    assert separator_narep.getType().equals(DType.STRING) : "separator naprep scalar must be a string scalar";
+    assert string_narep.getType().equals(DType.STRING) : "string narep scalar must be a string scalar";
+
+    return new ColumnVector(stringConcatenationListElementsSepCol(getNativeView(),
+      sep_col.getNativeView(), separator_narep.getScalarHandle(), string_narep.getScalarHandle(),
+      separate_nulls, empty_string_output_if_empty_list));
+  }
+
+  /**
+   * Given a lists column of strings (each row is a list of strings), concatenates the strings
+   * within each row and returns a single strings column result. Each new string is created by
+   * concatenating the strings from the same row (same list element) delimited by the
+   * separator provided.
+   * @param separator string scalar inserted between each string being merged.
+   * @param narep string scalar indicating null behavior. If set to null and any string in the row
+   *              is null the resulting string will be null. If not null, null values in any
+   *              column will be replaced by the specified string. The underlying value in the
+   *              string scalar may be null, but the object passed in may not.
+   * @param separate_nulls if true, then the separator is included for null rows if
+   *                       `narep` is valid.
+   * @param empty_string_output_if_empty_list if set to true, any input row that is an empty list
+   *                          will result in an empty string. Otherwise, it will result in a null.
+   * @return A new java column vector containing the concatenated strings with separator between.
+   */
+  public final ColumnVector stringConcatenateListElements(Scalar separator,
+      Scalar narep, boolean separate_nulls, boolean empty_string_output_if_empty_list) {
+    assert type.equals(DType.LIST) : "column type must be a list";
+    assert separator != null : "separator scalar provided may not be null";
+    assert narep != null : "column narep scalar provided may not be null";
+    assert narep.getType().equals(DType.STRING) : "narep scalar must be a string scalar";
+
+    return new ColumnVector(stringConcatenationListElements(getNativeView(),
+        separator.getScalarHandle(), narep.getScalarHandle(), separate_nulls,
+        empty_string_output_if_empty_list));
+  }
+
    /**
    * Apply a JSONPath string to all rows in an input strings column.
    *
@@ -2711,6 +2790,60 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *         by the timestampToLong method.
    */
   private static native long stringTimestampToTimestamp(long viewHandle, int unit, String format);
+
+  /**
+   * Native method to concatenate a list column of strings (each row is a list of strings),
+   * concatenates the strings within each row and returns a single strings column result.
+   * Each new string is created by concatenating the strings from the same row (same list element)
+   * delimited by the row separator provided in the `separators` strings column.
+   * @param listColumnHandle long holding the native handle of the column containing lists of strings
+   *                         to concatenate.
+   * @param sepColumn long holding the native handle of the strings column that provides separators
+   *                  for concatenation.
+   * @param separatorNarep string scalar indicating null behavior when a separator is null.
+   *                       If set to null and the separator is null the resulting string will
+   *                       be null. If not null, this string will be used in place of a null
+   *                       separator.
+   * @param colNarep string String scalar that should be used in place of any null strings
+   *                 found in any column.
+   * @param separateNulls boolean if true, then the separator is included for null rows if
+   *                     `col_narep` is valid.
+   * @param emptyStringOutputIfEmptyList boolean if true, any input row that is an empty list
+   *                                     will result in an empty string. Otherwise, it will
+   *                                     result in a null.
+   * @return native handle of the resulting cudf column, used to construct the Java column.
+   */
+  private static native long stringConcatenationListElementsSepCol(long listColumnHandle,
+                                                                   long sepColumn,
+                                                                   long separatorNarep,
+                                                                   long colNarep,
+                                                                   boolean separateNulls,
+                                                                   boolean emptyStringOutputIfEmptyList);
+
+  /**
+   * Native method to concatenate a list column of strings (each row is a list of strings),
+   * concatenates the strings within each row and returns a single strings column result.
+   * Each new string is created by concatenating the strings from the same row (same list element)
+   * delimited by the separator provided.
+   * @param listColumnHandle long holding the native handle of the column containing lists of strings
+   *                     to concatenate.
+   * @param separator string scalar inserted between each string being merged, may not be null.
+   * @param narep string scalar indicating null behavior. If set to null and any string in the row
+   *              is null the resulting string will be null. If not null, null values in any
+   *              column will be replaced by the specified string. The underlying value in the
+   *              string scalar may be null, but the object passed in may not.
+   * @param separateNulls boolean if true, then the separator is included for null rows if
+   *                      `col_narep` is valid.
+   * @param emptyStringOutputIfEmptyList boolean if true, any input row that is an empty list
+   *                                     will result in an empty string. Otherwise, it will
+   *                                     result in a null.
+   * @return native handle of the resulting cudf column, used to construct the Java column.
+   */
+  private static native long stringConcatenationListElements(long listColumnHandle,
+                                                             long separator,
+                                                             long narep,
+                                                             boolean separateNulls,
+                                                             boolean emptyStringOutputIfEmptyList);
 
   private static native long getJSONObject(long viewHandle, long scalarHandle) throws CudfException;
 
