@@ -19,8 +19,17 @@ from cudf._lib.scalar import DeviceScalar
 
 
 def is_categorical_dtype(obj):
-    """Infer whether a given pandas, numpy, or cuDF Column, Series, or dtype
-    is a pandas CategoricalDtype.
+    """Check whether an array-like or dtype is of the Categorical dtype.
+
+    Parameters
+    ----------
+    obj : array-like or dtype
+        The array-like or dtype to check.
+
+    Returns
+    -------
+    bool
+        Whether or not the array-like or dtype is of a categorical dtype.
     """
     if obj is None:
         return False
@@ -71,6 +80,18 @@ def is_categorical_dtype(obj):
 
 
 def is_numeric_dtype(obj):
+    """Check whether the provided array or dtype is of a numeric dtype.
+
+    Parameters
+    ----------
+    obj : array-like or dtype
+        The array or dtype to check.
+
+    Returns
+    -------
+    bool
+        Whether or not the array or dtype is of a numeric dtype.
+    """
     # TODO: we should handle objects with a `.dtype` attribute,
     # e.g., arrays, here.
     try:
@@ -95,6 +116,18 @@ TODO: There a number of things we need to check:
 
 
 def is_integer_dtype(obj):
+    """Check whether the provided array or dtype is of an integer dtype.
+
+    Parameters
+    ----------
+    obj : array-like or dtype
+        The array or dtype to check.
+
+    Returns
+    -------
+    bool
+        Whether or not the array or dtype is of an integer dtype.
+    """
     try:
         dtype = np.dtype(obj)
     except TypeError:
@@ -103,12 +136,31 @@ def is_integer_dtype(obj):
 
 
 def is_integer(obj):
+    """Return True if given object is integer.
+
+    Returns
+    -------
+    bool
+    """
     if isinstance(obj, cudf.Scalar):
         return is_integer_dtype(obj.dtype)
     return pd.api.types.is_integer(obj)
 
 
 def is_string_dtype(obj):
+    """
+    Check whether the provided array or dtype is of the string dtype.
+
+    Parameters
+    ----------
+    obj : array-like or dtype
+        The array or dtype to check.
+
+    Returns
+    -------
+    bool
+        Whether or not the array or dtype is of the string dtype.
+    """
     return (
         pd.api.types.is_string_dtype(obj)
         # Reject all cudf extension types.
@@ -121,6 +173,18 @@ def is_string_dtype(obj):
 
 
 def is_datetime_dtype(obj):
+    """Check whether an array-like or dtype is of the datetime64 dtype.
+
+    Parameters
+    ----------
+    obj : array-like or dtype
+        The array-like or dtype to check.
+
+    Returns
+    -------
+    bool
+        Whether or not the array-like or dtype is of the datetime64 dtype.
+    """
     if obj is None:
         return False
     if not hasattr(obj, "str"):
@@ -129,6 +193,18 @@ def is_datetime_dtype(obj):
 
 
 def is_timedelta_dtype(obj):
+    """Check whether an array-like or dtype is of the timedelta dtype.
+
+    Parameters
+    ----------
+    obj : array-like or dtype
+        The array-like or dtype to check.
+
+    Returns
+    -------
+    bool
+        Whether or not the array-like or dtype is of the timedelta64 dtype.
+    """
     if obj is None:
         return False
     if not hasattr(obj, "str"):
@@ -137,6 +213,18 @@ def is_timedelta_dtype(obj):
 
 
 def is_list_dtype(obj):
+    """Check whether an array-like or dtype is of the timedelta64 dtype.
+
+    Parameters
+    ----------
+    obj : array-like or dtype
+        The array-like or dtype to check.
+
+    Returns
+    -------
+    bool
+        Whether or not the array-like or dtype is of the timedelta64 dtype.
+    """
     return (
         type(obj) is cudf.core.dtypes.ListDtype
         or obj is cudf.core.dtypes.ListDtype
@@ -148,6 +236,18 @@ def is_list_dtype(obj):
 
 
 def is_struct_dtype(obj):
+    """Check whether an array-like or dtype is of the timedelta64 dtype.
+
+    Parameters
+    ----------
+    obj : array-like or dtype
+        The array-like or dtype to check.
+
+    Returns
+    -------
+    bool
+        Whether or not the array-like or dtype is of the timedelta64 dtype.
+    """
     return (
         isinstance(obj, cudf.core.dtypes.StructDtype)
         or obj is cudf.core.dtypes.StructDtype
@@ -157,6 +257,18 @@ def is_struct_dtype(obj):
 
 
 def is_interval_dtype(obj):
+    """Check whether an array-like or dtype is of the Interval dtype.
+
+    Parameters
+    ----------
+    obj : array-like or dtype
+        The array-like or dtype to check.
+
+    Returns
+    -------
+    bool
+        Whether or not the array-like or dtype is of the Interval dtype.
+    """
     # TODO: Should there be any branch in this function that calls
     # pd.api.types.is_interval_dtype?
     return (
@@ -171,6 +283,18 @@ def is_interval_dtype(obj):
 
 
 def is_decimal_dtype(obj):
+    """Check whether an array-like or dtype is of the Interval dtype.
+
+    Parameters
+    ----------
+    obj : array-like or dtype
+        The array-like or dtype to check.
+
+    Returns
+    -------
+    bool
+        Whether or not the array-like or dtype is of the Interval dtype.
+    """
     return (
         type(obj) is cudf.core.dtypes.Decimal64Dtype
         or obj is cudf.core.dtypes.Decimal64Dtype
@@ -183,6 +307,18 @@ def is_decimal_dtype(obj):
 
 
 def is_scalar(val):
+    """Return True if given object is scalar.
+
+    Parameters
+    ----------
+    val : object
+        TODO: List valid objects.
+
+    Returns
+    -------
+    bool
+        Return True if given object is scalar.
+    """
     return (
         val is None
         or isinstance(val, DeviceScalar)
@@ -201,10 +337,7 @@ def is_scalar(val):
 
 
 def is_list_like(obj):
-    """
-    This function checks if the given `obj`
-    is a list-like (list, tuple, Series...)
-    type or not.
+    """Return `True` if the given `obj` is list-like (list, tuple, Series...).
 
     Parameters
     ----------
@@ -212,10 +345,9 @@ def is_list_like(obj):
 
     Returns
     -------
-    Boolean: True or False depending on whether the
-    input `obj` is like-like or not.
+    bool
+        Return True if given object is list-like.
     """
-
     return isinstance(obj, (Sequence, np.ndarray)) and not isinstance(
         obj, (str, bytes)
     )
