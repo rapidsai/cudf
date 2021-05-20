@@ -253,6 +253,12 @@ public class ScalarTest extends CudfTestBase {
       assertEquals("TEST", s.getJavaString());
       assertArrayEquals(new byte[]{'T', 'E', 'S', 'T'}, s.getUTF8());
     }
+    try (Scalar s = Scalar.fromUTF8String("".getBytes(StandardCharsets.UTF_8))) {
+      assertEquals(DType.STRING, s.getType());
+      assertTrue(s.isValid());
+      assertEquals("", s.getJavaString());
+      assertArrayEquals(new byte[]{}, s.getUTF8());
+    }
   }
 
   @Test
