@@ -715,8 +715,16 @@ class GroupBy(Serializable):
         axis : 0, axis to shift
             Shift direction. Only row-wise shift is supported
         fill_value : scalar or list of scalars, optional
-            The scalar value to use for newly introduced missing values. Should
-            match the dtype of columns to fill.
+            The scalar value to use for newly introduced missing values. Can be
+            specified with `None`, a single value or multiple values:
+
+            - `None` (default): do not perform fill
+            - Single value: fill all shifted columns with this value. Should
+              match the data type of all columns.
+            - List of values: fill shifted columns with corresponding value in
+              the list. The length of the list should match the number of
+              columns shifted. Each value should match the data type of the
+              column to fill.
 
         Returns
         -------
@@ -726,11 +734,6 @@ class GroupBy(Serializable):
         Notes
         -----
         Parameter ``freq`` is unsupported.
-
-        Parameter ``fill_value`` can be specified with ``None``, a single value
-        or multiple values. When multiple values are specified, the number of
-        values should match the number of columns to shift. Each column shifted
-        is filled with the corresponding value in the value list.
         """
 
         if freq is not None:
