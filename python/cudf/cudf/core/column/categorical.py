@@ -1389,82 +1389,8 @@ class CategoricalColumn(column.ColumnBase):
     def set_categories(
         self, new_categories: Any, ordered: bool = False, rename: bool = False,
     ) -> CategoricalColumn:
-        """
-        Set the categories to the specified new_categories.
+        # See CategoricalAccessor.set_categories.
 
-
-        `new_categories` can include new categories (which
-        will result in unused categories) or remove old categories
-        (which results in values set to null). If `rename==True`,
-        the categories will simple be renamed (less or more items
-        than in old categories will result in values set to null or
-        in unused categories respectively).
-
-        This method can be used to perform more than one action
-        of adding, removing, and reordering simultaneously and
-        is therefore faster than performing the individual steps
-        via the more specialised methods.
-
-        On the other hand this methods does not do checks
-        (e.g., whether the old categories are included in the
-        new categories on a reorder), which can result in
-        surprising changes.
-
-        Parameters
-        ----------
-
-        new_categories : list-like
-            The categories in new order.
-
-        ordered : bool, default None
-            Whether or not the categorical is treated as
-            a ordered categorical. If not given, do
-            not change the ordered information.
-
-        rename : bool, default False
-            Whether or not the `new_categories` should be
-            considered as a rename of the old categories
-            or as reordered categories.
-
-        Returns
-        -------
-        cat
-            Categorical with reordered categories
-            or None if inplace.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([1, 1, 2, 10, 2, 10], dtype='category')
-        >>> s
-        0     1
-        1     1
-        2     2
-        3    10
-        4     2
-        5    10
-        dtype: category
-        Categories (3, int64): [1, 2, 10]
-        >>> s.cat.set_categories([1, 10])
-        0       1
-        1       1
-        2    <NA>
-        3      10
-        4    <NA>
-        5      10
-        dtype: category
-        Categories (2, int64): [1, 10]
-        >>> s.cat.set_categories([1, 10], inplace=True)
-        >>> s
-        0       1
-        1       1
-        2    <NA>
-        3      10
-        4    <NA>
-        5      10
-        dtype: category
-        Categories (2, int64): [1, 10]
-        """
         ordered = ordered if ordered is not None else self.ordered
         new_categories = column.as_column(new_categories)
 
