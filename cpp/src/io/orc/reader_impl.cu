@@ -430,12 +430,15 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // Remove this once we support Decimal128 data type
     CUDF_EXPECTS((col_type != type_id::DECIMAL64) or (_metadata->ff.types[col].precision <= 18),
                  "Decimal data has precision > 18, Decimal64 data type doesn't support it.");
-    // sign of the scale is changed since cuDF follows c++ libraries like CNL
-    // which uses negative scaling, but liborc and other libraries
-    // follow positive scaling.
-    auto scale =
-      (col_type == type_id::DECIMAL64) ? -static_cast<int32_t>(_metadata->ff.types[col].scale) : 0;
-    column_types.emplace_back(col_type, scale);
+    if (col_type == type_id::DECIMAL64) {
+      // sign of the scale is changed since cuDF follows c++ libraries like CNL
+      // which uses negative scaling, but liborc and other libraries
+      // follow positive scaling.
+      auto const scale = -static_cast<int32_t>(_metadata->ff.types[col].scale.value_or(0));
+      column_types.emplace_back(col_type, scale);
+    } else {
+      column_types.emplace_back(col_type);
+    }
 
     // Map each ORC column to its column
     orc_col_map[col] = column_types.size() - 1;
@@ -523,7 +526,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         chunk.num_rows      = stripe_info->numberOfRows;
         chunk.encoding_kind = stripe_footer->columns[_selected_columns[j]].kind;
         chunk.type_kind     = _metadata->ff.types[_selected_columns[j]].kind;
-        chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale;
+        chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale.value_or(0);
         chunk.rowgroup_id   = num_rowgroups;
         chunk.dtype_len     = (column_types[j].id() == type_id::STRING)
                             ? sizeof(std::pair<const char *, size_t>)
@@ -621,6 +624,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 // Forward to implementation
 reader::reader(std::vector<std::string> const &filepaths,
                orc_reader_options const &options,
+               rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
@@ -630,6 +634,7 @@ reader::reader(std::vector<std::string> const &filepaths,
 // Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                orc_reader_options const &options,
+               rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource *mr)
 {
   CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");

@@ -109,10 +109,11 @@ namespace {
 template <typename reader, typename reader_options>
 std::unique_ptr<reader> make_reader(source_info const& src_info,
                                     reader_options const& options,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   if (src_info.type == io_type::FILEPATH) {
-    return std::make_unique<reader>(src_info.filepaths, options, mr);
+    return std::make_unique<reader>(src_info.filepaths, options, stream, mr);
   }
 
   std::vector<std::unique_ptr<datasource>> datasources;
@@ -124,7 +125,7 @@ std::unique_ptr<reader> make_reader(source_info const& src_info,
     CUDF_FAIL("Unsupported source type");
   }
 
-  return std::make_unique<reader>(std::move(datasources), options, mr);
+  return std::make_unique<reader>(std::move(datasources), options, stream, mr);
 }
 
 template <typename writer, typename... Ts>
@@ -155,7 +156,7 @@ table_with_metadata read_avro(avro_reader_options const& opts, rmm::mr::device_m
   namespace avro = cudf::io::detail::avro;
 
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<avro::reader>(opts.get_source(), opts, mr);
+  auto reader = make_reader<avro::reader>(opts.get_source(), opts, rmm::cuda_stream_default, mr);
   return reader->read(opts);
 }
 
@@ -164,7 +165,7 @@ table_with_metadata read_json(json_reader_options const& opts, rmm::mr::device_m
   namespace json = cudf::io::detail::json;
 
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<json::reader>(opts.get_source(), opts, mr);
+  auto reader = make_reader<json::reader>(opts.get_source(), opts, rmm::cuda_stream_default, mr);
   return reader->read(opts);
 }
 
@@ -173,7 +174,8 @@ table_with_metadata read_csv(csv_reader_options const& options, rmm::mr::device_
   namespace csv = cudf::io::detail::csv;
 
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<csv::reader>(options.get_source(), options, mr);
+  auto reader =
+    make_reader<csv::reader>(options.get_source(), options, rmm::cuda_stream_default, mr);
 
   return reader->read();
 }
@@ -183,7 +185,7 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
 {
   using namespace cudf::io::detail;
 
-  auto writer = make_writer<csv::writer>(options.get_sink(), options, mr);
+  auto writer = make_writer<csv::writer>(options.get_sink(), options, rmm::cuda_stream_default, mr);
 
   writer->write(options.get_table(), options.get_metadata());
 }
@@ -235,76 +237,23 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 
 column_statistics::column_statistics(cudf::io::orc::column_statistics&& cs)
 {
-  _number_of_values = std::move(cs.number_of_values);
-  if (cs.int_stats.get()) {
-    _type                = statistics_type::INT;
-    _type_specific_stats = cs.int_stats.release();
-  } else if (cs.double_stats.get()) {
-    _type                = statistics_type::DOUBLE;
-    _type_specific_stats = cs.double_stats.release();
-  } else if (cs.string_stats.get()) {
-    _type                = statistics_type::STRING;
-    _type_specific_stats = cs.string_stats.release();
-  } else if (cs.bucket_stats.get()) {
-    _type                = statistics_type::BUCKET;
-    _type_specific_stats = cs.bucket_stats.release();
-  } else if (cs.decimal_stats.get()) {
-    _type                = statistics_type::DECIMAL;
-    _type_specific_stats = cs.decimal_stats.release();
-  } else if (cs.date_stats.get()) {
-    _type                = statistics_type::DATE;
-    _type_specific_stats = cs.date_stats.release();
-  } else if (cs.binary_stats.get()) {
-    _type                = statistics_type::BINARY;
-    _type_specific_stats = cs.binary_stats.release();
-  } else if (cs.timestamp_stats.get()) {
-    _type                = statistics_type::TIMESTAMP;
-    _type_specific_stats = cs.timestamp_stats.release();
-  }
-}
-
-column_statistics& column_statistics::operator=(column_statistics&& other) noexcept
-{
-  _number_of_values    = std::move(other._number_of_values);
-  _type                = other._type;
-  _type_specific_stats = other._type_specific_stats;
-
-  other._type                = statistics_type::NONE;
-  other._type_specific_stats = nullptr;
-
-  return *this;
-}
-
-column_statistics::column_statistics(column_statistics&& other) noexcept
-{
-  *this = std::move(other);
-}
-
-column_statistics::~column_statistics()
-{
-  switch (_type) {
-    case statistics_type::NONE:  // error state, but can't throw from a destructor.
-      break;
-    case statistics_type::INT: delete static_cast<integer_statistics*>(_type_specific_stats); break;
-    case statistics_type::DOUBLE:
-      delete static_cast<double_statistics*>(_type_specific_stats);
-      break;
-    case statistics_type::STRING:
-      delete static_cast<string_statistics*>(_type_specific_stats);
-      break;
-    case statistics_type::BUCKET:
-      delete static_cast<bucket_statistics*>(_type_specific_stats);
-      break;
-    case statistics_type::DECIMAL:
-      delete static_cast<decimal_statistics*>(_type_specific_stats);
-      break;
-    case statistics_type::DATE: delete static_cast<date_statistics*>(_type_specific_stats); break;
-    case statistics_type::BINARY:
-      delete static_cast<binary_statistics*>(_type_specific_stats);
-      break;
-    case statistics_type::TIMESTAMP:
-      delete static_cast<timestamp_statistics*>(_type_specific_stats);
-      break;
+  number_of_values = cs.number_of_values;
+  if (cs.int_stats) {
+    type_specific_stats = *cs.int_stats;
+  } else if (cs.double_stats) {
+    type_specific_stats = *cs.double_stats;
+  } else if (cs.string_stats) {
+    type_specific_stats = *cs.string_stats;
+  } else if (cs.bucket_stats) {
+    type_specific_stats = *cs.bucket_stats;
+  } else if (cs.decimal_stats) {
+    type_specific_stats = *cs.decimal_stats;
+  } else if (cs.date_stats) {
+    type_specific_stats = *cs.date_stats;
+  } else if (cs.binary_stats) {
+    type_specific_stats = *cs.binary_stats;
+  } else if (cs.timestamp_stats) {
+    type_specific_stats = *cs.timestamp_stats;
   }
 }
 
@@ -345,7 +294,8 @@ parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
 table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<detail_orc::reader>(options.get_source(), options, mr);
+  auto reader =
+    make_reader<detail_orc::reader>(options.get_source(), options, rmm::cuda_stream_default, mr);
 
   return reader->read(options);
 }
@@ -359,7 +309,7 @@ void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resourc
 
   namespace io_detail = cudf::io::detail;
   auto writer         = make_writer<detail_orc::writer>(
-    options.get_sink(), options, io_detail::SingleWriteMode::YES, mr);
+    options.get_sink(), options, io_detail::SingleWriteMode::YES, rmm::cuda_stream_default, mr);
 
   writer->write(options.get_table());
 }
@@ -372,7 +322,7 @@ orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& op,
 {
   namespace io_detail = cudf::io::detail;
   writer              = make_writer<detail_orc::writer>(
-    op.get_sink(), op, io_detail::SingleWriteMode::NO, mr, rmm::cuda_stream_default);
+    op.get_sink(), op, io_detail::SingleWriteMode::NO, rmm::cuda_stream_default, mr);
 }
 
 /**
@@ -404,7 +354,8 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<detail_parquet::reader>(options.get_source(), options, mr);
+  auto reader = make_reader<detail_parquet::reader>(
+    options.get_source(), options, rmm::cuda_stream_default, mr);
 
   return reader->read(options);
 }
@@ -445,7 +396,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
   namespace io_detail = cudf::io::detail;
 
   auto writer = make_writer<detail_parquet::writer>(
-    options.get_sink(), options, io_detail::SingleWriteMode::YES, mr, rmm::cuda_stream_default);
+    options.get_sink(), options, io_detail::SingleWriteMode::YES, rmm::cuda_stream_default, mr);
 
   writer->write(options.get_table());
   return writer->close(options.get_column_chunks_file_path());
@@ -459,7 +410,7 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
 {
   namespace io_detail = cudf::io::detail;
   writer              = make_writer<detail_parquet::writer>(
-    op.get_sink(), op, io_detail::SingleWriteMode::NO, mr, rmm::cuda_stream_default);
+    op.get_sink(), op, io_detail::SingleWriteMode::NO, rmm::cuda_stream_default, mr);
 }
 
 /**

@@ -18,9 +18,16 @@
 
 package ai.rapids.cudf;
 
+import ai.rapids.cudf.HostColumnVector.BasicType;
+import ai.rapids.cudf.HostColumnVector.DataType;
+import ai.rapids.cudf.HostColumnVector.ListType;
+import ai.rapids.cudf.HostColumnVector.StructData;
+import ai.rapids.cudf.HostColumnVector.StructType;
+
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
@@ -56,10 +63,40 @@ public class ScalarTest extends CudfTestBase {
       } else {
         type = DType.create(dataType);
       }
-      if (!type.isNestedType() || type.equals(DType.LIST)) {
+      if (!type.isNestedType()) {
         try (Scalar s = Scalar.fromNull(type)) {
           assertEquals(type, s.getType());
           assertFalse(s.isValid(), "null validity for " + type);
+        }
+      }
+
+      // list scalar
+      HostColumnVector.DataType hDataType;
+      if (DType.EMPTY.equals(type)) {
+        continue;
+      } else if (DType.LIST.equals(type)) {
+        // list of list of int32
+        hDataType = new ListType(true, new BasicType(true, DType.INT32));
+      } else if (DType.STRUCT.equals(type)) {
+        // list of struct of int32
+        hDataType = new StructType(true, new BasicType(true, DType.INT32));
+      } else {
+        // list of non nested type
+        hDataType = new BasicType(true, type);
+      }
+      try (Scalar s = Scalar.listFromNull(hDataType);
+           ColumnView listCv = s.getListAsColumnView()) {
+        assertFalse(s.isValid(), "null validity for " + type);
+        assertEquals(DType.LIST, s.getType());
+        assertEquals(type, listCv.getType());
+        assertEquals(0L, listCv.getRowCount());
+        assertEquals(0L, listCv.getNullCount());
+        if (type.isNestedType()) {
+          try (ColumnView child = listCv.getChildColumnView(0)) {
+            assertEquals(DType.INT32, child.getType());
+            assertEquals(0L, child.getRowCount());
+            assertEquals(0L, child.getNullCount());
+          }
         }
       }
     }
@@ -205,6 +242,22 @@ public class ScalarTest extends CudfTestBase {
       assertTrue(s.isValid());
       assertEquals("TEST", s.getJavaString());
       assertArrayEquals(new byte[]{'T', 'E', 'S', 'T'}, s.getUTF8());
+    }
+  }
+
+  @Test
+  public void testUTF8String() {
+    try (Scalar s = Scalar.fromUTF8String("TEST".getBytes(StandardCharsets.UTF_8))) {
+      assertEquals(DType.STRING, s.getType());
+      assertTrue(s.isValid());
+      assertEquals("TEST", s.getJavaString());
+      assertArrayEquals(new byte[]{'T', 'E', 'S', 'T'}, s.getUTF8());
+    }
+    try (Scalar s = Scalar.fromUTF8String("".getBytes(StandardCharsets.UTF_8))) {
+      assertEquals(DType.STRING, s.getType());
+      assertTrue(s.isValid());
+      assertEquals("", s.getJavaString());
+      assertArrayEquals(new byte[]{}, s.getUTF8());
     }
   }
 
