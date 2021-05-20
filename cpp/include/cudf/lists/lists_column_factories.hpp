@@ -14,28 +14,29 @@
  * limitations under the License.
  */
 
-#pragma once
-
-#include <cudf/strings/strings_column_view.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
+#include <cudf/column/column.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/types.hpp>
 
 namespace cudf {
-namespace strings {
+namespace lists {
 namespace detail {
 
 /**
- * @copydoc cudf::strings::get_json_object
+ * @brief Internal API to construct a lists column from a `list_scalar`, for public
+ * use, use `cudf::make_column_from_scalar`.
  *
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param[in] value The `list_scalar` to construct from
+ * @param[in] size The number of rows for the output column.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory.
  */
-std::unique_ptr<cudf::column> get_json_object(
-  cudf::strings_column_view const& col,
-  cudf::string_scalar const& json_path,
-  get_json_object_options options,
+std::unique_ptr<cudf::column> make_lists_column_from_scalar(
+  list_scalar const& value,
+  size_type size,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
-}  // namespace strings
+}  // namespace lists
 }  // namespace cudf
