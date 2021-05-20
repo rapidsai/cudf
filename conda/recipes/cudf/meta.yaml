@@ -18,6 +18,9 @@ build:
   script_env:
     - VERSION_SUFFIX
     - PARALLEL_LEVEL
+    - CC
+    - CXX
+    - CUDAHOSTCXX
 
 requirements:
   build:
