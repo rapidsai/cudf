@@ -87,7 +87,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case DECIMAL64:
       return new Scalar(type, makeDecimal64Scalar(0L, type.getScale(), false));
     case LIST:
-      return new Scalar(type, makeListScalar(0L, false));
+      throw new IllegalArgumentException("Please call 'listFromNull' to create a null list scalar.");
     default:
       throw new IllegalArgumentException("Unexpected type: " + type);
     }
@@ -329,10 +329,34 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   }
 
   public static Scalar fromString(String value) {
+    return fromUTF8String(value == null ? null : value.getBytes(StandardCharsets.UTF_8));
+  }
+
+  /**
+   * Creates a String scalar from an array of UTF8 bytes.
+   * @param value the array of UTF8 bytes
+   * @return a String scalar
+   */
+  public static Scalar fromUTF8String(byte[] value) {
     if (value == null) {
       return fromNull(DType.STRING);
     }
-    return new Scalar(DType.STRING, makeStringScalar(value.getBytes(StandardCharsets.UTF_8), true));
+    return new Scalar(DType.STRING, makeStringScalar(value, true));
+  }
+
+  /**
+   * Creates a null scalar of list type.
+   *
+   * Having this special API because the element type is required to build an empty
+   * nested column as the underlying column of the list scalar.
+   *
+   * @param elementType the data type of the element in the list.
+   * @return a null scalar of list type
+   */
+  public static Scalar listFromNull(HostColumnVector.DataType elementType) {
+    try (ColumnVector col = ColumnVector.empty(elementType)) {
+      return new Scalar(DType.LIST, makeListScalar(col.getNativeView(), false));
+    }
   }
 
   /**
@@ -343,7 +367,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
    */
   public static Scalar listFromColumnView(ColumnView list) {
     if (list == null) {
-      return Scalar.fromNull(DType.LIST);
+      throw new IllegalArgumentException("'list' should NOT be null." +
+          " Please call 'listFromNull' to create a null list scalar.");
     }
     return new Scalar(DType.LIST, makeListScalar(list.getNativeView(), true));
   }
@@ -604,6 +629,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       case UINT32:
       case TIMESTAMP_DAYS:
       case DECIMAL32:
+      case DURATION_DAYS:
         valueHash = getInt();
         break;
       case INT64:
@@ -613,6 +639,10 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       case TIMESTAMP_MICROSECONDS:
       case TIMESTAMP_NANOSECONDS:
       case DECIMAL64:
+      case DURATION_MICROSECONDS:
+      case DURATION_SECONDS:
+      case DURATION_MILLISECONDS:
+      case DURATION_NANOSECONDS:
         valueHash = Long.hashCode(getLong());
         break;
       case FLOAT32:

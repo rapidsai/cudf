@@ -65,6 +65,15 @@ struct stripe_rowgroups {
 };
 
 /**
+ * @brief Holds the sizes of encoded elements of decimal columns.
+ */
+struct encoder_decimal_info {
+  std::map<uint32_t, rmm::device_uvector<uint32_t>>
+    elem_sizes;                                        ///< Column index -> per-element size map
+  std::map<uint32_t, std::vector<uint32_t>> rg_sizes;  ///< Column index -> per-rowgroup size map
+};
+
+/**
  * @brief Returns the total number of rowgroups in the list of contigious stripes.
  */
 inline auto stripes_size(host_span<stripe_rowgroups const> stripes)
@@ -94,9 +103,9 @@ class orc_streams {
    */
   struct orc_stream_offsets {
     std::vector<size_t> offsets;
-    size_t str_data_size = 0;
-    size_t rle_data_size = 0;
-    auto data_size() const { return str_data_size + rle_data_size; }
+    size_t non_rle_data_size = 0;
+    size_t rle_data_size     = 0;
+    auto data_size() const { return non_rle_data_size + rle_data_size; }
   };
   orc_stream_offsets compute_offsets(host_span<orc_column_view const> columns,
                                      size_t num_rowgroups) const;
@@ -136,14 +145,14 @@ class writer::impl {
    * @param sink Output sink
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
-   * @param mr Device memory resource to use for device memory allocation
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<data_sink> sink,
                 orc_writer_options const& options,
                 SingleWriteMode mode,
-                rmm::mr::device_memory_resource* mr,
-                rmm::cuda_stream_view stream);
+                rmm::cuda_stream_view stream,
+                rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Constructor with chunked writer options.
@@ -151,14 +160,14 @@ class writer::impl {
    * @param sink Output sink
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
-   * @param mr Device memory resource to use for device memory allocation
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::unique_ptr<data_sink> sink,
                 chunked_orc_writer_options const& options,
                 SingleWriteMode mode,
-                rmm::mr::device_memory_resource* mr,
-                rmm::cuda_stream_view stream);
+                rmm::cuda_stream_view stream,
+                rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Destructor to complete any incomplete write and release resources.
@@ -224,10 +233,12 @@ class writer::impl {
    *
    * @param[in,out] columns List of columns
    * @param[in] stripe_bounds List of stripe boundaries
+   * @param[in] decimal_column_sizes Sizes of encoded decimal columns
    * @return List of stream descriptors
    */
   orc_streams create_streams(host_span<orc_column_view> columns,
-                             host_span<stripe_rowgroups const> stripe_bounds);
+                             host_span<stripe_rowgroups const> stripe_bounds,
+                             std::map<uint32_t, size_t> const& decimal_column_sizes);
 
   /**
    * @brief Gathers stripe information.
@@ -247,6 +258,7 @@ class writer::impl {
    * @param str_col_ids List of columns that are strings type
    * @param dict_data Dictionary data memory
    * @param dict_index Dictionary index memory
+   * @param dec_chunk_sizes Information about size of encoded decimal columns
    * @param stripe_bounds List of stripe boundaries
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Encoded data and per-chunk stream descriptors
@@ -256,6 +268,7 @@ class writer::impl {
                               std::vector<int> const& str_col_ids,
                               rmm::device_uvector<uint32_t>&& dict_data,
                               rmm::device_uvector<uint32_t>&& dict_index,
+                              encoder_decimal_info&& dec_chunk_sizes,
                               host_span<stripe_rowgroups const> stripe_bounds,
                               orc_streams const& streams);
 

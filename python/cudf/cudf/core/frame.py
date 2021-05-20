@@ -28,6 +28,7 @@ from cudf.core.join import merge
 from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
+    is_decimal_dtype,
     is_numerical_dtype,
     is_scalar,
     min_scalar_type,
@@ -3364,6 +3365,10 @@ class SingleColumnFrame(Frame):
         )
 
     @property
+    def _num_columns(self):
+        return 1
+
+    @property
     def _column(self):
         return self._data[self.name]
 
@@ -3527,6 +3532,79 @@ class SingleColumnFrame(Frame):
         ]
         """
         return self._column.to_arrow()
+
+    @property
+    def is_unique(self):
+        """Return boolean if values in the object are unique.
+
+        Returns
+        -------
+        bool
+        """
+        return self._column.is_unique
+
+    @property
+    def is_monotonic(self):
+        """Return boolean if values in the object are monotonic_increasing.
+
+        This property is an alias for :attr:`is_monotonic_increasing`.
+
+        Returns
+        -------
+        bool
+        """
+        return self.is_monotonic_increasing
+
+    @property
+    def is_monotonic_increasing(self):
+        """Return boolean if values in the object are monotonic_increasing.
+
+        Returns
+        -------
+        bool
+        """
+        return self._column.is_monotonic_increasing
+
+    @property
+    def is_monotonic_decreasing(self):
+        """Return boolean if values in the object are monotonic_decreasing.
+
+        Returns
+        -------
+        bool
+        """
+        return self._column.is_monotonic_decreasing
+
+    @property
+    def __cuda_array_interface__(self):
+        return self._column.__cuda_array_interface__
+
+    def factorize(self, na_sentinel=-1):
+        """Encode the input values as integer labels
+
+        Parameters
+        ----------
+        na_sentinel : number
+            Value to indicate missing category.
+
+        Returns
+        --------
+        (labels, cats) : (cupy.ndarray, cupy.ndarray or Index)
+            - *labels* contains the encoded values
+            - *cats* contains the categories in order that the N-th
+              item corresponds to the (N-1) code.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['a', 'a', 'c'])
+        >>> codes, uniques = s.factorize()
+        >>> codes
+        array([0, 0, 1], dtype=int8)
+        >>> uniques
+        StringIndex(['a' 'c'], dtype='object')
+        """
+        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
 
     @property
     def _copy_construct_defaults(self):
@@ -3698,10 +3776,16 @@ class SingleColumnFrame(Frame):
         return self._binaryop(other, "floordiv", reflect=True)
 
     def __truediv__(self, other):
-        return self._binaryop(other, "truediv")
+        if is_decimal_dtype(self.dtype):
+            return self._binaryop(other, "div")
+        else:
+            return self._binaryop(other, "truediv")
 
     def __rtruediv__(self, other):
-        return self._binaryop(other, "truediv", reflect=True)
+        if is_decimal_dtype(self.dtype):
+            return self._binaryop(other, "div", reflect=True)
+        else:
+            return self._binaryop(other, "truediv", reflect=True)
 
     __div__ = __truediv__
 

@@ -23,8 +23,11 @@
 
 #include <io/utilities/column_utils.cuh>
 
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -89,21 +92,34 @@ constexpr orc::TypeKind to_orc_type(cudf::type_id id)
     case cudf::type_id::TIMESTAMP_MILLISECONDS:
     case cudf::type_id::TIMESTAMP_NANOSECONDS: return TypeKind::TIMESTAMP;
     case cudf::type_id::STRING: return TypeKind::STRING;
+    case cudf::type_id::DECIMAL32:
+    case cudf::type_id::DECIMAL64: return TypeKind::DECIMAL;
     default: return TypeKind::INVALID_TYPE_KIND;
   }
 }
 
 /**
- * @brief Function that translates time unit to nanoscale multiple
+ * @brief Translates time unit to nanoscale multiple.
  */
-template <typename T>
-constexpr T to_clockscale(cudf::type_id timestamp_id)
+constexpr int32_t to_clockscale(cudf::type_id timestamp_id)
 {
   switch (timestamp_id) {
     case cudf::type_id::TIMESTAMP_SECONDS: return 9;
     case cudf::type_id::TIMESTAMP_MILLISECONDS: return 6;
     case cudf::type_id::TIMESTAMP_MICROSECONDS: return 3;
     case cudf::type_id::TIMESTAMP_NANOSECONDS:
+    default: return 0;
+  }
+}
+
+/**
+ * @brief Returns the precision of the given decimal type.
+ */
+constexpr auto orc_precision(cudf::type_id decimal_id)
+{
+  switch (decimal_id) {
+    case cudf::type_id::DECIMAL32: return 9;
+    case cudf::type_id::DECIMAL64: return 18;
     default: return 0;
   }
 }
@@ -131,8 +147,10 @@ class orc_column_view {
       _data_count(col.size()),
       _null_count(col.null_count()),
       _nulls(col.null_mask()),
-      _clockscale(to_clockscale<uint8_t>(col.type().id())),
-      _type_kind(to_orc_type(col.type().id()))
+      _type_kind(to_orc_type(col.type().id())),
+      _scale{(_type_kind == TypeKind::DECIMAL) ? -col.type().scale()
+                                               : to_clockscale(col.type().id())},
+      _precision{orc_precision(col.type().id())}
   {
     // Generating default name if name isn't present in metadata
     if (metadata && _index < metadata->column_names.size()) {
@@ -161,6 +179,9 @@ class orc_column_view {
   }
   auto device_dict_chunk() const { return d_dict; }
 
+  auto const &decimal_offsets() const { return d_decimal_offsets; }
+  void attach_decimal_offsets(uint32_t *sizes_ptr) { d_decimal_offsets = sizes_ptr; }
+
   /**
    * @brief Function that associates an existing stripe dictionary allocation
    */
@@ -182,11 +203,13 @@ class orc_column_view {
   // Id in the ORC file
   auto id() const noexcept { return _index + 1; }
   size_t type_width() const noexcept { return _type_width; }
-  size_t data_count() const noexcept { return _data_count; }
+  auto data_count() const noexcept { return _data_count; }
   size_t null_count() const noexcept { return _null_count; }
   bool nullable() const noexcept { return (_nulls != nullptr); }
   uint32_t const *nulls() const noexcept { return _nulls; }
-  uint8_t clockscale() const noexcept { return _clockscale; }
+
+  auto scale() const noexcept { return _scale; }
+  auto precision() const noexcept { return _precision; }
 
   void set_orc_encoding(ColumnEncodingKind e) { _encoding_kind = e; }
   auto orc_kind() const noexcept { return _type_kind; }
@@ -200,15 +223,17 @@ class orc_column_view {
   bool _is_string_type = false;
 
   size_t _type_width     = 0;
-  size_t _data_count     = 0;
+  size_type _data_count  = 0;
   size_t _null_count     = 0;
   uint32_t const *_nulls = nullptr;
-  uint8_t _clockscale    = 0;
 
   // ORC-related members
   std::string _name{};
   TypeKind _type_kind;
   ColumnEncodingKind _encoding_kind;
+
+  int32_t _scale     = 0;
+  int32_t _precision = 0;
 
   // String dictionary-related members
   size_t dict_stride                       = 0;
@@ -216,6 +241,10 @@ class orc_column_view {
   gpu::StripeDictionary const *stripe_dict = nullptr;
   gpu::DictionaryChunk *d_dict             = nullptr;
   gpu::StripeDictionary *d_stripe_dict     = nullptr;
+
+  // Offsets for encoded decimal elements. Used to enable direct writing of encoded decimal elements
+  // into the output stream.
+  uint32_t *d_decimal_offsets = nullptr;
 };
 
 std::vector<stripe_rowgroups> writer::impl::gather_stripe_info(
@@ -348,7 +377,8 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
 }
 
 orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
-                                         host_span<stripe_rowgroups const> stripe_bounds)
+                                         host_span<stripe_rowgroups const> stripe_bounds,
+                                         std::map<uint32_t, size_t> const &decimal_column_sizes)
 {
   // 'column 0' row index stream
   std::vector<Stream> streams{{ROW_INDEX, 0}};  // TODO: Separate index and data streams?
@@ -384,7 +414,6 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
       present_stream_size = ((row_index_stride_ + 7) >> 3);
       present_stream_size += (present_stream_size + 0x7f) >> 7;
     }
-
     switch (kind) {
       case TypeKind::BOOLEAN:
         data_stream_size = div_rowgroups_by<int64_t>(1024) * (128 + 1);
@@ -469,6 +498,14 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
         data2_kind        = SECONDARY;
         encoding_kind     = DIRECT_V2;
         break;
+      case TypeKind::DECIMAL:
+        // varint values (NO RLE)
+        data_stream_size = decimal_column_sizes.at(column.index());
+        // scale stream TODO: compute exact size since all elems are equal
+        data2_stream_size = div_rowgroups_by<int64_t>(512) * (512 * 4 + 2);
+        data2_kind        = SECONDARY;
+        encoding_kind     = DIRECT_V2;
+        break;
       default: CUDF_FAIL("Unsupported ORC type kind");
     }
 
@@ -505,34 +542,39 @@ orc_streams::orc_stream_offsets orc_streams::compute_offsets(
   host_span<orc_column_view const> columns, size_t num_rowgroups) const
 {
   std::vector<size_t> strm_offsets(streams.size());
-  size_t str_data_size = 0;
-  size_t rle_data_size = 0;
+  size_t non_rle_data_size = 0;
+  size_t rle_data_size     = 0;
   for (size_t i = 0; i < streams.size(); ++i) {
     const auto &stream = streams[i];
 
-    auto const is_str_data = [&]() {
-      // First stream is an index stream
-      if (!stream.column_index().has_value()) return false;
+    auto const is_rle_data = [&]() {
+      // First stream is an index stream, don't check types, etc.
+      if (!stream.column_index().has_value()) return true;
 
       auto const &column = columns[stream.column_index().value()];
-      if (column.orc_kind() != TypeKind::STRING) return false;
+      // Dictionary encoded string column - dictionary characters or
+      // directly encoded string - column characters
+      if (column.orc_kind() == TypeKind::STRING &&
+          ((stream.kind == DICTIONARY_DATA && column.orc_encoding() == DICTIONARY_V2) ||
+           (stream.kind == DATA && column.orc_encoding() == DIRECT_V2)))
+        return false;
+      // Decimal data
+      if (column.orc_kind() == TypeKind::DECIMAL && stream.kind == DATA) return false;
 
-      // Dictionary encoded string column dictionary characters or
-      // directly encoded string column characters
-      return ((stream.kind == DICTIONARY_DATA && column.orc_encoding() == DICTIONARY_V2) ||
-              (stream.kind == DATA && column.orc_encoding() == DIRECT_V2));
+      // Everything else uses RLE
+      return true;
     }();
-    if (is_str_data) {
-      strm_offsets[i] = str_data_size;
-      str_data_size += stream.length;
-    } else {
+    if (is_rle_data) {
       strm_offsets[i] = rle_data_size;
       rle_data_size += (stream.length * num_rowgroups + 7) & ~7;
+    } else {
+      strm_offsets[i] = non_rle_data_size;
+      non_rle_data_size += stream.length;
     }
   }
-  str_data_size = (str_data_size + 7) & ~7;
+  non_rle_data_size = (non_rle_data_size + 7) & ~7;
 
-  return {std::move(strm_offsets), str_data_size, rle_data_size};
+  return {std::move(strm_offsets), non_rle_data_size, rle_data_size};
 }
 
 struct segmented_valid_cnt_input {
@@ -545,6 +587,7 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
                                           std::vector<int> const &str_col_ids,
                                           rmm::device_uvector<uint32_t> &&dict_data,
                                           rmm::device_uvector<uint32_t> &&dict_index,
+                                          encoder_decimal_info &&dec_chunk_sizes,
                                           host_span<stripe_rowgroups const> stripe_bounds,
                                           orc_streams const &streams)
 {
@@ -576,8 +619,10 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
         } else {
           ck.dtype_len = column.type_width();
         }
-        ck.scale = column.clockscale();
-        // Only need to check row groups that end within the stripe
+        ck.scale = column.scale();
+        if (ck.type_kind == TypeKind::DECIMAL) {
+          ck.decimal_offsets = device_span<uint32_t>{column.decimal_offsets(), ck.num_rows};
+        }
       }
     }
   }
@@ -656,9 +701,16 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
               // Pass-through
               strm.lengths[strm_type]   = ck.num_rows * ck.dtype_len;
               strm.data_ptrs[strm_type] = nullptr;
+
+            } else if (ck.type_kind == DECIMAL && strm_type == gpu::CI_DATA) {
+              strm.lengths[strm_type]   = dec_chunk_sizes.rg_sizes.at(col_idx)[rg_idx];
+              strm.data_ptrs[strm_type] = (rg_idx == 0)
+                                            ? encoded_data.data() + stream_offsets.offsets[strm_id]
+                                            : (col_streams[rg_idx - 1].data_ptrs[strm_type] +
+                                               col_streams[rg_idx - 1].lengths[strm_type]);
             } else {
               strm.lengths[strm_type]   = streams[strm_id].length;
-              strm.data_ptrs[strm_type] = encoded_data.data() + stream_offsets.str_data_size +
+              strm.data_ptrs[strm_type] = encoded_data.data() + stream_offsets.non_rle_data_size +
                                           stream_offsets.offsets[strm_id] +
                                           streams[strm_id].length * rg_idx;
             }
@@ -755,6 +807,7 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
       case TypeKind::DOUBLE: desc->stats_dtype = dtype_float64; break;
       case TypeKind::BOOLEAN: desc->stats_dtype = dtype_bool; break;
       case TypeKind::DATE: desc->stats_dtype = dtype_int32; break;
+      case TypeKind::DECIMAL: desc->stats_dtype = dtype_decimal64; break;
       case TypeKind::TIMESTAMP: desc->stats_dtype = dtype_timestamp64; break;
       case TypeKind::STRING: desc->stats_dtype = dtype_string; break;
       default: desc->stats_dtype = dtype_none; break;
@@ -763,7 +816,7 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
     desc->num_values = column.data_count();
     if (desc->stats_dtype == dtype_timestamp64) {
       // Timestamp statistics are in milliseconds
-      switch (column.clockscale()) {
+      switch (column.scale()) {
         case 9: desc->ts_scale = 1000; break;
         case 6: desc->ts_scale = 0; break;
         case 3: desc->ts_scale = -1000; break;
@@ -969,8 +1022,8 @@ void writer::impl::add_uncompressed_block_headers(std::vector<uint8_t> &v)
 writer::impl::impl(std::unique_ptr<data_sink> sink,
                    orc_writer_options const &options,
                    SingleWriteMode mode,
-                   rmm::mr::device_memory_resource *mr,
-                   rmm::cuda_stream_view stream)
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource *mr)
   : compression_kind_(to_orc_compression(options.get_compression())),
     enable_statistics_(options.enable_statistics()),
     out_sink_(std::move(sink)),
@@ -985,8 +1038,8 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
 writer::impl::impl(std::unique_ptr<data_sink> sink,
                    chunked_orc_writer_options const &options,
                    SingleWriteMode mode,
-                   rmm::mr::device_memory_resource *mr,
-                   rmm::cuda_stream_view stream)
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource *mr)
   : compression_kind_(to_orc_compression(options.get_compression())),
     enable_statistics_(options.enable_statistics()),
     out_sink_(std::move(sink)),
@@ -1024,6 +1077,127 @@ rmm::device_uvector<size_type> get_string_column_ids(const table_device_view &vi
                                   });
   string_column_ids.resize(end_iter - string_column_ids.begin(), stream);
   return string_column_ids;
+}
+
+/**
+ * @brief Iterates over row indexes but returns the corresponding rowgroup index.
+ *
+ */
+struct rowgroup_iterator {
+  using difference_type   = long;
+  using value_type        = int;
+  using pointer           = int *;
+  using reference         = int &;
+  using iterator_category = thrust::output_device_iterator_tag;
+  size_type idx;
+  size_type rowgroup_size;
+
+  CUDA_HOST_DEVICE_CALLABLE rowgroup_iterator(int offset, size_type rg_size)
+    : idx{offset}, rowgroup_size{rg_size}
+  {
+  }
+  CUDA_HOST_DEVICE_CALLABLE value_type operator*() const { return idx / rowgroup_size; }
+  CUDA_HOST_DEVICE_CALLABLE auto operator+(int i) const
+  {
+    return rowgroup_iterator{idx + i, rowgroup_size};
+  }
+  CUDA_HOST_DEVICE_CALLABLE rowgroup_iterator &operator++()
+  {
+    ++idx;
+    return *this;
+  }
+  CUDA_HOST_DEVICE_CALLABLE value_type operator[](int offset)
+  {
+    return (idx + offset) / rowgroup_size;
+  }
+  CUDA_HOST_DEVICE_CALLABLE bool operator!=(rowgroup_iterator const &other)
+  {
+    return idx != other.idx;
+  }
+};
+
+// returns host vector of per-rowgroup sizes
+encoder_decimal_info decimal_chunk_sizes(table_view const &table,
+                                         host_span<orc_column_view> orc_columns,
+                                         size_type rowgroup_size,
+                                         host_span<stripe_rowgroups const> stripes,
+                                         rmm::cuda_stream_view stream)
+{
+  std::map<uint32_t, rmm::device_uvector<uint32_t>> elem_sizes;
+
+  auto const d_table = table_device_view::create(table, stream);
+  // Compute per-element offsets (within each row group) on the device
+  for (size_t col_idx = 0; col_idx < orc_columns.size(); ++col_idx) {
+    auto &orc_col = orc_columns[col_idx];
+    if (orc_col.orc_kind() == DECIMAL) {
+      auto const &col = table.column(col_idx);
+      auto &current_sizes =
+        elem_sizes.insert({col_idx, rmm::device_uvector<uint32_t>(col.size(), stream)})
+          .first->second;
+      thrust::tabulate(rmm::exec_policy(stream),
+                       current_sizes.begin(),
+                       current_sizes.end(),
+                       [table = *d_table, col_idx] __device__(auto idx) {
+                         auto const &col = table.column(col_idx);
+                         if (col.is_null(idx)) return 0u;
+                         int64_t const element = (col.type().id() == type_id::DECIMAL32)
+                                                   ? col.element<int32_t>(idx)
+                                                   : col.element<int64_t>(idx);
+                         int64_t const sign      = (element < 0) ? 1 : 0;
+                         uint64_t zigzaged_value = ((element ^ -sign) * 2) + sign;
+
+                         uint32_t encoded_length = 1;
+                         while (zigzaged_value > 127) {
+                           zigzaged_value >>= 7u;
+                           ++encoded_length;
+                         }
+                         return encoded_length;
+                       });
+
+      // Compute element offsets within each row group
+      thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+                                    rowgroup_iterator{0, rowgroup_size},
+                                    rowgroup_iterator{col.size(), rowgroup_size},
+                                    current_sizes.begin(),
+                                    current_sizes.begin());
+
+      orc_col.attach_decimal_offsets(current_sizes.data());
+    }
+  }
+  if (elem_sizes.empty()) return {};
+
+  // Gather the row group sizes and copy to host
+  auto const num_rowgroups  = stripes_size(stripes);
+  auto d_tmp_rowgroup_sizes = rmm::device_uvector<uint32_t>(num_rowgroups, stream);
+  std::map<uint32_t, std::vector<uint32_t>> rg_sizes;
+  for (auto const &[col_idx, esizes] : elem_sizes) {
+    // Copy last elem in each row group - equal to row group size
+    thrust::tabulate(
+      rmm::exec_policy(stream),
+      d_tmp_rowgroup_sizes.begin(),
+      d_tmp_rowgroup_sizes.end(),
+      [src = esizes.data(), num_rows = esizes.size(), rg_size = rowgroup_size] __device__(
+        auto idx) { return src[thrust::min<size_type>(num_rows, rg_size * (idx + 1)) - 1]; });
+
+    rg_sizes[col_idx] = cudf::detail::make_std_vector_async(d_tmp_rowgroup_sizes, stream);
+  }
+
+  return {std::move(elem_sizes), std::move(rg_sizes)};
+}
+
+std::map<uint32_t, size_t> decimal_column_sizes(
+  std::map<uint32_t, std::vector<uint32_t>> const &chunk_sizes)
+{
+  std::map<uint32_t, size_t> column_sizes;
+  std::transform(chunk_sizes.cbegin(),
+                 chunk_sizes.cend(),
+                 std::inserter(column_sizes, column_sizes.end()),
+                 [](auto const &chunk_size) -> std::pair<uint32_t, size_t> {
+                   return {
+                     chunk_size.first,
+                     std::accumulate(chunk_size.second.cbegin(), chunk_size.second.cend(), 0lu)};
+                 });
+  return column_sizes;
 }
 
 void writer::impl::write(table_view const &table)
@@ -1083,12 +1257,17 @@ void writer::impl::write(table_view const &table)
       orc_columns.data(), str_col_ids, stripe_bounds, dict, dict_index.data(), stripe_dict);
   }
 
-  auto streams  = create_streams(orc_columns, stripe_bounds);
+  auto dec_chunk_sizes =
+    decimal_chunk_sizes(table, orc_columns, row_index_stride_, stripe_bounds, stream);
+
+  auto streams =
+    create_streams(orc_columns, stripe_bounds, decimal_column_sizes(dec_chunk_sizes.rg_sizes));
   auto enc_data = encode_columns(*device_columns,
                                  orc_columns,
                                  str_col_ids,
                                  std::move(dict_data),
                                  std::move(dict_index),
+                                 std::move(dec_chunk_sizes),
                                  stripe_bounds,
                                  streams);
   // Assemble individual disparate column chunks into contiguous data streams
@@ -1262,7 +1441,11 @@ void writer::impl::write(table_view const &table)
     ff.types[0].subtypes.resize(num_columns);
     ff.types[0].fieldNames.resize(num_columns);
     for (auto const &column : orc_columns) {
-      ff.types[column.id()].kind             = column.orc_kind();
+      ff.types[column.id()].kind = column.orc_kind();
+      if (column.orc_kind() == DECIMAL) {
+        ff.types[column.id()].scale     = static_cast<uint32_t>(column.scale());
+        ff.types[column.id()].precision = column.precision();
+      }
       ff.types[0].subtypes[column.index()]   = column.id();
       ff.types[0].fieldNames[column.index()] = column.orc_name();
     }
@@ -1326,9 +1509,9 @@ void writer::impl::close()
 writer::writer(std::unique_ptr<data_sink> sink,
                orc_writer_options const &options,
                SingleWriteMode mode,
-               rmm::mr::device_memory_resource *mr,
-               rmm::cuda_stream_view stream)
-  : _impl(std::make_unique<impl>(std::move(sink), options, mode, mr, stream))
+               rmm::cuda_stream_view stream,
+               rmm::mr::device_memory_resource *mr)
+  : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream, mr))
 {
 }
 
@@ -1336,9 +1519,9 @@ writer::writer(std::unique_ptr<data_sink> sink,
 writer::writer(std::unique_ptr<data_sink> sink,
                chunked_orc_writer_options const &options,
                SingleWriteMode mode,
-               rmm::mr::device_memory_resource *mr,
-               rmm::cuda_stream_view stream)
-  : _impl(std::make_unique<impl>(std::move(sink), options, mode, mr, stream))
+               rmm::cuda_stream_view stream,
+               rmm::mr::device_memory_resource *mr)
+  : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream, mr))
 {
 }
 
