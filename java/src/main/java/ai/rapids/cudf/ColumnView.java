@@ -2807,7 +2807,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param colNarep string String scalar that should be used in place of any null strings
    *                 found in any column.
    * @param separateNulls boolean if true, then the separator is included for null rows if
-   *                     `col_narep` is valid.
+   *                     `colNarep` is valid.
    * @param emptyStringOutputIfEmptyList boolean if true, any input row that is an empty list
    *                                     will result in an empty string. Otherwise, it will
    *                                     result in a null.
@@ -2833,7 +2833,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *              column will be replaced by the specified string. The underlying value in the
    *              string scalar may be null, but the object passed in may not.
    * @param separateNulls boolean if true, then the separator is included for null rows if
-   *                      `col_narep` is valid.
+   *                      `narep` is valid.
    * @param emptyStringOutputIfEmptyList boolean if true, any input row that is an empty list
    *                                     will result in an empty string. Otherwise, it will
    *                                     result in a null.
