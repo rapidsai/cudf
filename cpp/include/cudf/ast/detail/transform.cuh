@@ -385,7 +385,9 @@ struct expression_evaluator {
      * @param expression_index Row index of data column.
      * @param result Value to assign to output.
      */
-    template <typename Element, CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
+    template <typename Element,
+              CUDF_ENABLE_IF(is_rep_layout_compatible<Element>() &&
+                             std::is_same<OutputType, mutable_column_device_view*>::value)>
     __device__ void resolve_output(detail::device_data_reference device_data_reference,
                                    cudf::size_type row_index,
                                    Element result) const
@@ -393,6 +395,25 @@ struct expression_evaluator {
       auto const ref_type = device_data_reference.reference_type;
       if (ref_type == detail::device_data_reference_type::COLUMN) {
         evaluator.output_column->template element<Element>(row_index) = result;
+      } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
+        // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing.
+        // Using a temporary variable ensures that the compiler knows the result is aligned.
+        std::int64_t tmp;
+        memcpy(&tmp, &result, sizeof(Element));
+        evaluator.thread_intermediate_storage[device_data_reference.data_index] = tmp;
+      }
+    }
+
+    template <typename Element,
+              CUDF_ENABLE_IF(is_rep_layout_compatible<Element>() &&
+                             std::is_same<OutputType, void*>::value)>
+    __device__ void resolve_output(detail::device_data_reference device_data_reference,
+                                   cudf::size_type row_index,
+                                   Element result) const
+    {
+      auto const ref_type = device_data_reference.reference_type;
+      if (ref_type == detail::device_data_reference_type::COLUMN) {
+        static_cast<Element*>(evaluator.output_column)[row_index] = result;
       } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
         // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing.
         // Using a temporary variable ensures that the compiler knows the result is aligned.
