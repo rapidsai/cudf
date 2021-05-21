@@ -157,6 +157,8 @@ get_predicate_join_indices(table_view const& left,
   }
 
   auto const plan = ast::detail::ast_plan{binary_pred, left, right, stream, mr};
+  CUDF_EXPECTS(plan.output_type().id() == type_id::BOOL8,
+               "The expression must produce a boolean output.");
 
   // Because we are approximating the number of joined elements, our approximation
   // might be incorrect and we might have underestimated the number of joined elements.
