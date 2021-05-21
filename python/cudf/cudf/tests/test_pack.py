@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 from cudf._lib.copying import pack, unpack
-from cudf.core import DataFrame, GenericIndex
+from cudf.core import DataFrame, GenericIndex, Series
 from cudf.tests.utils import assert_eq
 
 
@@ -63,6 +63,28 @@ def test_packed_dataframe_equality_categorical():
     check_packed_equality(df)
 
 
+def test_packed_dataframe_equality_list():
+    np.random.seed(0)
+
+    df = DataFrame()
+    df["keys"] = Series(list([i, i + 1, i + 2] for i in range(10)))
+    df["vals"] = np.random.random(len(df))
+
+    check_packed_equality(df)
+
+
+def test_packed_dataframe_equality_struct():
+    np.random.seed(0)
+
+    df = DataFrame()
+    df["keys"] = Series(
+        list({"0": i, "1": i + 1, "2": i + 2} for i in range(10))
+    )
+    df["vals"] = np.random.random(len(df))
+
+    check_packed_equality(df)
+
+
 def check_packed_unique_pointers(df):
     # basic
     assert_packed_frame_unique_pointers(df)
@@ -102,3 +124,7 @@ def test_packed_dataframe_unique_pointers_categorical():
     df["vals"] = np.random.random(len(df))
 
     check_packed_unique_pointers(df)
+
+
+if __name__ == "__main__":
+    test_packed_dataframe_equality_list()
