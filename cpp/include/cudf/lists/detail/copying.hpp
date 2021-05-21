@@ -48,21 +48,6 @@ std::unique_ptr<cudf::column> copy_slice(lists_column_view const& lists,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr);
 
-/**
- * @brief Create a single-level empty lists column.
- *
- * An empty lists column contains empty children so the column's
- * basic type is recorded.
- *
- * @param child_type The type used for the child column.
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New empty lists column.
- */
-std::unique_ptr<cudf::column> make_empty_lists_column(data_type child_type,
-                                                      rmm::cuda_stream_view stream,
-                                                      rmm::mr::device_memory_resource* mr);
-
 }  // namespace detail
 }  // namespace lists
 }  // namespace cudf
