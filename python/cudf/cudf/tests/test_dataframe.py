@@ -8636,16 +8636,3 @@ def test_is_homogeneous_multiindex(data, indexes, expected):
     actual = cudf.DataFrame(test_dataframe)._is_homogeneous
 
     assert actual == expected
-
-
-"""
-({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}, True),
-        ({"a": ["a", "b", "c"], "b": [4, 5, 6], "c": [7, 8, 9]}, False),
-        ({"a": [True, False, False], "b": [False, False, True]}, True),
-        ({"a": [True, False, False]}, True),
-        ({"a": [[1,2],[3,4]]}, True),
-        ({'a': [[1,2], [3,4]], 'b': ["a", "b"]}, False),
-        ({'a': [{'c':5} , {'e': 5}], 'b': [{'c':5} , {'g': 7}]}, True),
-        ({}, True),
-
-"""
