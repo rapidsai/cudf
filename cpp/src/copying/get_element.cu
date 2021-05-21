@@ -171,12 +171,9 @@ struct get_element_functor {
                                                    mr);
   }
 
-  template <typename T, std::enable_if_t<std::is_same<T, struct_view>::value> *p = nullptr>
-  std::unique_ptr<scalar> operator()(
-    column_view const &input,
-    size_type index,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
+  template <typename T, typename... Args>
+  std::enable_if_t<std::is_same<T, struct_view>::value, std::unique_ptr<scalar>> operator()(
+    Args &&...)
   {
     CUDF_FAIL("get_element_functor not supported for struct_view");
   }

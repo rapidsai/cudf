@@ -16,7 +16,7 @@ from cudf._lib.cpp.lists.drop_list_duplicates cimport (
 from cudf._lib.cpp.lists.sorting cimport (
     sort_lists as cpp_sort_lists
 )
-from cudf._lib.cpp.lists.concatenate_rows cimport (
+from cudf._lib.cpp.lists.combine cimport (
     concatenate_rows as cpp_concatenate_rows
 )
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
