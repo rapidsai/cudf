@@ -159,6 +159,12 @@ TEST_F(StringsCombineTest, ConcatZeroSizeStringsColumns)
   cudf::test::expect_strings_empty(results->view());
 }
 
+TEST_F(StringsCombineTest, SingleColumnErrorCheck)
+{
+  cudf::column_view col0(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  EXPECT_THROW(cudf::strings::concatenate(cudf::table_view{{col0}}), cudf::logic_error);
+}
+
 struct StringsConcatenateWithColSeparatorTest : public cudf::test::BaseFixture {
 };
 
@@ -209,7 +215,6 @@ TEST_F(StringsConcatenateWithColSeparatorTest, SingleColumnEmptyAndNullStringsNo
 
   auto exp_results =
     cudf::test::strings_column_wrapper({"", "", "", ""}, {false, true, false, false});
-
   auto results =
     cudf::strings::concatenate(cudf::table_view{{col0}}, cudf::strings_column_view(sep_col));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, true);

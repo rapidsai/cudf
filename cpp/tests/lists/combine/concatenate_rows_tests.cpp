@@ -19,7 +19,7 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/lists/concatenate_rows.hpp>
+#include <cudf/lists/combine.hpp>
 
 namespace {
 using StrListsCol = cudf::test::lists_column_wrapper<cudf::string_view>;
