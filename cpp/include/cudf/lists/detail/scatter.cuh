@@ -778,11 +778,12 @@ std::unique_ptr<column> scatter(
   if (num_rows == 0) { return cudf::empty_like(target); }
 
   auto const source_device_view = column_device_view::create(source, stream);
+  auto const scatter_map_size   = thrust::distance(scatter_map_begin, scatter_map_end);
   auto const source_vector =
     list_vector_from_column(unbound_list_view::label_type::SOURCE,
                             cudf::detail::lists_column_device_view(*source_device_view),
-                            thrust::make_counting_iterator(0),
-                            thrust::make_counting_iterator(num_rows),
+                            thrust::make_counting_iterator<size_type>(0),
+                            thrust::make_counting_iterator<size_type>(scatter_map_size),
                             stream,
                             mr);
 
@@ -790,8 +791,8 @@ std::unique_ptr<column> scatter(
   auto target_vector =
     list_vector_from_column(unbound_list_view::label_type::TARGET,
                             cudf::detail::lists_column_device_view(*target_device_view),
-                            thrust::make_counting_iterator(0),
-                            thrust::make_counting_iterator(num_rows),
+                            thrust::make_counting_iterator<size_type>(0),
+                            thrust::make_counting_iterator<size_type>(num_rows),
                             stream,
                             mr);
 
@@ -858,8 +859,8 @@ std::unique_ptr<column> scatter(
   auto const source_vector =
     list_vector_from_column(unbound_list_view::label_type::SOURCE,
                             cudf::detail::lists_column_device_view(*source_device_view),
-                            thrust::make_constant_iterator(0),
-                            thrust::make_constant_iterator(0) + scatter_map_size,
+                            thrust::make_constant_iterator<size_type>(0),
+                            thrust::make_constant_iterator<size_type>(0) + scatter_map_size,
                             stream,
                             mr);
 
@@ -867,8 +868,8 @@ std::unique_ptr<column> scatter(
   auto target_vector =
     list_vector_from_column(unbound_list_view::label_type::TARGET,
                             cudf::detail::lists_column_device_view(*target_device_view),
-                            thrust::make_counting_iterator(0),
-                            thrust::make_counting_iterator(num_rows),
+                            thrust::make_counting_iterator<size_type>(0),
+                            thrust::make_counting_iterator<size_type>(num_rows),
                             stream,
                             mr);
 
