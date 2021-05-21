@@ -58,15 +58,11 @@ struct dev_ast_plan {
 
 struct ast_plan {
   ast_plan(detail::node const& expr,
-           cudf::table_view table,
+           cudf::table_view left,
+           cudf::table_view right,
            rmm::cuda_stream_view stream,
            rmm::mr::device_memory_resource* mr)
-    // TODO: The AST code's linearizer data path_only uses the table of the
-    // expression for determining the data type of a column reference, so for now
-    // we can reuse the same linearizer for convenience and assume that the left
-    // and right tables have all the same data types. We will eventually have to
-    // relax this assumption to provide reasonable error checking.
-    : _linearizer(expr, table)
+    : _linearizer(expr, left, right)
   {
     std::vector<cudf::size_type> _sizes;
     std::vector<const void*> _data_pointers;
@@ -107,6 +103,14 @@ struct ast_plan {
       reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]),
       _linearizer.operator_source_indices().size());
     dev_plan.num_intermediates = _linearizer.intermediate_count();
+  }
+
+  ast_plan(detail::node const& expr,
+           cudf::table_view left,
+           rmm::cuda_stream_view stream,
+           rmm::mr::device_memory_resource* mr)
+    : ast_plan(expr, left, left, stream, mr)
+  {
   }
 
   cudf::data_type output_type() const { return _linearizer.root_data_type(); }
