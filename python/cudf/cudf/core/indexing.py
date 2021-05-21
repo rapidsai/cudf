@@ -85,7 +85,11 @@ class _SeriesIlocIndexer(object):
             arg = list(arg)
         data = self._sr._column[arg]
 
-        if is_scalar(data) or _is_null_host_scalar(data):
+        if (
+            isinstance(data, list)
+            or is_scalar(data)
+            or _is_null_host_scalar(data)
+        ):
             return data
         index = self._sr.index.take(arg)
         return self._sr._copy_construct(data=data, index=index)
