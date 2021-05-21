@@ -964,18 +964,14 @@ this compound column representation of strings.
 
 ## Structs columns
 
-A struct is a nested data type parametrized by ordered sequence of types, called fields. Unlike
-[Apache Arrow](https://arrow.apache.org/docs/format/Columnar.html#struct-layout), cuDF struct
-type only differentiate with other type by the field data type and the field order. Field name is
-not represented.
+A struct is a nested data type with a set of child columns each representing an individual field of a logical struct. Field names are not represented.
 
 A structs column with `N` fields has `N` children. Each child is a column storing all the data
 of a single field packed column-wise, with an optional null mask. The parent column's type is
 `STRUCT` and contains no data, its size represents the number of structs in the column, and its
 null mask represents the validity of each struct element.
 
-With this representation, `child[0][10]` is the first field of struct `10`, `child[1][42]` is the second
-field of struct `42`, etc.
+With this representation, `child[0][10]` is row 10 of the first field of the struct, `child[1][42]` is row 42 of the second field of the struct.
 
 Notice that in addition to the struct column's null mask, each struct field column has its own optional null
 mask. A struct field's validity can vary independently from the corresponding struct row. For
