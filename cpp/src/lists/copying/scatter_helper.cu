@@ -313,51 +313,38 @@ struct list_child_constructor {
 
     auto child_list_views = rmm::device_uvector<unbound_list_view>(num_child_rows, stream, mr);
 
-    // Function to convert from parent list_device_view instances to child list_device_views.
+    // Convert from parent list_device_view instances to child list_device_views.
     // For instance, if a parent list_device_view has 3 elements, it should have 3 corresponding
     // child list_device_view instances.
-    auto populate_child_list_views = [d_scattered_lists  = list_vector.begin(),
-                                      d_list_offsets     = list_offsets.template data<int32_t>(),
-                                      d_child_list_views = child_list_views.begin(),
-                                      source_lists,
-                                      target_lists] __device__(auto const& row_index) {
-      auto scattered_row        = d_scattered_lists[row_index];
-      auto label                = scattered_row.label();
-      auto bound_list_row       = scattered_row.bind_to_column(source_lists, target_lists);
-      auto lists_offsets_column = bound_list_row.get_column().offsets();
-
-      auto child_column  = bound_list_row.get_column().child();
-      auto child_offsets = child_column.child(cudf::lists_column_view::offsets_column_index);
-
-      // For lists row at row_index,
-      //   1. Number of entries in child_list_views == bound_list_row.size().
-      //   2. Offset of the first child list_view   == d_list_offsets[row_index].
-      auto output_start_offset = d_list_offsets[row_index];
-      auto input_list_start =
-        lists_offsets_column.template element<int32_t>(scattered_row.row_index());
-
-      thrust::for_each_n(
-        thrust::seq,
-        thrust::make_counting_iterator<size_type>(0),
-        bound_list_row.size(),
-        [input_list_start,
-         output_start_offset,
-         label,
-         d_child_list_views,
-         d_child_offsets =
-           child_offsets.template data<int32_t>()] __device__(auto const& child_list_index) {
-          auto child_start_idx = d_child_offsets[input_list_start + child_list_index];
-          auto child_end_idx   = d_child_offsets[input_list_start + child_list_index + 1];
-
-          d_child_list_views[output_start_offset + child_list_index] = unbound_list_view{
-            label, input_list_start + child_list_index, child_end_idx - child_start_idx};
-        });
-    };
-
-    thrust::for_each_n(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       list_vector.size(),
-                       populate_child_list_views);
+    thrust::transform(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator<size_type>(0),
+      thrust::make_counting_iterator<size_type>(child_list_views.size()),
+      child_list_views.begin(),
+      [offset_begin  = list_offsets.begin<offset_type>(),
+       offset_size   = list_offsets.size(),
+       d_list_vector = list_vector.begin(),
+       source_lists,
+       target_lists] __device__(auto index) {
+        auto const list_index_iter =
+          thrust::upper_bound(thrust::seq, offset_begin, offset_begin + offset_size, index);
+        auto const list_index =
+          static_cast<size_type>(thrust::distance(offset_begin, list_index_iter) - 1);
+        auto const intra_index = static_cast<size_type>(index - offset_begin[list_index]);
+        auto label             = d_list_vector[list_index].label();
+        auto row_index         = d_list_vector[list_index].row_index();
+        auto actual_list_row = d_list_vector[list_index].bind_to_column(source_lists, target_lists);
+        auto lists_column    = actual_list_row.get_column();
+        auto child_lists_column = lists_column.child();
+        auto lists_offsets_ptr  = lists_column.offsets().template data<offset_type>();
+        auto child_lists_offsets_ptr =
+          child_lists_column.child(lists_column_view::offsets_column_index)
+            .template data<offset_type>();
+        auto child_row_index = lists_offsets_ptr[row_index] + intra_index;
+        auto size =
+          child_lists_offsets_ptr[child_row_index + 1] - child_lists_offsets_ptr[child_row_index];
+        return unbound_list_view{label, child_row_index, size};
+      });
 
     // child_list_views should now have been populated, with source and target references.
 
