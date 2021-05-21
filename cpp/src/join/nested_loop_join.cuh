@@ -49,19 +49,15 @@ namespace detail {
  *
  * @return An estimate of the size of the output of the join operation
  */
-size_type estimate_nested_loop_join_output_size(
-  table_device_view left,
-  table_device_view right,
-  join_kind JoinKind,
-  null_equality compare_nulls,
-  ast::detail::ast_plan plan,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+size_type estimate_nested_loop_join_output_size(table_device_view left,
+                                                table_device_view right,
+                                                join_kind JoinKind,
+                                                null_equality compare_nulls,
+                                                ast::detail::ast_plan plan,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr)
 {
-  const size_type left_num_rows{left.num_rows()};
-  const size_type right_num_rows{right.num_rows()};
-
-  if (right_num_rows == 0) {
+  if (right.num_rows() == 0) {
     // If the right table is empty, we know exactly how large the output
     // will be for the different types of joins and can return immediately
     switch (JoinKind) {
@@ -70,7 +66,7 @@ size_type estimate_nested_loop_join_output_size(
 
       // Left join with an empty table will have an output of NULL rows
       // equal to the number of rows in the left table
-      case join_kind::LEFT_JOIN: return left_num_rows;
+      case join_kind::LEFT_JOIN: return left.num_rows();
 
       default: CUDF_FAIL("Unsupported join type");
     }
@@ -92,8 +88,6 @@ size_type estimate_nested_loop_join_output_size(
 
   int num_sms{-1};
   CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev_id));
-
-  size.set_value_zero(stream);
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
@@ -168,7 +162,6 @@ get_predicate_join_indices(table_view const& left,
 
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   detail::grid_1d config(left_table->num_rows(), block_size);
-  write_index.set_value_zero(stream);
 
   const auto& join_output_l = flip_join_indices ? right_indices->data() : left_indices->data();
   const auto& join_output_r = flip_join_indices ? left_indices->data() : right_indices->data();
