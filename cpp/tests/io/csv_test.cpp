@@ -362,8 +362,6 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnNegativeScale)
             std::istream_iterator<std::string>(),
             std::back_inserter(result_strings));
 
-  read_result_file.close();
-
   EXPECT_EQ(result_strings, reference_strings);
 }
 
@@ -409,8 +407,6 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnPositiveScale)
   std::copy(std::istream_iterator<std::string>(read_result_file),
             std::istream_iterator<std::string>(),
             std::back_inserter(result_strings));
-
-  read_result_file.close();
 
   EXPECT_EQ(result_strings, reference_strings);
 }
