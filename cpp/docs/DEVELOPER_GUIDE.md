@@ -969,7 +969,7 @@ of a logical struct. Field names are not represented.
 
 A structs column with `N` fields has `N` children. Each child is a column storing all the data
 of a single field packed column-wise, with an optional null mask. The parent column's type is
-`STRUCT` and contains no data, its size represents the number of structs in the column, and its
+`STRUCT` and contains no data, its size represents the number of struct rows in the column, and its
 null mask represents the validity of each struct element.
 
 With this representation, `child[0][10]` is row 10 of the first field of the struct, `child[1][42]`
