@@ -77,8 +77,7 @@ size_type estimate_nested_loop_join_output_size(
   }
 
   // Allocate storage for the counter used to get the size of the join output
-  size_type h_size_estimate{0};
-  rmm::device_scalar<size_type> size_estimate(0, stream, mr);
+  rmm::device_scalar<size_type> size(0, stream, mr);
 
   CHECK_CUDA(stream.value());
 
@@ -94,19 +93,16 @@ size_type estimate_nested_loop_join_output_size(
   int num_sms{-1};
   CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev_id));
 
-  size_estimate.set_value_zero(stream);
+  size.set_value_zero(stream);
 
-  row_equality equality{left, right, compare_nulls == null_equality::EQUAL};
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
   compute_nested_loop_join_output_size<block_size>
     <<<numBlocks * num_sms, block_size, 0, stream.value()>>>(
-      left, right, JoinKind, plan.dev_plan, size_estimate.data());
+      left, right, JoinKind, plan.dev_plan, size.data());
   CHECK_CUDA(stream.value());
 
-  h_size_estimate = size_estimate.value(stream);
-
-  return h_size_estimate;
+  return size.value(stream);
 }
 
 /**
@@ -152,11 +148,11 @@ get_predicate_join_indices(table_view const& left,
   CUDF_EXPECTS(plan.output_type().id() == type_id::BOOL8,
                "The expression must produce a boolean output.");
 
-  size_type estimated_size = estimate_nested_loop_join_output_size(
+  size_type join_size = estimate_nested_loop_join_output_size(
     *left_table, *right_table, JoinKind, compare_nulls, plan, stream, mr);
 
   // If the estimated output size is zero, return immediately
-  if (estimated_size == 0) {
+  if (join_size == 0) {
     return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
                           std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
@@ -166,50 +162,31 @@ get_predicate_join_indices(table_view const& left,
   // As such we will need to de-allocate memory and re-allocate memory to ensure
   // that the final output is correct.
   rmm::device_scalar<size_type> write_index(0, stream);
-  size_type join_size{0};
 
-  auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
-  auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
+  auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
+  auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
 
-  auto current_estimated_size = estimated_size;
-  do {
-    left_indices->resize(estimated_size, stream);
-    right_indices->resize(estimated_size, stream);
+  constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
+  detail::grid_1d config(left_table->num_rows(), block_size);
+  write_index.set_value_zero(stream);
 
-    auto output_column = cudf::make_fixed_width_column(
-      plan.output_type(), current_estimated_size, mask_state::UNALLOCATED, stream, mr);
-    auto mutable_output_device =
-      cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
+  const auto& join_output_l = flip_join_indices ? right_indices->data() : left_indices->data();
+  const auto& join_output_r = flip_join_indices ? left_indices->data() : right_indices->data();
+  auto const shmem_size_per_thread =
+    static_cast<int>(sizeof(std::int64_t) * plan.dev_plan.num_intermediates);
+  nested_loop_predicate_join<block_size, DEFAULT_JOIN_CACHE_SIZE>
+    <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_thread, stream.value()>>>(
+      *left_table,
+      *right_table,
+      JoinKind,
+      join_output_l,
+      join_output_r,
+      write_index.data(),
+      plan.dev_plan,
+      join_size);
 
-    constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
-    detail::grid_1d config(left_table->num_rows(), block_size);
-    write_index.set_value_zero(stream);
+  CHECK_CUDA(stream.value());
 
-    const auto& join_output_l = flip_join_indices ? right_indices->data() : left_indices->data();
-    const auto& join_output_r = flip_join_indices ? left_indices->data() : right_indices->data();
-    auto const shmem_size_per_thread =
-      static_cast<int>(sizeof(std::int64_t) * plan.dev_plan.num_intermediates);
-    nested_loop_predicate_join<block_size, DEFAULT_JOIN_CACHE_SIZE>
-      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_thread, stream.value()>>>(
-        *left_table,
-        *right_table,
-        JoinKind,
-        join_output_l,
-        join_output_r,
-        *mutable_output_device,
-        write_index.data(),
-        plan.dev_plan,
-        estimated_size);
-
-    CHECK_CUDA(stream.value());
-
-    join_size              = write_index.value(stream);
-    current_estimated_size = estimated_size;
-    estimated_size *= 2;
-  } while ((current_estimated_size < join_size));
-
-  left_indices->resize(join_size, stream);
-  right_indices->resize(join_size, stream);
   return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
 

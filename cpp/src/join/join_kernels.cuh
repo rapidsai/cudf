@@ -464,7 +464,6 @@ __global__ void nested_loop_predicate_join(table_device_view left_table,
                                            join_kind JoinKind,
                                            cudf::size_type* join_output_l,
                                            cudf::size_type* join_output_r,
-                                           mutable_column_device_view operator_outputs,
                                            cudf::size_type* current_idx,
                                            cudf::ast::detail::dev_ast_plan plan,
                                            const cudf::size_type max_size)
