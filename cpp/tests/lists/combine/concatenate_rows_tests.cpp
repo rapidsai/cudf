@@ -19,7 +19,7 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/lists/concatenate_rows.hpp>
+#include <cudf/lists/combine.hpp>
 
 namespace {
 using StrListsCol = cudf::test::lists_column_wrapper<cudf::string_view>;
@@ -125,6 +125,18 @@ TYPED_TEST(ListConcatenateRowsTypedTest, SimpleInputNoNull)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
 }
 
+TYPED_TEST(ListConcatenateRowsTypedTest, SimpleInputWithNullableChild)
+{
+  using ListsCol = cudf::test::lists_column_wrapper<TypeParam>;
+
+  auto const col1 = ListsCol{{1, 2}, ListsCol{{null}, null_at(0)}, {5, 6}}.release();
+  auto const col2 = ListsCol{{7, 8}, {9, 10}, {11, 12}}.release();
+  auto const expected =
+    ListsCol{{1, 2, 7, 8}, ListsCol{{null, 9, 10}, null_at(0)}, {5, 6, 11, 12}}.release();
+  auto const results = cudf::lists::concatenate_rows(TView{{col1->view(), col2->view()}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
+}
+
 TEST_F(ListConcatenateRowsTest, SimpleInputStringsColumnsNoNull)
 {
   auto const col1 = StrListsCol{
@@ -137,6 +149,26 @@ TEST_F(ListConcatenateRowsTest, SimpleInputStringsColumnsNoNull)
   auto const expected = StrListsCol{
     StrListsCol{"Tomato", "Apple", "Orange"},
     StrListsCol{"Banana", "Kiwi", "Cherry", "Lemon", "Peach"},
+    StrListsCol{
+      "Coconut"}}.release();
+  auto const results = cudf::lists::concatenate_rows(TView{{col1->view(), col2->view()}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
+}
+
+TEST_F(ListConcatenateRowsTest, SimpleInputStringsColumnsWithNullableChild)
+{
+  auto const col1 = StrListsCol{
+    StrListsCol{"Tomato", "Apple"},
+    StrListsCol{"Banana", "Kiwi", "Cherry"},
+    StrListsCol{
+      "Coconut"}}.release();
+  auto const col2 = StrListsCol{
+    StrListsCol{"Orange"},
+    StrListsCol{{"Lemon", "Peach"}, null_at(1)},
+    StrListsCol{}}.release();
+  auto const expected = StrListsCol{
+    StrListsCol{"Tomato", "Apple", "Orange"},
+    StrListsCol{{"Banana", "Kiwi", "Cherry", "Lemon", "Peach"}, null_at(4)},
     StrListsCol{
       "Coconut"}}.release();
   auto const results = cudf::lists::concatenate_rows(TView{{col1->view(), col2->view()}});
@@ -249,6 +281,44 @@ TEST_F(ListConcatenateRowsTest, SimpleInputStringsColumnsWithNulls)
                      null_at({1, 4})},
          StrListsCol{""} /*NULL*/},
         null_at(2)}
+        .release();
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
+  }
+}
+
+TEST_F(ListConcatenateRowsTest, SimpleInputStringsColumnsWithEmptyLists)
+{
+  auto const col1 =
+    StrListsCol{StrListsCol{{"" /*NULL*/}, null_at(0)}, StrListsCol{"One"}}.release();
+  auto const col2 = StrListsCol{
+    StrListsCol{{"Tomato", "" /*NULL*/, "Apple"}, null_at(1)},
+    StrListsCol{
+      "Two"}}.release();
+  auto const col3 =
+    StrListsCol{{StrListsCol{"Lemon", "Peach"}, StrListsCol{"Three"} /*NULL*/}, null_at(1)}
+      .release();
+
+  // Ignore null list elements
+  {
+    auto const results =
+      cudf::lists::concatenate_rows(TView{{col1->view(), col2->view(), col3->view()}});
+    auto const expected = StrListsCol{
+      StrListsCol{{"" /*NULL*/, "Tomato", "" /*NULL*/, "Apple", "Lemon", "Peach"}, null_at({0, 2})},
+      StrListsCol{"One",
+                  "Two"}}.release();
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
+  }
+
+  // Null list rows result in null list rows
+  {
+    auto const results =
+      cudf::lists::concatenate_rows(TView{{col1->view(), col2->view(), col3->view()}},
+                                    cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW);
+    auto const expected =
+      StrListsCol{{StrListsCol{{"" /*NULL*/, "Tomato", "" /*NULL*/, "Apple", "Lemon", "Peach"},
+                               null_at({0, 2})},
+                   StrListsCol{""} /*NULL*/},
+                  null_at(1)}
         .release();
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, print_all);
   }
