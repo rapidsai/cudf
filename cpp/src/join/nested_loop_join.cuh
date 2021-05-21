@@ -54,6 +54,7 @@ size_type estimate_nested_loop_join_output_size(
   table_device_view right,
   join_kind JoinKind,
   null_equality compare_nulls,
+  ast::detail::ast_plan plan,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -100,7 +101,7 @@ size_type estimate_nested_loop_join_output_size(
   // find what the size of the output will be.
   compute_nested_loop_join_output_size<block_size>
     <<<numBlocks * num_sms, block_size, 0, stream.value()>>>(
-      left, right, JoinKind, equality, size_estimate.data());
+      left, right, JoinKind, plan.dev_plan, size_estimate.data());
   CHECK_CUDA(stream.value());
 
   h_size_estimate = size_estimate.value(stream);
@@ -147,18 +148,18 @@ get_predicate_join_indices(table_view const& left,
   auto left_table  = table_device_view::create(left, stream);
   auto right_table = table_device_view::create(right, stream);
 
+  auto const plan = ast::detail::ast_plan{binary_pred, left, right, stream, mr};
+  CUDF_EXPECTS(plan.output_type().id() == type_id::BOOL8,
+               "The expression must produce a boolean output.");
+
   size_type estimated_size = estimate_nested_loop_join_output_size(
-    *left_table, *right_table, JoinKind, compare_nulls, stream, mr);
+    *left_table, *right_table, JoinKind, compare_nulls, plan, stream, mr);
 
   // If the estimated output size is zero, return immediately
   if (estimated_size == 0) {
     return std::make_pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
                           std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
-
-  auto const plan = ast::detail::ast_plan{binary_pred, left, right, stream, mr};
-  CUDF_EXPECTS(plan.output_type().id() == type_id::BOOL8,
-               "The expression must produce a boolean output.");
 
   // Because we are approximating the number of joined elements, our approximation
   // might be incorrect and we might have underestimated the number of joined elements.

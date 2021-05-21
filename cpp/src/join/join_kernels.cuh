@@ -221,20 +221,28 @@ template <int block_size>
 __global__ void compute_nested_loop_join_output_size(table_device_view left_table,
                                                      table_device_view right_table,
                                                      join_kind JoinKind,
-                                                     row_equality check_row_equality,
+                                                     ast::detail::dev_ast_plan plan,
                                                      cudf::size_type* output_size)
 {
+  extern __shared__ std::int64_t intermediate_storage[];
+  auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * plan.num_intermediates];
+
   cudf::size_type thread_counter(0);
   const cudf::size_type left_start_idx = threadIdx.x + blockIdx.x * blockDim.x;
   const cudf::size_type left_stride    = blockDim.x * gridDim.x;
   const cudf::size_type left_num_rows  = left_table.num_rows();
   const cudf::size_type right_num_rows = right_table.num_rows();
 
+  bool test_var;
+  auto evaluator = cudf::ast::detail::expression_evaluator<void*>(
+    left_table, plan, thread_intermediate_storage, &test_var, right_table);
+
   for (cudf::size_type left_row_index = left_start_idx; left_row_index < left_num_rows;
        left_row_index += left_stride) {
     bool found_match = false;
     for (cudf::size_type right_row_index = 0; right_row_index < right_num_rows; right_row_index++) {
-      if (check_row_equality(left_row_index, right_row_index)) {
+      evaluator.evaluate(left_row_index, right_row_index, 0);
+      if (test_var) {
         ++thread_counter;
         found_match = true;
       }
@@ -488,7 +496,6 @@ __global__ void nested_loop_predicate_join(table_device_view left_table,
   if (left_row_index < left_num_rows) {
     bool found_match = false;
     for (size_type right_row_index(0); right_row_index < right_num_rows; right_row_index++) {
-      auto output_row_index = left_row_index * right_num_rows + right_row_index;
       evaluator.evaluate(left_row_index, right_row_index, 0);
 
       if (test_var) {

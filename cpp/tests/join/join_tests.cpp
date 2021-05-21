@@ -1674,16 +1674,12 @@ TEST_F(JoinTest, PredicateJoin)
 
     EXPECT_EQ(result.first->size(), 1);
   }
-  // TODO: There is a bug that, in the following two cases at least,
-  // manifests as requiring at least one completely matching row. If I change
-  // the right_second_col[0] to not match left_second_col[0], I get zero
-  // matches no matter what the first columns look like.
   {
     auto const left_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2};
     auto const left_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30};
 
     auto const right_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 3};
-    auto const right_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{10, 40, 50};
+    auto const right_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{30, 40, 50};
 
     cudf::table_view left({left_first_col, left_second_col});
     cudf::table_view right({right_first_col, right_second_col});
@@ -1700,7 +1696,7 @@ TEST_F(JoinTest, PredicateJoin)
     auto const left_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30};
 
     auto const right_first_col  = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2};
-    auto const right_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{10, 40, 50};
+    auto const right_second_col = cudf::test::fixed_width_column_wrapper<int32_t>{30, 40, 50};
 
     cudf::table_view left({left_first_col, left_second_col});
     cudf::table_view right({right_first_col, right_second_col});
@@ -1742,13 +1738,10 @@ TEST_F(JoinTest, PredicateJoin)
 
     EXPECT_EQ(result.first->size(), 2);
   }
-  // TODO: The same bug as mentioned above shows up here. If I make
-  // right_first_col[0] != left_first_col[0], I get the wrong answer, but if
-  // they are equal I get the expected value (6).
   {
     auto const left_first_col = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2};
 
-    auto const right_first_col = cudf::test::fixed_width_column_wrapper<int32_t>{0, 0, 0};
+    auto const right_first_col = cudf::test::fixed_width_column_wrapper<int32_t>{1, 0, 0};
 
     cudf::table_view left({left_first_col});
     cudf::table_view right({right_first_col});
@@ -1758,7 +1751,7 @@ TEST_F(JoinTest, PredicateJoin)
     auto expression = cudf::ast::expression(cudf::ast::ast_operator::GREATER, col_ref_0, col_ref_1);
     auto result     = cudf::predicate_join(left, right, expression);
 
-    EXPECT_EQ(result.first->size(), 6);
+    EXPECT_EQ(result.first->size(), 5);
   }
   {
     auto const left_first_col = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2};

@@ -412,6 +412,12 @@ struct expression_evaluator {
                                    Element result) const
     {
       auto const ref_type = device_data_reference.reference_type;
+      // TODO: Rather than creating a separate device data reference for
+      // outputting to an arbitrary pointer I templated the
+      // expression_evaluator. I think this makes more sense because I think
+      // that conceptually the parsing of the expression tree should be
+      // independent of the nature of the output, but this should be discussed
+      // before finalizing.
       if (ref_type == detail::device_data_reference_type::COLUMN) {
         static_cast<Element*>(evaluator.output_column)[row_index] = result;
       } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
