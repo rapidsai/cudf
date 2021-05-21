@@ -49,13 +49,13 @@ namespace detail {
  *
  * @return An estimate of the size of the output of the join operation
  */
-size_type estimate_nested_loop_join_output_size(table_device_view left,
-                                                table_device_view right,
-                                                join_kind JoinKind,
-                                                null_equality compare_nulls,
-                                                ast::detail::ast_plan plan,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
+size_type get_nested_loop_join_output_size(table_device_view left,
+                                           table_device_view right,
+                                           join_kind JoinKind,
+                                           null_equality compare_nulls,
+                                           ast::detail::ast_plan plan,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   if (right.num_rows() == 0) {
     // If the right table is empty, we know exactly how large the output
@@ -142,7 +142,7 @@ get_predicate_join_indices(table_view const& left,
   CUDF_EXPECTS(plan.output_type().id() == type_id::BOOL8,
                "The expression must produce a boolean output.");
 
-  size_type join_size = estimate_nested_loop_join_output_size(
+  size_type join_size = get_nested_loop_join_output_size(
     *left_table, *right_table, JoinKind, compare_nulls, plan, stream, mr);
 
   // If the estimated output size is zero, return immediately
