@@ -156,15 +156,9 @@ get_predicate_join_indices(table_view const& left,
                           std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
-  // TODO: The AST code's linearizer data path_only uses the table of the
-  // expression for determining the data type of a column reference, so for now
-  // we can reuse the same linearizer for convenience and assume that the left
-  // and right tables have all the same data types. We will eventually have to
-  // relax this assumption to provide reasonable error checking.
-  auto const expr_linearizer   = ast::detail::linearizer(binary_pred, left);  // Linearize the AST
-  auto const plan              = ast::detail::ast_plan{expr_linearizer, stream, mr};
-  auto const num_intermediates = expr_linearizer.intermediate_count();
-  auto const shmem_size_per_thread = static_cast<int>(sizeof(std::int64_t) * num_intermediates);
+  auto const plan = ast::detail::ast_plan{binary_pred, left, stream, mr};
+  auto const shmem_size_per_thread =
+    static_cast<int>(sizeof(std::int64_t) * plan.dev_plan.num_intermediates);
 
   // Because we are approximating the number of joined elements, our approximation
   // might be incorrect and we might have underestimated the number of joined elements.
@@ -181,11 +175,8 @@ get_predicate_join_indices(table_view const& left,
     left_indices->resize(estimated_size, stream);
     right_indices->resize(estimated_size, stream);
 
-    auto output_column = cudf::make_fixed_width_column(expr_linearizer.root_data_type(),
-                                                       current_estimated_size,
-                                                       mask_state::UNALLOCATED,
-                                                       stream,
-                                                       mr);
+    auto output_column = cudf::make_fixed_width_column(
+      plan.output_type(), current_estimated_size, mask_state::UNALLOCATED, stream, mr);
     auto mutable_output_device =
       cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
@@ -205,8 +196,7 @@ get_predicate_join_indices(table_view const& left,
         *mutable_output_device,
         write_index.data(),
         plan.dev_plan,
-        estimated_size,
-        num_intermediates);
+        estimated_size);
 
     CHECK_CUDA(stream.value());
 

@@ -64,11 +64,10 @@ template <cudf::size_type max_block_size>
 __launch_bounds__(max_block_size) __global__
   void compute_column_kernel(table_device_view const table,
                              dev_ast_plan plan,
-                             mutable_column_device_view output_column,
-                             cudf::size_type num_intermediates)
+                             mutable_column_device_view output_column)
 {
   extern __shared__ std::int64_t intermediate_storage[];
-  auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * num_intermediates];
+  auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * plan.num_intermediates];
   auto const start_idx = static_cast<cudf::size_type>(threadIdx.x + blockIdx.x * blockDim.x);
   auto const stride    = static_cast<cudf::size_type>(blockDim.x * gridDim.x);
   auto evaluator       = cudf::ast::detail::expression_evaluator(
@@ -84,8 +83,7 @@ std::unique_ptr<column> compute_column(table_view const table,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  auto const expr_linearizer = linearizer(expr, table);  // Linearize the AST
-  auto const plan            = ast_plan{expr_linearizer, stream, mr};
+  auto const plan = ast_plan{expr, table, stream, mr};
 
   // Create table device view
   auto table_device         = table_device_view::create(table, stream);
@@ -93,13 +91,13 @@ std::unique_ptr<column> compute_column(table_view const table,
 
   // Prepare output column
   auto output_column = cudf::make_fixed_width_column(
-    expr_linearizer.root_data_type(), table_num_rows, mask_state::UNALLOCATED, stream, mr);
+    plan.output_type(), table_num_rows, mask_state::UNALLOCATED, stream, mr);
   auto mutable_output_device =
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
   // Configure kernel parameters
-  auto const num_intermediates     = expr_linearizer.intermediate_count();
-  auto const shmem_size_per_thread = static_cast<int>(sizeof(std::int64_t) * num_intermediates);
+  auto const shmem_size_per_thread =
+    static_cast<int>(sizeof(std::int64_t) * plan.dev_plan.num_intermediates);
   int device_id;
   CUDA_TRY(cudaGetDevice(&device_id));
   int shmem_limit_per_block;
@@ -116,7 +114,7 @@ std::unique_ptr<column> compute_column(table_view const table,
   // Execute the kernel
   cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE>
     <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-      *table_device, plan.dev_plan, *mutable_output_device, num_intermediates);
+      *table_device, plan.dev_plan, *mutable_output_device);
   CHECK_CUDA(stream.value());
   return output_column;
 }

@@ -53,20 +53,28 @@ struct dev_ast_plan {
   device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals;
   device_span<const ast_operator> operators;
   device_span<const cudf::size_type> operator_source_indices;
+  cudf::size_type num_intermediates;
 };
 
 struct ast_plan {
-  ast_plan(linearizer const& expr_linearizer,
+  ast_plan(detail::node const& expr,
+           cudf::table_view table,
            rmm::cuda_stream_view stream,
            rmm::mr::device_memory_resource* mr)
+    // TODO: The AST code's linearizer data path_only uses the table of the
+    // expression for determining the data type of a column reference, so for now
+    // we can reuse the same linearizer for convenience and assume that the left
+    // and right tables have all the same data types. We will eventually have to
+    // relax this assumption to provide reasonable error checking.
+    : _linearizer(expr, table)
   {
     std::vector<cudf::size_type> _sizes;
     std::vector<const void*> _data_pointers;
 
-    extract_size_and_pointer(expr_linearizer.data_references(), _sizes, _data_pointers);
-    extract_size_and_pointer(expr_linearizer.literals(), _sizes, _data_pointers);
-    extract_size_and_pointer(expr_linearizer.operators(), _sizes, _data_pointers);
-    extract_size_and_pointer(expr_linearizer.operator_source_indices(), _sizes, _data_pointers);
+    extract_size_and_pointer(_linearizer.data_references(), _sizes, _data_pointers);
+    extract_size_and_pointer(_linearizer.literals(), _sizes, _data_pointers);
+    extract_size_and_pointer(_linearizer.operators(), _sizes, _data_pointers);
+    extract_size_and_pointer(_linearizer.operator_source_indices(), _sizes, _data_pointers);
 
     // Create device buffer
     auto const buffer_size = std::accumulate(_sizes.cbegin(), _sizes.cend(), 0);
@@ -87,18 +95,21 @@ struct ast_plan {
     dev_plan.data_references    = device_span<const detail::device_data_reference>(
       reinterpret_cast<const detail::device_data_reference*>(device_data_buffer_ptr +
                                                              buffer_offsets[0]),
-      expr_linearizer.data_references().size());
+      _linearizer.data_references().size());
     dev_plan.literals = device_span<const cudf::detail::fixed_width_scalar_device_view_base>(
       reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
         device_data_buffer_ptr + buffer_offsets[1]),
-      expr_linearizer.literals().size());
+      _linearizer.literals().size());
     dev_plan.operators = device_span<const ast_operator>(
       reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]),
-      expr_linearizer.operators().size());
+      _linearizer.operators().size());
     dev_plan.operator_source_indices = device_span<const cudf::size_type>(
       reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]),
-      expr_linearizer.operator_source_indices().size());
+      _linearizer.operator_source_indices().size());
+    dev_plan.num_intermediates = _linearizer.intermediate_count();
   }
+
+  cudf::data_type output_type() const { return _linearizer.root_data_type(); }
 
   dev_ast_plan dev_plan;
 
@@ -120,6 +131,7 @@ struct ast_plan {
   }
 
   rmm::device_buffer _device_data_buffer;
+  linearizer const _linearizer;
 };
 
 /**

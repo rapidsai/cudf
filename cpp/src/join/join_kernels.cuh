@@ -459,8 +459,7 @@ __global__ void nested_loop_predicate_join(table_device_view left_table,
                                            mutable_column_device_view operator_outputs,
                                            cudf::size_type* current_idx,
                                            cudf::ast::detail::dev_ast_plan plan,
-                                           const cudf::size_type max_size,
-                                           const cudf::size_type num_intermediates)
+                                           const cudf::size_type max_size)
 {
   constexpr int num_warps = block_size / detail::warp_size;
   __shared__ cudf::size_type current_idx_shared[num_warps];
@@ -468,7 +467,7 @@ __global__ void nested_loop_predicate_join(table_device_view left_table,
   __shared__ cudf::size_type join_shared_r[num_warps][output_cache_size];
 
   extern __shared__ std::int64_t intermediate_storage[];
-  auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * num_intermediates];
+  auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * plan.num_intermediates];
 
   const int warp_id                    = threadIdx.x / detail::warp_size;
   const int lane_id                    = threadIdx.x % detail::warp_size;
