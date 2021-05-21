@@ -481,7 +481,7 @@ __global__ void nested_loop_predicate_join(table_device_view left_table,
   cudf::size_type left_row_index = threadIdx.x + blockIdx.x * blockDim.x;
 
   const unsigned int activemask = __ballot_sync(0xffffffff, left_row_index < left_num_rows);
-  auto evaluator                = cudf::ast::detail::expression_evaluator(
+  auto evaluator = cudf::ast::detail::expression_evaluator<mutable_column_device_view*>(
     left_table, plan, thread_intermediate_storage, &operator_outputs, right_table);
 
   if (left_row_index < left_num_rows) {

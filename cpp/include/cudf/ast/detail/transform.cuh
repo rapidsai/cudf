@@ -144,6 +144,7 @@ struct ast_plan {
  * This class is designed for n-ary transform evaluation. It operates on two
  * separate tables, and knows the rows of each one.
  */
+template <typename OutputType>
 struct expression_evaluator {
  public:
   /**
@@ -158,7 +159,7 @@ struct expression_evaluator {
   __device__ expression_evaluator(table_device_view const& left,
                                   dev_ast_plan const& plan,
                                   std::int64_t* thread_intermediate_storage,
-                                  mutable_column_device_view* output_column,
+                                  OutputType output_column,
                                   table_device_view const& right)
     : left(left),
       plan(plan),
@@ -172,7 +173,7 @@ struct expression_evaluator {
   __device__ expression_evaluator(table_device_view const& left,
                                   dev_ast_plan const& plan,
                                   std::int64_t* thread_intermediate_storage,
-                                  mutable_column_device_view* output_column)
+                                  OutputType output_column)
     : left(left),
       plan(plan),
       thread_intermediate_storage(thread_intermediate_storage),
@@ -367,7 +368,10 @@ struct expression_evaluator {
  private:
   struct expression_output {
    public:
-    __device__ expression_output(expression_evaluator const& evaluator) : evaluator(evaluator) {}
+    __device__ expression_output(expression_evaluator<OutputType> const& evaluator)
+      : evaluator(evaluator)
+    {
+    }
 
     /**
      * @brief Resolves an output data reference and assigns result value.
@@ -388,7 +392,7 @@ struct expression_evaluator {
     {
       auto const ref_type = device_data_reference.reference_type;
       if (ref_type == detail::device_data_reference_type::COLUMN) {
-        evaluator.output_column->element<Element>(row_index) = result;
+        evaluator.output_column->template element<Element>(row_index) = result;
       } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
         // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing.
         // Using a temporary variable ensures that the compiler knows the result is aligned.
@@ -407,12 +411,12 @@ struct expression_evaluator {
     }
 
    private:
-    expression_evaluator const& evaluator;
+    expression_evaluator<OutputType> const& evaluator;
   };
 
   template <typename Input>
   struct unary_expression_output : public expression_output {
-    __device__ unary_expression_output(expression_evaluator const& evaluator)
+    __device__ unary_expression_output(expression_evaluator<OutputType> const& evaluator)
       : expression_output(evaluator)
     {
     }
@@ -426,7 +430,7 @@ struct expression_evaluator {
     {
       using OperatorFunctor = detail::operator_functor<op>;
       using Out             = cuda::std::invoke_result_t<OperatorFunctor, Input>;
-      resolve_output<Out>(output, output_row_index, OperatorFunctor{}(input));
+      this->template resolve_output<Out>(output, output_row_index, OperatorFunctor{}(input));
     }
 
     template <
@@ -442,7 +446,7 @@ struct expression_evaluator {
 
   template <typename LHS, typename RHS>
   struct binary_expression_output : public expression_output {
-    __device__ binary_expression_output(expression_evaluator const& evaluator)
+    __device__ binary_expression_output(expression_evaluator<OutputType> const& evaluator)
       : expression_output(evaluator)
     {
     }
@@ -457,7 +461,7 @@ struct expression_evaluator {
     {
       using OperatorFunctor = detail::operator_functor<op>;
       using Out             = cuda::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
-      resolve_output<Out>(output, output_row_index, OperatorFunctor{}(lhs, rhs));
+      this->template resolve_output<Out>(output, output_row_index, OperatorFunctor{}(lhs, rhs));
     }
 
     template <ast_operator op,
@@ -476,7 +480,7 @@ struct expression_evaluator {
   table_device_view const& right;
   dev_ast_plan const& plan;
   std::int64_t* thread_intermediate_storage;
-  mutable_column_device_view* output_column;
+  OutputType output_column;
 };
 
 /**
