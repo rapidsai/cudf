@@ -162,8 +162,8 @@ class Frame(libcudf.table.Table):
         if not self._data.columns:
             return True
 
-        first_type = self._data.columns[0].dtype
-        return all(x.dtype == first_type for x in self._data.columns)
+        first_type = self._data.columns[0].dtype.name
+        return all(x.dtype.name == first_type for x in self._data.columns)
 
     @property
     def empty(self):
