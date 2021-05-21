@@ -16,7 +16,7 @@
 
 #include "../fixture/benchmark_fixture.hpp"
 #include "../synchronization/synchronization.hpp"
-#include "rmm/device_buffer.hpp"
+#include <rmm/device_buffer.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 

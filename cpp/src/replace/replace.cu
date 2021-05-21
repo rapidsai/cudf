@@ -472,7 +472,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::diction
   auto indices_column = std::make_unique<cudf::column>(indices_type,
                                                        input.size(),
                                                        std::move(*(contents.data.release())),
-                                                       rmm::device_buffer{0, stream, mr},
+                                                       rmm::device_buffer{},
                                                        0);
   std::unique_ptr<cudf::column> keys_column(std::move(matched_input->release().children.back()));
   return cudf::make_dictionary_column(std::move(keys_column),

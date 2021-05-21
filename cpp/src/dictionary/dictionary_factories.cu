@@ -136,7 +136,7 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys,
       return std::make_unique<column>(new_type,
                                       indices_size,
                                       std::move(*(contents.data.release())),
-                                      rmm::device_buffer{0, stream, mr},
+                                      rmm::device_buffer{},
                                       0);
     }
     // If the new type does not match, then convert the data.
