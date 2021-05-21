@@ -848,6 +848,16 @@ void writer::impl::build_chunk_dictionaries2(
   for (auto &chunk : chunks.host_view().flat_view()) {
     // std::cout << "dict_size " << chunk.dict_data_size << std::endl;
   }
+
+  // Time to make the dict index.
+  std::vector<rmm::device_uvector<uint16_t>> dict_index;
+  for (auto &chunk : chunks.host_view().flat_view()) {
+    auto &inserted_dict_index = dict_index.emplace_back(chunk.num_values, stream);
+    chunk.dict_index          = inserted_dict_index.data();
+  }
+  chunks.host_to_device(stream);
+  gpu::GetDictionaryIndices(chunks.device_view().flat_view(), stream);
+  stream.synchronize();
 }
 
 void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,

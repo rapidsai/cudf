@@ -126,8 +126,7 @@ __global__ void __launch_bounds__(block_size, 1)
     s_chunk                    = chunks[rg_idx][col_idx];
     s_chunk_uniq_data_size_ptr = &chunks[rg_idx][col_idx].uniq_data_size;
     s_chunk_dict_entries_ptr   = &chunks[rg_idx][col_idx].num_dict_entries;
-    // printf("rg %d, col %d, %p\n", rg_idx, col_idx, s_chunk.col_desc);
-    s_col = *(s_chunk.col_desc);
+    s_col                      = *(s_chunk.col_desc);
 
     // Find the bounds of values in leaf column to be inserted into the map for current chunk
     size_type end_value_idx = min(start_row + 5000, num_rows);
@@ -149,10 +148,6 @@ __global__ void __launch_bounds__(block_size, 1)
     }
     s_start_value_idx = current_start_value_idx;
     s_num_values      = end_value_idx - current_start_value_idx;
-    // printf("num_values %d, map ptr %p, map_size %lu\n",
-    //        s_num_values,
-    //        s_chunk.dict_map_slots,
-    //        s_chunk.dict_map_size);
   }
   __syncthreads();
 
@@ -169,11 +164,7 @@ __global__ void __launch_bounds__(block_size, 1)
 
   for (size_type i = 0; i < s_num_values; i += block_size) {
     // Check if the num unique values in chunk has already exceeded max dict size and early exit
-    if (*s_chunk_dict_entries_ptr > 65535) {
-      // if (t == 0) { printf("block %d, early return %d\n", blockIdx.x, *s_chunk_dict_entries_ptr);
-      // }
-      return;
-    }
+    if (*s_chunk_dict_entries_ptr > 65535) { return; }
 
     // add the value to hash map
     size_type val_idx = i + t + s_start_value_idx;
@@ -240,13 +231,75 @@ __global__ void __launch_bounds__(block_size, 1)
       if (key != KEY_SENTINEL) {
         auto loc = atomicAdd(&counter, 1);
         cudf_assert(loc < MAX_DICT_SIZE && "Number of filled slots exceeds max dict size");
-        chunk.dict_data[loc]     = key;
-        chunk.dict_data_idx[loc] = t + i;
+        chunk.dict_data[loc] = key;
+        // chunk.dict_data_idx[loc] = t + i;
+        // TODO: I guess we don't need the temporary dict_data_idx. Go remove it from everywhere.
+        // Unless the dictionary being sorted is a requirement. Then we still need it because there
+        // would be a sorting step in between the two statements above and below this comment.
+        chunk.dict_map_slots[loc].second.store(t + i);
+        // TODO: ^ This doesn't need to be atomic. Try casting to value_type ptr and just writing.
       }
     }
   }
   __syncthreads();
   if (t == 0) { chunk.dict_data_size = counter; }
+}
+
+template <int block_size>
+__global__ void __launch_bounds__(block_size, 1)
+  gpuGetDictionaryIndices(device_span<EncColumnChunk> chunks)
+{
+  auto &chunk = chunks[blockIdx.x];
+  if (not chunk.use_dictionary) { return; }
+
+  __shared__ size_type s_start_value_idx;
+  __shared__ size_type s_num_values;
+
+  auto t = threadIdx.x;
+
+  if (t == 0) {
+    // Find the bounds of values in leaf column to be inserted into the map for current chunk
+    size_type start_value_idx = chunk.start_row;
+    size_type end_value_idx   = chunk.start_row + chunk.num_rows;
+
+    auto col = *(chunk.col_desc->parent_column);
+    while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
+      if (col.type().id() == type_id::STRUCT) {
+        start_value_idx += col.offset();
+        end_value_idx += col.offset();
+        col = col.child(0);
+      } else {
+        auto offset_col = col.child(lists_column_view::offsets_column_index);
+        start_value_idx = offset_col.element<size_type>(start_value_idx + col.offset());
+        end_value_idx   = offset_col.element<size_type>(end_value_idx + col.offset());
+        col             = col.child(lists_column_view::child_column_index);
+      }
+    }
+    s_start_value_idx = start_value_idx;
+    s_num_values      = end_value_idx - start_value_idx;
+  }
+  __syncthreads();
+
+  column_device_view &data_col = *chunk.col_desc->leaf_column;
+  auto map =
+    map_type::device_view(chunk.dict_map_slots, chunk.dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
+
+  for (size_t i = 0; i < chunk.num_values; i += block_size) {
+    if (t + i < chunk.num_values) {
+      auto val_idx = s_start_value_idx + t + i;
+      bool is_valid =
+        (i + t < s_num_values && val_idx < data_col.size()) ? data_col.is_valid(val_idx) : false;
+
+      if (is_valid) {
+        auto found_slot = type_dispatcher(data_col.type(), map_find_fn{map}, data_col, val_idx);
+        if (found_slot != map.end()) {
+          // No need for atomic as this is not going to be modified
+          auto *val_ptr           = reinterpret_cast<map_type::mapped_type *>(&found_slot->second);
+          chunk.dict_index[i + t] = *val_ptr;
+        }
+      }
+    }
+  }
 }
 
 template <typename T>
@@ -339,6 +392,11 @@ void CollectMapEntries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
   gpuCollectMapEntries<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
 }
 
+void GetDictionaryIndices(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
+{
+  constexpr int block_size = 1024;
+  gpuGetDictionaryIndices<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
+}
 }  // namespace gpu
 }  // namespace parquet
 }  // namespace io

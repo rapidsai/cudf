@@ -332,6 +332,7 @@ struct EncColumnChunk {
   size_type *dict_data;
   size_type *dict_data_idx;
   size_type dict_data_size;
+  uint16_t *dict_index;
   bool use_dictionary;
 };
 
@@ -578,6 +579,7 @@ void BuildChunkDictionaries2(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                              rmm::device_uvector<gpu::slot_type> &onemap,
                              rmm::cuda_stream_view stream);
 void CollectMapEntries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
+void GetDictionaryIndices(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
 }  // namespace gpu
 }  // namespace parquet
 }  // namespace io
