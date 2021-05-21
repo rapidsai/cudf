@@ -178,7 +178,6 @@ struct expression_evaluator {
       plan(plan),
       thread_intermediate_storage(thread_intermediate_storage),
       output_column(output_column),
-      // TODO: Decide if this should be stored at all, or if not what to do.
       right(left)
   {
   }
@@ -200,9 +199,9 @@ struct expression_evaluator {
   {
     auto const data_index = device_data_reference.data_index;
     auto const ref_type   = device_data_reference.reference_type;
-    // TODO: Should we error check for table_reference::OUTPUT? If left and
-    // right are identical, should we error if a user passes
-    // table_reference::RIGHT?
+    // TODO: Everywhere in the code assumes that the tbale reference is either
+    // left or right. Should we error-check somewhere to prevent
+    // table_reference::OUTPUT from being specified?
     auto const& table = device_data_reference.table_source == table_reference::LEFT ? left : right;
     if (ref_type == detail::device_data_reference_type::COLUMN) {
       return table.column(data_index).element<Element>(row_index);
@@ -336,7 +335,6 @@ struct expression_evaluator {
         auto const output =
           plan.data_references[plan.operator_source_indices[operator_source_index + 1]];
         operator_source_index += arity + 1;
-        // TODO: Error checking of table_reference::RIGHT/OUTPUT.
         auto input_row_index =
           input.table_source == table_reference::LEFT ? left_row_index : right_row_index;
         type_dispatcher(
