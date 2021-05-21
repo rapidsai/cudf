@@ -8595,7 +8595,7 @@ def test_dataframe_init_from_series(data, columns, index):
         ({}, True),
     ],
 )
-def test_is_homogeneous(data, expected):
+def test_is_homogeneous_dataframe(data, expected):
     actual = cudf.DataFrame(data)._is_homogeneous
 
     assert actual == expected
@@ -8631,8 +8631,48 @@ def test_is_homogeneous(data, expected):
         ),
     ],
 )
-def test_is_homogeneous_multiindex(data, indexes, expected):
+def test_is_homogeneous_multiIndex_dataframe(data, indexes, expected):
     test_dataframe = cudf.DataFrame(data).set_index(indexes)
     actual = cudf.DataFrame(test_dataframe)._is_homogeneous
+
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "data, expected", [([1, 2, 3, 4], True), ([True, False], True)]
+)
+def test_is_homogeneous_series(data, expected):
+    actual = cudf.Series(data)._is_homogeneous
+
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "levels, codes, expected",
+    [
+        (
+            [["lama", "cow", "falcon"], ["speed", "weight", "length"]],
+            [[0, 0, 0, 1, 1, 1, 2, 2, 2], [0, 1, 2, 0, 1, 2, 0, 1, 2]],
+            True,
+        ),
+        (
+            [[1, 2, 3], [True, False, True]],
+            [[0, 0, 0, 1, 1, 1, 2, 2, 2], [0, 1, 2, 0, 1, 2, 0, 1, 2]],
+            False,
+        ),
+    ],
+)
+def test_is_homogeneous_multiIndex(levels, codes, expected):
+    actual = cudf.MultiIndex(levels=levels, codes=codes)._is_homogeneous
+
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "data, expected",
+    [([1, 2, 3], True), (["Hello", "World"], True), ([True, False], True)],
+)
+def test_is_homogeneous_index(data, expected):
+    actual = cudf.Index(data)._is_homogeneous
 
     assert actual == expected
