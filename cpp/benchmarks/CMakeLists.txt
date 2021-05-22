@@ -68,6 +68,10 @@ ConfigureBench(GATHER_BENCH copying/gather_benchmark.cu)
 ConfigureBench(SCATTER_BENCH copying/scatter_benchmark.cu)
 
 ###################################################################################################
+# - lists scatter benchmark -----------------------------------------------------------------------
+ConfigureBench(SCATTER_LISTS_BENCH lists/copying/scatter_lists_benchmark.cu)
+
+###################################################################################################
 # - contiguous_split benchmark  -------------------------------------------------------------------
 ConfigureBench(CONTIGUOUS_SPLIT_BENCH copying/contiguous_split_benchmark.cu)
 
