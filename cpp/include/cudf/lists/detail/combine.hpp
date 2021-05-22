@@ -13,29 +13,37 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
-#include <cudf/strings/strings_column_view.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
+#include <cudf/column/column.hpp>
+#include <cudf/lists/combine.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 
 namespace cudf {
-namespace strings {
+namespace lists {
 namespace detail {
+/**
+ * @copydoc cudf::lists::concatenate_rows
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> concatenate_rows(
+  table_view const& input,
+  concatenate_null_policy null_policy,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc cudf::strings::get_json_object
+ * @copydoc cudf::lists::concatenate_list_elements
  *
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> get_json_object(
-  cudf::strings_column_view const& col,
-  cudf::string_scalar const& json_path,
-  get_json_object_options options,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+std::unique_ptr<column> concatenate_list_elements(
+  column_view const& input,
+  concatenate_null_policy null_policy,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
-}  // namespace strings
+}  // namespace lists
 }  // namespace cudf
