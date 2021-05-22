@@ -136,10 +136,10 @@ class GroupBy(Serializable):
         >>> a = cudf.DataFrame(
             {'a': [1, 1, 2], 'b': [1, 2, 3], 'c': [2, 2, 1]})
         >>> a.groupby('a').agg('sum')
-           b
+           b  c
         a
-        2  3
-        1  3
+        2  3  1
+        1  3  4
 
         Specifying a list of aggregations to perform on each column.
 
