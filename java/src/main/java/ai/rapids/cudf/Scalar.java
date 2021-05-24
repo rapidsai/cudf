@@ -21,6 +21,7 @@ package ai.rapids.cudf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.swing.text.TableView;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
@@ -373,6 +374,17 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return new Scalar(DType.LIST, makeListScalar(list.getNativeView(), true));
   }
 
+  public static Scalar structFromColumnViews(ColumnView... columns) {
+    if (columns == null || columns.length == 0) {
+      throw new IllegalArgumentException("......");
+    }
+    long[] columnHandles = new long[columns.length];
+    for (int i = 0; i < columns.length; i++) {
+      columnHandles[i] = columns[i].getNativeView();
+    }
+    return new Scalar(DType.STRUCT, makeStructScalar(columnHandles, true));
+  }
+
   private static native void closeScalar(long scalarHandle);
   private static native boolean isScalarValid(long scalarHandle);
   private static native byte getByte(long scalarHandle);
@@ -383,6 +395,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native double getDouble(long scalarHandle);
   private static native byte[] getUTF8(long scalarHandle);
   private static native long getListAsColumnView(long scalarHandle);
+  private static native long[] getChildrenFromStructScalar(long scalarHandle);
   private static native long makeBool8Scalar(boolean isValid, boolean value);
   private static native long makeInt8Scalar(byte value, boolean isValid);
   private static native long makeUint8Scalar(byte value, boolean isValid);
@@ -402,6 +415,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native long makeDecimal32Scalar(int value, int scale, boolean isValid);
   private static native long makeDecimal64Scalar(long value, int scale, boolean isValid);
   private static native long makeListScalar(long viewHandle, boolean isValid);
+  private static native long makeStructScalar(long[] viewHandles, boolean isValid);
 
 
   Scalar(DType type, long scalarHandle) {
@@ -537,6 +551,31 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   public ColumnView getListAsColumnView() {
     assert DType.LIST.equals(type) : "Cannot get list for the vector of type " + type;
     return new ColumnView(getListAsColumnView(getScalarHandle()));
+  }
+
+  public ColumnView[] getChildrenFromStructScalar() {
+    assert DType.STRUCT.equals(type) : "Cannot get table for the vector of type " + type;
+
+    long[] childHandles = getChildrenFromStructScalar(getScalarHandle());
+    ColumnView[] children = new ColumnView[childHandles.length];
+    try {
+      for (int i = 0; i < children.length; i++) {
+        children[i] = new ColumnView(childHandles[i]);
+      }
+    } catch (Exception ex) {
+      // close all created ColumnViews if exception thrown
+      for (ColumnView child : children) {
+        // We closed all created ColumnViews when we hit null. Therefore we exit the loop.
+        if (child == null) break;
+        // make sure the close process is exception-free
+        try {
+          child.close();
+        } catch (Exception ignore) {
+        }
+      }
+      throw ex;
+    }
+    return children;
   }
 
   @Override

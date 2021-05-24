@@ -287,4 +287,95 @@ public class ScalarTest extends CudfTestBase {
       }
     }
   }
+
+  @Test
+  public void testStruct() {
+    try (ColumnVector col0 = ColumnVector.fromInts(1);
+         ColumnVector col1 = ColumnVector.fromBoxedDoubles(1.2);
+         ColumnVector col2 = ColumnVector.fromStrings("a");
+         ColumnVector col3 = ColumnVector.fromDecimals(BigDecimal.TEN);
+         ColumnVector col4 = ColumnVector.daysFromInts(10);
+         ColumnVector col5 = ColumnVector.durationSecondsFromLongs(12345L);
+         Scalar s = Scalar.structFromColumnViews(col0, col1, col2, col3, col4, col5, col0, col1)) {
+      ColumnView[] children = s.getChildrenFromStructScalar();
+      try {
+        assertColumnsAreEqual(col0, children[0]);
+        assertColumnsAreEqual(col1, children[1]);
+        assertColumnsAreEqual(col2, children[2]);
+        assertColumnsAreEqual(col3, children[3]);
+        assertColumnsAreEqual(col4, children[4]);
+        assertColumnsAreEqual(col5, children[5]);
+        assertColumnsAreEqual(col0, children[6]);
+        assertColumnsAreEqual(col1, children[7]);
+      } finally {
+        for (ColumnView child : children) child.close();
+      }
+    }
+
+    // test Struct Scalar with null members
+    try (ColumnVector col0 = ColumnVector.fromInts(1);
+         ColumnVector col1 = ColumnVector.fromBoxedDoubles((Double) null);
+         ColumnVector col2 = ColumnVector.fromStrings((String) null);
+         Scalar s1 = Scalar.structFromColumnViews(col0, col1, col2);
+         Scalar s2 = Scalar.structFromColumnViews(col1, col2)) {
+      ColumnView[] children = s1.getChildrenFromStructScalar();
+      try {
+        assertColumnsAreEqual(col0, children[0]);
+        assertColumnsAreEqual(col1, children[1]);
+        assertColumnsAreEqual(col2, children[2]);
+      } finally {
+        for (ColumnView child : children) child.close();
+      }
+
+      ColumnView[] children2 = s2.getChildrenFromStructScalar();
+      try {
+        assertColumnsAreEqual(col1, children2[0]);
+        assertColumnsAreEqual(col2, children2[1]);
+      } finally {
+        for (ColumnView child : children2) child.close();
+      }
+    }
+
+    // test Struct Scalar with single column
+    try (ColumnVector col0 = ColumnVector.fromInts(1234);
+         Scalar s = Scalar.structFromColumnViews(col0)) {
+      ColumnView[] children = s.getChildrenFromStructScalar();
+      try {
+        assertColumnsAreEqual(col0, children[0]);
+      } finally {
+        children[0].close();
+      }
+    }
+
+    // test Struct Scalar with nested types
+    HostColumnVector.DataType listType = new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT32));
+    HostColumnVector.DataType structType = new HostColumnVector.StructType(true,
+        new HostColumnVector.BasicType(true, DType.INT32),
+        new HostColumnVector.BasicType(true, DType.INT64));
+    HostColumnVector.DataType nestedStructType = new HostColumnVector.StructType(true,
+        new HostColumnVector.BasicType(true, DType.STRING),
+        listType, structType);
+    try (ColumnVector strCol = ColumnVector.fromStrings("AAAAAA");
+         ColumnVector listCol = ColumnVector.fromLists(listType, Arrays.asList(1, 2, 3, 4, 5));
+         ColumnVector structCol = ColumnVector.fromStructs(structType,
+             new HostColumnVector.StructData(1, -1L));
+         ColumnVector nestedStructCol = ColumnVector.fromStructs(nestedStructType,
+             new HostColumnVector.StructData(null,
+                 Arrays.asList(1, 2, null),
+                 new HostColumnVector.StructData(null, 10L)));
+         Scalar s = Scalar.structFromColumnViews(strCol, listCol, structCol, nestedStructCol)) {
+      assertEquals(DType.STRUCT, s.getType());
+      assertTrue(s.isValid());
+      ColumnView[] children = s.getChildrenFromStructScalar();
+      try {
+        assertColumnsAreEqual(strCol, children[0]);
+        assertColumnsAreEqual(listCol, children[1]);
+        assertColumnsAreEqual(structCol, children[2]);
+        assertColumnsAreEqual(nestedStructCol, children[3]);
+      } finally {
+        for (ColumnView child : children) child.close();
+      }
+    }
+  }
 }

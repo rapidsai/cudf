@@ -138,6 +138,22 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_getListAsColumnView(JNIEnv *e
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Scalar_getChildrenFromStructScalar(JNIEnv *env, jclass,
+                                                                                    jlong scalar_handle) {
+  JNI_NULL_CHECK(env, scalar_handle, "scalar handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    const auto s                  = reinterpret_cast<cudf::struct_scalar*>(scalar_handle);
+    const cudf::table_view& table = s->view();
+    cudf::jni::native_jlongArray column_handles(env, table.num_columns());
+    for (int i = 0; i < table.num_columns(); i++) {
+      column_handles[i] = reinterpret_cast<jlong>(new cudf::column_view(table.column(i)));
+    }
+    return column_handles.get_jArray();
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeBool8Scalar(JNIEnv *env, jclass,
                                                                    jboolean value,
                                                                    jboolean is_valid) {
@@ -473,6 +489,27 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeListScalar(JNIEnv *env, j
     cudf::scalar* s = new cudf::list_scalar(*col_view);
     s->set_valid(is_valid);
     return reinterpret_cast<jlong>(s);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeStructScalar(JNIEnv *env, jclass,
+                                                                    jlongArray handles,
+                                                                    jboolean is_valid) {
+
+  JNI_NULL_CHECK(env, handles, "native view handles are null", 0)
+  try {
+    cudf::jni::auto_set_device(env);
+    std::unique_ptr<cudf::column_view> ret;
+    cudf::jni::native_jpointerArray<cudf::column_view> column_pointers(env, handles);
+    std::vector<cudf::column_view> columns;
+    std::transform(column_pointers.data(),
+                   column_pointers.data() + column_pointers.size(),
+                   std::back_inserter(columns),
+                   [](auto const& col_ptr) { return *col_ptr; });
+    auto s = std::make_unique<cudf::struct_scalar>(
+      cudf::host_span<cudf::column_view const>{columns}, is_valid);
+    return reinterpret_cast<jlong>(s.release());
   }
   CATCH_STD(env, 0);
 }
