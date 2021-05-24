@@ -122,7 +122,6 @@ struct compute_size_and_concatenate_fn {
     // a null or an empty string
     if (!d_chars) {
       d_offsets[idx] = has_valid_element ? size_bytes : 0;
-
       d_validities[idx] =
         has_valid_element || empty_list_policy == output_if_empty_list::EMPTY_STRING;
     }
