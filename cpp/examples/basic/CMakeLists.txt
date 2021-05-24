@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(libcudf_example VERSION 0.0.1 LANGUAGES C CXX CUDA)
+project(basic_example VERSION 0.0.1 LANGUAGES C CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CUDA_ARCHITECTURES "")
