@@ -71,7 +71,7 @@ namespace ops {
 
 struct Add {
   template <typename T1, typename T2>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs + rhs)
+  CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs + rhs)
   {
     return lhs + rhs;
   }
@@ -79,7 +79,7 @@ struct Add {
 
 struct Sub {
   template <typename T1, typename T2>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs - rhs)
+  CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs - rhs)
   {
     return lhs - rhs;
   }
@@ -98,7 +98,7 @@ struct Mul {
             (std::is_integral<TypeLhs>() and is_duration<TypeRhs>()));
   }
   template <typename T1, typename T2, std::enable_if_t<is_supported<T1, T2>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs * rhs)
+  CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs * rhs)
   {
     return lhs * rhs;
   }
@@ -113,7 +113,7 @@ struct Div {
            (is_duration<TypeLhs>() and (std::is_integral<TypeRhs>() or is_duration<TypeRhs>()));
   }
   template <typename T1, typename T2, std::enable_if_t<is_supported<T1, T2>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs / rhs)
+  CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs / rhs)
   {
     return lhs / rhs;
   }
@@ -121,7 +121,7 @@ struct Div {
 
 struct TrueDiv {
   template <typename T1, typename T2>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs)
+  CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs)
     -> decltype((static_cast<double>(lhs) / static_cast<double>(rhs)))
   {
     return (static_cast<double>(lhs) / static_cast<double>(rhs));
@@ -130,7 +130,7 @@ struct TrueDiv {
 
 struct FloorDiv {
   template <typename T1, typename T2>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs)
+  CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs)
     -> decltype(floor(static_cast<double>(lhs) / static_cast<double>(rhs)))
   {
     return floor(static_cast<double>(lhs) / static_cast<double>(rhs));
@@ -148,21 +148,21 @@ struct Mod {
            (is_duration<TypeLhs>() and (std::is_integral<TypeRhs>() or is_duration<TypeRhs>()));
   }
   template <typename T1, typename T2, std::enable_if_t<is_supported<T1, T2>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs % rhs)
+  CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs % rhs)
   {
     return lhs % rhs;
   }
   template <typename T1,
             typename T2,
             std::enable_if_t<(std::is_same_v<float, common_type_t<T1, T2>>)>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> float
+  CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> float
   {
     return fmodf(static_cast<float>(lhs), static_cast<float>(rhs));
   }
   template <typename T1,
             typename T2,
             std::enable_if_t<(std::is_same_v<double, common_type_t<T1, T2>>)>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> double
+  CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> double
   {
     return fmod(static_cast<double>(lhs), static_cast<double>(rhs));
   }
@@ -172,7 +172,7 @@ struct PyMod {
   template <typename TypeLhs,
             typename TypeRhs,
             enable_if_t<(is_integral_v<common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(((x % y) + y) % y)
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(((x % y) + y) % y)
   {
     return ((x % y) + y) % y;
   }
@@ -180,7 +180,7 @@ struct PyMod {
   template <typename TypeLhs,
             typename TypeRhs,
             enable_if_t<(is_floating_point_v<common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
   {
     double x1 = static_cast<double>(x);
     double y1 = static_cast<double>(y);
@@ -188,7 +188,7 @@ struct PyMod {
   }
 
   template <typename TypeLhs, typename TypeRhs, enable_if_t<(is_duration<TypeLhs>())>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(((x % y) + y) % y)
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(((x % y) + y) % y)
   {
     return ((x % y) + y) % y;
   }
@@ -202,7 +202,7 @@ struct PMod {
   template <typename TypeLhs,
             typename TypeRhs,
             enable_if_t<(is_integral_v<common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y)
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y)
   {
     using common_t = common_type_t<TypeLhs, TypeRhs>;
     common_t xconv = static_cast<common_t>(x);
@@ -218,7 +218,7 @@ struct PMod {
             typename TypeRhs,
             enable_if_t<!(is_integral_v<common_type_t<TypeLhs, TypeRhs>>)and(
               is_floating_point_v<common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y)
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y)
   {
     using common_t = common_type_t<TypeLhs, TypeRhs>;
     common_t xconv = static_cast<common_t>(x);
@@ -234,7 +234,7 @@ struct Pow {
             typename TypeRhs,
             enable_if_t<(is_convertible_v<TypeLhs, double> and
                          is_convertible_v<TypeRhs, double>)>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
   {
     return pow(static_cast<double>(x), static_cast<double>(y));
   }
@@ -242,7 +242,7 @@ struct Pow {
 
 struct Equal {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x == y)
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x == y)
   {
     return (x == y);
   }
@@ -250,7 +250,7 @@ struct Equal {
 
 struct NotEqual {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x != y)
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x != y)
   {
     return (x != y);
   }
@@ -258,7 +258,7 @@ struct NotEqual {
 
 struct Less {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x < y)
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x < y)
   {
     return (x < y);
   }
@@ -266,7 +266,7 @@ struct Less {
 
 struct Greater {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x > y)
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x > y)
   {
     return (x > y);
   }
@@ -274,7 +274,7 @@ struct Greater {
 
 struct LessEqual {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x <= y)
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x <= y)
   {
     return (x <= y);
   }
@@ -282,7 +282,7 @@ struct LessEqual {
 
 struct GreaterEqual {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x >= y)
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x >= y)
   {
     return (x >= y);
   }
@@ -290,7 +290,7 @@ struct GreaterEqual {
 
 struct LogicalAnd {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x && y)
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x && y)
   {
     return (x && y);
   }
@@ -298,7 +298,7 @@ struct LogicalAnd {
 
 struct LogicalOr {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x || y)
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x || y)
   {
     return (x || y);
   }
@@ -306,7 +306,7 @@ struct LogicalOr {
 
 struct BitwiseAnd {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x & y)
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x & y)
   {
     return (x & y);
   }
@@ -314,7 +314,7 @@ struct BitwiseAnd {
 
 struct BitwiseOr {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x | y)
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x | y)
   {
     return (x | y);
   }
@@ -322,7 +322,7 @@ struct BitwiseOr {
 
 struct BitwiseXor {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x ^ y)
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x ^ y)
   {
     return (x ^ y);
   }
@@ -330,7 +330,7 @@ struct BitwiseXor {
 
 struct ShiftLeft {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x << y)
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x << y)
   {
     return (x << y);
   }
@@ -338,7 +338,7 @@ struct ShiftLeft {
 
 struct ShiftRight {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x >> y)
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x >> y)
   {
     return (x >> y);
   }
@@ -348,7 +348,7 @@ struct ShiftRightUnsigned {
   template <typename TypeLhs,
             typename TypeRhs,
             enable_if_t<(is_integral_v<TypeLhs> and not is_boolean<TypeLhs>())>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y)
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y)
     -> decltype(static_cast<make_unsigned_t<TypeLhs>>(x) >> y)
   {
     return (static_cast<make_unsigned_t<TypeLhs>>(x) >> y);
@@ -361,7 +361,7 @@ struct LogBase {
             typename TypeRhs,
             enable_if_t<(is_convertible_v<TypeLhs, double> and
                          is_convertible_v<TypeRhs, double>)>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
   {
     return (std::log(static_cast<double>(x)) / std::log(static_cast<double>(y)));
   }
@@ -372,7 +372,7 @@ struct ATan2 {
             typename TypeRhs,
             enable_if_t<(is_convertible_v<TypeLhs, double> and
                          is_convertible_v<TypeRhs, double>)>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
   {
     return std::atan2(static_cast<double>(x), static_cast<double>(y));
   }

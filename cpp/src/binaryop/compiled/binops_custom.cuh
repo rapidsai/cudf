@@ -54,7 +54,7 @@ struct ops_wrapper {
     typename TypeCommon,
     typename... Args,
     std::enable_if_t<not is_op_supported<TypeCommon, TypeCommon, BinaryOperator>()>* = nullptr>
-  __device__ void operator()(Args... args)
+  __device__ void operator()(Args...)
   {
   }
 };
@@ -86,7 +86,7 @@ struct ops2_wrapper {
             typename... Args,
             std::enable_if_t<has_common_type_v<TypeLhs, TypeRhs> or
                              not is_op_supported<TypeLhs, TypeRhs, BinaryOperator>()>* = nullptr>
-  __device__ void operator()(Args... args)
+  __device__ void operator()(Args...)
   {
   }
 };

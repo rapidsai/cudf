@@ -153,31 +153,31 @@ add_library(cudf
     src/binaryop/compiled/binary_ops.cu
     src/binaryop/compiled/binops_custom.cu
     src/binaryop/compiled/Add.cu
-    src/binaryop/compiled/Sub.cu
-    src/binaryop/compiled/Mul.cu
-    src/binaryop/compiled/Div.cu
-    src/binaryop/compiled/TrueDiv.cu
-    src/binaryop/compiled/FloorDiv.cu
-    src/binaryop/compiled/Mod.cu
-    src/binaryop/compiled/PyMod.cu
-    src/binaryop/compiled/Pow.cu
-    src/binaryop/compiled/Equal.cu
-    src/binaryop/compiled/NotEqual.cu
-    src/binaryop/compiled/Less.cu
-    src/binaryop/compiled/Greater.cu
-    src/binaryop/compiled/LessEqual.cu
-    src/binaryop/compiled/GreaterEqual.cu
+    src/binaryop/compiled/ATan2.cu
     src/binaryop/compiled/BitwiseAnd.cu
     src/binaryop/compiled/BitwiseOr.cu
     src/binaryop/compiled/BitwiseXor.cu
+    src/binaryop/compiled/Div.cu
+    src/binaryop/compiled/Equal.cu
+    src/binaryop/compiled/FloorDiv.cu
+    src/binaryop/compiled/Greater.cu
+    src/binaryop/compiled/GreaterEqual.cu
+    src/binaryop/compiled/Less.cu
+    src/binaryop/compiled/LessEqual.cu
+    src/binaryop/compiled/LogBase.cu
     src/binaryop/compiled/LogicalAnd.cu
     src/binaryop/compiled/LogicalOr.cu
+    src/binaryop/compiled/Mod.cu
+    src/binaryop/compiled/Mul.cu
+    src/binaryop/compiled/NotEqual.cu
+    src/binaryop/compiled/PMod.cu
+    src/binaryop/compiled/Pow.cu
+    src/binaryop/compiled/PyMod.cu
     src/binaryop/compiled/ShiftLeft.cu
     src/binaryop/compiled/ShiftRight.cu
     src/binaryop/compiled/ShiftRightUnsigned.cu
-    src/binaryop/compiled/LogBase.cu
-    src/binaryop/compiled/ATan2.cu
-    src/binaryop/compiled/PMod.cu
+    src/binaryop/compiled/Sub.cu
+    src/binaryop/compiled/TrueDiv.cu
     #src/binaryop/compiled/NullEquals.cu
     #src/binaryop/compiled/NullMax.cu
     #src/binaryop/compiled/NullMin.cu
@@ -298,7 +298,7 @@ add_library(cudf
     src/join/join.cu
     src/join/semi_join.cu
     src/lists/contains.cu
-    src/lists/combine/concatenate_list_elements.cu		
+    src/lists/combine/concatenate_list_elements.cu
     src/lists/combine/concatenate_rows.cu
     src/lists/copying/concatenate.cu
     src/lists/copying/copying.cu
