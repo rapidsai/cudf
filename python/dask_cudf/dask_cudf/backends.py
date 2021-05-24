@@ -272,6 +272,8 @@ def merge_chunk_cudf(lhs, *args, **kwargs):
 
             dtype = "category"
             if left is not None and right is not None:
+                # TODO: Remove this workaround once `cudf.Categorical`
+                # and `union_categorical` are implemented
                 dtype = (
                     left.astype("category")
                     .dtype.categories.append(
