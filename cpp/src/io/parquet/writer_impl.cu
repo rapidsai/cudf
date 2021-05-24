@@ -856,7 +856,7 @@ void writer::impl::build_chunk_dictionaries2(
     chunk.dict_index          = inserted_dict_index.data();
   }
   chunks.host_to_device(stream);
-  gpu::GetDictionaryIndices(chunks.device_view().flat_view(), stream);
+  gpu::GetDictionaryIndices(chunks.device_view(), num_rows, stream);
   stream.synchronize();
 }
 

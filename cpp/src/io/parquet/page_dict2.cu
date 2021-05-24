@@ -247,45 +247,65 @@ __global__ void __launch_bounds__(block_size, 1)
 
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
-  gpuGetDictionaryIndices(device_span<EncColumnChunk> chunks)
+  gpuGetDictionaryIndices(cudf::detail::device_2dspan<EncColumnChunk> chunks, size_type num_rows)
 {
-  auto &chunk = chunks[blockIdx.x];
-  if (not chunk.use_dictionary) { return; }
+  auto col_idx = blockIdx.y;
+  auto block_x = blockIdx.x;
+  auto t       = threadIdx.x;
 
+  auto start_row = block_x * 2500;
+
+  __shared__ EncColumnChunk s_chunk;
+  __shared__ parquet_column_device_view s_col;
   __shared__ size_type s_start_value_idx;
   __shared__ size_type s_num_values;
 
-  auto t = threadIdx.x;
-
   if (t == 0) {
-    // Find the bounds of values in leaf column to be inserted into the map for current chunk
-    size_type start_value_idx = chunk.start_row;
-    size_type end_value_idx   = chunk.start_row + chunk.num_rows;
+    // Find the chunk this block is a part of
+    size_type num_rowgroups = chunks.size().first;
+    size_type rg_idx        = 0;
+    while (rg_idx < num_rowgroups) {
+      if (auto ck = chunks[rg_idx][col_idx];
+          start_row >= ck.start_row and start_row < ck.start_row + ck.num_rows) {
+        break;
+      }
+      ++rg_idx;
+    }
+    s_chunk = chunks[rg_idx][col_idx];
+    s_col   = *(s_chunk.col_desc);
 
-    auto col = *(chunk.col_desc->parent_column);
+    // Find the bounds of values in leaf column to be inserted into the map for current chunk
+    size_type end_value_idx = min(start_row + 2500, num_rows);
+
+    auto col                     = *(s_col.parent_column);
+    auto current_start_value_idx = start_row;
     while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
       if (col.type().id() == type_id::STRUCT) {
-        start_value_idx += col.offset();
+        current_start_value_idx += col.offset();
         end_value_idx += col.offset();
         col = col.child(0);
       } else {
         auto offset_col = col.child(lists_column_view::offsets_column_index);
-        start_value_idx = offset_col.element<size_type>(start_value_idx + col.offset());
-        end_value_idx   = offset_col.element<size_type>(end_value_idx + col.offset());
-        col             = col.child(lists_column_view::child_column_index);
+        current_start_value_idx =
+          offset_col.element<size_type>(current_start_value_idx + col.offset());
+        end_value_idx = offset_col.element<size_type>(end_value_idx + col.offset());
+        col           = col.child(lists_column_view::child_column_index);
       }
     }
-    s_start_value_idx = start_value_idx;
-    s_num_values      = end_value_idx - start_value_idx;
+    s_start_value_idx = current_start_value_idx;
+    s_num_values      = end_value_idx - current_start_value_idx;
   }
   __syncthreads();
 
-  column_device_view &data_col = *chunk.col_desc->leaf_column;
-  auto map =
-    map_type::device_view(chunk.dict_map_slots, chunk.dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
+  if (not s_chunk.use_dictionary) { return; }
 
-  for (size_t i = 0; i < chunk.num_values; i += block_size) {
-    if (t + i < chunk.num_values) {
+  column_device_view &data_col = *s_col.leaf_column;
+
+  auto map = map_type::device_view(
+    s_chunk.dict_map_slots, s_chunk.dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
+
+  for (size_t i = 0; i < s_num_values; i += block_size) {
+    if (t + i < s_num_values) {
       auto val_idx = s_start_value_idx + t + i;
       bool is_valid =
         (i + t < s_num_values && val_idx < data_col.size()) ? data_col.is_valid(val_idx) : false;
@@ -294,8 +314,8 @@ __global__ void __launch_bounds__(block_size, 1)
         auto found_slot = type_dispatcher(data_col.type(), map_find_fn{map}, data_col, val_idx);
         if (found_slot != map.end()) {
           // No need for atomic as this is not going to be modified
-          auto *val_ptr           = reinterpret_cast<map_type::mapped_type *>(&found_slot->second);
-          chunk.dict_index[i + t] = *val_ptr;
+          auto *val_ptr = reinterpret_cast<map_type::mapped_type *>(&found_slot->second);
+          s_chunk.dict_index[i + t] = *val_ptr;
         }
       }
     }
@@ -392,10 +412,17 @@ void CollectMapEntries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view
   gpuCollectMapEntries<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
 }
 
-void GetDictionaryIndices(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
+void GetDictionaryIndices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                          size_type num_rows,
+                          rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 1024;
-  gpuGetDictionaryIndices<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
+  auto grid_x              = cudf::detail::grid_1d(num_rows, 2500);
+  auto num_columns         = chunks.size().second;
+  dim3 dim_grid(grid_x.num_blocks, num_columns);
+
+  gpuGetDictionaryIndices<block_size>
+    <<<dim_grid, block_size, 0, stream.value()>>>(chunks, num_rows);
 }
 }  // namespace gpu
 }  // namespace parquet

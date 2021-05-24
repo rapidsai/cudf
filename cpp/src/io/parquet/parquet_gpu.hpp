@@ -579,7 +579,9 @@ void BuildChunkDictionaries2(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                              rmm::device_uvector<gpu::slot_type> &onemap,
                              rmm::cuda_stream_view stream);
 void CollectMapEntries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
-void GetDictionaryIndices(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
+void GetDictionaryIndices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                          size_type num_rows,
+                          rmm::cuda_stream_view stream);
 }  // namespace gpu
 }  // namespace parquet
 }  // namespace io
