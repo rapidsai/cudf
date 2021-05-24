@@ -1,9 +1,14 @@
+from . import classes
 from numba import types
 from cudf.core.scalar import _NAType
-from numba.core.extending import typeof_impl, register_model, models
+from numba.core.extending import (typeof_impl, register_model, models,
+                                  make_attribute_wrapper)
 from numba.cuda.cudadecl import registry as cuda_decl_registry
-from numba.core.typing.templates import AbstractTemplate
+from numba.core.typing.templates import (AbstractTemplate, AttributeTemplate,
+                                         ConcreteTemplate)
 from numba.core.typing import signature as nb_signature
+from numba.core.typing.typeof import typeof
+
 
 import operator
 
@@ -100,6 +105,40 @@ class MaskedType(types.Type):
             return False
 
         return self.value_type == other.value_type
+
+
+# For typing a Masked constant value defined outside a kernel (e.g. captured in
+# a closure).
+@typeof_impl.register(classes.Masked)
+def typeof_interval(val, c):
+    return MaskedType(typeof(val))
+
+
+@cuda_decl_registry.register
+class MaskedConstructor(ConcreteTemplate):
+    key = classes.Masked
+
+    cases = [nb_signature(MaskedType(t), t, types.boolean)
+             for t in (types.integer_domain | types.real_domain)]
+
+
+make_attribute_wrapper(MaskedType, 'value', 'value')
+make_attribute_wrapper(MaskedType, 'valid', 'valid')
+
+
+@cuda_decl_registry.register_attr
+class ClassesTemplate(AttributeTemplate):
+    key = types.Module(classes)
+
+    def resolve_Masked(self, mod):
+        breakpoint()
+        return types.Function(MaskedConstructor)
+
+
+# For typing classes.Masked
+cuda_decl_registry.register_global(classes, types.Module(classes))
+# For typing bare Masked
+cuda_decl_registry.register_global(classes.Masked, types.Function(MaskedConstructor))
 
 
 # Tell numba how `MaskedType` is constructed on the backend in terms

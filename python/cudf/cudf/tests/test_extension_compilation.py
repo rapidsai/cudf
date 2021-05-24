@@ -1,11 +1,13 @@
 import operator
 import pytest
 
-from numba import types
+from numba import cuda, types
 from numba.cuda import compile_ptx
 
 from cudf import NA
 from cudf.core.udf.typing import MaskedType
+from cudf.core.udf.classes import Masked
+
 
 arith_ops = (
     operator.add,
@@ -64,6 +66,40 @@ def test_compile_masked_unary(op, ty):
 
     cc = (7, 5)
     ptx, resty = compile_ptx(func, (MaskedType(ty),), cc=cc, device=True)
+
+
+@pytest.mark.parametrize('op', arith_ops)
+@pytest.mark.parametrize('ty', number_types, ids=number_ids)
+def test_execute_masked_binary(op, ty):
+
+    @cuda.jit(device=True)
+    def func(x, y):
+        return op(x, y)
+
+    @cuda.jit(debug=True)
+    def test_kernel(x, y):
+        # Reference result with unmasked value
+        u = func(x, y)
+
+        # Construct masked values to test with
+        x0, y0 = Masked(x, False), Masked(y, False)
+        x1, y1 = Masked(x, True), Masked(y, True)
+
+        # Call with masked types
+        r0 = func(x0, y0)
+        r1 = func(x1, y1)
+
+        # Check masks are as expected, and unmasked result matches masked
+        # result
+        if r0.valid:
+            raise RuntimeError('Expected r0 to be invalid')
+        if not r1.valid:
+            raise RuntimeError('Expected r1 to be valid')
+        if u != r1.value:
+            print('Values: ', u, r1.value)
+            raise RuntimeError('u != r1.value')
+
+    test_kernel[1, 1](1, 2)
 
 
 @pytest.mark.parametrize('op', ops)

@@ -1,3 +1,4 @@
+from . import classes
 from numba.cuda.cudaimpl import (
     lower as cuda_lower,
     registry as cuda_lowering_registry,
@@ -7,7 +8,7 @@ from cudf.core.udf.typing import MaskedType, NAType
 from numba.core import cgutils
 from numba.cuda.cudaimpl import registry as cuda_impl_registry
 import operator
-from numba.extending import types
+from numba.extending import lower_builtin, types
 from llvmlite import ir
 
 arith_ops = [
@@ -245,3 +246,14 @@ def cast_masked_to_masked(context, builder, fromty, toty, val):
     ext.value = casted
     ext.valid = operand.valid
     return ext._getvalue()
+
+
+# Masked constructor for use in a kernel for testing
+@lower_builtin(classes.Masked, types.Number, types.boolean)
+def masked_constructor(context, builder, sig, args):
+    ty = sig.return_type
+    value, valid = args
+    masked = cgutils.create_struct_proxy(ty)(context, builder)
+    masked.value = value
+    masked.valid = valid
+    return masked._getvalue()
