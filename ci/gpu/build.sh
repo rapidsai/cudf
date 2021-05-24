@@ -189,6 +189,9 @@ else
     else
         $WORKSPACE/build.sh cudf dask_cudf cudf_kafka -l --ptds
     fi
+
+    gpuci_logger "Building libcudf examples"
+    $WORKSPACE/cpp/examples/build.sh
 fi
 
 # Both regular and Project Flash proceed here
