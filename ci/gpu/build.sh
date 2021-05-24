@@ -190,6 +190,7 @@ else
         $WORKSPACE/build.sh cudf dask_cudf cudf_kafka -l --ptds
     fi
 
+    # If examples grows too large to build, should move to cpu side
     gpuci_logger "Building libcudf examples"
     $WORKSPACE/cpp/examples/build.sh
 fi
