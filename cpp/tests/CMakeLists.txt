@@ -61,8 +61,8 @@ ConfigureTest(GROUPBY_TEST
     groupby/count_scan_tests.cpp
     groupby/count_tests.cpp
     groupby/groups_tests.cpp
-    groupby/keys_tests.cpp    
-    groupby/min_tests.cpp    
+    groupby/keys_tests.cpp
+    groupby/min_tests.cpp
     groupby/max_scan_tests.cpp
     groupby/max_tests.cpp
     groupby/mean_tests.cpp
@@ -137,7 +137,9 @@ ConfigureTest(CLAMP_TEST replace/clamp_test.cpp)
 
 ###################################################################################################
 # - fixed_point tests -----------------------------------------------------------------------------
-ConfigureTest(FIXED_POINT_TEST fixed_point/fixed_point_tests.cu)
+ConfigureTest(FIXED_POINT_TEST
+    fixed_point/fixed_point_tests.cpp
+    fixed_point/fixed_point_tests.cu)
 
 ###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
@@ -326,9 +328,9 @@ ConfigureTest(STRINGS_TEST
     strings/booleans_tests.cpp
     strings/case_tests.cpp
     strings/chars_types_tests.cpp
-    strings/combine/concatenate_list_elements_tests.cpp
     strings/combine/concatenate_tests.cpp
-    strings/combine/join_strings_tests
+    strings/combine/join_list_elements_tests.cpp
+    strings/combine/join_strings_tests.cpp
     strings/concatenate_tests.cpp
     strings/contains_tests.cpp
     strings/datetime_tests.cpp
@@ -405,7 +407,8 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 ###################################################################################################
 # - lists tests ----------------------------------------------------------------------------------
 ConfigureTest(LISTS_TEST
-    lists/concatenate_rows_tests.cpp
+    lists/combine/concatenate_list_elements_tests.cpp
+    lists/combine/concatenate_rows_tests.cpp
     lists/contains_tests.cpp
     lists/count_elements_tests.cpp
     lists/drop_list_duplicates_tests.cpp

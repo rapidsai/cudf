@@ -25,8 +25,6 @@
 
 #include <tests/strings/utilities.h>
 
-#include <vector>
-
 struct StringsConvertTest : public cudf::test::BaseFixture {
 };
 
@@ -43,7 +41,7 @@ TYPED_TEST(StringsFixedPointConvertTest, ToFixedPoint)
   using fp_wrapper  = cudf::test::fixed_point_column_wrapper<RepType>;
 
   cudf::test::strings_column_wrapper strings(
-    {"1234", "-876", "543.2", "-0.12", ".25", "-.002", "-.0027", "", "-0.0"});
+    {"1.234E3", "-876", "543.2", "-0.12", ".25", "-2E-3", "-.0027", "", "-0.0"});
   auto results = cudf::strings::to_fixed_point(
     cudf::strings_column_view(strings),
     cudf::data_type{cudf::type_to_id<DecimalType>(), numeric::scale_type{-3}});
@@ -58,7 +56,7 @@ TYPED_TEST(StringsFixedPointConvertTest, ToFixedPoint)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_scaled);
 
   cudf::test::strings_column_wrapper strings_nulls(
-    {"1234", "-876", "543", "900000", "2500000", "", ""}, {1, 1, 1, 1, 1, 1, 0});
+    {"1234", "-876", "543", "900000", "25E5", "", ""}, {1, 1, 1, 1, 1, 1, 0});
   results = cudf::strings::to_fixed_point(cudf::strings_column_view(strings_nulls),
                                           cudf::data_type{cudf::type_to_id<DecimalType>()});
   auto const expected_nulls = fp_wrapper{
@@ -73,8 +71,8 @@ TYPED_TEST(StringsFixedPointConvertTest, ToFixedPointVeryLarge)
   using fp_wrapper   = cudf::test::fixed_point_column_wrapper<RepType>;
   auto const strings = cudf::test::strings_column_wrapper({"1234000000000000000000",
                                                            "-876000000000000000000",
-                                                           "543200000000000000000",
-                                                           "-120000000000000000",
+                                                           "5432e+17",
+                                                           "-12E016",
                                                            "250000000000000000",
                                                            "-2800000000000000",
                                                            "",
@@ -93,8 +91,8 @@ TYPED_TEST(StringsFixedPointConvertTest, ToFixedPointVerySmall)
   using fp_wrapper   = cudf::test::fixed_point_column_wrapper<RepType>;
   auto const strings = cudf::test::strings_column_wrapper({"0.00000000000000001234",
                                                            "-0.0000000000000000876",
-                                                           ".000000000000000005432",
-                                                           "-.000000000000000012",
+                                                           "543.2e-20",
+                                                           "-12E-18",
                                                            "+.000000000000000025",
                                                            "-.00000000002147483647",
                                                            "",
@@ -171,7 +169,7 @@ TEST_F(StringsConvertTest, IsFixedPoint)
     {"1234", "+876", "543.2", "-00.120", "1E34", "1.0.02", "", "-0.0"});
   auto results        = cudf::strings::is_fixed_point(cudf::strings_column_view(strings));
   auto const expected = cudf::test::fixed_width_column_wrapper<bool>(
-    {true, true, true, true, false, false, false, true});
+    {true, true, true, true, true, false, false, true});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 
   results = cudf::strings::is_fixed_point(
@@ -184,35 +182,38 @@ TEST_F(StringsConvertTest, IsFixedPoint)
     cudf::data_type{cudf::type_id::DECIMAL32, numeric::scale_type{1}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 
-  cudf::test::strings_column_wrapper big_numbers({"2147483647",
-                                                  "-2147483647",
-                                                  "2147483648",
-                                                  "9223372036854775807",
-                                                  "-9223372036854775807",
-                                                  "9223372036854775808"});
+  cudf::test::strings_column_wrapper big_numbers({
+    "2147483647",
+    "-2147483647",
+    "2147483648",
+    "9223372036854775807",
+    "-9223372036854775807",
+    "9223372036854775808",
+    "100E2147483648",
+  });
   results = cudf::strings::is_fixed_point(cudf::strings_column_view(big_numbers),
                                           cudf::data_type{cudf::type_id::DECIMAL32});
   auto const expected32 =
-    cudf::test::fixed_width_column_wrapper<bool>({true, true, false, false, false, false});
+    cudf::test::fixed_width_column_wrapper<bool>({true, true, false, false, false, false, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected32);
 
   results = cudf::strings::is_fixed_point(cudf::strings_column_view(big_numbers),
                                           cudf::data_type{cudf::type_id::DECIMAL64});
   auto const expected64 =
-    cudf::test::fixed_width_column_wrapper<bool>({true, true, true, true, true, false});
+    cudf::test::fixed_width_column_wrapper<bool>({true, true, true, true, true, false, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected64);
 
   results = cudf::strings::is_fixed_point(
     cudf::strings_column_view(big_numbers),
     cudf::data_type{cudf::type_id::DECIMAL32, numeric::scale_type{10}});
   auto const expected32_scaled =
-    cudf::test::fixed_width_column_wrapper<bool>({true, true, true, true, true, true});
+    cudf::test::fixed_width_column_wrapper<bool>({true, true, true, true, true, true, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected32_scaled);
 
   results = cudf::strings::is_fixed_point(
     cudf::strings_column_view(big_numbers),
     cudf::data_type{cudf::type_id::DECIMAL64, numeric::scale_type{-5}});
   auto const expected64_scaled =
-    cudf::test::fixed_width_column_wrapper<bool>({true, true, true, false, false, false});
+    cudf::test::fixed_width_column_wrapper<bool>({true, true, true, false, false, false, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected64_scaled);
 }

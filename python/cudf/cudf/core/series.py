@@ -21,7 +21,6 @@ from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
 from cudf.core.column import (
-    ColumnBase,
     DatetimeColumn,
     TimeDeltaColumn,
     arange,
@@ -33,6 +32,7 @@ from cudf.core.column import (
 from cudf.core.column.categorical import (
     CategoricalAccessor as CategoricalAccessor,
 )
+from cudf.core.column.column import _concat_columns
 from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
@@ -45,7 +45,6 @@ from cudf.core.window import Rolling
 from cudf.utils import cudautils, docutils, ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    _decimal_normalize_types,
     can_convert_to_column,
     is_decimal_dtype,
     is_struct_dtype,
@@ -56,7 +55,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     is_scalar,
     min_scalar_type,
-    numeric_normalize_types,
+    find_common_type,
 )
 from cudf.utils.utils import (
     get_appropriate_dispatched_func,
@@ -2410,12 +2409,10 @@ class Series(SingleColumnFrame, Serializable):
                     )
 
             if dtype_mismatch:
-                if isinstance(objs[0]._column, cudf.core.column.DecimalColumn):
-                    objs = _decimal_normalize_types(*objs)
-                else:
-                    objs = numeric_normalize_types(*objs)
+                common_dtype = find_common_type([obj.dtype for obj in objs])
+                objs = [obj.astype(common_dtype) for obj in objs]
 
-        col = ColumnBase._concat([o._column for o in objs])
+        col = _concat_columns([o._column for o in objs])
 
         if isinstance(col, cudf.core.column.DecimalColumn):
             col = objs[0]._column._copy_type_metadata(col)
@@ -3867,32 +3864,6 @@ class Series(SingleColumnFrame, Serializable):
 
         return codes._copy_construct(name=None, index=self.index)
 
-    def factorize(self, na_sentinel=-1):
-        """Encode the input values as integer labels
-
-        Parameters
-        ----------
-        na_sentinel : number
-            Value to indicate missing category.
-
-        Returns
-        --------
-        (labels, cats) : (cupy.ndarray, cupy.ndarray or Index)
-            - *labels* contains the encoded values
-            - *cats* contains the categories in order that the N-th
-              item corresponds to the (N-1) code.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series(['a', 'a', 'c'])
-        >>> codes
-        array([0, 0, 1], dtype=int8)
-        >>> uniques
-        StringIndex(['a' 'c'], dtype='object')
-        """
-        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
-
     # UDF related
 
     def applymap(self, udf, out_dtype=None):
@@ -4260,60 +4231,7 @@ class Series(SingleColumnFrame, Serializable):
             skipna=skipna, dtype=dtype, min_count=min_count
         )
 
-    def prod(
-        self,
-        axis=None,
-        skipna=None,
-        dtype=None,
-        level=None,
-        numeric_only=None,
-        min_count=0,
-        **kwargs,
-    ):
-        """
-        Return product of the values in the series
-
-        Parameters
-        ----------
-
-        skipna : bool, default True
-            Exclude NA/null values when computing the result.
-
-        dtype : data type
-            Data type to cast the result to.
-
-        min_count : int, default 0
-            The required number of valid values to perform the operation.
-            If fewer than min_count non-NA values are present the result
-            will be NA.
-
-            The default being 0. This means the sum of an all-NA or empty
-            Series is 0, and the product of an all-NA or empty Series is 1.
-
-        Returns
-        -------
-        scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level`, `numeric_only`.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 5, 2, 4, 3])
-        >>> ser.prod()
-        120
-        """
-        return self.product(
-            axis=axis,
-            skipna=skipna,
-            dtype=dtype,
-            level=level,
-            numeric_only=numeric_only,
-            min_count=min_count,
-            **kwargs,
-        )
+    prod = product
 
     def cummin(self, axis=None, skipna=True, *args, **kwargs):
         """
@@ -5939,54 +5857,6 @@ class Series(SingleColumnFrame, Serializable):
             out.name = index
 
         return out.copy(deep=copy)
-
-    @property
-    def is_unique(self):
-        """
-        Return boolean if values in the object are unique.
-
-        Returns
-        -------
-        out : bool
-        """
-        return self._column.is_unique
-
-    @property
-    def is_monotonic(self):
-        """
-        Return boolean if values in the object are monotonic_increasing.
-
-        Returns
-        -------
-        out : bool
-        """
-        return self._column.is_monotonic_increasing
-
-    @property
-    def is_monotonic_increasing(self):
-        """
-        Return boolean if values in the object are monotonic_increasing.
-
-        Returns
-        -------
-        out : bool
-        """
-        return self._column.is_monotonic_increasing
-
-    @property
-    def is_monotonic_decreasing(self):
-        """
-        Return boolean if values in the object are monotonic_decreasing.
-
-        Returns
-        -------
-        out : bool
-        """
-        return self._column.is_monotonic_decreasing
-
-    @property
-    def __cuda_array_interface__(self):
-        return self._column.__cuda_array_interface__
 
     def _align_to_index(
         self, index, how="outer", sort=True, allow_non_unique=False
