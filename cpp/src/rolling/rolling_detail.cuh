@@ -81,14 +81,16 @@ struct DeviceRolling {
   static constexpr bool is_supported()
   {
     return cudf::detail::is_valid_aggregation<T, O>() && has_corresponding_operator<O>() &&
-             // MIN/MAX supports all fixed width types
-             ((O == aggregation::MIN || O == aggregation::MAX) && cudf::is_fixed_width<T>()) ||
+           // TODO: Delete all this extra logic once is_valid_aggregation<> cleans up some edge
+           // cases it isn't handling.
+           // MIN/MAX supports all fixed width types
+           (((O == aggregation::MIN || O == aggregation::MAX) && cudf::is_fixed_width<T>()) ||
 
-           // SUM supports all fixed width types except timestamps
-           ((O == aggregation::SUM) && (cudf::is_fixed_width<T>() && !cudf::is_timestamp<T>())) ||
+            // SUM supports all fixed width types except timestamps
+            ((O == aggregation::SUM) && (cudf::is_fixed_width<T>() && !cudf::is_timestamp<T>())) ||
 
-           // MEAN supports numeric and duration
-           ((O == aggregation::MEAN) && (cudf::is_numeric<T>() || cudf::is_duration<T>()));
+            // MEAN supports numeric and duration
+            ((O == aggregation::MEAN) && (cudf::is_numeric<T>() || cudf::is_duration<T>())));
   }
 
   // operations we do support
