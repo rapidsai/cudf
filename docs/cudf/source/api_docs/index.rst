@@ -12,4 +12,5 @@ the left sidebar to see how various elements look on this theme.
 
     series
     dataframe
+    index_objects
 
