@@ -210,6 +210,7 @@ ConfigureTest(COPYING_TEST
     copying/sample_tests.cpp
     copying/scatter_tests.cpp
     copying/scatter_list_tests.cpp
+    copying/scatter_list_scalar_tests.cpp
     copying/scatter_struct_tests.cpp
     copying/segmented_gather_list_tests.cpp
     copying/shift_tests.cpp
