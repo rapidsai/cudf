@@ -1783,13 +1783,13 @@ def test_parquet_writer_statistics(tmpdir, pdf):
         pdf = pdf.drop(columns=["col_category", "col_bool"])
 
     timedelta_types = [
-            "timedelta64[s]",
-            "timedelta64[ms]",
-            "timedelta64[us]",
-            "timedelta64[ns]"
-            ]
+        "timedelta64[s]",
+        "timedelta64[ms]",
+        "timedelta64[us]",
+        "timedelta64[ns]",
+    ]
     for t in timedelta_types:
-        pdf['col_' + t] = pd.Series(np.arange(len(pdf.index))).astype(t)
+        pdf["col_" + t] = pd.Series(np.arange(len(pdf.index))).astype(t)
 
     gdf = cudf.from_pandas(pdf)
     gdf.to_parquet(file_path, index=False)
