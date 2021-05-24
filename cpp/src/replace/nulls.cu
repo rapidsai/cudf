@@ -25,6 +25,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
+#include <cudf/detail/replace/nulls.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/replace.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -40,10 +41,13 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
+#include <thrust/functional.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/scan.h>
 #include <thrust/transform.h>
 
 namespace {  // anonymous
@@ -357,22 +361,6 @@ std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<
 }
 
 /**
- * @brief Functor used by `inclusive_scan` to determine the index to gather from in
- *        the result column. When current row in input column is NULL, return previous
- *        accumulated index, otherwise return the current index. The second element in
- *        the return tuple is discarded.
- */
-struct replace_policy_functor {
-  __device__ thrust::tuple<cudf::size_type, bool> operator()(
-    thrust::tuple<cudf::size_type, bool> const& lhs,
-    thrust::tuple<cudf::size_type, bool> const& rhs)
-  {
-    return thrust::get<1>(rhs) ? thrust::make_tuple(thrust::get<0>(rhs), true)
-                               : thrust::make_tuple(thrust::get<0>(lhs), true);
-  }
-};
-
-/**
  * @brief Function used by replace_nulls policy
  */
 
@@ -390,7 +378,7 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
   auto gm_begin = thrust::make_zip_iterator(
     thrust::make_tuple(gather_map.begin(), thrust::make_discard_iterator()));
 
-  auto func = replace_policy_functor();
+  auto func = cudf::detail::replace_policy_functor();
   if (replace_policy == cudf::replace_policy::PRECEDING) {
     thrust::inclusive_scan(
       rmm::exec_policy(stream), in_begin, in_begin + input.size(), gm_begin, func);
@@ -414,6 +402,7 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
 
 namespace cudf {
 namespace detail {
+
 std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             cudf::column_view const& replacement,
                                             rmm::cuda_stream_view stream,

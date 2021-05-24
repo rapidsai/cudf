@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
@@ -11,6 +11,8 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.aggregation cimport aggregation
 from cudf._lib.cpp.types cimport size_type, order, null_order, null_policy
+from cudf._lib.cpp.replace cimport replace_policy
+from cudf._lib.cpp.utilities.host_span cimport host_span
 
 
 cdef extern from "cudf/groupby.hpp" \
@@ -74,3 +76,8 @@ cdef extern from "cudf/groupby.hpp" \
 
         groups get_groups() except +
         groups get_groups(table_view values) except +
+
+        pair[unique_ptr[table], unique_ptr[table]] replace_nulls(
+            const table_view& value,
+            const vector[replace_policy] replace_policy
+        ) except +
