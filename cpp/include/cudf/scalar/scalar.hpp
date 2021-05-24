@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -570,6 +571,60 @@ class list_scalar : public scalar {
 
  private:
   cudf::column _data;
+};
+
+/**
+ * @brief An owning class to represent a struct value in device memory
+ */
+class struct_scalar : public scalar {
+ public:
+  struct_scalar();
+  ~struct_scalar()                          = default;
+  struct_scalar(struct_scalar&& other)      = default;
+  struct_scalar(struct_scalar const& other) = default;
+  struct_scalar& operator=(struct_scalar const& other) = delete;
+  struct_scalar& operator=(struct_scalar&& other) = delete;
+
+  /**
+   * @brief Construct a new struct scalar object from table_view
+   *
+   * The input table_view is deep-copied.
+   *
+   * @param data The table data to copy.
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  struct_scalar(table_view const& data,
+                bool is_valid                       = true,
+                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  /**
+   * @brief Construct a new struct scalar object from a host_span of column_views
+   *
+   * The input column_views are deep-copied.
+   *
+   * @param data The column_views to copy.
+   * @param is_valid Whether the value held by the scalar is valid
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  struct_scalar(host_span<column_view const> data,
+                bool is_valid                       = true,
+                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  /**
+   * @brief Returns a non-owning, immutable view to underlying device data
+   */
+  table_view view() const;
+
+ private:
+  table _data;
+
+  void init(bool is_valid, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
+  void superimpose_nulls(rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
 };
 
 /** @} */  // end of group

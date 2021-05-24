@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -173,6 +174,19 @@ public class ColumnVectorTest extends CudfTestBase {
          HostColumnVector host = cv.copyToHost();
          ColumnVector backAgain = host.copyToDevice()) {
       TableTest.assertColumnsAreEqual(cv, backAgain);
+    }
+  }
+
+  @Test
+  void testUTF8StringCreation() {
+    try (ColumnVector cv = ColumnVector.fromUTF8Strings(
+            "d".getBytes(StandardCharsets.UTF_8),
+            "sd".getBytes(StandardCharsets.UTF_8),
+            "sde".getBytes(StandardCharsets.UTF_8),
+            null,
+            "END".getBytes(StandardCharsets.UTF_8));
+         ColumnVector expected = ColumnVector.fromStrings("d", "sd", "sde", null, "END")) {
+      TableTest.assertColumnsAreEqual(expected, cv);
     }
   }
 
@@ -2037,9 +2051,8 @@ public class ColumnVectorTest extends CudfTestBase {
       }
     });
     assertThrows(AssertionError.class, () -> {
-      try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
-           Scalar emptyString = Scalar.fromString("");
-           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString, new ColumnView[]{sv})) {
+      try (Scalar emptyString = Scalar.fromString("");
+           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString, new ColumnView[]{})) {
       }
     });
     assertThrows(CudfException.class, () -> {
@@ -2085,6 +2098,16 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector concat = ColumnVector.stringConcatenate(emptyString, nullSubstitute, new ColumnView[]{v, v})) {
       assertColumnsAreEqual(concat, e_concat);
     }
+
+    try (ColumnVector v = ColumnVector.fromStrings("a", "B", "cd", "\u0480\u0481", "E\tf",
+        "g\nH", "IJ\"\u0100\u0101\u0500\u0501",
+        "kl m", "Nop1", "\\qRs2", null,
+        "3tuV\'", "wX4Yz", "\ud720\ud721");
+         Scalar emptyString = Scalar.fromString("");
+         Scalar nullSubstitute = Scalar.fromString("NULL");
+         ColumnVector concat = ColumnVector.stringConcatenate(emptyString, nullSubstitute, new ColumnView[]{v})) {
+      assertColumnsAreEqual(v, concat);
+    }
   }
 
   @Test
@@ -2102,6 +2125,13 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testListConcatByRow() {
+    try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+            new HostColumnVector.BasicType(true, DType.INT32)),
+        Arrays.asList(0), Arrays.asList(1, 2, 3), null, Arrays.asList(), Arrays.asList());
+         ColumnVector result = ColumnVector.listConcatenateByRow(cv)) {
+      assertColumnsAreEqual(cv, result);
+    }
+
     try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
             new HostColumnVector.BasicType(true, DType.INT32)),
         Arrays.asList(0), Arrays.asList(1, 2, 3), null, Arrays.asList(), Arrays.asList());
@@ -2148,13 +2178,6 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expect, result);
     }
 
-    assertThrows(AssertionError.class, () -> {
-      try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
-          new HostColumnVector.BasicType(true, DType.INT32)), Arrays.asList(1, 2, 3));
-           ColumnVector result = ColumnVector.listConcatenateByRow(cv)) {
-      }
-    });
-
     assertThrows(CudfException.class, () -> {
       try (ColumnVector cv = ColumnVector.fromInts(1, 2, 3);
            ColumnVector result = ColumnVector.listConcatenateByRow(cv, cv)) {
@@ -2190,6 +2213,13 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testListConcatByRowIgnoreNull() {
+    try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+            new HostColumnVector.BasicType(true, DType.INT32)),
+        Arrays.asList(0), Arrays.asList(1, 2, 3), null, Arrays.asList(), Arrays.asList());
+         ColumnVector result = ColumnVector.listConcatenateByRow(true, cv)) {
+      assertColumnsAreEqual(cv, result);
+    }
+
     try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
             new HostColumnVector.BasicType(true, DType.INT32)),
         Arrays.asList((Integer) null), Arrays.asList(1, 2, 3), null, Arrays.asList(), null);

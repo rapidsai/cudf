@@ -81,25 +81,3 @@ index c0c6d59..937ee31 100644
      {
          typedef AgentScanPolicy<
                  128, 15,                                        ///< Threads per block, items per thread
-diff --git a/thrust/system/cuda/detail/scan_by_key.h b/thrust/system/cuda/detail/scan_by_key.h
-index fe4b321c..b3974c69 100644
---- a/thrust/system/cuda/detail/scan_by_key.h
-+++ b/thrust/system/cuda/detail/scan_by_key.h
-@@ -513,7 +513,7 @@ namespace __scan_by_key {
-             scan_op(scan_op_)
-       {
-         int  tile_idx      = blockIdx.x;
--        Size tile_base     = ITEMS_PER_TILE * tile_idx;
-+        Size tile_base     = ITEMS_PER_TILE * static_cast<Size>(tile_idx);
-         Size num_remaining = num_items - tile_base;
- 
-         if (num_remaining > ITEMS_PER_TILE)
-@@ -734,7 +734,7 @@ namespace __scan_by_key {
-                              ScanOp                     scan_op,
-                              AddInitToScan              add_init_to_scan)
-   {
--    int          num_items    = static_cast<int>(thrust::distance(keys_first, keys_last));
-+    size_t       num_items    = static_cast<size_t>(thrust::distance(keys_first, keys_last));
-     size_t       storage_size = 0;
-     cudaStream_t stream       = cuda_cub::stream(policy);
-     bool         debug_sync   = THRUST_DEBUG_SYNC_FLAG;

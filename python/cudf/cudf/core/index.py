@@ -28,6 +28,7 @@ from cudf.core.column import (
     arange,
     column,
 )
+from cudf.core.column.column import _concat_columns
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import SingleColumnFrame
@@ -336,17 +337,6 @@ class Index(SingleColumnFrame, Serializable):
         else:
             return self
 
-    def factorize(self, na_sentinel=-1):
-        """
-        Encode the input values as integer labels
-
-        See Also
-        --------
-        cudf.core.series.Series.factorize : Encode the input values of Series.
-
-        """
-        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
-
     @property
     def nlevels(self):
         """
@@ -649,7 +639,7 @@ class Index(SingleColumnFrame, Serializable):
 
     @classmethod
     def _concat(cls, objs):
-        data = ColumnBase._concat([o._values for o in objs])
+        data = _concat_columns([o._values for o in objs])
         names = {obj.name for obj in objs}
         if len(names) == 1:
             [name] = names
@@ -1142,59 +1132,6 @@ class Index(SingleColumnFrame, Serializable):
             name=self.name if name is None else name,
         )
 
-    @property
-    def is_unique(self):
-        """
-        Return if the index has unique values.
-        """
-        raise (NotImplementedError)
-
-    @property
-    def is_monotonic(self):
-        """
-        Alias for is_monotonic_increasing.
-        """
-        return self.is_monotonic_increasing
-
-    @property
-    def is_monotonic_increasing(self):
-        """
-        Return if the index is monotonic increasing
-        (only equal or increasing) values.
-        """
-        return self._values.is_monotonic_increasing
-
-    @property
-    def is_monotonic_decreasing(self):
-        """
-        Return if the index is monotonic decreasing
-        (only equal or decreasing) values.
-        """
-        return self._values.is_monotonic_decreasing
-
-    @property
-    def empty(self):
-        """
-        Indicator whether Index is empty.
-
-        True if Index is entirely empty (no items).
-
-        Returns
-        -------
-        out : bool
-            If Index is empty, return True, if not return False.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> index = cudf.Index([])
-        >>> index
-        Float64Index([], dtype='float64')
-        >>> index.empty
-        True
-        """
-        return not self.size
-
     def get_slice_bound(self, label, side, kind):
         """
         Calculate slice bound that corresponds to given label.
@@ -1276,9 +1213,7 @@ class Index(SingleColumnFrame, Serializable):
         array([ True, False, False])
         """
 
-        result = self.to_series().isin(values).values
-
-        return result
+        return self._values.isin(values).values
 
     def where(self, cond, other=None):
         """
@@ -1309,10 +1244,6 @@ class Index(SingleColumnFrame, Serializable):
         Int64Index([4, 3, 15, 15, 15], dtype='int64')
         """
         return super().where(cond=cond, other=other)
-
-    @property
-    def __cuda_array_interface__(self):
-        raise (NotImplementedError)
 
     def memory_usage(self, deep=False):
         """
@@ -1505,10 +1436,6 @@ class RangeIndex(Index):
         The value of the step parameter.
         """
         return self._step
-
-    @property
-    def _num_columns(self):
-        return 1
 
     @property
     def _num_rows(self):
@@ -1771,10 +1698,6 @@ class RangeIndex(Index):
         pos = search_range(start, stop, label, step, side=side)
         return pos
 
-    @property
-    def __cuda_array_interface__(self):
-        return self._values.__cuda_array_interface__
-
     def memory_usage(self, **kwargs):
         return 0
 
@@ -1836,7 +1759,7 @@ class GenericIndex(Index):
 
     @property
     def _values(self):
-        return next(iter(self._data.columns))
+        return self._column
 
     def copy(self, name=None, deep=False, dtype=None, names=None):
         """
@@ -1988,19 +1911,8 @@ class GenericIndex(Index):
             end += 1
         return begin, end
 
-    @property
-    def is_unique(self):
-        """
-        Return if the index has unique values.
-        """
-        return self._values.is_unique
-
     def get_slice_bound(self, label, side, kind):
         return self._values.get_slice_bound(label, side, kind)
-
-    @property
-    def __cuda_array_interface__(self):
-        return self._values.__cuda_array_interface__
 
 
 class NumericIndex(GenericIndex):

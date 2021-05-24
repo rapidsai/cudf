@@ -58,8 +58,7 @@ TYPED_TEST_CASE(CollectSetTypedTest, FixedWidthTypesNotBool);
 TYPED_TEST(CollectSetTypedTest, TrivialInput)
 {
   // Empty input
-  // TODO: Enable this test after issue#7611 has been fixed
-  // test_single_agg(COL_K{}, COL_V{}, COL_K{}, COL_V{}, COLLECT_SET);
+  test_single_agg(COL_K{}, COL_V{}, COL_K{}, LCL_V{}, CollectSetTest::collect_set());
 
   // Single key input
   {
