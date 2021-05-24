@@ -2098,16 +2098,6 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector concat = ColumnVector.stringConcatenate(emptyString, nullSubstitute, new ColumnView[]{v, v})) {
       assertColumnsAreEqual(concat, e_concat);
     }
-
-    try (ColumnVector v = ColumnVector.fromStrings("a", "B", "cd", "\u0480\u0481", "E\tf",
-        "g\nH", "IJ\"\u0100\u0101\u0500\u0501",
-        "kl m", "Nop1", "\\qRs2", null,
-        "3tuV\'", "wX4Yz", "\ud720\ud721");
-         Scalar emptyString = Scalar.fromString("");
-         Scalar nullSubstitute = Scalar.fromString("NULL");
-         ColumnVector concat = ColumnVector.stringConcatenate(emptyString, nullSubstitute, new ColumnView[]{v})) {
-      assertColumnsAreEqual(v, concat);
-    }
   }
 
   @Test
