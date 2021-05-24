@@ -84,7 +84,7 @@ ConfigureTest(GROUPBY_TEST
 ConfigureTest(JOIN_TEST
     join/join_tests.cpp
     join/cross_join_tests.cpp
-    join/semi_join_tests.cpp)
+    join/semi_anti_join_tests.cpp)
 
 ###################################################################################################
 # - is_sorted tests -------------------------------------------------------------------------------
