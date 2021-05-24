@@ -84,7 +84,7 @@ gpuci_conda_retry install -y \
 
 # https://docs.rapids.ai/maintainers/depmgmt/
 gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
-gpuci_conda_retry install -y "dlpack=0.5"
+gpuci_conda_retry install -y "dlpack=0.3"
 
 
 gpuci_logger "Check compiler versions"
