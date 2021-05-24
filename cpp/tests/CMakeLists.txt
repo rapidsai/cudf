@@ -328,8 +328,8 @@ ConfigureTest(STRINGS_TEST
     strings/booleans_tests.cpp
     strings/case_tests.cpp
     strings/chars_types_tests.cpp
-    strings/combine/concatenate_list_elements_tests.cpp
     strings/combine/concatenate_tests.cpp
+    strings/combine/join_list_elements_tests.cpp
     strings/combine/join_strings_tests.cpp
     strings/concatenate_tests.cpp
     strings/contains_tests.cpp
@@ -407,7 +407,8 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 ###################################################################################################
 # - lists tests ----------------------------------------------------------------------------------
 ConfigureTest(LISTS_TEST
-    lists/concatenate_rows_tests.cpp
+    lists/combine/concatenate_list_elements_tests.cpp
+    lists/combine/concatenate_rows_tests.cpp
     lists/contains_tests.cpp
     lists/count_elements_tests.cpp
     lists/drop_list_duplicates_tests.cpp

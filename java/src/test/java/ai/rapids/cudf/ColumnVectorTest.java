@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -173,6 +174,19 @@ public class ColumnVectorTest extends CudfTestBase {
          HostColumnVector host = cv.copyToHost();
          ColumnVector backAgain = host.copyToDevice()) {
       TableTest.assertColumnsAreEqual(cv, backAgain);
+    }
+  }
+
+  @Test
+  void testUTF8StringCreation() {
+    try (ColumnVector cv = ColumnVector.fromUTF8Strings(
+            "d".getBytes(StandardCharsets.UTF_8),
+            "sd".getBytes(StandardCharsets.UTF_8),
+            "sde".getBytes(StandardCharsets.UTF_8),
+            null,
+            "END".getBytes(StandardCharsets.UTF_8));
+         ColumnVector expected = ColumnVector.fromStrings("d", "sd", "sde", null, "END")) {
+      TableTest.assertColumnsAreEqual(expected, cv);
     }
   }
 
@@ -2085,15 +2099,16 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(concat, e_concat);
     }
 
-    try (ColumnVector v = ColumnVector.fromStrings("a", "B", "cd", "\u0480\u0481", "E\tf",
-        "g\nH", "IJ\"\u0100\u0101\u0500\u0501",
-        "kl m", "Nop1", "\\qRs2", null,
-        "3tuV\'", "wX4Yz", "\ud720\ud721");
-         Scalar emptyString = Scalar.fromString("");
-         Scalar nullSubstitute = Scalar.fromString("NULL");
-         ColumnVector concat = ColumnVector.stringConcatenate(emptyString, nullSubstitute, new ColumnView[]{v})) {
-      assertColumnsAreEqual(v, concat);
-    }
+    assertThrows(CudfException.class, () -> {
+      try (ColumnVector v = ColumnVector.fromStrings("a", "B", "cd", "\u0480\u0481", "E\tf",
+          "g\nH", "IJ\"\u0100\u0101\u0500\u0501",
+          "kl m", "Nop1", "\\qRs2", null,
+          "3tuV\'", "wX4Yz", "\ud720\ud721");
+           Scalar emptyString = Scalar.fromString("");
+           Scalar nullSubstitute = Scalar.fromString("NULL");
+           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, nullSubstitute, new ColumnView[]{v})) {
+      }
+    });
   }
 
   @Test

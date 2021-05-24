@@ -329,10 +329,19 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   }
 
   public static Scalar fromString(String value) {
+    return fromUTF8String(value == null ? null : value.getBytes(StandardCharsets.UTF_8));
+  }
+
+  /**
+   * Creates a String scalar from an array of UTF8 bytes.
+   * @param value the array of UTF8 bytes
+   * @return a String scalar
+   */
+  public static Scalar fromUTF8String(byte[] value) {
     if (value == null) {
       return fromNull(DType.STRING);
     }
-    return new Scalar(DType.STRING, makeStringScalar(value.getBytes(StandardCharsets.UTF_8), true));
+    return new Scalar(DType.STRING, makeStringScalar(value, true));
   }
 
   /**

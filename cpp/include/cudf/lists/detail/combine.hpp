@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,44 +16,34 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/combine.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf/table/table_view.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
+#include <cudf/lists/combine.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 
 namespace cudf {
-namespace strings {
+namespace lists {
 namespace detail {
-
 /**
- * @copydoc concatenate(table_view const&,string_scalar const&,string_scalar
- * const&,rmm::mr::device_memory_resource*)
+ * @copydoc cudf::lists::concatenate_rows
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> concatenate(
-  table_view const& strings_columns,
-  string_scalar const& separator,
-  string_scalar const& narep,
-  separator_on_nulls separate_nulls   = separator_on_nulls::YES,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+std::unique_ptr<column> concatenate_rows(
+  table_view const& input,
+  concatenate_null_policy null_policy,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc join_strings(table_view const&,string_scalar const&,string_scalar
- * const&,rmm::mr::device_memory_resource*)
+ * @copydoc cudf::lists::concatenate_list_elements
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> join_strings(
-  strings_column_view const& strings,
-  string_scalar const& separator,
-  string_scalar const& narep,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+std::unique_ptr<column> concatenate_list_elements(
+  column_view const& input,
+  concatenate_null_policy null_policy,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
-}  // namespace strings
+}  // namespace lists
 }  // namespace cudf
