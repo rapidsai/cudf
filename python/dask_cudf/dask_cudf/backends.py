@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from dask.dataframe._compat import PANDAS_GT_100
 from dask.dataframe.categorical import categorical_dtype_dispatch
 from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
 from dask.dataframe.methods import (
@@ -13,7 +12,7 @@ from dask.dataframe.methods import (
     is_categorical_dtype_dispatch,
     tolist_dispatch,
 )
-from dask.dataframe.multi import merge_chunk_dispatch
+from dask.dataframe.multi import union_categoricals_dispatch
 from dask.dataframe.utils import (
     UNKNOWN_CATEGORIES,
     _nonempty_scalar,
@@ -23,7 +22,7 @@ from dask.dataframe.utils import (
 )
 
 import cudf
-from cudf.utils.dtypes import is_categorical_dtype, is_string_dtype
+from cudf.utils.dtypes import is_string_dtype
 
 from .core import DataFrame, Index, Series
 
@@ -244,64 +243,13 @@ def is_categorical_dtype_cudf(obj):
     return cudf.utils.dtypes.is_categorical_dtype(obj)
 
 
-@merge_chunk_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
-def merge_chunk_cudf(lhs, *args, **kwargs):
-    empty_index_dtype = kwargs.pop("empty_index_dtype", None)
-    categorical_columns = kwargs.pop("categorical_columns", None)
-
-    rhs, *args = args
-    left_index = kwargs.get("left_index", False)
-    right_index = kwargs.get("right_index", False)
-
-    if categorical_columns is not None and PANDAS_GT_100:
-        for col in categorical_columns:
-            left = None
-            right = None
-
-            if col in lhs:
-                left = lhs[col]
-            elif col == kwargs.get("right_on", None) and left_index:
-                if is_categorical_dtype(lhs.index):
-                    left = lhs.index
-
-            if col in rhs:
-                right = rhs[col]
-            elif col == kwargs.get("left_on", None) and right_index:
-                if is_categorical_dtype(rhs.index):
-                    right = rhs.index
-
-            dtype = "category"
-            if left is not None and right is not None:
-                # TODO: Remove this workaround once `cudf.Categorical`
-                # and `union_categorical` are implemented
-                dtype = (
-                    left.astype("category")
-                    .dtype.categories.append(
-                        right.astype("category").dtype.categories
-                    )
-                    .astype("category")
-                    .dtype
-                )
-
-            if left is not None:
-                if isinstance(left, cudf.Index):
-                    lhs.index = left.astype(dtype)
-                else:
-                    lhs = lhs.assign(**{col: left.astype(dtype)})
-            if right is not None:
-                if isinstance(right, cudf.Index):
-                    rhs.index = right.astype(dtype)
-                else:
-                    rhs = rhs.assign(**{col: right.astype(dtype)})
-
-    out = lhs.merge(rhs, *args, **kwargs)
-
-    # Workaround pandas bug where if the output result of a merge operation is
-    # an empty dataframe, the output index is `int64` in all cases, regardless
-    # of input dtypes.
-    if len(out) == 0 and empty_index_dtype is not None:
-        out.index = out.index.astype(empty_index_dtype)
-    return out
+@union_categoricals_dispatch.register((cudf.Series, cudf.Index))
+def union_categoricals_cudf(
+    to_union, sort_categories=False, ignore_order=False
+):
+    return cudf.core.column.categorical._union_categoricals(
+        to_union, sort_categories=False, ignore_order=False
+    )
 
 
 try:

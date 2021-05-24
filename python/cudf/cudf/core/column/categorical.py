@@ -8,6 +8,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Dict,
+    List,
     Mapping,
     Optional,
     Sequence,
@@ -1524,6 +1525,25 @@ def _create_empty_categorical_column(
         mask=categorical_column.base_mask,
         ordered=dtype.ordered,
     )
+
+
+def _union_categoricals(
+    to_union: List[Union[cudf.Series, cudf.Index]],
+    sort_categories: bool = False,
+    ignore_order: bool = False,
+):
+
+    result_col = CategoricalColumn._concat([obj._column for obj in to_union])
+    if sort_categories:
+        sorted_categories = (
+            cudf.Series(result_col.categories)
+            .sort_values(ascending=True, ignore_index=True)
+            ._column
+        )
+        result_col = result_col.cat().reorder_categories(
+            new_categories=sorted_categories
+        )
+    return cudf.Index(result_col)
 
 
 def pandas_categorical_as_column(
