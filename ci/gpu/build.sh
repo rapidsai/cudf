@@ -117,9 +117,9 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
 
     gpuci_logger "Build from source"
     if [[ ${BUILD_MODE} == "pull-request" ]]; then
-        $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests libcudf_examples --ptds
+        $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests --ptds
     else
-        $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests libcudf_examples -l --ptds
+        $WORKSPACE/build.sh clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests -l --ptds
     fi
 
     ################################################################################
@@ -185,9 +185,9 @@ else
 
     gpuci_logger "Build python libs from source"
     if [[ ${BUILD_MODE} == "pull-request" ]]; then
-        $WORKSPACE/build.sh cudf dask_cudf cudf_kafka libcudf_examples --ptds
+        $WORKSPACE/build.sh cudf dask_cudf cudf_kafka --ptds
     else
-        $WORKSPACE/build.sh cudf dask_cudf cudf_kafka libcudf_examples -l --ptds
+        $WORKSPACE/build.sh cudf dask_cudf cudf_kafka -l --ptds
     fi
 fi
 
