@@ -6,7 +6,7 @@ import pandas as pd
 import pyarrow as pa
 
 from dask.dataframe.categorical import categorical_dtype_dispatch
-from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
+from dask.dataframe.core import get_parallel_type, meta_nonempty
 from dask.dataframe.methods import (
     concat_dispatch,
     is_categorical_dtype_dispatch,
@@ -18,6 +18,8 @@ from dask.dataframe.utils import (
     _scalar_from_dtype,
     is_arraylike,
     is_scalar,
+    make_meta,
+    make_meta_obj,
 )
 
 import cudf
@@ -133,8 +135,8 @@ def _empty_series(name, dtype, index=None):
     return cudf.Series([], dtype=dtype, name=name, index=index)
 
 
-@make_meta.register(object)
-def make_meta_object(x, index=None):
+@make_meta_obj.register(object)
+def make_meta_object_cudf(x, index=None):
     """Create an empty cudf object containing the desired metadata.
 
     Parameters

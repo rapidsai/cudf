@@ -9,7 +9,8 @@ import pytest
 
 import dask
 from dask import dataframe as dd
-from dask.dataframe.core import make_meta, meta_nonempty
+from dask.dataframe.core import meta_nonempty
+from dask.dataframe.utils import make_meta_util
 from dask.utils import M
 
 import cudf
@@ -638,7 +639,7 @@ def test_make_meta_backends(index):
     df = df.set_index(index)
 
     # Check "empty" metadata types
-    chk_meta = make_meta(df)
+    chk_meta = make_meta_util(df)
     dd.assert_eq(chk_meta.dtypes, df.dtypes)
 
     # Check "non-empty" metadata types
