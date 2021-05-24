@@ -1273,44 +1273,79 @@ class ColumnBase(Column, Serializable):
             }
         )
 
-    def _copy_type_metadata(self: T, other: ColumnBase) -> ColumnBase:
+    @property
+    def type_metadata(self):
         """
-        Copies type metadata from self onto other, returning a new column.
+        Return metadata relevant for constructing a copy of this column.
 
-        * when `self` is a CategoricalColumn and `other` is not, we assume
-          other is a column of codes, and return a CategoricalColumn composed
-          of `other`  and the categories of `self`.
-        * when both `self` and `other` are StructColumns, rename the fields
-          of `other` to the field names of `self`.
-        * when both `self` and `other` are DecimalColumns, copy the precision
-          from self.dtype to other.dtype
-        * when `self` and `other` are nested columns of the same type,
-          recursively apply this function on the children of `self` to the
-          and the children of `other`.
-        * if none of the above, return `other` without any changes
+        The metadata will always contain the dtype of the column, in addition
+        to:
+
+        * the categories and ordering, if ``self`` is a ``CategoricalColumn``
+        * the field names, if ``self`` is a ``StructColumn``
+        * the precision, if ``self`` is a ``DecimalColumn``
         """
-        if isinstance(self, cudf.core.column.CategoricalColumn) and not (
-            isinstance(other, cudf.core.column.CategoricalColumn)
+        metadata = {"type": self.__class__}
+
+        if isinstance(self, cudf.core.column.CategoricalColumn):
+            metadata.update(
+                {"categories": self.categories, "ordered": self.ordered}
+            )
+        if isinstance(self, cudf.core.column.StructColumn):
+            metadata["field_keys"] = self.dtype.fields.keys()
+        if isinstance(self, cudf.core.column.DecimalColumn):
+            metadata["precision"] = self.dtype.precision
+
+        return metadata
+
+    def _copy_type_metadata_from_dict(self: ColumnBase, metadata: dict):
+        """
+        Applies metadata extracted from another column onto ``self``.
+
+        * when ``metadata["type"]`` is a ``CategoricalColumn`` and ``self`` is
+          not, we assume ``self`` is a column of codes, and return a
+          ``CategoricalColumn`` composed of ``self`` and the categories listed
+          in ``metadata["categories"]``.
+        * when both ``metadata["type"]`` and ``self`` are ``StructColumns``,
+          rename the fields of `self` to the field names listed in
+          ``metadata["field_keys"]``.
+        * when both ``metadata["type"]`` and ``self`` are ``DecimalColumns``,
+          copy the precision from ``metadata["precision"]`` to ``self.dtype``
+        * if none of the above, no changes are applied
+        """
+        if metadata["type"] is cudf.core.column.CategoricalColumn and not (
+            isinstance(self, cudf.core.column.CategoricalColumn)
         ):
-            other = build_categorical_column(
-                categories=self.categories,
-                codes=as_column(other.base_data, dtype=other.dtype),
-                mask=other.base_mask,
-                ordered=self.ordered,
-                size=other.size,
-                offset=other.offset,
-                null_count=other.null_count,
+            self = build_categorical_column(
+                categories=metadata["categories"],
+                codes=as_column(self.base_data, dtype=self.dtype),
+                mask=self.base_mask,
+                ordered=metadata["ordered"],
+                size=self.size,
+                offset=self.offset,
+                null_count=self.null_count,
             )
 
-        if isinstance(other, cudf.core.column.StructColumn) and isinstance(
+        if metadata["type"] is cudf.core.column.StructColumn and isinstance(
             self, cudf.core.column.StructColumn
         ):
-            other = other._rename_fields(self.dtype.fields.keys())
+            self = self._rename_fields(metadata["field_keys"])
 
-        if isinstance(other, cudf.core.column.DecimalColumn) and isinstance(
+        if metadata["type"] is cudf.core.column.DecimalColumn and isinstance(
             self, cudf.core.column.DecimalColumn
         ):
-            other.dtype.precision = self.dtype.precision
+            self.dtype.precision = metadata["precision"]
+
+    def _copy_type_metadata(self: T, other: ColumnBase) -> ColumnBase:
+        """
+        Copies type metadata from ``self`` onto ``other``, returning a new
+        column.
+
+        When ``self`` and ``other`` are nested columns of the same type,
+        recursively apply this function on the children of ``self`` and
+        ``other``.
+        """
+        other._copy_type_metadata_from_dict(self.type_metadata)
 
         if type(self) is type(other):
             if self.base_children and other.base_children:
