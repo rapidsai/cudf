@@ -1,7 +1,7 @@
-from inspect import signature as py_signature
 from cudf.core.udf.typing import MaskedType
 from numba.np import numpy_support
 from numba import cuda
+
 
 def compile_udf(func, dtypes):
     '''
@@ -24,6 +24,7 @@ def compile_udf(func, dtypes):
     )
 
     return numpy_output_type, ptx
+
 
 def nulludf(func):
     '''

@@ -20,7 +20,7 @@ arith_ops = [
 
 
 comparison_ops = [
-    operator.eq, 
+    operator.eq,
     operator.ne,
     operator.lt,
     operator.le,
@@ -28,9 +28,10 @@ comparison_ops = [
     operator.ge
 ]
 
+
 class MaskedType(types.Type):
     '''
-    A numba type consiting of a value of some primitive type 
+    A numba type consiting of a value of some primitive type
     and a validity boolean, over which we can define math ops
     '''
     def __init__(self, value):
@@ -45,42 +46,42 @@ class MaskedType(types.Type):
     def __hash__(self):
         '''
         Needed so that numba caches type instances with different
-        `value_type` separately.  
+        `value_type` separately.
         '''
         return self.__repr__().__hash__()
 
     def unify(self, context, other):
         '''
         Logic for sorting out what to do when the UDF conditionally
-        returns a `MaskedType`, an `NAType`, or a literal based off 
+        returns a `MaskedType`, an `NAType`, or a literal based off
         the data at runtime.
 
         In this framework, every input column is treated as having
-        type `MaskedType`. Operations like `x + y` are understood 
+        type `MaskedType`. Operations like `x + y` are understood
         as translating to:
 
         `Masked(value=x, valid=True) + Masked(value=y, valid=True)`
 
-        This means if the user writes a function such as 
+        This means if the user writes a function such as
         def f(x, y):
             return x + y
-            
+
         numba sees this function as:
         f(x: MaskedType, y: MaskedType) -> MaskedType
-        
+
         However if the user writes something like:
         def f(x, y):
             if x > 5:
                 return 42
             else:
                 return x + y
-        
+
         numba now sees this as
         f(x: MaskedType(dtype_1), y: MaskedType(dtype_2))
-          -> MaskedType(dtype_unified) 
+          -> MaskedType(dtype_unified)
         '''
-        
-        # If we have Masked and NA, the output should be a 
+
+        # If we have Masked and NA, the output should be a
         # MaskedType with the original type as its value_type
         if isinstance(other, NAType):
             return self
@@ -93,12 +94,13 @@ class MaskedType(types.Type):
             return None
 
         return MaskedType(unified)
-    
+
     def __eq__(self, other):
         if not isinstance(other, MaskedType):
             return False
 
         return self.value_type == other.value_type
+
 
 # Tell numba how `MaskedType` is constructed on the backend in terms
 # of primitive things that exist at the LLVM level
@@ -106,8 +108,8 @@ class MaskedType(types.Type):
 class MaskedModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         # This struct has two members, a value and a validity
-        # let the type of the `value` field be the same as the 
-        # `value_type` and let `valid` be a boolean 
+        # let the type of the `value` field be the same as the
+        # `value_type` and let `valid` be a boolean
         members = [("value", fe_type.value_type), ("valid", types.bool_)]
         models.StructModel.__init__(self, dmm, fe_type, members)
 
@@ -116,9 +118,9 @@ class NAType(types.Type):
     '''
     A type for handling ops against nulls
     Exists so we can:
-    1. Teach numba that all occurances of `cudf.NA` are 
+    1. Teach numba that all occurances of `cudf.NA` are
        to be read as instances of this type instead
-    2. Define ops like `if x is cudf.NA` where `x` is of 
+    2. Define ops like `if x is cudf.NA` where `x` is of
        type `Masked` to mean `if x.valid is False`
     '''
     def __init__(self):
@@ -138,6 +140,7 @@ class NAType(types.Type):
         else:
             return MaskedType(other)
 
+
 @typeof_impl.register(_NAType)
 def typeof_na(val, c):
     '''
@@ -147,12 +150,13 @@ def typeof_na(val, c):
     '''
     return NAType()
 
+
 register_model(NAType)(models.OpaqueModel)
 
 
 # Ultimately, we want numba to produce PTX code that specifies how to add
 # two singular `Masked` structs together, which is defined as producing a
-# new `Masked` with the right validity and if valid, the correct value. 
+# new `Masked` with the right validity and if valid, the correct value.
 # This happens in two phases:
 #   1. Specify that `Masked` + `Masked` exists and what it should return
 #   2. Implement how to actually do (1) at the LLVM level
@@ -168,8 +172,8 @@ class MaskedScalarArithOp(AbstractTemplate):
         '''
         if isinstance(args[0], MaskedType) and isinstance(args[1], MaskedType):
             # In the case of op(Masked, Masked), the return type is a Masked
-            # such that Masked.value is the primitive type that would have 
-            # been resolved if we were just adding the `value_type`s. 
+            # such that Masked.value is the primitive type that would have
+            # been resolved if we were just adding the `value_type`s.
             return_type = self.context.resolve_function_type(
                 self.key, (args[0].value_type, args[1].value_type), kws
             ).return_type
@@ -178,6 +182,7 @@ class MaskedScalarArithOp(AbstractTemplate):
                 args[0],
                 args[1],
             )
+
 
 class MaskedScalarNullOp(AbstractTemplate):
     def generic(self, args, kws):
@@ -199,6 +204,7 @@ class MaskedScalarNullOp(AbstractTemplate):
                 NAType(),
                 args[1]
             )
+
 
 class MaskedScalarConstOp(AbstractTemplate):
     def generic(self, args, kws):
@@ -230,7 +236,8 @@ class MaskedScalarConstOp(AbstractTemplate):
                 args[0],
                 args[1],
             )
-            
+
+
 @cuda_decl_registry.register_global(operator.is_)
 class MaskedScalarIsNull(AbstractTemplate):
     '''
@@ -239,9 +246,10 @@ class MaskedScalarIsNull(AbstractTemplate):
     def generic(self, args, kws):
         if isinstance(args[0], MaskedType) and isinstance(args[1], NAType):
             return nb_signature(
-                types.boolean, 
-                args[0], 
+                types.boolean,
+                args[0],
                 NAType())
+
 
 @cuda_decl_registry.register_global(operator.truth)
 class MaskedScalarTruth(AbstractTemplate):
@@ -257,6 +265,7 @@ class MaskedScalarTruth(AbstractTemplate):
                 types.boolean,
                 MaskedType(types.boolean)
             )
+
 
 for op in arith_ops + comparison_ops:
     # Every op shares the same typing class
