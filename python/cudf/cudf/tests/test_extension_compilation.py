@@ -27,8 +27,7 @@ comparison_ops = (
 )
 
 unary_ops = (
-    operator.not_,
-    operator.truth
+    operator.truth,
 )
 
 ops = arith_ops + comparison_ops
@@ -117,7 +116,7 @@ def test_compile_arith_masked_vs_na(op, ty):
 def test_compile_arith_na_vs_masked(op, ty):
 
     def func(x):
-        return op(x, NA)
+        return op(NA, x)
 
     cc = (7, 5)
     ptx, resty = compile_ptx(func, (MaskedType(ty),), cc=cc, device=True)
