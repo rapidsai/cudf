@@ -868,6 +868,11 @@ def pack(Table input_table, keep_index=True):
         This step will implicitly be skipped if the index columns can be
         reconstructed on the fly at unpacking time.
 
+    Returns
+    -------
+    PackedColumns
+        A packed representation of ``input_table``.
+
     Examples
     --------
     Build a dataframe and pack it:
@@ -896,6 +901,11 @@ def unpack(PackedColumns packed):
     ----------
     packed : PackedColumns
         The results of calling ``pack()`` on a ``cudf.DataFrame``.
+
+    Returns
+    -------
+    cudf.DataFrame
+        A copy of the original DataFrame which was packed.
 
     Examples
     --------
