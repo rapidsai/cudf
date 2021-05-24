@@ -3130,7 +3130,7 @@ def test_str_join_lists_error():
             "__",
             "=",
             None,
-            cudf.Series(["a__b", "=", "=__hello__=__world"]),
+            cudf.Series(["a__b", "", "=__hello__=__world"]),
         ),
         (
             cudf.Series(
@@ -3161,7 +3161,7 @@ def test_str_join_lists_error():
             cudf.Series(
                 [
                     "a-rep_str-b",
-                    "rep_str",
+                    "",
                     "rep_str**hello**rep_str**world",
                     None,
                 ]
@@ -3172,7 +3172,7 @@ def test_str_join_lists_error():
             ["-", "_", None],
             "rep_str",
             None,
-            cudf.Series(["rep_str-a", "rep_str", None]),
+            cudf.Series(["rep_str-a", "", None]),
         ),
         (
             cudf.Series([[None, "a"], [None], None]),

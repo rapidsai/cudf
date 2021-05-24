@@ -485,10 +485,11 @@ class StringMethods(ColumnMethodsMixin):
             If array-like, the string at a position is used as a
             delimiter for corresponding row of the list entries.
         string_na_rep : str, default None
-            This character will take the place of any null strings
-            (not empty strings) in the Series.
-            If ``string_na_rep`` is ``None``, it defaults to empty
-            space "".
+            This character will take the place of null strings
+            (not empty strings) in the Series but will be considered
+            only if the Series contains at least one non-null string.
+            If ``string_na_rep`` is ``None`` or the Series contains only
+            ``None``, it defaults to empty space "".
         sep_na_rep : str, default None
             This character will take the place of any null strings
             (not empty strings) in `sep`. This parameter can be used
