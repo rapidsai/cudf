@@ -2927,8 +2927,6 @@ def as_index(arbitrary, **kwargs) -> Index:
         return CategoricalIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, IntervalColumn):
         return IntervalIndex(arbitrary, **kwargs)
-    elif isinstance(arbitrary, StructColumn):
-        return IntervalIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, cudf.Series):
         return as_index(arbitrary._column, **kwargs)
     elif isinstance(arbitrary, pd.RangeIndex):
