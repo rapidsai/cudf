@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <cudf/ast/linearizer.hpp>
+#include <cudf/ast/nodes.hpp>
 #include <cudf/table/table_view.hpp>
 
 namespace cudf {

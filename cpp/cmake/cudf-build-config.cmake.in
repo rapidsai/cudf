@@ -43,8 +43,6 @@ find_dependency(ZLIB)
 
 # add third party dependencies using CPM
 include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetCPM.cmake)
-# find boost
-include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_FindBoost.cmake)
 # find jitify
 include(@CUDF_SOURCE_DIR@/cmake/thirdparty/CUDF_GetJitify.cmake)
 # find thrust/cub
