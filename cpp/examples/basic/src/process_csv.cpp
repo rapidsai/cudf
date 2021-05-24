@@ -8,13 +8,12 @@
 #include <utility>
 #include <vector>
 
-std::unique_ptr<cudf::table> read_csv(std::string const& file_path)
+cudf::io::table_with_metadata read_csv(std::string const& file_path)
 {
-  auto source_info    = cudf::io::source_info(file_path);
-  auto builder        = cudf::io::csv_reader_options::builder(source_info);
-  auto options        = builder.build();
-  auto data_with_meta = cudf::io::read_csv(options);
-  return std::move(data_with_meta.tbl);
+  auto source_info = cudf::io::source_info(file_path);
+  auto builder     = cudf::io::csv_reader_options::builder(source_info);
+  auto options     = builder.build();
+  return cudf::io::read_csv(options);
 }
 
 void write_csv(cudf::table_view const& tbl_view, std::string const& file_path)
@@ -57,10 +56,10 @@ std::unique_ptr<cudf::table> average_closing_price(cudf::table_view stock_info_t
 int main(int argc, char** argv)
 {
   // Read data
-  auto stock_info_table = read_csv("4stock_5day.csv");
+  auto stock_table_with_metadata = read_csv("4stock_5day.csv");
 
   // Process
-  auto result = average_closing_price(*stock_info_table);
+  auto result = average_closing_price(*stock_table_with_metadata.tbl);
 
   // Write out result
   write_csv(*result, "4stock_5day_avg_close.csv");
