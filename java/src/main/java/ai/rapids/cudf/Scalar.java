@@ -617,6 +617,11 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return new ColumnView(getListAsColumnView(getScalarHandle()));
   }
 
+  /**
+   * Fetches views of children columns from struct scalar.
+   *
+   * @return array of column views refer to children of struct scalar
+   */
   public ColumnView[] getChildrenFromStructScalar() {
     assert DType.STRUCT.equals(type) : "Cannot get table for the vector of type " + type;
 
