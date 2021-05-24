@@ -41,6 +41,7 @@ namespace {
  * concatenation.
  */
 std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
+                                                      bool build_null_mask,
                                                       rmm::cuda_stream_view stream,
                                                       rmm::mr::device_memory_resource* mr)
 {
@@ -50,9 +51,13 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
   auto out_offsets = make_numeric_column(
     data_type{type_id::INT32}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
 
+  // The array of int8_t stores validities for the output list elements.
+  auto validities = rmm::device_uvector<int8_t>(build_null_mask ? num_rows : 0, stream);
+
   auto const d_out_offsets  = out_offsets->mutable_view().template begin<offset_type>();
   auto const d_row_offsets  = lists_column_view(input).offsets_begin();
   auto const d_list_offsets = lists_column_view(lists_column_view(input).child()).offsets_begin();
+  auto const lists_dv_ptr   = column_device_view::create(lists_column_view(input).child());
 
   // Concatenating the lists at the same row by converting the entry offsets from the child column
   // into row offsets of the root column. Those entry offsets are subtracted by the first entry
@@ -62,7 +67,22 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
                     iter,
                     iter + num_rows + 1,
                     d_out_offsets,
-                    [d_row_offsets, d_list_offsets] __device__(auto const idx) {
+                    [d_row_offsets,
+                     d_list_offsets,
+                     lists_dv     = *lists_dv_ptr,
+                     d_validities = validities.begin(),
+                     build_null_mask,
+                     iter] __device__(auto const idx) {
+                      if (build_null_mask) {
+                        // The output row will be null only if all lists on the input row are null.
+                        auto const is_valid = thrust::any_of(thrust::seq,
+                                                             iter + d_row_offsets[idx],
+                                                             iter + d_row_offsets[idx + 1],
+                                                             [&] __device__(auto const list_idx) {
+                                                               return lists_dv.is_valid(list_idx);
+                                                             });
+                        d_validities[idx]   = static_cast<int8_t>(is_valid);
+                      }
                       auto const start_offset = d_list_offsets[d_row_offsets[0]];
                       return d_list_offsets[d_row_offsets[idx]] - start_offset;
                     });
@@ -71,11 +91,18 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
   auto out_entries = std::make_unique<column>(
     lists_column_view(lists_column_view(input).get_sliced_child(stream)).get_sliced_child(stream));
 
+  auto [null_mask, null_count] = [&] {
+    return build_null_mask
+             ? cudf::detail::valid_if(
+                 validities.begin(), validities.end(), thrust::identity<int8_t>{}, stream, mr)
+             : std::make_pair(cudf::detail::copy_bitmask(input, stream, mr), input.null_count());
+  }();
+
   return make_lists_column(num_rows,
                            std::move(out_offsets),
                            std::move(out_entries),
-                           input.null_count(),
-                           cudf::detail::copy_bitmask(input, stream, mr),
+                           null_count,
+                           null_count > 0 ? std::move(null_mask) : rmm::device_buffer{},
                            stream,
                            mr);
 }
@@ -241,9 +268,10 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
 
   if (input.size() == 0) { return cudf::empty_like(input); }
 
-  return (null_policy == concatenate_null_policy::IGNORE ||
-          !lists_column_view(input).child().has_nulls())
-           ? concatenate_lists_ignore_null(input, stream, mr)
+  bool has_null_list = lists_column_view(input).child().has_nulls();
+
+  return (null_policy == concatenate_null_policy::IGNORE || !has_null_list)
+           ? concatenate_lists_ignore_null(input, has_null_list, stream, mr)
            : concatenate_lists_nullifying_rows(input, stream, mr);
 }
 

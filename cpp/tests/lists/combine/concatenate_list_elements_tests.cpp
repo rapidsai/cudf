@@ -147,19 +147,23 @@ TYPED_TEST(ConcatenateListElementsTypedTest, SimpleInputWithNulls)
   auto row5      = ListsCol{ListsCol{{1, 2, 3, null}, null_at(3)},
                        ListsCol{{null}, null_at(0)},
                        ListsCol{{null, null, null, null, null}, all_nulls()}};
-  auto const col = build_lists_col(row0, row1, row2, row3, row4, row5);
+  auto row6 =
+    ListsCol{{ListsCol{} /*NULL*/, ListsCol{} /*NULL*/, ListsCol{} /*NULL*/}, all_nulls()};
+  auto const col = build_lists_col(row0, row1, row2, row3, row4, row5, row6);
 
   // Ignore null list elements.
   {
     auto const results = cudf::lists::concatenate_list_elements(col);
     auto const expected =
-      ListsCol{ListsCol{{1, null, 3, 4, 10, 11, 12, null}, null_at({1, 7})},
-               ListsCol{{null, 2, 3, 4, 13, 14, 15, 16, 17, null, 20, null}, null_at({0, 9, 11})},
-               ListsCol{{null, 2, 3, 4, null, 21, null, null}, null_at({0, 4, 6, 7})},
-               ListsCol{{null, 18}, null_at(0)},
-               ListsCol{{1, 2, null, 4, 19, 20, null, 22, 23, 24, 25}, null_at({2, 6})},
-               ListsCol{{1, 2, 3, null, null, null, null, null, null, null},
-                        null_at({3, 4, 5, 6, 7, 8, 9})}};
+      ListsCol{{ListsCol{{1, null, 3, 4, 10, 11, 12, null}, null_at({1, 7})},
+                ListsCol{{null, 2, 3, 4, 13, 14, 15, 16, 17, null, 20, null}, null_at({0, 9, 11})},
+                ListsCol{{null, 2, 3, 4, null, 21, null, null}, null_at({0, 4, 6, 7})},
+                ListsCol{{null, 18}, null_at(0)},
+                ListsCol{{1, 2, null, 4, 19, 20, null, 22, 23, 24, 25}, null_at({2, 6})},
+                ListsCol{{1, 2, 3, null, null, null, null, null, null, null},
+                         null_at({3, 4, 5, 6, 7, 8, 9})},
+                ListsCol{} /*NULL*/},
+               null_at(6)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
   }
 
@@ -174,8 +178,9 @@ TYPED_TEST(ConcatenateListElementsTypedTest, SimpleInputWithNulls)
                 ListsCol{} /*NULL*/,
                 ListsCol{{1, 2, null, 4, 19, 20, null, 22, 23, 24, 25}, null_at({2, 6})},
                 ListsCol{{1, 2, 3, null, null, null, null, null, null, null},
-                         null_at({3, 4, 5, 6, 7, 8, 9})}},
-               null_at({0, 2, 3})};
+                         null_at({3, 4, 5, 6, 7, 8, 9})},
+                ListsCol{} /*NULL*/},
+               null_at({0, 2, 3, 6})};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
   }
 }
