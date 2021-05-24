@@ -69,11 +69,11 @@ For `cudf version == 0.19.2` :
 ```bash
 # for CUDA 10.1
 conda install -c rapidsai -c nvidia -c numba -c conda-forge \
-    cudf=0.19.2 python=3.7 cudatoolkit=10.1
+    cudf=0.19 python=3.7 cudatoolkit=10.1
 
 # or, for CUDA 10.2
 conda install -c rapidsai -c nvidia -c numba -c conda-forge \
-    cudf=0.19.2 python=3.7 cudatoolkit=10.2
+    cudf=0.19 python=3.7 cudatoolkit=10.2
 
 ```
 
