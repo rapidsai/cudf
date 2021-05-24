@@ -777,3 +777,34 @@ def test_index_map_partitions():
     mins_gd = gddf.index.map_partitions(M.min, meta=gddf.index).compute()
 
     dd.assert_eq(mins_pd, mins_gd)
+
+
+def test_merging_categorical_columns():
+    df_1 = cudf.DataFrame(
+        {"id_1": [0, 1, 2, 3], "cat_col": ["a", "b", "f", "f"]}
+    )
+
+    ddf_1 = dgd.from_cudf(df_1, npartitions=2)
+
+    ddf_1 = dd.categorical.categorize(ddf_1, columns=["cat_col"])
+
+    df_2 = cudf.DataFrame(
+        {"id_2": [111, 112, 113], "cat_col": ["g", "h", "f"]}
+    )
+
+    ddf_2 = dgd.from_cudf(df_2, npartitions=2)
+
+    ddf_2 = dd.categorical.categorize(ddf_2, columns=["cat_col"])
+    expected = cudf.DataFrame(
+        {
+            "id_1": [2, 3],
+            "cat_col": cudf.Series(
+                ["f", "f"],
+                dtype=cudf.CategoricalDtype(
+                    categories=["a", "b", "f", "g", "h"], ordered=False
+                ),
+            ),
+            "id_2": [113, 113],
+        }
+    )
+    dd.assert_eq(ddf_1.merge(ddf_2), expected)
