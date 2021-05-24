@@ -1,7 +1,8 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 from decimal import Decimal
-from typing import cast, Any
+from numbers import Number
+from typing import Any, Sequence, Tuple, Union, cast
 
 import cupy as cp
 import numpy as np
@@ -10,12 +11,13 @@ from pandas.api.types import is_integer_dtype
 
 import cudf
 from cudf import _lib as libcudf
+from cudf._lib.quantiles import quantile as cpp_quantile
 from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
 from cudf._typing import Dtype
 from cudf.core.buffer import Buffer
-from cudf.core.column import ColumnBase, as_column
+from cudf.core.column import ColumnBase, NumericalColumn, as_column
 from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import pa_mask_buffer_to_mask
@@ -23,6 +25,14 @@ from cudf.utils.utils import pa_mask_buffer_to_mask
 
 class DecimalColumn(ColumnBase):
     dtype: Decimal64Dtype
+
+    def __truediv__(self, other):
+        return self.binary_operator("div", other)
+
+    def __setitem__(self, key, value):
+        if isinstance(value, np.integer):
+            value = int(value)
+        super().__setitem__(key, value)
 
     @classmethod
     def from_arrow(cls, data: pa.Array):
@@ -72,7 +82,7 @@ class DecimalColumn(ColumnBase):
 
         # Binary Arithmatics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
-        if op in ("add", "sub", "mul"):
+        if op in ("add", "sub", "mul", "div"):
             scale = _binop_scale(self.dtype, other.dtype, op)
             output_type = Decimal64Dtype(
                 scale=scale, precision=Decimal64Dtype.MAX_PRECISION
@@ -81,7 +91,7 @@ class DecimalColumn(ColumnBase):
             result.dtype.precision = _binop_precision(
                 self.dtype, other.dtype, op
             )
-        elif op in ("eq", "lt", "gt", "le", "ge"):
+        elif op in ("eq", "ne", "lt", "gt", "le", "ge"):
             if not isinstance(
                 other,
                 (DecimalColumn, cudf.core.column.NumericalColumn, cudf.Scalar),
@@ -115,6 +125,51 @@ class DecimalColumn(ColumnBase):
 
     def _apply_scan_op(self, op: str) -> ColumnBase:
         result = libcudf.reduce.scan(op, self, True)
+        return self._copy_type_metadata(result)
+
+    def quantile(
+        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+    ) -> ColumnBase:
+        if isinstance(q, Number) or cudf.utils.dtypes.is_list_like(q):
+            np_array_q = np.asarray(q)
+            if np.logical_or(np_array_q < 0, np_array_q > 1).any():
+                raise ValueError(
+                    "percentiles should all be in the interval [0, 1]"
+                )
+        # Beyond this point, q either being scalar or list-like
+        # will only have values in range [0, 1]
+        result = self._decimal_quantile(q, interpolation, exact)
+        if isinstance(q, Number):
+            return (
+                cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+                if result[0] is cudf.NA
+                else result[0]
+            )
+        return result
+
+    def median(self, skipna: bool = None) -> ColumnBase:
+        skipna = True if skipna is None else skipna
+
+        if not skipna and self.has_nulls:
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+
+        # enforce linear in case the default ever changes
+        return self.quantile(0.5, interpolation="linear", exact=True)
+
+    def _decimal_quantile(
+        self, q: Union[float, Sequence[float]], interpolation: str, exact: bool
+    ) -> ColumnBase:
+        quant = [float(q)] if not isinstance(q, (Sequence, np.ndarray)) else q
+        # get sorted indices and exclude nulls
+        sorted_indices = self.as_frame()._get_sorted_inds(
+            ascending=True, na_position="first"
+        )
+        sorted_indices = sorted_indices[self.null_count :]
+
+        result = cpp_quantile(
+            self, quant, interpolation, sorted_indices, exact
+        )
+
         return self._copy_type_metadata(result)
 
     def as_decimal_column(
@@ -177,10 +232,42 @@ class DecimalColumn(ColumnBase):
 
         Returns a copy with null filled.
         """
+        if isinstance(value, (int, Decimal)):
+            value = cudf.Scalar(value, dtype=self.dtype)
+        elif (
+            isinstance(value, DecimalColumn)
+            or isinstance(value, NumericalColumn)
+            and is_integer_dtype(value.dtype)
+        ):
+            value = value.astype(self.dtype)
+        else:
+            raise TypeError(
+                "Decimal columns only support using fillna with decimal and "
+                "integer values"
+            )
+
         result = libcudf.replace.replace_nulls(
             input_col=self, replacement=value, method=method, dtype=dtype
         )
         return self._copy_type_metadata(result)
+
+    def serialize(self) -> Tuple[dict, list]:
+        header, frames = super().serialize()
+        header["dtype"] = self.dtype.serialize()
+        header["size"] = self.size
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header: dict, frames: list) -> ColumnBase:
+        dtype = cudf.Decimal64Dtype.deserialize(*header["dtype"])
+        header["dtype"] = dtype
+        return super().deserialize(header, frames)
+
+    @property
+    def __cuda_array_interface__(self):
+        raise NotImplementedError(
+            "Decimals are not yet supported via `__cuda_array_interface__`"
+        )
 
 
 def _binop_scale(l_dtype, r_dtype, op):
@@ -191,6 +278,8 @@ def _binop_scale(l_dtype, r_dtype, op):
         return max(s1, s2)
     elif op == "mul":
         return s1 + s2
+    elif op == "div":
+        return s1 - s2
     else:
         raise NotImplementedError()
 
@@ -206,7 +295,7 @@ def _binop_precision(l_dtype, r_dtype, op):
     s1, s2 = l_dtype.scale, r_dtype.scale
     if op in ("add", "sub"):
         return max(s1, s2) + max(p1 - s1, p2 - s2) + 1
-    elif op == "mul":
+    elif op in ("mul", "div"):
         return p1 + p2 + 1
     else:
         raise NotImplementedError()

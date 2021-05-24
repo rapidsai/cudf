@@ -40,14 +40,17 @@ struct reduce_functor {
   template <typename T>
   static constexpr bool is_supported()
   {
-    if (K == aggregation::SUM)
-      return cudf::is_numeric<T>() || cudf::is_duration<T>() || cudf::is_fixed_point<T>();
-    else if (K == aggregation::MIN or K == aggregation::MAX)
-      return cudf::is_fixed_width<T>() and is_relationally_comparable<T, T>();
-    else if (K == aggregation::ARGMIN or K == aggregation::ARGMAX)
-      return is_relationally_comparable<T, T>();
-    else
-      return false;
+    switch (K) {
+      case aggregation::SUM:
+        return cudf::is_numeric<T>() || cudf::is_duration<T>() || cudf::is_fixed_point<T>();
+      case aggregation::PRODUCT: return cudf::detail::is_product_supported<T>();
+      case aggregation::MIN:
+      case aggregation::MAX:
+        return cudf::is_fixed_width<T>() and is_relationally_comparable<T, T>();
+      case aggregation::ARGMIN:
+      case aggregation::ARGMAX: return is_relationally_comparable<T, T>();
+      default: return false;
+    }
   }
 
   template <typename T>
@@ -62,7 +65,7 @@ struct reduce_functor {
     using OpType     = cudf::detail::corresponding_operator_t<K>;
     using ResultType = cudf::detail::target_type_t<T, K>;
 
-    auto result_type = is_fixed_point<T>()
+    auto result_type = is_fixed_point<ResultType>()
                          ? data_type{type_to_id<ResultType>(), values.type().scale()}
                          : data_type{type_to_id<ResultType>()};
 

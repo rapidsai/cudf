@@ -32,7 +32,7 @@ elseif(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
   set(CUDF_JNI_BUILD_FOR_DETECTED_ARCHS TRUE)
 endif()
 
-project(CUDF_JNI VERSION 0.20.0 LANGUAGES C CXX)
+project(CUDF_JNI VERSION 21.06.00 LANGUAGES C CXX)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
@@ -248,6 +248,7 @@ set(SOURCE_FILES
     "src/RmmJni.cpp"
     "src/ScalarJni.cpp"
     "src/TableJni.cpp"
+    "src/prefix_sum.cu"
     "src/map_lookup.cu")
 add_library(cudfjni SHARED ${SOURCE_FILES})
 
@@ -274,7 +275,7 @@ target_compile_definitions(cudfjni
 if(USE_GDS)
     add_library(cufilejni SHARED "src/CuFileJni.cpp")
     target_include_directories(cufilejni PRIVATE "${cuFile_INCLUDE_DIRS}")
-    target_link_libraries(cufilejni PRIVATE "${cuFile_LIBRARIES}")
+    target_link_libraries(cufilejni PRIVATE cudfjni "${cuFile_LIBRARIES}")
 endif(USE_GDS)
 
 ###################################################################################################

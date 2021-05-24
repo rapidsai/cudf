@@ -169,18 +169,12 @@ struct dispatch_compute_indices {
     return result;
   }
 
-  template <typename Element>
+  template <typename Element, typename... Args>
   typename std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(),
                             std::unique_ptr<column>>
-  operator()(column_view const&,
-             column_view const&,
-             column_view const&,
-             offsets_pair const*,
-             size_type const*,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource*)
+  operator()(Args&&...)
   {
-    CUDF_FAIL("list_view as keys for dictionary not supported");
+    CUDF_FAIL("dictionary concatenate not supported for this column type");
   }
 };
 
@@ -213,6 +207,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                                   std::vector<size_type>{0},
                                                   duplicate_keep_option::KEEP_FIRST,
                                                   null_equality::EQUAL,
+                                                  null_order::BEFORE,
                                                   stream,
                                                   mr)
                       ->release();

@@ -27,7 +27,7 @@ namespace io {
 namespace orc {
 namespace gpu {
 
-using detail::device_2dspan;
+using cudf::detail::device_2dspan;
 
 constexpr int scratch_buffer_size = 512 * 4;
 
@@ -781,6 +781,9 @@ __global__ void __launch_bounds__(block_size)
               s->lengths.u32[nz_idx]                  = value.size_bytes();
             }
             break;
+            // Reusing the lengths array for the scale stream
+            // Note: can be written in a faster manner, given that all values are equal
+          case DECIMAL: s->lengths.u32[nz_idx] = zigzag(s->chunk.scale); break;
           default: break;
         }
       }
@@ -814,7 +817,7 @@ __global__ void __launch_bounds__(block_size)
         uint32_t nz = s->buf.u32[511];
         s->nnz += nz;
         s->numvals += nz;
-        s->numlengths += (s->chunk.type_kind == TIMESTAMP ||
+        s->numlengths += (s->chunk.type_kind == TIMESTAMP || s->chunk.type_kind == DECIMAL ||
                           (s->chunk.type_kind == STRING && s->chunk.encoding_kind != DICTIONARY_V2))
                            ? nz
                            : 0;
@@ -865,6 +868,17 @@ __global__ void __launch_bounds__(block_size)
               n = s->numvals;
             }
             break;
+          case DECIMAL: {
+            if (valid) {
+              uint64_t const zz_val = (s->chunk.leaf_column->type().id() == type_id::DECIMAL32)
+                                        ? zigzag(s->chunk.leaf_column->element<int32_t>(row))
+                                        : zigzag(s->chunk.leaf_column->element<int64_t>(row));
+              auto const offset =
+                (row == s->chunk.start_row) ? 0 : s->chunk.decimal_offsets[row - 1];
+              StoreVarint(s->stream.data_ptrs[CI_DATA] + offset, zz_val);
+            }
+            n = s->numvals;
+          } break;
           default: n = s->numvals; break;
         }
         __syncthreads();
@@ -878,6 +892,7 @@ __global__ void __launch_bounds__(block_size)
             n = IntegerRLE<CI_DATA2, uint64_t, false, 0x3ff, block_size>(
               s, s->lengths.u64, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u64);
             break;
+          case DECIMAL:
           case STRING:
             n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
               s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u32);
@@ -893,7 +908,9 @@ __global__ void __launch_bounds__(block_size)
   __syncthreads();
   if (t <= CI_PRESENT && s->stream.ids[t] >= 0) {
     // Update actual compressed length
-    streams[col_id][group_id].lengths[t] = s->strm_pos[t];
+    // (not needed for decimal data, whose exact size is known before encode)
+    if (!(t == CI_DATA && s->chunk.type_kind == DECIMAL))
+      streams[col_id][group_id].lengths[t] = s->strm_pos[t];
     if (!s->stream.data_ptrs[t]) {
       streams[col_id][group_id].data_ptrs[t] =
         static_cast<uint8_t *>(const_cast<void *>(s->chunk.leaf_column->head())) +
@@ -1226,8 +1243,8 @@ void CompressOrcDataStreams(uint8_t *compressed_data,
                             uint32_t num_compressed_blocks,
                             CompressionKind compression,
                             uint32_t comp_blk_size,
-                            detail::device_2dspan<StripeStream> strm_desc,
-                            detail::device_2dspan<encoder_chunk_streams> enc_streams,
+                            device_2dspan<StripeStream> strm_desc,
+                            device_2dspan<encoder_chunk_streams> enc_streams,
                             gpu_inflate_input_s *comp_in,
                             gpu_inflate_status_s *comp_out,
                             rmm::cuda_stream_view stream)

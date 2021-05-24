@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import builtins
 from numbers import Number
-from typing import Any, Callable, Sequence, Tuple, Union, cast
+from types import SimpleNamespace
+from typing import Any, Callable, Mapping, Sequence, Tuple, Union, cast
 
+import cupy
 import numpy as np
 import pandas as pd
-from nvtx import annotate
+from numba import cuda, njit
 from pandas.api.types import is_integer_dtype
 
 import cudf
@@ -20,11 +23,14 @@ from cudf.core.column import (
     as_column,
     build_column,
     column,
+    column_empty,
     string,
 )
 from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
+    NUMERIC_TYPES,
+    cudf_dtypes_to_pandas_dtypes,
     min_column_type,
     min_signed_type,
     numeric_normalize_types,
@@ -84,6 +90,33 @@ class NumericalColumn(ColumnBase):
             self, column.as_column([item], dtype=self.dtype)
         ).any()
 
+    @property
+    def __cuda_array_interface__(self) -> Mapping[builtins.str, Any]:
+        output = {
+            "shape": (len(self),),
+            "strides": (self.dtype.itemsize,),
+            "typestr": self.dtype.str,
+            "data": (self.data_ptr, False),
+            "version": 1,
+        }
+
+        if self.nullable and self.has_nulls:
+
+            # Create a simple Python object that exposes the
+            # `__cuda_array_interface__` attribute here since we need to modify
+            # some of the attributes from the numba device array
+            mask = SimpleNamespace(
+                __cuda_array_interface__={
+                    "shape": (len(self),),
+                    "typestr": "<t1",
+                    "data": (self.mask_ptr, True),
+                    "version": 1,
+                }
+            )
+            output["mask"] = mask
+
+        return output
+
     def unary_operator(self, unaryop: str) -> ColumnBase:
         return _numeric_column_unaryop(self, op=unaryop)
 
@@ -117,7 +150,7 @@ class NumericalColumn(ColumnBase):
                 msg = "{!r} operator not supported between {} and {}"
                 raise TypeError(msg.format(binop, type(self), type(rhs)))
             if isinstance(rhs, cudf.core.column.DecimalColumn):
-                lhs = self.as_decimal_column(
+                lhs: Union[ScalarLike, ColumnBase] = self.as_decimal_column(
                     Decimal64Dtype(Decimal64Dtype.MAX_PRECISION, 0)
                 )
                 return lhs.binary_operator(binop, rhs)
@@ -129,9 +162,11 @@ class NumericalColumn(ColumnBase):
                     or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
                 ):
                     out_dtype = np.dtype("float64")
-        return _numeric_column_binop(
-            lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect
-        )
+
+        if binop in {"lt", "gt", "le", "ge", "eq", "ne", "NULL_EQUALS"}:
+            out_dtype = "bool"
+        lhs, rhs = (self, rhs) if not reflect else (rhs, self)
+        return libcudf.binaryop.binaryop(lhs, rhs, binop, out_dtype)
 
     def _apply_scan_op(self, op: str) -> ColumnBase:
         return libcudf.reduce.scan(op, self, True)
@@ -405,7 +440,7 @@ class NumericalColumn(ColumnBase):
     def applymap(
         self, udf: Callable[[ScalarLike], ScalarLike], out_dtype: Dtype = None
     ) -> ColumnBase:
-        """Apply an element-wise function to transform the values in the Column.
+        """Apply an elementwise function to transform the values in the Column.
 
         Parameters
         ----------
@@ -422,8 +457,22 @@ class NumericalColumn(ColumnBase):
         """
         if out_dtype is None:
             out_dtype = self.dtype
-        out = column.column_applymap(udf=udf, column=self, out_dtype=out_dtype)
-        return out
+
+        core = njit(udf)
+
+        # For non-masked columns
+        @cuda.jit
+        def kernel_applymap(values, results):
+            i = cuda.grid(1)
+            # in range?
+            if i < values.size:
+                # call udf
+                results[i] = core(values[i])
+
+        results = column_empty(self.size, dtype=out_dtype)
+        values = self.data_array_view
+        kernel_applymap.forall(self.size)(values, results)
+        return as_column(results)
 
     def default_na_value(self) -> ScalarLike:
         """Returns the default NA value for this column
@@ -695,34 +744,22 @@ class NumericalColumn(ColumnBase):
 
         return False
 
+    def to_pandas(
+        self, index: pd.Index = None, nullable: bool = False, **kwargs
+    ) -> "pd.Series":
+        if nullable and self.dtype in cudf_dtypes_to_pandas_dtypes:
+            pandas_nullable_dtype = cudf_dtypes_to_pandas_dtypes[self.dtype]
+            arrow_array = self.to_arrow()
+            pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)
+            pd_series = pd.Series(pandas_array, copy=False)
+        elif str(self.dtype) in NUMERIC_TYPES and not self.has_nulls:
+            pd_series = pd.Series(cupy.asnumpy(self.values), copy=False)
+        else:
+            pd_series = self.to_arrow().to_pandas(**kwargs)
 
-@annotate("BINARY_OP", color="orange", domain="cudf_python")
-def _numeric_column_binop(
-    lhs: Union[ColumnBase, ScalarLike],
-    rhs: Union[ColumnBase, ScalarLike],
-    op: str,
-    out_dtype: Dtype,
-    reflect: bool = False,
-) -> ColumnBase:
-    if reflect:
-        lhs, rhs = rhs, lhs
-
-    is_op_comparison = op in [
-        "lt",
-        "gt",
-        "le",
-        "ge",
-        "eq",
-        "ne",
-        "NULL_EQUALS",
-    ]
-
-    if is_op_comparison:
-        out_dtype = "bool"
-
-    out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
-
-    return out
+        if index is not None:
+            pd_series.index = index
+        return pd_series
 
 
 def _numeric_column_unaryop(operand: ColumnBase, op: str) -> ColumnBase:

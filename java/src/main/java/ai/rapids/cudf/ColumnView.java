@@ -41,7 +41,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Constructs a Column View given a native view address
    * @param address the view handle
    */
-  protected ColumnView(long address) {
+  ColumnView(long address) {
     this.viewHandle = address;
     this.type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
     this.rows = ColumnView.getNativeRowCount(viewHandle);
@@ -209,6 +209,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public void close() {
     ColumnView.deleteColumnView(viewHandle);
     viewHandle = 0;
+  }
+
+  @Override
+  public String toString() {
+    return "ColumnView{" +
+           "rows=" + rows +
+           ", type=" + type +
+           ", nullCount=" + nullCount +
+           '}';
   }
 
   /**
@@ -1280,27 +1289,42 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return Column containing aggregate function result.
    * @throws IllegalArgumentException if unsupported window specification * (i.e. other than {@link WindowOptions.FrameType#ROWS} is used.
    */
-  public final ColumnVector rollingWindow(Aggregation op, WindowOptions options) {
+  public final ColumnVector rollingWindow(RollingAggregation op, WindowOptions options) {
+    Aggregation agg = op.getBaseAggregation();
     // Check that only row-based windows are used.
     if (!options.getFrameType().equals(WindowOptions.FrameType.ROWS)) {
       throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: "
           + options.getFrameType());
     }
 
-    long nativePtr = op.createNativeInstance();
+    long nativePtr = agg.createNativeInstance();
     try {
+      Scalar p = options.getPrecedingScalar();
+      Scalar f = options.getFollowingScalar();
       return new ColumnVector(
           rollingWindow(this.getNativeView(),
-              op.getDefaultOutput(),
+              agg.getDefaultOutput(),
               options.getMinPeriods(),
               nativePtr,
-              options.getPreceding(),
-              options.getFollowing(),
+              p == null || !p.isValid() ? 0 : p.getInt(),
+              f == null || !f.isValid() ? 0 : f.getInt(),
               options.getPrecedingCol() == null ? 0 : options.getPrecedingCol().getNativeView(),
               options.getFollowingCol() == null ? 0 : options.getFollowingCol().getNativeView()));
     } finally {
       Aggregation.close(nativePtr);
     }
+  }
+
+  /**
+   * Compute the cumulative sum/prefix sum of the values in this column.
+   * This is similar to a rolling window SUM with unbounded preceding and none following.
+   * Input values 1, 2, 3
+   * Output values 1, 3, 6
+   * This currently only works for long values that are not nullable as this is currently a
+   * very simple implementation. It may be expanded in the future if needed.
+   */
+  public final ColumnVector prefixSum() {
+    return new ColumnVector(prefixSum(getNativeView()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1435,23 +1459,32 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       map.put(indices[index], views[index]);
     });
     List<ColumnView> newChildren = new ArrayList<>(getNumChildren());
-    IntStream.range(0, getNumChildren()).forEach(i -> {
-      ColumnView view = map.remove(i);
-      ColumnView child = getChildColumnView(i);
-      if (view == null) {
-        newChildren.add(child);
-      } else {
-        if (child.getRowCount() != view.getRowCount()) {
-          throw new IllegalArgumentException("Child row count doesn't match the old child");
+    List<ColumnView> toClose = new ArrayList<>(getNumChildren());
+    try {
+      IntStream.range(0, getNumChildren()).forEach(i -> {
+        ColumnView view = map.remove(i);
+        ColumnView child = getChildColumnView(i);
+        toClose.add(child);
+        if (view == null) {
+          newChildren.add(child);
+        } else {
+          if (child.getRowCount() != view.getRowCount()) {
+            throw new IllegalArgumentException("Child row count doesn't match the old child");
+          }
+          newChildren.add(view);
         }
-        newChildren.add(view);
+      });
+      if (!map.isEmpty()) {
+        throw new IllegalArgumentException("One or more invalid child indices passed to be " +
+            "replaced");
       }
-    });
-    if (!map.isEmpty()) {
-      throw new IllegalArgumentException("One or more invalid child indices passed to be replaced");
+      return new ColumnView(type, getRowCount(), Optional.of(getNullCount()), getValid(),
+          getOffsets(), newChildren.stream().toArray(n -> new ColumnView[n]));
+    } finally {
+      for (ColumnView columnView: toClose) {
+        columnView.close();
+      }
     }
-    return new ColumnView(type, getRowCount(), Optional.of(getNullCount()), getValid(),
-        getOffsets(), newChildren.stream().toArray(n -> new ColumnView[n]));
   }
 
   /**
@@ -2504,6 +2537,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(mapLookup(getNativeView(), key.getScalarHandle()));
   }
 
+  /** For a column of type List<Struct<String, String>> and a passed in String key, return a boolean
+   * column for all keys in the structs, It is true if the key exists in the corresponding map for
+   * that row, false otherwise. It will never return null for a row.
+   * @param key the String scalar to lookup in the column
+   * @return a boolean column based on the lookup result
+   */
+  public final ColumnVector getMapKeyExistence(Scalar key) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    assert key != null : "target string may not be null";
+    assert key.getType().equals(DType.STRING) : "target must be a string scalar";
+
+    return new ColumnVector(mapContains(getNativeView(), key.getScalarHandle()));
+  }
 
   /**
    * Create a new struct column view of existing column views. Note that this will NOT copy
@@ -2815,20 +2861,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long urlEncode(long cudfViewHandle);
 
   /**
-   * Native method to concatenate columns of strings together, combining a row from
-   * each colunm into a single string.
-   * @param columnViews array of longs holding the native handles of the column_views to combine.
-   * @param separator string scalar inserted between each string being merged, may not be null.
-   * @param narep string scalar indicating null behavior. If set to null and any string in the row is null
-   *              the resulting string will be null. If not null, null values in any column will be
-   *              replaced by the specified string. The underlying value in the string scalar may be null,
-   *              but the object passed in may not.
-   * @return native handle of the resulting cudf column, used to construct the Java column
-   *         by the stringConcatenate method.
-   */
-  protected static native long stringConcatenation(long[] columnViews, long separator, long narep);
-
-  /**
    * Native method for map lookup over a column of List<Struct<String,String>>
    * @param columnView the column view handle of the map
    * @param key the string scalar that is the key for lookup
@@ -2836,6 +2868,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @throws CudfException
    */
   private static native long mapLookup(long columnView, long key) throws CudfException;
+
+  /**
+   * Native method for check the existence of a key over a column of List<Struct<String,String>>
+   * @param columnView the column view handle of the map
+   * @param key the string scalar that is the key for lookup
+   * @return boolean column handle of the result
+   * @throws CudfException
+   */
+  private static native long mapContains(long columnView, long key) throws CudfException;
   /**
    * Native method to add zeros as padding to the left of each string.
    */
@@ -2909,6 +2950,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       int following,
       long preceding_col,
       long following_col);
+
+  private static native long prefixSum(long viewHandle) throws CudfException;
 
   private static native long nansToNulls(long viewHandle) throws CudfException;
 

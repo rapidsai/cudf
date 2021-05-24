@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,11 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
 #include <cudf/detail/indexalator.cuh>
+#include <cudf/detail/is_element_valid.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/lists/detail/copying.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 
@@ -122,7 +125,19 @@ struct get_element_functor {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
-    CUDF_FAIL("get_element_functor not supported for list_view");
+    bool valid = is_element_valid_sync(input, index, stream);
+
+    if (valid) {
+      lists_column_view lcv(input);
+      // Make a copy of the row
+      auto row_slice_contents =
+        lists::detail::copy_slice(lcv, index, index + 1, stream, mr)->release();
+      // Construct scalar with row data
+      return std::make_unique<list_scalar>(
+        std::move(*row_slice_contents.children[1]), valid, stream, mr);
+    } else {
+      return make_default_constructed_scalar(data_type(type_id::LIST));
+    }
   }
 
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()> *p = nullptr>
@@ -156,12 +171,9 @@ struct get_element_functor {
                                                    mr);
   }
 
-  template <typename T, std::enable_if_t<std::is_same<T, struct_view>::value> *p = nullptr>
-  std::unique_ptr<scalar> operator()(
-    column_view const &input,
-    size_type index,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
+  template <typename T, typename... Args>
+  std::enable_if_t<std::is_same<T, struct_view>::value, std::unique_ptr<scalar>> operator()(
+    Args &&...)
   {
     CUDF_FAIL("get_element_functor not supported for struct_view");
   }

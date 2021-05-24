@@ -23,6 +23,11 @@ namespace cudf {
 namespace structs {
 namespace detail {
 
+enum class column_nullability {
+  MATCH_INCOMING,  // generate a null column if the incoming column has nulls
+  FORCE            // always generate a null column
+};
+
 /**
  * @brief Flatten the children of the input columns into a vector where the i'th element
  * is a vector of column_views representing the i'th child from each input column_view.
@@ -57,6 +62,8 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
  * @param input input table to be flattened
  * @param column_order column order for input table
  * @param null_precedence null order for input table
+ * @param nullability force output to have nullability columns even if input columns
+ * are all valid
  * @return tuple with flattened table, flattened column order, flattened null precedence,
  * vector of boolean columns (struct validity).
  */
@@ -66,7 +73,26 @@ std::tuple<table_view,
            std::vector<std::unique_ptr<column>>>
 flatten_nested_columns(table_view const& input,
                        std::vector<order> const& column_order,
-                       std::vector<null_order> const& null_precedence);
+                       std::vector<null_order> const& null_precedence,
+                       column_nullability nullability = column_nullability::MATCH_INCOMING);
+
+/**
+ * @brief Pushdown nulls from a parent mask into a child column, using AND.
+ *
+ * This function will recurse through all struct descendants. It is expected that
+ * the size of `parent_null_mask` in bits is the same as `child.size()`
+ *
+ * @param parent_null_mask The mask to be applied to descendants
+ * @param parent_null_count Null count in the null mask
+ * @param column Column to apply the null mask to.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr     Device memory resource used to allocate new device memory.
+ */
+void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
+                              size_type parent_null_count,
+                              column& child,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace structs

@@ -23,9 +23,11 @@
 #include <cudf/reshape.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/detail/interop.hpp>
+#include <cudf/lists/combine.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/strings/combine.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 
 #include "cudf_jni_apis.hpp"
@@ -123,6 +125,56 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromArrow(JNIEnv *env, 
   CATCH_STD(env, 0);
 }
 
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringConcatenation(JNIEnv *env, jclass,
+                                                                             jlongArray column_handles,
+                                                                             jlong separator,
+                                                                             jlong narep) {
+  JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
+  JNI_NULL_CHECK(env, separator, "separator string scalar object is null", 0);
+  JNI_NULL_CHECK(env, narep, "narep string scalar object is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    const auto& separator_scalar = *reinterpret_cast<cudf::string_scalar*>(separator);
+    const auto& narep_scalar     = *reinterpret_cast<cudf::string_scalar*>(narep);
+
+    cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
+    std::vector<cudf::column_view> column_views;
+    std::transform(n_cudf_columns.data(),
+                   n_cudf_columns.data() + n_cudf_columns.size(),
+                   std::back_inserter(column_views),
+                   [](auto const &p_column) { return *p_column; });
+
+    std::unique_ptr<cudf::column> result =
+      cudf::strings::concatenate(cudf::table_view(column_views), separator_scalar, narep_scalar);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatListByRow(JNIEnv *env, jclass,
+                                                                         jlongArray column_handles,
+                                                                         jboolean ignore_null) {
+  JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto null_policy = ignore_null ? cudf::lists::concatenate_null_policy::IGNORE
+                                   : cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW;
+
+    cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
+    std::vector<cudf::column_view> column_views;
+    std::transform(n_cudf_columns.data(),
+                   n_cudf_columns.data() + n_cudf_columns.size(),
+                   std::back_inserter(column_views),
+                   [](auto const &p_column) { return *p_column; });
+
+    std::unique_ptr<cudf::column> result =
+      cudf::lists::concatenate_rows(cudf::table_view(column_views), null_policy);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, jobject j_object,
                                                                   jlongArray handles,
                                                                   jlong j_type,
@@ -172,17 +224,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
   try {
     cudf::jni::auto_set_device(env);
     auto scalar_val = reinterpret_cast<cudf::scalar const *>(j_scalar);
-    auto dtype = scalar_val->type();
-    cudf::mask_state mask_state =
-        scalar_val->is_valid() ? cudf::mask_state::UNALLOCATED : cudf::mask_state::ALL_NULL;
     std::unique_ptr<cudf::column> col;
-    if (row_count == 0) {
-      col = cudf::make_empty_column(dtype);
-    } else if (cudf::is_fixed_width(dtype)) {
-      col = cudf::make_fixed_width_column(dtype, row_count, mask_state);
-      auto mut_view = col->mutable_view();
-      cudf::fill_in_place(mut_view, 0, row_count, *scalar_val);
-    } else if (dtype.id() == cudf::type_id::STRING) {
+    if (scalar_val->type().id() == cudf::type_id::STRING) {
+      // Tests fail when using the cudf implementation, complaining no child for string column.
+      // So here take care of the String type itself.
       // create a string column of all empty strings to fill (cheapest string column to create)
       auto offsets = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, row_count + 1,
                                                cudf::mask_state::UNALLOCATED);
@@ -193,7 +238,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
 
       col = cudf::fill(str_col->view(), 0, row_count, *scalar_val);
     } else {
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
+      col = cudf::make_column_from_scalar(*scalar_val, row_count);
     }
     return reinterpret_cast<jlong>(col.release());
   }
