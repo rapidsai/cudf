@@ -1533,6 +1533,9 @@ def _union_categoricals(
     ignore_order: bool = False,
 ):
 
+    if ignore_order:
+        raise TypeError("ignore_order is not yet implemented")
+
     result_col = CategoricalColumn._concat([obj._column for obj in to_union])
     if sort_categories:
         sorted_categories = (
