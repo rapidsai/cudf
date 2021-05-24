@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 
-#include <initializer_list>
 #include <tests/groupby/groupby_test_util.hpp>
 
 #include <cudf/table/table.hpp>
