@@ -374,6 +374,43 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return new Scalar(DType.LIST, makeListScalar(list.getNativeView(), true));
   }
 
+  /**
+   * Creates a null scalar of struct type.
+   *
+   * @param elementTypes data types of children in the struct
+   * @return a null scalar of struct type
+   */
+  public static Scalar structFromNull(HostColumnVector.DataType... elementTypes) {
+    ColumnVector[] children = new ColumnVector[elementTypes.length];
+    long[] childHandles = new long[elementTypes.length];
+    try {
+      for (int i = 0; i < elementTypes.length; i++) {
+        // Build column vector having single null value rather than empty column vector,
+        // because struct scalar requires row count of children columns == 1.
+        children[i] = buildNullColumnVector(elementTypes[i]);
+        childHandles[i] = children[i].getNativeView();
+      }
+      return new Scalar(DType.STRUCT, makeStructScalar(childHandles, false));
+    } finally {
+      // close all empty children
+      for (ColumnVector child : children) {
+        // We closed all created ColumnViews when we hit null. Therefore we exit the loop.
+        if (child == null) break;
+        // make sure the close process is exception-free
+        try {
+          child.close();
+        } catch (Exception ignored) {
+        }
+      }
+    }
+  }
+
+  /**
+   * Creates a scalar of struct from a ColumnView.
+   *
+   * @param columns children columns of struct
+   * @return a Struct scalar
+   */
   public static Scalar structFromColumnViews(ColumnView... columns) {
     if (columns == null || columns.length == 0) {
       throw new IllegalArgumentException("......");
@@ -383,6 +420,35 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       columnHandles[i] = columns[i].getNativeView();
     }
     return new Scalar(DType.STRUCT, makeStructScalar(columnHandles, true));
+  }
+
+  /**
+   * Build column vector of single row who holds a null value
+   *
+   * @param hostType host data type of null column vector
+   * @return the null vector
+   */
+  private static ColumnVector buildNullColumnVector(HostColumnVector.DataType hostType) {
+    DType dt = hostType.getType();
+    if (!dt.isNestedType()) {
+      try (HostColumnVector.Builder builder = HostColumnVector.builder(dt, 1)) {
+        builder.appendNull();
+        try (HostColumnVector hcv = builder.build()) {
+          return hcv.copyToDevice();
+        }
+      }
+    } else if (dt.typeId == DType.DTypeEnum.LIST) {
+      try (HostColumnVector hcv = HostColumnVector.fromLists(hostType, Arrays.asList())) {
+        return hcv.copyToDevice();
+      }
+    } else if (dt.typeId == DType.DTypeEnum.STRUCT) {
+      try (HostColumnVector hcv = HostColumnVector.fromStructs(hostType,
+          new HostColumnVector.StructData(new Object[hostType.getNumChildren()]))) {
+        return hcv.copyToDevice();
+      }
+    } else {
+      throw new IllegalArgumentException("Unsupported data type: " + hostType);
+    }
   }
 
   private static native void closeScalar(long scalarHandle);

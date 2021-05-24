@@ -70,7 +70,7 @@ public class ScalarTest extends CudfTestBase {
         }
       }
 
-      // list scalar
+      // create elementType for nested types
       HostColumnVector.DataType hDataType;
       if (DType.EMPTY.equals(type)) {
         continue;
@@ -84,6 +84,8 @@ public class ScalarTest extends CudfTestBase {
         // list of non nested type
         hDataType = new BasicType(true, type);
       }
+
+      // test list scalar with elementType(`type`)
       try (Scalar s = Scalar.listFromNull(hDataType);
            ColumnView listCv = s.getListAsColumnView()) {
         assertFalse(s.isValid(), "null validity for " + type);
@@ -97,6 +99,23 @@ public class ScalarTest extends CudfTestBase {
             assertEquals(0L, child.getRowCount());
             assertEquals(0L, child.getNullCount());
           }
+        }
+      }
+
+      // test struct scalar with elementType(`type`)
+      try (Scalar s = Scalar.structFromNull(hDataType, hDataType, hDataType)) {
+        assertFalse(s.isValid(), "null validity for " + type);
+        assertEquals(DType.STRUCT, s.getType());
+
+        ColumnView[] children = s.getChildrenFromStructScalar();
+        try {
+          for (ColumnView child : children) {
+            assertEquals(hDataType.getType(), child.getType());
+            assertEquals(1L, child.getRowCount());
+            assertEquals(1L, child.getNullCount());
+          }
+        } finally {
+          for (ColumnView child : children) child.close();
         }
       }
     }
