@@ -85,19 +85,14 @@ std::unique_ptr<column> compute_column(table_view const table,
 {
   auto const plan = ast_plan{expr, table, stream, mr};
 
-  // Create table device view
-  auto table_device         = table_device_view::create(table, stream);
-  auto const table_num_rows = table.num_rows();
-
   // Prepare output column
   auto output_column = cudf::make_fixed_width_column(
-    plan.output_type(), table_num_rows, mask_state::UNALLOCATED, stream, mr);
+    plan.output_type(), table.num_rows(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_output_device =
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
   // Configure kernel parameters
-  auto const shmem_size_per_thread =
-    static_cast<int>(sizeof(std::int64_t) * plan.dev_plan.num_intermediates);
+  auto const& dev_plan = plan.dev_plan;
   int device_id;
   CUDA_TRY(cudaGetDevice(&device_id));
   int shmem_limit_per_block;
@@ -105,16 +100,17 @@ std::unique_ptr<column> compute_column(table_view const table,
     cudaDeviceGetAttribute(&shmem_limit_per_block, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
   auto constexpr MAX_BLOCK_SIZE = 128;
   auto const block_size =
-    shmem_size_per_thread != 0
-      ? std::min(MAX_BLOCK_SIZE, shmem_limit_per_block / shmem_size_per_thread)
+    dev_plan.shmem_per_thread != 0
+      ? std::min(MAX_BLOCK_SIZE, shmem_limit_per_block / dev_plan.shmem_per_thread)
       : MAX_BLOCK_SIZE;
-  auto const config               = cudf::detail::grid_1d{table_num_rows, block_size};
-  auto const shmem_size_per_block = shmem_size_per_thread * config.num_threads_per_block;
+  auto const config          = cudf::detail::grid_1d{table.num_rows(), block_size};
+  auto const shmem_per_block = dev_plan.shmem_per_thread * config.num_threads_per_block;
 
   // Execute the kernel
+  auto table_device = table_device_view::create(table, stream);
   cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE>
-    <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-      *table_device, plan.dev_plan, *mutable_output_device);
+    <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
+      *table_device, dev_plan, *mutable_output_device);
   CHECK_CUDA(stream.value());
   return output_column;
 }

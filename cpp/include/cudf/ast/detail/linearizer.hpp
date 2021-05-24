@@ -228,8 +228,8 @@ class linearizer {
   cudf::size_type add_data_reference(detail::device_data_reference data_ref);
 
   // State information about the "linearized" GPU execution plan
-  cudf::table_view _left;
-  cudf::table_view _right;
+  cudf::table_view const& _left;
+  cudf::table_view const& _right;
   cudf::size_type _node_count;
   intermediate_counter _intermediate_counter;
   std::vector<detail::device_data_reference> _data_references;

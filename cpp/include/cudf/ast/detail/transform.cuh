@@ -54,6 +54,7 @@ struct dev_ast_plan {
   device_span<const ast_operator> operators;
   device_span<const cudf::size_type> operator_source_indices;
   cudf::size_type num_intermediates;
+  int shmem_per_thread;
 };
 
 struct ast_plan {
@@ -103,6 +104,7 @@ struct ast_plan {
       reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]),
       _linearizer.operator_source_indices().size());
     dev_plan.num_intermediates = _linearizer.intermediate_count();
+    dev_plan.shmem_per_thread = static_cast<int>(sizeof(std::int64_t) * dev_plan.num_intermediates);
   }
 
   ast_plan(detail::node const& expr,
