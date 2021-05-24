@@ -16,6 +16,7 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/lists/contains.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -152,6 +153,55 @@ TYPED_TEST(TypedContainsTest, ListContainsScalarWithNullLists)
                                        0, [](auto i) { return (i != 3) && (i != 10); })};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, *actual_result);
+}
+
+TYPED_TEST(TypedContainsTest, SlicedLists)
+{
+  // Test sliced List columns.
+
+  using namespace cudf;
+
+  using T     = TypeParam;
+  using bools = fixed_width_column_wrapper<bool>;
+
+  auto search_space = lists_column_wrapper<T, int32_t>{
+    {{0, 1, 2},
+     {3, 4, 5},
+     {6, 7, 8},
+     {},
+     {9, 0, 1},
+     {2, 3, 4},
+     {5, 6, 7},
+     {8, 9, 0},
+     {},
+     {1, 2, 3},
+     {}},
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+      return (i != 3) && (i != 10);
+    })}.release();
+
+  auto sliced_column_1 = cudf::detail::slice(search_space->view(), {1, 8}).front();
+
+  auto search_key_one = create_scalar_search_key<T>(1);
+  auto result_1       = lists::contains(sliced_column_1, *search_key_one);
+
+  auto expected_result_1 = bools{
+    {0, 0, 0, 1, 0, 0, 0}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+      return (i != 2);
+    })}.release();
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result_1->view(), result_1->view());
+
+  auto sliced_column_2 = cudf::detail::slice(search_space->view(), {3, 10}).front();
+
+  auto result_2 = lists::contains(sliced_column_2, *search_key_one);
+
+  auto expected_result_2 = bools{
+    {0, 1, 0, 0, 0, 0, 1}, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
+      return (i != 0);
+    })}.release();
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result_2->view(), result_2->view());
 }
 
 TYPED_TEST(TypedContainsTest, ListContainsScalarNonNullListsWithNullValues)

@@ -1,5 +1,6 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
+import json
 import re
 import urllib.parse
 from contextlib import ExitStack as does_not_raise
@@ -1317,7 +1318,6 @@ def test_string_no_children_properties():
     assert empty_col.children == ()
     assert empty_col.size == 0
 
-    assert empty_col._nbytes == 0
     assert getsizeof(empty_col) >= 0  # Accounts for Python GC overhead
 
 
@@ -2930,6 +2930,145 @@ def test_string_slice_with_mask():
     assert_eq(actual._column.null_count, expected._column.null_count)
 
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "category":"reference",
+                            "author":"Nigel Rees",
+                            "title":"Sayings of the Century",
+                            "price":8.95
+                        },
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            "title":"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """
+        ],
+        [
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "category":"reference",
+                            "author":"Nigel Rees",
+                            "title":"Sayings of the Century",
+                            "price":8.95
+                        }
+                    ]
+                }
+            }
+            """,
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            "title":"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """,
+        ],
+    ],
+)
+def test_string_get_json_object_n(data):
+    gs = cudf.Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(
+        json.loads(gs.str.get_json_object("$.store")[0]),
+        ps.apply(lambda x: json.loads(x)["store"])[0],
+    )
+    assert_eq(
+        json.loads(gs.str.get_json_object("$.store.book")[0]),
+        ps.apply(lambda x: json.loads(x)["store"]["book"])[0],
+    )
+    assert_eq(
+        gs.str.get_json_object("$.store.book[0].category"),
+        ps.apply(lambda x: json.loads(x)["store"]["book"][0]["category"]),
+    )
+
+
+@pytest.mark.parametrize(
+    "json_path", ["$.store", "$.store.book", "$.store.book[*].category", " "]
+)
+def test_string_get_json_object_empty_json_strings(json_path):
+    gs = cudf.Series(
+        [
+            """
+            {
+                "":{
+                    "":[
+                        {
+                            "":"",
+                            "":"",
+                            "":""
+                        },
+                        {
+                            "":"fiction",
+                            "":"",
+                            "title":""
+                        }
+                    ]
+                }
+            }
+            """
+        ]
+    )
+
+    got = gs.str.get_json_object(json_path)
+    expect = cudf.Series([None], dtype="object")
+
+    assert_eq(got, expect)
+
+
+@pytest.mark.parametrize("json_path", ["a", ".", "/.store"])
+def test_string_get_json_object_invalid_JSONPath(json_path):
+    gs = cudf.Series(
+        [
+            """
+            {
+                "store":{
+                    "book":[
+                        {
+                            "category":"reference",
+                            "author":"Nigel Rees",
+                            "title":"Sayings of the Century",
+                            "price":8.95
+                        },
+                        {
+                            "category":"fiction",
+                            "author":"Evelyn Waugh",
+                            "title":"Sword of Honour",
+                            "price":12.99
+                        }
+                    ]
+                }
+            }
+            """
+        ]
+    )
+
+    with pytest.raises(ValueError):
+        gs.str.get_json_object(json_path)
 
 
 def test_str_join_lists_error():

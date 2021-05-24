@@ -13,7 +13,6 @@ from uuid import uuid4
 import cupy
 import numpy as np
 import pandas as pd
-from nvtx import annotate
 from pandas._config import get_option
 from pandas.api.types import is_dict_like
 
@@ -22,7 +21,6 @@ from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
 from cudf.core.column import (
-    ColumnBase,
     DatetimeColumn,
     TimeDeltaColumn,
     arange,
@@ -34,6 +32,7 @@ from cudf.core.column import (
 from cudf.core.column.categorical import (
     CategoricalAccessor as CategoricalAccessor,
 )
+from cudf.core.column.column import _concat_columns
 from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
@@ -46,7 +45,6 @@ from cudf.core.window import Rolling
 from cudf.utils import cudautils, docutils, ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    _decimal_normalize_types,
     can_convert_to_column,
     is_decimal_dtype,
     is_list_dtype,
@@ -54,7 +52,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     is_scalar,
     min_scalar_type,
-    numeric_normalize_types,
+    find_common_type,
 )
 from cudf.utils.utils import (
     get_appropriate_dispatched_func,
@@ -391,16 +389,9 @@ class Series(SingleColumnFrame, Serializable):
 
         return Series(column, index=index, name=name)
 
+    @property
     def _copy_construct_defaults(self):
-        return dict(data=self._column, index=self._index, name=self.name)
-
-    def _copy_construct(self, **kwargs):
-        """Shallow copy this object by replacing certain ctor args.
-        """
-        params = self._copy_construct_defaults()
-        cls = type(self)
-        params.update(kwargs)
-        return cls(**params)
+        return {"data": self._column, "index": self._index, "name": self.name}
 
     def _get_columns_by_label(self, labels, downcast=False):
         """Return the column specified by `labels`
@@ -1329,71 +1320,26 @@ class Series(SingleColumnFrame, Serializable):
             lines.append(category_memory)
         return "\n".join(lines)
 
-    @annotate("BINARY_OP", color="orange", domain="cudf_python")
     def _binaryop(
         self, other, fn, fill_value=None, reflect=False, can_reindex=False
     ):
-        """
-        Internal util to call a binary operator *fn* on operands *self*
-        and *other*.  Return the output Series.  The output dtype is
-        determined by the input operands.
-
-        If ``reflect`` is ``True``, swap the order of the operands.
-        """
         if isinstance(other, cudf.DataFrame):
             return NotImplemented
 
         if isinstance(other, Series):
-            if not can_reindex and fn in cudf.utils.utils._EQUALITY_OPS:
-                if not self.index.equals(other.index):
-                    raise ValueError(
-                        "Can only compare identically-labeled "
-                        "Series objects"
-                    )
-            lhs, rhs = _align_indices([self, other], allow_non_unique=True)
+            if (
+                not can_reindex
+                and fn in cudf.utils.utils._EQUALITY_OPS
+                and not self.index.equals(other.index)
+            ):
+                raise ValueError(
+                    "Can only compare identically-labeled " "Series objects"
+                )
+            lhs, other = _align_indices([self, other], allow_non_unique=True)
         else:
-            lhs, rhs = self, other
-        rhs = self._normalize_binop_value(rhs)
+            lhs = self
 
-        if fn == "truediv":
-            if str(lhs.dtype) in truediv_int_dtype_corrections:
-                truediv_type = truediv_int_dtype_corrections[str(lhs.dtype)]
-                lhs = lhs.astype(truediv_type)
-
-        if fill_value is not None:
-            if is_scalar(rhs):
-                lhs = lhs.fillna(fill_value)
-            else:
-                if lhs.nullable and rhs.nullable:
-                    lmask = Series(data=lhs.nullmask)
-                    rmask = Series(data=rhs.nullmask)
-                    mask = (lmask | rmask).data
-                    lhs = lhs.fillna(fill_value)
-                    rhs = rhs.fillna(fill_value)
-                    result = lhs._binaryop(rhs, fn=fn, reflect=reflect)
-                    data = column.build_column(
-                        data=result.data, dtype=result.dtype, mask=mask
-                    )
-                    return lhs._copy_construct(data=data)
-                elif lhs.nullable:
-                    lhs = lhs.fillna(fill_value)
-                elif rhs.nullable:
-                    rhs = rhs.fillna(fill_value)
-
-        outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
-
-        # Get the appropriate name for output operations involving two objects
-        # that are a mix of pandas and cudf Series and Index. If the two inputs
-        # are identically named, the output shares this name.
-        if isinstance(other, (cudf.Series, cudf.Index, pd.Series, pd.Index)):
-            if self.name == other.name:
-                result_name = self.name
-            else:
-                result_name = None
-        else:
-            result_name = self.name
-
-        return lhs._copy_construct(data=outcol, name=result_name)
+        return super()._binaryop(other, fn, fill_value, reflect, lhs)
 
     def add(self, other, fill_value=None, axis=0):
         """
@@ -1448,9 +1394,6 @@ class Series(SingleColumnFrame, Serializable):
             raise NotImplementedError("Only axis=0 supported at this time.")
         return self._binaryop(other, "add", fill_value)
 
-    def __add__(self, other):
-        return self._binaryop(other, "add")
-
     def radd(self, other, fill_value=None, axis=0):
         """Addition of series and other, element-wise
         (binary operator radd).
@@ -1497,9 +1440,6 @@ class Series(SingleColumnFrame, Serializable):
         return self._binaryop(
             other, "add", fill_value=fill_value, reflect=True
         )
-
-    def __radd__(self, other):
-        return self._binaryop(other, "add", reflect=True)
 
     def subtract(self, other, fill_value=None, axis=0):
         """Subtraction of series and other, element-wise
@@ -1549,9 +1489,6 @@ class Series(SingleColumnFrame, Serializable):
 
     sub = subtract
 
-    def __sub__(self, other):
-        return self._binaryop(other, "sub")
-
     def rsub(self, other, fill_value=None, axis=0):
         """Subtraction of series and other, element-wise
         (binary operator rsub).
@@ -1596,9 +1533,6 @@ class Series(SingleColumnFrame, Serializable):
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
         return self._binaryop(other, "sub", fill_value, reflect=True)
-
-    def __rsub__(self, other):
-        return self._binaryop(other, "sub", reflect=True)
 
     def multiply(self, other, fill_value=None, axis=0):
         """Multiplication of series and other, element-wise
@@ -1646,9 +1580,6 @@ class Series(SingleColumnFrame, Serializable):
         return self._binaryop(other, "mul", fill_value=fill_value)
 
     mul = multiply
-
-    def __mul__(self, other):
-        return self._binaryop(other, "mul")
 
     def rmul(self, other, fill_value=None, axis=0):
         """Multiplication of series and other, element-wise
@@ -1698,9 +1629,6 @@ class Series(SingleColumnFrame, Serializable):
             raise NotImplementedError("Only axis=0 supported at this time.")
         return self._binaryop(other, "mul", fill_value, True)
 
-    def __rmul__(self, other):
-        return self._binaryop(other, "mul", reflect=True)
-
     def mod(self, other, fill_value=None, axis=0):
         """Modulo of series and other, element-wise
         (binary operator mod).
@@ -1735,9 +1663,6 @@ class Series(SingleColumnFrame, Serializable):
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
         return self._binaryop(other, "mod", fill_value)
-
-    def __mod__(self, other):
-        return self._binaryop(other, "mod")
 
     def rmod(self, other, fill_value=None, axis=0):
         """Modulo of series and other, element-wise
@@ -1787,9 +1712,6 @@ class Series(SingleColumnFrame, Serializable):
             raise NotImplementedError("Only axis=0 supported at this time.")
         return self._binaryop(other, "mod", fill_value, True)
 
-    def __rmod__(self, other):
-        return self._binaryop(other, "mod", reflect=True)
-
     def pow(self, other, fill_value=None, axis=0):
         """Exponential power of series and other, element-wise
         (binary operator pow).
@@ -1834,9 +1756,6 @@ class Series(SingleColumnFrame, Serializable):
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
         return self._binaryop(other, "pow", fill_value)
-
-    def __pow__(self, other):
-        return self._binaryop(other, "pow")
 
     def rpow(self, other, fill_value=None, axis=0):
         """Exponential power of series and other, element-wise
@@ -1883,9 +1802,6 @@ class Series(SingleColumnFrame, Serializable):
             raise NotImplementedError("Only axis=0 supported at this time.")
         return self._binaryop(other, "pow", fill_value, True)
 
-    def __rpow__(self, other):
-        return self._binaryop(other, "pow", reflect=True)
-
     def floordiv(self, other, fill_value=None, axis=0):
         """Integer division of series and other, element-wise
         (binary operator floordiv).
@@ -1930,9 +1846,6 @@ class Series(SingleColumnFrame, Serializable):
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
         return self._binaryop(other, "floordiv", fill_value)
-
-    def __floordiv__(self, other):
-        return self._binaryop(other, "floordiv")
 
     def rfloordiv(self, other, fill_value=None, axis=0):
         """Integer division of series and other, element-wise
@@ -1987,9 +1900,6 @@ class Series(SingleColumnFrame, Serializable):
             raise NotImplementedError("Only axis=0 supported at this time.")
         return self._binaryop(other, "floordiv", fill_value, True)
 
-    def __rfloordiv__(self, other):
-        return self._binaryop(other, "floordiv", reflect=True)
-
     def truediv(self, other, fill_value=None, axis=0):
         """Floating division of series and other, element-wise
         (binary operator truediv).
@@ -2034,9 +1944,6 @@ class Series(SingleColumnFrame, Serializable):
         if axis != 0:
             raise NotImplementedError("Only axis=0 supported at this time.")
         return self._binaryop(other, "truediv", fill_value)
-
-    def __truediv__(self, other):
-        return self._binaryop(other, "truediv")
 
     def rtruediv(self, other, fill_value=None, axis=0):
         """Floating division of series and other, element-wise
@@ -2083,80 +1990,17 @@ class Series(SingleColumnFrame, Serializable):
             raise NotImplementedError("Only axis=0 supported at this time.")
         return self._binaryop(other, "truediv", fill_value, True)
 
-    def __rtruediv__(self, other):
-        return self._binaryop(other, "truediv", reflect=True)
-
-    __div__ = __truediv__
-
-    def _bitwise_binop(self, other, op):
-        if (
-            np.issubdtype(self.dtype, np.bool_)
-            or np.issubdtype(self.dtype, np.integer)
-        ) and (
-            np.issubdtype(other.dtype, np.bool_)
-            or np.issubdtype(other.dtype, np.integer)
-        ):
-            # TODO: This doesn't work on Series (op) DataFrame
-            # because dataframe doesn't have dtype
-            ser = self._binaryop(other, op)
-            if np.issubdtype(self.dtype, np.bool_) or np.issubdtype(
-                other.dtype, np.bool_
-            ):
-                ser = ser.astype(np.bool_)
-            return ser
-        else:
-            raise TypeError(
-                f"Operation 'bitwise {op}' not supported between "
-                f"{self.dtype.type.__name__} and {other.dtype.type.__name__}"
-            )
-
-    def __and__(self, other):
-        """Performs vectorized bitwise and (&) on corresponding elements of two
-        series.
-        """
-        return self._bitwise_binop(other, "and")
-
-    def __or__(self, other):
-        """Performs vectorized bitwise or (|) on corresponding elements of two
-        series.
-        """
-        return self._bitwise_binop(other, "or")
-
-    def __xor__(self, other):
-        """Performs vectorized bitwise xor (^) on corresponding elements of two
-        series.
-        """
-        return self._bitwise_binop(other, "xor")
-
     def logical_and(self, other):
-        ser = self._binaryop(other, "l_and")
-        return ser.astype(np.bool_)
+        return self._binaryop(other, "l_and").astype(np.bool_)
 
     def remainder(self, other):
-        ser = self._binaryop(other, "mod")
-        return ser
+        return self._binaryop(other, "mod")
 
     def logical_or(self, other):
-        ser = self._binaryop(other, "l_or")
-        return ser.astype(np.bool_)
+        return self._binaryop(other, "l_or").astype(np.bool_)
 
     def logical_not(self):
         return self._unaryop("not")
-
-    def _normalize_binop_value(self, other):
-        """Returns a *column* (not a Series) or scalar for performing
-        binary operations with self._column.
-        """
-        if isinstance(other, ColumnBase):
-            return other
-        if isinstance(other, Series):
-            return other._column
-        elif isinstance(other, Index):
-            return Series(other)._column
-        elif other is cudf.NA:
-            return cudf.Scalar(other, dtype=self.dtype)
-        else:
-            return self._column.normalize_binop_value(other)
 
     def eq(self, other, fill_value=None, axis=0):
         """Equal to of series and other, element-wise
@@ -2210,9 +2054,6 @@ class Series(SingleColumnFrame, Serializable):
             other=other, fn="eq", fill_value=fill_value, can_reindex=True
         )
 
-    def __eq__(self, other):
-        return self._binaryop(other, "eq")
-
     def ne(self, other, fill_value=None, axis=0):
         """Not equal to of series and other, element-wise
         (binary operator ne).
@@ -2264,9 +2105,6 @@ class Series(SingleColumnFrame, Serializable):
         return self._binaryop(
             other=other, fn="ne", fill_value=fill_value, can_reindex=True
         )
-
-    def __ne__(self, other):
-        return self._binaryop(other, "ne")
 
     def lt(self, other, fill_value=None, axis=0):
         """Less than of series and other, element-wise
@@ -2320,9 +2158,6 @@ class Series(SingleColumnFrame, Serializable):
             other=other, fn="lt", fill_value=fill_value, can_reindex=True
         )
 
-    def __lt__(self, other):
-        return self._binaryop(other, "lt")
-
     def le(self, other, fill_value=None, axis=0):
         """Less than or equal to of series and other, element-wise
         (binary operator le).
@@ -2374,9 +2209,6 @@ class Series(SingleColumnFrame, Serializable):
         return self._binaryop(
             other=other, fn="le", fill_value=fill_value, can_reindex=True
         )
-
-    def __le__(self, other):
-        return self._binaryop(other, "le")
 
     def gt(self, other, fill_value=None, axis=0):
         """Greater than of series and other, element-wise
@@ -2430,9 +2262,6 @@ class Series(SingleColumnFrame, Serializable):
             other=other, fn="gt", fill_value=fill_value, can_reindex=True
         )
 
-    def __gt__(self, other):
-        return self._binaryop(other, "gt")
-
     def ge(self, other, fill_value=None, axis=0):
         """Greater than or equal to of series and other, element-wise
         (binary operator ge).
@@ -2485,15 +2314,8 @@ class Series(SingleColumnFrame, Serializable):
             other=other, fn="ge", fill_value=fill_value, can_reindex=True
         )
 
-    def __ge__(self, other):
-        return self._binaryop(other, "ge")
-
     def __invert__(self):
-        """Bitwise invert (~) for each element.
-        Logical NOT if dtype is bool
-
-        Returns a new Series.
-        """
+        """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
         if np.issubdtype(self.dtype, np.integer):
             return self._unaryop("invert")
         elif np.issubdtype(self.dtype, np.bool_):
@@ -2502,13 +2324,6 @@ class Series(SingleColumnFrame, Serializable):
             raise TypeError(
                 f"Operation `~` not supported on {self.dtype.type.__name__}"
             )
-
-    def __neg__(self):
-        """Negated value (-) for each element
-
-        Returns a new Series.
-        """
-        return self.__mul__(-1)
 
     @copy_docstring(CategoricalAccessor.__init__)  # type: ignore
     @property
@@ -2586,12 +2401,10 @@ class Series(SingleColumnFrame, Serializable):
                     )
 
             if dtype_mismatch:
-                if isinstance(objs[0]._column, cudf.core.column.DecimalColumn):
-                    objs = _decimal_normalize_types(*objs)
-                else:
-                    objs = numeric_normalize_types(*objs)
+                common_dtype = find_common_type([obj.dtype for obj in objs])
+                objs = [obj.astype(common_dtype) for obj in objs]
 
-        col = ColumnBase._concat([o._column for o in objs])
+        col = _concat_columns([o._column for o in objs])
 
         if isinstance(col, cudf.core.column.DecimalColumn):
             col = objs[0]._column._copy_type_metadata(col)
@@ -4044,32 +3857,6 @@ class Series(SingleColumnFrame, Serializable):
 
         return codes._copy_construct(name=None, index=self.index)
 
-    def factorize(self, na_sentinel=-1):
-        """Encode the input values as integer labels
-
-        Parameters
-        ----------
-        na_sentinel : number
-            Value to indicate missing category.
-
-        Returns
-        --------
-        (labels, cats) : (cupy.ndarray, cupy.ndarray or Index)
-            - *labels* contains the encoded values
-            - *cats* contains the categories in order that the N-th
-              item corresponds to the (N-1) code.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series(['a', 'a', 'c'])
-        >>> codes
-        array([0, 0, 1], dtype=int8)
-        >>> uniques
-        StringIndex(['a' 'c'], dtype='object')
-        """
-        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
-
     # UDF related
 
     def applymap(self, udf, out_dtype=None):
@@ -4437,60 +4224,7 @@ class Series(SingleColumnFrame, Serializable):
             skipna=skipna, dtype=dtype, min_count=min_count
         )
 
-    def prod(
-        self,
-        axis=None,
-        skipna=None,
-        dtype=None,
-        level=None,
-        numeric_only=None,
-        min_count=0,
-        **kwargs,
-    ):
-        """
-        Return product of the values in the series
-
-        Parameters
-        ----------
-
-        skipna : bool, default True
-            Exclude NA/null values when computing the result.
-
-        dtype : data type
-            Data type to cast the result to.
-
-        min_count : int, default 0
-            The required number of valid values to perform the operation.
-            If fewer than min_count non-NA values are present the result
-            will be NA.
-
-            The default being 0. This means the sum of an all-NA or empty
-            Series is 0, and the product of an all-NA or empty Series is 1.
-
-        Returns
-        -------
-        scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level`, `numeric_only`.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 5, 2, 4, 3])
-        >>> ser.prod()
-        120
-        """
-        return self.product(
-            axis=axis,
-            skipna=skipna,
-            dtype=dtype,
-            level=level,
-            numeric_only=numeric_only,
-            min_count=min_count,
-            **kwargs,
-        )
+    prod = product
 
     def cummin(self, axis=None, skipna=True, *args, **kwargs):
         """
@@ -5531,9 +5265,6 @@ class Series(SingleColumnFrame, Serializable):
         """
         return self._unaryop("abs")
 
-    def __abs__(self):
-        return self.abs()
-
     # Rounding
     def ceil(self):
         """
@@ -6121,54 +5852,6 @@ class Series(SingleColumnFrame, Serializable):
 
         return out.copy(deep=copy)
 
-    @property
-    def is_unique(self):
-        """
-        Return boolean if values in the object are unique.
-
-        Returns
-        -------
-        out : bool
-        """
-        return self._column.is_unique
-
-    @property
-    def is_monotonic(self):
-        """
-        Return boolean if values in the object are monotonic_increasing.
-
-        Returns
-        -------
-        out : bool
-        """
-        return self._column.is_monotonic_increasing
-
-    @property
-    def is_monotonic_increasing(self):
-        """
-        Return boolean if values in the object are monotonic_increasing.
-
-        Returns
-        -------
-        out : bool
-        """
-        return self._column.is_monotonic_increasing
-
-    @property
-    def is_monotonic_decreasing(self):
-        """
-        Return boolean if values in the object are monotonic_decreasing.
-
-        Returns
-        -------
-        out : bool
-        """
-        return self._column.is_monotonic_decreasing
-
-    @property
-    def __cuda_array_interface__(self):
-        return self._column.__cuda_array_interface__
-
     def _align_to_index(
         self, index, how="outer", sort=True, allow_non_unique=False
     ):
@@ -6332,20 +6015,6 @@ class Series(SingleColumnFrame, Serializable):
             return self.__class__._from_data(data, index=idx)
 
         return super()._explode(self._column_names[0], ignore_index)
-
-
-truediv_int_dtype_corrections = {
-    "int8": "float32",
-    "int16": "float32",
-    "int32": "float32",
-    "int64": "float64",
-    "uint8": "float32",
-    "uint16": "float32",
-    "uint32": "float64",
-    "uint64": "float64",
-    "bool": "float32",
-    "int": "float",
-}
 
 
 class DatetimeProperties(object):

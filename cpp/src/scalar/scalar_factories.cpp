@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,6 +97,27 @@ std::unique_ptr<scalar> make_fixed_width_scalar(data_type type,
   return type_dispatcher(type, scalar_construction_helper{}, stream, mr);
 }
 
+std::unique_ptr<scalar> make_list_scalar(column_view elements,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  return std::make_unique<list_scalar>(elements, true, stream, mr);
+}
+
+std::unique_ptr<scalar> make_struct_scalar(table_view const& data,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
+{
+  return std::make_unique<struct_scalar>(data, true, stream, mr);
+}
+
+std::unique_ptr<scalar> make_struct_scalar(host_span<column_view const> data,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
+{
+  return std::make_unique<struct_scalar>(data, true, stream, mr);
+}
+
 namespace {
 struct default_scalar_functor {
   template <typename T>
@@ -125,7 +146,7 @@ template <>
 std::unique_ptr<cudf::scalar> default_scalar_functor::operator()<list_view>(
   rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FAIL("list_view type not supported");
+  return std::make_unique<list_scalar>(column(), false, stream, mr);
 }
 
 template <>

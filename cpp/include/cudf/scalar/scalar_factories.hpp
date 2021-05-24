@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -155,6 +155,46 @@ std::unique_ptr<scalar> make_fixed_point_scalar(
 {
   return std::make_unique<scalar_type_t<T>>(value, scale, true, stream, mr);
 }
+
+/**
+ * @brief Construct scalar using the given column of elements
+ *
+ * @param elements Elements of the list
+ * @param stream CUDA stream used for device memory operations.
+ * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
+ */
+std::unique_ptr<scalar> make_list_scalar(
+  column_view elements,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Construct a struct scalar using the given table_view.
+ *
+ * The columns must have 1 row.
+ *
+ * @param data The columnar data to store in the scalar object
+ * @param stream CUDA stream used for device memory operations.
+ * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
+ */
+std::unique_ptr<scalar> make_struct_scalar(
+  table_view const& data,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Construct a struct scalar using the given span of column views.
+ *
+ * The columns must have 1 row.
+ *
+ * @param value The columnar data to store in the scalar object
+ * @param stream CUDA stream used for device memory operations.
+ * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
+ */
+std::unique_ptr<scalar> make_struct_scalar(
+  host_span<column_view const> data,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf
