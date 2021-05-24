@@ -808,7 +808,7 @@ cdef class PackedColumns:
         return p
 
     @staticmethod
-    cdef PackedColumns c_from_table(Table input_table, keep_index=True):
+    cdef PackedColumns c_from_py_table(Table input_table, keep_index=True):
         """
         Construct a PackedColumns object from a cudf::Table.
         """
@@ -851,7 +851,7 @@ cdef class PackedColumns:
 
 
 def pack(Table input_table, keep_index=True):
-    return PackedColumns.c_from_table(input_table, keep_index)
+    return PackedColumns.c_from_py_table(input_table, keep_index)
 
 
 def unpack(PackedColumns packed):
