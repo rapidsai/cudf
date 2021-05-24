@@ -740,6 +740,10 @@ def segmented_gather(Column source_column, Column gather_map):
 
 
 cdef class PackedColumns:
+    """
+    A packed representation of a ``cudf.DataFrame``, with all columns residing
+    in a single GPU memory buffer.
+    """
 
     def __reduce__(self):
         return self.deserialize, self.serialize()
@@ -810,7 +814,7 @@ cdef class PackedColumns:
     @staticmethod
     cdef PackedColumns c_from_py_table(Table input_table, keep_index=True):
         """
-        Construct a PackedColumns object from a cudf::Table.
+        Construct a PackedColumns object from a ``cudf.DataFrame``.
         """
         from cudf.core import RangeIndex
 
@@ -851,10 +855,68 @@ cdef class PackedColumns:
 
 
 def pack(Table input_table, keep_index=True):
+    """
+    Pack the columns of a ``cudf.DataFrame`` into a single GPU memory buffer.
+
+    Parameters
+    ----------
+    input_table : DataFrame
+        DataFrame to return packed representation of.
+
+    keep_index : boolean, default True
+        Pack the DataFrame's index columns along with the data columns.
+        This step will implicitly be skipped if the index columns can be
+        reconstructed on the fly at unpacking time.
+
+    Examples
+    --------
+    Build a dataframe and pack it:
+
+    >>> import cudf
+    >>> from cudf._lib.copying import pack
+    >>> df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    >>> df
+        a   b
+    0   1   4
+    1   2   5
+    2   3   6
+    >>> packed = pack(df)
+    >>> packed
+    <cudf._lib.copying.PackedColumns at 0x7f34ff6a4b80>
+    """
     return PackedColumns.c_from_py_table(input_table, keep_index)
 
 
 def unpack(PackedColumns packed):
+    """
+    Unpack the results of packing a ``cudf.DataFrame``, returning a new
+    ``DataFrame`` in the process.
+
+    Parameters
+    ----------
+    packed : PackedColumns
+        The results of calling ``pack()`` on a ``cudf.DataFrame``.
+
+    Examples
+    --------
+    Build a dataframe, pack it, then unpack it:
+
+    >>> import cudf
+    >>> from cudf._lib.copying import pack, unpack
+    >>> df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    >>> df
+        a   b
+    0   1   4
+    1   2   5
+    2   3   6
+    >>> packed = pack(df)
+    >>> unpacked = unpack(packed)
+    >>> unpacked
+        a   b
+    0   1   4
+    1   2   5
+    2   3   6
+    """
     from cudf.core.dataframe import DataFrame
 
     return DataFrame._from_table(packed.c_unpack())
