@@ -54,10 +54,22 @@ __forceinline__ __device__ uint4 load_uint4(const char* ptr)
   return regs;
 }
 
-// Strategy 1: String-parallel
-// This strategy assigns strings to warps so that each warp can cooperatively copy from the input
-// location of the string to the corresponding output location. Large datatype (uint4) is used for
-// stores. This strategy is best suited for large strings.
+/**
+ * @brief Gather characters from the input iterator, with string parallel strategy.
+ *
+ * This strategy assigns strings to warps so that each warp can cooperatively copy from the input
+ * location of the string to the corresponding output location. Large datatype (uint4) is used for
+ * stores. This strategy is best suited for large strings.
+ *
+ * @tparam StringIterator Iterator should produce `string_view` objects.
+ * @tparam MapIterator Iterator for retrieving integer indices of the `StringIterator`.
+ *
+ * @param strings_begin Start of the iterator to retrieve `string_view` instances.
+ * @param out_chars Output buffer for gathered characters.
+ * @param out_offsets The offset values associated with the output buffer.
+ * @param string_indices Start of index iterator.
+ * @param total_out_strings Number of output strings to be gathered.
+ */
 template <typename StringIterator, typename MapIterator>
 __global__ void gather_chars_fn_string_parallel(StringIterator strings_begin,
                                                 char* out_chars,
@@ -127,11 +139,22 @@ __global__ void gather_chars_fn_string_parallel(StringIterator strings_begin,
   }
 }
 
-// Strategy 2: Char-parallel
-// This strategy assigns characters to threads, and uses binary search for getting the string
-// index. To improve the binary search performance, fixed number of strings per threadblock is
-// used. This strategy is best suited for small strings.
-
+/**
+ * @brief Gather characters from the input iterator, with char parallel strategy.
+ *
+ * This strategy assigns characters to threads, and uses binary search for getting the string
+ * index. To improve the binary search performance, fixed number of strings per threadblock is
+ * used. This strategy is best suited for small strings.
+ *
+ * @tparam StringIterator Iterator should produce `string_view` objects.
+ * @tparam MapIterator Iterator for retrieving integer indices of the `StringIterator`.
+ *
+ * @param strings_begin Start of the iterator to retrieve `string_view` instances.
+ * @param out_chars Output buffer for gathered characters.
+ * @param out_offsets The offset values associated with the output buffer.
+ * @param string_indices Start of index iterator.
+ * @param total_out_strings Number of output strings to be gathered.
+ */
 template <int strings_per_threadblock, typename StringIterator, typename MapIterator>
 __global__ void gather_chars_fn_char_parallel(StringIterator strings_begin,
                                               char* out_chars,
@@ -185,7 +208,7 @@ __global__ void gather_chars_fn_char_parallel(StringIterator strings_begin,
  * @tparam StringIterator Iterator should produce `string_view` objects.
  * @tparam MapIterator Iterator for retrieving integer indices of the `StringIterator`.
  *
- * @param strings_begin Start of the iterator to retrieve `string_view` instances
+ * @param strings_begin Start of the iterator to retrieve `string_view` instances.
  * @param map_begin Start of index iterator.
  * @param map_end End of index iterator.
  * @param offsets The offset values to be associated with the output chars column.
@@ -210,10 +233,13 @@ std::unique_ptr<cudf::column> gather_chars(StringIterator strings_begin,
   auto const d_chars = chars_column->mutable_view().template data<char>();
 
   constexpr int warps_per_threadblock = 4;
+  // String parallel strategy will be used if average string length is above this threshold.
+  // Otherwise, char parallel strategy will be used.
+  constexpr size_type string_parallel_threshold = 32;
 
   size_type average_string_length = chars_bytes / output_count;
 
-  if (average_string_length > 32) {
+  if (average_string_length > string_parallel_threshold) {
     constexpr int max_threadblocks = 65536;
     gather_chars_fn_string_parallel<<<
       min((static_cast<int>(output_count) + warps_per_threadblock - 1) / warps_per_threadblock,
