@@ -60,8 +60,8 @@ struct typed_casted_writer {
     if constexpr (mutable_column_device_view::has_element_accessor<Element>() and
                   std::is_constructible_v<Element, FromType>) {
       col.element<Element>(i) = static_cast<Element>(val);
-    } else if constexpr (is_fixed_point<Element>() and is_fixed_point<FromType>()) {
-      col.data<Element::rep>()[i] = val.value();
+    } else if constexpr (is_fixed_point<Element>() and std::is_constructible_v<Element, FromType>) {
+      col.data<Element::rep>()[i] = static_cast<Element>(val).value();
     }
   }
 };
@@ -94,8 +94,10 @@ struct Mul {
            // _deps/libcudacxx-src/include/cuda/std/detail/libcxx/include/chrono(917): error:
            // identifier "cuda::std::__3::ratio<(long)86400000000l, (long)1l> ::num" is undefined in
            // device code
-           ((is_duration<TypeLhs>() and std::is_integral<TypeRhs>()) or
-            (std::is_integral<TypeLhs>() and is_duration<TypeRhs>()));
+           (is_duration<TypeLhs>() and std::is_integral<TypeRhs>()) or
+           (std::is_integral<TypeLhs>() and is_duration<TypeRhs>()) or
+           (is_fixed_point<TypeLhs>() and is_numeric<TypeRhs>()) or
+           (is_numeric<TypeLhs>() and is_fixed_point<TypeRhs>());
   }
   template <typename T1, typename T2, std::enable_if_t<is_supported<T1, T2>()>* = nullptr>
   CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs * rhs)
@@ -110,7 +112,9 @@ struct Div {
   {
     return has_common_type_v<TypeLhs, TypeRhs> or
            // FIXME: without this, compilation error on chrono:917
-           (is_duration<TypeLhs>() and (std::is_integral<TypeRhs>() or is_duration<TypeRhs>()));
+           (is_duration<TypeLhs>() and (std::is_integral<TypeRhs>() or is_duration<TypeRhs>())) or
+           (is_fixed_point<TypeLhs>() and is_numeric<TypeRhs>()) or
+           (is_numeric<TypeLhs>() and is_fixed_point<TypeRhs>());
   }
   template <typename T1, typename T2, std::enable_if_t<is_supported<T1, T2>()>* = nullptr>
   CUDA_DEVICE_CALLABLE auto operator()(T1 const& lhs, T2 const& rhs) -> decltype(lhs / rhs)

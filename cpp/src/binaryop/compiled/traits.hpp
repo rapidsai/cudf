@@ -59,7 +59,7 @@ struct is_binary_operation_supported {
       return column_device_view::has_element_accessor<TypeLhs>() and
              column_device_view::has_element_accessor<TypeRhs>() and
              (mutable_column_device_view::has_element_accessor<TypeOut>() or
-              (is_fixed_point<TypeOut>() and is_fixed_point<ReturnType>())) and
+              is_fixed_point<TypeOut>()) and
              std::is_constructible_v<TypeOut, ReturnType>;
     } else {
       return false;

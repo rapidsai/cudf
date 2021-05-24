@@ -156,7 +156,8 @@ using Mul_types =
                     cudf::test::Types<duration_ms, duration_D, int16_t>,
                     cudf::test::Types<duration_ns, duration_us, uint8_t>,
                     cudf::test::Types<numeric::decimal32, numeric::decimal32, numeric::decimal32>,
-                    cudf::test::Types<int, numeric::decimal32, numeric::decimal32>>;
+                    cudf::test::Types<int, numeric::decimal32, numeric::decimal32>,
+                    cudf::test::Types<numeric::decimal32, int, int>>;
 template <typename T>
 struct BinaryOperationCompiledTest_Mul : public BinaryOperationCompiledTest<T> {
 };
@@ -221,10 +222,13 @@ TYPED_TEST(BinaryOperationCompiledTest_Div, Vector_Vector)
 // n n / n
 // t
 // d
-using TrueDiv_types = cudf::test::Types<cudf::test::Types<int16_t, u_int64_t, u_int64_t>,
-                                        cudf::test::Types<double, int8_t, int64_t>,
-                                        cudf::test::Types<int8_t, bool, u_int32_t>,
-                                        cudf::test::Types<u_int64_t, float, int16_t>>;
+using TrueDiv_types =
+  cudf::test::Types<cudf::test::Types<int16_t, u_int64_t, u_int64_t>,
+                    cudf::test::Types<double, int8_t, int64_t>,
+                    cudf::test::Types<int8_t, bool, u_int32_t>,
+                    cudf::test::Types<u_int64_t, float, int16_t>,
+                    cudf::test::Types<numeric::decimal32, numeric::decimal32, numeric::decimal32>,
+                    cudf::test::Types<int, numeric::decimal32, numeric::decimal32>>;
 template <typename T>
 struct BinaryOperationCompiledTest_TrueDiv : public BinaryOperationCompiledTest<T> {
 };
