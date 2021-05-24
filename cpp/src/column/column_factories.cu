@@ -18,6 +18,7 @@
 #include <cudf/detail/fill.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/dictionary/dictionary_factories.hpp>
+#include <cudf/lists/lists_column_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/fill.hpp>
 
@@ -32,6 +33,7 @@ struct column_from_scalar_dispatch {
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr) const
   {
+    if (size == 0) return make_empty_column(value.type());
     if (!value.is_valid())
       return make_fixed_width_column(value.type(), size, mask_state::ALL_NULL, stream, mr);
     auto output_column =
@@ -49,6 +51,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr) const
 {
+  if (size == 0) return make_empty_column(value.type());
   auto null_mask = detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
 
   if (!value.is_valid())
@@ -84,7 +87,8 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::list
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr) const
 {
-  CUDF_FAIL("TODO");
+  auto lv = static_cast<list_scalar const*>(&value);
+  return lists::detail::make_lists_column_from_scalar(*lv, size, stream, mr);
 }
 
 template <>
@@ -94,6 +98,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stru
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr) const
 {
+  if (size == 0) CUDF_FAIL("0-length struct column is unsupported.");
   auto ss   = static_cast<scalar_type_t<cudf::struct_view> const&>(value);
   auto iter = thrust::make_constant_iterator(0);
 
@@ -117,7 +122,6 @@ std::unique_ptr<column> make_column_from_scalar(scalar const& s,
                                                 rmm::cuda_stream_view stream,
                                                 rmm::mr::device_memory_resource* mr)
 {
-  if (size == 0) return make_empty_column(s.type());
   return type_dispatcher(s.type(), column_from_scalar_dispatch{}, s, size, stream, mr);
 }
 

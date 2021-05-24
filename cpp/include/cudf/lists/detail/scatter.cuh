@@ -526,10 +526,7 @@ struct list_child_constructor {
 
     if (num_child_rows == 0) {
       // make an empty lists column using the input child type
-      return make_empty_lists_column(
-        source_lists_column_view.child().child(lists_column_view::child_column_index).type(),
-        stream,
-        mr);
+      return empty_like(source_lists_column_view.child());
     }
 
     auto child_list_views = rmm::device_uvector<unbound_list_view>(num_child_rows, stream, mr);

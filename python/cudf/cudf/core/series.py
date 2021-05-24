@@ -45,7 +45,6 @@ from cudf.core.window import Rolling
 from cudf.utils import cudautils, docutils, ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    _decimal_normalize_types,
     can_convert_to_column,
     is_decimal_dtype,
     is_list_dtype,
@@ -53,7 +52,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     is_scalar,
     min_scalar_type,
-    numeric_normalize_types,
+    find_common_type,
 )
 from cudf.utils.utils import (
     get_appropriate_dispatched_func,
@@ -2402,10 +2401,8 @@ class Series(SingleColumnFrame, Serializable):
                     )
 
             if dtype_mismatch:
-                if isinstance(objs[0]._column, cudf.core.column.DecimalColumn):
-                    objs = _decimal_normalize_types(*objs)
-                else:
-                    objs = numeric_normalize_types(*objs)
+                common_dtype = find_common_type([obj.dtype for obj in objs])
+                objs = [obj.astype(common_dtype) for obj in objs]
 
         col = _concat_columns([o._column for o in objs])
 
