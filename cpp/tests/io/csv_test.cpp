@@ -22,9 +22,11 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
+#include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -60,6 +62,16 @@ using table_view = cudf::table_view;
 // Global environment for temporary files
 auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
   ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
+
+// Base test fixture for tests
+struct CsvWriterTest : public cudf::test::BaseFixture {
+};
+
+template <typename T>
+struct CsvFixedPointWriterTest : public CsvWriterTest {
+};
+
+TYPED_TEST_CASE(CsvFixedPointWriterTest, cudf::test::FixedPointTypes);
 
 // Base test fixture for tests
 struct CsvReaderTest : public cudf::test::BaseFixture {
@@ -305,6 +317,98 @@ TYPED_TEST(CsvReaderNumericTypeTest, SingleColumn)
 
   const auto view = result.tbl->view();
   expect_column_data_equal(std::vector<TypeParam>(sequence, sequence + num_rows), view.column(0));
+}
+
+TYPED_TEST(CsvFixedPointWriterTest, SingleColumnNegativeScale)
+{
+  std::vector<std::string> reference_strings = {
+    "1.23", "-8.76", "5.43", "-0.12", "0.25", "-0.23", "-0.27", "0.00", "0.00"};
+
+  auto validity = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return (i % 2 == 0) ? true : false; });
+  cudf::test::strings_column_wrapper strings(
+    reference_strings.begin(), reference_strings.end(), validity);
+
+  std::vector<std::string> valid_reference_strings;
+  thrust::copy_if(thrust::host,
+                  reference_strings.begin(),
+                  reference_strings.end(),
+                  thrust::make_counting_iterator(0),
+                  std::back_inserter(valid_reference_strings),
+                  validity.functor());
+  reference_strings = valid_reference_strings;
+
+  using DecimalType = TypeParam;
+  auto input_column = cudf::strings::to_fixed_point(
+    cudf::strings_column_view(strings),
+    cudf::data_type{cudf::type_to_id<DecimalType>(), numeric::scale_type{-2}});
+
+  auto input_table = cudf::table_view{std::vector<cudf::column_view>{*input_column}};
+
+  auto filepath = temp_env->get_temp_dir() + "FixedPointSingleColumnNegativeScale.csv";
+
+  cudf_io::csv_writer_options writer_options =
+    cudf_io::csv_writer_options::builder(cudf_io::sink_info(filepath), input_table);
+
+  cudf_io::write_csv(writer_options);
+
+  std::vector<std::string> result_strings;
+  result_strings.reserve(reference_strings.size());
+
+  std::ifstream read_result_file(filepath);
+  assert(read_result_file.is_open());
+
+  std::copy(std::istream_iterator<std::string>(read_result_file),
+            std::istream_iterator<std::string>(),
+            std::back_inserter(result_strings));
+
+  EXPECT_EQ(result_strings, reference_strings);
+}
+
+TYPED_TEST(CsvFixedPointWriterTest, SingleColumnPositiveScale)
+{
+  std::vector<std::string> reference_strings = {
+    "123000", "-876000", "543000", "-12000", "25000", "-23000", "-27000", "0000", "0000"};
+
+  auto validity = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return (i % 2 == 0) ? true : false; });
+  cudf::test::strings_column_wrapper strings(
+    reference_strings.begin(), reference_strings.end(), validity);
+
+  std::vector<std::string> valid_reference_strings;
+  thrust::copy_if(thrust::host,
+                  reference_strings.begin(),
+                  reference_strings.end(),
+                  thrust::make_counting_iterator(0),
+                  std::back_inserter(valid_reference_strings),
+                  validity.functor());
+  reference_strings = valid_reference_strings;
+
+  using DecimalType = TypeParam;
+  auto input_column = cudf::strings::to_fixed_point(
+    cudf::strings_column_view(strings),
+    cudf::data_type{cudf::type_to_id<DecimalType>(), numeric::scale_type{3}});
+
+  auto input_table = cudf::table_view{std::vector<cudf::column_view>{*input_column}};
+
+  auto filepath = temp_env->get_temp_dir() + "FixedPointSingleColumnPositiveScale.csv";
+
+  cudf_io::csv_writer_options writer_options =
+    cudf_io::csv_writer_options::builder(cudf_io::sink_info(filepath), input_table);
+
+  cudf_io::write_csv(writer_options);
+
+  std::vector<std::string> result_strings;
+  result_strings.reserve(reference_strings.size());
+
+  std::ifstream read_result_file(filepath);
+  assert(read_result_file.is_open());
+
+  std::copy(std::istream_iterator<std::string>(read_result_file),
+            std::istream_iterator<std::string>(),
+            std::back_inserter(result_strings));
+
+  EXPECT_EQ(result_strings, reference_strings);
 }
 
 TEST_F(CsvReaderTest, MultiColumn)
