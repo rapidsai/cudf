@@ -720,7 +720,7 @@ class GroupBy(Serializable):
             The scalar value to use for newly introduced missing values. Can be
             specified with `None`, a single value or multiple values:
 
-            - `None` (default): do not perform fill
+            - `None` (default): sets all indeterminable values to null.
             - Single value: fill all shifted columns with this value. Should
               match the data type of all columns.
             - List of values: fill shifted columns with corresponding value in
