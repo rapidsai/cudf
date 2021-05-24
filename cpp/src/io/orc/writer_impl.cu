@@ -94,6 +94,7 @@ constexpr orc::TypeKind to_orc_type(cudf::type_id id)
     case cudf::type_id::STRING: return TypeKind::STRING;
     case cudf::type_id::DECIMAL32:
     case cudf::type_id::DECIMAL64: return TypeKind::DECIMAL;
+    case cudf::type_id::LIST: return TypeKind::LIST;
     default: return TypeKind::INVALID_TYPE_KIND;
   }
 }
@@ -143,7 +144,7 @@ class orc_column_view {
     : _index(index),
       _str_id(str_id),
       _is_string_type(col.type().id() == type_id::STRING),
-      _type_width(_is_string_type ? 0 : cudf::size_of(col.type())),
+      _type_width(cudf::is_fixed_width(col.type()) ? cudf::size_of(col.type()) : 0),
       _data_count(col.size()),
       _null_count(col.null_count()),
       _nulls(col.null_mask()),
@@ -506,7 +507,10 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
         data2_kind        = SECONDARY;
         encoding_kind     = DIRECT_V2;
         break;
-      default: CUDF_FAIL("Unsupported ORC type kind");
+      case TypeKind::LIST:
+        // no data streams, only present
+        break;
+      default: std::cout << kind << std::endl; CUDF_FAIL("Unsupported ORC type kind");
     }
 
     // Initialize the column's metadata (this is the only reason columns is in/out param)
@@ -1453,12 +1457,11 @@ void writer::impl::write(table_view const &table)
     // verify the user isn't passing mismatched tables
     CUDF_EXPECTS(ff.types.size() == 1 + orc_columns.size(),
                  "Mismatch in table structure between multiple calls to write");
-    CUDF_EXPECTS(std::all_of(orc_columns.cbegin(),
-                             orc_columns.cend(),
-                             [&](auto const &col) {
-                               return ff.types[1 + col.index()].kind == col.orc_kind();
-                             }),
-                 "Mismatch in column types between multiple calls to write");
+    CUDF_EXPECTS(
+      std::all_of(orc_columns.cbegin(),
+                  orc_columns.cend(),
+                  [&](auto const &col) { return ff.types[col.id()].kind == col.orc_kind(); }),
+      "Mismatch in column types between multiple calls to write");
   }
   ff.stripes.insert(ff.stripes.end(),
                     std::make_move_iterator(stripes.begin()),
