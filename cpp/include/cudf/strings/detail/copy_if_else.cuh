@@ -74,8 +74,7 @@ std::unique_ptr<cudf::column> copy_if_else(
     stream,
     mr);
   size_type null_count = valid_mask.second;
-  auto null_mask =
-    (null_count > 0) ? std::move(valid_mask.first) : rmm::device_buffer{};
+  auto null_mask       = (null_count > 0) ? std::move(valid_mask.first) : rmm::device_buffer{};
 
   // build offsets column
   auto offsets_transformer = [lhs_begin, rhs_begin, filter_fn] __device__(size_type idx) {

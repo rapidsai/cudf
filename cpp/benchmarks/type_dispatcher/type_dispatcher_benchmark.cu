@@ -16,7 +16,6 @@
 
 #include "../fixture/benchmark_fixture.hpp"
 #include "../synchronization/synchronization.hpp"
-#include <rmm/device_buffer.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
@@ -28,6 +27,7 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 
 #include <type_traits>
 

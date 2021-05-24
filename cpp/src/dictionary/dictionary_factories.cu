@@ -133,11 +133,8 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys,
   auto indices_column = [&] {
     // If the types match, then just commandeer the column's data buffer.
     if (new_type.id() == indices_type) {
-      return std::make_unique<column>(new_type,
-                                      indices_size,
-                                      std::move(*(contents.data.release())),
-                                      rmm::device_buffer{},
-                                      0);
+      return std::make_unique<column>(
+        new_type, indices_size, std::move(*(contents.data.release())), rmm::device_buffer{}, 0);
     }
     // If the new type does not match, then convert the data.
     cudf::column_view cast_view{cudf::data_type{indices_type}, indices_size, contents.data->data()};
