@@ -253,7 +253,7 @@ __global__ void __launch_bounds__(block_size, 1)
   auto block_x = blockIdx.x;
   auto t       = threadIdx.x;
 
-  auto start_row = block_x * 2500;
+  auto start_row = block_x * 5000;
 
   __shared__ EncColumnChunk s_chunk;
   __shared__ parquet_column_device_view s_col;
@@ -275,7 +275,7 @@ __global__ void __launch_bounds__(block_size, 1)
     s_col   = *(s_chunk.col_desc);
 
     // Find the bounds of values in leaf column to be inserted into the map for current chunk
-    size_type end_value_idx = min(start_row + 2500, num_rows);
+    size_type end_value_idx = min(start_row + 5000, num_rows);
 
     auto col                     = *(s_col.parent_column);
     auto current_start_value_idx = start_row;
@@ -382,7 +382,7 @@ void BuildChunkDictionaries2(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                              rmm::device_uvector<gpu::slot_type> &onemap,
                              rmm::cuda_stream_view stream)
 {
-  constexpr int block_size = 1024;
+  constexpr int block_size = 256;
   auto grid_x              = cudf::detail::grid_1d(num_rows, 5000);
   auto num_columns         = chunks.size().second;
   dim3 dim_grid(grid_x.num_blocks, num_columns);
@@ -416,8 +416,8 @@ void GetDictionaryIndices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                           size_type num_rows,
                           rmm::cuda_stream_view stream)
 {
-  constexpr int block_size = 1024;
-  auto grid_x              = cudf::detail::grid_1d(num_rows, 2500);
+  constexpr int block_size = 256;
+  auto grid_x              = cudf::detail::grid_1d(num_rows, 5000);
   auto num_columns         = chunks.size().second;
   dim3 dim_grid(grid_x.num_blocks, num_columns);
 
