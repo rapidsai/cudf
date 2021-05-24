@@ -426,7 +426,8 @@ extern "C" __global__ void __launch_bounds__(128, 8)
     int num_rowgroups = min(s->rowgroup_end - s->rowgroup_start, 128);
     int rowgroup_size4, t4, t32;
 
-    s->rowgroups[t].chunk_id = chunk_id;
+    s->rowgroups[t].chunk_id      = chunk_id;
+    s->rowgroups[t].valid_row_grp = true;
     if (t == 0) { gpuReadRowGroupIndexEntries(s, num_rowgroups); }
     __syncthreads();
     if (s->is_compressed) {

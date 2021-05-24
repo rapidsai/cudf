@@ -131,7 +131,7 @@ class reader::impl {
   std::vector<std::unique_ptr<datasource>> _sources;
   std::unique_ptr<aggregate_orc_metadata> _metadata;
   // _output_columns associated schema indices
-  std::vector<int> _selected_columns;
+  std::vector<std::vector<int>> _selected_columns;
 
   bool _use_index            = true;
   bool _use_np_dtypes        = true;

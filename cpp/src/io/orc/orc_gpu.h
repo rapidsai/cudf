@@ -90,7 +90,9 @@ struct ColumnDesc {
   uint32_t *valid_map_base;                // base pointer of valid bit map for this column
   void *column_data_base;                  // base pointer of column data
   uint32_t start_row;                      // starting row of the stripe
-  uint32_t num_rows;                       // starting row of the stripe
+  uint32_t num_rows;                       // number of rows in stripe
+  uint32_t column_num_rows                 // number of rows in whole column
+    uint32_t num_child_rows;               // number of child rows if nested column
   uint32_t dictionary_start;               // start position in global dictionary
   uint32_t dict_len;                       // length of local dictionary
   uint32_t null_count;                     // number of null values in this stripe's column
@@ -111,6 +113,7 @@ struct RowGroup {
   uint32_t chunk_id;        // Column chunk this entry belongs to
   uint32_t strm_offset[2];  // Index offset for CI_DATA and CI_DATA2 streams
   uint16_t run_pos[2];      // Run position for CI_DATA and CI_DATA2
+  bool valid_row_group = false;
 };
 
 /**

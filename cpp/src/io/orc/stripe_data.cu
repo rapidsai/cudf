@@ -132,6 +132,7 @@ struct orcdec_state_s {
     int64_t i64[block_size];
     double f64[block_size];
   } vals;
+  uint64_t num_child_rows = 0;
 };
 
 /**
@@ -1118,6 +1119,7 @@ __global__ void __launch_bounds__(block_size)
 
   if (t == 0) s->chunk = chunks[chunk_id];
   __syncthreads();
+  max_num_rows = s->chunk.column_num_rows;
   if (is_nulldec) {
     uint32_t null_count = 0;
     // Decode NULLs
@@ -1373,23 +1375,30 @@ __global__ void __launch_bounds__(block_size)
                          uint32_t rowidx_stride)
 {
   __shared__ __align__(16) orcdec_state_s state_g;
-  __shared__ typename cub::BlockReduce<uint32_t, block_size>::TempStorage temp_storage;
+  using block_reduce = cub::BlockReduce<uint64_t, block_size>;
+  __shared__ union {
+    typename cub::BlockReduce<uint32_t, block_size>::TempStorage bk_uint32;
+    typename cub::BlockReduce<uint64_t, block_size>::TempStorage bk_uint64;
+  } temp_storage;
 
   orcdec_state_s *const s = &state_g;
   uint32_t chunk_id;
-  int t = threadIdx.x;
+  int t                = threadIdx.x;
+  bool is_rowgrp_valid = true;
 
   if (num_rowgroups > 0) {
     if (t == 0) s->top.data.index = row_groups[blockIdx.y * num_columns + blockIdx.x];
     __syncthreads();
-    chunk_id = s->top.data.index.chunk_id;
+    is_rowgrp_valid = s->top.data.index.valid;
+    chunk_id        = s->top.data.index.chunk_id;
   } else {
     chunk_id = blockIdx.x;
   }
-  if (t == 0) s->chunk = chunks[chunk_id];
+  if (t == 0 and is_rowgrp_valid) s->chunk = chunks[chunk_id];
 
   __syncthreads();
-  if (t == 0) {
+  max_num_rows = s->chunk.column_num_rows;
+  if (t == 0 and is_rowgrp_valid) {
     // If we have an index, seek to the initial run and update row positions
     if (num_rowgroups > 0) {
       uint32_t ofs0 = min(s->top.data.index.strm_offset[0], s->chunk.strm_len[CI_DATA]);
@@ -1424,7 +1433,7 @@ __global__ void __launch_bounds__(block_size)
     bytestream_init(&s->bs2, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
   }
   __syncthreads();
-  while (s->top.data.cur_row < s->top.data.end_row) {
+  while (is_rowgrp_valid && (s->top.data.cur_row < s->top.data.end_row)) {
     bytestream_fill(&s->bs, t);
     bytestream_fill(&s->bs2, t);
     __syncthreads();
@@ -1514,8 +1523,9 @@ __global__ void __launch_bounds__(block_size)
       __syncthreads();
       // Account for skipped values
       if (num_rowgroups > 0 && !s->is_string) {
-        uint32_t run_pos = (s->chunk.type_kind == DECIMAL) ? s->top.data.index.run_pos[CI_DATA2]
-                                                           : s->top.data.index.run_pos[CI_DATA];
+        uint32_t run_pos = (s->chunk.type_kind == DECIMAL || s->chunk.type_kind == LIST)
+                             ? s->top.data.index.run_pos[CI_DATA2]
+                             : s->top.data.index.run_pos[CI_DATA];
         numvals =
           min(numvals + run_pos, (s->chunk.type_kind == BOOLEAN) ? blockDim.x * 2 : blockDim.x);
       }
@@ -1589,6 +1599,13 @@ __global__ void __launch_bounds__(block_size)
             &s->bs, &s->u.rle8, s->vals, val_scale, numvals, s->chunk.decimal_scale, t);
         }
         __syncthreads();
+      } else if (s->chunk.type_kind == LIST) {
+        if (is_rlev1(s->chunk.encoding_kind)) {
+          numvals = Integer_RLEv1<uint64_t>(&s->bs2, &s->u.rlev1, s->vals.u64, numvals, t);
+        } else {
+          numvals = Integer_RLEv2<uint64_t>(&s->bs2, &s->u.rlev2, s->vals.u64, numvals, t);
+        }
+        __syncthreads();
       } else if (s->chunk.type_kind == FLOAT) {
         numvals = min(numvals, (bytestream_buffer_size - 8u) >> 2);
         if (t < numvals) { s->vals.u32[t] = bytestream_readu32(&s->bs, s->bs.pos + t * 4); }
@@ -1628,12 +1645,14 @@ __global__ void __launch_bounds__(block_size)
       __syncthreads();
       // Use the valid bits to compute non-null row positions until we get a full batch of values to
       // decode
-      DecodeRowPositions(s, first_row, t, temp_storage);
+      DecodeRowPositions(s, first_row, t, temp_storage.uint32);
       if (!s->top.data.nrows && !s->u.rowdec.nz_count && !vals_skipped) {
         // This is a bug (could happen with bitstream errors with a bad run that would produce more
         // values than the number of remaining rows)
         return;
       }
+
+      uint64_t list_child_elements = 0;
       // Store decoded values to output
       if (t < min(min(s->top.data.max_vals, s->u.rowdec.nz_count), s->top.data.nrows) &&
           s->u.rowdec.row[t] != 0 &&
@@ -1647,7 +1666,9 @@ __global__ void __launch_bounds__(block_size)
             case DOUBLE:
             case LONG:
             case DECIMAL:
+            case LIST:
               static_cast<uint64_t *>(data_out)[row] = s->vals.u64[t + vals_skipped];
+
               break;
             case SHORT:
               static_cast<uint16_t *>(data_out)[row] =
@@ -1715,6 +1736,9 @@ __global__ void __launch_bounds__(block_size)
           }
         }
       }
+      if (s->chunk.type_kind == LIST) {
+        list_child_elements = block_reduce(temp_storage.bk_uint64).Sum(list_child_elements);
+      }
       __syncthreads();
       // Buffer secondary stream values
       if (s->chunk.type_kind == TIMESTAMP) {
@@ -1729,12 +1753,14 @@ __global__ void __launch_bounds__(block_size)
     __syncthreads();
     if (t == 0) {
       s->top.data.cur_row += s->top.data.nrows;
+      if (s->chunk.type_kind == LIST) { s->num_child_rows += list_child_elements; }
       if (s->is_string && !is_dictionary(s->chunk.encoding_kind) && s->top.data.max_vals > 0) {
         s->chunk.dictionary_start += s->vals.u32[s->top.data.max_vals - 1];
       }
     }
     __syncthreads();
   }
+  if (t == 0) { atmoicAdd(&chunks[chunk_id].num_child_rows, s->child_num_rows); }
 }
 
 /**
