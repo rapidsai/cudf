@@ -454,8 +454,12 @@ int host_value = int_scalar.value();
 Allocates a specified number of elements of the specified type. If no initialization value is 
 provided, all elements are default initialized (this incurs a kernel launch).
 
-**Note**: `rmm::device_vector<T>` is not yet updated to use `device_memory_resource`s, but support 
-is forthcoming. Likewise, `device_vector` operations cannot be stream ordered.
+**Note**: We have removed all usage of `rmm::device_vector` and `thrust::device_vector` from
+libcudf, and you should not use it in new code in libcudf without careful consideration. Instead, 
+use `rmm::device_uvector` along with the utility factories in `device_factories.hpp`. These 
+utilities enable creation of `uvector`s from host-side vectors, or creating zero-initialized
+`uvector`s, so that they are as convenient to use as `device_vector`. Avoiding `device_vector` has
+a number of benefits, as described in the folling section on `rmm::device_uvector`.
 
 #### `rmm::device_uvector<T>`
 
@@ -464,7 +468,9 @@ differences:
 - As an optimization, elements are uninitialized and no synchronization occurs at construction.
 This limits the types `T` to trivially copyable types.
 - All operations are stream ordered (i.e., they accept a `cuda_stream_view` specifying the stream 
-on which the operation is performed).
+on which the operation is performed). This improves safety when using non-default streams.
+- `device_uvector.hpp` does not include any `__device__` code, unlike `thrust/device_vector.hpp`, 
+  which means `device_uvector`s can be used in `.cpp` files, rather than just in `.cu` files.
 
 ```c++
 cuda_stream s;
