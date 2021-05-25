@@ -17,6 +17,11 @@ def _union_categoricals(
     """
     This is an internal API which combines categorical data.
     """
+    # TODO(s) in the order specified :
+    # 1. The return type needs to be changed
+    #    to cudf.Categorical once it is implemented.
+    # 2. Make this API public (i.e., to resemble
+    #    pd.api.types.union_categoricals)
 
     if ignore_order:
         raise TypeError("ignore_order is not yet implemented")
@@ -33,8 +38,5 @@ def _union_categoricals(
         result_col = result_col.cat().reorder_categories(
             new_categories=sorted_categories
         )
-
-    # TODO: The return type needs to be changed
-    # to cudf.Categorical once it is implemented.
 
     return cudf.Index(result_col)
