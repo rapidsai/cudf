@@ -204,6 +204,11 @@ class MultiIndex(Index):
             )
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
+    @property
+    def _num_columns(self):
+        # MultiIndex is not a single-columned frame.
+        return super(SingleColumnFrame, self)._num_columns
+
     def rename(self, names, inplace=False):
         """
         Alter MultiIndex level names
@@ -1386,11 +1391,7 @@ class MultiIndex(Index):
         Return if the index is monotonic increasing
         (only equal or increasing) values.
         """
-        if not hasattr(self, "_is_monotonic_increasing"):
-            self._is_monotonic_increasing = self._is_sorted(
-                ascending=None, null_position=None
-            )
-        return self._is_monotonic_increasing
+        return self._is_sorted(ascending=None, null_position=None)
 
     @property
     def is_monotonic_decreasing(self):
@@ -1398,11 +1399,9 @@ class MultiIndex(Index):
         Return if the index is monotonic decreasing
         (only equal or decreasing) values.
         """
-        if not hasattr(self, "_is_monotonic_decreasing"):
-            self._is_monotonic_decreasing = self._is_sorted(
-                ascending=[False] * len(self.levels), null_position=None
-            )
-        return self._is_monotonic_decreasing
+        return self._is_sorted(
+            ascending=[False] * len(self.levels), null_position=None
+        )
 
     def argsort(self, ascending=True, **kwargs):
         indices = self._source_data.argsort(ascending=ascending, **kwargs)

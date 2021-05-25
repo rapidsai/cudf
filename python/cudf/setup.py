@@ -192,7 +192,7 @@ extensions = [
         ),
         libraries=["cudart", "cudf"] + pa.get_libraries() + ["arrow_cuda"],
         language="c++",
-        extra_compile_args=["-std=c++14"],
+        extra_compile_args=["-std=c++17"],
     )
 ]
 
