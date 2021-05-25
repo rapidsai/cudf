@@ -28,6 +28,10 @@ struct dlpack_deleter {
   void operator()(DLManagedTensor* tensor) { tensor->deleter(tensor); }
 };
 
+struct dlpack_deleter_test
+}
+;
+
 using unique_managed_tensor = std::unique_ptr<DLManagedTensor, dlpack_deleter>;
 
 template <typename T>
