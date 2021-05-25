@@ -73,7 +73,7 @@ template <typename pair_type,
 constexpr bool is_packable()
 {
   return std::is_integral<key_type>::value and std::is_integral<value_type>::value and
-         not std::is_void<packed_t<pair_type>>::value;
+         not std::is_void<packed_t<pair_type>>::value and sizeof(key_type) == sizeof(value_type);
 }
 
 /**
