@@ -39,20 +39,20 @@ from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import SingleColumnFrame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy
-from cudf.core.index import Index, RangeIndex, as_index
+from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
 from cudf.utils import cudautils, docutils, ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
+    find_common_type,
     is_decimal_dtype,
     is_list_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
     is_scalar,
     min_scalar_type,
-    find_common_type,
 )
 from cudf.utils.utils import (
     get_appropriate_dispatched_func,
@@ -219,7 +219,7 @@ class Series(SingleColumnFrame, Serializable):
         elif isinstance(data, pd.Index):
             name = data.name
             data = data.values
-        elif isinstance(data, Index):
+        elif isinstance(data, BaseIndex):
             name = data.name
             data = data._values
             if dtype is not None:
@@ -255,7 +255,7 @@ class Series(SingleColumnFrame, Serializable):
             if dtype is not None:
                 data = data.astype(dtype)
 
-        if index is not None and not isinstance(index, Index):
+        if index is not None and not isinstance(index, BaseIndex):
             index = as_index(index)
 
         assert isinstance(data, column.ColumnBase)
@@ -739,7 +739,7 @@ class Series(SingleColumnFrame, Serializable):
         e    14
         dtype: int64
         """
-        index = index if isinstance(index, Index) else as_index(index)
+        index = index if isinstance(index, BaseIndex) else as_index(index)
         return self._copy_construct(index=index)
 
     def as_index(self):

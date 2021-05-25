@@ -26,13 +26,13 @@ from cudf.core.column import (
 )
 from cudf.core.join import merge
 from cudf.utils.dtypes import (
+    find_common_type,
     is_categorical_dtype,
     is_column_like,
     is_decimal_dtype,
     is_numerical_dtype,
     is_scalar,
     min_scalar_type,
-    find_common_type,
 )
 
 T = TypeVar("T", bound="Frame")
@@ -4126,7 +4126,7 @@ def _drop_rows_by_labels(
     if isinstance(level, int) and level >= obj.index.nlevels:
         raise ValueError("Param level out of bounds.")
 
-    if not isinstance(labels, (cudf.Series, cudf.Index)):
+    if not isinstance(labels, SingleColumnFrame):
         labels = as_column(labels)
 
     if isinstance(obj._index, cudf.MultiIndex):

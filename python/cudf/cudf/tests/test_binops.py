@@ -1697,7 +1697,7 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
     got = val == data
 
     # In case of index, expected would be a numpy array
-    if isinstance(data, cudf.Index):
+    if isinstance(data, cudf.BaseIndex):
         expected = pd.Index(expected)
 
     utils.assert_eq(expected, got)

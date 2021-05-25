@@ -3969,7 +3969,7 @@ class StringMethods(ColumnMethodsMixin):
         new_col = cpp_code_points(self._column)
         if isinstance(self._parent, cudf.Series):
             return cudf.Series(new_col, name=self._parent.name)
-        elif isinstance(self._parent, cudf.Index):
+        elif isinstance(self._parent, cudf.BaseIndex):
             return cudf.core.index.as_index(new_col, name=self._parent.name)
         else:
             return new_col
@@ -4273,7 +4273,7 @@ class StringMethods(ColumnMethodsMixin):
         result_col = cpp_character_tokenize(self._column)
         if isinstance(self._parent, cudf.Series):
             return cudf.Series(result_col, name=self._parent.name)
-        elif isinstance(self._parent, cudf.Index):
+        elif isinstance(self._parent, cudf.BaseIndex):
             return cudf.core.index.as_index(result_col, name=self._parent.name)
         else:
             return result_col

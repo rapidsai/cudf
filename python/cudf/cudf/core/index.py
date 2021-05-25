@@ -132,7 +132,7 @@ class BaseIndex(SingleColumnFrame, Serializable):
             True if “other” is an Index and it has the same elements
             as calling index; False otherwise.
         """
-        if not isinstance(other, Index):
+        if not isinstance(other, BaseIndex):
             return False
 
         check_types = False
@@ -667,7 +667,7 @@ class BaseIndex(SingleColumnFrame, Serializable):
                 to_concat = [this, other]
 
         for obj in to_concat:
-            if not isinstance(obj, Index):
+            if not isinstance(obj, BaseIndex):
                 raise TypeError("all inputs must be Index")
 
         return self._concat(to_concat)
@@ -2777,7 +2777,7 @@ def as_index(arbitrary, **kwargs) -> BaseIndex:
     kwargs = _setdefault_name(arbitrary, **kwargs)
     if isinstance(arbitrary, cudf.MultiIndex):
         return arbitrary
-    elif isinstance(arbitrary, Index):
+    elif isinstance(arbitrary, BaseIndex):
         if arbitrary.name == kwargs["name"]:
             return arbitrary
         idx = arbitrary.copy(deep=False)
