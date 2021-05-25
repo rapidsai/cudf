@@ -19,7 +19,11 @@ from pyarrow import parquet as pq
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
 from cudf.tests import dataset_generator as dg
-from cudf.tests.utils import assert_eq, assert_exceptions_equal
+from cudf.tests.utils import (
+    TIMEDELTA_TYPES,
+    assert_eq,
+    assert_exceptions_equal,
+)
 
 
 @pytest.fixture(scope="module")
@@ -1782,13 +1786,7 @@ def test_parquet_writer_statistics(tmpdir, pdf):
     if "col_category" in pdf.columns:
         pdf = pdf.drop(columns=["col_category", "col_bool"])
 
-    timedelta_types = [
-        "timedelta64[s]",
-        "timedelta64[ms]",
-        "timedelta64[us]",
-        "timedelta64[ns]",
-    ]
-    for t in timedelta_types:
+    for t in TIMEDELTA_TYPES:
         pdf["col_" + t] = pd.Series(np.arange(len(pdf.index))).astype(t)
 
     gdf = cudf.from_pandas(pdf)
