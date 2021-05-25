@@ -49,12 +49,12 @@ extern template void dispatch_single_double<ops::FloorDiv>(mutable_column_device
 extern template void dispatch_single_double<ops::Mod>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
 extern template void dispatch_single_double<ops::PyMod>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
 extern template void dispatch_single_double<ops::Pow>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::Equal>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::NotEqual>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::Less>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::Greater>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::LessEqual>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::GreaterEqual>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
+// extern template void dispatch_single_double<ops::Equal>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
+// extern template void dispatch_single_double<ops::NotEqual>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
+// extern template void dispatch_single_double<ops::Less>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
+// extern template void dispatch_single_double<ops::Greater>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
+// extern template void dispatch_single_double<ops::LessEqual>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
+// extern template void dispatch_single_double<ops::GreaterEqual>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
 extern template void dispatch_single_double<ops::BitwiseAnd>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
 extern template void dispatch_single_double<ops::BitwiseOr>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
 extern template void dispatch_single_double<ops::BitwiseXor>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
@@ -71,6 +71,16 @@ extern template void dispatch_single_double<ops::PMod>(mutable_column_device_vie
 // extern template void dispatch_single_double<ops::NullMin>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
 // extern template void dispatch_single_double<ops::UserDefinedOp>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
 // clang-format on
+void dispatch_comparison_op(mutable_column_device_view& outd,
+                            column_device_view const& lhsd,
+                            column_device_view const& rhsd,
+                            binary_operator op,
+                            rmm::cuda_stream_view stream);
+void dispatch_equality_op(mutable_column_device_view& outd,
+                          column_device_view const& lhsd,
+                          column_device_view const& rhsd,
+                          binary_operator op,
+                          rmm::cuda_stream_view stream);
 
 void operator_dispatcher(mutable_column_view& out,
                          column_view const& lhs,
@@ -97,12 +107,16 @@ void operator_dispatcher(mutable_column_view& out,
     case binary_operator::MOD:                  dispatch_single_double<ops::Mod>(*outd, *lhsd, *rhsd, stream); break;
     case binary_operator::PYMOD:                dispatch_single_double<ops::PyMod>(*outd, *lhsd, *rhsd, stream); break;
     case binary_operator::POW:                  dispatch_single_double<ops::Pow>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::EQUAL:                dispatch_single_double<ops::Equal>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::NOT_EQUAL:            dispatch_single_double<ops::NotEqual>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::LESS:                 dispatch_single_double<ops::Less>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::GREATER:              dispatch_single_double<ops::Greater>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::LESS_EQUAL:           dispatch_single_double<ops::LessEqual>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::GREATER_EQUAL:        dispatch_single_double<ops::GreaterEqual>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::EQUAL:                //dispatch_single_double<ops::Equal>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::NOT_EQUAL:            //dispatch_single_double<ops::NotEqual>(*outd, *lhsd, *rhsd, stream); break;
+      if(out.type().id() != type_id::BOOL8) CUDF_FAIL("Output type of Comparison operator should be bool type");
+        dispatch_equality_op(*outd, *lhsd, *rhsd, op, stream); break;
+    case binary_operator::LESS:                 //dispatch_single_double<ops::Less>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::GREATER:              //dispatch_single_double<ops::Greater>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::LESS_EQUAL:           //dispatch_single_double<ops::LessEqual>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::GREATER_EQUAL:        //dispatch_single_double<ops::GreaterEqual>(*outd, *lhsd, *rhsd, stream); break;
+      if(out.type().id() != type_id::BOOL8) CUDF_FAIL("Output type of Comparison operator should be bool type");
+        dispatch_comparison_op(*outd, *lhsd, *rhsd, op, stream); break;
     case binary_operator::BITWISE_AND:          dispatch_single_double<ops::BitwiseAnd>(*outd, *lhsd, *rhsd, stream); break;
     case binary_operator::BITWISE_OR:           dispatch_single_double<ops::BitwiseOr>(*outd, *lhsd, *rhsd, stream); break;
     case binary_operator::BITWISE_XOR:          dispatch_single_double<ops::BitwiseXor>(*outd, *lhsd, *rhsd, stream); break;

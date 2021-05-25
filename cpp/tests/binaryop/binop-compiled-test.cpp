@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -58,13 +58,6 @@ struct BinaryOperationCompiledTest : public BinaryOperationTest {
     return BinaryOperationTest::make_random_wrapped_column<T1>();
   }
 };
-
-// using OutTypes = cudf::test::Types<bool, double, timestamp_D, timestamp_ns, duration_ms,
-// duration_us>; using LhsTypes = cudf::test::Types<int32_t, float, timestamp_ms, timestamp_us,
-// duration_D, duration_ns>; using RhsTypes = cudf::test::Types<uint8_t, , timestamp_ms,
-// timestamp_ns, duration_D, duration_us>;
-// using types = cudf::test::CrossProduct<OutTypes, LhsTypes, RhsTypes>;
-// using types = cudf::test::CrossProduct<IntegralTypes, IntegralTypes, IntegralTypes>;
 
 // ADD
 //     n      t     d
@@ -582,14 +575,14 @@ TYPED_TEST(BinaryOperationCompiledTest_Logical, LogicalOr_Vector_Vector)
 // Comparison Operations ==, !=, <, >, <=, >=
 // n<!=>n, t<!=>t, d<!=>d, s<!=>s, dc<!=>dc
 using Comparison_types =
-  cudf::test::Types<cudf::test::Types<int16_t, int8_t, int16_t>,
-                    cudf::test::Types<int64_t, uint32_t, uint16_t>,
+  cudf::test::Types<cudf::test::Types<bool, int8_t, int16_t>,
+                    cudf::test::Types<bool, uint32_t, uint16_t>,
                     cudf::test::Types<bool, uint64_t, double>,
                     // cudf::test::Types<bool, uint64_t, int64_t>, //valid
                     cudf::test::Types<bool, timestamp_D, timestamp_s>,
-                    cudf::test::Types<int, timestamp_ns, timestamp_us>,
+                    cudf::test::Types<bool, timestamp_ns, timestamp_us>,
                     cudf::test::Types<bool, duration_ns, duration_ns>,
-                    cudf::test::Types<float, duration_us, duration_s>,
+                    cudf::test::Types<bool, duration_us, duration_s>,
                     cudf::test::Types<bool, std::string, std::string>,
                     cudf::test::Types<bool, numeric::decimal32, numeric::decimal32>>;
 

@@ -35,7 +35,7 @@ namespace {
  *
  * @tparam BinaryOperator binary operator functor
  */
-template <typename BinaryOperator>
+template <typename BinaryOperator, bool store_as_result = false>
 struct ops_wrapper {
   mutable_column_device_view& out;
   column_device_view const& lhs;
@@ -47,7 +47,10 @@ struct ops_wrapper {
     TypeCommon x = type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs);
     TypeCommon y = type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs);
     auto result  = BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(x, y);
-    type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
+    if constexpr (store_as_result)
+      out.element<decltype(result)>(i) = result;
+    else
+      type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
   }
 
   template <
@@ -64,7 +67,7 @@ struct ops_wrapper {
  *
  * @tparam BinaryOperator binary operator functor
  */
-template <typename BinaryOperator>
+template <typename BinaryOperator, bool store_as_result = false>
 struct ops2_wrapper {
   mutable_column_device_view& out;
   column_device_view const& lhs;
@@ -78,7 +81,10 @@ struct ops2_wrapper {
     TypeLhs x   = lhs.element<TypeLhs>(i);
     TypeRhs y   = rhs.element<TypeRhs>(i);
     auto result = BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(x, y);
-    type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
+    if constexpr (store_as_result)
+      out.element<decltype(result)>(i) = result;
+    else
+      type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
   }
 
   template <typename TypeLhs,
@@ -99,7 +105,7 @@ struct ops2_wrapper {
  *
  * @tparam BinaryOperator binary operator functor
  */
-template <class BinaryOperator>
+template <class BinaryOperator, bool store_as_result = false>
 struct device_type_dispatcher {
   //, OperatorType type)
   // (type == OperatorType::Direct ? operator_name : 'R' + operator_name);
@@ -107,10 +113,10 @@ struct device_type_dispatcher {
   column_device_view lhs;
   column_device_view rhs;
   data_type common_data_type;
-  device_type_dispatcher(mutable_column_device_view ot,
-                         column_device_view lt,
-                         column_device_view rt,
-                         data_type ct)
+  CUDA_HOST_DEVICE_CALLABLE device_type_dispatcher(mutable_column_device_view ot,
+                                                   column_device_view lt,
+                                                   column_device_view rt,
+                                                   data_type ct)
     : out(ot), lhs(lt), rhs(rt), common_data_type(ct)
   {
   }
@@ -119,9 +125,10 @@ struct device_type_dispatcher {
   {
     if (common_data_type == data_type{type_id::EMPTY}) {
       double_type_dispatcher(
-        lhs.type(), rhs.type(), ops2_wrapper<BinaryOperator>{out, lhs, rhs}, i);
+        lhs.type(), rhs.type(), ops2_wrapper<BinaryOperator, store_as_result>{out, lhs, rhs}, i);
     } else {
-      type_dispatcher(common_data_type, ops_wrapper<BinaryOperator>{out, lhs, rhs}, i);
+      type_dispatcher(
+        common_data_type, ops_wrapper<BinaryOperator, store_as_result>{out, lhs, rhs}, i);
     }
   }
 };
