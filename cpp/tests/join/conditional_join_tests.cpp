@@ -58,7 +58,7 @@ struct ConditionalJoinTest : public cudf::test::BaseFixture {
     cudf::table_view left(left_columns);
     cudf::table_view right(right_columns);
 
-    auto result = cudf::predicate_join(left, right, predicate);
+    auto result = cudf::conditional_join(left, right, predicate);
 
     std::vector<std::pair<cudf::size_type, cudf::size_type>> resulting_pairs;
     for (size_t i = 0; i < result.first->size(); ++i) {

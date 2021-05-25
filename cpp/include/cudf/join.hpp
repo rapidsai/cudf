@@ -671,10 +671,10 @@ class hash_join {
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-predicate_join(table_view left,
-               table_view right,
-               ast::expression binary_pred,
-               rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+conditional_join(table_view left,
+                 table_view right,
+                 ast::expression binary_pred,
+                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

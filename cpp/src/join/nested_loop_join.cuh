@@ -49,7 +49,7 @@ namespace detail {
  *
  * @return An estimate of the size of the output of the join operation
  */
-size_type get_nested_loop_join_output_size(table_device_view left,
+size_type get_conditional_join_output_size(table_device_view left,
                                            table_device_view right,
                                            join_kind JoinKind,
                                            null_equality compare_nulls,
@@ -81,7 +81,7 @@ size_type get_nested_loop_join_output_size(table_device_view left,
   int numBlocks{-1};
 
   CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-    &numBlocks, compute_nested_loop_join_output_size<block_size>, block_size, 0));
+    &numBlocks, compute_conditional_join_output_size<block_size>, block_size, 0));
 
   int dev_id{-1};
   CUDA_TRY(cudaGetDevice(&dev_id));
@@ -91,7 +91,7 @@ size_type get_nested_loop_join_output_size(table_device_view left,
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
-  compute_nested_loop_join_output_size<block_size>
+  compute_conditional_join_output_size<block_size>
     <<<numBlocks * num_sms, block_size, 0, stream.value()>>>(
       left, right, JoinKind, plan.dev_plan, size.data());
   CHECK_CUDA(stream.value());
@@ -115,19 +115,19 @@ size_type get_nested_loop_join_output_size(table_device_view left,
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-get_predicate_join_indices(table_view const& left,
-                           table_view const& right,
-                           bool flip_join_indices,
-                           join_kind JoinKind,
-                           ast::expression binary_pred,
-                           null_equality compare_nulls,
-                           rmm::cuda_stream_view stream,
-                           rmm::mr::device_memory_resource* mr)
+get_conditional_join_indices(table_view const& left,
+                             table_view const& right,
+                             bool flip_join_indices,
+                             join_kind JoinKind,
+                             ast::expression binary_pred,
+                             null_equality compare_nulls,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
 {
   // The `right` table is always used for the inner loop. We want to use the smaller table
   // for the inner loop. Thus, if `left` is smaller than `right`, swap `left/right`.
   if ((JoinKind == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
-    return get_predicate_join_indices(
+    return get_conditional_join_indices(
       right, left, true, JoinKind, binary_pred, compare_nulls, stream, mr);
   }
   // Trivial left join case - exit early
@@ -142,7 +142,7 @@ get_predicate_join_indices(table_view const& left,
   CUDF_EXPECTS(plan.output_type().id() == type_id::BOOL8,
                "The expression must produce a boolean output.");
 
-  size_type join_size = get_nested_loop_join_output_size(
+  size_type join_size = get_conditional_join_output_size(
     *left_table, *right_table, JoinKind, compare_nulls, plan, stream, mr);
 
   // If the estimated output size is zero, return immediately
@@ -161,18 +161,17 @@ get_predicate_join_indices(table_view const& left,
 
   const auto& join_output_l = flip_join_indices ? right_indices->data() : left_indices->data();
   const auto& join_output_r = flip_join_indices ? left_indices->data() : right_indices->data();
-  nested_loop_predicate_join<block_size, DEFAULT_JOIN_CACHE_SIZE>
-    <<<config.num_blocks,
-       config.num_threads_per_block,
-       plan.dev_plan.shmem_per_thread,
-       stream.value()>>>(*left_table,
-                         *right_table,
-                         JoinKind,
-                         join_output_l,
-                         join_output_r,
-                         write_index.data(),
-                         plan.dev_plan,
-                         join_size);
+  conditional_join<block_size, DEFAULT_JOIN_CACHE_SIZE><<<config.num_blocks,
+                                                          config.num_threads_per_block,
+                                                          plan.dev_plan.shmem_per_thread,
+                                                          stream.value()>>>(*left_table,
+                                                                            *right_table,
+                                                                            JoinKind,
+                                                                            join_output_l,
+                                                                            join_output_r,
+                                                                            write_index.data(),
+                                                                            plan.dev_plan,
+                                                                            join_size);
 
   CHECK_CUDA(stream.value());
 

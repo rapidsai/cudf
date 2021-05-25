@@ -207,7 +207,7 @@ __global__ void compute_join_output_size(multimap_type multi_map,
  * @brief Computes the output size of joining the left table to the right table.
  *
  * This method uses a nested loop to iterate over the left and right tables and count the number of
- * matches.
+ * matches according to a boolean expression.
  *
  * @tparam block_size The number of threads per block for this kernel
  *
@@ -218,7 +218,7 @@ __global__ void compute_join_output_size(multimap_type multi_map,
  * @param[out] output_size The resulting output size
  */
 template <int block_size>
-__global__ void compute_nested_loop_join_output_size(table_device_view left_table,
+__global__ void compute_conditional_join_output_size(table_device_view left_table,
                                                      table_device_view right_table,
                                                      join_kind JoinKind,
                                                      ast::detail::dev_ast_plan plan,
@@ -440,9 +440,9 @@ __global__ void probe_hash_table(multimap_type multi_map,
 }
 
 /**
- * @brief Performs a nested loop join to find all matching rows between the
- * left and right tables and generate the output for the desired Join
- * operation.
+ * @brief Performs a join conditioned on a predicate to find all matching rows
+ * between the left and right tables and generate the output for the desired
+ * Join operation.
  *
  * @tparam block_size The number of threads per block for this kernel
  * @tparam output_cache_size The side of the shared memory buffer to cache join
@@ -459,14 +459,14 @@ __global__ void probe_hash_table(multimap_type multi_map,
  * @param[in] max_size The maximum size of the output
  */
 template <cudf::size_type block_size, cudf::size_type output_cache_size>
-__global__ void nested_loop_predicate_join(table_device_view left_table,
-                                           table_device_view right_table,
-                                           join_kind JoinKind,
-                                           cudf::size_type* join_output_l,
-                                           cudf::size_type* join_output_r,
-                                           cudf::size_type* current_idx,
-                                           cudf::ast::detail::dev_ast_plan plan,
-                                           const cudf::size_type max_size)
+__global__ void conditional_join(table_device_view left_table,
+                                 table_device_view right_table,
+                                 join_kind JoinKind,
+                                 cudf::size_type* join_output_l,
+                                 cudf::size_type* join_output_r,
+                                 cudf::size_type* current_idx,
+                                 cudf::ast::detail::dev_ast_plan plan,
+                                 const cudf::size_type max_size)
 {
   constexpr int num_warps = block_size / detail::warp_size;
   __shared__ cudf::size_type current_idx_shared[num_warps];
