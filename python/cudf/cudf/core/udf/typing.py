@@ -115,8 +115,8 @@ class MaskedType(types.Type):
 # For typing a Masked constant value defined outside a kernel (e.g. captured in
 # a closure).
 @typeof_impl.register(classes.Masked)
-def typeof_interval(val, c):
-    return MaskedType(typeof(val))
+def typeof_masked(val, c):
+    return MaskedType(typeof(val.value))
 
 
 # Implemented typing for Masked(value, valid) - the construction of a Masked
@@ -301,6 +301,11 @@ class MaskedScalarIsNull(AbstractTemplate):
                 types.boolean,
                 args[0],
                 na_type)
+        elif isinstance(args[1], MaskedType) and isinstance(args[0], NAType):
+            return nb_signature(
+                types.boolean,
+                na_type,
+                args[1])
 
 
 @cuda_decl_registry.register_global(operator.truth)

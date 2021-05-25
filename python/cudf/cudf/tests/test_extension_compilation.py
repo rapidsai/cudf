@@ -197,13 +197,13 @@ def test_is_na(fn):
 
     @cuda.jit(debug=True)
     def test_kernel():
-        valid_result = device_fn(valid)
-        invalid_result = device_fn(invalid)
+        valid_is_na = device_fn(valid)
+        invalid_is_na = device_fn(invalid)
 
-        if not valid_result:
+        if valid_is_na:
             raise RuntimeError('Valid masked value is NA and should not be')
 
-        if invalid_result:
+        if not invalid_is_na:
             raise RuntimeError('Invalid masked value is not NA and should be')
 
     test_kernel[1, 1]()

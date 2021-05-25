@@ -183,13 +183,20 @@ for op in arith_ops + comparison_ops:
 
 
 @cuda_lower(operator.is_, MaskedType, NAType)
+@cuda_lower(operator.is_, NAType, MaskedType)
 def masked_scalar_is_null_impl(context, builder, sig, args):
     '''
-    Implement `MaskedType` + constant
+    Implement `MaskedType` is `NA`
     '''
-    masked_type, na = sig.args
+    if isinstance(sig.args[1], NAType):
+        masked_type, na = sig.args
+        value = args[0]
+    else:
+        na, masked_type = sig.args
+        value = args[1]
+
     indata = cgutils.create_struct_proxy(masked_type)(
-        context, builder, value=args[0]
+        context, builder, value=value
     )
     result = cgutils.alloca_once(builder, ir.IntType(1))
     with builder.if_else(indata.valid) as (then, otherwise):
@@ -256,4 +263,12 @@ def masked_constructor(context, builder, sig, args):
     masked = cgutils.create_struct_proxy(ty)(context, builder)
     masked.value = value
     masked.valid = valid
+    return masked._getvalue()
+
+
+@cuda_impl_registry.lower_constant(MaskedType)
+def lower_constant_masked(context, builder, ty, val):
+    masked = cgutils.create_struct_proxy(ty)(context, builder)
+    masked.value = context.get_constant(ty.value_type, val.value)
+    masked.valid = context.get_constant(types.boolean, val.valid)
     return masked._getvalue()
