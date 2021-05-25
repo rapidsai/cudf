@@ -553,27 +553,31 @@ class StringMethods(ColumnMethodsMixin):
         dtype: object
 
         We can replace `<NA>`/`None` values present in lists using
-        ``string_na_rep``:
+        ``string_na_rep`` if the lists contain at least one valid string
+        (lists containing all `None` will result in empty output strings):
 
-        >>> ser = cudf.Series([['a', 'b', None], None, ['c', 'd']])
+        >>> ser = cudf.Series([['a', 'b', None], [None, None, None], None, ['c', 'd']])
         >>> ser
-        0    [a, b, None]
-        1            None
-        2          [c, d]
+        0          [a, b, None]
+        1    [None, None, None]
+        2                  None
+        3                [c, d]
         dtype: list
         >>> ser.str.join(sep='_', string_na_rep='k')
         0    a_b_k
-        1     <NA>
-        2      c_d
+        1
+        2     <NA>
+        3      c_d
         dtype: object
 
         We can replace `<NA>`/`None` values present in lists of ``sep``
         using ``sep_na_rep``:
 
-        >>> ser.str.join(sep=[None, '.', '-'], sep_na_rep='+')
+        >>> ser.str.join(sep=[None, '^', '.', '-'], sep_na_rep='+')
         0    a+b+
-        1    <NA>
-        2     c-d
+        1
+        2    <NA>
+        3     c-d
         dtype: object
         """  # noqa E501
         if sep is None:
