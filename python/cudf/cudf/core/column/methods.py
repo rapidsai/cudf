@@ -2,27 +2,21 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Union, overload
+from typing import Optional, Union, overload
 
 from typing_extensions import Literal
 
 import cudf
 
-if TYPE_CHECKING:
-    from cudf.core.column import ColumnBase
 
+class ColumnMethods:
+    # Encapsulates common behaviour for Series/Index accessor classes
 
-class ColumnMethodsMixin:
-    _column: ColumnBase
-    _parent: Optional[Union["cudf.Series", "cudf.Index"]]
+    _parent: Union["cudf.Series", "cudf.Index"]
 
-    def __init__(
-        self,
-        column: ColumnBase,
-        parent: Union["cudf.Series", "cudf.Index"] = None,
-    ):
-        self._column = column
+    def __init__(self, parent: Union["cudf.Series", "cudf.Index"]):
         self._parent = parent
+        self._column = self._parent._column
 
     @overload
     def _return_or_inplace(
@@ -60,20 +54,14 @@ class ColumnMethodsMixin:
         of the owner (Series or Index) to mimic an inplace operation
         """
         if inplace:
-            if self._parent is not None:
-                self._parent._mimic_inplace(
-                    self._parent.__class__._from_table(
-                        cudf._lib.table.Table({self._parent.name: new_col})
-                    ),
-                    inplace=True,
-                )
-                return None
-            else:
-                self._column._mimic_inplace(new_col, inplace=True)
-                return None
+            self._parent._mimic_inplace(
+                self._parent.__class__._from_table(
+                    cudf._lib.table.Table({self._parent.name: new_col})
+                ),
+                inplace=True,
+            )
+            return None
         else:
-            if self._parent is None:
-                return new_col
             if expand or isinstance(
                 self._parent, (cudf.DataFrame, cudf.MultiIndex)
             ):

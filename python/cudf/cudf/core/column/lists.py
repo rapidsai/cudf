@@ -19,7 +19,7 @@ from cudf._lib.table import Table
 from cudf._typing import BinaryOperand
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
-from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import ListDtype
 from cudf.utils.dtypes import is_list_dtype, is_numerical_dtype
 
@@ -145,9 +145,6 @@ class ListColumn(ColumnBase):
         """
         return self.children[0]
 
-    def list(self, parent=None):
-        return ListMethods(self, parent=parent)
-
     def to_arrow(self):
         offsets = self.offsets.to_arrow()
         elements = (
@@ -234,17 +231,17 @@ class ListColumn(ColumnBase):
         )
 
 
-class ListMethods(ColumnMethodsMixin):
+class ListMethods(ColumnMethods):
     """
     List methods for Series
     """
 
-    def __init__(self, column, parent=None):
-        if not is_list_dtype(column.dtype):
+    def __init__(self, parent=None):
+        if not is_list_dtype(parent.dtype):
             raise AttributeError(
                 "Can only use .list accessor with a 'list' dtype"
             )
-        super().__init__(column=column, parent=parent)
+        super().__init__(parent=parent)
 
     def get(self, index):
         """
@@ -340,7 +337,7 @@ class ListMethods(ColumnMethodsMixin):
         dtype: int64
         """
         if type(self._column.elements) is ListColumn:
-            return self._column.elements.list(parent=self._parent).leaves
+            return self._column.elements.elements
         else:
             return self._return_or_inplace(
                 self._column.elements, retain_index=False

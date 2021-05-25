@@ -5,7 +5,7 @@ import pyarrow as pa
 
 import cudf
 from cudf.core.column import ColumnBase
-from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.column.methods import ColumnMethods
 from cudf.utils.dtypes import is_struct_dtype
 
 
@@ -84,9 +84,6 @@ class StructColumn(ColumnBase):
             result = result._rename_fields(self.dtype.fields.keys())
         return result
 
-    def struct(self, parent=None):
-        return StructMethods(self, parent=parent)
-
     def _rename_fields(self, names):
         """
         Return a StructColumn with the same field values as this StructColumn,
@@ -112,17 +109,17 @@ class StructColumn(ColumnBase):
         )
 
 
-class StructMethods(ColumnMethodsMixin):
+class StructMethods(ColumnMethods):
     """
     Struct methods for Series
     """
 
-    def __init__(self, column, parent=None):
-        if not is_struct_dtype(column.dtype):
+    def __init__(self, parent=None):
+        if not is_struct_dtype(parent.dtype):
             raise AttributeError(
                 "Can only use .struct accessor with a 'struct' dtype"
             )
-        super().__init__(column=column, parent=parent)
+        super().__init__(parent=parent)
 
     def field(self, key):
         """
