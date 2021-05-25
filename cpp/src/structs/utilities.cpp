@@ -107,13 +107,11 @@ struct flattened_table {
     for (decltype(col.num_children()) i = 0; i < col.num_children(); ++i) {
       auto const& child = col.get_sliced_child(i);
       if (child.type().id() == type_id::STRUCT) {
-        flatten_struct_column(structs_column_view{child}, col_order, null_order::BEFORE);
-        // default spark behaviour is null_order::BEFORE
+        flatten_struct_column(structs_column_view{child}, col_order, col_null_order);
       } else {
         flat_columns.push_back(child);
         if (not column_order.empty()) flat_column_order.push_back(col_order);
-        if (not null_precedence.empty()) flat_null_precedence.push_back(null_order::BEFORE);
-        // default spark behaviour is null_order::BEFORE
+        if (not null_precedence.empty()) flat_null_precedence.push_back(col_null_order);
       }
     }
   }

@@ -72,6 +72,7 @@ ConfigureTest(GROUPBY_TEST
     groupby/nunique_tests.cpp
     groupby/product_tests.cpp
     groupby/quantile_tests.cpp
+    groupby/replace_nulls_tests.cpp
     groupby/shift_tests.cpp
     groupby/std_tests.cpp
     groupby/sum_of_squares_tests.cpp
@@ -84,7 +85,7 @@ ConfigureTest(GROUPBY_TEST
 ConfigureTest(JOIN_TEST
     join/join_tests.cpp
     join/cross_join_tests.cpp
-    join/semi_join_tests.cpp)
+    join/semi_anti_join_tests.cpp)
 
 ###################################################################################################
 # - is_sorted tests -------------------------------------------------------------------------------
@@ -172,10 +173,14 @@ ConfigureTest(TRANSFORM_TEST
 
 ###################################################################################################
 # - interop tests -------------------------------------------------------------------------
+set_source_files_properties(interop/dlpack_test.cpp
+                            PROPERTIES COMPILE_FLAGS "-MD -MF -")
+
 ConfigureTest(INTEROP_TEST
     interop/to_arrow_test.cpp
     interop/from_arrow_test.cpp
     interop/dlpack_test.cpp)
+
 
 ###################################################################################################
 # - io tests --------------------------------------------------------------------------------------
@@ -210,6 +215,7 @@ ConfigureTest(COPYING_TEST
     copying/sample_tests.cpp
     copying/scatter_tests.cpp
     copying/scatter_list_tests.cpp
+    copying/scatter_list_scalar_tests.cpp
     copying/scatter_struct_tests.cpp
     copying/segmented_gather_list_tests.cpp
     copying/shift_tests.cpp
