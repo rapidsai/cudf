@@ -964,21 +964,18 @@ this compound column representation of strings.
 
 ## Structs columns
 
-Structs are represented similarly to lists, except that they have multiple child data columns.
-The parent column's type is `STRUCT` and contains no data, but its size represents the number of 
-structs in the column, and its null mask represents the validity of each struct element. The parent 
-has `N + 1` children, where `N` is the number of fields in the struct. 
+A struct is a nested data type with a set of child columns each representing an individual field
+of a logical struct. Field names are not represented.
 
-1. A non-nullable column of `INT32` elements that indicates the offset to the beginning of each 
-   struct in each dense column of elements.
-2. For each field, a column containing the actual field data and optional null mask for all elements
-   of all the structs packed together.
-   
-With this representation, `child[0][offsets[i]]` is the first field of struct `i`, 
-`child[1][offsets[i]]` is the second field of struct `i`, etc.
+A structs column with `N` fields has `N` children. Each child is a column storing all the data
+of a single field packed column-wise, with an optional null mask. The parent column's type is
+`STRUCT` and contains no data, its size represents the number of struct rows in the column, and its
+null mask represents the validity of each struct element.
 
-As defined in the [Apache Arrow specification](https://arrow.apache.org/docs/format/Columnar.html#struct-layout),
-in addition to the struct column's null mask, each struct field column has its own optional null
+With this representation, `child[0][10]` is row 10 of the first field of the struct, `child[1][42]`
+is row 42 of the second field of the struct.
+
+Notice that in addition to the struct column's null mask, each struct field column has its own optional null
 mask. A struct field's validity can vary independently from the corresponding struct row. For
 instance, a non-null struct row might have a null field. However, the fields of a null struct row
 are deemed to be null as well. For example, consider a struct column of type 
