@@ -30,11 +30,9 @@ def _union_categoricals(
         [obj._column for obj in to_union]
     )
     if sort_categories:
-        sorted_categories = (
-            cudf.Series(result_col.categories)
-            .sort_values(ascending=True, ignore_index=True)
-            ._column
-        )
+        sorted_categories = result_col.categories.sort_by_values(
+            ascending=True
+        )[0]
         result_col = result_col.cat().reorder_categories(
             new_categories=sorted_categories
         )
