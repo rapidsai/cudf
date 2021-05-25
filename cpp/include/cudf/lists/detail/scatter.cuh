@@ -126,12 +126,12 @@ std::unique_ptr<column> scatter_impl(
     list_size_begin, list_size_begin + target.size(), stream, mr);
 
   auto child_column = build_list_child_column_recursive(child_column_type,
-                                         target_vector,
-                                         offsets_column->view(),
-                                         source_lists_column_view,
-                                         target_lists_column_view,
-                                         stream,
-                                         mr);
+                                                        target_vector,
+                                                        offsets_column->view(),
+                                                        source_lists_column_view,
+                                                        target_lists_column_view,
+                                                        stream,
+                                                        mr);
 
   auto null_mask =
     target.has_nulls() ? copy_bitmask(target, stream, mr) : rmm::device_buffer{0, stream, mr};
