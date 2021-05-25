@@ -109,6 +109,7 @@ void operator_dispatcher(mutable_column_view& out,
     case binary_operator::POW:                  dispatch_single_double<ops::Pow>(*outd, *lhsd, *rhsd, stream); break;
     case binary_operator::EQUAL:                //dispatch_single_double<ops::Equal>(*outd, *lhsd, *rhsd, stream); break;
     case binary_operator::NOT_EQUAL:            //dispatch_single_double<ops::NotEqual>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::NULL_EQUALS:          //dispatch_single_double<ops::NullEquals>(*outd, *lhsd, *rhsd, stream); break;
       if(out.type().id() != type_id::BOOL8) CUDF_FAIL("Output type of Comparison operator should be bool type");
         dispatch_equality_op(*outd, *lhsd, *rhsd, op, stream); break;
     case binary_operator::LESS:                 //dispatch_single_double<ops::Less>(*outd, *lhsd, *rhsd, stream); break;
@@ -129,7 +130,6 @@ void operator_dispatcher(mutable_column_view& out,
     case binary_operator::ATAN2:                dispatch_single_double<ops::ATan2>(*outd, *lhsd, *rhsd, stream); break;
     case binary_operator::PMOD:                 dispatch_single_double<ops::PMod>(*outd, *lhsd, *rhsd, stream); break;
     /*
-    case binary_operator::NULL_EQUALS:          dispatch_single_double<ops::NullEquals>(*outd, *lhsd, *rhsd, stream); break;
     case binary_operator::NULL_MAX:             dispatch_single_double<ops::NullMax>(*outd, *lhsd, *rhsd, stream); break;
     case binary_operator::NULL_MIN:             dispatch_single_double<ops::NullMin>(*outd, *lhsd, *rhsd, stream); break;
     case binary_operator::GENERIC_BINARY:       dispatch_single_double<ops::UserDefinedOp>(*outd, *lhsd, *rhsd, stream); break;
@@ -145,13 +145,13 @@ void binary_operation_compiled(mutable_column_view& out,
                                binary_operator op,
                                rmm::cuda_stream_view stream)
 {
-  if (is_null_dependent(op)) {
-    CUDF_FAIL("Unsupported yet");
-    // TODO cudf::binops::jit::kernel_v_v_with_validity
-  } else {
-    operator_dispatcher(out, lhs, rhs, op, stream);
-    //"cudf::binops::jit::kernel_v_v")  //TODO v_s, s_v.
-  }
+  // if (is_null_dependent(op)) {
+  //  CUDF_FAIL("Unsupported yet");
+  // TODO cudf::binops::jit::kernel_v_v_with_validity
+  //} else {
+  operator_dispatcher(out, lhs, rhs, op, stream);
+  //"cudf::binops::jit::kernel_v_v")  //TODO v_s, s_v.
+  //}
 }
 }  // namespace compiled
 }  // namespace binops

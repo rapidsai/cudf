@@ -62,6 +62,31 @@ struct ops_wrapper {
   }
 };
 
+template <>
+struct ops_wrapper<ops::NullEquals, true> {
+  mutable_column_device_view& out;
+  column_device_view const& lhs;
+  column_device_view const& rhs;
+  template <typename TypeCommon,
+            std::enable_if_t<is_op_supported<TypeCommon, TypeCommon, ops::NullEquals>()>* = nullptr>
+  __device__ void operator()(size_type i)
+  {
+    TypeCommon x = type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs);
+    TypeCommon y = type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs);
+    auto result  = ops::NullEquals{}.template operator()<TypeCommon, TypeCommon>(
+      x, y, lhs.is_valid(i), rhs.is_valid(i));
+    out.element<decltype(result)>(i) = result;
+  }
+
+  template <
+    typename TypeCommon,
+    typename... Args,
+    std::enable_if_t<not is_op_supported<TypeCommon, TypeCommon, ops::NullEquals>()>* = nullptr>
+  __device__ void operator()(Args...)
+  {
+  }
+};
+
 /**
  * @brief Functor to launch only defined operations without common type.
  *
@@ -92,6 +117,35 @@ struct ops2_wrapper {
             typename... Args,
             std::enable_if_t<has_common_type_v<TypeLhs, TypeRhs> or
                              not is_op_supported<TypeLhs, TypeRhs, BinaryOperator>()>* = nullptr>
+  __device__ void operator()(Args...)
+  {
+  }
+};
+
+// Specialize NullEquals for op2_wrapper, ops2_wrapper structs!
+template <>
+struct ops2_wrapper<ops::NullEquals, true> {
+  mutable_column_device_view& out;
+  column_device_view const& lhs;
+  column_device_view const& rhs;
+  template <typename TypeLhs,
+            typename TypeRhs,
+            std::enable_if_t<!has_common_type_v<TypeLhs, TypeRhs> and
+                             is_op_supported<TypeLhs, TypeRhs, ops::NullEquals>()>* = nullptr>
+  __device__ void operator()(size_type i)
+  {
+    TypeLhs x   = lhs.element<TypeLhs>(i);
+    TypeRhs y   = rhs.element<TypeRhs>(i);
+    auto result = ops::NullEquals{}.template operator()<TypeLhs, TypeRhs>(
+      x, y, lhs.is_valid(i), rhs.is_valid(i));
+    out.element<decltype(result)>(i) = result;
+  }
+
+  template <typename TypeLhs,
+            typename TypeRhs,
+            typename... Args,
+            std::enable_if_t<has_common_type_v<TypeLhs, TypeRhs> or
+                             not is_op_supported<TypeLhs, TypeRhs, ops::NullEquals>()>* = nullptr>
   __device__ void operator()(Args...)
   {
   }

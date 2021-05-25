@@ -91,8 +91,8 @@ struct is_supported_operation_functor {
         case binary_operator::LOG_BASE:             return call<ops::LogBase, TypeOut>();
         case binary_operator::ATAN2:                return call<ops::ATan2, TypeOut>();
         case binary_operator::PMOD:                 return call<ops::PMod, TypeOut>();
-        /*
         case binary_operator::NULL_EQUALS:          return call<ops::NullEquals, TypeOut>();
+        /*
         case binary_operator::NULL_MAX:             return call<ops::NullMax, TypeOut>();
         case binary_operator::NULL_MIN:             return call<ops::NullMin, TypeOut>();
         */

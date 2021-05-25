@@ -36,6 +36,7 @@ void dispatch_equality_op(mutable_column_device_view& outd,
       switch (op) {
       case binary_operator::EQUAL:         device_type_dispatcher<ops::Equal, true>{outd, lhsd, rhsd, common_dtype}(i); break;
       case binary_operator::NOT_EQUAL:     device_type_dispatcher<ops::NotEqual, true>{outd, lhsd, rhsd, common_dtype}(i); break;
+      case binary_operator::NULL_EQUALS:   device_type_dispatcher<ops::NullEquals, true>{outd, lhsd, rhsd, common_dtype}(i); break;
       default:;
       }
       // clang-format on

@@ -385,6 +385,20 @@ struct ATan2 {
   }
 };
 
+struct NullEquals {
+  template <typename TypeLhs, typename TypeRhs>
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid)
+    -> decltype(x == y)
+  {
+    if (!lhs_valid && !rhs_valid) return true;
+    if (lhs_valid && rhs_valid) return x == y;
+    return false;
+  }
+  // To allow constexpr is_op_supported
+  template <typename TypeLhs, typename TypeRhs>
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x == y);
+};
+
 }  // namespace ops
 }  // namespace compiled
 }  // namespace binops
