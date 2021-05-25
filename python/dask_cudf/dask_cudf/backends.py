@@ -246,7 +246,7 @@ def is_categorical_dtype_cudf(obj):
 
 try:
 
-    from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
+    from dask.dataframe.core import group_split_dispatch, hash_object_dispatch
 
     def safe_hash(frame):
         index = frame.index
