@@ -343,7 +343,7 @@ class GroupBy(Serializable):
         >>> import cudf
         >>> df = cudf.DataFrame({'A': ['a', 'b', 'a', 'b'], 'B': [1, 2, 3, 4]})
         >>> df
-        A  B
+           A  B
         0  a  1
         1  b  2
         2  a  3
@@ -353,7 +353,7 @@ class GroupBy(Serializable):
         in one pass, you can do
 
         >>> df.groupby('A').pipe(lambda x: x.max() - x.min())
-        B
+           B
         A
         a  2
         b  2
