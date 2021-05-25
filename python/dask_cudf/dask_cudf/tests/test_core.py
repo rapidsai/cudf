@@ -778,3 +778,20 @@ def test_index_map_partitions():
     mins_gd = gddf.index.map_partitions(M.min, meta=gddf.index).compute()
 
     dd.assert_eq(mins_pd, mins_gd)
+
+
+def test_correct_meta():
+    # Need these local imports in this specific order.
+    # For context: https://github.com/rapidsai/cudf/issues/7946
+    import pandas as pd
+
+    from dask import dataframe as dd
+
+    import dask_cudf  # noqa: F401
+
+    df = pd.DataFrame({"a": [3, 4], "b": [1, 2]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    emb = ddf["a"].apply(pd.Series, meta={"c0": "int64", "c1": "int64"})
+
+    assert isinstance(emb, dd.DataFrame)
+    assert isinstance(emb._meta, pd.DataFrame)
