@@ -245,6 +245,11 @@ class DataFrame(_Frame, dd.core.DataFrame):
         set_divisions=False,
         **kwargs,
     ):
+        if kwargs:
+            raise ValueError(
+                f"Unsupported input arguments passed : {list(kwargs.keys())}"
+            )
+
         if self.npartitions == 1:
             df = self.map_partitions(M.sort_values, by)
         else:
