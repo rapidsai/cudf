@@ -72,6 +72,7 @@ ConfigureTest(GROUPBY_TEST
     groupby/nunique_tests.cpp
     groupby/product_tests.cpp
     groupby/quantile_tests.cpp
+    groupby/replace_nulls_tests.cpp
     groupby/shift_tests.cpp
     groupby/std_tests.cpp
     groupby/sum_of_squares_tests.cpp
@@ -84,7 +85,7 @@ ConfigureTest(GROUPBY_TEST
 ConfigureTest(JOIN_TEST
     join/join_tests.cpp
     join/cross_join_tests.cpp
-    join/semi_join_tests.cpp)
+    join/semi_anti_join_tests.cpp)
 
 ###################################################################################################
 # - is_sorted tests -------------------------------------------------------------------------------
@@ -210,6 +211,7 @@ ConfigureTest(COPYING_TEST
     copying/sample_tests.cpp
     copying/scatter_tests.cpp
     copying/scatter_list_tests.cpp
+    copying/scatter_list_scalar_tests.cpp
     copying/scatter_struct_tests.cpp
     copying/segmented_gather_list_tests.cpp
     copying/shift_tests.cpp
@@ -328,8 +330,8 @@ ConfigureTest(STRINGS_TEST
     strings/booleans_tests.cpp
     strings/case_tests.cpp
     strings/chars_types_tests.cpp
-    strings/combine/concatenate_list_elements_tests.cpp
     strings/combine/concatenate_tests.cpp
+    strings/combine/join_list_elements_tests.cpp
     strings/combine/join_strings_tests.cpp
     strings/concatenate_tests.cpp
     strings/contains_tests.cpp
@@ -407,7 +409,8 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp)
 ###################################################################################################
 # - lists tests ----------------------------------------------------------------------------------
 ConfigureTest(LISTS_TEST
-    lists/concatenate_rows_tests.cpp
+    lists/combine/concatenate_list_elements_tests.cpp
+    lists/combine/concatenate_rows_tests.cpp
     lists/contains_tests.cpp
     lists/count_elements_tests.cpp
     lists/drop_list_duplicates_tests.cpp

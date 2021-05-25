@@ -248,7 +248,6 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
  * the actual copy.
  *
  * @param num_src_bufs Total number of source buffers (N)
- * @param num_partitions Number of partitions the each source buffer is split into (M)
  * @param src_bufs Input source buffers (N)
  * @param dst_bufs Desination buffers (N*M)
  * @param buf_info Information on the range of values to be copied for each destination buffer.

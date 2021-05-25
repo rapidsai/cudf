@@ -209,6 +209,7 @@ add_library(cudf
     src/groupby/sort/group_max_scan.cu
     src/groupby/sort/group_min_scan.cu
     src/groupby/sort/group_sum_scan.cu
+    src/groupby/sort/group_replace_nulls.cu
     src/groupby/sort/sort_helper.cu
     src/hash/hashing.cu
     src/hash/md5_hash.cu
@@ -266,7 +267,8 @@ add_library(cudf
     src/join/join.cu
     src/join/semi_join.cu
     src/lists/contains.cu
-    src/lists/concatenate_rows.cu
+    src/lists/combine/concatenate_list_elements.cu		
+    src/lists/combine/concatenate_rows.cu
     src/lists/copying/concatenate.cu
     src/lists/copying/copying.cu
     src/lists/copying/gather.cu
@@ -332,8 +334,8 @@ add_library(cudf
     src/strings/char_types/char_cases.cu
     src/strings/char_types/char_types.cu
     src/strings/combine/concatenate.cu
-    src/strings/combine/concatenate_list_elements.cu
     src/strings/combine/join.cu
+    src/strings/combine/join_list_elements.cu
     src/strings/contains.cu
     src/strings/convert/convert_booleans.cu
     src/strings/convert/convert_datetime.cu
