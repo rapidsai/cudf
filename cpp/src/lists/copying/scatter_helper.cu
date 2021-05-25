@@ -8,9 +8,6 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <cudf/debug_printers.hpp>
-#include "cudf/lists/lists_column_view.hpp"
-
 #include <thrust/binary_search.h>
 
 namespace cudf {
@@ -161,15 +158,6 @@ struct list_child_constructor {
         ? construct_child_nullmask(
             list_vector, list_offsets, source_lists, target_lists, num_child_rows, stream, mr)
         : std::make_pair(rmm::device_buffer{}, 0);
-
-#ifndef NDEBUG
-    print("list_offsets ", list_offsets, stream);
-    print("source_lists.child() ", source_lists_column_view.child(), stream);
-    print("source_lists.offsets() ", source_lists_column_view.offsets(), stream);
-    print("target_lists.child() ", target_lists_column_view.child(), stream);
-    print("target_lists.offsets() ", target_lists_column_view.offsets(), stream);
-    print("scatter_rows ", list_vector, stream);
-#endif  // NDEBUG
 
     auto child_column = cudf::make_fixed_width_column(source_lists_column_view.child().type(),
                                                       num_child_rows,
