@@ -282,7 +282,15 @@ class ColumnBase(Column, Serializable):
 
         # Perform the actual concatenation
         if newsize > 0:
-            col = libcudf.concat.concat_columns(objs)
+            try:
+                col = libcudf.concat.concat_columns(objs)
+            except RuntimeError as e:
+                if "concatenated rows exceeds size_type range" in str(e):
+                    raise OverflowError(
+                        "total size of output strings is too "
+                        "large for a cudf column"
+                    ) from e
+                raise
         else:
             col = column_empty(0, head.dtype, masked=True)
 
