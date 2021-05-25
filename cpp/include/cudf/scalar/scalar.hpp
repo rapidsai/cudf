@@ -86,10 +86,10 @@ class scalar {
   bool const* validity_data() const;
 
  protected:
-  data_type _type{type_id::EMPTY};       ///< Logical type of value in the scalar
-  rmm::device_scalar<bool> _is_valid{};  ///< Device bool signifying validity
+  data_type _type{type_id::EMPTY};     ///< Logical type of value in the scalar
+  rmm::device_scalar<bool> _is_valid;  ///< Device bool signifying validity
 
-  scalar() = default;
+  scalar() = delete;
 
   /**
    * @brief Construct a new scalar object
@@ -342,9 +342,10 @@ class string_scalar : public scalar {
   using value_type = cudf::string_view;
 
   string_scalar();
-  ~string_scalar()                          = default;
-  string_scalar(string_scalar&& other)      = default;
-  string_scalar(string_scalar const& other) = default;
+  ~string_scalar()                     = default;
+  string_scalar(string_scalar&& other) = default;
+
+  string_scalar(string_scalar const& other) = delete;
   string_scalar& operator=(string_scalar const& other) = delete;
   string_scalar& operator=(string_scalar&& other) = delete;
 
