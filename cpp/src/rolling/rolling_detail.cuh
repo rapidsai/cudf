@@ -927,15 +927,7 @@ struct rolling_window_launcher {
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr)
   {
-    return cudf::detail::
-      compute_lead_lag_for_nested<op, InputType, PrecedingWindowIterator, FollowingWindowIterator>(
-        input,
-        default_outputs,
-        preceding_window_begin,
-        following_window_begin,
-        dynamic_cast<cudf::detail::lead_lag_aggregation const&>(agg).row_offset,
-        stream,
-        mr);
+    CUDF_FAIL("Invalid aggregation type/pair");
   }
 };
 
