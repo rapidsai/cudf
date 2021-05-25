@@ -11,7 +11,6 @@ import cupy
 import numpy as np
 import pandas as pd
 from numba import cuda, njit
-from nvtx import annotate
 from pandas.api.types import is_integer_dtype
 
 import cudf
@@ -151,7 +150,7 @@ class NumericalColumn(ColumnBase):
                 msg = "{!r} operator not supported between {} and {}"
                 raise TypeError(msg.format(binop, type(self), type(rhs)))
             if isinstance(rhs, cudf.core.column.DecimalColumn):
-                lhs = self.as_decimal_column(
+                lhs: Union[ScalarLike, ColumnBase] = self.as_decimal_column(
                     Decimal64Dtype(Decimal64Dtype.MAX_PRECISION, 0)
                 )
                 return lhs.binary_operator(binop, rhs)
@@ -163,9 +162,11 @@ class NumericalColumn(ColumnBase):
                     or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
                 ):
                     out_dtype = np.dtype("float64")
-        return _numeric_column_binop(
-            lhs=self, rhs=rhs, op=binop, out_dtype=out_dtype, reflect=reflect
-        )
+
+        if binop in {"lt", "gt", "le", "ge", "eq", "ne", "NULL_EQUALS"}:
+            out_dtype = "bool"
+        lhs, rhs = (self, rhs) if not reflect else (rhs, self)
+        return libcudf.binaryop.binaryop(lhs, rhs, binop, out_dtype)
 
     def _apply_scan_op(self, op: str) -> ColumnBase:
         return libcudf.reduce.scan(op, self, True)
@@ -739,35 +740,6 @@ class NumericalColumn(ColumnBase):
         if index is not None:
             pd_series.index = index
         return pd_series
-
-
-@annotate("BINARY_OP", color="orange", domain="cudf_python")
-def _numeric_column_binop(
-    lhs: Union[ColumnBase, ScalarLike],
-    rhs: Union[ColumnBase, ScalarLike],
-    op: str,
-    out_dtype: Dtype,
-    reflect: bool = False,
-) -> ColumnBase:
-    if reflect:
-        lhs, rhs = rhs, lhs
-
-    is_op_comparison = op in [
-        "lt",
-        "gt",
-        "le",
-        "ge",
-        "eq",
-        "ne",
-        "NULL_EQUALS",
-    ]
-
-    if is_op_comparison:
-        out_dtype = "bool"
-
-    out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
-
-    return out
 
 
 def _numeric_column_unaryop(operand: ColumnBase, op: str) -> ColumnBase:

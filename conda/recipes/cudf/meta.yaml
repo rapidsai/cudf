@@ -3,7 +3,7 @@
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set py_version=environ.get('CONDA_PY', 36) %}
-{% set cuda_version='.'.join(environ.get('CUDA_VERSION', '10.1').split('.')[:2]) %}
+{% set cuda_version='.'.join(environ.get('CUDA', '10.1').split('.')[:2]) %}
 
 package:
   name: cudf
@@ -18,6 +18,9 @@ build:
   script_env:
     - VERSION_SUFFIX
     - PARALLEL_LEVEL
+    - CC
+    - CXX
+    - CUDAHOSTCXX
 
 requirements:
   build:
@@ -26,7 +29,7 @@ requirements:
     - cython >=0.29,<0.30
     - setuptools
     - numba >=0.53.1
-    - dlpack
+    - dlpack 0.3
     - pyarrow 1.0.1
     - libcudf {{ version }}
     - rmm {{ minor_version }}

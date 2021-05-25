@@ -423,12 +423,12 @@ TEST_F(ScanStringTest, skip_nulls)
   CUDF_EXPECT_THROW_MESSAGE(
     (cudf::scan(
       col_nulls, cudf::make_min_aggregation(), scan_type::EXCLUSIVE, null_policy::EXCLUDE)),
-    "String types supports only inclusive min/max for `cudf::scan`");
+    "Non-arithmetic types not supported for exclusive scan");
 
   CUDF_EXPECT_THROW_MESSAGE(
     (cudf::scan(
       col_nulls, cudf::make_min_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE)),
-    "String types supports only inclusive min/max for `cudf::scan`");
+    "Non-arithmetic types not supported for exclusive scan");
 }
 
 TYPED_TEST(ScanTest, EmptyColumnskip_nulls)

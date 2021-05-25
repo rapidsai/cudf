@@ -9,7 +9,6 @@ from typing import Any, Sequence, Tuple, Union, cast
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
@@ -247,7 +246,7 @@ class TimeDeltaColumn(column.ColumnBase):
         if reflect:
             lhs, rhs = rhs, lhs  # type: ignore
 
-        return binop(lhs, rhs, op=op, out_dtype=out_dtype)
+        return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     def normalize_binop_value(self, other) -> BinaryOperand:
         if isinstance(other, cudf.Scalar):
@@ -544,17 +543,6 @@ class TimeDeltaColumn(column.ColumnBase):
         ) // cudf.Scalar(
             np.timedelta64(_numpy_to_pandas_conversion["ns"], "ns")
         )
-
-
-@annotate("BINARY_OP", color="orange", domain="cudf_python")
-def binop(
-    lhs: "column.ColumnBase",
-    rhs: "column.ColumnBase",
-    op: str,
-    out_dtype: DtypeObj,
-) -> "cudf.core.column.ColumnBase":
-    out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
-    return out
 
 
 def determine_out_dtype(lhs_dtype: Dtype, rhs_dtype: Dtype) -> Dtype:
