@@ -173,14 +173,18 @@ ConfigureTest(TRANSFORM_TEST
 
 ###################################################################################################
 # - interop tests -------------------------------------------------------------------------
-set_source_files_properties(interop/dlpack_test.cpp
-                            PROPERTIES COMPILE_FLAGS "-MD -MF -")
-
 ConfigureTest(INTEROP_TEST
     interop/to_arrow_test.cpp
     interop/from_arrow_test.cpp
     interop/dlpack_test.cpp)
 
+add_custom_command(TARGET INTEROP_TEST POST_BUILD
+    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+    COMMAND  ninja -t deps CMakeFiles/cudf.dir/src/interop/dlpack.cpp.o )
+
+add_custom_command(TARGET INTEROP_TEST POST_BUILD
+    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+    COMMAND  ninja -t deps tests/CMakeFiles/INTEROP_TEST.dir/interop/dlpack_test.cpp.o )
 
 ###################################################################################################
 # - io tests --------------------------------------------------------------------------------------
