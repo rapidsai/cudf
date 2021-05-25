@@ -36,11 +36,11 @@ comparison_ops = [
 
 class MaskedType(types.Type):
     '''
-    A numba type consiting of a value of some primitive type
+    A Numba type consisting of a value of some primitive type
     and a validity boolean, over which we can define math ops
     '''
     def __init__(self, value):
-        # MaskedType in numba shall be parameterized
+        # MaskedType in Numba shall be parameterized
         # with a value type
         super().__init__(name="Masked")
         self.value_type = value
@@ -96,14 +96,19 @@ class MaskedType(types.Type):
         # and that other thing
         unified = context.unify_pairs(self.value_type, other)
         if unified is None:
+            # The value types don't unify, so there is no unified masked type
             return None
 
         return MaskedType(unified)
 
     def __eq__(self, other):
+        # Equality is required for determining whether a cast is required
+        # between two different types.
         if not isinstance(other, MaskedType):
+            # Require a cast when the other type is not masked
             return False
 
+        # Require a cast for another masked with a different value type
         return self.value_type == other.value_type
 
 
@@ -114,6 +119,8 @@ def typeof_interval(val, c):
     return MaskedType(typeof(val))
 
 
+# Implemented typing for Masked(value, valid) - the construction of a Masked
+# type in a kernel.
 @cuda_decl_registry.register
 class MaskedConstructor(ConcreteTemplate):
     key = classes.Masked
@@ -122,10 +129,12 @@ class MaskedConstructor(ConcreteTemplate):
              for t in (types.integer_domain | types.real_domain)]
 
 
+# Provide access to `m.value` and `m.valid` in a kernel for a Masked `m`.
 make_attribute_wrapper(MaskedType, 'value', 'value')
 make_attribute_wrapper(MaskedType, 'valid', 'valid')
 
 
+# Typing for `classes.Masked`
 @cuda_decl_registry.register_attr
 class ClassesTemplate(AttributeTemplate):
     key = types.Module(classes)
@@ -135,10 +144,11 @@ class ClassesTemplate(AttributeTemplate):
         return types.Function(MaskedConstructor)
 
 
-# For typing classes.Masked
+# Registration of the global is also needed for Numba to type classes.Masked
 cuda_decl_registry.register_global(classes, types.Module(classes))
-# For typing bare Masked
-cuda_decl_registry.register_global(classes.Masked, types.Function(MaskedConstructor))
+# For typing bare Masked (as in `from .classes import Masked`
+cuda_decl_registry.register_global(classes.Masked,
+                                   types.Function(MaskedConstructor))
 
 
 # Tell numba how `MaskedType` is constructed on the backend in terms
@@ -180,6 +190,9 @@ class NAType(types.Type):
             return MaskedType(other)
 
 
+na_type = NAType()
+
+
 @typeof_impl.register(_NAType)
 def typeof_na(val, c):
     '''
@@ -187,7 +200,7 @@ def typeof_na(val, c):
     Effectively make it so numba sees `cudf.NA` as an
     instance of this NAType -> handle it accordingly.
     '''
-    return NAType()
+    return na_type
 
 
 register_model(NAType)(models.OpaqueModel)
@@ -235,27 +248,27 @@ class MaskedScalarNullOp(AbstractTemplate):
             return nb_signature(
                 args[0],
                 args[0],
-                NAType(),
+                na_type,
             )
         elif isinstance(args[0], NAType) and isinstance(args[1], MaskedType):
             return nb_signature(
                 args[1],
-                NAType(),
+                na_type,
                 args[1]
             )
 
 
-class MaskedScalarConstOp(AbstractTemplate):
+class MaskedScalarScalarOp(AbstractTemplate):
     def generic(self, args, kws):
         '''
-        Typing for `Masked` + a constant literal
+        Typing for `Masked` + a scalar.
         handles situations like `x + 1`
         '''
         if isinstance(args[0], MaskedType) and isinstance(
             args[1], types.Number
         ):
-            # In the case of op(Masked, constant), we resolve the type between
-            # the Masked value_type and the constant's type directly
+            # In the case of op(Masked, scalar), we resolve the type between
+            # the Masked value_type and the scalar's type directly
             return_type = self.context.resolve_function_type(
                 self.key, (args[0].value_type, args[1]), kws
             ).return_type
@@ -287,7 +300,7 @@ class MaskedScalarIsNull(AbstractTemplate):
             return nb_signature(
                 types.boolean,
                 args[0],
-                NAType())
+                na_type)
 
 
 @cuda_decl_registry.register_global(operator.truth)
@@ -310,4 +323,4 @@ for op in arith_ops + comparison_ops:
     # Every op shares the same typing class
     cuda_decl_registry.register_global(op)(MaskedScalarArithOp)
     cuda_decl_registry.register_global(op)(MaskedScalarNullOp)
-    cuda_decl_registry.register_global(op)(MaskedScalarConstOp)
+    cuda_decl_registry.register_global(op)(MaskedScalarScalarOp)
