@@ -50,13 +50,12 @@ std::unique_ptr<cudf::column> make_structs_column(
     }
   }
 
-  return std::make_unique<column>(
-    cudf::data_type{type_id::STRUCT},
-    num_rows,
-    rmm::device_buffer{},  // Empty data buffer. Structs hold no data.
-    std::move(null_mask),
-    null_count,
-    std::move(child_columns));
+  return std::make_unique<column>(cudf::data_type{type_id::STRUCT},
+                                  num_rows,
+                                  rmm::device_buffer{},  // Empty data buffer. Structs hold no data.
+                                  std::move(null_mask),
+                                  null_count,
+                                  std::move(child_columns));
 }
 
 }  // namespace cudf
