@@ -476,7 +476,9 @@ class StringMethods(ColumnMethodsMixin):
 
         If the elements of a Series are lists themselves, join the content of
         these lists using the delimiter passed to the function.
-        This function is an equivalent to :meth:`str.join`.
+        This function is an equivalent to :meth:`str.join`. 
+        In the special case that the lists in the Series contain only ``None``,
+        a `<NA>`/`None` value will always be returned.
 
         Parameters
         ----------
@@ -487,9 +489,9 @@ class StringMethods(ColumnMethodsMixin):
         string_na_rep : str, default None
             This character will take the place of null strings
             (not empty strings) in the Series but will be considered
-            only if the Series contains at least one non-null string.
-            If ``string_na_rep`` is ``None`` or the Series contains only
-            ``None``, it defaults to empty space "".
+            only if the Series contains list elements and those lists have
+            at least one non-null string. If ``string_na_rep`` is ``None``, 
+            it defaults to empty space "".
         sep_na_rep : str, default None
             This character will take the place of any null strings
             (not empty strings) in `sep`. This parameter can be used
@@ -554,7 +556,7 @@ class StringMethods(ColumnMethodsMixin):
 
         We can replace `<NA>`/`None` values present in lists using
         ``string_na_rep`` if the lists contain at least one valid string
-        (lists containing all `None` will result in empty output strings):
+        (lists containing all `None` will result in a `<NA>`/`None` value):
 
         >>> ser = cudf.Series([['a', 'b', None], [None, None, None], None, ['c', 'd']])
         >>> ser
@@ -565,7 +567,7 @@ class StringMethods(ColumnMethodsMixin):
         dtype: list
         >>> ser.str.join(sep='_', string_na_rep='k')
         0    a_b_k
-        1
+        1     <NA>
         2     <NA>
         3      c_d
         dtype: object
@@ -575,7 +577,7 @@ class StringMethods(ColumnMethodsMixin):
 
         >>> ser.str.join(sep=[None, '^', '.', '-'], sep_na_rep='+')
         0    a+b+
-        1
+        1    <NA>
         2    <NA>
         3     c-d
         dtype: object
