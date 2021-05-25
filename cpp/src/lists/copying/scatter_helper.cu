@@ -1,4 +1,5 @@
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/detail/copying.hpp>
@@ -8,6 +9,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <cudf/debug_printers.hpp>
+#include "cudf/lists/lists_column_view.hpp"
 
 #include <thrust/binary_search.h>
 
@@ -405,23 +407,24 @@ struct list_child_constructor {
     std::vector<std::unique_ptr<column>> child_columns;
     child_columns.reserve(num_struct_members);
 
-    auto project_member_as_list = [stream, mr](column_view const& structs_member,
-                                               cudf::size_type const& structs_list_num_rows,
-                                               column_view const& structs_list_offsets,
-                                               rmm::device_buffer const& structs_list_nullmask,
-                                               cudf::size_type const& structs_list_null_count) {
-      return cudf::make_lists_column(structs_list_num_rows,
-                                     std::make_unique<column>(structs_list_offsets, stream, mr),
-                                     std::make_unique<column>(structs_member, stream, mr),
-                                     structs_list_null_count,
-                                     rmm::device_buffer(structs_list_nullmask),
-                                     stream,
-                                     mr);
+    auto project_member_as_list_view = [](column_view const& structs_member,
+                                          cudf::size_type const& structs_list_num_rows,
+                                          column_view const& structs_list_offsets,
+                                          rmm::device_buffer const& structs_list_nullmask,
+                                          cudf::size_type const& structs_list_null_count) {
+      return lists_column_view(
+        column_view(data_type{type_id::LIST},
+                    structs_list_num_rows,
+                    nullptr,
+                    static_cast<bitmask_type const*>(structs_list_nullmask.data()),
+                    structs_list_null_count,
+                    0,
+                    {structs_list_offsets, structs_member}));
     };
 
     auto const iter_source_member_as_list = thrust::make_transform_iterator(
       thrust::make_counting_iterator<cudf::size_type>(0), [&](auto child_idx) {
-        return project_member_as_list(
+        return project_member_as_list_view(
           source_structs.child(child_idx),
           source_lists_column_view.size(),
           source_lists_column_view.offsets(),
@@ -431,7 +434,7 @@ struct list_child_constructor {
 
     auto const iter_target_member_as_list = thrust::make_transform_iterator(
       thrust::make_counting_iterator<cudf::size_type>(0), [&](auto child_idx) {
-        return project_member_as_list(
+        return project_member_as_list_view(
           target_structs.child(child_idx),
           target_lists_column_view.size(),
           target_lists_column_view.offsets(),
@@ -439,22 +442,21 @@ struct list_child_constructor {
           target_lists_column_view.null_count());
       });
 
-    std::transform(
-      iter_source_member_as_list,
-      iter_source_member_as_list + num_struct_members,
-      iter_target_member_as_list,
-      std::back_inserter(child_columns),
-      [&](auto source_struct_member_as_list, auto target_struct_member_as_list) {
-        return cudf::type_dispatcher<dispatch_storage_type>(
-          source_struct_member_as_list->child(cudf::lists_column_view::child_column_index).type(),
-          list_child_constructor{},
-          list_vector,
-          list_offsets,
-          cudf::lists_column_view(source_struct_member_as_list->view()),
-          cudf::lists_column_view(target_struct_member_as_list->view()),
-          stream,
-          mr);
-      });
+    std::transform(iter_source_member_as_list,
+                   iter_source_member_as_list + num_struct_members,
+                   iter_target_member_as_list,
+                   std::back_inserter(child_columns),
+                   [&](auto source_struct_member_list_view, auto target_struct_member_list_view) {
+                     return cudf::type_dispatcher<dispatch_storage_type>(
+                       source_struct_member_list_view.child().type(),
+                       list_child_constructor{},
+                       list_vector,
+                       list_offsets,
+                       source_struct_member_list_view,
+                       target_struct_member_list_view,
+                       stream,
+                       mr);
+                   });
 
     auto child_null_mask =
       source_lists_column_view.child().nullable() || target_lists_column_view.child().nullable()
