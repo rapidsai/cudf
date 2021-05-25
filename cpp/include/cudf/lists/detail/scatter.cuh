@@ -125,7 +125,7 @@ std::unique_ptr<column> scatter_impl(
   auto offsets_column = cudf::strings::detail::make_offsets_child_column(
     list_size_begin, list_size_begin + target.size(), stream, mr);
 
-  auto child_column = build_child_column(child_column_type,
+  auto child_column = build_list_child_column_recursive(child_column_type,
                                          target_vector,
                                          offsets_column->view(),
                                          source_lists_column_view,

@@ -113,7 +113,7 @@ struct unbound_list_view {
   size_type _size{};       // Number of elements in *this* list row.
 };
 
-std::unique_ptr<column> build_child_column(
+std::unique_ptr<column> build_lists_child_column_recursive(
   data_type child_column_type,
   rmm::device_uvector<unbound_list_view> const& list_vector,
   cudf::column_view const& list_offsets,
