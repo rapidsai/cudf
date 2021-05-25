@@ -19,7 +19,7 @@ def read_csv(path, chunksize="256 MiB", **kwargs):
     """
     Read CSV files into a dask_cudf.DataFrame
 
-    This API parallelizes the `cudf.read_csv` function in the following ways:
+    This API parallelizes the ``cudf.read_csv`` function in the following ways:
 
     It supports loading many files at once using globstrings:
 
