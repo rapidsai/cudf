@@ -125,6 +125,7 @@ class GroupBy(Serializable):
             )
             .groupby(self.grouping, sort=self._sort)
             .agg("cumcount")
+            .reset_index(drop=True)
         )
 
     @cached_property
@@ -240,9 +241,10 @@ class GroupBy(Serializable):
         """
         Return the nth row from each group.
         """
-        result = self.agg(lambda x: x.nth(n))
-        sizes = self.size()
-        return result[n < sizes]
+        result = self.agg(lambda x: x.nth(n)).sort_index()
+        sizes = self.size().sort_index()
+
+        return result[sizes > n]
 
     def serialize(self):
         header = {}
