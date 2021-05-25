@@ -177,3 +177,33 @@ def test_compile_arith_masked_ops(op, ty1, ty2, masked):
         ty2 = MaskedType(ty2)
 
     ptx, resty = compile_ptx(func, (ty1, ty2), cc=cc, device=True)
+
+
+def func_x_is_na(x):
+    return x is NA
+
+
+def func_na_is_x(x):
+    return NA is x
+
+
+@pytest.mark.parametrize('fn', (func_x_is_na, func_na_is_x))
+def test_is_na(fn):
+
+    valid = Masked(1, True)
+    invalid = Masked(1, False)
+
+    device_fn = cuda.jit(device=True)(fn)
+
+    @cuda.jit(debug=True)
+    def test_kernel():
+        valid_result = device_fn(valid)
+        invalid_result = device_fn(invalid)
+
+        if not valid_result:
+            raise RuntimeError('Valid masked value is NA and should not be')
+
+        if invalid_result:
+            raise RuntimeError('Invalid masked value is not NA and should be')
+
+    test_kernel[1, 1]()
