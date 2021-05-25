@@ -94,15 +94,12 @@ struct dispatch_compute_indices {
     return result;
   }
 
-  template <typename Element>
+  template <typename Element, typename... Args>
   typename std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(),
                             std::unique_ptr<column>>
-  operator()(dictionary_column_view const& input,
-             column_view const& new_keys,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr)
+  operator()(Args&&...)
   {
-    CUDF_FAIL("list_view dictionary set_keys not supported yet");
+    CUDF_FAIL("dictionary set_keys not supported for this column type");
   }
 };
 

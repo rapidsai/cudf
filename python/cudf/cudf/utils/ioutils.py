@@ -1051,7 +1051,7 @@ def _is_local_filesystem(fs):
 def ensure_single_filepath_or_buffer(path_or_data, **kwargs):
     """Return False if `path_or_data` resolves to multiple filepaths or buffers
     """
-    path_or_data = fsspec.utils.stringify_path(path_or_data)
+    path_or_data = stringify_pathlike(path_or_data)
     if isinstance(path_or_data, str):
         storage_options = kwargs.get("storage_options")
         path_or_data = os.path.expanduser(path_or_data)
@@ -1076,7 +1076,7 @@ def ensure_single_filepath_or_buffer(path_or_data, **kwargs):
 def is_directory(path_or_data, **kwargs):
     """Returns True if the provided filepath is a directory
     """
-    path_or_data = fsspec.utils.stringify_path(path_or_data)
+    path_or_data = stringify_pathlike(path_or_data)
     if isinstance(path_or_data, str):
         storage_options = kwargs.get("storage_options")
         path_or_data = os.path.expanduser(path_or_data)
@@ -1121,7 +1121,7 @@ def get_filepath_or_buffer(
     compression : str
         Type of compression algorithm for the content
     """
-    path_or_data = fsspec.utils.stringify_path(path_or_data)
+    path_or_data = stringify_pathlike(path_or_data)
 
     if isinstance(path_or_data, str):
         storage_options = kwargs.get("storage_options")
@@ -1221,6 +1221,27 @@ def is_fsspec_open_file(file_obj):
     if isinstance(file_obj, fsspec.core.OpenFile):
         return True
     return False
+
+
+def stringify_pathlike(pathlike):
+    """
+    Convert any object that implements the fspath protocol
+    to a string. Leaves other objects unchanged
+    Parameters
+    ----------
+    pathlike
+        Pathlike object that implements the fspath protocol
+
+    Returns
+    -------
+    maybe_pathlike_str
+        String version of the object if possible
+    """
+    maybe_pathlike_str = (
+        pathlike.__fspath__() if hasattr(pathlike, "__fspath__") else pathlike
+    )
+
+    return maybe_pathlike_str
 
 
 def buffer_write_lines(buf, lines):
