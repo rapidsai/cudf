@@ -61,7 +61,10 @@ struct typed_casted_writer {
                   std::is_constructible_v<Element, FromType>) {
       col.element<Element>(i) = static_cast<Element>(val);
     } else if constexpr (is_fixed_point<Element>() and std::is_constructible_v<Element, FromType>) {
-      col.data<Element::rep>()[i] = static_cast<Element>(val).value();
+      if constexpr (is_fixed_point<FromType>())
+        col.data<Element::rep>()[i] = val.rescaled(numeric::scale_type{col.type().scale()}).value();
+      else
+        col.data<Element::rep>()[i] = Element{val, numeric::scale_type{col.type().scale()}}.value();
     }
   }
 };

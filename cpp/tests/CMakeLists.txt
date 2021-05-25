@@ -159,6 +159,7 @@ ConfigureTest(BINARY_TEST
     binaryop/binop-null-test.cpp
     binaryop/binop-integration-test.cpp
     binaryop/binop-compiled-test.cpp
+    binaryop/binop-compiled-fixed_point-test.cpp
     binaryop/binop-generic-ptx-test.cpp
     )
 
