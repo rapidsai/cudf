@@ -48,14 +48,14 @@ def read_csv(path, chunksize="256 MiB", **kwargs):
         or any object with a read() method (such as builtin open() file
         handler function or StringIO).
     chunksize : int or str, default "256 MiB"
-        The target task partition size.
+        The target task partition size. If `None`, a single block is used for each file.
     **kwargs : dict
         Passthrough key-word arguments that are sent to ``cudf.read_csv``.
 
     Examples
     --------
     >>> import dask_cudf
-    >>> ddf = dask_cudf.read_csv('sample.csv', usecols=['a', 'b'])
+    >>> ddf = dask_cudf.read_csv("sample.csv", usecols=["a", "b"])
     >>> ddf.compute()
        a      b
     0  1     hi
