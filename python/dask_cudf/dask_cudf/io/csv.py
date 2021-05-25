@@ -32,7 +32,7 @@ def read_csv(path, chunksize="256 MiB", **kwargs):
 
     It can read CSV files from external resources (e.g. S3, HTTP, FTP)
 
-    >>> df = dask_cudf.read_csv('s3://bucket/myfiles.*.csv')
+    >>> df = dask_cudf.read_csv("s3://bucket/myfiles.*.csv")
     >>> df = dask_cudf.read_csv("https://www.mycloud.com/sample.csv")
 
     Internally ``dask_cudf.read_csv`` uses ``cudf.read_csv`` and supports
