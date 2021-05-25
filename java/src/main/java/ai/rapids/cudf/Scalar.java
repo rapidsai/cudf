@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -390,16 +391,23 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       }
       return new Scalar(DType.STRUCT, makeStructScalar(childHandles, false));
     } finally {
+      IllegalStateException closeException = null;
       // close all empty children
       for (ColumnVector child : children) {
         // We closed all created ColumnViews when we hit null. Therefore we exit the loop.
         if (child == null) break;
-        // make sure the close process is exception-free
+        // suppress exception during the close process to ensure that all elements are closed
         try {
           child.close();
-        } catch (Exception ignored) {
+        } catch (IllegalStateException ex) {
+          if (closeException == null) {
+            closeException = ex;
+            continue;
+          }
+          closeException.addSuppressed(ex);
         }
       }
+      if (closeException != null) throw closeException;
     }
   }
 
@@ -410,8 +418,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
    * @return a Struct scalar
    */
   public static Scalar structFromColumnViews(ColumnView... columns) {
-    if (columns == null || columns.length == 0) {
-      throw new IllegalArgumentException("......");
+    if (columns == null) {
+      throw new IllegalArgumentException("input columns should NOT be null");
     }
     long[] columnHandles = new long[columns.length];
     for (int i = 0; i < columns.length; i++) {
@@ -436,12 +444,12 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         }
       }
     } else if (dt.typeId == DType.DTypeEnum.LIST) {
-      try (HostColumnVector hcv = HostColumnVector.fromLists(hostType, Arrays.asList())) {
+      try (HostColumnVector hcv = HostColumnVector.fromLists(hostType, (List<Integer>) null)) {
         return hcv.copyToDevice();
       }
     } else if (dt.typeId == DType.DTypeEnum.STRUCT) {
-      try (HostColumnVector hcv = HostColumnVector.fromStructs(hostType,
-          new HostColumnVector.StructData(new Object[hostType.getNumChildren()]))) {
+      try (HostColumnVector hcv = HostColumnVector.fromStructs(
+          hostType, (HostColumnVector.StructData) null)) {
         return hcv.copyToDevice();
       }
     } else {
@@ -619,6 +627,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
 
   /**
    * Fetches views of children columns from struct scalar.
+   * The returned ColumnViews should be closed appropriately. Otherwise, a native memory leak will occur.
    *
    * @return array of column views refer to children of struct scalar
    */

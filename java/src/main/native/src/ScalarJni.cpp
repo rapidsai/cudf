@@ -145,9 +145,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Scalar_getChildrenFromStructSca
     cudf::jni::auto_set_device(env);
     const auto s                  = reinterpret_cast<cudf::struct_scalar*>(scalar_handle);
     const cudf::table_view& table = s->view();
-    cudf::jni::native_jlongArray column_handles(env, table.num_columns());
+    cudf::jni::native_jpointerArray<cudf::column_view> column_handles(env, table.num_columns());
     for (int i = 0; i < table.num_columns(); i++) {
-      column_handles[i] = reinterpret_cast<jlong>(new cudf::column_view(table.column(i)));
+      column_handles[i] = new cudf::column_view(table.column(i));
     }
     return column_handles.get_jArray();
   }
@@ -496,13 +496,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeListScalar(JNIEnv *env, j
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeStructScalar(JNIEnv *env, jclass,
                                                                     jlongArray handles,
                                                                     jboolean is_valid) {
-
   JNI_NULL_CHECK(env, handles, "native view handles are null", 0)
   try {
     cudf::jni::auto_set_device(env);
     std::unique_ptr<cudf::column_view> ret;
     cudf::jni::native_jpointerArray<cudf::column_view> column_pointers(env, handles);
     std::vector<cudf::column_view> columns;
+    columns.reserve(column_pointers.size());
     std::transform(column_pointers.data(),
                    column_pointers.data() + column_pointers.size(),
                    std::back_inserter(columns),

@@ -316,6 +316,8 @@ public class ScalarTest extends CudfTestBase {
          ColumnVector col4 = ColumnVector.daysFromInts(10);
          ColumnVector col5 = ColumnVector.durationSecondsFromLongs(12345L);
          Scalar s = Scalar.structFromColumnViews(col0, col1, col2, col3, col4, col5, col0, col1)) {
+      assertEquals(DType.STRUCT, s.getType());
+      assertTrue(s.isValid());
       ColumnView[] children = s.getChildrenFromStructScalar();
       try {
         assertColumnsAreEqual(col0, children[0]);
@@ -364,6 +366,14 @@ public class ScalarTest extends CudfTestBase {
       } finally {
         children[0].close();
       }
+    }
+
+    // test Struct Scalar without column
+    try (Scalar s = Scalar.structFromColumnViews()) {
+      assertEquals(DType.STRUCT, s.getType());
+      assertTrue(s.isValid());
+      ColumnView[] children = s.getChildrenFromStructScalar();
+      assertEquals(0, children.length);
     }
 
     // test Struct Scalar with nested types
