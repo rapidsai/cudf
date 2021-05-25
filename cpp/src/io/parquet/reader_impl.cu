@@ -37,8 +37,6 @@
 #include <numeric>
 #include <regex>
 
-#include <cudf_test/column_utilities.hpp>
-
 namespace cudf {
 namespace io {
 namespace detail {
