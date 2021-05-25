@@ -2526,9 +2526,12 @@ def test_string_hex_to_int(data):
 
     gsr = cudf.Series(data)
 
-    got = gsr.str.htoi()
     expected = cudf.Series([263988422296292, 0, 281474976710655])
 
+    got = gsr.str.htoi()
+    assert_eq(expected, got)
+
+    got = gsr.str.hex_to_int()  # alias
     assert_eq(expected, got)
 
 
@@ -2585,7 +2588,9 @@ def test_string_ip4_to_int():
     expected = cudf.Series([0, None, 0, 698875905, 2130706433, 700776449])
 
     got = gsr.str.ip2int()
+    assert_eq(expected, got)
 
+    got = gsr.str.ip_to_int()  # alias
     assert_eq(expected, got)
 
 
