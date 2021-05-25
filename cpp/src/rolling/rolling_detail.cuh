@@ -687,7 +687,7 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
                                   preceding_window_begin,
                                   following_window_begin,
                                   min_periods,
-                                  agg,
+                                  agg._null_handling,
                                   stream,
                                   mr);
   }
@@ -700,7 +700,7 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
                                                      preceding_window_begin,
                                                      following_window_begin,
                                                      min_periods,
-                                                     agg,
+                                                     agg._null_handling,
                                                      stream,
                                                      mr);
 
@@ -953,7 +953,7 @@ struct dispatch_rolling {
   {
     // do any preprocessing of aggregations (eg, MIN -> ARGMIN, COLLECT_LIST -> nothing)
     rolling_aggregation_preprocessor preprocessor;
-    auto preprocessed_aggs = agg.get_simple_aggregations(input.type(), preprocessor);
+    auto preprocessed_aggs = agg.get_simple_aggregations( input.type(), preprocessor);
     CUDF_EXPECTS(preprocessed_aggs.size() <= 1,
                  "Encountered a non-trivial rolling aggregation result");
 
