@@ -37,6 +37,7 @@ namespace detail {
 
 namespace {
 
+template <typename IndexIterator>
 rmm::device_uvector<unbound_list_view> list_vector_from_column(
   unbound_list_view::label_type label,
   cudf::detail::lists_column_device_view const& lists_column,
