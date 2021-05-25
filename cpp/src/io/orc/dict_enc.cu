@@ -125,8 +125,7 @@ __global__ void __launch_bounds__(block_size, 2)
                            uint32_t *dict_data,
                            uint32_t *dict_index,
                            size_t row_index_stride,
-                           size_type *str_col_ids,
-                           uint32_t num_columns)
+                           device_span<int const> str_col_flat_indexes)
 {
   __shared__ __align__(16) dictinit_state_s state_g;
 
@@ -141,12 +140,13 @@ __global__ void __launch_bounds__(block_size, 2)
   dictinit_state_s *const s = &state_g;
   uint32_t col_id           = blockIdx.x;
   uint32_t group_id         = blockIdx.y;
+  auto const num_str_cols   = str_col_flat_indexes.size();
   uint32_t nnz, start_row, dict_char_count;
   int t = threadIdx.x;
 
   if (t == 0) {
-    column_device_view *leaf_column_view = view.begin() + str_col_ids[col_id];
-    s->chunk                             = chunks[group_id * num_columns + col_id];
+    column_device_view *leaf_column_view = view.begin() + str_col_flat_indexes[col_id];
+    s->chunk                             = chunks[group_id * num_str_cols + col_id];
     s->chunk.leaf_column                 = leaf_column_view;
     s->chunk.dict_data =
       dict_data + col_id * leaf_column_view->size() + group_id * row_index_stride;
@@ -283,16 +283,16 @@ __global__ void __launch_bounds__(block_size, 2)
   // while making any future changes.
   dict_char_count = block_reduce(temp_storage.reduce_storage).Sum(dict_char_count);
   if (!t) {
-    chunks[group_id * num_columns + col_id].num_strings       = nnz;
-    chunks[group_id * num_columns + col_id].string_char_count = s->chunk.string_char_count;
-    chunks[group_id * num_columns + col_id].num_dict_strings  = nnz - s->total_dupes;
-    chunks[group_id * num_columns + col_id].dict_char_count   = dict_char_count;
-    chunks[group_id * num_columns + col_id].leaf_column       = s->chunk.leaf_column;
+    chunks[group_id * num_str_cols + col_id].num_strings       = nnz;
+    chunks[group_id * num_str_cols + col_id].string_char_count = s->chunk.string_char_count;
+    chunks[group_id * num_str_cols + col_id].num_dict_strings  = nnz - s->total_dupes;
+    chunks[group_id * num_str_cols + col_id].dict_char_count   = dict_char_count;
+    chunks[group_id * num_str_cols + col_id].leaf_column       = s->chunk.leaf_column;
 
-    chunks[group_id * num_columns + col_id].dict_data  = s->chunk.dict_data;
-    chunks[group_id * num_columns + col_id].dict_index = s->chunk.dict_index;
-    chunks[group_id * num_columns + col_id].start_row  = s->chunk.start_row;
-    chunks[group_id * num_columns + col_id].num_rows   = s->chunk.num_rows;
+    chunks[group_id * num_str_cols + col_id].dict_data  = s->chunk.dict_data;
+    chunks[group_id * num_str_cols + col_id].dict_index = s->chunk.dict_index;
+    chunks[group_id * num_str_cols + col_id].start_row  = s->chunk.start_row;
+    chunks[group_id * num_str_cols + col_id].num_rows   = s->chunk.num_rows;
   }
 }
 
@@ -432,16 +432,15 @@ void InitDictionaryIndices(const table_device_view &view,
                            uint32_t *dict_data,
                            uint32_t *dict_index,
                            size_t row_index_stride,
-                           size_type *str_col_ids,
-                           uint32_t num_columns,
+                           device_span<int const> str_col_flat_indexes,
                            uint32_t num_rowgroups,
                            rmm::cuda_stream_view stream)
 {
   static constexpr int block_size = 512;
   dim3 dim_block(block_size, 1);
-  dim3 dim_grid(num_columns, num_rowgroups);
+  dim3 dim_grid(str_col_flat_indexes.size(), num_rowgroups);
   gpuInitDictionaryIndices<block_size><<<dim_grid, dim_block, 0, stream.value()>>>(
-    chunks, view, dict_data, dict_index, row_index_stride, str_col_ids, num_columns);
+    chunks, view, dict_data, dict_index, row_index_stride, str_col_flat_indexes);
 }
 
 /**

@@ -197,16 +197,14 @@ class writer::impl {
    *
    * @param view Table device view representing input table
    * @param columns List of columns
-   * @param str_col_ids List of columns that are strings type
-   * @param d_str_col_ids List of columns that are strings type in device memory
+   * @param str_col_flat_indexes List of columns that are strings type
    * @param dict_data Dictionary data memory
    * @param dict_index Dictionary index memory
    * @param dict List of dictionary chunks
    */
   void init_dictionaries(const table_device_view& view,
                          orc_column_view* columns,
-                         std::vector<int> const& str_col_ids,
-                         device_span<size_type> d_str_col_ids,
+                         host_span<int const> str_col_flat_indexes,
                          uint32_t* dict_data,
                          uint32_t* dict_index,
                          hostdevice_vector<gpu::DictionaryChunk>* dict);
@@ -215,14 +213,14 @@ class writer::impl {
    * @brief Builds up per-stripe dictionaries for string columns.
    *
    * @param columns List of columns
-   * @param str_col_ids List of columns that are strings type
+   * @param str_col_flat_indexes List of columns that are strings type
    * @param stripe_bounds List of stripe boundaries
    * @param dict List of dictionary chunks
    * @param dict_index List of dictionary indices
    * @param stripe_dict List of stripe dictionaries
    */
   void build_dictionaries(orc_column_view* columns,
-                          std::vector<int> const& str_col_ids,
+                          host_span<int const> str_col_flat_indexes,
                           host_span<stripe_rowgroups const> stripe_bounds,
                           hostdevice_vector<gpu::DictionaryChunk> const& dict,
                           uint32_t* dict_index,
@@ -255,7 +253,7 @@ class writer::impl {
    *
    * @param view Table device view representing input table
    * @param columns List of columns
-   * @param str_col_ids List of columns that are strings type
+   * @param str_col_flat_indexes List of columns that are strings type
    * @param dict_data Dictionary data memory
    * @param dict_index Dictionary index memory
    * @param dec_chunk_sizes Information about size of encoded decimal columns
@@ -265,7 +263,7 @@ class writer::impl {
    */
   encoded_data encode_columns(const table_device_view& view,
                               host_span<orc_column_view const> columns,
-                              std::vector<int> const& str_col_ids,
+                              host_span<int const> str_col_flat_indexes,
                               rmm::device_uvector<uint32_t>&& dict_data,
                               rmm::device_uvector<uint32_t>&& dict_index,
                               encoder_decimal_info&& dec_chunk_sizes,
