@@ -178,14 +178,6 @@ ConfigureTest(INTEROP_TEST
     interop/from_arrow_test.cpp
     interop/dlpack_test.cpp)
 
-add_custom_command(TARGET INTEROP_TEST POST_BUILD
-    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
-    COMMAND  ninja -t deps CMakeFiles/cudf.dir/src/interop/dlpack.cpp.o )
-
-add_custom_command(TARGET INTEROP_TEST POST_BUILD
-    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
-    COMMAND  ninja -t deps tests/CMakeFiles/INTEROP_TEST.dir/interop/dlpack_test.cpp.o )
-
 ###################################################################################################
 # - io tests --------------------------------------------------------------------------------------
 ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cu)
