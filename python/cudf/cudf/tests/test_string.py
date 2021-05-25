@@ -3159,12 +3159,7 @@ def test_str_join_lists_error():
             "rep_str",
             "sep_str",
             cudf.Series(
-                [
-                    "a-rep_str-b",
-                    "",
-                    "rep_str**hello**rep_str**world",
-                    None,
-                ]
+                ["a-rep_str-b", "", "rep_str**hello**rep_str**world", None,]
             ),
         ),
         (
