@@ -6013,12 +6013,14 @@ class Series(SingleColumnFrame, Serializable):
             return self.__class__._from_data(data, index=idx)
 
         return super()._explode(self._column_names[0], ignore_index)
-    
-    def pct_change(self, periods=1, fill_method='ffill', limit=None, freq=None):
+
+    def pct_change(
+        self, periods=1, fill_method="ffill", limit=None, freq=None
+    ):
         """
         Calculates the percent change between sequential elements
         in the Series.
-        
+
         Parameters
         ----------
         periods : int, default 1
@@ -6031,7 +6033,7 @@ class Series(SingleColumnFrame, Serializable):
         freq : str, optional
             Increment to use from time series API.
             Not yet implemented.
-        
+
         Returns
         -------
         Series
@@ -6040,9 +6042,11 @@ class Series(SingleColumnFrame, Serializable):
             raise NotImplementedError("limit parameter not supported yet.")
         if freq is not None:
             raise NotImplementedError("freq parameter not supported yet.")
-        if fill_method not in ['ffill', 'bfill']:
-            raise NotImplementedError("fill_method must be either 'ffill' or 'bfill'.")
-            
+        if fill_method not in ["ffill", "bfill"]:
+            raise NotImplementedError(
+                "fill_method must be either 'ffill' or 'bfill'."
+            )
+
         data = self.fillna(method=fill_method, limit=limit)
         diff = data.diff(periods=periods)
         change = diff / data.shift(periods=periods, freq=freq)
