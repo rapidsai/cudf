@@ -7,12 +7,12 @@ import pyarrow as pa
 
 from dask.dataframe.categorical import categorical_dtype_dispatch
 from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
+from dask.dataframe.dispatch import union_categoricals_dispatch
 from dask.dataframe.methods import (
     concat_dispatch,
     is_categorical_dtype_dispatch,
     tolist_dispatch,
 )
-from dask.dataframe.multi import union_categoricals_dispatch
 from dask.dataframe.utils import (
     UNKNOWN_CATEGORIES,
     _nonempty_scalar,
@@ -247,7 +247,7 @@ def is_categorical_dtype_cudf(obj):
 def union_categoricals_cudf(
     to_union, sort_categories=False, ignore_order=False
 ):
-    return cudf.core.column.categorical._union_categoricals(
+    return cudf.api.types._union_categoricals(
         to_union, sort_categories=False, ignore_order=False
     )
 
