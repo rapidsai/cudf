@@ -394,7 +394,7 @@ struct NullEquals {
     if (lhs_valid && rhs_valid) return x == y;
     return false;
   }
-  // To allow constexpr is_op_supported
+  // To allow std::is_invocable_v = true
   template <typename TypeLhs, typename TypeRhs>
   CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x == y);
 };

@@ -37,24 +37,12 @@ constexpr inline bool has_common_type_v = has_common_type_impl<void, Ts...>::val
 
 namespace binops::compiled {
 
-template <typename T1, typename BinaryFunctor>
-constexpr bool is_op_supported(void)
-{
-  return std::is_invocable_v<BinaryFunctor, T1>;
-}
-
-template <typename T1, typename T2, typename BinaryFunctor>
-constexpr bool is_op_supported(void)
-{
-  return std::is_invocable_v<BinaryFunctor, T1, T2>;
-}
-
 template <typename BinaryOperator>
 struct is_binary_operation_supported {
   template <typename TypeOut, typename TypeLhs, typename TypeRhs>
   inline constexpr bool operator()(void)
   {
-    if constexpr (is_op_supported<TypeLhs, TypeRhs, BinaryOperator>()) {
+    if constexpr (std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>()) {
       using ReturnType = std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>;
       return column_device_view::has_element_accessor<TypeLhs>() and
              column_device_view::has_element_accessor<TypeRhs>() and
@@ -66,23 +54,6 @@ struct is_binary_operation_supported {
     }
   }
 };
-
-// has ::operate
-template <typename T, typename T1, typename T2, typename T3, typename = T>
-struct has_operate : std::false_type {
-};
-template <typename T, typename T1, typename T2, typename T3>
-struct has_operate<
-  T,
-  T1,
-  T2,
-  T3,
-  std::enable_if_t<std::is_same<decltype(T::template operate<T1, T2, T3>), T1(T2, T3)>::value, T>>
-  : std::true_type {
-};
-
-template <class T, typename T1, typename T2, typename T3>
-constexpr inline bool has_operate_v = has_operate<T, T1, T2, T3>::value;
 
 }  // namespace binops::compiled
 }  // namespace cudf

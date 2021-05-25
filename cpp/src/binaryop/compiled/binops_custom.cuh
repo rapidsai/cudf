@@ -40,50 +40,37 @@ struct ops_wrapper {
   mutable_column_device_view& out;
   column_device_view const& lhs;
   column_device_view const& rhs;
-  template <typename TypeCommon,
-            std::enable_if_t<is_op_supported<TypeCommon, TypeCommon, BinaryOperator>()>* = nullptr>
+  template <typename TypeCommon>
   __device__ void operator()(size_type i)
   {
-    TypeCommon x = type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs);
-    TypeCommon y = type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs);
-    auto result  = BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(x, y);
-    if constexpr (store_as_result)
-      out.element<decltype(result)>(i) = result;
-    else
-      type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
-  }
-
-  template <
-    typename TypeCommon,
-    typename... Args,
-    std::enable_if_t<not is_op_supported<TypeCommon, TypeCommon, BinaryOperator>()>* = nullptr>
-  __device__ void operator()(Args...)
-  {
+    if constexpr (std::is_invocable_v<BinaryOperator, TypeCommon, TypeCommon>()) {
+      TypeCommon x = type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs);
+      TypeCommon y = type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs);
+      auto result  = BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(x, y);
+      if constexpr (store_as_result)
+        out.element<decltype(result)>(i) = result;
+      else
+        type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
+    }
   }
 };
 
+// Specialize for NullEquals
 template <>
 struct ops_wrapper<ops::NullEquals, true> {
   mutable_column_device_view& out;
   column_device_view const& lhs;
   column_device_view const& rhs;
-  template <typename TypeCommon,
-            std::enable_if_t<is_op_supported<TypeCommon, TypeCommon, ops::NullEquals>()>* = nullptr>
+  template <typename TypeCommon>
   __device__ void operator()(size_type i)
   {
-    TypeCommon x = type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs);
-    TypeCommon y = type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs);
-    auto result  = ops::NullEquals{}.template operator()<TypeCommon, TypeCommon>(
-      x, y, lhs.is_valid(i), rhs.is_valid(i));
-    out.element<decltype(result)>(i) = result;
-  }
-
-  template <
-    typename TypeCommon,
-    typename... Args,
-    std::enable_if_t<not is_op_supported<TypeCommon, TypeCommon, ops::NullEquals>()>* = nullptr>
-  __device__ void operator()(Args...)
-  {
+    if constexpr (std::is_invocable_v<ops::NullEquals, TypeCommon, TypeCommon>()) {
+      TypeCommon x = type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs);
+      TypeCommon y = type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs);
+      auto result  = ops::NullEquals{}.template operator()<TypeCommon, TypeCommon>(
+        x, y, lhs.is_valid(i), rhs.is_valid(i));
+      out.element<decltype(result)>(i) = result;
+    }
   }
 };
 
@@ -97,57 +84,39 @@ struct ops2_wrapper {
   mutable_column_device_view& out;
   column_device_view const& lhs;
   column_device_view const& rhs;
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<!has_common_type_v<TypeLhs, TypeRhs> and
-                             is_op_supported<TypeLhs, TypeRhs, BinaryOperator>()>* = nullptr>
+  template <typename TypeLhs, typename TypeRhs>
   __device__ void operator()(size_type i)
   {
-    TypeLhs x   = lhs.element<TypeLhs>(i);
-    TypeRhs y   = rhs.element<TypeRhs>(i);
-    auto result = BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(x, y);
-    if constexpr (store_as_result)
-      out.element<decltype(result)>(i) = result;
-    else
-      type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
-  }
-
-  template <typename TypeLhs,
-            typename TypeRhs,
-            typename... Args,
-            std::enable_if_t<has_common_type_v<TypeLhs, TypeRhs> or
-                             not is_op_supported<TypeLhs, TypeRhs, BinaryOperator>()>* = nullptr>
-  __device__ void operator()(Args...)
-  {
+    if constexpr (!has_common_type_v<TypeLhs, TypeRhs> and
+                  std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>()) {
+      TypeLhs x   = lhs.element<TypeLhs>(i);
+      TypeRhs y   = rhs.element<TypeRhs>(i);
+      auto result = BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(x, y);
+      if constexpr (store_as_result)
+        out.element<decltype(result)>(i) = result;
+      else
+        type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
+    }
   }
 };
 
-// Specialize NullEquals for op2_wrapper, ops2_wrapper structs!
+// Specialize for NullEquals
 template <>
 struct ops2_wrapper<ops::NullEquals, true> {
   mutable_column_device_view& out;
   column_device_view const& lhs;
   column_device_view const& rhs;
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<!has_common_type_v<TypeLhs, TypeRhs> and
-                             is_op_supported<TypeLhs, TypeRhs, ops::NullEquals>()>* = nullptr>
+  template <typename TypeLhs, typename TypeRhs>
   __device__ void operator()(size_type i)
   {
-    TypeLhs x   = lhs.element<TypeLhs>(i);
-    TypeRhs y   = rhs.element<TypeRhs>(i);
-    auto result = ops::NullEquals{}.template operator()<TypeLhs, TypeRhs>(
-      x, y, lhs.is_valid(i), rhs.is_valid(i));
-    out.element<decltype(result)>(i) = result;
-  }
-
-  template <typename TypeLhs,
-            typename TypeRhs,
-            typename... Args,
-            std::enable_if_t<has_common_type_v<TypeLhs, TypeRhs> or
-                             not is_op_supported<TypeLhs, TypeRhs, ops::NullEquals>()>* = nullptr>
-  __device__ void operator()(Args...)
-  {
+    if constexpr (!has_common_type_v<TypeLhs, TypeRhs> and
+                  std::is_invocable_v<ops::NullEquals, TypeLhs, TypeRhs>()) {
+      TypeLhs x   = lhs.element<TypeLhs>(i);
+      TypeRhs y   = rhs.element<TypeRhs>(i);
+      auto result = ops::NullEquals{}.template operator()<TypeLhs, TypeRhs>(
+        x, y, lhs.is_valid(i), rhs.is_valid(i));
+      out.element<decltype(result)>(i) = result;
+    }
   }
 };
 
@@ -188,7 +157,8 @@ struct device_type_dispatcher {
 };
 }  // namespace
 /**
- * @brief Functor that runs binary operation on each element of @p lhsd and @p rhsd columns.
+ * @brief Deploys single type or double type dispatcher that runs binary operation on each element
+ * of @p lhsd and @p rhsd columns.
  *
  * This template is instantiated for each binary operator.
  *
