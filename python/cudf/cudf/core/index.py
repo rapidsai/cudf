@@ -2879,6 +2879,13 @@ class Index(BaseIndex, metaclass=IndexMeta):
     Index
         cudf Index
 
+    Warnings
+    --------
+    This class should not be subclassed. It is designed as a factory for
+    different subclasses of :class:`BaseIndex` depending on the provided input.
+    If you absolutely must, and if you're intimately familiar with the
+    internals of cuDF, subclass :class:`BaseIndex` instead.
+
     Examples
     --------
     >>> import cudf
@@ -2900,6 +2907,9 @@ class Index(BaseIndex, metaclass=IndexMeta):
         tupleize_cols=True,
         **kwargs,
     ):
+        assert cls is Index, (
+            "Index cannot be subclassed, extend BaseIndex " "instead."
+        )
         if tupleize_cols is not True:
             raise NotImplementedError(
                 "tupleize_cols != True is not yet supported"
