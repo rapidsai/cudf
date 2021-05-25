@@ -273,6 +273,7 @@ add_library(cudf
     src/lists/copying/copying.cu
     src/lists/copying/gather.cu
     src/lists/copying/segmented_gather.cu
+    src/lists/copying/scatter_helper.cu
     src/lists/count_elements.cu
     src/lists/drop_list_duplicates.cu
     src/lists/explode.cu
