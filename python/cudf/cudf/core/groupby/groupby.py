@@ -710,7 +710,7 @@ class GroupBy(Serializable):
         """Internal implementation for `ffill` and `bfill`
         """
         value_column_labels = self._value_column_labels()
-        value_columns = self._data.select_by_labels(value_column_labels)
+        value_columns = self.obj._data.select_by_labels(value_column_labels)
         result = self._groupby.replace_nulls(Table(value_columns), method)
         result = self.obj.__class__.from_table(result)
         return result._copy_type_metadata(value_columns)
