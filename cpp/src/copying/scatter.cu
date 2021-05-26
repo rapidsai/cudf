@@ -194,8 +194,8 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
     auto contents           = new_indices->release();
     auto indices_column     = std::make_unique<column>(indices_type,
                                                    static_cast<size_type>(output_size),
-                                                   *(contents.data.release()),
-                                                   rmm::device_buffer{0, stream, mr},
+                                                   std::move(*(contents.data.release())),
+                                                   rmm::device_buffer{},
                                                    0);
     // use the keys from the matched column
     std::unique_ptr<column> keys_column(std::move(dict_target->release().children.back()));
