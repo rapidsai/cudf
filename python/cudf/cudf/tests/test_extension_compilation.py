@@ -207,3 +207,111 @@ def test_is_na(fn):
             raise RuntimeError('Invalid masked value is not NA and should be')
 
     test_kernel[1, 1]()
+
+
+def func_lt_na(x):
+    return x < NA
+
+
+def func_gt_na(x):
+    return x > NA
+
+
+def func_eq_na(x):
+    return x == NA
+
+
+def func_ne_na(x):
+    return x != NA
+
+
+def func_ge_na(x):
+    return x >= NA
+
+
+def func_le_na(x):
+    return x <= NA
+
+
+def func_na_lt(x):
+    return x < NA
+
+
+def func_na_gt(x):
+    return x > NA
+
+
+def func_na_eq(x):
+    return x == NA
+
+
+def func_na_ne(x):
+    return x != NA
+
+
+def func_na_ge(x):
+    return x >= NA
+
+
+def func_na_le(x):
+    return x <= NA
+
+
+na_comparison_funcs = (
+    func_lt_na,
+    func_gt_na,
+    func_eq_na,
+    func_ne_na,
+    func_ge_na,
+    func_le_na,
+    func_na_lt,
+    func_na_gt,
+    func_na_eq,
+    func_na_ne,
+    func_na_ge,
+    func_na_le,
+)
+
+
+@pytest.mark.parametrize('fn', na_comparison_funcs)
+@pytest.mark.parametrize('ty', number_types, ids=number_ids)
+def test_na_masked_comparisons(fn, ty):
+
+    device_fn = cuda.jit(device=True)(fn)
+
+    @cuda.jit(debug=True)
+    def test_kernel():
+        unmasked = ty(1)
+        valid_masked = Masked(unmasked, True)
+        invalid_masked = Masked(unmasked, False)
+
+        valid_cmp_na = device_fn(valid_masked)
+        invalid_cmp_na = device_fn(invalid_masked)
+
+        if valid_cmp_na:
+            raise RuntimeError('Valid masked value compared True with NA')
+
+        if invalid_cmp_na:
+            raise RuntimeError('Invalid masked value compared True with NA')
+
+    test_kernel[1, 1]()
+
+
+# xfail because scalars do not yet cast for a comparison to NA
+@pytest.mark.xfail
+@pytest.mark.parametrize('fn', na_comparison_funcs)
+@pytest.mark.parametrize('ty', number_types, ids=number_ids)
+def test_na_scalar_comparisons(fn, ty):
+
+    device_fn = cuda.jit(device=True)(fn)
+
+    @cuda.jit(debug=True)
+    def test_kernel():
+        unmasked = ty(1)
+
+        unmasked_cmp_na = device_fn(unmasked)
+
+        if unmasked_cmp_na:
+            raise RuntimeError('Unmasked value compared True with NA')
+
+    test_kernel[1, 1]()
