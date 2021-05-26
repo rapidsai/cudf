@@ -27,12 +27,12 @@ requirements:
     - python
     - cudf {{ version }}
     - dask>=2021.4.0,<=2021.5.0
-    - distributed >=2.22.0,<=2021.5.0
+    - distributed>=2.22.0,<=2021.5.0
   run:
     - python
     - cudf {{ version }}
     - dask>=2021.4.0,<=2021.5.0
-    - distributed >=2.22.0,<=2021.5.0
+    - distributed>=2.22.0,<=2021.5.0
   
 test:
   requires:
