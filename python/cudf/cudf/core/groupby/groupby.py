@@ -8,7 +8,10 @@ from nvtx import annotate
 
 import cudf
 from cudf._lib import groupby as libgroupby
+from cudf._lib.table import Table
+from cudf._typing import DataFrameOrSeries
 from cudf.core.abc import Serializable
+from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
@@ -702,6 +705,124 @@ class GroupBy(Serializable):
     def cummax(self):
         """Get the column-wise cumulative maximum value in each group."""
         return self.agg("cummax")
+
+    def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
+        """Internal implementation for `ffill` and `bfill`
+        """
+        value_column_labels = self._value_column_labels()
+        value_columns = self._data.select_by_labels(value_column_labels)
+        result = self._groupby.replace_nulls(Table(value_columns), method)
+        result = self.obj.__class__.from_table(result)
+        return result._copy_type_metadata(value_columns)
+
+    def pad(self, limit=None):
+        """Forward fill NA values.
+
+        Parameters
+        ----------
+        limit : int, default None
+            Unsupported
+        """
+
+        if limit is not None:
+            raise NotImplementedError("Does not support limit param yet.")
+
+        return self._scan_fill("ffill", limit)
+
+    ffill = pad
+
+    def backfill(self, limit=None):
+        """Backward fill NA values.
+
+        Parameters
+        ----------
+        limit : int, default None
+            Unsupported
+        """
+        if limit is not None:
+            raise NotImplementedError("Does not support limit param yet.")
+
+        return self._scan_fill("bfill", limit)
+
+    bfill = backfill
+
+    def fillna(
+        self,
+        value=None,
+        method=None,
+        axis=0,
+        inplace=False,
+        limit=None,
+        downcast=None,
+    ):
+        """Fill NA values using the specified method.
+
+        Parameters
+        ----------
+        value : scalar, dict, Series or DataFrame
+            Value to use to fill the holes. Cannot be specified with method.
+        method : {'backfill', 'bfill', 'pad', 'ffill', None}, default None
+            Method to use for filling holes in reindexed Series
+
+            - pad/ffill: propagate last valid observation forward to next valid
+            - backfill/bfill: use next valid observation to fill gap
+        axis : {0 or 'index', 1 or 'columns'}
+            Unsupoprted
+        inplace : bool, default False
+            If `True`, fill inplace. Note: this will modify other views on this
+            object.
+        limit : int, default None
+            Unsupported
+        downcast : dict, default None
+            Unsupported
+
+        Returns
+        -------
+        DataFrame
+        """
+        if inplace:
+            raise NotImplementedError("Does not support inplace yet.")
+        if limit is not None:
+            raise NotImplementedError("Does not support limit param yet.")
+        if downcast is not None:
+            raise NotImplementedError("Does not support downcast yet.")
+        if not axis == 0:
+            raise NotImplementedError("Only support axis == 0.")
+
+        if value is None and method is None:
+            raise ValueError("Must specify a fill 'value' or 'method'.")
+        if value is not None and method is not None:
+            raise ValueError("Cannot specify both 'value' and 'method'.")
+
+        if method:
+            if method not in {"pad", "ffill", "backfill", "bfill"}:
+                raise ValueError(
+                    "Method can only be of 'pad', 'ffill',"
+                    "'backfill', 'bfill'."
+                )
+            return getattr(self, method, limit)
+        else:
+            if is_scalar(value):
+                # Verify scalar type match all groupby value columns type
+                # fill with column.fillna
+                pass
+            else:
+                if isinstance(value, (cudf.Series, pd.Series)):
+                    # Verify series type the same as groupby value column
+                    pass
+                elif isinstance(value, (dict, cudf.DataFrame, pd.DataFrame)):
+                    # Verify column number and name matches
+                    # Verify value.column data type match with each groupby
+                    #   value column
+                    pass
+
+    def _value_column_labels(self) -> list:
+        """Get the labels of the value columns.
+        To retrieve these columns, use `self._data.select_by_label(labels)`.
+        """
+        return [
+            x for x in self.obj._column_names if x not in self.grouping.names
+        ]
 
 
 class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):

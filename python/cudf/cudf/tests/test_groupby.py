@@ -1696,3 +1696,15 @@ def test_groupby_mix_agg_scan():
     gb.agg(func[1:])
     with pytest.raises(NotImplementedError, match=err_msg):
         gb.agg(func)
+
+
+@pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
+@pytest.mark.parametrize("value", [42])
+def test_groupby_fillna_value(nelem):
+    pass
+
+
+@pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
+@pytest.mark.parametrize("value", ["pad", "ffill", "backfill", "bfill"])
+def test_groupby_fillna_method(nelem):
+    pass
