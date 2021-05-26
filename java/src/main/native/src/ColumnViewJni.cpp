@@ -1341,7 +1341,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
     cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
 
     if (n_cudf_columns.size() == 0) {
-      rmm::device_buffer null_mask{0};
+      rmm::device_buffer null_mask{};
       copy->set_null_mask(null_mask);
       return reinterpret_cast<jlong>(copy.release());
     }
