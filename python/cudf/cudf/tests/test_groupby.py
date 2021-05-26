@@ -35,10 +35,12 @@ def assert_groupby_results_equal(
     expect, got, sort=True, as_index=True, by=None, **kwargs
 ):
     # Because we don't sort by index by default in groupby,
-    # sort expect and got by index before comparing
+    # sort expect and got by index before comparing. We use
+    # merge sort because it's stable, in transform operations
+    # we require rows to maintain their order within groups.
     if sort:
         if as_index:
-            expect = expect.sort_index()
+            expect = expect.sort_index(kind='mergesort')
             got = got.sort_index()
         else:
             assert by is not None
@@ -1908,21 +1910,59 @@ def test_groupby_fillna_value(nelem, value):
     pass
 
 
+@pytest.mark.parametrize("nelem", [10, 100, 1000])
 @pytest.mark.parametrize("method", ["pad", "ffill", "backfill", "bfill"])
-def test_groupby_fillna_method(method):
-    key = pd.Series([1, 2, 1, 2, 1, 2])
-    pdf = pd.DataFrame(
-        {
-            "general": [1, 3, None, None, 4, 2],
-            "leading_nulls": [None, None, 1, 3, 2, 4],
-            "trailing_nulls": [1, 3, 2, 4, None, None],
-        }
+def test_groupby_fillna_method(nelem, method):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "float32", "null_frequency": 0.4, "cardinality": 10},
+            {
+                "dtype": "datetime64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "timedelta64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "list",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+                "lists_max_length": 10,
+                "nesting_max_depth": 3,
+                "value_type": "int64"
+            },
+            {
+                "dtype": "category",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "decimal64",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "str",
+                "null_frequency": 0.4,
+                "cardinality": 10
+            }
+        ],
+        rows=nelem,
+        use_threads=False,
+        seed=0
     )
-
+    key_col = '0'
+    value_cols = ['1', '2', '3', '4', '5', '6', '7', '8']
+    pdf = t.to_pandas()
     gdf = cudf.from_pandas(pdf)
 
-    expect = pdf.groupby(key).fillna(method=method)
-    got = gdf.groupby(key).fillna(method=method)
+    expect = pdf.groupby(key_col).fillna(method=method)
+    got = gdf.groupby(key_col).fillna(method=method)
 
-    expect.index = key
-    assert_groupby_results_equal(expect, got)
+    expect.index = pdf[key_col]
+    assert_groupby_results_equal(expect[value_cols], got[value_cols])
