@@ -702,7 +702,7 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
                                                      min_periods,
                                                      agg._null_handling,
                                                      stream,
-                                                     mr);
+                                                     rmm::mr::get_current_device_resource());
 
     result = lists::detail::drop_list_duplicates(lists_column_view(collected_list->view()),
                                                  null_equality::EQUAL,
