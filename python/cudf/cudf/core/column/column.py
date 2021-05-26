@@ -1278,7 +1278,7 @@ class ColumnBase(Column, Serializable):
         if isinstance(dtype, CategoricalDtype) and not (
             isinstance(self, cudf.core.column.CategoricalColumn)
         ):
-            new = build_categorical_column(
+            return build_categorical_column(
                 categories=dtype.categories._values,
                 codes=as_column(self.base_data, dtype=self.dtype),
                 mask=self.base_mask,
@@ -1291,14 +1291,17 @@ class ColumnBase(Column, Serializable):
         if isinstance(dtype, StructDtype) and isinstance(
             self, cudf.core.column.StructColumn
         ):
-            new = self._rename_fields(dtype.fields.keys())
+            return self._rename_fields(dtype.fields.keys())
 
         if isinstance(dtype, Decimal64Dtype) and isinstance(
             self, cudf.core.column.DecimalColumn
         ):
-            pass
+            new = self.copy()
+            new.dtype.precision = dtype.precision
 
-        return new
+            return new
+
+        return self.copy()
 
     def _copy_type_metadata(self: T, other: ColumnBase) -> ColumnBase:
         """
