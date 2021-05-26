@@ -8,6 +8,7 @@ import pyarrow as pa
 import cudf
 from cudf._lib.copying import segmented_gather
 from cudf._lib.lists import (
+    concatenate_list_elements,
     concatenate_rows,
     contains_scalar,
     count_elements,
@@ -518,52 +519,50 @@ class ListMethods(ColumnMethodsMixin):
             retain_index=not ignore_index,
         )
 
-    def flatten(self) -> ParentType:
+    def concat(self, dropna=True) -> ParentType:
         """
-        Removes one level of nesting from each row of the list Series.
+        Concatenates the lists in each row
+
+        Parameters
+        ----------
+        dropna: bool,optional
+            If True (default), ignores top-level null elements in each row.
+            If False, and top-level null elements are present, the resulting
+            row in the output is null.
 
         Returns
         -------
-        Series or Index with one level of nesting removed from each row.
+        Series or Index
 
         Examples
         --------
         >>> s1
         0      [[1.0, 2.0], [3.0, 4.0, 5.0]]
-        1    [[6.0, nan], [7.0], [8.0, 9.0]]
+        1    [[6.0, None], [7.0], [8.0, 9.0]]
         dtype: list
-        >>> s1.list.flatten()
+        >>> s1.list.concat()
         0    [1.0, 2.0, 3.0, 4.0, 5.0]
-        1    [6.0, nan, 7.0, 8.0, 9.0]
+        1    [6.0, None, 7.0, 8.0, 9.0]
         dtype: list
 
-        Null values at the top-level in each row are dropped:
+        Null values at the top-level in each row are dropped by default:
 
         >>> s2
         0    [[1.0, 2.0], None, [3.0, 4.0, 5.0]]
-        1        [[6.0, nan], [7.0], [8.0, 9.0]]
+        1        [[6.0, None], [7.0], [8.0, 9.0]]
         dtype: list
-        >>> s2.list.flatten()
+        >>> s2.list.concat()
         0    [1.0, 2.0, 3.0, 4.0, 5.0]
+        1    [6.0, None, 7.0, 8.0, 9.0]
+        dtype: list
+
+        Use ``dropna=False`` to produce a null instead:
+
+        >>> s2.list.concat(dropna=False)
+        0                         None
         1    [6.0, nan, 7.0, 8.0, 9.0]
         dtype: list
         """
-        result_dtype = self._column.dtype.element_type
-        if not isinstance(result_dtype, ListDtype):
-            return self._return_or_inplace(self._column)
-
-        self_offsets = self._column.offsets
-        child_offsets = self._column.elements.offsets
-        result_offsets = child_offsets[self_offsets]
-        result_children = (result_offsets, self._column.elements.elements)
-
         return self._return_or_inplace(
-            ListColumn(
-                self._column.size,
-                self._column.dtype.element_type,
-                self._column.mask,
-                self._column.offset,
-                self._column.null_count,
-                result_children,
-            )
+            concatenate_list_elements(self._column, dropna=dropna)
         )

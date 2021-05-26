@@ -1,6 +1,6 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 import functools
-import itertools
+import operator
 
 import numpy as np
 import pandas as pd
@@ -331,20 +331,16 @@ def test_contains_null_search_key(data, expect):
         [[["a", "c", "de", None], None, ["fg"]], [["abc", "de"], None]],
     ],
 )
-def test_flatten(row):
-    def flatten(row):
-        return list(
-            itertools.chain.from_iterable([x for x in row if x is not None])
-        )
+@pytest.mark.parametrize("dropna", [True, False])
+def test_concat_elements(row, dropna):
+    if not dropna and any(x is None for x in row):
+        result = None
+    else:
+        result = functools.reduce(operator.add, row)
 
-    expect = pd.Series([flatten(row)])
-    got = cudf.Series([row]).list.flatten()
+    expect = pd.Series([result])
+    got = cudf.Series([row]).list.concat(dropna=dropna)
     assert_eq(expect, got)
-
-
-def test_flatten_no_nesting():
-    s = cudf.Series([[1, 2], [3, 4, 5]])
-    assert_eq(s, s.list.flatten())
 
 
 def test_concatenate_rows_of_lists():
