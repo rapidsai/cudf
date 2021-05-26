@@ -344,3 +344,20 @@ def test_flatten(row):
 def test_flatten_no_nesting():
     s = cudf.Series([[1, 2], [3, 4, 5]])
     assert_eq(s, s.list.flatten())
+
+
+def test_concatenate_rows_of_lists():
+    pdf = pd.DataFrame({"val": [["a", "a"], ["b"], ["c"]]})
+    gdf = cudf.from_pandas(pdf)
+
+    expect = pdf["val"] + pdf["val"]
+    got = gdf["val"] + gdf["val"]
+
+    assert_eq(expect, got)
+
+
+def test_concatenate_list_with_nonlist():
+    with pytest.raises(TypeError, match="can only concatenate list to list"):
+        gdf1 = cudf.DataFrame({"A": [["a", "c"], ["b", "d"], ["c", "d"]]})
+        gdf2 = cudf.DataFrame({"A": ["a", "b", "c"]})
+        gdf1["A"] + gdf2["A"]

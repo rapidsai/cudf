@@ -4377,12 +4377,6 @@ def test_constructor_properties():
     df[key1] = val1
     df[key2] = val2
 
-    # Correct use of _constructor (for DataFrame)
-    assert_eq(df, df._constructor({key1: val1, key2: val2}))
-
-    # Correct use of _constructor (for cudf.Series)
-    assert_eq(df[key1], df[key2]._constructor(val1, name=key1))
-
     # Correct use of _constructor_sliced (for DataFrame)
     assert_eq(df[key1], df._constructor_sliced(val1, name=key1))
 
@@ -6069,7 +6063,7 @@ def test_dataframe_init_1d_list(data, columns):
 def test_dataframe_init_from_arrays_cols(data, cols, index):
 
     gd_data = data
-    if isinstance(data, cupy.core.ndarray):
+    if isinstance(data, cupy.ndarray):
         # pandas can't handle cupy arrays in general
         pd_data = data.get()
 
@@ -8562,3 +8556,26 @@ def test_dataframe_argsort(df, ascending, expected):
     actual = df.argsort(ascending=ascending)
 
     assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "data,columns,index",
+    [
+        (pd.Series([1, 2, 3]), None, None),
+        (pd.Series(["a", "b", None, "c"], name="abc"), None, None),
+        (
+            pd.Series(["a", "b", None, "c"], name="abc"),
+            ["abc", "b"],
+            [1, 2, 3],
+        ),
+    ],
+)
+def test_dataframe_init_from_series(data, columns, index):
+    expected = pd.DataFrame(data, columns=columns, index=index)
+    actual = cudf.DataFrame(data, columns=columns, index=index)
+
+    assert_eq(
+        expected,
+        actual,
+        check_index_type=False if len(expected) == 0 else True,
+    )

@@ -12,7 +12,6 @@ from typing import (
     Callable,
     Dict,
     List,
-    Mapping,
     Optional,
     Sequence,
     Tuple,
@@ -44,9 +43,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
-    NUMERIC_TYPES,
     check_cast_unsupported_dtype,
-    cudf_dtypes_to_pandas_dtypes,
     get_time_unit,
     is_categorical_dtype,
     is_decimal_dtype,
@@ -56,7 +53,6 @@ from cudf.utils.dtypes import (
     is_scalar,
     is_string_dtype,
     is_struct_dtype,
-    min_signed_type,
     min_unsigned_type,
     np_to_pa_dtype,
 )
@@ -116,22 +112,16 @@ class ColumnBase(Column, Serializable):
             f"dtype: {self.dtype}"
         )
 
-    def to_pandas(
-        self, index: ColumnLike = None, nullable: bool = False, **kwargs
-    ) -> "pd.Series":
-        if nullable and self.dtype in cudf_dtypes_to_pandas_dtypes:
-            pandas_nullable_dtype = cudf_dtypes_to_pandas_dtypes[self.dtype]
-            arrow_array = self.to_arrow()
-            pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)
-            pd_series = pd.Series(pandas_array, copy=False)
-        elif str(self.dtype) in NUMERIC_TYPES and self.null_count == 0:
-            pd_series = pd.Series(cupy.asnumpy(self.values), copy=False)
-        elif is_interval_dtype(self.dtype):
-            pd_series = pd.Series(
-                pd.IntervalDtype().__from_arrow__(self.to_arrow())
-            )
-        else:
-            pd_series = self.to_arrow().to_pandas(**kwargs)
+    def to_pandas(self, index: pd.Index = None, **kwargs) -> "pd.Series":
+        """Convert object to pandas type.
+
+        The default implementation falls back to PyArrow for the conversion.
+        """
+        # This default implementation does not handle nulls in any meaningful
+        # way, but must consume the parameter to avoid passing it to PyArrow
+        # (which does not recognize it).
+        kwargs.pop("nullable", None)
+        pd_series = self.to_arrow().to_pandas(**kwargs)
 
         if index is not None:
             pd_series.index = index
@@ -333,45 +323,13 @@ class ColumnBase(Column, Serializable):
           4
         ]
         """
-        if isinstance(self, cudf.core.column.CategoricalColumn):
-            # arrow doesn't support unsigned codes
-            signed_type = (
-                min_signed_type(self.codes.max())
-                if self.codes.size > 0
-                else np.int8
-            )
-            codes = self.codes.astype(signed_type)
-            categories = self.categories
-
-            out_indices = codes.to_arrow()
-            out_dictionary = categories.to_arrow()
-
-            return pa.DictionaryArray.from_arrays(
-                out_indices, out_dictionary, ordered=self.ordered,
-            )
-
-        if isinstance(self, cudf.core.column.StringColumn) and (
-            self.null_count == len(self)
-        ):
-            return pa.NullArray.from_buffers(
-                pa.null(), len(self), [pa.py_buffer((b""))]
-            )
-
-        result = libcudf.interop.to_arrow(
+        return libcudf.interop.to_arrow(
             libcudf.table.Table(
                 cudf.core.column_accessor.ColumnAccessor({"None": self})
             ),
             [["None"]],
             keep_index=False,
         )["None"].chunk(0)
-
-        if isinstance(self.dtype, cudf.Decimal64Dtype):
-            result = result.view(
-                pa.decimal128(
-                    scale=result.type.scale, precision=self.dtype.precision
-                )
-            )
-        return result
 
     @classmethod
     def from_arrow(cls, array: pa.Array) -> ColumnBase:
@@ -723,7 +681,7 @@ class ColumnBase(Column, Serializable):
             nelem = len(key)
 
         if is_scalar(value):
-            value = self.dtype.type(value) if value is not None else value
+            value = cudf.Scalar(value, dtype=self.dtype)
         else:
             if len(value) != nelem:
                 msg = (
@@ -838,7 +796,7 @@ class ColumnBase(Column, Serializable):
         return indices[-1]
 
     def append(self, other: ColumnBase) -> ColumnBase:
-        return ColumnBase._concat([self, as_column(other)])
+        return self.__class__._concat([self, as_column(other)])
 
     def quantile(
         self,
@@ -890,9 +848,6 @@ class ColumnBase(Column, Serializable):
         result: Column
             Column of booleans indicating if each element is in values.
         """
-        lhs = self
-        rhs = None
-
         try:
             lhs, rhs = self._process_values_for_isin(values)
             res = lhs._isin_earlystop(rhs)
@@ -1167,32 +1122,26 @@ class ColumnBase(Column, Serializable):
         )
         return sorted_indices
 
+    def __arrow_array__(self, type=None):
+        raise TypeError(
+            "Implicit conversion to a host PyArrow Array via __arrow_array__ "
+            "is not allowed, To explicitly construct a PyArrow Array, "
+            "consider using .to_arrow()"
+        )
+
+    def __array__(self, dtype=None):
+        raise TypeError(
+            "Implicit conversion to a host NumPy array via __array__ is not "
+            "allowed. To explicitly construct a host array, consider using "
+            ".to_array()"
+        )
+
     @property
-    def __cuda_array_interface__(self) -> Mapping[builtins.str, Any]:
-        output = {
-            "shape": (len(self),),
-            "strides": (self.dtype.itemsize,),
-            "typestr": self.dtype.str,
-            "data": (self.data_ptr, False),
-            "version": 1,
-        }
-
-        if self.nullable and self.has_nulls:
-
-            # Create a simple Python object that exposes the
-            # `__cuda_array_interface__` attribute here since we need to modify
-            # some of the attributes from the numba device array
-            mask = SimpleNamespace(
-                __cuda_array_interface__={
-                    "shape": (len(self),),
-                    "typestr": "<t1",
-                    "data": (self.mask_ptr, True),
-                    "version": 1,
-                }
-            )
-            output["mask"] = mask
-
-        return output
+    def __cuda_array_interface__(self):
+        raise NotImplementedError(
+            f"dtype {self.dtype} is not yet supported via "
+            "`__cuda_array_interface__`"
+        )
 
     def __add__(self, other):
         return self.binary_operator("add", other)
@@ -1287,12 +1236,22 @@ class ColumnBase(Column, Serializable):
         mask = None
         if "mask" in header:
             mask = Buffer.deserialize(header["mask"], [frames[1]])
-        return build_column(data=data, dtype=dtype, mask=mask)
+        return build_column(
+            data=data, dtype=dtype, mask=mask, size=header.get("size", None)
+        )
+
+    def unary_operator(self, unaryop: builtins.str):
+        raise TypeError(
+            f"Operation {unaryop} not supported for dtype {self.dtype}."
+        )
 
     def binary_operator(
         self, op: builtins.str, other: BinaryOperand, reflect: bool = False
     ) -> ColumnBase:
-        raise NotImplementedError
+        raise TypeError(
+            f"Operation {op} not supported between dtypes {self.dtype} and "
+            f"{other.dtype}."
+        )
 
     def min(self, skipna: bool = None, dtype: Dtype = None):
         result_col = self._process_for_reduction(skipna=skipna)

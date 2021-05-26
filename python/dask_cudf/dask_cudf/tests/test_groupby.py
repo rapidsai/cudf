@@ -537,6 +537,27 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
 
 
 @pytest.mark.parametrize(
+    "aggregations", [(sum, "sum"), (max, "max"), (min, "min")]
+)
+def test_groupby_agg_redirect(aggregations):
+    pdf = pd.DataFrame(
+        {
+            "x": np.random.randint(0, 5, size=10000),
+            "y": np.random.normal(size=10000),
+        }
+    )
+
+    gdf = cudf.DataFrame.from_pandas(pdf)
+
+    ddf = dask_cudf.from_cudf(gdf, npartitions=5)
+
+    a = ddf.groupby("x").agg({"x": aggregations[0]}).compute()
+    b = ddf.groupby("x").agg({"x": aggregations[1]}).compute()
+
+    dd.assert_eq(a, b)
+
+
+@pytest.mark.parametrize(
     "arg",
     [["not_supported"], {"a": "not_supported"}, {"a": ["not_supported"]}],
 )

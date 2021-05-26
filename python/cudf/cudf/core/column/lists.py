@@ -8,13 +8,15 @@ import pyarrow as pa
 import cudf
 from cudf._lib.copying import segmented_gather
 from cudf._lib.lists import (
+    concatenate_rows,
     contains_scalar,
     count_elements,
     drop_list_duplicates,
     extract_element,
     sort_lists,
 )
-from cudf._typing import ColumnLike, ScalarLike
+from cudf._lib.table import Table
+from cudf._typing import BinaryOperand, ColumnLike, ScalarLike
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethodsMixin, ParentType
@@ -77,6 +79,58 @@ class ListColumn(ColumnBase):
     @property
     def base_size(self):
         return len(self.base_children[0]) - 1
+
+    def binary_operator(
+        self, binop: str, other: BinaryOperand, reflect: bool = False
+    ) -> ColumnBase:
+        """
+        Calls a binary operator *binop* on operands *self*
+        and *other*.
+
+        Parameters
+        ----------
+        self, other : list columns
+
+        binop :  binary operator
+            Only "add" operator is currently being supported
+            for lists concatenation functions
+
+        reflect : boolean, default False
+            If ``reflect`` is ``True``, swap the order of
+            the operands.
+
+        Returns
+        -------
+        Series : the output dtype is determined by the
+            input operands.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame({'val': [['a', 'a'], ['b'], ['c']]})
+        >>> gdf
+            val
+        0  [a, a]
+        1     [b]
+        2     [c]
+        >>> gdf['val'] + gdf['val']
+        0    [a, a, a, a]
+        1          [b, b]
+        2          [c, c]
+        Name: val, dtype: list
+
+        """
+
+        if isinstance(other.dtype, ListDtype):
+            if binop == "add":
+                return concatenate_rows(Table({0: self, 1: other}))
+            else:
+                raise NotImplementedError(
+                    "Lists concatenation for this operation is not yet"
+                    "supported"
+                )
+        else:
+            raise TypeError("can only concatenate list to list")
 
     @property
     def elements(self):
@@ -173,6 +227,12 @@ class ListColumn(ColumnBase):
             mask=mask,
             children=tuple(children),
             size=header["size"],
+        )
+
+    @property
+    def __cuda_array_interface__(self):
+        raise NotImplementedError(
+            "Lists are not yet supported via `__cuda_array_interface__`"
         )
 
 
