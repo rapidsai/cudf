@@ -8,7 +8,9 @@ from nvtx import annotate
 
 import cudf
 from cudf._lib import groupby as libgroupby
+from cudf._lib.table import Table
 from cudf.core.abc import Serializable
+from cudf.utils.dtypes import is_list_like
 from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
@@ -702,6 +704,61 @@ class GroupBy(Serializable):
     def cummax(self):
         """Get the column-wise cumulative maximum value in each group."""
         return self.agg("cummax")
+
+    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
+        """
+        Shift each group by ``periods`` positions.
+
+        Parameters
+        ----------
+        periods : int, default 1
+            Number of periods to shift.
+        freq : str, unsupported
+        axis : 0, axis to shift
+            Shift direction. Only row-wise shift is supported
+        fill_value : scalar or list of scalars, optional
+            The scalar value to use for newly introduced missing values. Can be
+            specified with `None`, a single value or multiple values:
+
+            - `None` (default): sets all indeterminable values to null.
+            - Single value: fill all shifted columns with this value. Should
+              match the data type of all columns.
+            - List of values: fill shifted columns with corresponding value in
+              the list. The length of the list should match the number of
+              columns shifted. Each value should match the data type of the
+              column to fill.
+
+        Returns
+        -------
+        Series or DataFrame
+            Object shifted within each group.
+
+        Notes
+        -----
+        Parameter ``freq`` is unsupported.
+        """
+
+        if freq is not None:
+            raise NotImplementedError("Parameter freq is unsupported.")
+
+        if not axis == 0:
+            raise NotImplementedError("Only axis=0 is supported.")
+
+        value_column_names = [
+            x for x in self.obj._column_names if x not in self.grouping.names
+        ]
+        num_columns_to_shift = len(value_column_names)
+        if is_list_like(fill_value):
+            if not len(fill_value) == num_columns_to_shift:
+                raise ValueError(
+                    "Mismatched number of columns and values to fill."
+                )
+        else:
+            fill_value = [fill_value] * num_columns_to_shift
+
+        value_columns = self.obj._data.select_by_label(value_column_names)
+        result = self._groupby.shift(Table(value_columns), periods, fill_value)
+        return self.obj.__class__._from_table(result)
 
 
 class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
