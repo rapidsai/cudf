@@ -124,7 +124,3 @@ def test_packed_dataframe_unique_pointers_categorical():
     df["vals"] = np.random.random(len(df))
 
     check_packed_unique_pointers(df)
-
-
-if __name__ == "__main__":
-    test_packed_dataframe_equality_list()
