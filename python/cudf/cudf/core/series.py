@@ -6043,7 +6043,7 @@ class Series(SingleColumnFrame, Serializable):
         if freq is not None:
             raise NotImplementedError("freq parameter not supported yet.")
         if fill_method not in ["ffill", "bfill"]:
-            raise NotImplementedError(
+            raise ValueError(
                 "fill_method must be either 'ffill' or 'bfill'."
             )
 
