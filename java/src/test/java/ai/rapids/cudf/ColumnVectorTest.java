@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -173,6 +174,19 @@ public class ColumnVectorTest extends CudfTestBase {
          HostColumnVector host = cv.copyToHost();
          ColumnVector backAgain = host.copyToDevice()) {
       TableTest.assertColumnsAreEqual(cv, backAgain);
+    }
+  }
+
+  @Test
+  void testUTF8StringCreation() {
+    try (ColumnVector cv = ColumnVector.fromUTF8Strings(
+            "d".getBytes(StandardCharsets.UTF_8),
+            "sd".getBytes(StandardCharsets.UTF_8),
+            "sde".getBytes(StandardCharsets.UTF_8),
+            null,
+            "END".getBytes(StandardCharsets.UTF_8));
+         ColumnVector expected = ColumnVector.fromStrings("d", "sd", "sde", null, "END")) {
+      TableTest.assertColumnsAreEqual(expected, cv);
     }
   }
 
@@ -1174,8 +1188,14 @@ public class ColumnVectorTest extends CudfTestBase {
           s = Scalar.durationFromLong(DType.create(type), 21313);
           break;
         case EMPTY:
-        case STRUCT:
           continue;
+        case STRUCT:
+          try (ColumnVector col1 = ColumnVector.fromInts(1);
+               ColumnVector col2 = ColumnVector.fromStrings("A");
+               ColumnVector col3 = ColumnVector.fromDoubles(1.23)) {
+            s = Scalar.structFromColumnViews(col1, col2, col3);
+          }
+          break;
         case LIST:
           try (ColumnVector list = ColumnVector.fromInts(1, 2, 3)) {
             s = Scalar.listFromColumnView(list);
@@ -1353,8 +1373,24 @@ public class ColumnVectorTest extends CudfTestBase {
           break;
         }
         case EMPTY:
-        case STRUCT:
           continue;
+        case STRUCT:
+          try (ColumnVector col0 = ColumnVector.fromInts(1);
+               ColumnVector col1 = ColumnVector.fromBoxedDoubles((Double) null);
+               ColumnVector col2 = ColumnVector.fromStrings("a");
+               ColumnVector col3 = ColumnVector.fromDecimals(BigDecimal.TEN);
+               ColumnVector col4 = ColumnVector.daysFromInts(10)) {
+            s = Scalar.structFromColumnViews(col0, col1, col2, col3, col4);
+            StructData structData = new StructData(1, null, "a", BigDecimal.TEN, 10);
+            expected = ColumnVector.fromStructs(new HostColumnVector.StructType(true,
+                    new HostColumnVector.BasicType(true, DType.INT32),
+                    new HostColumnVector.BasicType(true, DType.FLOAT64),
+                    new HostColumnVector.BasicType(true, DType.STRING),
+                    new HostColumnVector.BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, 0)),
+                    new HostColumnVector.BasicType(true, DType.TIMESTAMP_DAYS)),
+                structData, structData, structData, structData);
+          }
+          break;
         case LIST:
           try (ColumnVector list = ColumnVector.fromInts(1, 2, 3)) {
             s = Scalar.listFromColumnView(list);
@@ -1517,6 +1553,63 @@ public class ColumnVectorTest extends CudfTestBase {
       try (ColumnVector ret = ColumnVector.fromScalar(s, 0)) {
         assertEquals(ret.getRowCount(), 0);
         assertEquals(ret.getNullCount(), 0);
+      }
+    }
+  }
+
+  @Test
+  void testFromScalarNullStruct() {
+    final int rowCount = 4;
+    for (DType.DTypeEnum typeEnum : DType.DTypeEnum.values()) {
+      DType dType = typeEnum.isDecimalType() ? DType.create(typeEnum, -8) : DType.create(typeEnum);
+      DataType hDataType;
+      if (DType.EMPTY.equals(dType)) {
+        continue;
+      } else if (DType.LIST.equals(dType)) {
+        // list of list of int32
+        hDataType = new ListType(true, new BasicType(true, DType.INT32));
+      } else if (DType.STRUCT.equals(dType)) {
+        // list of struct of int32
+        hDataType = new StructType(true, new BasicType(true, DType.INT32));
+      } else {
+        // list of non nested type
+        hDataType = new BasicType(true, dType);
+      }
+      try (Scalar s = Scalar.structFromNull(hDataType, hDataType, hDataType);
+           ColumnVector c = ColumnVector.fromScalar(s, rowCount);
+           HostColumnVector hc = c.copyToHost()) {
+        assertEquals(DType.STRUCT, c.getType());
+        assertEquals(rowCount, c.getRowCount());
+        assertEquals(rowCount, c.getNullCount());
+        for (int i = 0; i < rowCount; ++i) {
+          assertTrue(hc.isNull(i));
+        }
+        assertEquals(3, c.getNumChildren());
+        ColumnView[] children = new ColumnView[]{c.getChildColumnView(0),
+            c.getChildColumnView(1), c.getChildColumnView(2)};
+        try {
+          for (ColumnView child : children) {
+            assertEquals(dType, child.getType());
+            assertEquals(rowCount, child.getRowCount());
+            assertEquals(rowCount, child.getNullCount());
+            if (child.getType() == DType.LIST) {
+              try (ColumnView childOfChild = child.getChildColumnView(0)) {
+                assertEquals(DType.INT32, childOfChild.getType());
+                assertEquals(0L, childOfChild.getRowCount());
+                assertEquals(0L, childOfChild.getNullCount());
+              }
+            } else if (child.getType() == DType.STRUCT) {
+              assertEquals(1, child.getNumChildren());
+              try (ColumnView childOfChild = child.getChildColumnView(0)) {
+                assertEquals(DType.INT32, childOfChild.getType());
+                assertEquals(rowCount, childOfChild.getRowCount());
+                assertEquals(rowCount, childOfChild.getNullCount());
+              }
+            }
+          }
+        } finally {
+          for (ColumnView cv : children) cv.close();
+        }
       }
     }
   }
@@ -2037,9 +2130,8 @@ public class ColumnVectorTest extends CudfTestBase {
       }
     });
     assertThrows(AssertionError.class, () -> {
-      try (ColumnVector sv = ColumnVector.fromStrings("a", "B", "cd");
-           Scalar emptyString = Scalar.fromString("");
-           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString, new ColumnView[]{sv})) {
+      try (Scalar emptyString = Scalar.fromString("");
+           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, emptyString, new ColumnView[]{})) {
       }
     });
     assertThrows(CudfException.class, () -> {
@@ -2085,6 +2177,17 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector concat = ColumnVector.stringConcatenate(emptyString, nullSubstitute, new ColumnView[]{v, v})) {
       assertColumnsAreEqual(concat, e_concat);
     }
+
+    assertThrows(CudfException.class, () -> {
+      try (ColumnVector v = ColumnVector.fromStrings("a", "B", "cd", "\u0480\u0481", "E\tf",
+          "g\nH", "IJ\"\u0100\u0101\u0500\u0501",
+          "kl m", "Nop1", "\\qRs2", null,
+          "3tuV\'", "wX4Yz", "\ud720\ud721");
+           Scalar emptyString = Scalar.fromString("");
+           Scalar nullSubstitute = Scalar.fromString("NULL");
+           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, nullSubstitute, new ColumnView[]{v})) {
+      }
+    });
   }
 
   @Test
@@ -2102,6 +2205,13 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testListConcatByRow() {
+    try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+            new HostColumnVector.BasicType(true, DType.INT32)),
+        Arrays.asList(0), Arrays.asList(1, 2, 3), null, Arrays.asList(), Arrays.asList());
+         ColumnVector result = ColumnVector.listConcatenateByRow(cv)) {
+      assertColumnsAreEqual(cv, result);
+    }
+
     try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
             new HostColumnVector.BasicType(true, DType.INT32)),
         Arrays.asList(0), Arrays.asList(1, 2, 3), null, Arrays.asList(), Arrays.asList());
@@ -2148,13 +2258,6 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expect, result);
     }
 
-    assertThrows(AssertionError.class, () -> {
-      try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
-          new HostColumnVector.BasicType(true, DType.INT32)), Arrays.asList(1, 2, 3));
-           ColumnVector result = ColumnVector.listConcatenateByRow(cv)) {
-      }
-    });
-
     assertThrows(CudfException.class, () -> {
       try (ColumnVector cv = ColumnVector.fromInts(1, 2, 3);
            ColumnVector result = ColumnVector.listConcatenateByRow(cv, cv)) {
@@ -2190,6 +2293,13 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testListConcatByRowIgnoreNull() {
+    try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+            new HostColumnVector.BasicType(true, DType.INT32)),
+        Arrays.asList(0), Arrays.asList(1, 2, 3), null, Arrays.asList(), Arrays.asList());
+         ColumnVector result = ColumnVector.listConcatenateByRow(true, cv)) {
+      assertColumnsAreEqual(cv, result);
+    }
+
     try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
             new HostColumnVector.BasicType(true, DType.INT32)),
         Arrays.asList((Integer) null), Arrays.asList(1, 2, 3), null, Arrays.asList(), null);
