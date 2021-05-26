@@ -259,6 +259,8 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(out, inplace=False)
 
+    hex_to_int = htoi
+
     def ip2int(self) -> ParentType:
         """
         This converts ip strings to integers
@@ -289,6 +291,8 @@ class StringMethods(ColumnMethodsMixin):
         out = str_cast.ip2int(self._column)
 
         return self._return_or_inplace(out, inplace=False)
+
+    ip_to_int = ip2int
 
     def __getitem__(self, key):
         if isinstance(key, slice):
