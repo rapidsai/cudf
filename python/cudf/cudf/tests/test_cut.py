@@ -153,7 +153,7 @@ def test_cut_right(x, bins, right, precision):
 )
 @pytest.mark.parametrize("right", [True,False])
 @pytest.mark.parametrize("include_lowest", [True, False])
-@pytest.mark.parametrize("ordered", [True,False])
+@pytest.mark.parametrize("ordered", [True])
 @pytest.mark.parametrize("precision", [1,2,3])
 @pytest.mark.parametrize("duplicates", ["drop"]) #raise will return a value error 
 def test_cut_drop_duplicates(x, bins, right, precision, duplicates, ordered,include_lowest):
@@ -178,7 +178,7 @@ def test_cut_drop_duplicates(x, bins, right, precision, duplicates, ordered,incl
         ordered=ordered,
     )
 
-    assert_eq(pindex, gindex)
+    assert_eq(pindex, gindex, check_categorical=False)
 
 
 @pytest.mark.parametrize(
