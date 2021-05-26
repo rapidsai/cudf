@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -311,7 +311,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         // }
         if (s->chunk.has_sum) {  // Sum is equal to the number of 'true' values
           cur[0]       = 5 * 8 + PB_TYPE_FIXEDLEN;
-          cur          = pb_put_packed_uint(cur + 2, 1, s->chunk.sum.i_val);
+          cur          = pb_put_packed_uint(cur + 2, 1, s->chunk.sum.u_val);
           fld_start[1] = cur - (fld_start + 2);
         }
         break;
