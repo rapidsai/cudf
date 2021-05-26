@@ -72,7 +72,7 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
         self._name = name
-        meta = dd.core.make_meta(meta)
+        meta = dd.utils.make_meta_util(meta)
         if not isinstance(meta, self._partition_type):
             raise TypeError(
                 f"Expected meta to specify type "
@@ -115,7 +115,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             out[k] = v
             return out
 
-        meta = assigner(self._meta, k, dd.core.make_meta(v))
+        meta = assigner(self._meta, k, dd.utils.make_meta_util(v))
         return self.map_partitions(assigner, k, v, meta=meta)
 
     def apply_rows(self, func, incols, outcols, kwargs=None, cache_key=None):
@@ -677,7 +677,7 @@ def reduction(
     if meta is None:
         meta_chunk = _emulate(apply, chunk, args, chunk_kwargs)
         meta = _emulate(apply, aggregate, [[meta_chunk]], aggregate_kwargs)
-    meta = dd.core.make_meta(meta)
+    meta = dd.utils.make_meta_util(meta)
 
     graph = HighLevelGraph.from_collections(b, dsk, dependencies=args)
     return dd.core.new_dd_object(graph, b, meta, (None, None))

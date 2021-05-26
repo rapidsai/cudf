@@ -278,9 +278,9 @@ struct scatter_gather_functor {
   std::unique_ptr<cudf::column> operator()(
     cudf::column_view const& input,
     cudf::size_type const& output_size,
-    cudf::size_type const* block_offsets,
+    cudf::size_type const*,
     Filter filter,
-    cudf::size_type per_thread,
+    cudf::size_type,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
   {

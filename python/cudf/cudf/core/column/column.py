@@ -5,13 +5,13 @@ from __future__ import annotations
 import builtins
 import pickle
 import warnings
-from collections.abc import MutableSequence
 from types import SimpleNamespace
 from typing import (
     Any,
     Callable,
     Dict,
     List,
+    MutableSequence,
     Optional,
     Sequence,
     Tuple,
@@ -40,7 +40,12 @@ from cudf._lib.transform import bools_to_mask
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
-from cudf.core.dtypes import CategoricalDtype, IntervalDtype
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    IntervalDtype,
+    ListDtype,
+    StructDtype,
+)
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
     check_cast_unsupported_dtype,
@@ -407,8 +412,7 @@ class ColumnBase(Column, Serializable):
             "None"
         ]
 
-        if isinstance(result.dtype, cudf.Decimal64Dtype):
-            result.dtype.precision = array.type.precision
+        result = _copy_type_metadata_from_arrow(array, result)
         return result
 
     def _get_mask_as_column(self) -> ColumnBase:
@@ -804,7 +808,7 @@ class ColumnBase(Column, Serializable):
         return indices[-1]
 
     def append(self, other: ColumnBase) -> ColumnBase:
-        return self.__class__._concat([self, as_column(other)])
+        return _concat_columns([self, as_column(other)])
 
     def quantile(
         self,
@@ -942,25 +946,15 @@ class ColumnBase(Column, Serializable):
 
     @property
     def is_monotonic_increasing(self) -> bool:
-        if not hasattr(self, "_is_monotonic_increasing"):
-            if self.has_nulls:
-                self._is_monotonic_increasing = False
-            else:
-                self._is_monotonic_increasing = self.as_frame()._is_sorted(
-                    ascending=None, null_position=None
-                )
-        return self._is_monotonic_increasing
+        return not self.has_nulls and self.as_frame()._is_sorted(
+            ascending=None, null_position=None
+        )
 
     @property
     def is_monotonic_decreasing(self) -> bool:
-        if not hasattr(self, "_is_monotonic_decreasing"):
-            if self.has_nulls:
-                self._is_monotonic_decreasing = False
-            else:
-                self._is_monotonic_decreasing = self.as_frame()._is_sorted(
-                    ascending=[False], null_position=None
-                )
-        return self._is_monotonic_decreasing
+        return not self.has_nulls and self.as_frame()._is_sorted(
+            ascending=[False], null_position=None
+        )
 
     def get_slice_bound(
         self, label: ScalarLike, side: builtins.str, kind: builtins.str
@@ -1219,7 +1213,7 @@ class ColumnBase(Column, Serializable):
         )
 
     def serialize(self) -> Tuple[dict, list]:
-        header = {}  # type: Dict[Any, Any]
+        header: Dict[Any, Any] = {}
         frames = []
         header["type-serialized"] = pickle.dumps(type(self))
         header["dtype"] = self.dtype.str
@@ -2234,7 +2228,7 @@ def serialize_columns(columns) -> Tuple[List[dict], List]:
     frames : list
         list of frames
     """
-    headers = []  # type List[Dict[Any, Any], ...]
+    headers: List[Dict[Any, Any]] = []
     frames = []
 
     if len(columns) > 0:
@@ -2354,3 +2348,119 @@ def full(size: int, fill_value: ScalarLike, dtype: Dtype = None) -> ColumnBase:
     dtype: int8
     """
     return ColumnBase.from_scalar(cudf.Scalar(fill_value, dtype), size)
+
+
+def _copy_type_metadata_from_arrow(
+    arrow_array: pa.array, cudf_column: ColumnBase
+) -> ColumnBase:
+    """
+    Similar to `Column._copy_type_metadata`, except copies type metadata
+    from arrow array into a cudf column. Recursive for every level.
+    * When `arrow_array` is struct type and `cudf_column` is StructDtype, copy
+    field names.
+    * When `arrow_array` is decimal type and `cudf_column` is
+    Decimal64Dtype, copy precisions.
+    """
+    if pa.types.is_decimal(arrow_array.type) and isinstance(
+        cudf_column, cudf.core.column.DecimalColumn
+    ):
+        cudf_column.dtype.precision = arrow_array.type.precision
+    elif pa.types.is_struct(arrow_array.type) and isinstance(
+        cudf_column, cudf.core.column.StructColumn
+    ):
+        base_children = tuple(
+            _copy_type_metadata_from_arrow(arrow_array.field(i), col_child)
+            for i, col_child in enumerate(cudf_column.base_children)
+        )
+        cudf_column.set_base_children(base_children)
+        return cudf.core.column.StructColumn(
+            data=None,
+            size=cudf_column.base_size,
+            dtype=StructDtype.from_arrow(arrow_array.type),
+            mask=cudf_column.base_mask,
+            offset=cudf_column.offset,
+            null_count=cudf_column.null_count,
+            children=base_children,
+        )
+    elif pa.types.is_list(arrow_array.type) and isinstance(
+        cudf_column, cudf.core.column.ListColumn
+    ):
+        if arrow_array.values and cudf_column.base_children:
+            base_children = (
+                cudf_column.base_children[0],
+                _copy_type_metadata_from_arrow(
+                    arrow_array.values, cudf_column.base_children[1]
+                ),
+            )
+            return cudf.core.column.ListColumn(
+                size=cudf_column.base_size,
+                dtype=ListDtype.from_arrow(arrow_array.type),
+                mask=cudf_column.base_mask,
+                offset=cudf_column.offset,
+                null_count=cudf_column.null_count,
+                children=base_children,
+            )
+
+    return cudf_column
+
+
+def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
+    """Concatenate a sequence of columns."""
+    if len(objs) == 0:
+        dtype = pd.api.types.pandas_dtype(None)
+        return column_empty(0, dtype=dtype, masked=True)
+
+    # If all columns are `NumericalColumn` with different dtypes,
+    # we cast them to a common dtype.
+    # Notice, we can always cast pure null columns
+    not_null_col_dtypes = [o.dtype for o in objs if o.valid_count]
+    if len(not_null_col_dtypes) and all(
+        is_numerical_dtype(dtyp) and np.issubdtype(dtyp, np.datetime64)
+        for dtyp in not_null_col_dtypes
+    ):
+        # Use NumPy to find a common dtype
+        common_dtype = np.find_common_type(not_null_col_dtypes, [])
+        # Cast all columns to the common dtype
+        objs = [obj.astype(common_dtype) for obj in objs]
+
+    # Find the first non-null column:
+    head = next((obj for obj in objs if obj.valid_count), objs[0])
+
+    for i, obj in enumerate(objs):
+        # Check that all columns are the same type:
+        if not pd.api.types.is_dtype_equal(obj.dtype, head.dtype):
+            # if all null, cast to appropriate dtype
+            if obj.valid_count == 0:
+                objs[i] = column_empty_like(
+                    head, dtype=head.dtype, masked=True, newsize=len(obj)
+                )
+            else:
+                raise ValueError("All columns must be the same type")
+
+    # TODO: This logic should be generalized to a dispatch to
+    # ColumnBase._concat so that all subclasses can override necessary
+    # behavior. However, at the moment it's not clear what that API should look
+    # like, so CategoricalColumn simply implements a minimal working API.
+    if all(is_categorical_dtype(o.dtype) for o in objs):
+        return cudf.core.column.categorical.CategoricalColumn._concat(
+            cast(
+                MutableSequence[
+                    cudf.core.column.categorical.CategoricalColumn
+                ],
+                objs,
+            )
+        )
+
+    newsize = sum(map(len, objs))
+    if newsize > libcudf.MAX_COLUMN_SIZE:
+        raise MemoryError(
+            f"Result of concat cannot have "
+            f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
+        )
+    elif newsize == 0:
+        col = column_empty(0, head.dtype, masked=True)
+    else:
+        # Filter out inputs that have 0 length, then concatenate.
+        objs = [o for o in objs if len(o)]
+        col = libcudf.concat.concat_columns(objs)
+    return col
