@@ -38,6 +38,7 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
+#include <cudf/lists/detail/drop_list_duplicates.hpp>
 #include <cudf/rolling.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/types.hpp>
@@ -610,6 +611,14 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
     return {};
   }
 
+  // COLLECT_SET aggregations do not peform a rolling operation at all. They get processed
+  // entirely in the finalize() step.
+  std::vector<std::unique_ptr<aggregation>> visit(
+    data_type col_type, cudf::detail::collect_set_aggregation const& agg) override
+  {
+    return {};
+  }
+
   // LEAD and LAG have custom behaviors for non fixed-width types.
   std::vector<std::unique_ptr<aggregation>> visit(
     data_type col_type, cudf::detail::lead_lag_aggregation const& agg) override
@@ -707,9 +716,28 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
                                   preceding_window_begin,
                                   following_window_begin,
                                   min_periods,
-                                  agg,
+                                  agg._null_handling,
                                   stream,
                                   mr);
+  }
+
+  // perform the actual COLLECT_SET operation entirely.
+  void visit(cudf::detail::collect_set_aggregation const& agg) override
+  {
+    auto const collected_list = rolling_collect_list(input,
+                                                     default_outputs,
+                                                     preceding_window_begin,
+                                                     following_window_begin,
+                                                     min_periods,
+                                                     agg._null_handling,
+                                                     stream,
+                                                     rmm::mr::get_current_device_resource());
+
+    result = lists::detail::drop_list_duplicates(lists_column_view(collected_list->view()),
+                                                 null_equality::EQUAL,
+                                                 nan_equality::UNEQUAL,
+                                                 stream,
+                                                 mr);
   }
 
   std::unique_ptr<column> get_result()
