@@ -10,7 +10,12 @@ import pytest
 import dask
 from dask import dataframe as dd
 from dask.dataframe.core import meta_nonempty
-from dask.dataframe.utils import make_meta_util
+
+try:
+    from dask.dataframe.utils import make_meta_util as dask_make_meta
+except ImportError:
+    from dask.dataframe.core import make_meta as dask_make_meta
+
 from dask.utils import M
 
 import cudf
@@ -639,7 +644,7 @@ def test_make_meta_backends(index):
     df = df.set_index(index)
 
     # Check "empty" metadata types
-    chk_meta = make_meta_util(df)
+    chk_meta = dask_make_meta(df)
     dd.assert_eq(chk_meta.dtypes, df.dtypes)
 
     # Check "non-empty" metadata types
@@ -781,6 +786,11 @@ def test_index_map_partitions():
 
 
 def test_correct_meta():
+    try:
+        from dask.dataframe.utils import make_meta_util  # noqa: F401
+    except ImportError:
+        pytest.skip("need make_meta_util to be preset")
+
     # Need these local imports in this specific order.
     # For context: https://github.com/rapidsai/cudf/issues/7946
     import pandas as pd
