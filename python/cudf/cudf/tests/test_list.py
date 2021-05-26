@@ -350,6 +350,12 @@ def test_concat_elements(row, dropna):
     assert_eq(expect, got)
 
 
+def test_concat_elements_raise():
+    s = cudf.Series([[1, 2, 3]])  # no nesting
+    with pytest.raises(ValueError):
+        s.list.concat()
+
+
 def test_concatenate_rows_of_lists():
     pdf = pd.DataFrame({"val": [["a", "a"], ["b"], ["c"]]})
     gdf = cudf.from_pandas(pdf)

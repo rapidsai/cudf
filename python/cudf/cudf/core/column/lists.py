@@ -521,7 +521,8 @@ class ListMethods(ColumnMethodsMixin):
 
     def concat(self, dropna=True) -> ParentType:
         """
-        Concatenates the lists in each row
+        For a column with at least one level of nesting, concatenate the
+        lists in each row.
 
         Parameters
         ----------
@@ -563,6 +564,13 @@ class ListMethods(ColumnMethodsMixin):
         1    [6.0, nan, 7.0, 8.0, 9.0]
         dtype: list
         """
-        return self._return_or_inplace(
-            concatenate_list_elements(self._column, dropna=dropna)
-        )
+        try:
+            result = concatenate_list_elements(self._column, dropna=dropna)
+        except RuntimeError as e:
+            if "Rows of the input column must be lists." in str(e):
+                raise ValueError(
+                    "list.concat() can only be called on "
+                    "list columns with at least one level "
+                    "of nesting"
+                )
+        return self._return_or_inplace(result)
