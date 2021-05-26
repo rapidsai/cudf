@@ -97,8 +97,8 @@ struct flattened_table {
     // we should always do that if the structs column has any null element.
     // In addition, we should check for null by calling to `has_nulls()`, not `nullable()`.
     // This is because when comparing structs columns, if one column has bitmask while the other
-    // does not (and both columns do not have any null element) then flattening them will result
-    // in tables with different number of columns.
+    // does not (and both columns do not have any null element) then flattening them using
+    // `nullable()` will result in tables with different number of columns.
     if (nullability == column_nullability::FORCE || col.has_nulls()) {
       validity_as_column.push_back(cudf::is_valid(col));
       if (col.has_nulls()) {
