@@ -927,6 +927,5 @@ def unpack(PackedColumns packed):
     1   2   5
     2   3   6
     """
-    from cudf.core.dataframe import DataFrame
 
-    return DataFrame._from_table(packed.unpack())
+    return packed.unpack()
