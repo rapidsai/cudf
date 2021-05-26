@@ -341,10 +341,6 @@ def test_series_pct_change(data, periods, fill_method):
             got.to_array(fillna="pandas"), expected
         )
 
-    with pytest.raises(NotImplementedError):
-        cs.pct_change(limit=1)
-    with pytest.raises(NotImplementedError):
-        cs.pct_change(freq="infer")
 
 
 @pytest.mark.parametrize(
