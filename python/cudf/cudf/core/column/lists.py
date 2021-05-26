@@ -526,7 +526,7 @@ class ListMethods(ColumnMethodsMixin):
 
         Parameters
         ----------
-        dropna: bool,optional
+        dropna: bool, optional
             If True (default), ignores top-level null elements in each row.
             If False, and top-level null elements are present, the resulting
             row in the output is null.
