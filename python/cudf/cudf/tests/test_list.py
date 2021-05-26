@@ -326,15 +326,22 @@ def test_contains_null_search_key(data, expect):
         [[1]],
         [[1, 2]],
         [[1, 2], [3, 4, 5]],
+        [[1, 2], [], [3, 4, 5]],
         [[1, 2, None], [3, 4, 5]],
+        [[1, 2, None], None, [3, 4, 5]],
+        [[1, 2, None], None, [], [3, 4, 5]],
         [[[1, 2], [3, 4]], [[5, 6, 7], [8, 9]]],
         [[["a", "c", "de", None], None, ["fg"]], [["abc", "de"], None]],
     ],
 )
 @pytest.mark.parametrize("dropna", [True, False])
 def test_concat_elements(row, dropna):
-    if not dropna and any(x is None for x in row):
-        result = None
+    if any(x is None for x in row):
+        if dropna:
+            row = [x for x in row if x is not None]
+            result = functools.reduce(operator.add, row)
+        else:
+            result = None
     else:
         result = functools.reduce(operator.add, row)
 
