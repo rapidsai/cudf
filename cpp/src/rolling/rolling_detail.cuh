@@ -333,7 +333,8 @@ struct agg_specific_empty_output {
   }
 };
 
-std::unique_ptr<column> empty_output(column_view const& input, rolling_aggregation const& agg)
+std::unique_ptr<column> empty_output_for_rolling_aggregation(column_view const& input,
+                                                             rolling_aggregation const& agg)
 {
   return cudf::detail::dispatch_type_and_aggregation(
     input.type(), agg.kind, agg_specific_empty_output{}, input, agg);
@@ -1118,7 +1119,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
                 "bitmask_type size does not match CUDA warp size");
 
-  if (input.is_empty()) { return cudf::detail::empty_output(input, agg); }
+  if (input.is_empty()) { return cudf::detail::empty_output_for_rolling_aggregation(input, agg); }
 
   if (cudf::is_dictionary(input.type())) {
     CUDF_EXPECTS(agg.kind == aggregation::COUNT_ALL || agg.kind == aggregation::COUNT_VALID ||

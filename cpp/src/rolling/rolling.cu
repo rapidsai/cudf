@@ -47,7 +47,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 {
   CUDF_FUNC_RANGE();
 
-  if (input.is_empty()) { return cudf::detail::empty_output(input, agg); }
+  if (input.is_empty()) { return cudf::detail::empty_output_for_rolling_aggregation(input, agg); }
 
   CUDF_EXPECTS((min_periods >= 0), "min_periods must be non-negative");
 
@@ -91,7 +91,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   CUDF_FUNC_RANGE();
 
   if (preceding_window.is_empty() || following_window.is_empty() || input.is_empty()) {
-    return cudf::detail::empty_output(input, agg);
+    return cudf::detail::empty_output_for_rolling_aggregation(input, agg);
   }
 
   CUDF_EXPECTS(preceding_window.type().id() == type_id::INT32 &&
