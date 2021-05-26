@@ -812,7 +812,7 @@ cdef class PackedColumns:
         return p
 
     @staticmethod
-    cdef PackedColumns c_from_py_table(Table input_table, keep_index=True):
+    cdef PackedColumns from_py_table(Table input_table, keep_index=True):
         """
         Construct a PackedColumns object from a ``cudf.DataFrame``.
         """
@@ -833,7 +833,7 @@ cdef class PackedColumns:
 
         return p
 
-    cdef Table c_unpack(self):
+    cdef Table unpack(self):
         return Table.from_table_view(
             cpp_copying.unpack(self.c_obj),
             self,
@@ -889,7 +889,7 @@ def pack(Table input_table, keep_index=True):
     >>> packed
     <cudf._lib.copying.PackedColumns at 0x7f34ff6a4b80>
     """
-    return PackedColumns.c_from_py_table(input_table, keep_index)
+    return PackedColumns.from_py_table(input_table, keep_index)
 
 
 def unpack(PackedColumns packed):
@@ -929,4 +929,4 @@ def unpack(PackedColumns packed):
     """
     from cudf.core.dataframe import DataFrame
 
-    return DataFrame._from_table(packed.c_unpack())
+    return DataFrame._from_table(packed.unpack())

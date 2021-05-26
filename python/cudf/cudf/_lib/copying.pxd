@@ -10,9 +10,9 @@ cdef class PackedColumns:
     cdef object index_names
 
     @staticmethod
-    cdef PackedColumns c_from_py_table(Table input_table, keep_index=*)
+    cdef PackedColumns from_py_table(Table input_table, keep_index=*)
 
-    cdef Table c_unpack(self)
+    cdef Table unpack(self)
 
     cdef const void* c_metadata_ptr(self) except *
 
