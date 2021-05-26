@@ -779,6 +779,8 @@ cdef class PackedColumns:
         header = {}
 
         header["column-names"] = self.column_names
+        # we probably want to split dtypes into their own header/frames
+        header["column-dtypes"] = self.column_dtypes
         header["index-names"] = self.index_names
         header["gpu-data-ptr"] = self.gpu_data_ptr
         header["gpu-data-size"] = self.gpu_data_size
@@ -807,6 +809,7 @@ cdef class PackedColumns:
 
         p.c_obj = move(data_)
         p.column_names = header["column-names"]
+        p.column_dtypes = header["column-dtypes"]
         p.index_names = header["index-names"]
 
         return p
@@ -830,16 +833,21 @@ cdef class PackedColumns:
 
         p.c_obj = move(cpp_copying.pack(input_table_view))
         p.column_names = input_table._column_names
+        p.column_dtypes = [c.dtype for c in input_table._columns]
 
         return p
 
     cdef Table unpack(self):
-        return Table.from_table_view(
+        output_table = Table.from_table_view(
             cpp_copying.unpack(self.c_obj),
             self,
             self.column_names,
             self.index_names
         )
+
+        # we need to do something with dtypes here
+
+        return output_table
 
     cdef const void* c_metadata_ptr(self) except *:
         return self.c_obj.metadata_.get()[0].data()
