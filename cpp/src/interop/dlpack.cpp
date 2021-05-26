@@ -137,15 +137,15 @@ std::unique_ptr<table> from_dlpack(DLManagedTensor const* managed_tensor,
   auto const& tensor = managed_tensor->dl_tensor;
 
   // We can copy from host or device pointers
-  CUDF_EXPECTS(kDLGPU == tensor.ctx.device_type || kDLCPU == tensor.ctx.device_type ||
-                 kDLCPUPinned == tensor.ctx.device_type,
-               "DLTensor must be GPU, CPU, or pinned type");
+  CUDF_EXPECTS(tensor.device.device_type == kDLCPU || tensor.device.device_type == kDLCUDA ||
+                 tensor.device.device_type == kDLCUDAHost,
+               "DLTensor device type must be CPU, CUDA or CUDAHost");
 
   // Make sure the current device ID matches the Tensor's device ID
-  if (tensor.ctx.device_type != kDLCPU) {
+  if (tensor.device.device_type != kDLCPU) {
     int device_id = 0;
     CUDA_TRY(cudaGetDevice(&device_id));
-    CUDF_EXPECTS(tensor.ctx.device_id == device_id, "DLTensor device ID must be current device");
+    CUDF_EXPECTS(tensor.device.device_id == device_id, "DLTensor device ID must be current device");
   }
 
   // Currently only 1D and 2D tensors are supported
@@ -234,8 +234,8 @@ DLManagedTensor* to_dlpack(table_view const& input,
     tensor.strides[1] = num_rows;
   }
 
-  CUDA_TRY(cudaGetDevice(&tensor.ctx.device_id));
-  tensor.ctx.device_type = kDLGPU;
+  CUDA_TRY(cudaGetDevice(&tensor.device.device_id));
+  tensor.device.device_type = kDLCUDA;
 
   // If there is only one column, then a 1D tensor can just copy the pointer
   // to the data in the column, and the deleter should not delete the original

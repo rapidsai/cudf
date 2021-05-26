@@ -1188,8 +1188,14 @@ public class ColumnVectorTest extends CudfTestBase {
           s = Scalar.durationFromLong(DType.create(type), 21313);
           break;
         case EMPTY:
-        case STRUCT:
           continue;
+        case STRUCT:
+          try (ColumnVector col1 = ColumnVector.fromInts(1);
+               ColumnVector col2 = ColumnVector.fromStrings("A");
+               ColumnVector col3 = ColumnVector.fromDoubles(1.23)) {
+            s = Scalar.structFromColumnViews(col1, col2, col3);
+          }
+          break;
         case LIST:
           try (ColumnVector list = ColumnVector.fromInts(1, 2, 3)) {
             s = Scalar.listFromColumnView(list);
@@ -1367,8 +1373,24 @@ public class ColumnVectorTest extends CudfTestBase {
           break;
         }
         case EMPTY:
-        case STRUCT:
           continue;
+        case STRUCT:
+          try (ColumnVector col0 = ColumnVector.fromInts(1);
+               ColumnVector col1 = ColumnVector.fromBoxedDoubles((Double) null);
+               ColumnVector col2 = ColumnVector.fromStrings("a");
+               ColumnVector col3 = ColumnVector.fromDecimals(BigDecimal.TEN);
+               ColumnVector col4 = ColumnVector.daysFromInts(10)) {
+            s = Scalar.structFromColumnViews(col0, col1, col2, col3, col4);
+            StructData structData = new StructData(1, null, "a", BigDecimal.TEN, 10);
+            expected = ColumnVector.fromStructs(new HostColumnVector.StructType(true,
+                    new HostColumnVector.BasicType(true, DType.INT32),
+                    new HostColumnVector.BasicType(true, DType.FLOAT64),
+                    new HostColumnVector.BasicType(true, DType.STRING),
+                    new HostColumnVector.BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, 0)),
+                    new HostColumnVector.BasicType(true, DType.TIMESTAMP_DAYS)),
+                structData, structData, structData, structData);
+          }
+          break;
         case LIST:
           try (ColumnVector list = ColumnVector.fromInts(1, 2, 3)) {
             s = Scalar.listFromColumnView(list);
@@ -1531,6 +1553,63 @@ public class ColumnVectorTest extends CudfTestBase {
       try (ColumnVector ret = ColumnVector.fromScalar(s, 0)) {
         assertEquals(ret.getRowCount(), 0);
         assertEquals(ret.getNullCount(), 0);
+      }
+    }
+  }
+
+  @Test
+  void testFromScalarNullStruct() {
+    final int rowCount = 4;
+    for (DType.DTypeEnum typeEnum : DType.DTypeEnum.values()) {
+      DType dType = typeEnum.isDecimalType() ? DType.create(typeEnum, -8) : DType.create(typeEnum);
+      DataType hDataType;
+      if (DType.EMPTY.equals(dType)) {
+        continue;
+      } else if (DType.LIST.equals(dType)) {
+        // list of list of int32
+        hDataType = new ListType(true, new BasicType(true, DType.INT32));
+      } else if (DType.STRUCT.equals(dType)) {
+        // list of struct of int32
+        hDataType = new StructType(true, new BasicType(true, DType.INT32));
+      } else {
+        // list of non nested type
+        hDataType = new BasicType(true, dType);
+      }
+      try (Scalar s = Scalar.structFromNull(hDataType, hDataType, hDataType);
+           ColumnVector c = ColumnVector.fromScalar(s, rowCount);
+           HostColumnVector hc = c.copyToHost()) {
+        assertEquals(DType.STRUCT, c.getType());
+        assertEquals(rowCount, c.getRowCount());
+        assertEquals(rowCount, c.getNullCount());
+        for (int i = 0; i < rowCount; ++i) {
+          assertTrue(hc.isNull(i));
+        }
+        assertEquals(3, c.getNumChildren());
+        ColumnView[] children = new ColumnView[]{c.getChildColumnView(0),
+            c.getChildColumnView(1), c.getChildColumnView(2)};
+        try {
+          for (ColumnView child : children) {
+            assertEquals(dType, child.getType());
+            assertEquals(rowCount, child.getRowCount());
+            assertEquals(rowCount, child.getNullCount());
+            if (child.getType() == DType.LIST) {
+              try (ColumnView childOfChild = child.getChildColumnView(0)) {
+                assertEquals(DType.INT32, childOfChild.getType());
+                assertEquals(0L, childOfChild.getRowCount());
+                assertEquals(0L, childOfChild.getNullCount());
+              }
+            } else if (child.getType() == DType.STRUCT) {
+              assertEquals(1, child.getNumChildren());
+              try (ColumnView childOfChild = child.getChildColumnView(0)) {
+                assertEquals(DType.INT32, childOfChild.getType());
+                assertEquals(rowCount, childOfChild.getRowCount());
+                assertEquals(rowCount, childOfChild.getNullCount());
+              }
+            }
+          }
+        } finally {
+          for (ColumnView cv : children) cv.close();
+        }
       }
     }
   }

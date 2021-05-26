@@ -237,6 +237,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env,
                                                std::move(mask_buffer));
 
       col = cudf::fill(str_col->view(), 0, row_count, *scalar_val);
+    } else if (scalar_val->type().id() == cudf::type_id::STRUCT && row_count == 0) {
+      // Specialize the creation of empty struct column, since libcudf doesn't support it.
+      auto struct_scalar = reinterpret_cast<cudf::struct_scalar const *>(j_scalar);
+      auto children = cudf::empty_like(struct_scalar->view())->release();
+      auto mask_buffer = cudf::create_null_mask(0, cudf::mask_state::UNALLOCATED);
+      col = cudf::make_structs_column(0, std::move(children), 0, std::move(mask_buffer));
     } else {
       col = cudf::make_column_from_scalar(*scalar_val, row_count);
     }
