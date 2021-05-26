@@ -216,6 +216,7 @@ struct SkipRowTest {
 
 }  // namespace
 
+/*
 TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn)
 {
   auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
@@ -816,6 +817,7 @@ TEST_F(OrcChunkedWriterTest, MismatchedStructure)
   writer.write(*table1);
   EXPECT_THROW(writer.write(*table2), cudf::logic_error);
 }
+*/
 
 TEST_F(OrcChunkedWriterTest, ReadStripes)
 {
@@ -837,6 +839,7 @@ TEST_F(OrcChunkedWriterTest, ReadStripes)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
+/*
 TEST_F(OrcChunkedWriterTest, ReadStripesError)
 {
   srand(31337);
@@ -1119,6 +1122,8 @@ TEST_F(OrcReaderTest, MultipleInputs)
   auto result = cudf_io::read_orc(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
+}
+
 struct OrcWriterTestDecimal : public OrcWriterTest,
                               public ::testing::WithParamInterface<std::tuple<int, int>> {
 };
@@ -1192,5 +1197,6 @@ TEST_F(OrcWriterTest, Decimal32)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col64, result.tbl->view().column(0));
 }
+*/
 
 CUDF_TEST_PROGRAM_MAIN()

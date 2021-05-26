@@ -19,8 +19,8 @@
  * @brief cuDF-IO ORC reader class implementation
  */
 
-#include "io/orc/orc_gpu.h"
 #include "reader_impl.hpp"
+#include "io/orc/orc_gpu.h"
 #include "timezone.cuh"
 
 #include <io/comp/gpuinflate.h>
@@ -156,7 +156,6 @@ size_t gather_stream_info(const size_t stripe_index,
                           hostdevice_vector<gpu::ColumnDesc> &chunks,
                           std::vector<orc_stream_info> &stream_info)
 {
-  int num_index_columns  = 0;
   const auto num_columns = gdf2orc.size();
   uint64_t src_offset    = 0;
   uint64_t dst_offset    = 0;
@@ -368,7 +367,6 @@ class aggregate_orc_metadata {
             std::make_pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
           row_count += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
         }
-
         selected_stripes_mapping.push_back(
           {static_cast<int>(src_file_idx), stripe_idxs, stripe_infos});
       }
@@ -409,8 +407,9 @@ class aggregate_orc_metadata {
       for (auto &mapping : selected_stripes_mapping) {
         // Resize to all stripe_info for the source level
         per_file_metadata[mapping.source_idx].stripefooters.resize(mapping.stripe_info.size());
+        int insertion_idx = 0;
         for (auto &stripe_idx : mapping.stripe_idx_in_source) {
-          const auto stripe         = mapping.stripe_info[stripe_idx].first;
+          const auto stripe         = mapping.stripe_info[insertion_idx].first;
           const auto sf_comp_offset = stripe->offset + stripe->indexLength + stripe->dataLength;
           const auto sf_comp_length = stripe->footerLength;
           CUDF_EXPECTS(
@@ -423,8 +422,9 @@ class aggregate_orc_metadata {
             buffer->data(), sf_comp_length, &sf_length);
           ProtobufReader(sf_data, sf_length)
             .read(per_file_metadata[mapping.source_idx].stripefooters[stripe_idx]);
-          mapping.stripe_info[stripe_idx].second =
+          mapping.stripe_info[insertion_idx].second =
             &per_file_metadata[mapping.source_idx].stripefooters[stripe_idx];
+          insertion_idx++;
         }
       }
     }
@@ -696,7 +696,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       // sign of the scale is changed since cuDF follows c++ libraries like CNL
       // which uses negative scaling, but liborc and other libraries
       // follow positive scaling.
-      auto const scale = -static_cast<int32_t>(_metadata->->get_types()[col].scale.value_or(0));
+      auto const scale = -static_cast<int32_t>(_metadata->get_types()[col].scale.value_or(0));
       column_types.emplace_back(col_type, scale);
     } else {
       column_types.emplace_back(col_type);
@@ -790,106 +790,106 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             stream.synchronize();
           }
         }
-        if (_source->is_device_read_preferred(len)) {
-          CUDF_EXPECTS(_source->device_read(offset, len, d_dst, stream) == len,
-                       "Unexpected discrepancy in bytes read.");
+
+        // Update chunks to reference streams pointers
+        for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
+          auto &chunk         = chunks[stripe_idx * num_columns + col_idx];
+          chunk.start_row     = stripe_start_row;
+          chunk.num_rows      = stripe_info->numberOfRows;
+          chunk.encoding_kind = stripe_footer->columns[_selected_columns[col_idx]].kind;
+          chunk.type_kind     = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
+                              .ff.types[_selected_columns[col_idx]]
+                              .kind;
+          chunk.decimal_scale = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
+                                  .ff.types[_selected_columns[col_idx]]
+                                  .scale.value_or(0);
+          chunk.rowgroup_id = num_rowgroups;
+          chunk.dtype_len   = (column_types[col_idx].id() == type_id::STRING)
+                                ? sizeof(std::pair<const char *, size_t>)
+                                : cudf::size_of(column_types[col_idx]);
+          if (chunk.type_kind == orc::TIMESTAMP) {
+            chunk.ts_clock_rate = to_clockrate(_timestamp_type.id());
+          }
+          stripe_start_row += stripe_info->numberOfRows;
+          if (use_index) {
+            num_rowgroups += (stripe_info->numberOfRows + _metadata->get_row_index_stride() - 1) /
+                             _metadata->get_row_index_stride();
+          }
+
+          stripe_idx++;
+        }
+      }
+
+      // Process dataset chunk pages into output columns
+      if (stripe_data.size() != 0) {
+
+        // Calculate the total number of stripes across all input files
+        int total_num_stripes = 0;
+        for (auto &stripe_source_mapping : selected_stripes) {
+          total_num_stripes += stripe_source_mapping.stripe_info.size();
+        }
+
+        // Setup row group descriptors if using indexes
+        rmm::device_uvector<gpu::RowGroup> row_groups(num_rowgroups * num_columns, stream);
+        if (_metadata->per_file_metadata[0].ps.compression != orc::NONE) {
+          auto decomp_data =
+            decompress_stripe_data(chunks,
+                                   stripe_data,
+                                   _metadata->per_file_metadata[0].decompressor.get(),
+                                   stream_info,
+                                   total_num_stripes,
+                                   row_groups,
+                                   _metadata->get_row_index_stride(),
+                                   stream);
+          stripe_data.clear();
+          stripe_data.push_back(std::move(decomp_data));
         } else {
-          const auto buffer = _source->host_read(offset, len);
-          CUDF_EXPECTS(buffer->size() == len, "Unexpected discrepancy in bytes read.");
-          CUDA_TRY(
-            cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyHostToDevice, stream.value()));
-          stream.synchronize();
-        }
-      }
-
-      // Update chunks to reference streams pointers
-      for (size_t j = 0; j < num_columns; j++) {
-        auto &chunk         = chunks[stripe_idx * num_columns + col_idx];
-        chunk.start_row     = stripe_start_row;
-        chunk.num_rows      = stripe_info->numberOfRows;
-        chunk.encoding_kind = stripe_footer->columns[_selected_columns[col_idx]].kind;
-        chunk.type_kind     = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
-                              .ff.types[_selected_columns[col_idx]].kind;
-        chunk.decimal_scale = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
-                                  .ff.types[_selected_columns[col_idx]].scale.value_or(0);
-        chunk.rowgroup_id = num_rowgroups;
-        chunk.dtype_len     = (column_types[j].id() == type_id::STRING)
-                            ? sizeof(std::pair<const char *, size_t>)
-                            : cudf::size_of(column_types[j]);
-        if (chunk.type_kind == orc::TIMESTAMP) {
-          chunk.ts_clock_rate = to_clockrate(_timestamp_type.id());
-        }
-        stripe_start_row += stripe_info->numberOfRows;
-        if (use_index) {
-          num_rowgroups += (stripe_info->numberOfRows + _metadata->get_row_index_stride() - 1) /
-                           _metadata->get_row_index_stride();
-        }
-
-        stripe_idx++;
-      }
-    }
-
-    // Process dataset chunk pages into output columns
-    if (stripe_data.size() != 0) {
-      // Setup row group descriptors if using indexes
-      rmm::device_uvector<gpu::RowGroup> row_groups(num_rowgroups * num_columns, stream);
-      if (_metadata->per_file_metadata[0].ps.compression != orc::NONE) {
-        auto decomp_data =
-          decompress_stripe_data(chunks,
-                                 stripe_data,
-                                 _metadata->per_file_metadata[0].decompressor.get(),
-                                 stream_info,
-                                 selected_stripes.size(),
-                                 row_groups,
-                                 _metadata->get_row_index_stride(),
-                                 stream);
-        stripe_data.clear();  // XXX: This could be causing problems? Starts out with size 2 and
-                              // then gets reduced to 1 in the merge files unit test
-        stripe_data.push_back(std::move(decomp_data));
-      } else {
-        if (not row_groups.is_empty()) {
-          chunks.host_to_device(stream);
-          gpu::ParseRowGroupIndex(row_groups.data(),
-                                  nullptr,
-                                  chunks.device_ptr(),
-                                  num_columns,
-                                  selected_stripes.size(),
-                                  num_rowgroups,
-                                  _metadata->get_row_index_stride(),
-                                  stream);
-        }
-      }
-
-      // Setup table for converting timestamp columns from local to UTC time
-      auto const tz_table = _has_timestamp_column
-                              ? build_timezone_transition_table(
-                                  selected_stripes[0].stripe_info[0].second->writerTimezone, stream)
-                              : timezone_table{};
-
-      std::vector<column_buffer> out_buffers;
-      for (size_t i = 0; i < column_types.size(); ++i) {
-        bool is_nullable = false;
-        for (int j = 0; j < total_num_selected_stripes; ++j) {
-          if (chunks[i * num_columns + j].strm_len[gpu::CI_PRESENT] != 0) {
-            is_nullable = true;
-            break;
+          if (not row_groups.is_empty()) {
+            chunks.host_to_device(stream);
+            gpu::ParseRowGroupIndex(row_groups.data(),
+                                    nullptr,
+                                    chunks.device_ptr(),
+                                    num_columns,
+                                    selected_stripes.size(),
+                                    num_rowgroups,
+                                    _metadata->get_row_index_stride(),
+                                    stream);
           }
         }
-        out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
-      }
 
-      decode_stream_data(chunks,
-                         num_dict_entries,
-                         skip_rows,
-                         num_rows,
-                         tz_table.view(),
-                         row_groups,
-                         _metadata->get_row_index_stride(),
-                         out_buffers,
-                         stream);
+        // Setup table for converting timestamp columns from local to UTC time
+        auto const tz_table =
+          _has_timestamp_column
+            ? build_timezone_transition_table(
+                selected_stripes[0].stripe_info[0].second->writerTimezone, stream)
+            : timezone_table{};
 
-      for (size_t i = 0; i < column_types.size(); ++i) {
-        out_columns.emplace_back(make_column(out_buffers[i], nullptr, stream, _mr));
+        std::vector<column_buffer> out_buffers;
+        for (size_t i = 0; i < column_types.size(); ++i) {
+          bool is_nullable = false;
+          // XXX: This very likely needs to be the total number of stripes????
+          for (size_t j = 0; j < selected_stripes.size(); ++j) {
+            if (chunks[j * num_columns + i].strm_len[gpu::CI_PRESENT] != 0) {
+              is_nullable = true;
+              break;
+            }
+          }
+          out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
+        }
+
+        decode_stream_data(chunks,
+                           num_dict_entries,
+                           skip_rows,
+                           num_rows,
+                           tz_table.view(),
+                           row_groups,
+                           _metadata->get_row_index_stride(),
+                           out_buffers,
+                           stream);
+
+        for (size_t i = 0; i < column_types.size(); ++i) {
+          out_columns.emplace_back(make_column(out_buffers[i], nullptr, stream, _mr));
+        }
       }
     }
   }
