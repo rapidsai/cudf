@@ -62,10 +62,8 @@ struct alignas(8) relist {
 
   __host__ __device__ inline relist(int16_t insts, u_char* data = nullptr) : listsize(insts)
   {
-    listsize    = insts;
-    u_char* ptr = (u_char*)data;
-    if (ptr == nullptr) ptr = (reinterpret_cast<u_char*>(this)) + sizeof(relist);
-    ranges = reinterpret_cast<int2*>(ptr);
+    auto ptr = data == nullptr ? reinterpret_cast<u_char*>(this) + sizeof(relist) : data;
+    ranges   = reinterpret_cast<int2*>(ptr);
     ptr += listsize * sizeof(ranges[0]);
     inst_ids = reinterpret_cast<int16_t*>(ptr);
     ptr += listsize * sizeof(inst_ids[0]);
