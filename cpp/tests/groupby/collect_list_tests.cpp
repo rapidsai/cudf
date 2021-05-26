@@ -210,7 +210,7 @@ TYPED_TEST(groupby_collect_list_test, dictionary)
                                              std::make_unique<cudf::column>(offsets),
                                              std::make_unique<cudf::column>(vals),
                                              0,
-                                             rmm::device_buffer{0});
+                                             rmm::device_buffer{});
 
   test_single_agg(
     keys, vals, expect_keys, expect_vals->view(), cudf::make_collect_list_aggregation());

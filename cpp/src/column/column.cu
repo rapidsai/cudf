@@ -43,19 +43,8 @@
 #include <vector>
 
 namespace cudf {
-// Copy constructor
-column::column(column const &other)
-  : _type{other._type},
-    _size{other._size},
-    _data{other._data},
-    _null_mask{other._null_mask},
-    _null_count{other._null_count}
-{
-  _children.reserve(other.num_children());
-  for (auto const &c : other._children) { _children.emplace_back(std::make_unique<column>(*c)); }
-}
 
-// Copy ctor w/ explicit stream/mr
+// Copy ctor w/ optional stream/mr
 column::column(column const &other,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource *mr)
@@ -165,14 +154,16 @@ void column::set_null_mask(rmm::device_buffer &&new_null_mask, size_type new_nul
   _null_count = new_null_count;
 }
 
-void column::set_null_mask(rmm::device_buffer const &new_null_mask, size_type new_null_count)
+void column::set_null_mask(rmm::device_buffer const &new_null_mask,
+                           size_type new_null_count,
+                           rmm::cuda_stream_view stream)
 {
   if (new_null_count > 0) {
     CUDF_EXPECTS(new_null_mask.size() >= cudf::bitmask_allocation_size_bytes(this->size()),
                  "Column with null values must be nullable and the null mask \
                   buffer size should match the size of the column.");
   }
-  _null_mask  = new_null_mask;  // copy
+  _null_mask  = rmm::device_buffer{new_null_mask, stream};  // copy
   _null_count = new_null_count;
 }
 

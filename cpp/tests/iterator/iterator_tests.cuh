@@ -59,7 +59,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
                               init);
 
     // Allocate temporary storage
-    rmm::device_buffer d_temp_storage(temp_storage_bytes);
+    rmm::device_buffer d_temp_storage(temp_storage_bytes, rmm::cuda_stream_default);
 
     // Run reduction
     cub::DeviceReduce::Reduce(d_temp_storage.data(),
