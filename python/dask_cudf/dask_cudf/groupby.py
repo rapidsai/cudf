@@ -284,12 +284,7 @@ def groupby_agg(
         # be str, rather than tuples).
         for col in aggs:
             _aggs[col] = _aggs[col][0]
-    try:
-        _meta = ddf._meta.groupby(gb_cols, as_index=as_index).agg(_aggs)
-    except NotImplementedError:
-        _meta = ddf._meta_nonempty.groupby(gb_cols, as_index=as_index).agg(
-            _aggs
-        )
+    _meta = ddf._meta.groupby(gb_cols, as_index=as_index).agg(_aggs)
     for s in range(split_out):
         dsk[(gb_agg_name, s)] = (
             _finalize_gb_agg,
