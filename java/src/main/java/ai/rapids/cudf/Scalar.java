@@ -382,6 +382,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   public static Scalar structFromNull(HostColumnVector.DataType... elementTypes) {
     ColumnVector[] children = new ColumnVector[elementTypes.length];
     long[] childHandles = new long[elementTypes.length];
+    RuntimeException error = null;
     try {
       for (int i = 0; i < elementTypes.length; i++) {
         // Build column vector having single null value rather than empty column vector,
@@ -390,8 +391,13 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         childHandles[i] = children[i].getNativeView();
       }
       return new Scalar(DType.STRUCT, makeStructScalar(childHandles, false));
+    } catch (RuntimeException ex) {
+      error = ex;
+      throw ex;
+    } catch (Exception ex) {
+      error = new RuntimeException(ex);
+      throw ex;
     } finally {
-      IllegalStateException closeException = null;
       // close all empty children
       for (ColumnVector child : children) {
         // We closed all created ColumnViews when we hit null. Therefore we exit the loop.
@@ -399,15 +405,15 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         // suppress exception during the close process to ensure that all elements are closed
         try {
           child.close();
-        } catch (IllegalStateException ex) {
-          if (closeException == null) {
-            closeException = ex;
+        } catch (Exception ex) {
+          if (error == null) {
+            error = new RuntimeException(ex);
             continue;
           }
-          closeException.addSuppressed(ex);
+          error.addSuppressed(ex);
         }
       }
-      if (closeException != null) throw closeException;
+      if (error != null) throw error;
     }
   }
 
@@ -444,6 +450,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         }
       }
     } else if (dt.typeId == DType.DTypeEnum.LIST) {
+      // type of List doesn't matter here because of type erasure in Java
       try (HostColumnVector hcv = HostColumnVector.fromLists(hostType, (List<Integer>) null)) {
         return hcv.copyToDevice();
       }
@@ -648,7 +655,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         // make sure the close process is exception-free
         try {
           child.close();
-        } catch (Exception ignore) {
+        } catch (Exception suppressed) {
+          ex.addSuppressed(suppressed);
         }
       }
       throw ex;
