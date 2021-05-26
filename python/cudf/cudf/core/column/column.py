@@ -2240,17 +2240,6 @@ def full(size: int, fill_value: ScalarLike, dtype: Dtype = None) -> ColumnBase:
     return ColumnBase.from_scalar(cudf.Scalar(fill_value, dtype), size)
 
 
-def _cudf_dtype_from_arrow_type(arrow_type: Dtype) -> Dtype:
-    if pa.types.is_decimal(arrow_type):
-        return Decimal64Dtype.from_arrow(arrow_type)
-    elif pa.types.is_struct(arrow_type):
-        return StructDtype.from_arrow(arrow_type)
-    elif pa.types.is_list(arrow_type):
-        return ListDtype.from_arrow(arrow_type)
-
-    return arrow_type
-
-
 def _copy_type_metadata_from_arrow(
     arrow_array: pa.array, cudf_column: ColumnBase
 ) -> ColumnBase:
