@@ -231,7 +231,7 @@ cdef class GroupBy:
             move(c_result.second), column_names=values._column_names
         )
 
-        result = Table(data=grouped_result, index=sorted_keys)
+        result = Table(data=grouped_result._data, index=sorted_keys)
         return result
 
 _GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax"}

@@ -709,11 +709,12 @@ class GroupBy(Serializable):
     def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
         """Internal implementation for `ffill` and `bfill`
         """
-        value_column_labels = self._value_column_labels()
-        value_columns = self.obj._data.select_by_labels(value_column_labels)
-        result = self._groupby.replace_nulls(Table(value_columns), method)
-        result = self.obj.__class__.from_table(result)
-        return result._copy_type_metadata(value_columns)
+        value_columns = self.grouping.values(include_keys=True)
+        result = self._groupby.replace_nulls(
+            Table(value_columns._data), method
+        )
+        result = self.obj.__class__._from_table(result)
+        return result._copy_type_metadata(value_columns, include_index=True)
 
     def pad(self, limit=None):
         """Forward fill NA values.
@@ -800,7 +801,7 @@ class GroupBy(Serializable):
                     "Method can only be of 'pad', 'ffill',"
                     "'backfill', 'bfill'."
                 )
-            return getattr(self, method, limit)
+            return getattr(self, method, limit)()
         else:
             if is_scalar(value):
                 # Verify scalar type match all groupby value columns type
@@ -815,14 +816,6 @@ class GroupBy(Serializable):
                     # Verify value.column data type match with each groupby
                     #   value column
                     pass
-
-    def _value_column_labels(self) -> list:
-        """Get the labels of the value columns.
-        To retrieve these columns, use `self._data.select_by_label(labels)`.
-        """
-        return [
-            x for x in self.obj._column_names if x not in self.grouping.names
-        ]
 
 
 class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
@@ -1092,6 +1085,17 @@ class _Grouping(Serializable):
             return cudf.core.index.as_index(
                 self._key_columns[0], name=self.names[0]
             )
+
+    def values(self, include_keys=False):
+        """Returns value columns as a frame. If include_keys=True, index
+        of the frame is the keys, otherwise default.
+        """
+        value_column_names = [
+            x for x in self._obj._column_names if x not in self.names
+        ]
+        value_columns = self._obj._data.select_by_label(value_column_names)
+        index = self.keys if include_keys else None
+        return self._obj._from_data(value_columns, index=index)
 
     def _handle_callable(self, by):
         by = by(self._obj.index)

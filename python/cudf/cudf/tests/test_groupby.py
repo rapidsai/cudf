@@ -1700,11 +1700,25 @@ def test_groupby_mix_agg_scan():
 
 @pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
 @pytest.mark.parametrize("value", [42])
-def test_groupby_fillna_value(nelem):
+def test_groupby_fillna_value(nelem, value):
     pass
 
 
-@pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
-@pytest.mark.parametrize("value", ["pad", "ffill", "backfill", "bfill"])
-def test_groupby_fillna_method(nelem):
-    pass
+@pytest.mark.parametrize("method", ["pad", "ffill", "backfill", "bfill"])
+def test_groupby_fillna_method(method):
+    key = pd.Series([1, 2, 1, 2, 1, 2])
+    pdf = pd.DataFrame(
+        {
+            "general": [1, 3, None, None, 4, 2],
+            "leading_nulls": [None, None, 1, 3, 2, 4],
+            "trailing_nulls": [1, 3, 2, 4, None, None],
+        }
+    )
+
+    gdf = cudf.from_pandas(pdf)
+
+    expect = pdf.groupby(key).fillna(method=method)
+    got = gdf.groupby(key).fillna(method=method)
+
+    expect.index = key
+    assert_groupby_results_equal(expect, got)
