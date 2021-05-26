@@ -19,8 +19,12 @@ from dask.dataframe.utils import (
     is_arraylike,
     is_scalar,
     make_meta,
-    make_meta_obj,
 )
+
+try:
+    from dask.dataframe.utils import make_meta_obj as make_meta_obj
+except ImportError:
+    from dask.dataframe.utils import make_meta as make_meta_obj
 
 import cudf
 from cudf.utils.dtypes import is_string_dtype

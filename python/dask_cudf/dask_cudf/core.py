@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+
 import math
 import warnings
 from distutils.version import LooseVersion
@@ -24,6 +25,11 @@ from cudf import _lib as libcudf
 
 from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods
+
+try:
+    from dask.dataframe.utils import make_meta_util as dask_make_meta
+except ImportError:
+    from dask.dataframe.core import make_meta as dask_make_meta
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
@@ -72,7 +78,7 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
         self._name = name
-        meta = dd.utils.make_meta_util(meta)
+        meta = dask_make_meta(meta)
         if not isinstance(meta, self._partition_type):
             raise TypeError(
                 f"Expected meta to specify type "
@@ -115,7 +121,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             out[k] = v
             return out
 
-        meta = assigner(self._meta, k, dd.utils.make_meta_util(v))
+        meta = assigner(self._meta, k, dask_make_meta(v))
         return self.map_partitions(assigner, k, v, meta=meta)
 
     def apply_rows(self, func, incols, outcols, kwargs=None, cache_key=None):
@@ -677,7 +683,7 @@ def reduction(
     if meta is None:
         meta_chunk = _emulate(apply, chunk, args, chunk_kwargs)
         meta = _emulate(apply, aggregate, [[meta_chunk]], aggregate_kwargs)
-    meta = dd.utils.make_meta_util(meta)
+    meta = dask_make_meta(meta)
 
     graph = HighLevelGraph.from_collections(b, dsk, dependencies=args)
     return dd.core.new_dd_object(graph, b, meta, (None, None))
