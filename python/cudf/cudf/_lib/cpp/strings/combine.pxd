@@ -31,12 +31,12 @@ cdef extern from "cudf/strings/combine.hpp" namespace "cudf::strings" nogil:
         column_view separators,
         string_scalar separator_narep,
         string_scalar string_narep,
-        separator_on_nulls.YES,
-        output_if_empty_list.NULL_ELEMENT) except +
+        separator_on_nulls separate_nulls,
+        output_if_empty_list empty_list_policy) except +
 
     cdef unique_ptr[column] join_list_elements(
         column_view lists_strings_column,
         string_scalar separator,
         string_scalar narep,
-        separator_on_nulls.YES,
-        output_if_empty_list.NULL_ELEMENT) except +
+        separator_on_nulls separate_nulls,
+        output_if_empty_list empty_list_policy) except +
