@@ -94,7 +94,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 {
   CUDF_FUNC_RANGE();
 
-  if (input.is_empty()) return empty_like(input);
+  if (input.is_empty()) { return cudf::detail::empty_output(input, aggr); }
 
   CUDF_EXPECTS((group_keys.num_columns() == 0 || group_keys.num_rows() == input.size()),
                "Size mismatch between group_keys and input vector.");
@@ -949,7 +949,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
 {
   CUDF_FUNC_RANGE();
 
-  if (input.is_empty()) return empty_like(input);
+  if (input.is_empty()) { return cudf::detail::empty_output(input, aggr); }
 
   CUDF_EXPECTS((group_keys.num_columns() == 0 || group_keys.num_rows() == input.size()),
                "Size mismatch between group_keys and input vector.");

@@ -309,6 +309,35 @@ struct DeviceRollingRowNumber {
   }
 };
 
+struct agg_specific_empty_output {
+  template <typename InputType, aggregation::Kind op>
+  std::unique_ptr<column> operator()(column_view const& input, rolling_aggregation const& agg) const
+  {
+    using target_type = cudf::detail::target_type_t<InputType, op>;
+
+    if constexpr (std::is_same_v<cudf::detail::target_type_t<InputType, op>, void>) {
+      CUDF_FAIL("Unsupported combination of column-type and aggregation.");
+    }
+
+    if constexpr (cudf::is_fixed_width<target_type>()) {
+      return cudf::make_empty_column(data_type{type_to_id<target_type>()});
+    }
+
+    if constexpr (op == aggregation::COLLECT_LIST) {
+      return cudf::make_lists_column(
+        0, make_empty_column(data_type{type_to_id<offset_type>()}), empty_like(input), 0, {});
+    }
+
+    return empty_like(input);
+  }
+};
+
+std::unique_ptr<column> empty_output(column_view const& input, rolling_aggregation const& agg)
+{
+  return cudf::detail::dispatch_type_and_aggregation(
+    input.type(), agg.kind, agg_specific_empty_output{}, input, agg);
+}
+
 /**
  * @brief Operator for applying a LEAD rolling aggregation on a single window.
  */
@@ -1061,7 +1090,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
                 "bitmask_type size does not match CUDA warp size");
 
-  if (input.is_empty()) { return empty_like(input); }
+  if (input.is_empty()) { return cudf::detail::empty_output(input, agg); }
 
   if (cudf::is_dictionary(input.type())) {
     CUDF_EXPECTS(agg.kind == aggregation::COUNT_ALL || agg.kind == aggregation::COUNT_VALID ||
