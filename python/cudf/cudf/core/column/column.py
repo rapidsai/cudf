@@ -42,6 +42,7 @@ from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import (
     CategoricalDtype,
+    Decimal64Dtype,
     IntervalDtype,
     ListDtype,
     StructDtype,
@@ -1272,6 +1273,32 @@ class ColumnBase(Column, Serializable):
                 for name, f in zip(names, result_frames)
             }
         )
+
+    def _apply_type_metadata(self: T, dtype: Dtype) -> ColumnBase:
+        if isinstance(dtype, CategoricalDtype) and not (
+            isinstance(self, cudf.core.column.CategoricalColumn)
+        ):
+            new = build_categorical_column(
+                categories=dtype.categories._values,
+                codes=as_column(self.base_data, dtype=self.dtype),
+                mask=self.base_mask,
+                ordered=dtype.ordered,
+                size=self.size,
+                offset=self.offset,
+                null_count=self.null_count,
+            )
+
+        if isinstance(dtype, StructDtype) and isinstance(
+            self, cudf.core.column.StructColumn
+        ):
+            new = self._rename_fields(dtype.fields.keys())
+
+        if isinstance(dtype, Decimal64Dtype) and isinstance(
+            self, cudf.core.column.DecimalColumn
+        ):
+            pass
+
+        return new
 
     def _copy_type_metadata(self: T, other: ColumnBase) -> ColumnBase:
         """
