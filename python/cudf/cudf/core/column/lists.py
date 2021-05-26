@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import pickle
+from typing import Optional
 
 import numpy as np
 import pyarrow as pa
@@ -16,7 +17,7 @@ from cudf._lib.lists import (
     sort_lists,
 )
 from cudf._lib.table import Table
-from cudf._typing import BinaryOperand
+from cudf._typing import BinaryOperand, SeriesOrIndex
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethods
@@ -230,6 +231,12 @@ class ListColumn(ColumnBase):
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
 
+    def leaves(self):
+        if isinstance(self.elements, ListColumn):
+            return self.elements.leaves()
+        else:
+            return self.elements
+
 
 class ListMethods(ColumnMethods):
     """
@@ -315,7 +322,7 @@ class ListMethods(ColumnMethods):
             return res
 
     @property
-    def leaves(self):
+    def leaves(self) -> Optional[SeriesOrIndex]:
         """
         From a Series of (possibly nested) lists, obtain the elements from
         the innermost lists as a flat Series (one value per row).
@@ -336,12 +343,9 @@ class ListMethods(ColumnMethods):
         5       6
         dtype: int64
         """
-        if type(self._column.elements) is ListColumn:
-            return self._column.elements.elements
-        else:
-            return self._return_or_inplace(
-                self._column.elements, retain_index=False
-            )
+        return self._return_or_inplace(
+            self._column.leaves(), retain_index=False
+        )
 
     def len(self):
         """
