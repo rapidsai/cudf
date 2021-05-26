@@ -61,9 +61,8 @@ using packed_t = typename packed<sizeof(pair_type)>::type;
  * bitwise equality comparison, which may not be valid for non-integral
  * types.
  *
- * Also, the `key_type` and `value_type` must be the same size otherwise
- * the packed value will contain padding bits and accessing the packed
- * value would be undefined.
+ * Also, the `pair_type` must not contain any padding bits otherwise
+ * accessing the packed value would be undefined.
  *
  * @tparam pair_type The pair type that will be packed
  * @return true If the pair type can be packed
