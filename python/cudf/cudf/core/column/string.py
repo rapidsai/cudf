@@ -12,7 +12,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import cuda
-from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
@@ -41,7 +40,7 @@ from cudf._lib.nvtext.stemmer import (
     porter_stemmer_measure as cpp_porter_stemmer_measure,
 )
 from cudf._lib.nvtext.subword_tokenize import (
-    subword_tokenize as cpp_subword_tokenize,
+    subword_tokenize_vocab_file as cpp_subword_tokenize_vocab_file,
 )
 from cudf._lib.nvtext.tokenize import (
     _count_tokens_column as cpp_count_tokens_column,
@@ -110,6 +109,7 @@ from cudf._lib.strings.find import (
     startswith_multiple as cpp_startswith_multiple,
 )
 from cudf._lib.strings.findall import findall as cpp_findall
+from cudf._lib.strings.json import get_json_object as cpp_get_json_object
 from cudf._lib.strings.padding import (
     PadSide,
     center as cpp_center,
@@ -600,10 +600,6 @@ class StringMethods(ColumnMethodsMixin):
         else:
             # If self._column is not a ListColumn, we will have to
             # split each row by character and create a ListColumn out of it.
-
-            # TODO: Remove this workaround after the following
-            # feature request is resolved
-            # FEA: https://github.com/rapidsai/cudf/issues/8094
             strings_column = self._split_by_character()
 
         if is_scalar(sep):
@@ -640,13 +636,7 @@ class StringMethods(ColumnMethodsMixin):
     def _split_by_character(self):
         result_col = cpp_character_tokenize(self._column)
 
-        bytes_count = cpp_count_bytes(self._column)
-        offset_col = cudf.core.column.column_empty(
-            row_count=len(bytes_count) + 1, dtype="int32"
-        )
-        offset_col[0] = 0
-        offset_col[1:] = bytes_count
-        offset_col = offset_col._apply_scan_op("sum")
+        offset_col = self._column.children[0]
 
         res = cudf.core.column.ListColumn(
             size=len(self._column),
@@ -2179,6 +2169,72 @@ class StringMethods(ColumnMethodsMixin):
         """
 
         return self._return_or_inplace(cpp_string_get(self._column, i))
+
+    def get_json_object(self, json_path):
+        """
+        Applies a JSONPath string to an input strings column
+        where each row in the column is a valid json string
+
+        Parameters
+        ----------
+        json_path: str
+            The JSONPath string to be applied to each row
+            of the input column
+
+        Returns
+        -------
+        Column: New strings column containing the retrieved json object strings
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(
+            [
+                \\"\\"\\"
+                {
+                    "store":{
+                        "book":[
+                            {
+                                "category":"reference",
+                                "author":"Nigel Rees",
+                                "title":"Sayings of the Century",
+                                "price":8.95
+                            },
+                            {
+                                "category":"fiction",
+                                "author":"Evelyn Waugh",
+                                "title":"Sword of Honour",
+                                "price":12.99
+                            }
+                        ]
+                    }
+                }
+                \\"\\"\\"
+            ])
+        >>> s
+            0    {"store": {\\n        "book": [\\n        { "cat...
+            dtype: object
+        >>> s.str.get_json_object("$.store.book")
+            0    [\\n        { "category": "reference",\\n       ...
+            dtype: object
+        """
+
+        try:
+            res = self._return_or_inplace(
+                cpp_get_json_object(
+                    self._column, cudf.Scalar(json_path, "str")
+                )
+            )
+        except RuntimeError as e:
+            matches = (
+                "Unrecognized JSONPath operator",
+                "Invalid empty name in JSONPath query string",
+            )
+            if any(match in str(e) for match in matches):
+                raise ValueError("JSONPath value not found") from e
+            raise
+        else:
+            return res
 
     def split(
         self, pat: str = None, n: int = -1, expand: bool = None
@@ -4617,7 +4673,7 @@ class StringMethods(ColumnMethodsMixin):
         array([[0, 0, 2],
                [1, 0, 1]], dtype=uint32)
         """
-        tokens, masks, metadata = cpp_subword_tokenize(
+        tokens, masks, metadata = cpp_subword_tokenize_vocab_file(
             self._column,
             hash_file,
             max_length,
@@ -4977,7 +5033,7 @@ class StringColumn(column.ColumnBase):
         result_col = self._process_for_reduction(
             skipna=skipna, min_count=min_count
         )
-        if isinstance(result_col, cudf.core.column.ColumnBase):
+        if isinstance(result_col, type(self)):
             return result_col.str().cat()
         else:
             return result_col
@@ -5003,13 +5059,6 @@ class StringColumn(column.ColumnBase):
 
     def str(self, parent: ParentType = None) -> StringMethods:
         return StringMethods(self, parent=parent)
-
-    @property
-    def _nbytes(self) -> int:
-        if self.size == 0:
-            return 0
-        else:
-            return self.children[1].size
 
     def as_numerical_column(
         self, dtype: Dtype
@@ -5127,7 +5176,7 @@ class StringColumn(column.ColumnBase):
         return self.to_arrow().to_pandas().values
 
     def to_pandas(
-        self, index: ColumnLike = None, nullable: bool = False, **kwargs
+        self, index: pd.Index = None, nullable: bool = False, **kwargs
     ) -> "pd.Series":
         if nullable:
             pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
@@ -5140,7 +5189,7 @@ class StringColumn(column.ColumnBase):
         return pd_series
 
     def serialize(self) -> Tuple[dict, list]:
-        header = {"null_count": self.null_count}  # type: Dict[Any, Any]
+        header: Dict[Any, Any] = {"null_count": self.null_count}
         header["type-serialized"] = pickle.dumps(type(self))
         header["size"] = self.size
 
@@ -5302,7 +5351,9 @@ class StringColumn(column.ColumnBase):
             if op == "add":
                 return cast("column.ColumnBase", lhs.str().cat(others=rhs))
             elif op in ("eq", "ne", "gt", "lt", "ge", "le", "NULL_EQUALS"):
-                return _string_column_binop(self, rhs, op=op, out_dtype="bool")
+                return libcudf.binaryop.binaryop(
+                    lhs=self, rhs=rhs, op=op, dtype="bool"
+                )
 
         raise TypeError(
             f"{op} operator not supported between {type(self)} and {type(rhs)}"
@@ -5333,17 +5384,6 @@ class StringColumn(column.ColumnBase):
         )
 
         return to_view.view(dtype)
-
-
-@annotate("BINARY_OP", color="orange", domain="cudf_python")
-def _string_column_binop(
-    lhs: "column.ColumnBase",
-    rhs: "column.ColumnBase",
-    op: str,
-    out_dtype: Dtype,
-) -> "column.ColumnBase":
-    out = libcudf.binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype=out_dtype)
-    return out
 
 
 def _get_cols_list(parent_obj, others):

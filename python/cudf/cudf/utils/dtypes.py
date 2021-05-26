@@ -290,6 +290,17 @@ def is_decimal_dtype(obj):
     )
 
 
+def _find_common_type_decimal(dtypes):
+    # Find the largest scale and the largest difference between
+    # precision and scale of the columns to be concatenated
+    s = max([dtype.scale for dtype in dtypes])
+    lhs = max([dtype.precision - dtype.scale for dtype in dtypes])
+    # Combine to get the necessary precision and clip at the maximum
+    # precision
+    p = min(cudf.Decimal64Dtype.MAX_PRECISION, s + lhs)
+    return cudf.Decimal64Dtype(p, s)
+
+
 def cudf_dtype_from_pydata_dtype(dtype):
     """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
         Python dtype.
@@ -681,9 +692,15 @@ def find_common_type(dtypes):
     dtypes = set(dtypes)
 
     if any(is_decimal_dtype(dtype) for dtype in dtypes):
-        raise NotImplementedError(
-            "DecimalDtype is not yet supported in find_common_type"
-        )
+        if all(
+            is_decimal_dtype(dtype) or is_numerical_dtype(dtype)
+            for dtype in dtypes
+        ):
+            return _find_common_type_decimal(
+                [dtype for dtype in dtypes if is_decimal_dtype(dtype)]
+            )
+        else:
+            return np.dtype("O")
 
     # Corner case 1:
     # Resort to np.result_type to handle "M" and "m" types separately

@@ -23,6 +23,7 @@ import cudf
 from cudf import _lib as libcudf
 
 from dask_cudf import sorting
+from dask_cudf.accessors import ListMethods
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
@@ -71,7 +72,7 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
         self._name = name
-        meta = dd.core.make_meta(meta)
+        meta = dd.utils.make_meta_util(meta)
         if not isinstance(meta, self._partition_type):
             raise TypeError(
                 f"Expected meta to specify type "
@@ -114,7 +115,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             out[k] = v
             return out
 
-        meta = assigner(self._meta, k, dd.core.make_meta(v))
+        meta = assigner(self._meta, k, dd.utils.make_meta_util(v))
         return self.map_partitions(assigner, k, v, meta=meta)
 
     def apply_rows(self, func, incols, outcols, kwargs=None, cache_key=None):
@@ -414,6 +415,10 @@ class Series(_Frame, dd.core.Series):
 
         return CudfSeriesGroupBy(self, *args, **kwargs)
 
+    @property
+    def list(self):
+        return ListMethods(self)
+
 
 class Index(Series, dd.core.Index):
     _partition_type = cudf.Index
@@ -672,7 +677,7 @@ def reduction(
     if meta is None:
         meta_chunk = _emulate(apply, chunk, args, chunk_kwargs)
         meta = _emulate(apply, aggregate, [[meta_chunk]], aggregate_kwargs)
-    meta = dd.core.make_meta(meta)
+    meta = dd.utils.make_meta_util(meta)
 
     graph = HighLevelGraph.from_collections(b, dsk, dependencies=args)
     return dd.core.new_dd_object(graph, b, meta, (None, None))

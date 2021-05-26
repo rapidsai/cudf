@@ -541,7 +541,8 @@ std::unique_ptr<cudf::column> make_structs_column(
  *
  * The output column will have the same type as `s.type()`
  * The output column will contain all null rows if `s.invalid()==false`
- * The output column will be empty if `size==0`.
+ * The output column will be empty if `size==0`. For LIST scalars, the column hierarchy
+ * from @p s is preserved.
  *
  * @param[in] s The scalar to use for values in the column.
  * @param[in] size The number of rows for the output column.

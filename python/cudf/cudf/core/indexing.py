@@ -2,6 +2,7 @@
 
 from typing import Any, Union
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 from nvtx import annotate
@@ -58,7 +59,9 @@ def get_label_range_or_mask(index, start, stop, step):
         if start is not None and stop is not None:
             if start > stop:
                 return slice(0, 0, None)
-            boolean_mask = (index >= start) and (index <= stop)
+            # TODO: Once Index binary ops are updated to support logical_and,
+            # can use that instead of using cupy.
+            boolean_mask = cp.logical_and((index >= start), (index <= stop))
         elif start is not None:
             boolean_mask = index >= start
         else:
@@ -82,7 +85,11 @@ class _SeriesIlocIndexer(object):
             arg = list(arg)
         data = self._sr._column[arg]
 
-        if is_scalar(data) or _is_null_host_scalar(data):
+        if (
+            isinstance(data, list)
+            or is_scalar(data)
+            or _is_null_host_scalar(data)
+        ):
             return data
         index = self._sr.index.take(arg)
         return self._sr._copy_construct(data=data, index=index)
@@ -98,9 +105,11 @@ class _SeriesIlocIndexer(object):
             value = to_cudf_compatible_scalar(value)
         else:
             value = column.as_column(value)
-
         if (
-            not is_categorical_dtype(self._sr._column.dtype)
+            not isinstance(
+                self._sr._column.dtype,
+                (cudf.Decimal64Dtype, cudf.CategoricalDtype),
+            )
             and hasattr(value, "dtype")
             and pd.api.types.is_numeric_dtype(value.dtype)
         ):

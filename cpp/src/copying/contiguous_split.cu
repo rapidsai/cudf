@@ -248,14 +248,12 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
  * the actual copy.
  *
  * @param num_src_bufs Total number of source buffers (N)
- * @param num_partitions Number of partitions the each source buffer is split into (M)
  * @param src_bufs Input source buffers (N)
  * @param dst_bufs Desination buffers (N*M)
  * @param buf_info Information on the range of values to be copied for each destination buffer.
  */
 template <int block_size>
 __global__ void copy_partition(int num_src_bufs,
-                               int num_partitions,
                                uint8_t** src_bufs,
                                uint8_t** dst_bufs,
                                dst_buf_info* buf_info)
@@ -447,6 +445,13 @@ struct buf_info_functor {
     return {current + 1, offset_stack_pos + offset_depth};
   }
 
+  template <typename T, typename... Args>
+  std::enable_if_t<std::is_same<T, cudf::dictionary32>::value, std::pair<src_buf_info*, size_type>>
+  operator()(Args&&...)
+  {
+    CUDF_FAIL("Unsupported type");
+  }
+
  private:
   std::pair<src_buf_info*, size_type> add_null_buffer(column_view const& col,
                                                       src_buf_info* current,
@@ -597,17 +602,6 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::struct_vi
                                offset_stack_pos,
                                parent_offset_index,
                                offset_depth);
-}
-
-template <>
-std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::dictionary32>(
-  column_view const& col,
-  src_buf_info* current,
-  int offset_stack_pos,
-  int parent_offset_index,
-  int offset_depth)
-{
-  CUDF_FAIL("Unsupported type");
 }
 
 template <typename InputIter>
@@ -1021,9 +1015,9 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
 
   // copy.  1 block per buffer
   {
-    constexpr size_type block_size = 512;
+    constexpr size_type block_size = 256;
     copy_partition<block_size><<<num_bufs, block_size, 0, stream.value()>>>(
-      num_src_bufs, num_partitions, d_src_bufs, d_dst_bufs, d_dst_buf_info);
+      num_src_bufs, d_src_bufs, d_dst_bufs, d_dst_buf_info);
   }
 
   // DtoH dst info (to retrieve null counts)
