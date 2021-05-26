@@ -1274,11 +1274,11 @@ class ColumnBase(Column, Serializable):
             }
         )
 
-    def _apply_type_metadata(self: T, dtype: Dtype) -> ColumnBase:
+    def _apply_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype) and not (
             isinstance(self, cudf.core.column.CategoricalColumn)
         ):
-            return build_categorical_column(
+            self = build_categorical_column(
                 categories=dtype.categories._values,
                 codes=as_column(self.base_data, dtype=self.dtype),
                 mask=self.base_mask,
@@ -1291,17 +1291,14 @@ class ColumnBase(Column, Serializable):
         if isinstance(dtype, StructDtype) and isinstance(
             self, cudf.core.column.StructColumn
         ):
-            return self._rename_fields(dtype.fields.keys())
+            self = self._rename_fields(dtype.fields.keys())
 
         if isinstance(dtype, Decimal64Dtype) and isinstance(
             self, cudf.core.column.DecimalColumn
         ):
-            new = self.copy()
-            new.dtype.precision = dtype.precision
+            self.dtype.precision = dtype.precision
 
-            return new
-
-        return self.copy()
+        return self
 
     def _copy_type_metadata(self: T, other: ColumnBase) -> ColumnBase:
         """
@@ -1319,28 +1316,7 @@ class ColumnBase(Column, Serializable):
           and the children of `other`.
         * if none of the above, return `other` without any changes
         """
-        if isinstance(self, cudf.core.column.CategoricalColumn) and not (
-            isinstance(other, cudf.core.column.CategoricalColumn)
-        ):
-            other = build_categorical_column(
-                categories=self.categories,
-                codes=as_column(other.base_data, dtype=other.dtype),
-                mask=other.base_mask,
-                ordered=self.ordered,
-                size=other.size,
-                offset=other.offset,
-                null_count=other.null_count,
-            )
-
-        if isinstance(other, cudf.core.column.StructColumn) and isinstance(
-            self, cudf.core.column.StructColumn
-        ):
-            other = other._rename_fields(self.dtype.fields.keys())
-
-        if isinstance(other, cudf.core.column.DecimalColumn) and isinstance(
-            self, cudf.core.column.DecimalColumn
-        ):
-            other.dtype.precision = self.dtype.precision
+        other = other._apply_type_metadata(self.dtype)
 
         if type(self) is type(other):
             if self.base_children and other.base_children:
@@ -2262,6 +2238,17 @@ def full(size: int, fill_value: ScalarLike, dtype: Dtype = None) -> ColumnBase:
     dtype: int8
     """
     return ColumnBase.from_scalar(cudf.Scalar(fill_value, dtype), size)
+
+
+def _cudf_dtype_from_arrow_type(arrow_type: Dtype) -> Dtype:
+    if pa.types.is_decimal(arrow_type):
+        return Decimal64Dtype.from_arrow(arrow_type)
+    elif pa.types.is_struct(arrow_type):
+        return StructDtype.from_arrow(arrow_type)
+    elif pa.types.is_list(arrow_type):
+        return ListDtype.from_arrow(arrow_type)
+
+    return arrow_type
 
 
 def _copy_type_metadata_from_arrow(
