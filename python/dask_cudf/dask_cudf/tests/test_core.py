@@ -780,6 +780,15 @@ def test_index_map_partitions():
 
 
 def test_merging_categorical_columns():
+    try:
+        from dask.dataframe.dispatch import (  # noqa: F401
+            union_categoricals_dispatch,
+        )
+    except ImportError:
+        pytest.skip(
+            "need a version of dask that has union_categoricals_dispatch"
+        )
+
     df_1 = cudf.DataFrame(
         {"id_1": [0, 1, 2, 3], "cat_col": ["a", "b", "f", "f"]}
     )
