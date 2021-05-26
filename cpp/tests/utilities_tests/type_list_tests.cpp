@@ -19,11 +19,6 @@
 
 using namespace cudf::test;  // this will make reading code way easier
 
-namespace std {
-template <class T, class U>
-constexpr bool is_same_v = std::is_same<T, U>::value;
-}
-
 namespace {
 // Work around to remove parentheses surrounding a type
 template <typename T>
