@@ -93,11 +93,16 @@ struct flattened_table {
                              order col_order,
                              null_order col_null_order)
   {
-    if (nullability == column_nullability::FORCE || col.nullable()) {
-      // nullable columns could be required for comparisions such as joins
+    // Even if it is not required to extract the bitmask to a separate column,
+    // we should always do that if the structs column has any null element.
+    // In addition, we should check for null by calling to `has_nulls()`, not `nullable()`.
+    // This is because when comparing structs columns, if one column has bitmask while the other
+    // does not (and both columns do not have any null element) then flattening them will result
+    // in tables with different number of columns.
+    if (nullability == column_nullability::FORCE || col.has_nulls()) {
       validity_as_column.push_back(cudf::is_valid(col));
-      if (col.nullable()) {
-        // copy bitmask only works if the column is nullable
+      if (col.has_nulls()) {
+        // copy bitmask is needed only if the column has null
         validity_as_column.back()->set_null_mask(copy_bitmask(col));
       }
       flat_columns.push_back(validity_as_column.back()->view());
