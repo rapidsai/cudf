@@ -53,6 +53,12 @@ auto row_number() { return cudf::make_row_number_aggregation<cudf::rolling_aggre
 
 auto collect_list() { return cudf::make_collect_list_aggregation<cudf::rolling_aggregation>(); }
 
+auto udf()
+{
+  return cudf::make_udf_aggregation<cudf::rolling_aggregation>(
+    cudf::udf_type::CUDA, "", cudf::data_type{cudf::type_id::INT32});
+}
+
 // Constants for rolling_window.
 auto const min_periods      = 1;
 auto const preceding        = 2;
@@ -165,6 +171,7 @@ TYPED_TEST(TypedRollingEmptyInputTest, EmptyFixedWidthInputs)
     aggs.emplace_back(max());
     aggs.emplace_back(lead());
     aggs.emplace_back(lag());
+    aggs.emplace_back(udf());
 
     rolling_output_type_matches(empty_input, aggs, type_to_id<InputType>());
   }
@@ -224,6 +231,7 @@ TEST_F(RollingEmptyInputTest, Strings)
     aggs.emplace_back(max());
     aggs.emplace_back(lead());
     aggs.emplace_back(lag());
+    aggs.emplace_back(udf());
 
     rolling_output_type_matches(empty_input, aggs, type_id::STRING);
   }
@@ -271,6 +279,7 @@ TEST_F(RollingEmptyInputTest, Dictionaries)
     aggs.emplace_back(max());
     aggs.emplace_back(lead());
     aggs.emplace_back(lag());
+    aggs.emplace_back(udf());
 
     rolling_output_type_matches(empty_input, aggs, type_id::DICTIONARY32);
   }
@@ -319,6 +328,7 @@ TYPED_TEST(TypedRollingEmptyInputTest, Lists)
     aggs.emplace_back(max());
     aggs.emplace_back(lead());
     aggs.emplace_back(lag());
+    aggs.emplace_back(udf());
 
     rolling_output_type_matches(empty_input, aggs, type_id::LIST, type_to_id<T>());
   }
@@ -368,6 +378,7 @@ TYPED_TEST(TypedRollingEmptyInputTest, Structs)
     aggs.emplace_back(max());
     aggs.emplace_back(lead());
     aggs.emplace_back(lag());
+    aggs.emplace_back(udf());
 
     rolling_output_type_matches(empty_input, aggs, type_id::STRUCT, type_to_id<T>());
   }
