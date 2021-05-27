@@ -404,7 +404,7 @@ static std::unique_ptr<cudf::column> fixed_width_convert_to_rows(
       input_data->data(), input_nm->data(), data->mutable_view().data<int8_t>());
 
   return cudf::make_lists_column(num_rows, std::move(offsets), std::move(data), 0,
-                                 rmm::device_buffer{0, rmm::cuda_stream_default, mr}, stream, mr);
+                                 rmm::device_buffer{}, stream, mr);
 }
 
 static cudf::data_type get_data_type(const cudf::column_view &v) {
