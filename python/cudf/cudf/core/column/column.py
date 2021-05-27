@@ -2251,9 +2251,8 @@ def _copy_type_metadata_from_arrow(
     * When `arrow_array` is decimal type and `cudf_column` is
     Decimal64Dtype, copy precisions.
     """
-    cudf_column = cudf_column._apply_type_metadata(
-        _cudf_dtype_from_arrow_type(arrow_array.type)
-    )
+    cudf_dtype = _cudf_dtype_from_arrow_type(arrow_array.type)
+    cudf_column = cudf_column._apply_type_metadata(cudf_dtype)
 
     if isinstance(cudf_column, cudf.core.column.StructColumn):
         base_children = tuple(
@@ -2264,7 +2263,7 @@ def _copy_type_metadata_from_arrow(
         return cudf.core.column.StructColumn(
             data=None,
             size=cudf_column.base_size,
-            dtype=StructDtype.from_arrow(arrow_array.type),
+            dtype=cudf_dtype,
             mask=cudf_column.base_mask,
             offset=cudf_column.offset,
             null_count=cudf_column.null_count,
@@ -2282,7 +2281,7 @@ def _copy_type_metadata_from_arrow(
         )
         return cudf.core.column.ListColumn(
             size=cudf_column.base_size,
-            dtype=ListDtype.from_arrow(arrow_array.type),
+            dtype=cudf_dtype,
             mask=cudf_column.base_mask,
             offset=cudf_column.offset,
             null_count=cudf_column.null_count,
