@@ -8,7 +8,6 @@ import warnings
 from types import SimpleNamespace
 from typing import (
     Any,
-    Callable,
     Dict,
     List,
     MutableSequence,
@@ -417,16 +416,6 @@ class ColumnBase(Column, Serializable):
 
     def default_na_value(self) -> Any:
         raise NotImplementedError()
-
-    def applymap(
-        self, udf: Callable[[ScalarLike], ScalarLike], out_dtype: Dtype = None
-    ) -> ColumnBase:
-        """Apply an element-wise function to the values in the Column."""
-        # Subclasses that support applymap must override this behavior.
-        raise TypeError(
-            "User-defined functions are currently not supported on data "
-            f"with dtype {self.dtype}."
-        )
 
     def to_gpu_array(self, fillna=None) -> "cuda.devicearray.DeviceNDArray":
         """Get a dense numba device array for the data.
@@ -1247,6 +1236,11 @@ class ColumnBase(Column, Serializable):
             f"{other.dtype}."
         )
 
+    def normalize_binop_value(
+        self, other: ScalarLike
+    ) -> Union[ColumnBase, ScalarLike]:
+        raise NotImplementedError
+
     def min(self, skipna: bool = None, dtype: Dtype = None):
         result_col = self._process_for_reduction(skipna=skipna)
         if isinstance(result_col, ColumnBase):
@@ -1381,46 +1375,18 @@ class ColumnBase(Column, Serializable):
             }
         )
 
-    def _copy_type_metadata(self: T, other: ColumnBase) -> ColumnBase:
+    def _copy_type_metadata(self: ColumnBase, other: ColumnBase) -> ColumnBase:
         """
         Copies type metadata from self onto other, returning a new column.
 
-        * when `self` is a CategoricalColumn and `other` is not, we assume
-          other is a column of codes, and return a CategoricalColumn composed
-          of `other`  and the categories of `self`.
-        * when both `self` and `other` are StructColumns, rename the fields
-          of `other` to the field names of `self`.
-        * when both `self` and `other` are DecimalColumns, copy the precision
-          from self.dtype to other.dtype
         * when `self` and `other` are nested columns of the same type,
           recursively apply this function on the children of `self` to the
           and the children of `other`.
         * if none of the above, return `other` without any changes
         """
-        if isinstance(self, cudf.core.column.CategoricalColumn) and not (
-            isinstance(other, cudf.core.column.CategoricalColumn)
-        ):
-            other = build_categorical_column(
-                categories=self.categories,
-                codes=as_column(other.base_data, dtype=other.dtype),
-                mask=other.base_mask,
-                ordered=self.ordered,
-                size=other.size,
-                offset=other.offset,
-                null_count=other.null_count,
-            )
-
-        if isinstance(other, cudf.core.column.StructColumn) and isinstance(
-            self, cudf.core.column.StructColumn
-        ):
-            other = other._rename_fields(self.dtype.fields.keys())
-
-        if isinstance(other, cudf.core.column.DecimalColumn) and isinstance(
-            self, cudf.core.column.DecimalColumn
-        ):
-            other.dtype.precision = self.dtype.precision
-
-        if type(self) is type(other):
+        # TODO: This logic should probably be moved to a common nested column
+        # class.
+        if isinstance(other, type(self)):
             if self.base_children and other.base_children:
                 base_children = tuple(
                     self.base_children[i]._copy_type_metadata(

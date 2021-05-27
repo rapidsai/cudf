@@ -180,14 +180,13 @@ std::string stringify_column_differences(cudf::device_span<int const> difference
 {
   CUDF_EXPECTS(not differences.empty(), "Shouldn't enter this function if `differences` is empty");
   std::string const depth_str = depth > 0 ? "depth " + std::to_string(depth) + '\n' : "";
+  // move the differences to the host.
+  auto h_differences = cudf::detail::make_host_vector_sync(differences);
   if (print_all_differences) {
     std::ostringstream buffer;
     buffer << depth_str << "differences:" << std::endl;
 
-    // thrust may crash if a device vector is passed to fixed_width_column_wrapper,
-    // thus we construct fixed_width_column_wrapper from a host_vector instead
-    auto h_differences = cudf::detail::make_host_vector_sync(differences);
-    auto source_table  = cudf::table_view({lhs, rhs});
+    auto source_table = cudf::table_view({lhs, rhs});
     auto diff_column =
       fixed_width_column_wrapper<int32_t>(h_differences.begin(), h_differences.end());
     auto diff_table = cudf::gather(source_table, diff_column);
@@ -200,7 +199,7 @@ std::string stringify_column_differences(cudf::device_span<int const> difference
              << h_differences[i] << "] = " << h_right_strings[i] << std::endl;
     return buffer.str();
   } else {
-    int index     = differences[0];  // only stringify first difference
+    int index     = h_differences[0];  // only stringify first difference
     auto diff_lhs = cudf::detail::slice(lhs, index, index + 1);
     auto diff_rhs = cudf::detail::slice(rhs, index, index + 1);
     return depth_str + "first difference: " + "lhs[" + std::to_string(index) +

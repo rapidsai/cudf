@@ -45,11 +45,22 @@ namespace cudf {
  */
 class scalar {
  public:
-  virtual ~scalar()           = default;
-  scalar(scalar&& other)      = default;
-  scalar(scalar const& other) = default;
+  virtual ~scalar()      = default;
+  scalar(scalar&& other) = default;
+
   scalar& operator=(scalar const& other) = delete;
   scalar& operator=(scalar&& other) = delete;
+
+  /**
+   * @brief Construct a new scalar object by deep copying another.
+   *
+   * @param[in] other The scalar to copy.
+   * @param[in] stream CUDA stream used for device memory operations.
+   * @param[in] mr Device memory resource to use for device memory allocation
+   */
+  scalar(scalar const& other,
+         rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+         rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Returns the scalar's logical value type
@@ -116,11 +127,22 @@ class fixed_width_scalar : public scalar {
  public:
   using value_type = T;
 
-  ~fixed_width_scalar()                               = default;
-  fixed_width_scalar(fixed_width_scalar&& other)      = default;
-  fixed_width_scalar(fixed_width_scalar const& other) = default;
+  ~fixed_width_scalar()                          = default;
+  fixed_width_scalar(fixed_width_scalar&& other) = default;
+
   fixed_width_scalar& operator=(fixed_width_scalar const& other) = delete;
   fixed_width_scalar& operator=(fixed_width_scalar&& other) = delete;
+
+  /**
+   * @brief Construct a new fixed-width scalar object by deep copying another.
+   *
+   * @param[in] other The scalar to copy.
+   * @param[in] stream CUDA stream used for device memory operations.
+   * @param[in] mr Device memory resource to use for device memory allocation
+   */
+  fixed_width_scalar(fixed_width_scalar const& other,
+                     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Set the value of the scalar
@@ -196,12 +218,23 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
   static_assert(is_numeric<T>(), "Unexpected non-numeric type.");
 
  public:
-  numeric_scalar()                            = default;
-  ~numeric_scalar()                           = default;
-  numeric_scalar(numeric_scalar&& other)      = default;
-  numeric_scalar(numeric_scalar const& other) = default;
+  numeric_scalar()                       = default;
+  ~numeric_scalar()                      = default;
+  numeric_scalar(numeric_scalar&& other) = default;
+
   numeric_scalar& operator=(numeric_scalar const& other) = delete;
   numeric_scalar& operator=(numeric_scalar&& other) = delete;
+
+  /**
+   * @brief Construct a new numeric scalar object by deep copying another.
+   *
+   * @param[in] other The scalar to copy.
+   * @param[in] stream CUDA stream used for device memory operations.
+   * @param[in] mr Device memory resource to use for device memory allocation
+   */
+  numeric_scalar(numeric_scalar const& other,
+                 rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct a new numeric scalar object
@@ -244,11 +277,22 @@ class fixed_point_scalar : public scalar {
   using value_type = T;
 
   fixed_point_scalar();
-  ~fixed_point_scalar()                               = default;
-  fixed_point_scalar(fixed_point_scalar&& other)      = default;
-  fixed_point_scalar(fixed_point_scalar const& other) = default;
+  ~fixed_point_scalar()                          = default;
+  fixed_point_scalar(fixed_point_scalar&& other) = default;
+
   fixed_point_scalar& operator=(fixed_point_scalar const& other) = delete;
   fixed_point_scalar& operator=(fixed_point_scalar&& other) = delete;
+
+  /**
+   * @brief Construct a new fixed_point scalar object by deep copying another.
+   *
+   * @param[in] other The scalar to copy.
+   * @param[in] stream CUDA stream used for device memory operations.
+   * @param[in] mr Device memory resource to use for device memory allocation
+   */
+  fixed_point_scalar(fixed_point_scalar const& other,
+                     rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct a new fixed_point scalar object from already shifted value and scale
@@ -342,11 +386,22 @@ class string_scalar : public scalar {
   using value_type = cudf::string_view;
 
   string_scalar();
-  ~string_scalar()                          = default;
-  string_scalar(string_scalar&& other)      = default;
-  string_scalar(string_scalar const& other) = default;
+  ~string_scalar()                     = default;
+  string_scalar(string_scalar&& other) = default;
+
   string_scalar& operator=(string_scalar const& other) = delete;
   string_scalar& operator=(string_scalar&& other) = delete;
+
+  /**
+   * @brief Construct a new string scalar object by deep copying another string_scalar.
+   *
+   * @param[in] other The other string_scalar to copy
+   * @param[in] stream CUDA stream used for device memory operations.
+   * @param[in] mr Device memory resource to use for device memory allocation
+   */
+  string_scalar(string_scalar const& other,
+                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct a new string scalar object
@@ -433,12 +488,23 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
   static_assert(is_chrono<T>(), "Unexpected non-chrono type");
 
  public:
-  chrono_scalar()                           = default;
-  ~chrono_scalar()                          = default;
-  chrono_scalar(chrono_scalar&& other)      = default;
-  chrono_scalar(chrono_scalar const& other) = default;
+  chrono_scalar()                      = default;
+  ~chrono_scalar()                     = default;
+  chrono_scalar(chrono_scalar&& other) = default;
+
   chrono_scalar& operator=(chrono_scalar const& other) = delete;
   chrono_scalar& operator=(chrono_scalar&& other) = delete;
+
+  /**
+   * @brief Construct a new chrono scalar object by deep copying another.
+   *
+   * @param[in] other The scalar to copy.
+   * @param[in] stream CUDA stream used for device memory operations.
+   * @param[in] mr Device memory resource to use for device memory allocation
+   */
+  chrono_scalar(chrono_scalar const& other,
+                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct a new chrono scalar object
@@ -468,12 +534,25 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
 };
 
 template <typename T>
-struct timestamp_scalar : chrono_scalar<T> {
+class timestamp_scalar : public chrono_scalar<T> {
+ public:
   static_assert(is_timestamp<T>(), "Unexpected non-timestamp type");
   using chrono_scalar<T>::chrono_scalar;
   using rep_type = typename T::rep;
 
-  timestamp_scalar() = default;
+  timestamp_scalar()                         = default;
+  timestamp_scalar(timestamp_scalar&& other) = default;
+
+  /**
+   * @brief Construct a new timestamp scalar object by deep copying another.
+   *
+   * @param[in] other The scalar to copy.
+   * @param[in] stream CUDA stream used for device memory operations.
+   * @param[in] mr Device memory resource to use for device memory allocation
+   */
+  timestamp_scalar(timestamp_scalar const& other,
+                   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct a new timestamp scalar object from a duration that is
@@ -498,12 +577,25 @@ struct timestamp_scalar : chrono_scalar<T> {
 };
 
 template <typename T>
-struct duration_scalar : chrono_scalar<T> {
+class duration_scalar : public chrono_scalar<T> {
+ public:
   static_assert(is_duration<T>(), "Unexpected non-duration type");
   using chrono_scalar<T>::chrono_scalar;
   using rep_type = typename T::rep;
 
-  duration_scalar() = default;
+  duration_scalar()                        = default;
+  duration_scalar(duration_scalar&& other) = default;
+
+  /**
+   * @brief Construct a new duration scalar object by deep copying another.
+   *
+   * @param[in] other The scalar to copy.
+   * @param[in] stream CUDA stream used for device memory operations.
+   * @param[in] mr Device memory resource to use for device memory allocation
+   */
+  duration_scalar(duration_scalar const& other,
+                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct a new duration scalar object from tick counts
@@ -530,11 +622,22 @@ struct duration_scalar : chrono_scalar<T> {
 class list_scalar : public scalar {
  public:
   list_scalar();
-  ~list_scalar()                        = default;
-  list_scalar(list_scalar&& other)      = default;
-  list_scalar(list_scalar const& other) = default;
+  ~list_scalar()                   = default;
+  list_scalar(list_scalar&& other) = default;
+
   list_scalar& operator=(list_scalar const& other) = delete;
   list_scalar& operator=(list_scalar&& other) = delete;
+
+  /**
+   * @brief Construct a new list scalar object by deep copying another.
+   *
+   * @param[in] other The scalar to copy.
+   * @param[in] stream CUDA stream used for device memory operations.
+   * @param[in] mr Device memory resource to use for device memory allocation
+   */
+  list_scalar(list_scalar const& other,
+              rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
    * @brief Construct a new list scalar object from column_view
