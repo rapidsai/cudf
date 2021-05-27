@@ -93,11 +93,22 @@ struct flattened_table {
                              order col_order,
                              null_order col_null_order)
   {
-    if (nullability == column_nullability::FORCE || col.nullable()) {
-      // nullable columns could be required for comparisions such as joins
+    // Even if it is not required to extract the bitmask to a separate column,
+    // we should always do that if the structs column has any null element.
+    //
+    // In addition, we should check for null by calling to `has_nulls()`, not `nullable()`.
+    // This is because when comparing structs columns, if one column has bitmask while the other
+    // does not (and both columns do not have any null element) then flattening them using
+    // `nullable()` will result in tables with different number of columns.
+    //
+    // Notice that, for comparing structs columns when one column has null while the other
+    // doesn't, `nullability` must be passed in with value `column_nullability::FORCE` to make
+    // sure the flattening results are tables having the same number of columns.
+
+    if (nullability == column_nullability::FORCE || col.has_nulls()) {
       validity_as_column.push_back(cudf::is_valid(col));
-      if (col.nullable()) {
-        // copy bitmask only works if the column is nullable
+      if (col.has_nulls()) {
+        // copy bitmask is needed only if the column has null
         validity_as_column.back()->set_null_mask(copy_bitmask(col));
       }
       flat_columns.push_back(validity_as_column.back()->view());
@@ -107,13 +118,11 @@ struct flattened_table {
     for (decltype(col.num_children()) i = 0; i < col.num_children(); ++i) {
       auto const& child = col.get_sliced_child(i);
       if (child.type().id() == type_id::STRUCT) {
-        flatten_struct_column(structs_column_view{child}, col_order, null_order::BEFORE);
-        // default spark behaviour is null_order::BEFORE
+        flatten_struct_column(structs_column_view{child}, col_order, col_null_order);
       } else {
         flat_columns.push_back(child);
         if (not column_order.empty()) flat_column_order.push_back(col_order);
-        if (not null_precedence.empty()) flat_null_precedence.push_back(null_order::BEFORE);
-        // default spark behaviour is null_order::BEFORE
+        if (not null_precedence.empty()) flat_null_precedence.push_back(col_null_order);
       }
     }
   }

@@ -27,6 +27,7 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 
 #include <type_traits>
 
@@ -186,10 +187,12 @@ void type_dispatcher_benchmark(::benchmark::State& state)
   cudf::mutable_table_view source_table{source_columns};
 
   // For no dispatching
-  std::vector<rmm::device_buffer> h_vec(n_cols,
-                                        rmm::device_buffer(source_size * sizeof(TypeParam)));
+  std::vector<rmm::device_buffer> h_vec(n_cols);
   std::vector<TypeParam*> h_vec_p(n_cols);
-  for (int c = 0; c < n_cols; c++) { h_vec_p[c] = static_cast<TypeParam*>(h_vec[c].data()); }
+  std::transform(h_vec.begin(), h_vec.end(), h_vec_p.begin(), [source_size](auto& col) {
+    col.resize(source_size * sizeof(TypeParam), rmm::cuda_stream_default);
+    return static_cast<TypeParam*>(col.data());
+  });
   rmm::device_uvector<TypeParam*> d_vec(n_cols, rmm::cuda_stream_default);
 
   if (dispatching_type == NO_DISPATCHING) {
