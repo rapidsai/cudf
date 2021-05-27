@@ -393,4 +393,27 @@ conditional_left_join(table_view left,
     left, right, binary_pred, detail::join_kind::LEFT_JOIN, rmm::cuda_stream_default, mr);
 }
 
+std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
+  table_view left,
+  table_view right,
+  ast::expression binary_pred,
+  rmm::mr::device_memory_resource* mr)
+{
+  return std::move(
+    detail::conditional_join(
+      left, right, binary_pred, detail::join_kind::LEFT_SEMI_JOIN, rmm::cuda_stream_default, mr)
+      .first);
+}
+
+std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
+  table_view left,
+  table_view right,
+  ast::expression binary_pred,
+  rmm::mr::device_memory_resource* mr)
+{
+  return std::move(
+    detail::conditional_join(
+      left, right, binary_pred, detail::join_kind::LEFT_ANTI_JOIN, rmm::cuda_stream_default, mr)
+      .first);
+}
 }  // namespace cudf

@@ -683,5 +683,18 @@ conditional_left_join(table_view left,
                       table_view right,
                       ast::expression binary_pred,
                       rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
+  table_view left,
+  table_view right,
+  ast::expression binary_pred,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
+  table_view left,
+  table_view right,
+  ast::expression binary_pred,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of group
 }  // namespace cudf

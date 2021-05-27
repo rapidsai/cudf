@@ -503,8 +503,14 @@ __global__ void conditional_join(table_device_view left_table,
 
       if (test_var) {
         // If the rows are equal, then we have found a true match
-        found_match = true;
-        if (JoinKind != join_kind::LEFT_ANTI_JOIN) {
+        // In the case of left anti joins we only add indices from left after
+        // the loop if we have found _no_ matches from the right.
+        // In the case of left semi joins we only add the first match (note
+        // that the current logic relies on the fact that we process all right
+        // table rows for a single left table row on a single thread so that no
+        // synchronization of found_match is required).
+        if ((JoinKind != join_kind::LEFT_ANTI_JOIN) &&
+            !(JoinKind == join_kind::LEFT_SEMI_JOIN && found_match)) {
           add_pair_to_cache(left_row_index,
                             right_row_index,
                             current_idx_shared,
@@ -512,6 +518,7 @@ __global__ void conditional_join(table_device_view left_table,
                             join_shared_l[warp_id],
                             join_shared_r[warp_id]);
         }
+        found_match = true;
       }
 
       __syncwarp(activemask);
@@ -533,7 +540,8 @@ __global__ void conditional_join(table_device_view left_table,
       }
     }
 
-    // If performing a LEFT join and no match was found, insert a Null into the output
+    // Left, left anti, and full joins all require saving left columns that
+    // aren't present in the right.
     if ((JoinKind == join_kind::LEFT_JOIN || JoinKind == join_kind::LEFT_ANTI_JOIN ||
          JoinKind == join_kind::FULL_JOIN) &&
         (!found_match)) {

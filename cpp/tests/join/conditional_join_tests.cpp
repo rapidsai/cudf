@@ -215,3 +215,94 @@ TYPED_TEST(ConditionalLeftJoinTest, TestTwoColumnThreeRowSomeEqual)
              left_zero_eq_right_zero,
              {{0, 0}, {1, 1}, {2, JoinNoneValue}});
 };
+
+// TODO: The input parsing logic should be unified with the ConditionalJoinTest
+// (the output parsing needs to be different).
+template <typename T>
+struct ConditionalSingleJoinTest : public cudf::test::BaseFixture {
+  void test(std::vector<std::vector<T>> left_data,
+            std::vector<std::vector<T>> right_data,
+            cudf::ast::expression predicate,
+            std::vector<cudf::size_type> expected_outputs)
+  {
+    // Note that we need to maintain the column wrappers otherwise the
+    // resulting column views will be referencing potentially invalid memory.
+    std::vector<cudf::test::fixed_width_column_wrapper<T>> left_wrappers;
+    std::vector<cudf::test::fixed_width_column_wrapper<T>> right_wrappers;
+
+    std::vector<cudf::column_view> left_columns;
+    std::vector<cudf::column_view> right_columns;
+
+    for (auto v : left_data) {
+      left_wrappers.push_back(cudf::test::fixed_width_column_wrapper<T>(v.begin(), v.end()));
+      left_columns.push_back(left_wrappers.back());
+    }
+
+    for (auto v : right_data) {
+      right_wrappers.push_back(cudf::test::fixed_width_column_wrapper<T>(v.begin(), v.end()));
+      right_columns.push_back(right_wrappers.back());
+    }
+
+    cudf::table_view left(left_columns);
+    cudf::table_view right(right_columns);
+    auto result = this->join(left, right, predicate);
+
+    std::vector<cudf::size_type> resulting_indices;
+    for (size_t i = 0; i < result->size(); ++i) {
+      // Note: Not trying to be terribly efficient here since these tests are
+      // small, otherwise a batch copy to host before constructing the tuples
+      // would be important.
+      resulting_indices.push_back(result->element(i, rmm::cuda_stream_default));
+    }
+    std::sort(resulting_indices.begin(), resulting_indices.end());
+    std::sort(expected_outputs.begin(), expected_outputs.end());
+    EXPECT_TRUE(
+      std::equal(resulting_indices.begin(), resulting_indices.end(), expected_outputs.begin()));
+  }
+
+  /**
+   * This method must be implemented by subclasses for specific types of joins.
+   * It should be a simply forwarding of arguments to the appropriate cudf
+   * conditional join API.
+   */
+  virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> join(
+    cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) = 0;
+};
+
+/**
+ * Tests of left semi joins.
+ */
+template <typename T>
+struct ConditionalLeftSemiJoinTest : public ConditionalSingleJoinTest<T> {
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> join(
+    cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
+  {
+    return cudf::conditional_left_semi_join(left, right, predicate);
+  }
+};
+
+TYPED_TEST_CASE(ConditionalLeftSemiJoinTest, cudf::test::IntegralTypesNotBool);
+
+TYPED_TEST(ConditionalLeftSemiJoinTest, TestTwoColumnThreeRowSomeEqual)
+{
+  this->test({{0, 1, 2}, {10, 20, 30}}, {{0, 1, 3}, {30, 40, 50}}, left_zero_eq_right_zero, {0, 1});
+};
+
+/**
+ * Tests of left anti joins.
+ */
+template <typename T>
+struct ConditionalLeftAntiJoinTest : public ConditionalSingleJoinTest<T> {
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> join(
+    cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
+  {
+    return cudf::conditional_left_anti_join(left, right, predicate);
+  }
+};
+
+TYPED_TEST_CASE(ConditionalLeftAntiJoinTest, cudf::test::IntegralTypesNotBool);
+
+TYPED_TEST(ConditionalLeftAntiJoinTest, TestTwoColumnThreeRowSomeEqual)
+{
+  this->test({{0, 1, 2}, {10, 20, 30}}, {{0, 1, 3}, {30, 40, 50}}, left_zero_eq_right_zero, {2});
+};
