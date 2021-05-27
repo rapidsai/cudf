@@ -243,11 +243,15 @@ __global__ void compute_conditional_join_output_size(table_device_view left_tabl
     for (cudf::size_type right_row_index = 0; right_row_index < right_num_rows; right_row_index++) {
       evaluator.evaluate(left_row_index, right_row_index, 0);
       if (test_var) {
-        ++thread_counter;
         found_match = true;
+        if (JoinKind != join_kind::LEFT_ANTI_JOIN) { ++thread_counter; }
       }
     }
-    if ((JoinKind == join_kind::LEFT_JOIN) && (!found_match)) { ++thread_counter; }
+    if ((JoinKind == join_kind::LEFT_JOIN || JoinKind == join_kind::LEFT_ANTI_JOIN ||
+         JoinKind == join_kind::FULL_JOIN) &&
+        (!found_match)) {
+      ++thread_counter;
+    }
   }
 
   using BlockReduce = cub::BlockReduce<cudf::size_type, block_size>;
@@ -500,12 +504,14 @@ __global__ void conditional_join(table_device_view left_table,
       if (test_var) {
         // If the rows are equal, then we have found a true match
         found_match = true;
-        add_pair_to_cache(left_row_index,
-                          right_row_index,
-                          current_idx_shared,
-                          warp_id,
-                          join_shared_l[warp_id],
-                          join_shared_r[warp_id]);
+        if (JoinKind != join_kind::LEFT_ANTI_JOIN) {
+          add_pair_to_cache(left_row_index,
+                            right_row_index,
+                            current_idx_shared,
+                            warp_id,
+                            join_shared_l[warp_id],
+                            join_shared_r[warp_id]);
+        }
       }
 
       __syncwarp(activemask);
@@ -528,7 +534,9 @@ __global__ void conditional_join(table_device_view left_table,
     }
 
     // If performing a LEFT join and no match was found, insert a Null into the output
-    if ((JoinKind == join_kind::LEFT_JOIN) && (!found_match)) {
+    if ((JoinKind == join_kind::LEFT_JOIN || JoinKind == join_kind::LEFT_ANTI_JOIN ||
+         JoinKind == join_kind::FULL_JOIN) &&
+        (!found_match)) {
       add_pair_to_cache(left_row_index,
                         static_cast<cudf::size_type>(JoinNoneValue),
                         current_idx_shared,
