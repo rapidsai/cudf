@@ -1,14 +1,14 @@
 from cudf._lib.labeling import label_bins
-from cudf.core.column import as_column, arange
+from cudf.core.column import as_column
 from cudf.core.column import build_categorical_column
-from cudf.core.index import IntervalIndex
+from cudf.core.index import IntervalIndex, interval_range
 from pandas.core.indexes.interval import IntervalIndex as pandas_IntervalIndex
-from cudf.utils.dtypes import is_list_like, find_common_type
+from cudf.utils.dtypes import is_list_like
 import cupy
 import cudf
 import numpy as np
 import pandas as pd
-from collections import Sequence
+from collections.abc import Sequence
 from cudf._lib.filling import sequence
 
 
@@ -100,6 +100,7 @@ def cut(
     right_inclusive = True
     # saving the original input x for use in case its a series
     orig_x = x
+    old_bins = bins
 
     if not ordered and labels is None:
         raise ValueError("'labels' must be provided if 'ordered = False'")
@@ -109,6 +110,19 @@ def cut(
             "invalid value for 'duplicates' parameter, valid options are: "
             "raise, drop"
         )
+
+    if labels is not False:
+        if not (labels is None or is_list_like(labels)):
+            raise ValueError(
+                "Bin labels must either be False, None or passed in as a "
+                "list-like argument"
+            ) 
+        elif ordered and labels is not None:
+            if len(set(labels)) != len(labels):
+                raise ValueError(
+                    "labels must be unique if ordered=True;" 
+                    "pass ordered=False for duplicate labels"  
+                )
 
     # bins can either be an int, sequence of scalars or an intervalIndex
     if isinstance(bins, Sequence):
@@ -130,22 +144,26 @@ def cut(
         and bins.closed == "right"
     ):
         right = True
-    
+
     # create bins if given an int or single scalar
     if not isinstance(bins, pandas_IntervalIndex):
         if not isinstance(bins, (Sequence)):
-            if isinstance(x, (pd.Series,cudf.Series,np.ndarray,cupy.ndarray)):
-                #changing to scalars and using sequence to get the bins 
-                #because this allows masked arrays from value_counts to
-                #also be able to be handled by cut correctly
-                #pandas by default seems to turn all bins into a float
+            if isinstance(
+                x, (pd.Series, cudf.Series, np.ndarray, cupy.ndarray)
+            ):
+                # changing to scalars and using sequence to get the bins
+                # because this allows masked arrays from value_counts to
+                # also be able to be handled by cut correctly
+                # pandas by default seems to turn all bins into a float
                 mn = cudf.Scalar(x.min(), dtype="float64")
                 mx = cudf.Scalar(x.max(), dtype="float64")
             else:
-                mn = cudf.Scalar(min(x) , dtype="float64")
+                mn = cudf.Scalar(min(x), dtype="float64")
                 mx = cudf.Scalar(max(x), dtype="float64")
-            step = cudf.Scalar((mx -mn)/bins, dtype="float64")
-            bins = sequence(size=bins + 1, init=mn.device_value,step=step.device_value).values
+            step = cudf.Scalar((mx - mn) / bins, dtype="float64")
+            bins = sequence(
+                size=bins + 1, init=mn.device_value, step=step.device_value
+            ).values
             adj = (mx - mn).value * 0.001
             if right:
                 bins[0] -= adj
@@ -157,14 +175,16 @@ def cut(
         if right and include_lowest:
             bins[0] = bins[0] - 10 ** (-precision)
 
-        # adjust bin edges decimal precision
-        bins = cupy.around(bins, precision)
-
         # if right is false the last bin edge is not included
         if right is False:
             right_edge = bins[len(bins) - 1]
             x = cupy.asarray(x)
-            x[x == right_edge.item()] = right_edge.item() + 1
+            if isinstance(right_edge, cupy._core.core.ndarray):
+                right_edge = right_edge.item()
+            x[x == right_edge] = right_edge + 1
+        
+        # adjust bin edges decimal precision
+        int_label_bins = cupy.around(bins, precision)
 
     # the inputs is a column of the values in the array x
     input_arr = as_column(x)
@@ -172,15 +192,22 @@ def cut(
     # checking for the correct inclusivity values
     if right:
         closed = "right"
-    elif not right:
+    else:
         closed = "left"
         left_inclusive = True
-
+    
     if isinstance(bins, pandas_IntervalIndex):
         interval_labels = bins
     elif labels is None:
-        # get labels for categories
-        interval_labels = IntervalIndex.from_breaks(bins, closed=closed)
+        if duplicates=='drop' and len(bins)==1 and len(old_bins) !=1:
+            if right and include_lowest:
+                old_bins[0] = old_bins[0] - 10 ** (-precision) 
+                interval_labels= interval_range(old_bins[0],old_bins[1],periods=1,closed=closed)
+            else:
+                interval_labels = IntervalIndex.from_breaks(old_bins, closed=closed)
+        else:
+            # get labels for categories
+            interval_labels = IntervalIndex.from_breaks(int_label_bins, closed=closed)
     elif labels is not False:
         if not (is_list_like(labels)):
             raise ValueError(
@@ -226,7 +253,7 @@ def cut(
     if labels is False:
         # if labels is false we return the index labels, we return them
         # as a series if we have a series input
-        if isinstance(orig_x, pd.Series) or isinstance(orig_x, cudf.Series):
+        if isinstance(orig_x, (pd.Series, cudf.Series)):
             # need to run more tests but looks like in this case pandas
             # always returns a float64 dtype
             indx_arr_series = cudf.Series(index_labels, dtype="float64")
@@ -249,7 +276,7 @@ def cut(
             return cudf.CategoricalIndex(
                 new_data, categories=sorted(set(labels)), ordered=False
             )
-
+    
     col = build_categorical_column(
         categories=interval_labels,
         codes=index_labels,
@@ -262,7 +289,7 @@ def cut(
     # we return a categorical index, as we don't have a Categorical method
     categorical_index = cudf.core.index.as_index(col)
 
-    if isinstance(orig_x, pd.Series) or isinstance(orig_x, cudf.Series):
+    if isinstance(orig_x, (pd.Series, cudf.Series)):
         # if we have a series input we return a series output
         res_series = cudf.Series(categorical_index, index=orig_x.index)
         if retbins:

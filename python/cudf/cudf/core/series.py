@@ -5207,7 +5207,10 @@ class Series(SingleColumnFrame, Serializable):
                 index=cudf.Index([], dtype=self.dtype),
             )
 
-        res = self.groupby(self, dropna=dropna).count(dropna=dropna)
+        res = self.groupby(self, dropna=dropna)
+        # breakpoint()
+        res = res.count(dropna=dropna)
+        
         res.index.name = None
 
         if sort:

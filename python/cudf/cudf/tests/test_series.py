@@ -575,9 +575,9 @@ def test_series_value_counts(dropna, normalize):
 @pytest.mark.parametrize("bins", [1, 2, 3])
 @pytest.mark.parametrize("dropna", [True, False])
 def test_series_value_counts_bins(dropna, bins):
-    psr = pd.Series([1.0, 2.0, 2.0, 3.0, 3.0, 3.0, None])
+    psr = pd.Series([1.0, 2.0, 2.0, 3.0, 3.0, 3.0])
     gsr = cudf.from_pandas(psr)
-
+    breakpoint()
     expected = psr.value_counts(
         bins, dropna=dropna
     )
