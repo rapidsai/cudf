@@ -40,9 +40,9 @@ class CudfEngine(ArrowEngine):
 
         return (new_meta, stats, parts, index)
 
-    # @classmethod
-    # def read_partition_multi(cls, *args, **kwargs):
-    #     return cls.read_partition(*args, **kwargs)
+    @classmethod
+    def multi_support(cls):
+        return cls == CudfEngine
 
     @staticmethod
     def read_partition(
@@ -75,7 +75,6 @@ class CudfEngine(ArrowEngine):
                         [row_group] if not isinstance(row_group, list) else row_group
                     )
 
-            #import pdb; pdb.set_trace()
             df = cudf.read_parquet(
                 paths,
                 engine="cudf",
