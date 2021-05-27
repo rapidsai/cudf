@@ -245,8 +245,10 @@ def _binop_precision(l_dtype, r_dtype, op):
     p1, p2 = l_dtype.precision, r_dtype.precision
     s1, s2 = l_dtype.scale, r_dtype.scale
     if op in ("add", "sub"):
-        return max(s1, s2) + max(p1 - s1, p2 - s2) + 1
+        result = max(s1, s2) + max(p1 - s1, p2 - s2) + 1
     elif op in ("mul", "div"):
-        return p1 + p2 + 1
+        result = p1 + p2 + 1
     else:
         raise NotImplementedError()
+
+    return min(result, cudf.Decimal64Dtype.MAX_PRECISION)
