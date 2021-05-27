@@ -2240,6 +2240,17 @@ def full(size: int, fill_value: ScalarLike, dtype: Dtype = None) -> ColumnBase:
     return ColumnBase.from_scalar(cudf.Scalar(fill_value, dtype), size)
 
 
+def _cudf_dtype_from_arrow_type(arrow_type: Dtype) -> Dtype:
+    if pa.types.is_decimal(arrow_type):
+        return Decimal64Dtype.from_arrow(arrow_type)
+    elif pa.types.is_struct(arrow_type):
+        return StructDtype.from_arrow(arrow_type)
+    elif pa.types.is_list(arrow_type):
+        return ListDtype.from_arrow(arrow_type)
+
+    return arrow_type
+
+
 def _copy_type_metadata_from_arrow(
     arrow_array: pa.array, cudf_column: ColumnBase
 ) -> ColumnBase:
@@ -2251,13 +2262,11 @@ def _copy_type_metadata_from_arrow(
     * When `arrow_array` is decimal type and `cudf_column` is
     Decimal64Dtype, copy precisions.
     """
-    if pa.types.is_decimal(arrow_array.type) and isinstance(
-        cudf_column, cudf.core.column.DecimalColumn
-    ):
-        cudf_column.dtype.precision = arrow_array.type.precision
-    elif pa.types.is_struct(arrow_array.type) and isinstance(
-        cudf_column, cudf.core.column.StructColumn
-    ):
+    cudf_column = cudf_column._apply_type_metadata(
+        _cudf_dtype_from_arrow_type(arrow_array.type)
+    )
+
+    if isinstance(cudf_column, cudf.core.column.StructColumn):
         base_children = tuple(
             _copy_type_metadata_from_arrow(arrow_array.field(i), col_child)
             for i, col_child in enumerate(cudf_column.base_children)
@@ -2272,24 +2281,24 @@ def _copy_type_metadata_from_arrow(
             null_count=cudf_column.null_count,
             children=base_children,
         )
-    elif pa.types.is_list(arrow_array.type) and isinstance(
-        cudf_column, cudf.core.column.ListColumn
+
+    elif isinstance(cudf_column, cudf.core.column.ListColumn) and (
+        arrow_array.values and cudf_column.base_children
     ):
-        if arrow_array.values and cudf_column.base_children:
-            base_children = (
-                cudf_column.base_children[0],
-                _copy_type_metadata_from_arrow(
-                    arrow_array.values, cudf_column.base_children[1]
-                ),
-            )
-            return cudf.core.column.ListColumn(
-                size=cudf_column.base_size,
-                dtype=ListDtype.from_arrow(arrow_array.type),
-                mask=cudf_column.base_mask,
-                offset=cudf_column.offset,
-                null_count=cudf_column.null_count,
-                children=base_children,
-            )
+        base_children = (
+            cudf_column.base_children[0],
+            _copy_type_metadata_from_arrow(
+                arrow_array.values, cudf_column.base_children[1]
+            ),
+        )
+        return cudf.core.column.ListColumn(
+            size=cudf_column.base_size,
+            dtype=ListDtype.from_arrow(arrow_array.type),
+            mask=cudf_column.base_mask,
+            offset=cudf_column.offset,
+            null_count=cudf_column.null_count,
+            children=base_children,
+        )
 
     return cudf_column
 
