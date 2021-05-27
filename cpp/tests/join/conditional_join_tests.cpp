@@ -30,9 +30,30 @@
 #include <utility>
 #include <vector>
 
+// Defining expressions for AST evaluation is currently a bit tedious, so we
+// define some standard nodes here that can be easily reused elsewhere.
+namespace {
 constexpr cudf::size_type JoinNoneValue =
   std::numeric_limits<cudf::size_type>::min();  // TODO: how to test if this isn't public?
 
+// Common column references.
+const auto col_ref_left_0  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+const auto col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+const auto col_ref_left_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
+const auto col_ref_right_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
+
+// Common expressions.
+auto left_zero_eq_right_zero =
+  cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
+}  // namespace
+
+/**
+ * The principal fixture for all conditional joins. This class presents a
+ * straightforward test function that simplifies input handling so that
+ * individual tests can just use initializer lists to generate tables and focus
+ * on testing cases. This fixture should be extended by child classes that
+ * define the `join` method for different types of joins.
+ */
 template <typename T>
 struct ConditionalJoinTest : public cudf::test::BaseFixture {
   void test(std::vector<std::vector<T>> left_data,
@@ -60,7 +81,6 @@ struct ConditionalJoinTest : public cudf::test::BaseFixture {
 
     cudf::table_view left(left_columns);
     cudf::table_view right(right_columns);
-
     auto result = this->join(left, right, predicate);
 
     std::vector<std::pair<cudf::size_type, cudf::size_type>> resulting_pairs;
@@ -77,11 +97,19 @@ struct ConditionalJoinTest : public cudf::test::BaseFixture {
       std::equal(resulting_pairs.begin(), resulting_pairs.end(), expected_outputs.begin()));
   }
 
+  /**
+   * This method must be implemented by subclasses for specific types of joins.
+   * It should be a simply forwarding of arguments to the appropriate cudf
+   * conditional join API.
+   */
   virtual std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
                     std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
   join(cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) = 0;
 };
 
+/**
+ * Tests of inner joins.
+ */
 template <typename T>
 struct ConditionalInnerJoinTest : public ConditionalJoinTest<T> {
   std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
@@ -92,59 +120,38 @@ struct ConditionalInnerJoinTest : public ConditionalJoinTest<T> {
   }
 };
 
-template <typename T>
-struct ConditionalLeftJoinTest : public ConditionalJoinTest<T> {
-  std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-            std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
-  join(cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
-  {
-    return cudf::conditional_left_join(left, right, predicate);
-  }
-};
+TYPED_TEST_CASE(ConditionalInnerJoinTest, cudf::test::IntegralTypesNotBool);
 
-template <typename T>
-struct ConditionalInnerJoinFirstColumnEqualityTest : public ConditionalInnerJoinTest<T> {
-  void test(std::vector<std::vector<T>> left_data,
-            std::vector<std::vector<T>> right_data,
-            std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
-  {
-    auto col_ref_0 = cudf::ast::column_reference(0);
-    auto col_ref_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
-    auto predicate = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, col_ref_1);
-
-    ConditionalJoinTest<T>::test(left_data, right_data, predicate, expected_outputs);
-  }
-};
-
-// TYPED_TEST_CASE(ConditionalJoinTest, cudf::test::IntegralTypesNotBool);
-TYPED_TEST_CASE(ConditionalInnerJoinFirstColumnEqualityTest, cudf::test::Types<int32_t>);
-
-TYPED_TEST(ConditionalInnerJoinFirstColumnEqualityTest, TestOneColumnOneRowAllEqual)
+TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnOneRowAllEqual)
 {
-  this->test({{0}}, {{0}}, {{0, 0}});
+  this->test({{0}}, {{0}}, left_zero_eq_right_zero, {{0, 0}});
 };
 
-TYPED_TEST(ConditionalInnerJoinFirstColumnEqualityTest, TestOneColumnTwoRowAllEqual)
+TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnTwoRowAllEqual)
 {
-  this->test({{0, 1}}, {{0, 0}}, {{0, 0}, {0, 1}});
+  this->test({{0, 1}}, {{0, 0}}, left_zero_eq_right_zero, {{0, 0}, {0, 1}});
 };
 
-TYPED_TEST(ConditionalInnerJoinFirstColumnEqualityTest, TestTwoColumnOneRowAllEqual)
+TYPED_TEST(ConditionalInnerJoinTest, TestTwoColumnOneRowAllEqual)
 {
-  this->test({{0}, {0}}, {{0}, {0}}, {{0, 0}});
+  this->test({{0}, {0}}, {{0}, {0}}, left_zero_eq_right_zero, {{0, 0}});
 };
 
-TYPED_TEST(ConditionalInnerJoinFirstColumnEqualityTest, TestTwoColumnThreeRowAllEqual)
+TYPED_TEST(ConditionalInnerJoinTest, TestTwoColumnThreeRowAllEqual)
 {
-  this->test({{0, 1, 2}, {10, 20, 30}}, {{0, 1, 2}, {30, 40, 50}}, {{0, 0}, {1, 1}, {2, 2}});
+  this->test({{0, 1, 2}, {10, 20, 30}},
+             {{0, 1, 2}, {30, 40, 50}},
+             left_zero_eq_right_zero,
+             {{0, 0}, {1, 1}, {2, 2}});
 };
 
-TYPED_TEST(ConditionalInnerJoinFirstColumnEqualityTest, TestTwoColumnThreeRowSomeEqual)
+TYPED_TEST(ConditionalInnerJoinTest, TestTwoColumnThreeRowSomeEqual)
 {
-  this->test({{0, 1, 2}, {10, 20, 30}}, {{0, 1, 3}, {30, 40, 50}}, {{0, 0}, {1, 1}});
+  this->test({{0, 1, 2}, {10, 20, 30}},
+             {{0, 1, 3}, {30, 40, 50}},
+             left_zero_eq_right_zero,
+             {{0, 0}, {1, 1}});
 };
-
-TYPED_TEST_CASE(ConditionalInnerJoinTest, cudf::test::Types<int32_t>);
 
 TYPED_TEST(ConditionalInnerJoinTest, TestNotComparison)
 {
@@ -167,16 +174,16 @@ TYPED_TEST(ConditionalInnerJoinTest, TestComplexConditionMultipleColumns)
 {
   // LEFT is implicit, but specifying explicitly to validate that it works.
   auto col_ref_0      = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
-  auto literal_value  = cudf::numeric_scalar<int32_t>(1);
-  auto literal_0      = cudf::ast::literal(literal_value);
-  auto literal_filter = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, literal_0);
+  auto scalar_1       = cudf::numeric_scalar<TypeParam>(1);
+  auto literal_1      = cudf::ast::literal(scalar_1);
+  auto left_0_equal_1 = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, literal_1);
 
   auto col_ref_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
   auto comparison_filter =
     cudf::ast::expression(cudf::ast::ast_operator::LESS, col_ref_1, col_ref_0);
 
   auto expression =
-    cudf::ast::expression(cudf::ast::ast_operator::LOGICAL_AND, literal_filter, comparison_filter);
+    cudf::ast::expression(cudf::ast::ast_operator::LOGICAL_AND, left_0_equal_1, comparison_filter);
 
   this->test({{0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2}, {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}},
              {{0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2},
@@ -186,24 +193,25 @@ TYPED_TEST(ConditionalInnerJoinTest, TestComplexConditionMultipleColumns)
              {{4, 0}, {5, 0}, {6, 0}, {7, 0}});
 };
 
+/**
+ * Tests of left joins.
+ */
 template <typename T>
-struct ConditionalLeftJoinFirstColumnEqualityTest : public ConditionalLeftJoinTest<T> {
-  void test(std::vector<std::vector<T>> left_data,
-            std::vector<std::vector<T>> right_data,
-            std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
+struct ConditionalLeftJoinTest : public ConditionalJoinTest<T> {
+  std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
+            std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
+  join(cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
   {
-    auto col_ref_0 = cudf::ast::column_reference(0);
-    auto col_ref_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
-    auto predicate = cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_0, col_ref_1);
-
-    ConditionalJoinTest<T>::test(left_data, right_data, predicate, expected_outputs);
+    return cudf::conditional_left_join(left, right, predicate);
   }
 };
 
-TYPED_TEST_CASE(ConditionalLeftJoinFirstColumnEqualityTest, cudf::test::Types<int32_t>);
+TYPED_TEST_CASE(ConditionalLeftJoinTest, cudf::test::IntegralTypesNotBool);
 
-TYPED_TEST(ConditionalLeftJoinFirstColumnEqualityTest, TestTwoColumnThreeRowSomeEqual)
+TYPED_TEST(ConditionalLeftJoinTest, TestTwoColumnThreeRowSomeEqual)
 {
-  this->test(
-    {{0, 1, 2}, {10, 20, 30}}, {{0, 1, 3}, {30, 40, 50}}, {{0, 0}, {1, 1}, {2, JoinNoneValue}});
+  this->test({{0, 1, 2}, {10, 20, 30}},
+             {{0, 1, 3}, {30, 40, 50}},
+             left_zero_eq_right_zero,
+             {{0, 0}, {1, 1}, {2, JoinNoneValue}});
 };
