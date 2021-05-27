@@ -2700,8 +2700,9 @@ class Series(SingleColumnFrame, Serializable):
         4    10.0
         dtype: float64
         """
-        result_col = self._column.nans_to_nulls()
-        return self._copy_construct(data=result_col)
+        return self._from_array(
+            self._array.nans_to_nulls(), name=self.name, index=self.index
+        )
 
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
         """

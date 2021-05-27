@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeVar, cast
 
 import numpy as np
 import pandas as pd
@@ -25,6 +25,8 @@ from cudf.utils.dtypes import (
 if TYPE_CHECKING:
     from cudf.core.column import ColumnBase, NumericalColumn, StringColumn
 
+T = TypeVar("T", bound="Array")
+
 
 class Array:
     _column: ColumnBase
@@ -41,7 +43,7 @@ class Array:
 
     def _process_for_reduction(self, skipna: bool = None) -> Array:
         if skipna:
-            preprocessed = asarray(self._column.nans_to_nulls())  # TODO
+            preprocessed = self.nans_to_nulls()
             preprocessed = asarray(preprocessed._column.dropna())  # TODO
         else:
             preprocessed = self
@@ -67,6 +69,14 @@ class Array:
             )
 
         return libcudf.reduce.reduce(op, preprocessed._column, **kwargs)
+
+    def nans_to_nulls(self: T) -> T:
+        if self.dtype.kind == "f":
+            out_mask = libcudf.transform.nans_to_nulls(self._column)
+            out_column = self._column.set_mask(out_mask)
+            return cast(T, asarray(out_column))
+        else:
+            return self
 
     def astype(self, dtype: Dtype, **kwargs) -> Array:
         return asarray(self._column.astype(dtype, **kwargs))

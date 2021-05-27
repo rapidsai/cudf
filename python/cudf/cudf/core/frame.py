@@ -3393,6 +3393,11 @@ class SingleColumnFrame(Frame):
     def _array(self):
         return self._new_data.arrays[0]
 
+    @classmethod
+    def _from_array(cls, array, name=None, index=None):
+        data = cudf.internals.arrays.ArrayAccessor([name], [array])
+        return cls._from_arrays(data, index=index)
+
     @property
     def values(self):
         """

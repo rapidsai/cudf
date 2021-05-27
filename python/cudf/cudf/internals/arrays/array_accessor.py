@@ -30,3 +30,6 @@ class ArrayAccessor:
 
     def __len__(self):
         return len(self.arrays)
+
+    def __setitem__(self, key, value):
+        self.arrays[key] = value
