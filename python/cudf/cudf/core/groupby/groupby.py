@@ -614,7 +614,7 @@ class GroupBy(Serializable):
 
         return self.agg(func)
 
-    def describe(self):
+    def describe(self, include=None, exclude=None):
         """
         Generate descriptive statistics that summarizes the central tendency,
         dispersion and shape of a dataset’s distribution, excluding NaN values.
@@ -623,11 +623,17 @@ class GroupBy(Serializable):
 
         Parameters
         ----------
-        DataFrame to be summarized
+        include: ‘all’, list-like of dtypes or None (default), optional
+            list of data types to include in the result.
+            Ignored for Series.
+
+        exclude: list-like of dtypes or None (default), optional,
+            list of data types to omit from the result.
+            Ignored for Series.
 
         Returns
         -------
-        DataFrame
+        Series or DataFrame
             Summary statistics of the Dataframe provided.
 
         Examples
@@ -642,14 +648,18 @@ class GroupBy(Serializable):
         2   24.0     90
         3   26.0     80
         >>> gdf.groupby('Score').describe()
-                count   mean   std    min    25%    50%    75%    max
+            Speed
+            count   mean   std    min    25%    50%    75%     max
         Score
-        30         1  370.0  <NA>  370.0  370.0  370.0  370.0  370.0
-        50         1  380.0  <NA>  380.0  380.0  380.0  380.0  380.0
-        80         1   26.0  <NA>   26.0   26.0   26.0   26.0   26.0
-        90         1   24.0  <NA>   24.0   24.0   24.0   24.0   24.0
+        30        1  370.0  <NA>  370.0  370.0  370.0  370.0  370.0
+        50        1  380.0  <NA>  380.0  380.0  380.0  380.0  380.0
+        80        1   26.0  <NA>   26.0   26.0   26.0   26.0   26.0
+        90        1   24.0  <NA>   24.0   24.0   24.0   24.0   24.0
 
         """
+        if exclude is not None and include is not None:
+            raise NotImplementedError
+
         res = self.agg(
             [
                 "count",
@@ -662,7 +672,15 @@ class GroupBy(Serializable):
                 "max",
             ]
         )
-        res.rename(columns={"_quantile_25":"25%", "_quantile_50":"50%", "_quantile_75":"75%"}, level=1)
+        res.rename(
+            columns={
+                "_quantile_25": "25%",
+                "_quantile_50": "50%",
+                "_quantile_75": "75%",
+            },
+            level=1,
+            inplace=True,
+        )
         return res
 
     def sum(self):
