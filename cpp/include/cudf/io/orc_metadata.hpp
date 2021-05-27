@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,33 +23,183 @@
 
 #include <cudf/io/types.hpp>
 
+#include <optional>
+#include <variant>
 #include <vector>
 
-//! cuDF interfaces
 namespace cudf {
-//! In-development features
 namespace io {
 
 /**
- * @brief Reads file-level and stripe-level statistics of ORC dataset
+ * @brief Holds column names and buffers containing raw file-level and stripe-level statistics.
+ *
+ * The buffers can be parsed using a Protobuf parser. Alternatively, use `parsed_orc_statistics` to
+ * get the statistics parsed into a libcudf representation.
+ *
+ * The `column_names` and `file_stats` members contain one element per column. The `stripes_stats`
+ * contains one element per stripe, where each element contains column statistics for each column.
+ */
+struct raw_orc_statistics {
+  std::vector<std::string> column_names;
+  std::vector<std::string> file_stats;
+  std::vector<std::vector<std::string>> stripes_stats;
+};
+
+/**
+ * @brief Reads file-level and stripe-level statistics of ORC dataset.
  *
  * @ingroup io_readers
  *
  * The following code snippet demonstrates how to read statistics of a dataset
  * from a file:
  * @code
- *  std::string filepath = "dataset.orc";
- *  auto result = cudf::read_orc_statistics(cudf::source_info(filepath));
+ *  auto result = cudf::read_raw_orc_statistics(cudf::source_info("dataset.orc"));
  * @endcode
  *
  * @param src_info Dataset source
  *
- * @return Decompressed ColumnStatistics blobs stored in a vector of vectors. The first element of
- * result vector, which is itself a vector, contains the name of each column. The second element
- * contains statistics of each column of the whole file. Remaining elements contain statistics of
- * each column for each stripe.
+ * @return Column names and encoded ORC statistics
  */
-std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src_info);
+raw_orc_statistics read_raw_orc_statistics(source_info const& src_info);
+
+/**
+ * @brief Monostate type alias for the statistics variant.
+ */
+using no_statistics = std::monostate;
+
+/**
+ * @brief Base class for column statistics that include optional minimum and maximum.
+ *
+ * Includes accessors for the minimum and maximum values.
+ */
+template <typename T>
+struct minmax_statistics {
+  std::optional<T> minimum;
+  std::optional<T> maximum;
+};
+
+/**
+ * @brief Base class for column statistics that include an optional sum.
+ *
+ * Includes accessors for the sum value.
+ */
+template <typename T>
+struct sum_statistics {
+  std::optional<T> sum;
+};
+
+/**
+ * @brief Statistics for integral columns.
+ */
+struct integer_statistics : minmax_statistics<int64_t>, sum_statistics<int64_t> {
+};
+
+/**
+ * @brief Statistics for floating point columns.
+ */
+struct double_statistics : minmax_statistics<double>, sum_statistics<double> {
+};
+
+/**
+ * @brief Statistics for string columns.
+ *
+ * The `minimum` and `maximum` are the first and last elements, respectively, in lexicographical
+ * order. The `sum` is the total length of elements in the column.
+ * Note: According to ORC specs, the sum should be signed, but pyarrow uses unsigned value
+ */
+struct string_statistics : minmax_statistics<std::string>, sum_statistics<uint64_t> {
+};
+
+/**
+ * @brief Statistics for boolean columns.
+ *
+ * The `count` array includes the count of `false` and `true` values.
+ */
+struct bucket_statistics {
+  std::vector<uint64_t> count;
+};
+
+/**
+ * @brief Statistics for decimal columns.
+ */
+struct decimal_statistics : minmax_statistics<std::string>, sum_statistics<std::string> {
+};
+
+/**
+ * @brief Statistics for date(time) columns.
+ */
+using date_statistics = minmax_statistics<int32_t>;
+
+/**
+ * @brief Statistics for binary columns.
+ *
+ * The `sum` is the total number of bytes across all elements.
+ */
+using binary_statistics = sum_statistics<int64_t>;
+
+/**
+ * @brief Statistics for timestamp columns.
+ *
+ * The `minimum` and `maximum` min/max elements in the column, as the number of milliseconds since
+ * the UNIX epoch. The `minimum_utc` and `maximum_utc` are the same values adjusted to UTC.
+ */
+struct timestamp_statistics : minmax_statistics<int64_t> {
+  std::optional<int64_t> minimum_utc;
+  std::optional<int64_t> maximum_utc;
+};
+
+namespace orc {
+// forward declare the type that ProtobufReader uses. The `cudf::io::column_statistics` objects,
+// returned from `read_parsed_orc_statistics`, are constructed from
+// `cudf::io::orc::column_statistics` objects that `ProtobufReader` initializes.
+struct column_statistics;
+}  // namespace orc
+
+/**
+ * @brief Contains per-column ORC statistics.
+ *
+ * All columns can have the `number_of_values` statistics. Depending on the data type, a column can
+ * have additional statistics, accessible through `type_specific_stats` accessor.
+ */
+struct column_statistics {
+  std::optional<uint64_t> number_of_values;
+  std::variant<no_statistics,
+               integer_statistics,
+               double_statistics,
+               string_statistics,
+               bucket_statistics,
+               decimal_statistics,
+               date_statistics,
+               binary_statistics,
+               timestamp_statistics>
+    type_specific_stats;
+
+  column_statistics(cudf::io::orc::column_statistics&& detail_statistics);
+};
+
+/**
+ * @brief Holds column names and parsed file-level and stripe-level statistics.
+ *
+ * The `column_names` and `file_stats` members contain one element per column. The `stripes_stats`
+ * member contains one element per stripe, where each element contains column statistics for each
+ * column.
+ */
+struct parsed_orc_statistics {
+  std::vector<std::string> column_names;
+  std::vector<column_statistics> file_stats;
+  std::vector<std::vector<column_statistics>> stripes_stats;
+};
+
+/**
+ * @brief Reads file-level and stripe-level statistics of ORC dataset.
+ *
+ * @ingroup io_readers
+ *
+ * @param src_info Dataset source
+ *
+ * @return Column names and decoded ORC statistics
+ */
+parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info);
 
 }  // namespace io
 }  // namespace cudf

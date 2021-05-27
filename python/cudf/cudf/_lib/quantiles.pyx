@@ -6,7 +6,7 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.table cimport Table
 from cudf._lib.types cimport (
     underlying_type_t_order,

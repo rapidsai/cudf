@@ -31,13 +31,13 @@ TEST_F(DictionarySearchTest, StringsColumn)
   auto result = cudf::dictionary::get_index(dictionary, cudf::string_scalar("ccc"));
   EXPECT_TRUE(result->is_valid());
   auto n_result = dynamic_cast<cudf::numeric_scalar<uint32_t>*>(result.get());
-  EXPECT_EQ(3, n_result->value());
+  EXPECT_EQ(uint32_t{3}, n_result->value());
 
   result = cudf::dictionary::get_index(dictionary, cudf::string_scalar("eee"));
   EXPECT_FALSE(result->is_valid());
   result   = cudf::dictionary::detail::get_insert_index(dictionary, cudf::string_scalar("eee"));
   n_result = dynamic_cast<cudf::numeric_scalar<uint32_t>*>(result.get());
-  EXPECT_EQ(5, n_result->value());
+  EXPECT_EQ(uint32_t{5}, n_result->value());
 }
 
 TEST_F(DictionarySearchTest, WithNulls)
@@ -47,13 +47,13 @@ TEST_F(DictionarySearchTest, WithNulls)
   auto result = cudf::dictionary::get_index(dictionary, cudf::numeric_scalar<int64_t>(4));
   EXPECT_TRUE(result->is_valid());
   auto n_result = dynamic_cast<cudf::numeric_scalar<uint32_t>*>(result.get());
-  EXPECT_EQ(0, n_result->value());
+  EXPECT_EQ(uint32_t{0}, n_result->value());
 
   result = cudf::dictionary::get_index(dictionary, cudf::numeric_scalar<int64_t>(5));
   EXPECT_FALSE(result->is_valid());
   result = cudf::dictionary::detail::get_insert_index(dictionary, cudf::numeric_scalar<int64_t>(5));
   n_result = dynamic_cast<cudf::numeric_scalar<uint32_t>*>(result.get());
-  EXPECT_EQ(1, n_result->value());
+  EXPECT_EQ(uint32_t{1}, n_result->value());
 }
 
 TEST_F(DictionarySearchTest, EmptyColumn)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,11 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <strings/regex/regex.cuh>
-#include <strings/utilities.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace strings {
@@ -39,15 +41,14 @@ using backref_type = thrust::pair<size_type, size_type>;
  * There are three call types based on the number of regex instructions in the given pattern.
  * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
  * Longer patterns require global memory. Shorter patterns are common in data cleaning.
- *
  */
-template <size_t stack_size>
+template <typename Iterator, size_t stack_size>
 struct backrefs_fn {
   column_device_view const d_strings;
   reprog_device prog;
   string_view const d_repl;  // string replacement template
-  rmm::device_vector<backref_type>::iterator backrefs_begin;
-  rmm::device_vector<backref_type>::iterator backrefs_end;
+  Iterator backrefs_begin;
+  Iterator backrefs_end;
   int32_t* d_offsets{};
   char* d_chars{};
 
@@ -85,8 +86,8 @@ struct backrefs_fn {
             lpos_template += copy_length;
           }
           // extract the specific group's string for this backref's index
-          size_type spos_extract = begin;  // these are modified
-          size_type epos_extract = end;    // by extract()
+          int32_t spos_extract = begin;  // these are modified
+          int32_t epos_extract = end;    // by extract()
           if ((prog.extract(idx, d_str, spos_extract, epos_extract, backref.first - 1) <= 0) ||
               (epos_extract <= spos_extract))
             return;  // no value for this backref number; that is ok
@@ -107,7 +108,7 @@ struct backrefs_fn {
     if (out_ptr && (lpos < d_str.size_bytes()))  // copy remainder of input string
       memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);
     else if (!out_ptr)
-      d_offsets[idx] = nbytes;
+      d_offsets[idx] = static_cast<int32_t>(nbytes);
   }
 };
 
@@ -116,18 +117,16 @@ using children_pair = std::pair<std::unique_ptr<column>, std::unique_ptr<column>
 children_pair replace_with_backrefs_medium(column_device_view const& d_strings,
                                            reprog_device& d_prog,
                                            string_view const& d_repl_template,
-                                           rmm::device_vector<backref_type>& backrefs,
-                                           size_type null_count,
-                                           rmm::mr::device_memory_resource* mr,
-                                           cudaStream_t stream);
+                                           device_span<backref_type> backrefs,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr);
 
 children_pair replace_with_backrefs_large(column_device_view const& d_strings,
                                           reprog_device& d_prog,
                                           string_view const& d_repl_template,
-                                          rmm::device_vector<backref_type>& backrefs,
-                                          size_type null_count,
-                                          rmm::mr::device_memory_resource* mr,
-                                          cudaStream_t stream);
+                                          device_span<backref_type> backrefs,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace strings

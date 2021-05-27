@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/io/detail/orc.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -61,12 +62,6 @@ class orc_reader_options {
   bool _use_np_dtypes = true;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
-
-  // Whether to convert decimals to float64
-  bool _decimals_as_float64 = true;
-  // For decimals as int, optional forced decimal scale;
-  // -1 is auto (column scale), >=0: number of fractional digits
-  size_type _forced_decimals_scale = -1;
 
   friend orc_reader_options_builder;
 
@@ -133,16 +128,6 @@ class orc_reader_options {
    */
   data_type get_timestamp_type() const { return _timestamp_type; }
 
-  /**
-   * @brief Whether to convert decimals to float64.
-   */
-  bool is_enabled_decimals_as_float64() const { return _decimals_as_float64; }
-
-  /**
-   * @brief Returns whether decimal scale is inferred or forced to have limited fractional digits.
-   */
-  size_type get_forced_decimals_scale() const { return _forced_decimals_scale; }
-
   // Setters
 
   /**
@@ -206,20 +191,6 @@ class orc_reader_options {
    * @param type Type of timestamp.
    */
   void set_timestamp_type(data_type type) { _timestamp_type = type; }
-
-  /**
-   * @brief Enable/Disable conversion of decimals to float64.
-   *
-   * @param val Boolean value to enable/disable.
-   */
-  void set_decimals_as_float64(bool val) { _decimals_as_float64 = val; }
-
-  /**
-   * @brief Sets whether decimal scale is inferred or forced to have limited fractional digits.
-   *
-   * @param val Length of fractional digits.
-   */
-  void set_forced_decimals_scale(size_type val) { _forced_decimals_scale = val; }
 };
 
 class orc_reader_options_builder {
@@ -321,30 +292,6 @@ class orc_reader_options_builder {
   orc_reader_options_builder& timestamp_type(data_type type)
   {
     options._timestamp_type = type;
-    return *this;
-  }
-
-  /**
-   * @brief Enable/Disable conversion of decimals to float64.
-   *
-   * @param val Boolean value to enable/disable.
-   * @return this for chaining.
-   */
-  orc_reader_options_builder& decimals_as_float64(bool val)
-  {
-    options._decimals_as_float64 = val;
-    return *this;
-  }
-
-  /**
-   * @brief Sets whether decimal scale is inferred or forced to have limited fractional digits.
-   *
-   * @param val Length of fractional digits.
-   * @return this for chaining.
-   */
-  orc_reader_options_builder& forced_decimals_scale(size_type val)
-  {
-    options._forced_decimals_scale = val;
     return *this;
   }
 
@@ -755,12 +702,7 @@ class chunked_orc_writer_options_builder {
 };
 
 /**
- * @brief Forward declaration of anonymous chunked-writer state struct.
- */
-struct orc_chunked_state;
-
-/**
- * @brief Begin the process of writing an ORC file in a chunked/stream form.
+ * @brief Chunked orc writer class writes an ORC file in a chunked/stream form.
  *
  * The intent of the write_orc_chunked_ path is to allow writing of an
  * arbitrarily large / arbitrary number of rows to an ORC file in multiple passes.
@@ -773,43 +715,46 @@ struct orc_chunked_state;
  *  cudf::io::chunked_orc_writer_options options = cudf::io::chunked_orc_writer_options
  * options::builder(cudf::sink_info(filepath));
  *  ...
- *  auto state = cudf::write_orc_chunked_begin(options);
- *    cudf::write_orc_chunked(table0, state);
- *    cudf::write_orc_chunked(table1, state);
+ *  orc_chunked_writer writer(options)
+ *  writer.write(table0)
+ *  writer.write(table1)
  *    ...
- *  cudf_write_orc_chunked_end(state);
+ *  writer.close();
  * @endcode
- *
- * @param[in] options Settings for controlling writing behavior.
- * @param[in] mr Device memory resource to use for device memory allocation.
- *
- * @returns pointer to an anonymous state structure storing information about the chunked write.
- * this pointer must be passed to all subsequent write_orc_chunked() and write_orc_chunked_end()
- * calls.
  */
-std::shared_ptr<orc_chunked_state> write_orc_chunked_begin(
-  chunked_orc_writer_options const& options,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+class orc_chunked_writer {
+ public:
+  /**
+   * @brief Default constructor, this should never be used.
+   *        This is added just to satisfy cython.
+   */
+  orc_chunked_writer() = default;
 
-/**
- * @brief Write a single table as a subtable of a larger logical orc file/table.
- *
- * All tables passed into multiple calls of this function must contain the same # of columns and
- * have columns of the same type.
- *
- * @param[in] table The table data to be written.
- * @param[in] state Opaque state information about the writer process. Must be the same pointer
- * returned from write_orc_chunked_begin().
- */
-void write_orc_chunked(table_view const& table, std::shared_ptr<orc_chunked_state> state);
+  /**
+   * @brief Constructor with chunked writer options
+   *
+   * @param[in] op options used to write table
+   * @param[in] mr Device memory resource to use for device memory allocation
+   */
+  orc_chunked_writer(chunked_orc_writer_options const& op,
+                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-/**
- * @brief Finish writing a chunked/stream orc file.
- *
- * @param[in] state Opaque state information about the writer process. Must be the same pointer
- * returned from write_orc_chunked_begin().
- */
-void write_orc_chunked_end(std::shared_ptr<orc_chunked_state>& state);
+  /**
+   * @brief Writes table to output.
+   *
+   * @param[in] table Table that needs to be written
+   * @return returns reference of the class object
+   */
+  orc_chunked_writer& write(table_view const& table);
+
+  /**
+   * @brief Finishes the chunked/streamed write process.
+   */
+  void close();
+
+  // Unique pointer to impl writer class
+  std::unique_ptr<cudf::io::detail::orc::writer> writer;
+};
 
 /** @} */  // end of group
 }  // namespace io

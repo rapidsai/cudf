@@ -15,7 +15,7 @@
  */
 
 #include <cmath>
-#include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -144,7 +144,7 @@ select_quantile(ValueAccessor get_value, size_type size, double q, interpolation
 
     default:
 #if defined(__CUDA_ARCH__)
-      release_assert(false && "Invalid interpolation operation for quantiles");
+      cudf_assert(false && "Invalid interpolation operation for quantiles");
       return Result();
 #else
       CUDF_FAIL("Invalid interpolation operation for quantiles.");
@@ -173,7 +173,7 @@ select_quantile_data(Iterator begin, size_type size, double q, interpolation int
   }
 
 #if defined(__CUDA_ARCH__)
-  release_assert(false && "Invalid interpolation operation for quantiles");
+  cudf_assert(false && "Invalid interpolation operation for quantiles");
   return Result();
 #else
   CUDF_FAIL("Invalid interpolation operation for quantiles.");
@@ -200,7 +200,7 @@ CUDA_HOST_DEVICE_CALLABLE bool select_quantile_validity(Iterator begin,
   }
 
 #if defined(__CUDA_ARCH__)
-  release_assert(false && "Invalid interpolation operation for quantiles");
+  cudf_assert(false && "Invalid interpolation operation for quantiles");
   return false;
 #else
   CUDF_FAIL("Invalid interpolation operation for quantiles.");

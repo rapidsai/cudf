@@ -36,7 +36,7 @@ namespace strings {
  * | :-------: | ----------- |
  * | \%d | Day of the month: 01-31 |
  * | \%m | Month of the year: 01-12 |
- * | \%y | Year without century: 00-99 |
+ * | \%y | Year without century: 00-99. [0,68] maps to [2000,2068] and [69,99] maps to [1969,1999] |
  * | \%Y | Year with century: 0001-9999 |
  * | \%H | 24-hour of the day: 00-23 |
  * | \%I | 12-hour of the day: 01-12 |
@@ -84,7 +84,7 @@ std::unique_ptr<column> to_timestamps(
  * | :-------: | ----------- |
  * | \%d | Day of the month: 01-31 |
  * | \%m | Month of the year: 01-12 |
- * | \%y | Year without century: 00-99 |
+ * | \%y | Year without century: 00-99. [0,68] maps to [2000,2068] and [69,99] maps to [1969,1999] |
  * | \%Y | Year with century: 0001-9999 |
  * | \%H | 24-hour of the day: 00-23 |
  * | \%I | 12-hour of the day: 01-12 |

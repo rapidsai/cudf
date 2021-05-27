@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import datetime
 import json
@@ -28,6 +28,8 @@ class Fuzzer(object):
         max_string_length=None,
         params=None,
         write_data_on_failure=True,
+        max_lists_length=None,
+        max_lists_nesting_depth=None,
     ):
 
         self._target = target
@@ -38,6 +40,8 @@ class Fuzzer(object):
             max_rows=max_rows_size,
             max_columns=max_cols_size,
             max_string_length=max_string_length,
+            max_lists_length=max_lists_length,
+            max_lists_nesting_depth=max_lists_nesting_depth,
         )
         self._total_executions = 0
         self._regression = regression

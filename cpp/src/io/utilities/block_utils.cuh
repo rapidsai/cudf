@@ -19,91 +19,58 @@
 
 namespace cudf {
 namespace io {
-#if (__CUDACC_VER_MAJOR__ >= 9)
-#define SHFL0(v) __shfl_sync(~0, v, 0)
-#define SHFL(v, t) __shfl_sync(~0, v, t)
-#define SHFL_XOR(v, m) __shfl_xor_sync(~0, v, m)
-#define SYNCWARP() __syncwarp()
-#define BALLOT(v) __ballot_sync(~0, v)
-#else
-#define SHFL0(v) __shfl(v, 0)
-#define SHFL(v, t) __shfl(v, t)
-#define SHFL_XOR(v, m) __shfl_xor(v, m)
-#define SYNCWARP()
-#define BALLOT(v) __ballot(v)
-#endif
 
-#if (__CUDA_ARCH__ >= 700)
-#define NANOSLEEP(d) __nanosleep(d)
-#else
-#define NANOSLEEP(d) clock()
-#endif
+template <typename T>
+inline __device__ T shuffle(T var, int lane = 0)
+{
+  return __shfl_sync(~0, var, lane);
+}
+
+template <typename T>
+inline __device__ T shuffle_xor(T var, uint32_t delta)
+{
+  return __shfl_xor_sync(~0, var, delta);
+}
+
+inline __device__ void syncwarp(void) { __syncwarp(); }
+
+inline __device__ uint32_t ballot(int pred) { return __ballot_sync(~0, pred); }
 
 // Warp reduction helpers
 template <typename T>
-inline __device__ T WarpReduceSum2(T acc)
-{
-  return acc + SHFL_XOR(acc, 1);
-}
-template <typename T>
-inline __device__ T WarpReduceSum4(T acc)
-{
-  acc = WarpReduceSum2(acc);
-  return acc + SHFL_XOR(acc, 2);
-}
-template <typename T>
-inline __device__ T WarpReduceSum8(T acc)
-{
-  acc = WarpReduceSum4(acc);
-  return acc + SHFL_XOR(acc, 4);
-}
-template <typename T>
-inline __device__ T WarpReduceSum16(T acc)
-{
-  acc = WarpReduceSum8(acc);
-  return acc + SHFL_XOR(acc, 8);
-}
-template <typename T>
-inline __device__ T WarpReduceSum32(T acc)
-{
-  acc = WarpReduceSum16(acc);
-  return acc + SHFL_XOR(acc, 16);
-}
-
-template <typename T>
 inline __device__ T WarpReduceOr2(T acc)
 {
-  return acc | SHFL_XOR(acc, 1);
+  return acc | shuffle_xor(acc, 1);
 }
 template <typename T>
 inline __device__ T WarpReduceOr4(T acc)
 {
   acc = WarpReduceOr2(acc);
-  return acc | SHFL_XOR(acc, 2);
+  return acc | shuffle_xor(acc, 2);
 }
 template <typename T>
 inline __device__ T WarpReduceOr8(T acc)
 {
   acc = WarpReduceOr4(acc);
-  return acc | SHFL_XOR(acc, 4);
+  return acc | shuffle_xor(acc, 4);
 }
 template <typename T>
 inline __device__ T WarpReduceOr16(T acc)
 {
   acc = WarpReduceOr8(acc);
-  return acc | SHFL_XOR(acc, 8);
+  return acc | shuffle_xor(acc, 8);
 }
 template <typename T>
 inline __device__ T WarpReduceOr32(T acc)
 {
   acc = WarpReduceOr16(acc);
-  return acc | SHFL_XOR(acc, 16);
+  return acc | shuffle_xor(acc, 16);
 }
 
 template <typename T>
 inline __device__ T WarpReducePos2(T pos, uint32_t t)
 {
-  T tmp = SHFL(pos, t & 0x1e);
+  T tmp = shuffle(pos, t & 0x1e);
   pos += (t & 1) ? tmp : 0;
   return pos;
 }
@@ -112,7 +79,7 @@ inline __device__ T WarpReducePos4(T pos, uint32_t t)
 {
   T tmp;
   pos = WarpReducePos2(pos, t);
-  tmp = SHFL(pos, (t & 0x1c) | 1);
+  tmp = shuffle(pos, (t & 0x1c) | 1);
   pos += (t & 2) ? tmp : 0;
   return pos;
 }
@@ -121,7 +88,7 @@ inline __device__ T WarpReducePos8(T pos, uint32_t t)
 {
   T tmp;
   pos = WarpReducePos4(pos, t);
-  tmp = SHFL(pos, (t & 0x18) | 3);
+  tmp = shuffle(pos, (t & 0x18) | 3);
   pos += (t & 4) ? tmp : 0;
   return pos;
 }
@@ -130,7 +97,7 @@ inline __device__ T WarpReducePos16(T pos, uint32_t t)
 {
   T tmp;
   pos = WarpReducePos8(pos, t);
-  tmp = SHFL(pos, (t & 0x10) | 7);
+  tmp = shuffle(pos, (t & 0x10) | 7);
   pos += (t & 8) ? tmp : 0;
   return pos;
 }
@@ -139,7 +106,7 @@ inline __device__ T WarpReducePos32(T pos, uint32_t t)
 {
   T tmp;
   pos = WarpReducePos16(pos, t);
-  tmp = SHFL(pos, 0xf);
+  tmp = shuffle(pos, 0xf);
   pos += (t & 16) ? tmp : 0;
   return pos;
 }
@@ -218,61 +185,6 @@ inline __device__ void memcpy_block(void *dstv, const void *srcv, uint32_t len, 
     if (sync_before_store) { __syncthreads(); }
     if (t < len) { dst[t] = b; }
   }
-}
-
-/**
- * @brief Compares two strings
- */
-template <class T, const T lesser, const T greater, const T equal>
-inline __device__ T nvstr_compare(const char *as, uint32_t alen, const char *bs, uint32_t blen)
-{
-  uint32_t len = min(alen, blen);
-  uint32_t i   = 0;
-  if (len >= 4) {
-    uint32_t align_a     = 3 & reinterpret_cast<uintptr_t>(as);
-    uint32_t align_b     = 3 & reinterpret_cast<uintptr_t>(bs);
-    const uint32_t *as32 = reinterpret_cast<const uint32_t *>(as - align_a);
-    const uint32_t *bs32 = reinterpret_cast<const uint32_t *>(bs - align_b);
-    uint32_t ofsa        = align_a * 8;
-    uint32_t ofsb        = align_b * 8;
-    do {
-      uint32_t a = *as32++;
-      uint32_t b = *bs32++;
-      if (ofsa) a = __funnelshift_r(a, *as32, ofsa);
-      if (ofsb) b = __funnelshift_r(b, *bs32, ofsb);
-      if (a != b) {
-        return (lesser == greater || __byte_perm(a, 0, 0x0123) < __byte_perm(b, 0, 0x0123))
-                 ? lesser
-                 : greater;
-      }
-      i += 4;
-    } while (i + 4 <= len);
-  }
-  while (i < len) {
-    uint8_t a = as[i];
-    uint8_t b = bs[i];
-    if (a != b) { return (a < b) ? lesser : greater; }
-    ++i;
-  }
-  return (alen == blen) ? equal : (alen < blen) ? lesser : greater;
-}
-
-inline __device__ bool nvstr_is_lesser(const char *as, uint32_t alen, const char *bs, uint32_t blen)
-{
-  return nvstr_compare<bool, true, false, false>(as, alen, bs, blen);
-}
-
-inline __device__ bool nvstr_is_greater(const char *as,
-                                        uint32_t alen,
-                                        const char *bs,
-                                        uint32_t blen)
-{
-  return nvstr_compare<bool, false, true, false>(as, alen, bs, blen);
-}
-
-inline __device__ bool nvstr_is_equal(const char *as, uint32_t alen, const char *bs, uint32_t blen)
-{
-  return nvstr_compare<bool, false, false, true>(as, alen, bs, blen);
 }
 
 }  // namespace io

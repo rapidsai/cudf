@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,12 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/timestamp_utilities.cuh>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -21,15 +27,14 @@
 #include <cudf/types.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/timestamp_utilities.cuh>
-#include <cudf_test/type_lists.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 
 template <typename T>
 struct ChronoColumnTest : public cudf::test::BaseFixture {
-  cudaStream_t stream() { return cudaStream_t(0); }
+  rmm::cuda_stream_view stream() { return rmm::cuda_stream_default; }
   cudf::size_type size() { return cudf::size_type(100); }
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
@@ -71,7 +76,7 @@ TYPED_TEST(ChronoColumnTest, ChronoDurationsMatchPrimitiveRepresentation)
   using T   = TypeParam;
   using Rep = typename T::rep;
   using namespace cudf::test;
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
 
   auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
   auto stop_ = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
@@ -80,17 +85,15 @@ TYPED_TEST(ChronoColumnTest, ChronoDurationsMatchPrimitiveRepresentation)
 
   // round-trip through the host to copy `chrono_col` values
   // to a new fixed_width_column_wrapper `primitive_col`
-  // When C++17, use structured bindings
-  thrust::host_vector<Rep> chrono_col_data;
-  std::vector<cudf::bitmask_type> chrono_col_mask;
-  std::tie(chrono_col_data, chrono_col_mask) = to_host<Rep>(chrono_col);
+  auto const [chrono_col_data, chrono_col_mask] = to_host<Rep>(chrono_col);
 
   auto primitive_col =
     fixed_width_column_wrapper<Rep>(chrono_col_data.begin(), chrono_col_data.end());
 
-  thrust::device_vector<int32_t> indices(this->size());
-  thrust::sequence(indices.begin(), indices.end());
-  EXPECT_TRUE(thrust::all_of(indices.begin(),
+  rmm::device_uvector<int32_t> indices(this->size(), rmm::cuda_stream_default);
+  thrust::sequence(rmm::exec_policy(), indices.begin(), indices.end());
+  EXPECT_TRUE(thrust::all_of(rmm::exec_policy(),
+                             indices.begin(),
                              indices.end(),
                              compare_chrono_elements_to_primitive_representation<T>{
                                *cudf::column_device_view::create(primitive_col),
@@ -128,7 +131,7 @@ TYPED_TEST(ChronoColumnTest, ChronosCanBeComparedInDeviceCode)
 {
   using T = TypeParam;
   using namespace cudf::test;
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
 
   auto start_lhs = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
   auto start_rhs = milliseconds(-2400000000000);  // Tue, 12 Dec 1893 05:20:00 GMT
@@ -141,10 +144,11 @@ TYPED_TEST(ChronoColumnTest, ChronosCanBeComparedInDeviceCode)
   auto chrono_rhs_col =
     generate_timestamps<T>(this->size(), time_point_ms(start_rhs), time_point_ms(stop_rhs_));
 
-  thrust::device_vector<int32_t> indices(this->size());
-  thrust::sequence(indices.begin(), indices.end());
+  rmm::device_uvector<int32_t> indices(this->size(), rmm::cuda_stream_default);
+  thrust::sequence(rmm::exec_policy(), indices.begin(), indices.end());
 
   EXPECT_TRUE(thrust::all_of(
+    rmm::exec_policy(),
     indices.begin(),
     indices.end(),
     compare_chrono_elements<TypeParam>{cudf::binary_operator::LESS,
@@ -152,6 +156,7 @@ TYPED_TEST(ChronoColumnTest, ChronosCanBeComparedInDeviceCode)
                                        *cudf::column_device_view::create(chrono_rhs_col)}));
 
   EXPECT_TRUE(thrust::all_of(
+    rmm::exec_policy(),
     indices.begin(),
     indices.end(),
     compare_chrono_elements<TypeParam>{cudf::binary_operator::GREATER,
@@ -159,6 +164,7 @@ TYPED_TEST(ChronoColumnTest, ChronosCanBeComparedInDeviceCode)
                                        *cudf::column_device_view::create(chrono_lhs_col)}));
 
   EXPECT_TRUE(thrust::all_of(
+    rmm::exec_policy(),
     indices.begin(),
     indices.end(),
     compare_chrono_elements<TypeParam>{cudf::binary_operator::LESS_EQUAL,
@@ -166,6 +172,7 @@ TYPED_TEST(ChronoColumnTest, ChronosCanBeComparedInDeviceCode)
                                        *cudf::column_device_view::create(chrono_lhs_col)}));
 
   EXPECT_TRUE(thrust::all_of(
+    rmm::exec_policy(),
     indices.begin(),
     indices.end(),
     compare_chrono_elements<TypeParam>{cudf::binary_operator::GREATER_EQUAL,

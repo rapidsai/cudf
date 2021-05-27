@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2021, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -7,25 +7,28 @@ from libcpp.utility cimport move
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.cpp.column.column cimport column
 
 from cudf._lib.cpp.strings.char_types cimport (
     all_characters_of_type as cpp_all_characters_of_type,
     filter_characters_of_type as cpp_filter_characters_of_type,
     string_character_types as string_character_types,
-    is_integer as cpp_is_integer,
-    is_float as cpp_is_float,
 )
 
 
-def filter_alphanum(Column source_strings, Scalar repl, bool keep=True):
+def filter_alphanum(Column source_strings, object py_repl, bool keep=True):
     """
     Returns a Column of strings keeping only alphanumeric character types.
     """
+
+    cdef DeviceScalar repl = py_repl.device_value
+
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
-    cdef string_scalar* scalar_repl = <string_scalar*>(repl.c_value.get())
+    cdef const string_scalar* scalar_repl = <const string_scalar*>(
+        repl.get_raw_ptr()
+    )
 
     with nogil:
         c_result = move(cpp_filter_characters_of_type(
@@ -183,38 +186,6 @@ def is_space(Column source_strings):
             source_view,
             string_character_types.SPACE,
             string_character_types.ALL_TYPES
-        ))
-
-    return Column.from_unique_ptr(move(c_result))
-
-
-def is_integer(Column source_strings):
-    """
-    Returns a Column of boolean values with True for `source_strings`
-    that have intergers.
-    """
-    cdef unique_ptr[column] c_result
-    cdef column_view source_view = source_strings.view()
-
-    with nogil:
-        c_result = move(cpp_is_integer(
-            source_view
-        ))
-
-    return Column.from_unique_ptr(move(c_result))
-
-
-def is_float(Column source_strings):
-    """
-    Returns a Column of boolean values with True for `source_strings`
-    that have floats.
-    """
-    cdef unique_ptr[column] c_result
-    cdef column_view source_view = source_strings.view()
-
-    with nogil:
-        c_result = move(cpp_is_float(
-            source_view
         ))
 
     return Column.from_unique_ptr(move(c_result))

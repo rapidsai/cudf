@@ -13,7 +13,7 @@ from dask.dataframe.core import (
     new_dd_object,
     split_out_on_cols,
 )
-from dask.dataframe.groupby import DataFrameGroupBy
+from dask.dataframe.groupby import DataFrameGroupBy, SeriesGroupBy
 from dask.highlevelgraph import HighLevelGraph
 
 
@@ -23,9 +23,44 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         self.as_index = kwargs.pop("as_index", True)
         super().__init__(*args, **kwargs)
 
+    def __getitem__(self, key):
+        if isinstance(key, list):
+            g = CudfDataFrameGroupBy(
+                self.obj,
+                by=self.index,
+                slice=key,
+                sort=self.sort,
+                **self.dropna,
+            )
+        else:
+            g = CudfSeriesGroupBy(
+                self.obj,
+                by=self.index,
+                slice=key,
+                sort=self.sort,
+                **self.dropna,
+            )
+
+        g._meta = g._meta[key]
+        return g
+
+    def mean(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.index,
+            {c: "mean" for c in self.obj.columns if c not in self.index},
+            split_every=split_every,
+            split_out=split_out,
+            dropna=self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )
+
     def aggregate(self, arg, split_every=None, split_out=1):
         if arg == "size":
             return self.size()
+        arg = _redirect_aggs(arg)
 
         _supported = {"count", "mean", "std", "var", "sum", "min", "max"}
         if (
@@ -37,6 +72,53 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
                 self.obj,
                 self.index,
                 arg,
+                split_every=split_every,
+                split_out=split_out,
+                dropna=self.dropna,
+                sep=self.sep,
+                sort=self.sort,
+                as_index=self.as_index,
+            )
+
+        return super().aggregate(
+            arg, split_every=split_every, split_out=split_out
+        )
+
+
+class CudfSeriesGroupBy(SeriesGroupBy):
+    def __init__(self, *args, **kwargs):
+        self.sep = kwargs.pop("sep", "___")
+        self.as_index = kwargs.pop("as_index", True)
+        super().__init__(*args, **kwargs)
+
+    def mean(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.index,
+            {self._slice: "mean"},
+            split_every=split_every,
+            split_out=split_out,
+            dropna=self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )[self._slice]
+
+    def aggregate(self, arg, split_every=None, split_out=1):
+        if arg == "size":
+            return self.size()
+        arg = _redirect_aggs(arg)
+
+        _supported = {"count", "mean", "std", "var", "sum", "min", "max"}
+        if (
+            isinstance(self.obj, DaskDataFrame)
+            and isinstance(self.index, (str, list))
+            and _is_supported({self._slice: arg}, _supported)
+        ):
+            return groupby_agg(
+                self.obj,
+                self.index,
+                {self._slice: arg},
                 split_every=split_every,
                 split_out=split_out,
                 dropna=self.dropna,
@@ -79,7 +161,7 @@ def groupby_agg(
     split_out = split_out or 1
 
     # Standardize `gb_cols` and `columns` lists
-    aggs = aggs_in.copy()
+    aggs = _redirect_aggs(aggs_in.copy())
     if isinstance(gb_cols, str):
         gb_cols = [gb_cols]
     columns = [c for c in ddf.columns if c not in gb_cols]
@@ -197,15 +279,32 @@ def groupby_agg(
     return new_dd_object(graph, gb_agg_name, _meta, divisions)
 
 
+def _redirect_aggs(arg):
+    """ Redirect aggregations to their corresponding name in cuDF
+    """
+    redirects = {sum: "sum", max: "max", min: "min"}
+    if isinstance(arg, dict):
+        new_arg = dict()
+        for col in arg:
+            if isinstance(arg[col], list):
+                new_arg[col] = [redirects.get(agg, agg) for agg in arg[col]]
+            else:
+                new_arg[col] = redirects.get(arg[col], arg[col])
+        return new_arg
+    if isinstance(arg, list):
+        return [redirects.get(agg, agg) for agg in arg]
+    return redirects.get(arg, arg)
+
+
 def _is_supported(arg, supported: set):
-    """ Check that aggregations in `args` is a subset of `supportd`
+    """ Check that aggregations in `arg` are a subset of `supported`
     """
     if isinstance(arg, (list, dict)):
         if isinstance(arg, dict):
             _global_set = set()
             for col in arg:
                 if isinstance(arg[col], list):
-                    _global_set.union(set(arg[col]))
+                    _global_set = _global_set.union(set(arg[col]))
                 else:
                     _global_set.add(arg[col])
         else:

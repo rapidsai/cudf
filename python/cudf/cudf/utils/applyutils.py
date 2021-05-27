@@ -1,5 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
+
 import functools
+from typing import Any, Dict
 
 from numba import cuda
 
@@ -9,12 +11,7 @@ from cudf.core.column import column
 from cudf.utils import utils
 from cudf.utils.docutils import docfmt_partial
 
-try:
-    # Numba >= 0.49
-    from numba.core.utils import pysignature
-except ImportError:
-    # Numba <= 0.49
-    from numba.utils import pysignature
+from numba.core.utils import pysignature
 
 
 _doc_applyparams = """
@@ -332,7 +329,7 @@ def chunk_wise_kernel(nrows, chunks, {args}):
     return kernel
 
 
-_cache = dict()  # WeakKeyDictionary()
+_cache = dict()  # type: Dict[Any, Any]
 
 
 @functools.wraps(_make_row_wise_kernel)

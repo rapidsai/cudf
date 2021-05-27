@@ -1,4 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION
+
 import itertools
 
 import numba
@@ -9,9 +10,10 @@ from cudf import _lib as libcudf
 from cudf.core import column
 from cudf.core.column.column import as_column
 from cudf.utils import cudautils
+from cudf.utils.utils import GetAttrGetItemMixin
 
 
-class Rolling:
+class Rolling(GetAttrGetItemMixin):
     """
     Rolling window calculations.
 
@@ -153,6 +155,8 @@ class Rolling:
     dtype: float64
     """
 
+    _PROTECTED_KEYS = frozenset(("obj",))
+
     _time_window = False
 
     def __init__(
@@ -179,15 +183,6 @@ class Rolling:
                     "Only the default win_type 'boxcar' is currently supported"
                 )
         self.win_type = win_type
-
-    def __getattr__(self, key):
-        if key == "obj":
-            raise AttributeError()
-        return self.obj[key].rolling(
-            window=self.window,
-            min_periods=self.min_periods,
-            center=self.center,
-        )
 
     def __getitem__(self, arg):
         if isinstance(arg, tuple):
@@ -252,13 +247,22 @@ class Rolling:
 
     def apply(self, func, *args, **kwargs):
         """
-        Counterpart of pandas.core.window.Rolling.apply
+        Counterpart of `pandas.core.window.Rolling.apply
+        <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.core.window.rolling.Rolling.apply.html>`_.
 
-        *func* is a user defined function that takes an 1D array as input:
+        Parameters
+        ----------
+        func : function
+            A user defined function that takes an 1D array as input
 
         See also
         --------
-        The Notes section in `Series.applymap`.
+        cudf.core.series.Series.applymap : Apply an elementwise function to
+            transform the values in the Column.
+
+        Notes
+        -----
+        See notes of the :meth:`cudf.core.series.Series.applymap`
 
         """
         has_nulls = False
@@ -364,7 +368,7 @@ class RollingGroupby(Rolling):
         self._group_keys = groupby.grouping.keys.take(sort_order)
         obj = groupby.obj.take(sort_order)
 
-        gb_size = groupby.size()
+        gb_size = groupby.size().sort_index()
         self._group_starts = (
             gb_size.cumsum().shift(1).fillna(0).repeat(gb_size)
         )

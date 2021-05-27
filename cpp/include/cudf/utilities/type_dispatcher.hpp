@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +16,21 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/release_assert.cuh>
+#include <cudf/detail/utilities/assert.cuh>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/wrappers/dictionary.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-#include <string>
 
-#include <cudf/fixed_point/fixed_point.hpp>
+#include <string>
 
 /**
  * @file
  * @brief Defines the mapping between `cudf::type_id` runtime type information
  * and concrete C++ types.
- **/
+ */
 namespace cudf {
 /**
  * @addtogroup utility_dispatcher
@@ -51,7 +51,7 @@ namespace cudf {
  * ```
  *
  * @tparam T The type to map to a `cudf::type_id`
- **/
+ */
 template <typename T>
 inline constexpr type_id type_to_id()
 {
@@ -78,7 +78,7 @@ struct id_to_type_impl {
  * static_assert(std::is_same<int32_t, id_to_type<id_type::INT32>);
  * ```
  * @tparam t The `cudf::type_id` to map
- **/
+ */
 template <cudf::type_id Id>
 using id_to_type = typename id_to_type_impl<Id>::type;
 
@@ -103,16 +103,31 @@ using device_storage_type_t =
 // clang-format on
 
 /**
+ * @brief Returns the corresponding `type_id` of type stored on device for a given `type_id`
+ *
+ * @param id   The given `type_id`
+ * @return     Corresponding `type_id` of type stored on device
+ */
+inline type_id device_storage_type_id(type_id id)
+{
+  switch (id) {
+    case type_id::DECIMAL32: return type_id::INT32;
+    case type_id::DECIMAL64: return type_id::INT64;
+    default: return id;
+  }
+}
+
+/**
  * @brief Checks if `fixed_point`-like types have template type `T` matching the column's
  * stored type id
  *
- * @tparam T The type that is stored on the device
- * @param id The `data_type::id` of the column
- * @return true If T matches the stored column type id
- * @return false If T does not match the stored column type id
+ * @tparam     T The type that is stored on the device
+ * @param id   The `data_type::id` of the column
+ * @return     `true` If T matches the stored column `type_id`
+ * @return     `false` If T does not match the stored column `type_id`
  */
 template <typename T>
-bool type_id_matches_device_storage_type(type_id const& id)
+bool type_id_matches_device_storage_type(type_id id)
 {
   return (id == type_id::DECIMAL32 && std::is_same<T, int32_t>::value) ||
          (id == type_id::DECIMAL64 && std::is_same<T, int64_t>::value) || id == type_to_id<T>();
@@ -124,7 +139,7 @@ bool type_id_matches_device_storage_type(type_id const& id)
 
  * @param Type The concrete C++ type
  * @param Id The `cudf::type_id` enum
- **/
+ */
 #ifndef CUDF_TYPE_MAPPING
 #define CUDF_TYPE_MAPPING(Type, Id)                   \
   template <>                                         \
@@ -146,7 +161,7 @@ bool type_id_matches_device_storage_type(type_id const& id)
 /**
  * @brief Defines all of the mappings between C++ types and their corresponding
  * `cudf::type_id` values.
- **/
+ */
 CUDF_TYPE_MAPPING(bool, type_id::BOOL8);
 CUDF_TYPE_MAPPING(int8_t, type_id::INT8);
 CUDF_TYPE_MAPPING(int16_t, type_id::INT16);
@@ -174,6 +189,19 @@ CUDF_TYPE_MAPPING(cudf::list_view, type_id::LIST);
 CUDF_TYPE_MAPPING(numeric::decimal32, type_id::DECIMAL32);
 CUDF_TYPE_MAPPING(numeric::decimal64, type_id::DECIMAL64);
 CUDF_TYPE_MAPPING(cudf::struct_view, type_id::STRUCT);
+
+/**
+ * @brief Use this specialization on `type_dispatcher` whenever you only need to operate on the
+ * underlying stored type.
+ *
+ * For example, `cudf::sort` in sort.cu uses `cudf::type_dispatcher<dispatch_storage_type>(...)`.
+ * `cudf::gather` in gather.cuh also uses `cudf::type_dispatcher<dispatch_storage_type>(...)`.
+ * However, reductions needs both `data_type` and underlying type, so cannot use this.
+ */
+template <cudf::type_id Id>
+struct dispatch_storage_type {
+  using type = device_storage_type_t<typename id_to_type_impl<Id>::type>;
+};
 
 template <typename T>
 struct type_to_scalar_type_impl {
@@ -376,7 +404,7 @@ using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceT
  * @param args Parameter pack of arguments forwarded to the `operator()`
  * invocation
  * @return Whatever is returned by the callable's `operator()`
- **/
+ */
 // This pragma disables a compiler warning that complains about the valid usage
 // of calling a __host__ functor from this function which is __host__ __device__
 #pragma nv_exec_check_disable
@@ -473,7 +501,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported type_id.");
 #else
-      release_assert(false && "Unsupported type_id.");
+      cudf_assert(false && "Unsupported type_id.");
 
       // The following code will never be reached, but the compiler generates a
       // warning if there isn't a return value.

@@ -21,6 +21,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <vector>
 
 namespace cudf {
@@ -35,8 +37,8 @@ std::unique_ptr<column> lower_bound(
   table_view const& values,
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t steam                  = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @copydoc cudf::upper_bound
@@ -48,8 +50,8 @@ std::unique_ptr<column> upper_bound(
   table_view const& values,
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @copydoc cudf::contains(column_view const&, scalar const&,
@@ -57,7 +59,9 @@ std::unique_ptr<column> upper_bound(
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-bool contains(column_view const& col, scalar const& value, cudaStream_t stream = 0);
+bool contains(column_view const& col,
+              scalar const& value,
+              rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @copydoc cudf::contains(column_view const&, column_view const&,
@@ -68,8 +72,8 @@ bool contains(column_view const& col, scalar const& value, cudaStream_t stream =
 std::unique_ptr<column> contains(
   column_view const& haystack,
   column_view const& needles,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace cudf

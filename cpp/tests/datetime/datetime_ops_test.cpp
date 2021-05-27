@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/column/column_view.hpp>
-#include <cudf/datetime.hpp>
-#include <cudf/types.hpp>
-#include <cudf/wrappers/timestamps.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/timestamp_utilities.cuh>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/column/column_factories.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/datetime.hpp>
+#include <cudf/types.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 
 template <typename T>
 struct NonTimestampTest : public cudf::test::BaseFixture {
@@ -41,10 +41,10 @@ TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp)
   using T = TypeParam;
   using namespace cudf::test;
   using namespace cudf::datetime;
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
 
   cudf::data_type dtype{cudf::type_to_id<T>()};
-  cudf::column col{dtype, 0, rmm::device_buffer{0}};
+  cudf::column col{dtype, 0, rmm::device_buffer{}};
 
   EXPECT_THROW(extract_year(col), cudf::logic_error);
   EXPECT_THROW(extract_month(col), cudf::logic_error);
@@ -55,10 +55,9 @@ TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp)
   EXPECT_THROW(extract_second(col), cudf::logic_error);
   EXPECT_THROW(last_day_of_month(col), cudf::logic_error);
   EXPECT_THROW(day_of_year(col), cudf::logic_error);
-  EXPECT_THROW(
-    add_calendrical_months(
-      col, cudf::column{cudf::data_type{cudf::type_id::INT16}, 0, rmm::device_buffer{0}}),
-    cudf::logic_error);
+  EXPECT_THROW(add_calendrical_months(
+                 col, cudf::column{cudf::data_type{cudf::type_id::INT16}, 0, rmm::device_buffer{}}),
+               cudf::logic_error);
 }
 
 struct BasicDatetimeOpsTest : public cudf::test::BaseFixture {
@@ -68,7 +67,7 @@ TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents)
 {
   using namespace cudf::test;
   using namespace cudf::datetime;
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
 
   auto timestamps_D =
     cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>{
@@ -143,7 +142,6 @@ TEST_F(BasicDatetimeOpsTest, TestExtractingDatetimeComponents)
 
 template <typename T>
 struct TypedDatetimeOpsTest : public cudf::test::BaseFixture {
-  cudaStream_t stream() { return cudaStream_t(0); }
   cudf::size_type size() { return cudf::size_type(10); }
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
@@ -155,13 +153,13 @@ TYPED_TEST(TypedDatetimeOpsTest, TestEmptyColumns)
   using T = TypeParam;
   using namespace cudf::test;
   using namespace cudf::datetime;
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
 
   auto int16s_dtype     = cudf::data_type{cudf::type_to_id<int16_t>()};
   auto timestamps_dtype = cudf::data_type{cudf::type_to_id<T>()};
 
-  cudf::column int16s{int16s_dtype, 0, rmm::device_buffer{0}};
-  cudf::column timestamps{timestamps_dtype, 0, rmm::device_buffer{0}};
+  cudf::column int16s{int16s_dtype, 0, rmm::device_buffer{}};
+  cudf::column timestamps{timestamps_dtype, 0, rmm::device_buffer{}};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_year(timestamps), int16s);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_month(timestamps), int16s);
@@ -177,7 +175,7 @@ TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedDatetimeComponents)
   using T = TypeParam;
   using namespace cudf::test;
   using namespace cudf::datetime;
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
 
   auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
   auto stop_ = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
@@ -214,7 +212,7 @@ TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedNullableDatetimeComponen
   using T = TypeParam;
   using namespace cudf::test;
   using namespace cudf::datetime;
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
 
   auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
   auto stop_ = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
@@ -269,7 +267,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithSeconds)
 {
   using namespace cudf::test;
   using namespace cudf::datetime;
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
 
   // Time in seconds since epoch
   // Dates converted using epochconverter.com
@@ -309,7 +307,7 @@ TEST_F(BasicDatetimeOpsTest, TestLastDayOfMonthWithDate)
 {
   using namespace cudf::test;
   using namespace cudf::datetime;
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
 
   // Time in days since epoch
   // Dates converted using epochconverter.com
@@ -349,7 +347,7 @@ TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate)
 {
   using namespace cudf::test;
   using namespace cudf::datetime;
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
 
   // Day number in the year
   // Dates converted using epochconverter.com
@@ -391,7 +389,7 @@ TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithEmptyColumn)
 {
   using namespace cudf::test;
   using namespace cudf::datetime;
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
 
   // Create an empty column
   auto timestamps_d = fixed_width_column_wrapper<cudf::timestamp_s>{};
@@ -403,7 +401,7 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithInvalidColType)
 {
   using namespace cudf::test;
   using namespace cudf::datetime;
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
 
   // Time in seconds since epoch
   // Dates converted using epochconverter.com
@@ -422,7 +420,7 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithIncorrectColSizes)
 {
   using namespace cudf::test;
   using namespace cudf::datetime;
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
 
   // Time in seconds since epoch
   // Dates converted using epochconverter.com
@@ -441,7 +439,7 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSeconds)
 {
   using namespace cudf::test;
   using namespace cudf::datetime;
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
 
   // Time in seconds since epoch
   // Dates converted using epochconverter.com
@@ -487,7 +485,7 @@ TEST_F(BasicDatetimeOpsTest, TestAddMonthsWithSecondsAndNullValues)
 {
   using namespace cudf::test;
   using namespace cudf::datetime;
-  using namespace simt::std::chrono;
+  using namespace cuda::std::chrono;
 
   // Time in seconds since epoch
   // Dates converted using epochconverter.com

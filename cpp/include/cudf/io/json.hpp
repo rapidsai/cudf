@@ -18,10 +18,10 @@
 
 #include "types.hpp"
 
-#include <rmm/mr/device/per_device_resource.hpp>
-
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+
+#include <rmm/mr/device/per_device_resource.hpp>
 
 #include <string>
 #include <vector>
@@ -61,7 +61,6 @@ class json_reader_options_builder;
  * | `date_unit`          | only millisecond units are supported             |
  * | `encoding`           | only ASCII-encoded data is supported             |
  * | `chunksize`          | use `byte_range_xxx` for chunking instead        |
- *
  */
 class json_reader_options {
   source_info _source;

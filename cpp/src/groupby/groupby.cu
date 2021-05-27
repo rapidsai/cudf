@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,17 +19,23 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby.hpp>
+#include <cudf/detail/groupby/group_replace_nulls.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <thrust/copy.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <memory>
 #include <utility>
@@ -52,8 +58,8 @@ groupby::groupby(table_view const& keys,
 
 // Select hash vs. sort groupby implementation
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::dispatch_aggregation(
-  std::vector<aggregation_request> const& requests,
-  cudaStream_t stream,
+  host_span<aggregation_request const> requests,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
   // If sort groupby has been called once on this groupby object, then
@@ -75,8 +81,46 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
 groupby::~groupby() = default;
 
 namespace {
+
+/**
+ * @brief Factory to construct empty result columns.
+ *
+ * Adds special handling for COLLECT_LIST/COLLECT_SET, because:
+ * 1. `make_empty_column()` does not support construction of nested columns.
+ * 2. Empty lists need empty child columns, to persist type information.
+ */
+struct empty_column_constructor {
+  column_view values;
+
+  template <typename ValuesType, aggregation::Kind k>
+  std::unique_ptr<cudf::column> operator()() const
+  {
+    using namespace cudf;
+    using namespace cudf::detail;
+
+    if constexpr (k == aggregation::Kind::COLLECT_LIST || k == aggregation::Kind::COLLECT_SET) {
+      return make_lists_column(
+        0, make_empty_column(data_type{type_to_id<offset_type>()}), empty_like(values), 0, {});
+    }
+
+    // If `values` is LIST typed, and the aggregation results match the type,
+    // construct empty results based on `values`.
+    // Most generally, this applies if input type matches output type.
+    //
+    // Note: `target_type_t` is not recursive, and `ValuesType` does not consider children.
+    //       It is important that `COLLECT_LIST` and `COLLECT_SET` are handled before this
+    //       point, because `COLLECT_LIST(LIST)` produces `LIST<LIST>`, but `target_type_t`
+    //       wouldn't know the difference.
+    if constexpr (std::is_same_v<target_type_t<ValuesType, k>, ValuesType>) {
+      return empty_like(values);
+    }
+
+    return make_empty_column(target_type(values.type(), k));
+  }
+};
+
 /// Make an empty table with appropriate types for requested aggs
-auto empty_results(std::vector<aggregation_request> const& requests)
+auto empty_results(host_span<aggregation_request const> requests)
 {
   std::vector<aggregation_result> empty_results;
 
@@ -89,7 +133,8 @@ auto empty_results(std::vector<aggregation_request> const& requests)
         request.aggregations.end(),
         std::back_inserter(results),
         [&request](auto const& agg) {
-          return make_empty_column(cudf::detail::target_type(request.values.type(), agg->kind));
+          return cudf::detail::dispatch_type_and_aggregation(
+            request.values.type(), agg->kind, empty_column_constructor{request.values});
         });
 
       return aggregation_result{std::move(results)};
@@ -99,26 +144,29 @@ auto empty_results(std::vector<aggregation_request> const& requests)
 }
 
 /// Verifies the agg requested on the request's values is valid
-void verify_valid_requests(std::vector<aggregation_request> const& requests)
+void verify_valid_requests(host_span<aggregation_request const> requests)
 {
-  CUDF_EXPECTS(std::all_of(requests.begin(),
-                           requests.end(),
-                           [](auto const& request) {
-                             return std::all_of(request.aggregations.begin(),
-                                                request.aggregations.end(),
-                                                [&request](auto const& agg) {
-                                                  return cudf::detail::is_valid_aggregation(
-                                                    request.values.type(), agg->kind);
-                                                });
-                           }),
-               "Invalid type/aggregation combination.");
+  CUDF_EXPECTS(
+    std::all_of(
+      requests.begin(),
+      requests.end(),
+      [](auto const& request) {
+        return std::all_of(
+          request.aggregations.begin(), request.aggregations.end(), [&request](auto const& agg) {
+            auto values_type = cudf::is_dictionary(request.values.type())
+                                 ? cudf::dictionary_column_view(request.values).keys().type()
+                                 : request.values.type();
+            return cudf::detail::is_valid_aggregation(values_type, agg->kind);
+          });
+      }),
+    "Invalid type/aggregation combination.");
 }
 
 }  // namespace
 
 // Compute aggregation requests
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggregate(
-  std::vector<aggregation_request> const& requests, rmm::mr::device_memory_resource* mr)
+  host_span<aggregation_request const> requests, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(
@@ -131,30 +179,79 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
 
   if (_keys.num_rows() == 0) { return std::make_pair(empty_like(_keys), empty_results(requests)); }
 
-  return dispatch_aggregation(requests, 0, mr);
+  return dispatch_aggregation(requests, rmm::cuda_stream_default, mr);
+}
+
+// Compute scan requests
+std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan(
+  host_span<aggregation_request const> requests, rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(
+    std::all_of(requests.begin(),
+                requests.end(),
+                [this](auto const& request) { return request.values.size() == _keys.num_rows(); }),
+    "Size mismatch between request values and groupby keys.");
+
+  verify_valid_requests(requests);
+
+  if (_keys.num_rows() == 0) { return std::make_pair(empty_like(_keys), empty_results(requests)); }
+
+  return sort_scan(requests, rmm::cuda_stream_default, mr);
 }
 
 groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto grouped_keys = helper().sorted_keys(mr, 0);
+  auto grouped_keys = helper().sorted_keys(rmm::cuda_stream_default, mr);
 
-  auto group_offsets = helper().group_offsets(0);
+  auto const& group_offsets = helper().group_offsets(rmm::cuda_stream_default);
   std::vector<size_type> group_offsets_vector(group_offsets.size());
-  thrust::copy(group_offsets.begin(), group_offsets.end(), group_offsets_vector.begin());
+  thrust::copy(thrust::device_pointer_cast(group_offsets.begin()),
+               thrust::device_pointer_cast(group_offsets.end()),
+               group_offsets_vector.begin());
 
-  std::unique_ptr<table> grouped_values{nullptr};
   if (values.num_columns()) {
-    grouped_values = cudf::detail::gather(values,
-                                          helper().key_sort_order(),
-                                          cudf::detail::out_of_bounds_policy::NULLIFY,
-                                          cudf::detail::negative_index_policy::NOT_ALLOWED,
-                                          mr);
+    auto grouped_values = cudf::detail::gather(values,
+                                               helper().key_sort_order(rmm::cuda_stream_default),
+                                               cudf::out_of_bounds_policy::DONT_CHECK,
+                                               cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                               rmm::cuda_stream_default,
+                                               mr);
     return groupby::groups{
       std::move(grouped_keys), std::move(group_offsets_vector), std::move(grouped_values)};
   } else {
     return groupby::groups{std::move(grouped_keys), std::move(group_offsets_vector)};
   }
+}
+
+std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls(
+  table_view const& values,
+  host_span<cudf::replace_policy const> replace_policies,
+  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(_keys.num_rows() == values.num_rows(),
+               "Size mismatch between group labels and value.");
+  CUDF_EXPECTS(static_cast<cudf::size_type>(replace_policies.size()) == values.num_columns(),
+               "Size mismatch between num_columns and replace_policies.");
+
+  if (values.is_empty()) { return std::make_pair(empty_like(_keys), empty_like(values)); }
+  auto const stream = rmm::cuda_stream_default;
+
+  auto const& group_labels = helper().group_labels(stream);
+  std::vector<std::unique_ptr<column>> results;
+  std::transform(thrust::make_counting_iterator(0),
+                 thrust::make_counting_iterator(values.num_columns()),
+                 std::back_inserter(results),
+                 [&](auto i) {
+                   auto grouped_values = helper().grouped_values(values.column(i), stream);
+                   return detail::group_replace_nulls(
+                     grouped_values->view(), group_labels, replace_policies[i], stream, mr);
+                 });
+
+  return std::make_pair(std::move(helper().sorted_keys(stream, mr)),
+                        std::make_unique<table>(std::move(results)));
 }
 
 // Get the sort helper object
@@ -165,6 +262,38 @@ detail::sort::sort_groupby_helper& groupby::helper()
     _keys, _include_null_keys, _keys_are_sorted);
   return *_helper;
 };
+
+std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
+  table_view const& values,
+  host_span<size_type const> offsets,
+  std::vector<std::reference_wrapper<const scalar>> const& fill_values,
+  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(values.num_columns() == static_cast<size_type>(fill_values.size()),
+               "Mismatch number of fill_values and columns.");
+  CUDF_EXPECTS(
+    std::all_of(thrust::make_counting_iterator(0),
+                thrust::make_counting_iterator(values.num_columns()),
+                [&](auto i) { return values.column(i).type() == fill_values[i].get().type(); }),
+    "values and fill_value should have the same type.");
+
+  auto stream = rmm::cuda_stream_default;
+  std::vector<std::unique_ptr<column>> results;
+  auto const& group_offsets = helper().group_offsets(stream);
+  std::transform(
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(values.num_columns()),
+    std::back_inserter(results),
+    [&](size_type i) {
+      auto grouped_values = helper().grouped_values(values.column(i), stream);
+      return cudf::detail::segmented_shift(
+        grouped_values->view(), group_offsets, offsets[i], fill_values[i].get(), stream, mr);
+    });
+
+  return std::make_pair(helper().sorted_keys(stream, mr),
+                        std::make_unique<cudf::table>(std::move(results)));
+}
 
 }  // namespace groupby
 }  // namespace cudf

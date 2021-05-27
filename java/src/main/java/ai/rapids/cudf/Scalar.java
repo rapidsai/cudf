@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,9 +22,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -86,6 +86,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       return new Scalar(type, makeDecimal32Scalar(0, type.getScale(), false));
     case DECIMAL64:
       return new Scalar(type, makeDecimal64Scalar(0L, type.getScale(), false));
+    case LIST:
+      throw new IllegalArgumentException("Please call 'listFromNull' to create a null list scalar.");
     default:
       throw new IllegalArgumentException("Unexpected type: " + type);
     }
@@ -276,7 +278,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
    */
   public static Scalar durationFromLong(DType type, long value) {
     if (type.isDurationType()) {
-      if (type == DType.DURATION_DAYS) {
+      if (type.equals(DType.DURATION_DAYS)) {
         int intValue = (int)value;
         if (value != intValue) {
           throw new IllegalArgumentException("value too large for type " + type + ": " + value);
@@ -304,8 +306,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   }
 
   public static Scalar timestampFromLong(DType type, long value) {
-    if (type.isTimestamp()) {
-      if (type == DType.TIMESTAMP_DAYS) {
+    if (type.isTimestampType()) {
+      if (type.equals(DType.TIMESTAMP_DAYS)) {
         int intValue = (int)value;
         if (value != intValue) {
           throw new IllegalArgumentException("value too large for type " + type + ": " + value);
@@ -327,10 +329,139 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   }
 
   public static Scalar fromString(String value) {
+    return fromUTF8String(value == null ? null : value.getBytes(StandardCharsets.UTF_8));
+  }
+
+  /**
+   * Creates a String scalar from an array of UTF8 bytes.
+   * @param value the array of UTF8 bytes
+   * @return a String scalar
+   */
+  public static Scalar fromUTF8String(byte[] value) {
     if (value == null) {
       return fromNull(DType.STRING);
     }
-    return new Scalar(DType.STRING, makeStringScalar(value.getBytes(StandardCharsets.UTF_8), true));
+    return new Scalar(DType.STRING, makeStringScalar(value, true));
+  }
+
+  /**
+   * Creates a null scalar of list type.
+   *
+   * Having this special API because the element type is required to build an empty
+   * nested column as the underlying column of the list scalar.
+   *
+   * @param elementType the data type of the element in the list.
+   * @return a null scalar of list type
+   */
+  public static Scalar listFromNull(HostColumnVector.DataType elementType) {
+    try (ColumnVector col = ColumnVector.empty(elementType)) {
+      return new Scalar(DType.LIST, makeListScalar(col.getNativeView(), false));
+    }
+  }
+
+  /**
+   * Creates a scalar of list from a ColumnView.
+   *
+   * All the rows in the ColumnView will be copied into the Scalar. So the ColumnView
+   * can be closed after this call completes.
+   */
+  public static Scalar listFromColumnView(ColumnView list) {
+    if (list == null) {
+      throw new IllegalArgumentException("'list' should NOT be null." +
+          " Please call 'listFromNull' to create a null list scalar.");
+    }
+    return new Scalar(DType.LIST, makeListScalar(list.getNativeView(), true));
+  }
+
+  /**
+   * Creates a null scalar of struct type.
+   *
+   * @param elementTypes data types of children in the struct
+   * @return a null scalar of struct type
+   */
+  public static Scalar structFromNull(HostColumnVector.DataType... elementTypes) {
+    ColumnVector[] children = new ColumnVector[elementTypes.length];
+    long[] childHandles = new long[elementTypes.length];
+    RuntimeException error = null;
+    try {
+      for (int i = 0; i < elementTypes.length; i++) {
+        // Build column vector having single null value rather than empty column vector,
+        // because struct scalar requires row count of children columns == 1.
+        children[i] = buildNullColumnVector(elementTypes[i]);
+        childHandles[i] = children[i].getNativeView();
+      }
+      return new Scalar(DType.STRUCT, makeStructScalar(childHandles, false));
+    } catch (RuntimeException ex) {
+      error = ex;
+      throw ex;
+    } catch (Exception ex) {
+      error = new RuntimeException(ex);
+      throw ex;
+    } finally {
+      // close all empty children
+      for (ColumnVector child : children) {
+        // We closed all created ColumnViews when we hit null. Therefore we exit the loop.
+        if (child == null) break;
+        // suppress exception during the close process to ensure that all elements are closed
+        try {
+          child.close();
+        } catch (Exception ex) {
+          if (error == null) {
+            error = new RuntimeException(ex);
+            continue;
+          }
+          error.addSuppressed(ex);
+        }
+      }
+      if (error != null) throw error;
+    }
+  }
+
+  /**
+   * Creates a scalar of struct from a ColumnView.
+   *
+   * @param columns children columns of struct
+   * @return a Struct scalar
+   */
+  public static Scalar structFromColumnViews(ColumnView... columns) {
+    if (columns == null) {
+      throw new IllegalArgumentException("input columns should NOT be null");
+    }
+    long[] columnHandles = new long[columns.length];
+    for (int i = 0; i < columns.length; i++) {
+      columnHandles[i] = columns[i].getNativeView();
+    }
+    return new Scalar(DType.STRUCT, makeStructScalar(columnHandles, true));
+  }
+
+  /**
+   * Build column vector of single row who holds a null value
+   *
+   * @param hostType host data type of null column vector
+   * @return the null vector
+   */
+  private static ColumnVector buildNullColumnVector(HostColumnVector.DataType hostType) {
+    DType dt = hostType.getType();
+    if (!dt.isNestedType()) {
+      try (HostColumnVector.Builder builder = HostColumnVector.builder(dt, 1)) {
+        builder.appendNull();
+        try (HostColumnVector hcv = builder.build()) {
+          return hcv.copyToDevice();
+        }
+      }
+    } else if (dt.typeId == DType.DTypeEnum.LIST) {
+      // type of List doesn't matter here because of type erasure in Java
+      try (HostColumnVector hcv = HostColumnVector.fromLists(hostType, (List<Integer>) null)) {
+        return hcv.copyToDevice();
+      }
+    } else if (dt.typeId == DType.DTypeEnum.STRUCT) {
+      try (HostColumnVector hcv = HostColumnVector.fromStructs(
+          hostType, (HostColumnVector.StructData) null)) {
+        return hcv.copyToDevice();
+      }
+    } else {
+      throw new IllegalArgumentException("Unsupported data type: " + hostType);
+    }
   }
 
   private static native void closeScalar(long scalarHandle);
@@ -342,6 +473,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native float getFloat(long scalarHandle);
   private static native double getDouble(long scalarHandle);
   private static native byte[] getUTF8(long scalarHandle);
+  private static native long getListAsColumnView(long scalarHandle);
+  private static native long[] getChildrenFromStructScalar(long scalarHandle);
   private static native long makeBool8Scalar(boolean isValid, boolean value);
   private static native long makeInt8Scalar(byte value, boolean isValid);
   private static native long makeUint8Scalar(byte value, boolean isValid);
@@ -360,6 +493,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native long makeTimestampTimeScalar(int dtypeNativeId, long value, boolean isValid);
   private static native long makeDecimal32Scalar(int value, int scale, boolean isValid);
   private static native long makeDecimal64Scalar(long value, int scale, boolean isValid);
+  private static native long makeListScalar(long viewHandle, boolean isValid);
+  private static native long makeStructScalar(long[] viewHandles, boolean isValid);
 
 
   Scalar(DType type, long scalarHandle) {
@@ -484,10 +619,55 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return getUTF8(getScalarHandle());
   }
 
+  /**
+   * Returns the scalar value as a ColumnView. Callers should close the returned ColumnView to
+   * avoid memory leak.
+   *
+   * The returned ColumnView is only valid as long as the Scalar remains valid. If the Scalar
+   * is closed before this ColumnView is closed, using this ColumnView will result in undefined
+   * behavior.
+   */
+  public ColumnView getListAsColumnView() {
+    assert DType.LIST.equals(type) : "Cannot get list for the vector of type " + type;
+    return new ColumnView(getListAsColumnView(getScalarHandle()));
+  }
+
+  /**
+   * Fetches views of children columns from struct scalar.
+   * The returned ColumnViews should be closed appropriately. Otherwise, a native memory leak will occur.
+   *
+   * @return array of column views refer to children of struct scalar
+   */
+  public ColumnView[] getChildrenFromStructScalar() {
+    assert DType.STRUCT.equals(type) : "Cannot get table for the vector of type " + type;
+
+    long[] childHandles = getChildrenFromStructScalar(getScalarHandle());
+    ColumnView[] children = new ColumnView[childHandles.length];
+    try {
+      for (int i = 0; i < children.length; i++) {
+        children[i] = new ColumnView(childHandles[i]);
+      }
+    } catch (Exception ex) {
+      // close all created ColumnViews if exception thrown
+      for (ColumnView child : children) {
+        // We closed all created ColumnViews when we hit null. Therefore we exit the loop.
+        if (child == null) break;
+        // make sure the close process is exception-free
+        try {
+          child.close();
+        } catch (Exception suppressed) {
+          ex.addSuppressed(suppressed);
+        }
+      }
+      throw ex;
+    }
+    return children;
+  }
+
   @Override
   public ColumnVector binaryOp(BinaryOp op, BinaryOperable rhs, DType outType) {
-    if (rhs instanceof ColumnVector) {
-      ColumnVector cvRhs = (ColumnVector) rhs;
+    if (rhs instanceof ColumnView) {
+      ColumnView cvRhs = (ColumnView) rhs;
       return new ColumnVector(binaryOp(this, cvRhs, op, outType));
     } else {
       throw new IllegalArgumentException(rhs.getClass() + " is not supported as a binary op with " +
@@ -495,7 +675,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     }
   }
 
-  static long binaryOp(Scalar lhs, ColumnVector rhs, BinaryOp op, DType outputType) {
+  static long binaryOp(Scalar lhs, ColumnView rhs, BinaryOp op, DType outputType) {
     return binaryOpSV(lhs.getScalarHandle(), rhs.getNativeView(),
         op.nativeId, outputType.typeId.getNativeId(), outputType.getScale());
   }
@@ -507,7 +687,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     if (this == o) return true;
     if (o == null || getClass() != o.getClass()) return false;
     Scalar other = (Scalar) o;
-    if (type != other.type) return false;
+    if (!type.equals(other.type)) return false;
     boolean valid = isValid();
     if (valid != other.isValid()) return false;
     if (!valid) return true;
@@ -525,6 +705,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case INT32:
     case UINT32:
     case TIMESTAMP_DAYS:
+    case DECIMAL32:
       return getInt() == other.getInt();
     case FLOAT32:
       return getFloat() == other.getFloat();
@@ -536,9 +717,15 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     case TIMESTAMP_MILLISECONDS:
     case TIMESTAMP_MICROSECONDS:
     case TIMESTAMP_NANOSECONDS:
-      return getLong() == getLong();
+    case DECIMAL64:
+      return getLong() == other.getLong();
     case STRING:
       return Arrays.equals(getUTF8(), other.getUTF8());
+    case LIST:
+      try (ColumnView viewMe = getListAsColumnView();
+           ColumnView viewO = other.getListAsColumnView()) {
+        return viewMe.equals(viewO);
+      }
     default:
       throw new IllegalStateException("Unexpected type: " + type);
     }
@@ -566,6 +753,8 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       case INT32:
       case UINT32:
       case TIMESTAMP_DAYS:
+      case DECIMAL32:
+      case DURATION_DAYS:
         valueHash = getInt();
         break;
       case INT64:
@@ -574,6 +763,11 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       case TIMESTAMP_MILLISECONDS:
       case TIMESTAMP_MICROSECONDS:
       case TIMESTAMP_NANOSECONDS:
+      case DECIMAL64:
+      case DURATION_MICROSECONDS:
+      case DURATION_SECONDS:
+      case DURATION_MILLISECONDS:
+      case DURATION_NANOSECONDS:
         valueHash = Long.hashCode(getLong());
         break;
       case FLOAT32:
@@ -584,6 +778,11 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         break;
       case STRING:
         valueHash = Arrays.hashCode(getUTF8());
+        break;
+      case LIST:
+        try (ColumnView v = getListAsColumnView()) {
+          valueHash = v.hashCode();
+        }
         break;
       default:
         throw new IllegalStateException("Unknown scalar type: " + type);
@@ -642,6 +841,17 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
         sb.append(getJavaString());
         sb.append('"');
         break;
+      case DECIMAL32:
+        // FALL THROUGH
+      case DECIMAL64:
+        sb.append(getBigDecimal());
+        break;
+      case LIST:
+        try (ColumnView v = getListAsColumnView()) {
+          // It's not easy to pull out the elements so just a simple string of some metadata.
+          sb.append(v.toString());
+        }
+        break;
       default:
         throw new IllegalArgumentException("Unknown scalar type: " + type);
       }
@@ -666,7 +876,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     }
 
     @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       if (scalarHandle != 0) {
         if (logErrorIfNotClean) {
           LOG.error("A SCALAR WAS LEAKED(ID: " + id + " " + Long.toHexString(scalarHandle) + ")");

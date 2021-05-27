@@ -33,7 +33,7 @@ namespace cudf_io = cudf::io;
 class ParquetRead : public cudf::benchmark {
 };
 
-void PQ_read(benchmark::State& state)
+void BM_parq_read_varying_input(benchmark::State& state)
 {
   auto const data_types             = get_type_or_group(state.range(0));
   cudf::size_type const cardinality = state.range(1);
@@ -66,16 +66,131 @@ void PQ_read(benchmark::State& state)
   state.SetBytesProcessed(data_size * state.iterations());
 }
 
-#define PARQ_RD_BENCHMARK_DEFINE(name, type_or_group, src_type)                              \
+std::vector<std::string> get_col_names(std::vector<char> const& parquet_data)
+{
+  cudf_io::parquet_reader_options const read_options =
+    cudf_io::parquet_reader_options::builder(
+      cudf_io::source_info{parquet_data.data(), parquet_data.size()})
+      .num_rows(1);
+  return cudf_io::read_parquet(read_options).metadata.column_names;
+}
+
+void BM_parq_read_varying_options(benchmark::State& state)
+{
+  auto state_idx        = 0;
+  auto const col_sel    = static_cast<column_selection>(state.range(state_idx++));
+  auto const row_sel    = static_cast<row_selection>(state.range(state_idx++));
+  auto const num_chunks = state.range(state_idx++);
+
+  auto const flags               = state.range(state_idx++);
+  auto const str_to_categories   = (flags & 1) != 0;
+  auto const use_pandas_metadata = (flags & 2) != 0;
+  auto const ts_type = cudf::data_type{static_cast<cudf::type_id>(state.range(state_idx++))};
+
+  auto const data_types =
+    dtypes_for_column_selection(get_type_or_group({int32_t(type_group_id::INTEGRAL),
+                                                   int32_t(type_group_id::FLOATING_POINT),
+                                                   int32_t(type_group_id::TIMESTAMP),
+                                                   int32_t(cudf::type_id::STRING)}),
+                                col_sel);
+  auto const tbl  = create_random_table(data_types, data_types.size(), table_size_bytes{data_size});
+  auto const view = tbl->view();
+
+  std::vector<char> parquet_data;
+  cudf_io::parquet_writer_options options =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{&parquet_data}, view);
+  cudf_io::write_parquet(options);
+
+  auto const cols_to_read = select_column_names(get_col_names(parquet_data), col_sel);
+  cudf_io::parquet_reader_options read_options =
+    cudf_io::parquet_reader_options::builder(
+      cudf_io::source_info{parquet_data.data(), parquet_data.size()})
+      .columns(cols_to_read)
+      .convert_strings_to_categories(str_to_categories)
+      .use_pandas_metadata(use_pandas_metadata)
+      .timestamp_type(ts_type);
+
+  auto const num_row_groups           = data_size / (128 << 20);
+  cudf::size_type const chunk_row_cnt = view.num_rows() / num_chunks;
+  for (auto _ : state) {
+    cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
+
+    cudf::size_type rows_read = 0;
+    for (int32_t chunk = 0; chunk < num_chunks; ++chunk) {
+      auto const is_last_chunk = chunk == (num_chunks - 1);
+      switch (row_sel) {
+        case row_selection::ALL: break;
+        case row_selection::ROW_GROUPS: {
+          auto row_groups_to_read = segments_in_chunk(num_row_groups, num_chunks, chunk);
+          if (is_last_chunk) {
+            // Need to assume that an additional "overflow" row group is present
+            row_groups_to_read.push_back(num_row_groups);
+          }
+          read_options.set_row_groups({row_groups_to_read});
+        } break;
+        case row_selection::NROWS:
+          read_options.set_skip_rows(chunk * chunk_row_cnt);
+          read_options.set_num_rows(chunk_row_cnt);
+          if (is_last_chunk) read_options.set_num_rows(-1);
+          break;
+        default: CUDF_FAIL("Unsupported row selection method");
+      }
+
+      rows_read += cudf_io::read_parquet(read_options).tbl->num_rows();
+    }
+
+    CUDF_EXPECTS(rows_read == view.num_rows(), "Benchmark did not read the entire table");
+  }
+  auto const data_processed = data_size * cols_to_read.size() / view.num_columns();
+  state.SetBytesProcessed(data_processed * state.iterations());
+}
+
+#define PARQ_RD_BM_INPUTS_DEFINE(name, type_or_group, src_type)                              \
   BENCHMARK_DEFINE_F(ParquetRead, name)                                                      \
-  (::benchmark::State & state) { PQ_read(state); }                                           \
+  (::benchmark::State & state) { BM_parq_read_varying_input(state); }                        \
   BENCHMARK_REGISTER_F(ParquetRead, name)                                                    \
     ->ArgsProduct({{int32_t(type_or_group)}, {0, 1000}, {1, 32}, {true, false}, {src_type}}) \
     ->Unit(benchmark::kMillisecond)                                                          \
     ->UseManualTime();
 
-RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BENCHMARK_DEFINE, integral, type_group_id::INTEGRAL);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BENCHMARK_DEFINE, floats, type_group_id::FLOATING_POINT);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BENCHMARK_DEFINE, timestamps, type_group_id::TIMESTAMP);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BENCHMARK_DEFINE, string, cudf::type_id::STRING);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BENCHMARK_DEFINE, list, cudf::type_id::LIST);
+RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, integral, type_group_id::INTEGRAL);
+RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
+RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
+RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, string, cudf::type_id::STRING);
+RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, list, cudf::type_id::LIST);
+
+BENCHMARK_DEFINE_F(ParquetRead, column_selection)
+(::benchmark::State& state) { BM_parq_read_varying_options(state); }
+BENCHMARK_REGISTER_F(ParquetRead, column_selection)
+  ->ArgsProduct({{int32_t(column_selection::ALL),
+                  int32_t(column_selection::ALTERNATE),
+                  int32_t(column_selection::FIRST_HALF),
+                  int32_t(column_selection::SECOND_HALF)},
+                 {int32_t(row_selection::ALL)},
+                 {1},
+                 {0b01},  // defaults
+                 {int32_t(cudf::type_id::EMPTY)}})
+  ->Unit(benchmark::kMillisecond)
+  ->UseManualTime();
+
+BENCHMARK_DEFINE_F(ParquetRead, row_selection)
+(::benchmark::State& state) { BM_parq_read_varying_options(state); }
+BENCHMARK_REGISTER_F(ParquetRead, row_selection)
+  ->ArgsProduct({{int32_t(column_selection::ALL)},
+                 {int32_t(row_selection::ROW_GROUPS), int32_t(row_selection::NROWS)},
+                 {1, 4},
+                 {0b01},  // defaults
+                 {int32_t(cudf::type_id::EMPTY)}})
+  ->Unit(benchmark::kMillisecond)
+  ->UseManualTime();
+
+BENCHMARK_DEFINE_F(ParquetRead, misc_options)
+(::benchmark::State& state) { BM_parq_read_varying_options(state); }
+BENCHMARK_REGISTER_F(ParquetRead, misc_options)
+  ->ArgsProduct({{int32_t(column_selection::ALL)},
+                 {int32_t(row_selection::NROWS)},
+                 {1},
+                 {0b01, 0b00, 0b11, 0b010},
+                 {int32_t(cudf::type_id::EMPTY), int32_t(cudf::type_id::TIMESTAMP_NANOSECONDS)}})
+  ->Unit(benchmark::kMillisecond)
+  ->UseManualTime();

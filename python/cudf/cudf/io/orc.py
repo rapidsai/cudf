@@ -1,16 +1,32 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
-import warnings
 import datetime
+import warnings
 
 import pyarrow as pa
 from pyarrow import orc as orc
 
 import cudf
-from cudf import _lib as libcudf
+from cudf._lib import orc as liborc
 from cudf.utils import ioutils
+from cudf.utils.metadata import (  # type: ignore
+    orc_column_statistics_pb2 as cs_pb2,
+)
 
-import cudf.utils.metadata.orc_column_statistics_pb2 as cs_pb2
+
+def _make_empty_df(filepath_or_buffer, columns):
+    orc_file = orc.ORCFile(filepath_or_buffer)
+    schema = orc_file.schema
+    col_names = schema.names if columns is None else columns
+    return cudf.DataFrame(
+        {
+            col_name: cudf.core.column.column_empty(
+                row_count=0,
+                dtype=schema.field(col_name).type.to_pandas_dtype(),
+            )
+            for col_name in col_names
+        }
+    )
 
 
 def _parse_column_statistics(cs, column_statistics_blob):
@@ -19,10 +35,10 @@ def _parse_column_statistics(cs, column_statistics_blob):
     cs.ParseFromString(column_statistics_blob)
 
     # Load from parsed stats blob into stats to return
-    if not cs.HasField("numberOfValues") or not cs.HasField("hasNull"):
-        return None
-    column_statistics["number_of_values"] = cs.numberOfValues
-    column_statistics["has_null"] = cs.hasNull
+    if cs.HasField("numberOfValues"):
+        column_statistics["number_of_values"] = cs.numberOfValues
+    if cs.HasField("hasNull"):
+        column_statistics["has_null"] = cs.hasNull
     if cs.HasField("intStatistics"):
         column_statistics["minimum"] = cs.intStatistics.minimum
         column_statistics["maximum"] = cs.intStatistics.maximum
@@ -47,11 +63,11 @@ def _parse_column_statistics(cs, column_statistics_blob):
         column_statistics["sum"] = cs.decimalStatistics.sum
     elif cs.HasField("dateStatistics"):
         column_statistics["minimum"] = datetime.datetime.fromtimestamp(
-            datetime.timedelta(cs.dateStatistics.minimumUtc).total_seconds(),
+            datetime.timedelta(cs.dateStatistics.minimum).total_seconds(),
             datetime.timezone.utc,
         )
         column_statistics["maximum"] = datetime.datetime.fromtimestamp(
-            datetime.timedelta(cs.dateStatistics.maximumUtc).total_seconds(),
+            datetime.timedelta(cs.dateStatistics.maximum).total_seconds(),
             datetime.timezone.utc,
         )
     elif cs.HasField("timestampStatistics"):
@@ -90,9 +106,17 @@ def read_orc_metadata(path):
 
 @ioutils.doc_read_orc_statistics()
 def read_orc_statistics(
-    filepath_or_buffer, **kwargs,
+    filepath_or_buffer, columns=None, **kwargs,
 ):
     """{docstring}"""
+
+    is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
+        path_or_data=filepath_or_buffer, **kwargs,
+    )
+    if not is_single_filepath_or_buffer:
+        raise NotImplementedError(
+            "`read_orc_statistics` does not support reading multiple files"
+        )
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
         path_or_data=filepath_or_buffer, compression=None, **kwargs
@@ -101,32 +125,92 @@ def read_orc_statistics(
         ValueError("URL content-encoding decompression is not supported")
 
     # Read in statistics and unpack
-    statistics = libcudf.orc.read_orc_statistics(filepath_or_buffer)
-    if not statistics:
-        return None
-    (column_names, raw_file_statistics, *raw_stripes_statistics,) = statistics
+    (
+        column_names,
+        raw_file_statistics,
+        raw_stripes_statistics,
+    ) = liborc.read_raw_orc_statistics(filepath_or_buffer)
+
+    # Parse column names
+    column_names = [
+        column_name.decode("utf-8") for column_name in column_names
+    ]
 
     # Parse statistics
     cs = cs_pb2.ColumnStatistics()
-    file_statistics = {}
+
+    file_statistics = {
+        column_names[i]: _parse_column_statistics(cs, raw_file_stats)
+        for i, raw_file_stats in enumerate(raw_file_statistics)
+        if columns is None or column_names[i] in columns
+    }
+    if any(
+        not parsed_statistics for parsed_statistics in file_statistics.values()
+    ):
+        return None
+
     stripes_statistics = []
-    for i, raw_file_stats in enumerate(raw_file_statistics):
-        parsed_statistics = _parse_column_statistics(cs, raw_file_stats)
-        if not parsed_statistics:
-            return None
-        file_statistics[column_names[i].decode("utf-8")] = parsed_statistics
     for raw_stripe_statistics in raw_stripes_statistics:
-        stripe_statistics = {}
-        for i, raw_file_stats in enumerate(raw_stripe_statistics):
-            parsed_statistics = _parse_column_statistics(cs, raw_file_stats)
-            if not parsed_statistics:
-                return None
-            stripe_statistics[
-                column_names[i].decode("utf-8")
-            ] = parsed_statistics
-        stripes_statistics.append(stripe_statistics)
+        stripe_statistics = {
+            column_names[i]: _parse_column_statistics(cs, raw_file_stats)
+            for i, raw_file_stats in enumerate(raw_stripe_statistics)
+            if columns is None or column_names[i] in columns
+        }
+        if any(
+            not parsed_statistics
+            for parsed_statistics in stripe_statistics.values()
+        ):
+            return None
+        else:
+            stripes_statistics.append(stripe_statistics)
 
     return file_statistics, stripes_statistics
+
+
+def _filter_stripes(
+    filters, filepath_or_buffer, stripes=None, skip_rows=None, num_rows=None
+):
+    # Prepare filters
+    filters = ioutils._prepare_filters(filters)
+
+    # Get columns relevant to filtering
+    columns_in_predicate = [
+        col for conjunction in filters for (col, op, val) in conjunction
+    ]
+
+    # Read and parse file-level and stripe-level statistics
+    file_statistics, stripes_statistics = read_orc_statistics(
+        filepath_or_buffer, columns_in_predicate
+    )
+
+    # Filter using file-level statistics
+    if not ioutils._apply_filters(filters, file_statistics):
+        return []
+
+    # Filter using stripe-level statistics
+    selected_stripes = []
+    num_rows_scanned = 0
+    for i, stripe_statistics in enumerate(stripes_statistics):
+        num_rows_before_stripe = num_rows_scanned
+        num_rows_scanned += next(iter(stripe_statistics.values()))[
+            "number_of_values"
+        ]
+        if stripes is not None and i not in stripes:
+            continue
+        if skip_rows is not None and num_rows_scanned <= skip_rows:
+            continue
+        else:
+            skip_rows = 0
+        if (
+            skip_rows is not None
+            and num_rows is not None
+            and num_rows_before_stripe >= skip_rows + num_rows
+        ):
+            continue
+        if ioutils._apply_filters(filters, stripe_statistics):
+            selected_stripes.append(i)
+
+    return selected_stripes
 
 
 @ioutils.doc_read_orc()
@@ -134,12 +218,11 @@ def read_orc(
     filepath_or_buffer,
     engine="cudf",
     columns=None,
+    filters=None,
     stripes=None,
     skiprows=None,
     num_rows=None,
     use_index=True,
-    decimals_as_float=True,
-    force_decimal_scale=None,
     timestamp_type=None,
     **kwargs,
 ):
@@ -147,23 +230,40 @@ def read_orc(
 
     from cudf import DataFrame
 
+    is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
+        path_or_data=filepath_or_buffer, **kwargs,
+    )
+    if not is_single_filepath_or_buffer:
+        raise NotImplementedError(
+            "`read_orc` does not yet support reading multiple files"
+        )
+
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
         path_or_data=filepath_or_buffer, compression=None, **kwargs
     )
     if compression is not None:
         ValueError("URL content-encoding decompression is not supported")
 
+    if filters is not None:
+        selected_stripes = _filter_stripes(
+            filters, filepath_or_buffer, stripes, skiprows, num_rows
+        )
+
+        # Return empty if everything was filtered
+        if len(selected_stripes) == 0:
+            return _make_empty_df(filepath_or_buffer, columns)
+        else:
+            stripes = selected_stripes
+
     if engine == "cudf":
         df = DataFrame._from_table(
-            libcudf.orc.read_orc(
+            liborc.read_orc(
                 filepath_or_buffer,
                 columns,
                 stripes,
                 skiprows,
                 num_rows,
                 use_index,
-                decimals_as_float,
-                force_decimal_scale,
                 timestamp_type,
             )
         )
@@ -193,12 +293,38 @@ def read_orc(
 def to_orc(df, fname, compression=None, enable_statistics=True, **kwargs):
     """{docstring}"""
 
+    for col in df._data.columns:
+        if isinstance(col, cudf.core.column.ListColumn):
+            raise NotImplementedError(
+                "Writing to ORC format is not yet supported with "
+                "list columns."
+            )
+        elif isinstance(col, cudf.core.column.StructColumn):
+            raise NotImplementedError(
+                "Writing to ORC format is not yet supported with "
+                "Struct columns."
+            )
+        elif isinstance(col, cudf.core.column.CategoricalColumn):
+            raise NotImplementedError(
+                "Writing to ORC format is not yet supported with "
+                "Categorical columns."
+            )
+
+    if isinstance(df.index, cudf.CategoricalIndex):
+        raise NotImplementedError(
+            "Writing to ORC format is not yet supported with "
+            "Categorical columns."
+        )
+
     path_or_buf = ioutils.get_writer_filepath_or_buffer(
         path_or_data=fname, mode="wb", **kwargs
     )
     if ioutils.is_fsspec_open_file(path_or_buf):
         with path_or_buf as file_obj:
             file_obj = ioutils.get_IOBase_writer(file_obj)
-            libcudf.orc.write_orc(df, file_obj, compression, enable_statistics)
+            liborc.write_orc(df, file_obj, compression, enable_statistics)
     else:
-        libcudf.orc.write_orc(df, path_or_buf, compression, enable_statistics)
+        liborc.write_orc(df, path_or_buf, compression, enable_statistics)
+
+
+ORCWriter = liborc.ORCWriter

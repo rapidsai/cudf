@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,12 +30,12 @@ enum class side : bool { LEFT, RIGHT };
  * @brief Tagged index type: `thrust::get<0>` indicates left/right side,
  * `thrust::get<1>` indicates the row index
  */
-using index_type = thrust::tuple<side, cudf::size_type>;
+using index_type = thrust::pair<side, cudf::size_type>;
 
 /**
  * @brief Vector of `index_type` values.
  */
-using index_vector = rmm::device_vector<index_type>;
+using index_vector = rmm::device_uvector<index_type>;
 
 /**
  * @brief tagged_element_relational_comparator uses element_relational_comparator to provide
@@ -67,7 +67,6 @@ using index_vector = rmm::device_vector<index_type>;
  * As a result, a special comparison logic is necessary whereby the index is "tagged" with side
  * information and consequently comparator functors (predicates) must operate on these tagged
  * indices rather than on raw indices.
- *
  */
 template <bool has_nulls = true>
 struct tagged_element_relational_comparator {
@@ -81,11 +80,11 @@ struct tagged_element_relational_comparator {
   __device__ weak_ordering compare(index_type lhs_tagged_index, index_type rhs_tagged_index) const
     noexcept
   {
-    side l_side = thrust::get<0>(lhs_tagged_index);
-    side r_side = thrust::get<0>(rhs_tagged_index);
+    side const l_side = thrust::get<0>(lhs_tagged_index);
+    side const r_side = thrust::get<0>(rhs_tagged_index);
 
-    cudf::size_type l_indx = thrust::get<1>(lhs_tagged_index);
-    cudf::size_type r_indx = thrust::get<1>(rhs_tagged_index);
+    cudf::size_type const l_indx = thrust::get<1>(lhs_tagged_index);
+    cudf::size_type const r_indx = thrust::get<1>(rhs_tagged_index);
 
     column_device_view const* ptr_left_dview{l_side == side::LEFT ? &lhs : &rhs};
 

@@ -19,14 +19,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class Cuda {
-  // Defined in driver_types.h in cuda library.
-  static final int CPU_DEVICE_ID = -1;
-  private static final Logger log = LoggerFactory.getLogger(Cuda.class);
-  private static Boolean isCompat = null;
-
+  // This needs to happen first before calling any native methods.
   static {
     NativeDepsLoader.loadNativeDeps();
   }
+
+  // Defined in driver_types.h in cuda library.
+  static final int CPU_DEVICE_ID = -1;
+  static final long CUDA_STREAM_DEFAULT = 0;
+  static final long CUDA_STREAM_LEGACY = 1;
+  static final long CUDA_STREAM_PER_THREAD = 2;
+  private final static long DEFAULT_STREAM_ID = isPtdsEnabled() ? CUDA_STREAM_PER_THREAD : CUDA_STREAM_LEGACY;
+  private static final Logger log = LoggerFactory.getLogger(Cuda.class);
+  private static Boolean isCompat = null;
 
   private static class StreamCleaner extends MemoryCleaner.Cleaner {
     private long stream;
@@ -36,10 +41,12 @@ public class Cuda {
     }
 
     @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       long origAddress = stream;
-      if (stream != 0) {
+      if (stream != CUDA_STREAM_DEFAULT &&
+          stream != CUDA_STREAM_LEGACY &&
+          stream != CUDA_STREAM_PER_THREAD) {
         destroyStream(stream);
         stream = 0;
         neededCleanup = true;
@@ -89,7 +96,7 @@ public class Cuda {
     }
 
     public long getStream() {
-      return cleaner == null ? 0 : cleaner.stream;
+      return cleaner == null ? DEFAULT_STREAM_ID : cleaner.stream;
     }
 
     /**
@@ -107,7 +114,7 @@ public class Cuda {
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
       if (cleaner != null) {
         cleaner.delRef();
       }
@@ -132,7 +139,7 @@ public class Cuda {
     }
 
     @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       long origAddress = event;
       if (event != 0) {
@@ -206,7 +213,7 @@ public class Cuda {
     }
 
     /**
-     * Captures the contents of stream 0 at the time of this call.
+     * Captures the contents of the default stream at the time of this call.
      */
     public void record() {
       record(DEFAULT_STREAM);
@@ -226,7 +233,7 @@ public class Cuda {
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
       cleaner.delRef();
       if (closed) {
         cleaner.logRefCountDebug("double free " + this);

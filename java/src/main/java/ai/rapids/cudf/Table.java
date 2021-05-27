@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,7 +18,16 @@
 
 package ai.rapids.cudf;
 
+import ai.rapids.cudf.HostColumnVector.BasicType;
+import ai.rapids.cudf.HostColumnVector.DataType;
+import ai.rapids.cudf.HostColumnVector.ListType;
+import ai.rapids.cudf.HostColumnVector.StructData;
+import ai.rapids.cudf.HostColumnVector.StructType;
+
 import java.io.File;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -109,6 +118,11 @@ public final class Table implements AutoCloseable {
     return columns;
   }
 
+  /** Return the native table view handle for this table */
+  long getNativeView() {
+    return nativeHandle;
+  }
+
   /**
    * Return the {@link ColumnVector} at the specified index. If you want to keep a reference to
    * the column around past the life time of the table, you will need to increment the reference
@@ -168,8 +182,12 @@ public final class Table implements AutoCloseable {
   
   private static native ContiguousTable[] contiguousSplit(long inputTable, int[] indices);
 
+  private static native long[] partition(long inputTable, long partitionView,
+      int numberOfPartitions, int[] outputOffsets);
+
   private static native long[] hashPartition(long inputTable,
                                              int[] columnsToHash,
+                                             int hashTypeId,
                                              int numberOfPartitions,
                                              int[] outputOffsets) throws CudfException;
 
@@ -211,52 +229,72 @@ public final class Table implements AutoCloseable {
 
   /**
    * Read in Parquet formatted data.
-   * @param filterColumnNames name of the columns to read, or an empty array if we want to read
-   *                          all of them
-   * @param filePath          the path of the file to read, or null if no path should be read.
-   * @param address           the address of the buffer to read from or 0 if we should not.
-   * @param length            the length of the buffer to read from.
-   * @param timeUnit          return type of TimeStamp in units
+   * @param filterColumnNames  name of the columns to read, or an empty array if we want to read
+   *                           all of them
+   * @param filePath           the path of the file to read, or null if no path should be read.
+   * @param address            the address of the buffer to read from or 0 if we should not.
+   * @param length             the length of the buffer to read from.
+   * @param timeUnit           return type of TimeStamp in units
+   * @param strictDecimalTypes whether strictly reading all decimal columns as fixed-point decimal type
    */
   private static native long[] readParquet(String[] filterColumnNames, String filePath,
-                                           long address, long length, int timeUnit) throws CudfException;
+                                           long address, long length, int timeUnit,
+                                           boolean strictDecimalTypes) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a file.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
+   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
    * @param statsFreq       native statistics frequency ID
+   * @param isInt96         true if timestamp type is int96
+   * @param precisions      precision list containing all the precisions of the decimal types in
+   *                        the columns
    * @param filename        local output path
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetFileBegin(String[] columnNames,
+                                                   int numChildren,
+                                                   int[] flatNumChildren,
                                                    boolean[] nullable,
                                                    String[] metadataKeys,
                                                    String[] metadataValues,
                                                    int compression,
                                                    int statsFreq,
+                                                   boolean[] isInt96,
+                                                   int[] precisions,
                                                    String filename) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a buffer.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
+   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
    * @param statsFreq       native statistics frequency ID
+   * @param isInt96         true if timestamp type is int96
+   * @param precisions      precision list containing all the precisions of the decimal types in
+   *                        the columns
    * @param consumer        consumer of host buffers produced.
    * @return a handle that is used in later calls to writeParquetChunk and writeParquetEnd.
    */
   private static native long writeParquetBufferBegin(String[] columnNames,
+                                                     int numChildren,
+                                                     int[] flatNumChildren,
                                                      boolean[] nullable,
                                                      String[] metadataKeys,
                                                      String[] metadataValues,
                                                      int compression,
                                                      int statsFreq,
+                                                     boolean[] isInt96,
+                                                     int[] precisions,
                                                      HostBufferConsumer consumer) throws CudfException;
 
   /**
@@ -422,7 +460,9 @@ public final class Table implements AutoCloseable {
   private static native void readArrowIPCEnd(long handle);
 
   private static native long[] groupByAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
-                                                long[] aggInstances, boolean ignoreNullKeys) throws CudfException;
+                                                long[] aggInstances, boolean ignoreNullKeys,
+                                                boolean keySorted, boolean[] keysDescending,
+                                                boolean[] keysNullSmallest) throws CudfException;
 
   private static native long[] rollingWindowAggregate(
       long inputTable,
@@ -435,9 +475,13 @@ public final class Table implements AutoCloseable {
       int[] following,
       boolean ignoreNullKeys) throws CudfException;
 
-  private static native long[] timeRangeRollingWindowAggregate(long inputTable, int[] keyIndices, int[] timestampIndices, boolean[] isTimesampAscending,
-                                                               int[] aggColumnsIndices, long[] aggInstances, int[] minPeriods,
-                                                               int[] preceding, int[] following, boolean ignoreNullKeys) throws CudfException;
+  private static native long[] rangeRollingWindowAggregate(long inputTable, int[] keyIndices, int[] orderByIndices, boolean[] isOrderByAscending,
+                                                           int[] aggColumnsIndices, long[] aggInstances, int[] minPeriods,
+                                                           long[] preceding, long[] following, boolean[] unboundedPreceding, boolean[] unboundedFollowing,
+                                                           boolean ignoreNullKeys) throws CudfException;
+
+  private static native long sortOrder(long inputTable, long[] sortKeys, boolean[] isDescending,
+      boolean[] areNullsSmallest) throws CudfException;
 
   private static native long[] orderBy(long inputTable, long[] sortKeys, boolean[] isDescending,
                                        boolean[] areNullsSmallest) throws CudfException;
@@ -448,17 +492,32 @@ public final class Table implements AutoCloseable {
   private static native long[] leftJoin(long leftTable, int[] leftJoinCols, long rightTable,
                                         int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
+  private static native long[] leftJoinGatherMaps(long leftKeys, long rightKeys,
+                                                  boolean compareNullsEqual) throws CudfException;
+
   private static native long[] innerJoin(long leftTable, int[] leftJoinCols, long rightTable,
                                          int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
+
+  private static native long[] innerJoinGatherMaps(long leftKeys, long rightKeys,
+                                                   boolean compareNullsEqual) throws CudfException;
 
   private static native long[] fullJoin(long leftTable, int[] leftJoinCols, long rightTable,
                                          int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
+  private static native long[] fullJoinGatherMaps(long leftKeys, long rightKeys,
+                                                  boolean compareNullsEqual) throws CudfException;
+
   private static native long[] leftSemiJoin(long leftTable, int[] leftJoinCols, long rightTable,
       int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
 
+  private static native long[] leftSemiJoinGatherMap(long leftKeys, long rightKeys,
+                                                     boolean compareNullsEqual) throws CudfException;
+
   private static native long[] leftAntiJoin(long leftTable, int[] leftJoinCols, long rightTable,
       int[] rightJoinCols, boolean compareNullsEqual) throws CudfException;
+
+  private static native long[] leftAntiJoinGatherMap(long leftKeys, long rightKeys,
+                                                     boolean compareNullsEqual) throws CudfException;
 
   private static native long[] crossJoin(long leftTable, long rightTable) throws CudfException;
 
@@ -480,7 +539,26 @@ public final class Table implements AutoCloseable {
                                                  long columnHandle,
                                                  boolean checkCount);
 
-  private native long createCudfTableView(long[] nativeColumnViewHandles);
+  private static native long rowBitCount(long tableHandle) throws CudfException;
+
+  private static native long[] explode(long tableHandle, int index);
+
+  private static native long[] explodePosition(long tableHandle, int index);
+
+  private static native long[] explodeOuter(long tableHandle, int index);
+
+  private static native long[] explodeOuterPosition(long tableHandle, int index);
+
+  private static native long createCudfTableView(long[] nativeColumnViewHandles);
+
+  private static native long[] columnViewsFromPacked(ByteBuffer metadata, long dataAddress);
+
+  private static native ContiguousTable[] contiguousSplitGroups(long inputTable,
+                                                                int[] keyIndices,
+                                                                boolean ignoreNullKeys,
+                                                                boolean keySorted,
+                                                                boolean[] keysDescending,
+                                                                boolean[] keysNullSmallest);
 
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
@@ -607,7 +685,8 @@ public final class Table implements AutoCloseable {
    */
   public static Table readParquet(ParquetOptions opts, File path) {
     return new Table(readParquet(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId()));
+        path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId(),
+        opts.isStrictDecimalType()));
   }
 
   /**
@@ -667,7 +746,8 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(readParquet(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId()));
+        null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId(),
+        opts.isStrictDecimalType()));
   }
 
   /**
@@ -756,25 +836,45 @@ public final class Table implements AutoCloseable {
     HostBufferConsumer consumer;
 
     private ParquetTableWriter(ParquetWriterOptions options, File outputFile) {
+      String[] columnNames = options.getFlatColumnNames();
+      boolean[] columnNullabilities = options.getFlatIsNullable();
+      boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
+      int[] precisions = options.getFlatPrecision();
+      int[] flatNumChildren = options.getFlatNumChildren();
+
       this.consumer = null;
-      this.handle = writeParquetFileBegin(options.getColumnNames(),
-          options.getColumnNullability(),
+      this.handle = writeParquetFileBegin(columnNames,
+          options.getTopLevelChildren(),
+          flatNumChildren,
+          columnNullabilities,
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
+          timeInt96Values,
+          precisions,
           outputFile.getAbsolutePath());
     }
 
     private ParquetTableWriter(ParquetWriterOptions options, HostBufferConsumer consumer) {
-      this.handle = writeParquetBufferBegin(options.getColumnNames(),
-          options.getColumnNullability(),
+      String[] columnNames = options.getFlatColumnNames();
+      boolean[] columnNullabilities = options.getFlatIsNullable();
+      boolean[] timeInt96Values = options.getFlatIsTimeTypeInt96();
+      int[] precisions = options.getFlatPrecision();
+      int[] flatNumChildren = options.getFlatNumChildren();
+
+      this.consumer = consumer;
+      this.handle = writeParquetBufferBegin(columnNames,
+          options.getTopLevelChildren(),
+          flatNumChildren,
+          columnNullabilities,
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
           options.getStatisticsFrequency().nativeId,
+          timeInt96Values,
+          precisions,
           consumer);
-      this.consumer = consumer;
     }
 
     @Override
@@ -818,17 +918,6 @@ public final class Table implements AutoCloseable {
   public static TableWriter writeParquetChunked(ParquetWriterOptions options,
                                                 HostBufferConsumer consumer) {
     return new ParquetTableWriter(options, consumer);
-  }
-
-  /**
-   * Writes this table to a Parquet file on the host
-   *
-   * @param outputFile file to write the table to
-   * @deprecated please use writeParquetChunked instead
-   */
-  @Deprecated
-  public void writeParquet(File outputFile) {
-    writeParquet(ParquetWriterOptions.DEFAULT, outputFile);
   }
 
   /**
@@ -1190,7 +1279,7 @@ public final class Table implements AutoCloseable {
    * @return the new Table.
    * @throws CudfException on any error.
    */
-  public Table repeat(ColumnVector counts) {
+  public Table repeat(ColumnView counts) {
     return repeat(counts, true);
   }
 
@@ -1205,12 +1294,31 @@ public final class Table implements AutoCloseable {
    * @return the new Table.
    * @throws CudfException on any error.
    */
-  public Table repeat(ColumnVector counts, boolean checkCount) {
+  public Table repeat(ColumnView counts, boolean checkCount) {
     return new Table(repeatColumnCount(this.nativeHandle, counts.getNativeView(), checkCount));
   }
 
   /**
-   * Given a sorted table return the lower bound.
+   * Partition this table using the mapping in partitionMap. partitionMap must be an integer
+   * column. The number of rows in partitionMap must be the same as this table.  Each row
+   * in the map will indicate which partition the rows in the table belong to.
+   * @param partitionMap the partitions for each row.
+   * @param numberOfPartitions number of partitions
+   * @return {@link PartitionedTable} Table that exposes a limited functionality of the
+   * {@link Table} class
+   */
+  public PartitionedTable partition(ColumnView partitionMap, int numberOfPartitions) {
+    int[] partitionOffsets = new int[numberOfPartitions];
+    return new PartitionedTable(new Table(partition(
+        getNativeView(),
+        partitionMap.getNativeView(),
+        partitionOffsets.length,
+        partitionOffsets)), partitionOffsets);
+  }
+
+  /**
+   * Find smallest indices in a sorted table where values should be inserted to maintain order.
+   * <pre>
    * Example:
    *
    *  Single column:
@@ -1228,14 +1336,11 @@ public final class Table implements AutoCloseable {
    *                      { .7 },
    *                      { 61 }}
    *   result          = {  3 }
-   * NaNs in column values produce incorrect results.
+   * </pre>
    * The input table and the values table need to be non-empty (row count > 0)
-   * The column data types of the tables' have to match in order.
-   * Strings and String categories do not work for this method. If the input table is
-   * unsorted the results are wrong. Types of columns can be of mixed data types.
-   * @param areNullsSmallest true if nulls are assumed smallest
-   * @param valueTable the table of values that need to be inserted
-   * @param descFlags indicates the ordering of the column(s), true if descending
+   * @param areNullsSmallest per column, true if nulls are assumed smallest
+   * @param valueTable the table of values to find insertion locations for
+   * @param descFlags per column indicates the ordering, true if descending.
    * @return ColumnVector with lower bound indices for all rows in valueTable
    */
   public ColumnVector lowerBound(boolean[] areNullsSmallest,
@@ -1246,7 +1351,34 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Find smallest indices in a sorted table where values should be inserted to maintain order.
+   * This is a convenience method. It pulls out the columns indicated by the args and sets up the
+   * ordering properly to call `lowerBound`.
+   * @param valueTable the table of values to find insertion locations for
+   * @param args the sort order used to sort this table.
+   * @return ColumnVector with lower bound indices for all rows in valueTable
+   */
+  public ColumnVector lowerBound(Table valueTable, OrderByArg... args) {
+    boolean[] areNullsSmallest = new boolean[args.length];
+    boolean[] descFlags = new boolean[args.length];
+    ColumnVector[] inputColumns = new ColumnVector[args.length];
+    ColumnVector[] searchColumns = new ColumnVector[args.length];
+    for (int i = 0; i < args.length; i++) {
+      areNullsSmallest[i] = args[i].isNullSmallest;
+      descFlags[i] = args[i].isDescending;
+      inputColumns[i] = columns[args[i].index];
+      searchColumns[i] = valueTable.columns[args[i].index];
+    }
+    try (Table input = new Table(inputColumns);
+         Table search = new Table(searchColumns)) {
+      return input.lowerBound(areNullsSmallest, search, descFlags);
+    }
+  }
+
+  /**
+   * Find largest indices in a sorted table where values should be inserted to maintain order.
    * Given a sorted table return the upper bound.
+   * <pre>
    * Example:
    *
    *  Single column:
@@ -1264,14 +1396,11 @@ public final class Table implements AutoCloseable {
    *                      { .7 },
    *                      { 61 }}
    *   result          = {  5 }
-   * NaNs in column values produce incorrect results.
+   * </pre>
    * The input table and the values table need to be non-empty (row count > 0)
-   * The column data types of the tables' have to match in order.
-   * Strings and String categories do not work for this method. If the input table is
-   * unsorted the results are wrong. Types of columns can be of mixed data types.
-   * @param areNullsSmallest true if nulls are assumed smallest
-   * @param valueTable the table of values that need to be inserted
-   * @param descFlags indicates the ordering of the column(s), true if descending
+   * @param areNullsSmallest per column, true if nulls are assumed smallest
+   * @param valueTable the table of values to find insertion locations for
+   * @param descFlags per column indicates the ordering, true if descending.
    * @return ColumnVector with upper bound indices for all rows in valueTable
    */
   public ColumnVector upperBound(boolean[] areNullsSmallest,
@@ -1281,11 +1410,36 @@ public final class Table implements AutoCloseable {
       descFlags, areNullsSmallest, true));
   }
 
+  /**
+   * Find largest indices in a sorted table where values should be inserted to maintain order.
+   * This is a convenience method. It pulls out the columns indicated by the args and sets up the
+   * ordering properly to call `upperBound`.
+   * @param valueTable the table of values to find insertion locations for
+   * @param args the sort order used to sort this table.
+   * @return ColumnVector with upper bound indices for all rows in valueTable
+   */
+  public ColumnVector upperBound(Table valueTable, OrderByArg... args) {
+    boolean[] areNullsSmallest = new boolean[args.length];
+    boolean[] descFlags = new boolean[args.length];
+    ColumnVector[] inputColumns = new ColumnVector[args.length];
+    ColumnVector[] searchColumns = new ColumnVector[args.length];
+    for (int i = 0; i < args.length; i++) {
+      areNullsSmallest[i] = args[i].isNullSmallest;
+      descFlags[i] = args[i].isDescending;
+      inputColumns[i] = columns[args[i].index];
+      searchColumns[i] = valueTable.columns[args[i].index];
+    }
+    try (Table input = new Table(inputColumns);
+         Table search = new Table(searchColumns)) {
+      return input.upperBound(areNullsSmallest, search, descFlags);
+    }
+  }
+
   private void assertForBounds(Table valueTable) {
     assert this.getRowCount() != 0 : "Input table cannot be empty";
     assert valueTable.getRowCount() != 0 : "Value table cannot be empty";
     for (int i = 0; i < Math.min(columns.length, valueTable.columns.length); i++) {
-      assert valueTable.columns[i].getType() == this.getColumn(i).getType() :
+      assert valueTable.columns[i].getType().equals(this.getColumn(i).getType()) :
           "Input and values tables' data types do not match";
     }
   }
@@ -1306,16 +1460,38 @@ public final class Table implements AutoCloseable {
   /////////////////////////////////////////////////////////////////////////////
 
   /**
+   * Get back a gather map that can be used to sort the data. This allows you to sort by data
+   * that does not appear in the final result and not pay the cost of gathering the data that
+   * is only needed for sorting.
+   * @param args what order to sort the data by
+   * @return a gather map
+   */
+  public ColumnVector sortOrder(OrderByArg... args) {
+    long[] sortKeys = new long[args.length];
+    boolean[] isDescending = new boolean[args.length];
+    boolean[] areNullsSmallest = new boolean[args.length];
+    for (int i = 0; i < args.length; i++) {
+      int index = args[i].index;
+      assert (index >= 0 && index < columns.length) :
+          "index is out of range 0 <= " + index + " < " + columns.length;
+      isDescending[i] = args[i].isDescending;
+      areNullsSmallest[i] = args[i].isNullSmallest;
+      sortKeys[i] = columns[index].getNativeView();
+    }
+
+    return new ColumnVector(sortOrder(nativeHandle, sortKeys, isDescending, areNullsSmallest));
+  }
+
+  /**
    * Orders the table using the sortkeys returning a new allocated table. The caller is
    * responsible for cleaning up
    * the {@link ColumnVector} returned as part of the output {@link Table}
    * <p>
-   * Example usage: orderBy(true, Table.asc(0), Table.desc(3)...);
-   * @param args             - Suppliers to initialize sortKeys.
+   * Example usage: orderBy(true, OrderByArg.asc(0), OrderByArg.desc(3)...);
+   * @param args Suppliers to initialize sortKeys.
    * @return Sorted Table
    */
   public Table orderBy(OrderByArg... args) {
-    assert args.length <= columns.length;
     long[] sortKeys = new long[args.length];
     boolean[] isDescending = new boolean[args.length];
     boolean[] areNullsSmallest = new boolean[args.length];
@@ -1340,13 +1516,13 @@ public final class Table implements AutoCloseable {
    *             initially.
    * @return a combined sorted table.
    */
-  public static Table merge(List<Table> tables, OrderByArg... args) {
-    assert !tables.isEmpty();
-    long[] tableHandles = new long[tables.size()];
-    Table first = tables.get(0);
+  public static Table merge(Table[] tables, OrderByArg... args) {
+    assert tables.length > 0;
+    long[] tableHandles = new long[tables.length];
+    Table first = tables[0];
     assert args.length <= first.columns.length;
-    for (int i = 0; i < tables.size(); i++) {
-      Table t = tables.get(i);
+    for (int i = 0; i < tables.length; i++) {
+      Table t = tables[i];
       assert t != null;
       assert t.columns.length == first.columns.length;
       tableHandles[i] = t.nativeHandle;
@@ -1357,7 +1533,7 @@ public final class Table implements AutoCloseable {
     for (int i = 0; i < args.length; i++) {
       int index = args[i].index;
       assert (index >= 0 && index < first.columns.length) :
-              "index is out of range 0 <= " + index + " < " + first.columns.length;
+          "index is out of range 0 <= " + index + " < " + first.columns.length;
       isDescending[i] = args[i].isDescending;
       areNullsSmallest[i] = args[i].isNullSmallest;
       sortKeyIndexes[i] = index;
@@ -1366,123 +1542,17 @@ public final class Table implements AutoCloseable {
     return new Table(merge(tableHandles, sortKeyIndexes, isDescending, areNullsSmallest));
   }
 
-  public static OrderByArg asc(final int index) {
-    return new OrderByArg(index, false, false);
-  }
-
-  public static OrderByArg desc(final int index) {
-    return new OrderByArg(index, true, false);
-  }
-
-  public static OrderByArg asc(final int index, final boolean isNullSmallest) {
-    return new OrderByArg(index, false, isNullSmallest);
-  }
-
-  public static OrderByArg desc(final int index, final boolean isNullSmallest) {
-    return new OrderByArg(index, true, isNullSmallest);
-  }
-
   /**
-   * Returns count aggregation with only valid values.
-   * Null values are skipped.
-   * @param index Column on which aggregation is to be performed
-   * @return count aggregation of column `index` with null values skipped.
-   * @deprecated please use Aggregation.count.onColumn
+   * Merge multiple already sorted tables keeping the sort order the same.
+   * This is a more efficient version of concatenate followed by orderBy, but requires that
+   * the input already be sorted.
+   * @param tables the tables that should be merged.
+   * @param args the ordering of the tables.  Should match how they were sorted
+   *             initially.
+   * @return a combined sorted table.
    */
-  @Deprecated
-  public static Aggregate count(int index) {
-    return Aggregate.count(index, false);
-  }
-
-  /**
-   * Returns count aggregation
-   * @param index Column on which aggregation is to be performed.
-   * @param include_nulls Include nulls if set to true
-   * @return count aggregation of column `index`
-   * @deprecated please use Aggregation.count.onColumn
-   */
-  @Deprecated
-  public static Aggregate count(int index, boolean include_nulls) {
-    return Aggregate.count(index, include_nulls);
-  }
-
-  /**
-   * Returns max aggregation. Null values are skipped.
-   * @param index Column on which max aggregation is to be performed.
-   * @return max aggregation of column `index`
-   * @deprecated please use Aggregation.max.onColumn
-   */
-  @Deprecated
-  public static Aggregate max(int index) {
-    return Aggregate.max(index);
-  }
-
-  /**
-   * Returns min aggregation. Null values are skipped.
-   * @param index Column on which min aggregation is to be performed.
-   * @return min aggregation of column `index`
-   * @deprecated please use Aggregation.min.onColumn
-   */
-  @Deprecated
-  public static Aggregate min(int index) {
-    return Aggregate.min(index);
-  }
-
-  /**
-   * Returns sum aggregation. Null values are skipped.
-   * @param index Column on which sum aggregation is to be performed.
-   * @return sum aggregation of column `index`
-   * @deprecated please use Aggregation.sum.onColumn
-   */
-  @Deprecated
-  public static Aggregate sum(int index) {
-    return Aggregate.sum(index);
-  }
-
-  /**
-   * Returns mean aggregation. Null values are skipped.
-   * @param index Column on which mean aggregation is to be performed.
-   * @return mean aggregation of column `index`
-   * @deprecated please use Aggregation.mean.onColumn
-   */
-  @Deprecated
-  public static Aggregate mean(int index) {
-    return Aggregate.mean(index);
-  }
-
-  /**
-   * Returns median aggregation. Null values are skipped.
-   * @param index Column on which median aggregation is to be performed.
-   * @return median aggregation of column `index`
-   * @deprecated please use Aggregation.median.onColumn
-   */
-  @Deprecated
-  public static Aggregate median(int index) {
-    return Aggregate.median(index);
-  }
-
-  /**
-   * Returns first aggregation.
-   * @param index Column on which first aggregation is to be performed.
-   * @param includeNulls Specifies whether null values are included in the aggregate operation.
-   * @return first aggregation of column `index`
-   * @deprecated please use Aggregation.nth.onColumn
-   */
-  @Deprecated
-  public static Aggregate first(int index, boolean includeNulls) {
-    return Aggregate.first(index, includeNulls);
-  }
-
-  /**
-   * Returns last aggregation.
-   * @param index Column on which last aggregation is to be performed.
-   * @param includeNulls Specifies whether null values are included in the aggregate operation.
-   * @return last aggregation of column `index`
-   * @deprecated please use Aggregation.nth.onColumn
-   */
-  @Deprecated
-  public static Aggregate last(int index, boolean includeNulls) {
-    return Aggregate.last(index, includeNulls);
+  public static Table merge(List<Table> tables, OrderByArg... args) {
+    return merge(tables.toArray(new Table[tables.size()]), args);
   }
 
   /**
@@ -1490,23 +1560,27 @@ public final class Table implements AutoCloseable {
    * @param groupByOptions Options provided in the builder
    * @param indices columns to be considered for groupBy
    */
-  public AggregateOperation groupBy(GroupByOptions groupByOptions, int... indices) {
+  public GroupByOperation groupBy(GroupByOptions groupByOptions, int... indices) {
     return groupByInternal(groupByOptions, indices);
   }
 
   /**
    * Returns aggregate operations grouped by columns provided in indices
-   * null is considered as key while grouping.
-   * @param indices columnns to be considered for groupBy
+   * with default options as below:
+   *  - null is considered as key while grouping.
+   *  - keys are not presorted.
+   *  - empty key order array.
+   *  - empty null order array.
+   * @param indices columns to be considered for groupBy
    */
-  public AggregateOperation groupBy(int... indices) {
+  public GroupByOperation groupBy(int... indices) {
     return groupByInternal(GroupByOptions.builder().withIgnoreNullKeys(false).build(),
         indices);
   }
 
-  private AggregateOperation groupByInternal(GroupByOptions groupByOptions, int[] indices) {
+  private GroupByOperation groupByInternal(GroupByOptions groupByOptions, int[] indices) {
     int[] operationIndicesArray = copyAndValidate(indices);
-    return new AggregateOperation(this, groupByOptions, operationIndicesArray);
+    return new GroupByOperation(this, groupByOptions, operationIndicesArray);
   }
 
   /**
@@ -1560,8 +1634,8 @@ public final class Table implements AutoCloseable {
    * @return table containing copy of all elements of this table passing
    * the filter defined by the boolean mask
    */
-  public Table filter(ColumnVector mask) {
-    assert mask.getType() == DType.BOOL8 : "Mask column must be of type BOOL8";
+  public Table filter(ColumnView mask) {
+    assert mask.getType().equals(DType.BOOL8) : "Mask column must be of type BOOL8";
     assert getRowCount() == 0 || getRowCount() == mask.getRowCount() : "Mask column has incorrect size";
     return new Table(filter(nativeHandle, mask.getNativeView()));
   }
@@ -1588,6 +1662,201 @@ public final class Table implements AutoCloseable {
     return contiguousSplit(nativeHandle, indices);
   }
 
+  /**
+   * Explodes a list column's elements.
+   *
+   * Any list is exploded, which means the elements of the list in each row are expanded
+   * into new rows in the output. The corresponding rows for other columns in the input
+   * are duplicated.
+   *
+   * <code>
+   * Example:
+   * input:  [[5,10,15], 100],
+   *         [[20,25],   200],
+   *         [[30],      300]
+   * index: 0
+   * output: [5,         100],
+   *         [10,        100],
+   *         [15,        100],
+   *         [20,        200],
+   *         [25,        200],
+   *         [30,        300]
+   * </code>
+   *
+   * Nulls propagate in different ways depending on what is null.
+   * <code>
+   * input:  [[5,null,15], 100],
+   *         [null,        200]
+   * index: 0
+   * output: [5,           100],
+   *         [null,        100],
+   *         [15,          100]
+   * </code>
+   * Note that null lists are completely removed from the output
+   * and nulls inside lists are pulled out and remain.
+   *
+   * @param index Column index to explode inside the table.
+   * @return A new table with explode_col exploded.
+   */
+  public Table explode(int index) {
+    assert 0 <= index && index < columns.length : "Column index is out of range";
+    assert columns[index].getType().equals(DType.LIST) : "Column to explode must be of type LIST";
+    return new Table(explode(nativeHandle, index));
+  }
+
+  /**
+   * Explodes a list column's elements and includes a position column.
+   *
+   * Any list is exploded, which means the elements of the list in each row are expanded into new rows
+   * in the output. The corresponding rows for other columns in the input are duplicated. A position
+   * column is added that has the index inside the original list for each row. Example:
+   * <code>
+   * input:  [[5,10,15], 100],
+   *         [[20,25],   200],
+   *         [[30],      300]
+   * index: 0
+   * output: [0,   5,    100],
+   *         [1,   10,   100],
+   *         [2,   15,   100],
+   *         [0,   20,   200],
+   *         [1,   25,   200],
+   *         [0,   30,   300]
+   * </code>
+   *
+   * Nulls and empty lists propagate in different ways depending on what is null or empty.
+   * <code>
+   * input:  [[5,null,15], 100],
+   *         [null,        200]
+   * index: 0
+   * output: [5,           100],
+   *         [null,        100],
+   *         [15,          100]
+   * </code>
+   *
+   * Note that null lists are not included in the resulting table, but nulls inside
+   * lists and empty lists will be represented with a null entry for that column in that row.
+   *
+   * @param index Column index to explode inside the table.
+   * @return A new table with exploded value and position. The column order of return table is
+   *         [cols before explode_input, explode_position, explode_value, cols after explode_input].
+   */
+  public Table explodePosition(int index) {
+    assert 0 <= index && index < columns.length : "Column index is out of range";
+    assert columns[index].getType().equals(DType.LIST) : "Column to explode must be of type LIST";
+    return new Table(explodePosition(nativeHandle, index));
+  }
+
+  /**
+   * Explodes a list column's elements.
+   *
+   * Any list is exploded, which means the elements of the list in each row are expanded
+   * into new rows in the output. The corresponding rows for other columns in the input
+   * are duplicated.
+   *
+   * <code>
+   * Example:
+   * input:  [[5,10,15], 100],
+   *         [[20,25],   200],
+   *         [[30],      300],
+   * index: 0
+   * output: [5,         100],
+   *         [10,        100],
+   *         [15,        100],
+   *         [20,        200],
+   *         [25,        200],
+   *         [30,        300]
+   * </code>
+   *
+   * Nulls propagate in different ways depending on what is null.
+   * <code>
+   *  input:  [[5,null,15], 100],
+   *          [null,        200]
+   * index: 0
+   * output:  [5,           100],
+   *          [null,        100],
+   *          [15,          100],
+   *          [null,        200]
+   * </code>
+   * Note that null lists are completely removed from the output
+   * and nulls inside lists are pulled out and remain.
+   *
+   * @param index Column index to explode inside the table.
+   * @return A new table with explode_col exploded.
+   */
+  public Table explodeOuter(int index) {
+    assert 0 <= index && index < columns.length : "Column index is out of range";
+    assert columns[index].getType().equals(DType.LIST) : "Column to explode must be of type LIST";
+    return new Table(explodeOuter(nativeHandle, index));
+  }
+
+  /**
+   * Explodes a list column's elements retaining any null entries or empty lists and includes a
+   * position column.
+   *
+   * Any list is exploded, which means the elements of the list in each row are expanded into new rows
+   * in the output. The corresponding rows for other columns in the input are duplicated. A position
+   * column is added that has the index inside the original list for each row. Example:
+   *
+   * <code>
+   * Example:
+   * input:  [[5,10,15], 100],
+   *         [[20,25],   200],
+   *         [[30],      300],
+   * index: 0
+   * output: [0,   5,    100],
+   *         [1,   10,   100],
+   *         [2,   15,   100],
+   *         [0,   20,   200],
+   *         [1,   25,   200],
+   *         [0,   30,   300]
+   * </code>
+   *
+   * Nulls and empty lists propagate as null entries in the result.
+   * <code>
+   * input:  [[5,null,15], 100],
+   *         [null,        200],
+   *         [[],          300]
+   * index: 0
+   * output: [0,     5,    100],
+   *         [1,  null,    100],
+   *         [2,    15,    100],
+   *         [0,  null,    200],
+   *         [0,  null,    300]
+   * </code>
+   *
+   *    returns
+   *
+   * @param index Column index to explode inside the table.
+   * @return A new table with exploded value and position. The column order of return table is
+   *         [cols before explode_input, explode_position, explode_value, cols after explode_input].
+   */
+  public Table explodeOuterPosition(int index) {
+    assert 0 <= index && index < columns.length : "Column index is out of range";
+    assert columns[index].getType().equals(DType.LIST) : "Column to explode must be of type LIST";
+    return new Table(explodeOuterPosition(nativeHandle, index));
+  }
+
+  /**
+   * Returns an approximate cumulative size in bits of all columns in the `table_view` for each row.
+   * This function counts bits instead of bytes to account for the null mask which only has one
+   * bit per row. Each row in the returned column is the sum of the per-row bit size for each column
+   * in the table.
+   *
+   * In some cases, this is an inexact approximation. Specifically, columns of lists and strings
+   * require N+1 offsets to represent N rows. It is up to the caller to calculate the small
+   * additional overhead of the terminating offset for any group of rows being considered.
+   *
+   * This function returns the per-row bit sizes as the columns are currently formed. This can
+   * end up being larger than the number you would get by gathering the rows. Specifically,
+   * the push-down of struct column validity masks can nullify rows that contain data for
+   * string or list columns. In these cases, the size returned is conservative such that:
+   * row_bit_count(column(x)) >= row_bit_count(gather(column(x)))
+   *
+   * @return INT32 column of bit size per row of the table
+   */
+  public ColumnVector rowBitCount() {
+    return new ColumnVector(rowBitCount(getNativeView()));
+  }
 
   /**
    * Gathers the rows of this table according to `gatherMap` such that row "i"
@@ -1601,7 +1870,7 @@ public final class Table implements AutoCloseable {
    * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
    * @return the resulting Table.
    */
-  public Table gather(ColumnVector gatherMap) {
+  public Table gather(ColumnView gatherMap) {
     return gather(gatherMap, true);
   }
 
@@ -1619,8 +1888,132 @@ public final class Table implements AutoCloseable {
    *                    when setting this to false.
    * @return the resulting Table.
    */
-  public Table gather(ColumnVector gatherMap, boolean checkBounds) {
+  public Table gather(ColumnView gatherMap, boolean checkBounds) {
     return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
+  }
+
+  private GatherMap[] buildJoinGatherMaps(long[] gatherMapData) {
+    long bufferSize = gatherMapData[0];
+    long leftAddr = gatherMapData[1];
+    long leftHandle = gatherMapData[2];
+    long rightAddr = gatherMapData[3];
+    long rightHandle = gatherMapData[4];
+    GatherMap[] maps = new GatherMap[2];
+    maps[0] = new GatherMap(DeviceMemoryBuffer.fromRmm(leftAddr, bufferSize, leftHandle));
+    maps[1] = new GatherMap(DeviceMemoryBuffer.fromRmm(rightAddr, bufferSize, rightHandle));
+    return maps;
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a left equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the table argument represents the key columns from the right table. Two {@link GatherMap}
+   * instances will be returned that can be used to gather the left and right tables,
+   * respectively, to produce the result of the left join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left and right table gather maps
+   */
+  public GatherMap[] leftJoinGatherMaps(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        leftJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an inner equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the table argument represents the key columns from the right table. Two {@link GatherMap}
+   * instances will be returned that can be used to gather the left and right tables,
+   * respectively, to produce the result of the inner join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left and right table gather maps
+   */
+  public GatherMap[] innerJoinGatherMaps(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        innerJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an full equi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the table argument represents the key columns from the right table. Two {@link GatherMap}
+   * instances will be returned that can be used to gather the left and right tables,
+   * respectively, to produce the result of the full join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left and right table gather maps
+   */
+  public GatherMap[] fullJoinGatherMaps(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        fullJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  private GatherMap buildSemiJoinGatherMap(long[] gatherMapData) {
+    long bufferSize = gatherMapData[0];
+    long leftAddr = gatherMapData[1];
+    long leftHandle = gatherMapData[2];
+    return new GatherMap(DeviceMemoryBuffer.fromRmm(leftAddr, bufferSize, leftHandle));
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left semi-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the table argument represents the key columns from the right table. The {@link GatherMap}
+   * instance returned can be used to gather the left table to produce the result of the
+   * left semi-join.
+   * It is the responsibility of the caller to close the resulting gather map instance.
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left table gather map
+   */
+  public GatherMap leftSemiJoinGatherMap(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        leftSemiJoinGatherMap(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildSemiJoinGatherMap(gatherMapData);
+  }
+
+  /**
+   * Computes the gather map that can be used to manifest the result of a left anti-join between
+   * two tables. It is assumed this table instance holds the key columns from the left table, and
+   * the table argument represents the key columns from the right table. The {@link GatherMap}
+   * instance returned can be used to gather the left table to produce the result of the
+   * left anti-join.
+   * It is the responsibility of the caller to close the resulting gather map instance.
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left table gather map
+   */
+  public GatherMap leftAntiJoinGatherMap(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        leftAntiJoinGatherMap(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildSemiJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -1713,7 +2106,7 @@ public final class Table implements AutoCloseable {
    * @param schema the types of each column.
    * @return the parsed table.
    */
-  public static Table convertFromRows(ColumnVector vec, DType ... schema) {
+  public static Table convertFromRows(ColumnView vec, DType ... schema) {
     // TODO at some point we need a schema that support nesting so we can support nested types
     // TODO we will need scale at some point very soon too
     int[] types = new int[schema.length];
@@ -1726,21 +2119,53 @@ public final class Table implements AutoCloseable {
     return new Table(convertFromRows(vec.getNativeView(), types, scale));
   }
 
+  /**
+   * Construct a table from a packed representation.
+   * @param metadata host-based metadata for the table
+   * @param data GPU data buffer for the table
+   * @return table which is zero-copy reconstructed from the packed-form
+   */
+  public static Table fromPackedTable(ByteBuffer metadata, DeviceMemoryBuffer data) {
+    // Ensure the metadata buffer is direct so it can be passed to JNI
+    ByteBuffer directBuffer = metadata;
+    if (!directBuffer.isDirect()) {
+      directBuffer = ByteBuffer.allocateDirect(metadata.remaining());
+      directBuffer.put(metadata);
+      directBuffer.flip();
+    }
+
+    long[] columnViewAddresses = columnViewsFromPacked(directBuffer, data.getAddress());
+    ColumnVector[] columns = new ColumnVector[columnViewAddresses.length];
+    Table result = null;
+    try {
+      for (int i = 0; i < columns.length; i++) {
+        columns[i] = ColumnVector.fromViewWithContiguousAllocation(columnViewAddresses[i], data);
+        columnViewAddresses[i] = 0;
+      }
+      result = new Table(columns);
+    } catch (Throwable t) {
+      for (int i = 0; i < columns.length; i++) {
+        if (columns[i] != null) {
+          columns[i].close();
+        }
+        if (columnViewAddresses[i] != 0) {
+          ColumnView.deleteColumnView(columnViewAddresses[i]);
+        }
+      }
+      throw t;
+    }
+
+    // close columns to leave the resulting table responsible for freeing underlying columns
+    for (ColumnVector column : columns) {
+      column.close();
+    }
+
+    return result;
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // HELPER CLASSES
   /////////////////////////////////////////////////////////////////////////////
-
-  public static final class OrderByArg {
-    final int index;
-    final boolean isDescending;
-    final boolean isNullSmallest;
-
-    OrderByArg(int index, boolean isDescending, boolean isNullSmallest) {
-      this.index = index;
-      this.isDescending = isDescending;
-      this.isNullSmallest = isNullSmallest;
-    }
-  }
 
   /**
    * class to encapsulate indices and table
@@ -1818,14 +2243,14 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Class representing aggregate operations
+   * Class representing groupby operations
    */
-  public static final class AggregateOperation {
+  public static final class GroupByOperation {
 
     private final Operation operation;
     private final GroupByOptions groupByOptions;
 
-    AggregateOperation(final Table table, GroupByOptions groupByOptions, final int... indices) {
+    GroupByOperation(final Table table, GroupByOptions groupByOptions, final int... indices) {
       operation = new Operation(table, indices);
       this.groupByOptions = groupByOptions;
     }
@@ -1882,7 +2307,10 @@ public final class Table implements AutoCloseable {
             operation.indices,
             aggColumnIndexes,
             aggOperationInstances,
-            groupByOptions.getIgnoreNullKeys()))) {
+            groupByOptions.getIgnoreNullKeys(),
+            groupByOptions.getKeySorted(),
+            groupByOptions.getKeysDescending(),
+            groupByOptions.getKeysNullSmallest()))) {
           // prepare the final table
           ColumnVector[] finalCols = new ColumnVector[keysLength + aggregates.length];
 
@@ -1919,7 +2347,7 @@ public final class Table implements AutoCloseable {
      *                             ROWS BETWEEN 1 PRECEDING and 1 FOLLOWING)
      *  FROM my_sales_table WHERE ...
      * 
-     * Each window-aggregation is represented by a different {@link WindowAggregate} argument,
+     * Each window-aggregation is represented by a different {@link AggregationOverWindow} argument,
      * indicating:
      *  1. the {@link Aggregation.Kind},
      *  2. the number of rows preceding and following the current row, within a window,
@@ -1992,8 +2420,10 @@ public final class Table implements AutoCloseable {
           for (AggregationOverWindow operation: entry.getValue().operations()) {
             aggColumnIndexes[opIndex] = columnIndex;
             aggInstances[opIndex] = operation.createNativeInstance();
-            aggPrecedingWindows[opIndex] = operation.getWindowOptions().getPreceding();
-            aggFollowingWindows[opIndex] = operation.getWindowOptions().getFollowing();
+            Scalar p = operation.getWindowOptions().getPrecedingScalar();
+            aggPrecedingWindows[opIndex] = p == null || !p.isValid() ? 0 : p.getInt();
+            Scalar f = operation.getWindowOptions().getFollowingScalar();
+            aggFollowingWindows[opIndex] = f == null || ! f.isValid() ? 1 : f.getInt();
             aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
             defaultOutputs[opIndex] = operation.getDefaultOutput();
             opIndex++;
@@ -2029,7 +2459,7 @@ public final class Table implements AutoCloseable {
     }
 
     /**
-     * Computes time-range-based window aggregation functions on the Table/projection, 
+     * Computes range-based window aggregation functions on the Table/projection,
      * based on windows specified in the argument.
      * 
      * This method enables queries such as the following SQL:
@@ -2039,7 +2469,7 @@ public final class Table implements AutoCloseable {
      *                             RANGE BETWEEN INTERVAL 1 DAY PRECEDING and CURRENT ROW)
      *  FROM my_sales_table WHERE ...
      * 
-     * Each window-aggregation is represented by a different {@link WindowAggregate} argument,
+     * Each window-aggregation is represented by a different {@link AggregationOverWindow} argument,
      * indicating:
      *  1. the {@link Aggregation.Kind},
      *  2. the index for the timestamp column to base the window definitions on
@@ -2078,10 +2508,10 @@ public final class Table implements AutoCloseable {
      * @param windowAggregates the window-aggregations to be performed
      * @return Table instance, with each column containing the result of each aggregation.
      * @throws IllegalArgumentException if the window arguments are not of type
-     * {@link WindowOptions.FrameType#RANGE},
+     * {@link WindowOptions.FrameType#RANGE} or the orderBys are not of (Boolean-exclusive) integral type
      * i.e. the timestamp-column was not specified for the aggregation.
      */
-    public Table aggregateWindowsOverTimeRanges(AggregationOverWindow... windowAggregates) {
+    public Table aggregateWindowsOverRanges(AggregationOverWindow... windowAggregates) {
       // To improve performance and memory we want to remove duplicate operations
       // and also group the operations by column so hopefully cudf can do multiple aggregations
       // in a single pass.
@@ -2093,49 +2523,85 @@ public final class Table implements AutoCloseable {
       for (int outputIndex = 0; outputIndex < windowAggregates.length; outputIndex++) {
         AggregationOverWindow agg = windowAggregates[outputIndex];
         if (agg.getWindowOptions().getFrameType() != WindowOptions.FrameType.RANGE) {
-          throw new IllegalArgumentException("Expected time-range-based window specification. Unexpected window type: " 
-                  + agg.getWindowOptions().getFrameType());
+          throw new IllegalArgumentException("Expected range-based window specification. Unexpected window type: "
+              + agg.getWindowOptions().getFrameType());
         }
+
+        DType orderByType = operation.table.getColumn(agg.getWindowOptions().getOrderByColumnIndex()).getType();
+        switch (orderByType.getTypeId()) {
+          case INT8:
+          case INT16:
+          case INT32:
+          case INT64:
+          case UINT8:
+          case UINT16:
+          case UINT32:
+          case UINT64:
+          case TIMESTAMP_MILLISECONDS:
+          case TIMESTAMP_SECONDS:
+          case TIMESTAMP_DAYS:
+          case TIMESTAMP_NANOSECONDS:
+          case TIMESTAMP_MICROSECONDS:
+            break;
+          default:
+            throw new IllegalArgumentException("Expected range-based window orderBy's " +
+                "type: integral (Boolean-exclusive) and timestamp");
+        }
+
         ColumnWindowOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnWindowOps());
         totalOps += ops.add(agg, outputIndex);
       }
 
       int[] aggColumnIndexes = new int[totalOps];
-      int[] timestampColumnIndexes = new int[totalOps];
-      boolean[] isTimestampOrderAscending = new boolean[totalOps];
+      int[] orderByColumnIndexes = new int[totalOps];
+      boolean[] isOrderByOrderAscending = new boolean[totalOps];
       long[] aggInstances = new long[totalOps];
+      long[] aggPrecedingWindows = new long[totalOps];
+      long[] aggFollowingWindows = new long[totalOps];
       try {
-        int[] aggPrecedingWindows = new int[totalOps];
-        int[] aggFollowingWindows = new int[totalOps];
+        boolean[] aggPrecedingWindowsUnbounded = new boolean[totalOps];
+        boolean[] aggFollowingWindowsUnbounded = new boolean[totalOps];
         int[] aggMinPeriods = new int[totalOps];
         int opIndex = 0;
         for (Map.Entry<Integer, ColumnWindowOps> entry: groupedOps.entrySet()) {
           int columnIndex = entry.getKey();
-          for (AggregationOverWindow operation: entry.getValue().operations()) {
+          for (AggregationOverWindow op: entry.getValue().operations()) {
             aggColumnIndexes[opIndex] = columnIndex;
-            aggInstances[opIndex] = operation.createNativeInstance();
-            aggPrecedingWindows[opIndex] = operation.getWindowOptions().getPreceding();
-            aggFollowingWindows[opIndex] = operation.getWindowOptions().getFollowing();
-            aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
-            assert (operation.getWindowOptions().getFrameType() == WindowOptions.FrameType.RANGE);
-            timestampColumnIndexes[opIndex] = operation.getWindowOptions().getTimestampColumnIndex();
-            isTimestampOrderAscending[opIndex] = operation.getWindowOptions().isTimestampOrderAscending();
-            if (operation.getDefaultOutput() != 0) {
+            aggInstances[opIndex] = op.createNativeInstance();
+            Scalar p = op.getWindowOptions().getPrecedingScalar();
+            Scalar f = op.getWindowOptions().getFollowingScalar();
+            if ((p == null || !p.isValid()) && !op.getWindowOptions().isUnboundedPreceding()) {
+              throw new IllegalArgumentException("Some kind of preceding must be set and a preceding column is not currently supported");
+            }
+            if ((f == null || !f.isValid()) && !op.getWindowOptions().isUnboundedFollowing()) {
+              throw new IllegalArgumentException("some kind of following must be set and a follow column is not currently supported");
+            }
+            aggPrecedingWindows[opIndex] = p == null ? 0 : p.getScalarHandle();
+            aggFollowingWindows[opIndex] = f == null ? 0 : f.getScalarHandle();
+            aggPrecedingWindowsUnbounded[opIndex] = op.getWindowOptions().isUnboundedPreceding();
+            aggFollowingWindowsUnbounded[opIndex] = op.getWindowOptions().isUnboundedFollowing();
+            aggMinPeriods[opIndex] = op.getWindowOptions().getMinPeriods();
+            assert (op.getWindowOptions().getFrameType() == WindowOptions.FrameType.RANGE);
+            orderByColumnIndexes[opIndex] = op.getWindowOptions().getOrderByColumnIndex();
+            isOrderByOrderAscending[opIndex] = op.getWindowOptions().isOrderByOrderAscending();
+            if (op.getDefaultOutput() != 0) {
               throw new IllegalArgumentException("Operations with a default output are not " +
                   "supported on time based rolling windows");
             }
+
             opIndex++;
           }
         }
         assert opIndex == totalOps : opIndex + " == " + totalOps;
 
-        try (Table aggregate = new Table(timeRangeRollingWindowAggregate(
+        try (Table aggregate = new Table(rangeRollingWindowAggregate(
             operation.table.nativeHandle,
             operation.indices,
-            timestampColumnIndexes,
-            isTimestampOrderAscending,
+            orderByColumnIndexes,
+            isOrderByOrderAscending,
             aggColumnIndexes,
             aggInstances, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
+            aggPrecedingWindowsUnbounded, aggFollowingWindowsUnbounded,
             groupByOptions.getIgnoreNullKeys()))) {
           // prepare the final table
           ColumnVector[] finalCols = new ColumnVector[windowAggregates.length];
@@ -2155,6 +2621,55 @@ public final class Table implements AutoCloseable {
       } finally {
         Aggregation.close(aggInstances);
       }
+    }
+
+    /**
+     * Splits the groups in a single table into separate tables according to the grouping keys.
+     * Each split table represents a single group.
+     *
+     * This API will be used by some grouping related operators to process the data
+     * group by group.
+     *
+     * Example:
+     *   Grouping column index: 0
+     *   Input: A table of 3 rows (two groups)
+     *             a    1
+     *             b    2
+     *             b    3
+     *
+     * Result:
+     *   Two tables, one group one table.
+     *   Result[0]:
+     *              a    1
+     *
+     *   Result[1]:
+     *              b    2
+     *              b    3
+     *
+     * Note, the order of the groups returned is NOT always the same with that in the input table.
+     * The split is done in native to avoid copying the offset array to JVM.
+     *
+     * @return The tables split according to the groups in the table. NOTE: It is the
+     * responsibility of the caller to close the result. Each table and column holds a
+     * reference to the original buffer. But both the buffer and the table must be closed
+     * for the memory to be released.
+     */
+    public ContiguousTable[] contiguousSplitGroups() {
+      return Table.contiguousSplitGroups(
+          operation.table.nativeHandle,
+          operation.indices,
+          groupByOptions.getIgnoreNullKeys(),
+          groupByOptions.getKeySorted(),
+          groupByOptions.getKeysDescending(),
+          groupByOptions.getKeysNullSmallest());
+    }
+
+    /**
+     * @deprecated use aggregateWindowsOverRanges
+     */
+    @Deprecated
+    public Table aggregateWindowsOverTimeRanges(AggregationOverWindow... windowAggregates) {
+      return aggregateWindowsOverRanges(windowAggregates);
     }
   }
 
@@ -2322,15 +2837,31 @@ public final class Table implements AutoCloseable {
     }
 
     /**
-     * Hash partition a table into the specified number of partitions.
+     * Hash partition a table into the specified number of partitions. Uses the default MURMUR3
+     * hashing.
      * @param numberOfPartitions - number of partitions to use
      * @return - {@link PartitionedTable} - Table that exposes a limited functionality of the
      * {@link Table} class
      */
     public PartitionedTable hashPartition(int numberOfPartitions) {
+      return hashPartition(HashType.MURMUR3, numberOfPartitions);
+    }
+
+    /**
+     * Hash partition a table into the specified number of partitions.
+     * @param type the type of hash to use. Depending on the type of hash different restrictions
+     *             on the hash column(s) may exist. Not all hash functions are guaranteed to work
+     *             besides IDENTITY and MURMUR3.
+     * @param numberOfPartitions - number of partitions to use
+     * @return {@link PartitionedTable} - Table that exposes a limited functionality of the
+     * {@link Table} class
+     */
+    public PartitionedTable hashPartition(HashType type, int numberOfPartitions) {
       int[] partitionOffsets = new int[numberOfPartitions];
-      return new PartitionedTable(new Table(Table.hashPartition(operation.table.nativeHandle,
+      return new PartitionedTable(new Table(Table.hashPartition(
+          operation.table.nativeHandle,
           operation.indices,
+          type.nativeId,
           partitionOffsets.length,
           partitionOffsets)), partitionOffsets);
     }
@@ -2357,84 +2888,202 @@ public final class Table implements AutoCloseable {
    * tests.
    */
   public static final class TestBuilder {
-    private final List<DType> types = new ArrayList<>();
+    private final List<DataType> types = new ArrayList<>();
     private final List<Object> typeErasedData = new ArrayList<>();
 
     public TestBuilder column(String... values) {
-      types.add(DType.STRING);
+      types.add(new BasicType(true, DType.STRING));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Boolean... values) {
-      types.add(DType.BOOL8);
+      types.add(new BasicType(true, DType.BOOL8));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Byte... values) {
-      types.add(DType.INT8);
+      types.add(new BasicType(true, DType.INT8));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Short... values) {
-      types.add(DType.INT16);
+      types.add(new BasicType(true, DType.INT16));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Integer... values) {
-      types.add(DType.INT32);
+      types.add(new BasicType(true, DType.INT32));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Long... values) {
-      types.add(DType.INT64);
+      types.add(new BasicType(true, DType.INT64));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Float... values) {
-      types.add(DType.FLOAT32);
+      types.add(new BasicType(true, DType.FLOAT32));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder column(Double... values) {
-      types.add(DType.FLOAT64);
+      types.add(new BasicType(true, DType.FLOAT64));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(ListType dataType, List<?>... values) {
+      types.add(dataType);
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(String[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.STRING)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Boolean[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.BOOL8)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Byte[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.INT8)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Short[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.INT16)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Integer[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.INT32)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Long[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.INT64)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Float[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.FLOAT32)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(Double[]... values) {
+      types.add(new ListType(true, new BasicType(true, DType.FLOAT64)));
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(StructType dataType, StructData... values) {
+      types.add(dataType);
+      typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder column(StructType dataType, StructData[]... values) {
+      types.add(new ListType(true, dataType));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder timestampDayColumn(Integer... values) {
-      types.add(DType.TIMESTAMP_DAYS);
+      types.add(new BasicType(true, DType.TIMESTAMP_DAYS));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder timestampNanosecondsColumn(Long... values) {
-      types.add(DType.TIMESTAMP_NANOSECONDS);
+      types.add(new BasicType(true, DType.TIMESTAMP_NANOSECONDS));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder timestampMillisecondsColumn(Long... values) {
-      types.add(DType.TIMESTAMP_MILLISECONDS);
+      types.add(new BasicType(true, DType.TIMESTAMP_MILLISECONDS));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder timestampMicrosecondsColumn(Long... values) {
-      types.add(DType.TIMESTAMP_MICROSECONDS);
+      types.add(new BasicType(true, DType.TIMESTAMP_MICROSECONDS));
       typeErasedData.add(values);
       return this;
     }
 
     public TestBuilder timestampSecondsColumn(Long... values) {
-      types.add(DType.TIMESTAMP_SECONDS);
+      types.add(new BasicType(true, DType.TIMESTAMP_SECONDS));
       typeErasedData.add(values);
+      return this;
+    }
+
+    public TestBuilder decimal32Column(int scale, Integer... unscaledValues) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, scale)));
+      typeErasedData.add(unscaledValues);
+      return this;
+    }
+
+    public TestBuilder decimal32Column(int scale, RoundingMode mode, Double... values) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, scale)));
+      BigDecimal[] data = Arrays.stream(values).map((x) -> {
+        if (x == null) return null;
+        return BigDecimal.valueOf(x).setScale(-scale, mode);
+      }).toArray(BigDecimal[]::new);
+      typeErasedData.add(data);
+      return this;
+    }
+
+    public TestBuilder decimal32Column(int scale, RoundingMode mode, String... values) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, scale)));
+      BigDecimal[] data = Arrays.stream(values).map((x) -> {
+        if (x == null) return null;
+        return new BigDecimal(x).setScale(-scale, mode);
+      }).toArray(BigDecimal[]::new);
+      typeErasedData.add(data);
+      return this;
+    }
+
+    public TestBuilder decimal64Column(int scale, Long... unscaledValues) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL64, scale)));
+      typeErasedData.add(unscaledValues);
+      return this;
+    }
+
+    public TestBuilder decimal64Column(int scale, RoundingMode mode, Double... values) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL64, scale)));
+      BigDecimal[] data = Arrays.stream(values).map((x) -> {
+        if (x == null) return null;
+        return BigDecimal.valueOf(x).setScale(-scale, mode);
+      }).toArray(BigDecimal[]::new);
+      typeErasedData.add(data);
+      return this;
+    }
+
+    public TestBuilder decimal64Column(int scale, RoundingMode mode, String... values) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL64, scale)));
+      BigDecimal[] data = Arrays.stream(values).map((x) -> {
+        if (x == null) return null;
+        return new BigDecimal(x).setScale(-scale, mode);
+      }).toArray(BigDecimal[]::new);
+      typeErasedData.add(data);
       return this;
     }
 
@@ -2480,17 +3129,69 @@ public final class Table implements AutoCloseable {
         case FLOAT64:
           ret = ColumnVector.fromBoxedDoubles((Double[]) dataArray);
           break;
+        case DECIMAL32:
+        case DECIMAL64:
+          int scale = type.getScale();
+          if (dataArray instanceof Integer[]) {
+            BigDecimal[] data = Arrays.stream(((Integer[]) dataArray))
+                .map((i) -> i == null ? null : BigDecimal.valueOf(i, -scale))
+                .toArray(BigDecimal[]::new);
+            ret = ColumnVector.build(type, data.length, (b) -> b.appendBoxed(data));
+          } else if (dataArray instanceof Long[]) {
+            BigDecimal[] data = Arrays.stream(((Long[]) dataArray))
+                .map((i) -> i == null ? null : BigDecimal.valueOf(i, -scale))
+                .toArray(BigDecimal[]::new);
+            ret = ColumnVector.build(type, data.length, (b) -> b.appendBoxed(data));
+          } else if (dataArray instanceof BigDecimal[]) {
+            BigDecimal[] data = (BigDecimal[]) dataArray;
+            ret = ColumnVector.build(type, data.length, (b) -> b.appendBoxed(data));
+          } else {
+            throw new IllegalArgumentException(
+                "Data array of invalid type(" + dataArray.getClass() + ") to build decimal column");
+          }
+          break;
         default:
           throw new IllegalArgumentException(type + " is not supported yet");
       }
       return ret;
     }
 
+    @SuppressWarnings("unchecked")
+    private static <T> ColumnVector fromLists(DataType dataType, Object[] dataArray) {
+      List[] dataLists = new List[dataArray.length];
+      for (int i = 0; i < dataLists.length; ++i) {
+        // The element in dataArray can be an array or list, because the below overloaded
+        // version accepts a List of Array as rows.
+        //  `public TestBuilder column(ListType dataType, List<?>... values)`
+        Object dataList = dataArray[i];
+        dataLists[i] = dataList == null ? null :
+            (dataList instanceof List ? (List)dataList : Arrays.asList((Object[])dataList));
+      }
+      return ColumnVector.fromLists(dataType, dataLists);
+    }
+
+    private static ColumnVector fromStructs(DataType dataType, StructData[] dataArray) {
+      return ColumnVector.fromStructs(dataType, dataArray);
+    }
+
     public Table build() {
       List<ColumnVector> columns = new ArrayList<>(types.size());
       try {
         for (int i = 0; i < types.size(); i++) {
-          columns.add(from(types.get(i), typeErasedData.get(i)));
+          DataType dataType = types.get(i);
+          DType dtype = dataType.getType();
+          Object dataArray = typeErasedData.get(i);
+          if (dtype.isNestedType()) {
+            if (dtype.equals(DType.LIST)) {
+              columns.add(fromLists(dataType, (Object[]) dataArray));
+            } else if (dtype.equals(DType.STRUCT)) {
+              columns.add(fromStructs(dataType, (StructData[]) dataArray));
+            } else {
+              throw new IllegalStateException("Unexpected nested type: " + dtype);
+            }
+          } else {
+            columns.add(from(dtype, dataArray));
+          }
         }
         return new Table(columns.toArray(new ColumnVector[columns.size()]));
       } finally {

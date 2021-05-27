@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +15,12 @@
  */
 #pragma once
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <cudf/column/column.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 /**
@@ -31,17 +33,16 @@ namespace cudf {
 /**
  * @brief Creates an empty column of the specified @p type
  *
- * An empty column does not contain any elements or a validity mask.
+ * An empty column contains zero elements and no validity mask.
  *
- * @param type The desired type
+ * @param[in] type The column data type
  * @return Empty column with desired type
  */
 std::unique_ptr<column> make_empty_column(data_type type);
 
 /**
- * @brief Construct column with sufficient uninitialized storage
- * to hold `size` elements of the specified numeric `data_type` with an optional
- * null mask.
+ * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
+ * specified numeric `data_type` with an optional null mask.
  *
  * @note `null_count()` is determined by the requested null mask `state`
  *
@@ -59,13 +60,12 @@ std::unique_ptr<column> make_numeric_column(
   data_type type,
   size_type size,
   mask_state state                    = mask_state::UNALLOCATED,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Construct column with sufficient uninitialized storage
- * to hold `size` elements of the specified numeric `data_type` with a
- * null mask.
+ * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
+ * specified numeric `data_type` with a null mask.
  *
  * @note null_count is optional and will be computed if not provided.
  *
@@ -85,7 +85,7 @@ std::unique_ptr<column> make_numeric_column(
   size_type size,
   B&& null_mask,
   size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
@@ -115,7 +115,7 @@ std::unique_ptr<column> make_fixed_point_column(
   data_type type,
   size_type size,
   mask_state state                    = mask_state::UNALLOCATED,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -139,7 +139,7 @@ std::unique_ptr<column> make_fixed_point_column(
   size_type size,
   B&& null_mask,
   size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(is_fixed_point(type), "Invalid, non-fixed_point type.");
@@ -151,9 +151,8 @@ std::unique_ptr<column> make_fixed_point_column(
 }
 
 /**
- * @brief Construct column with sufficient uninitialized storage
- * to hold `size` elements of the specified timestamp `data_type` with an
- * optional null mask.
+ * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
+ * specified timestamp `data_type` with an optional null mask.
  *
  * @note `null_count()` is determined by the requested null mask `state`
  *
@@ -171,13 +170,12 @@ std::unique_ptr<column> make_timestamp_column(
   data_type type,
   size_type size,
   mask_state state                    = mask_state::UNALLOCATED,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Construct column with sufficient uninitialized storage
- * to hold `size` elements of the specified timestamp `data_type` with a
- * null mask.
+ * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
+ * specified timestamp `data_type` with a null mask.
  *
  * @note null_count is optional and will be computed if not provided.
  *
@@ -197,7 +195,7 @@ std::unique_ptr<column> make_timestamp_column(
   size_type size,
   B&& null_mask,
   size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(is_timestamp(type), "Invalid, non-timestamp type.");
@@ -209,9 +207,8 @@ std::unique_ptr<column> make_timestamp_column(
 }
 
 /**
- * @brief Construct column with sufficient uninitialized storage
- * to hold `size` elements of the specified duration `data_type` with an
- * optional null mask.
+ * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
+ * specified duration `data_type` with an optional null mask.
  *
  * @note `null_count()` is determined by the requested null mask `state`
  *
@@ -229,13 +226,12 @@ std::unique_ptr<column> make_duration_column(
   data_type type,
   size_type size,
   mask_state state                    = mask_state::UNALLOCATED,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Construct column with sufficient uninitialized storage
- * to hold `size` elements of the specified duration `data_type` with a
- * null mask.
+ * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
+ * specified duration `data_type` with a null mask.
  *
  * @note null_count is optional and will be computed if not provided.
  *
@@ -255,7 +251,7 @@ std::unique_ptr<column> make_duration_column(
   size_type size,
   B&& null_mask,
   size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(is_duration(type), "Invalid, non-duration type.");
@@ -267,9 +263,8 @@ std::unique_ptr<column> make_duration_column(
 }
 
 /**
- * @brief Construct column with sufficient uninitialized storage
- * to hold `size` elements of the specified fixed width `data_type` with an optional
- * null mask.
+ * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
+ * specified fixed width `data_type` with an optional null mask.
  *
  * @note `null_count()` is determined by the requested null mask `state`
  *
@@ -287,13 +282,12 @@ std::unique_ptr<column> make_fixed_width_column(
   data_type type,
   size_type size,
   mask_state state                    = mask_state::UNALLOCATED,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Construct column with sufficient uninitialized storage
- * to hold `size` elements of the specified fixed width `data_type` with a
- * null mask.
+ * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
+ * specified fixed width `data_type` with a null mask.
  *
  * @note null_count is optional and will be computed if not provided.
  *
@@ -313,7 +307,7 @@ std::unique_ptr<column> make_fixed_width_column(
   size_type size,
   B&& null_mask,
   size_type null_count                = cudf::UNKNOWN_NULL_COUNT,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(is_fixed_width(type), "Invalid, non-fixed-width type.");
@@ -328,7 +322,8 @@ std::unique_ptr<column> make_fixed_width_column(
 }
 
 /**
- * @brief Construct STRING type column given a device vector of pointer/size pairs.
+ * @brief Construct a STRING type column given a device span of pointer/size pairs.
+ *
  * The total number of char bytes must not exceed the maximum size of size_type.
  * The string characters are expected to be UTF-8 encoded sequence of char
  * bytes. Use the strings_column_view class to perform strings operations on
@@ -342,20 +337,20 @@ std::unique_ptr<column> make_fixed_width_column(
  *
  * @throws std::bad_alloc if device memory allocation fails
  *
- * @param strings The vector of pointer/size pairs.
- *                Each pointer must be a device memory address or `nullptr`
- * (indicating a null string). The size must be the number of bytes.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used for allocation of the column's `null_mask` and children
+ * @param[in] strings The device span of pointer/size pairs. Each pointer must be a device memory
+   address or `nullptr` (indicating a null string). The size must be the number of bytes.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used for allocation of the column's `null_mask` and children
  * columns' device memory.
  */
 std::unique_ptr<column> make_strings_column(
-  const rmm::device_vector<thrust::pair<const char*, size_type>>& strings,
-  cudaStream_t stream                 = 0,
+  cudf::device_span<thrust::pair<const char*, size_type> const> strings,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Construct STRING type column given a device vector of string_view.
+ * @brief Construct a STRING type column given a device span of string_view.
+ *
  * The total number of char bytes must not exceed the maximum size of size_type.
  * The string characters are expected to be UTF-8 encoded sequence of char
  * bytes. Use the strings_column_view class to perform strings operations on
@@ -370,120 +365,72 @@ std::unique_ptr<column> make_strings_column(
  *
  * @throws std::bad_alloc if device memory allocation fails
  *
- * @param string_views The vector of string_view.
- *                Each string_view must point to a device memory address or
- * `null_placeholder` (indicating a null string). The size must be the number of
- * bytes.
- * @param null_placeholder string_view indicating null string in given list of
+ * @param[in] string_views The span of string_view. Each string_view must point to a device memory
+   address or `null_placeholder` (indicating a null string). The size must be the number of bytes.
+ * @param[in] null_placeholder string_view indicating null string in given list of
  * string_views.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used for allocation of the column's `null_mask` and children
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used for allocation of the column's `null_mask` and children
  * columns' device memory.
  */
 std::unique_ptr<column> make_strings_column(
-  const rmm::device_vector<string_view>& string_views,
+  cudf::device_span<string_view const> string_views,
   const string_view null_placeholder,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Construct STRING type column given a device vector of chars
- * encoded as UTF-8, a device vector of byte offsets identifying individual
- * strings within the char vector, and an optional null bitmask.
+ * @brief Construct a STRING type column given a device span of chars encoded as UTF-8, a device
+ * span of byte offsets identifying individual strings within the char vector, and an optional
+ * null bitmask.
  *
  * `offsets.front()` must always be zero.
  *
- * The total number of char bytes must not exceed the maximum size of size_type.
- * Use the strings_column_view class to perform strings operations on this type
- * of column.
- * This function makes a deep copy of the strings, offsets, null_mask to create
- * a new column.
+ * The total number of char bytes must not exceed the maximum size of size_type. Use the
+ * strings_column_view class to perform strings operations on this type of column.
+ *
+ * This function makes a deep copy of the strings, offsets, null_mask to create a new column.
  *
  * @throws std::bad_alloc if device memory allocation fails
  *
- * @param strings The vector of chars in device memory.
- *                This char vector is expected to be UTF-8 encoded characters.
- * @param offsets The vector of byte offsets in device memory.
- *                The number of elements is one more than the total number
- *                of strings so the `offsets.back()` is the total
- *                number of bytes in the strings array.
- *                `offsets.front()` must always be 0 to point to the beginning
- *                of `strings`.
- * @param null_mask Device vector containing the null element indicator bitmask.
- *                  Arrow format for nulls is used for interpeting this bitmask.
- * @param null_count The number of null string entries. If equal to
- * `UNKNOWN_NULL_COUNT`, the null count will be computed dynamically on the
- * first invocation of `column::null_count()`
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used for allocation of the column's `null_mask` and children
+ * @param[in] strings The device span of chars in device memory. This char vector is expected to be
+ *  UTF-8 encoded characters.
+ * @param[in] offsets The device span of byte offsets in device memory. The number of elements is
+ *  one more than the total number of strings so the `offsets.back()` is the total number of bytes
+ *  in the strings array. `offsets.front()` must always be 0 to point to the beginning of `strings`.
+ * @param[in] null_mask Device span containing the null element indicator bitmask. Arrow format for
+ *  nulls is used for interpeting this bitmask.
+ * @param[in] null_count The number of null string entries. If equal to `UNKNOWN_NULL_COUNT`, the
+ *  null count will be computed dynamically on the first invocation of `column::null_count()`
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used for allocation of the column's `null_mask` and children
  * columns' device memory.
  */
 std::unique_ptr<column> make_strings_column(
-  const rmm::device_vector<char>& strings,
-  const rmm::device_vector<size_type>& offsets,
-  const rmm::device_vector<bitmask_type>& null_mask = {},
-  size_type null_count                              = cudf::UNKNOWN_NULL_COUNT,
-  cudaStream_t stream                               = 0,
-  rmm::mr::device_memory_resource* mr               = rmm::mr::get_current_device_resource());
+  cudf::device_span<char const> strings,
+  cudf::device_span<size_type const> offsets,
+  cudf::device_span<bitmask_type const> null_mask = {},
+  size_type null_count                            = cudf::UNKNOWN_NULL_COUNT,
+  rmm::cuda_stream_view stream                    = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr             = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Construct STRING type column given a host vector of chars
- * encoded as UTF-8, a host vector of byte offsets identifying individual
- * strings within the char vector, and an optional null bitmask.
+ * @brief Construct a STRING type column given offsets column, chars columns, and null mask and null
+ * count.
  *
- * `offsets.front()` must always be zero.
+ * The columns and mask are moved into the resulting strings column.
  *
- * The total number of char bytes must not exceed the maximum size of size_type.
- * Use the strings_column_view class to perform strings operations on this type
- * of column.
- * This function makes a deep copy of the strings, offsets, null_mask to create
- * a new column.
- *
- * @throws std::bad_alloc if device memory allocation fails
- *
- * @param strings The contiguous array of chars in host memory.
- *                This char array is expected to be UTF-8 encoded characters.
- * @param offsets The array of byte offsets in host memory.
- *                The number of elements is one more than the total number
- *                of strings so the `offsets.back()` is the total
- *                number of bytes in the strings array.
- *                `offsets.front()` must always be 0 to point to the beginning
- *                of `strings`.
- * @param null_mask Host vector containing the null element indicator bitmask.
- *                  Arrow format for nulls is used for interpeting this bitmask.
- * @param null_count The number of null string entries. If equal to
- * `UNKNOWN_NULL_COUNT`, the null count will be computed dynamically on the
- * first invocation of `column::null_count()`
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used for allocation of the column's `null_mask` and children
- * columns' device memory.
- */
-std::unique_ptr<column> make_strings_column(
-  const std::vector<char>& strings,
-  const std::vector<size_type>& offsets,
-  const std::vector<bitmask_type>& null_mask = {},
-  size_type null_count                       = cudf::UNKNOWN_NULL_COUNT,
-  cudaStream_t stream                        = 0,
-  rmm::mr::device_memory_resource* mr        = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Constructs a STRING type column given offsets column, chars columns,
- * and null mask and null count. The columns and mask are moved into the
- * resulting strings column.
- *
- * @param num_strings The number of strings the column represents.
- * @param offsets_column The column of offset values for this column.
- *                       The number of elements is one more than the total number
- *                       of strings so the offset[last] - offset[0] is the total
- *                       number of bytes in the strings vector.
- * @param chars_column The column of char bytes for all the strings for this column.
- *                     Individual strings are identified by the offsets and the
- *                     nullmask.
- * @param null_count The number of null string entries.
- * @param null_mask The bits specifying the null strings in device memory.
- *                  Arrow format for nulls is used for interpeting this bitmask.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used for allocation of the column's `null_mask` and children
+ * @param[in] num_strings The number of strings the column represents.
+ * @param[in] offsets_column The column of offset values for this column. The number of elements is
+ *  one more than the total number of strings so the `offset[last] - offset[0]` is the total number
+ *  of bytes in the strings vector.
+ * @param[in] chars_column The column of char bytes for all the strings for this column. Individual
+ *  strings are identified by the offsets and the nullmask.
+ * @param[in] null_count The number of null string entries.
+ * @param[in] null_mask The bits specifying the null strings in device memory. Arrow format for
+ *  nulls is used for interpeting this bitmask.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used for allocation of the column's `null_mask` and children
  * columns' device memory.
  */
 std::unique_ptr<column> make_strings_column(
@@ -492,15 +439,14 @@ std::unique_ptr<column> make_strings_column(
   std::unique_ptr<column> chars_column,
   size_type null_count,
   rmm::device_buffer&& null_mask,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Constructs a LIST type column given offsets column, child column,
- * and null mask and null count.
+ * @brief Construct a LIST type column given offsets column, child column, null mask and null
+ * count.
  *
  * The columns and mask are moved into the resulting lists column.
- *
  *
  * List columns are structured similarly to strings columns.  They contain
  * a set of offsets which represents the lengths of the lists in each row, and
@@ -534,21 +480,21 @@ std::unique_ptr<column> make_strings_column(
  * data    (depth 1)   {1, 2, 3, 4, 5, 6, 7}
  * @endcode
  *
- * @param num_lists The number of lists the column represents.
- * @param offsets_column The column of offset values for this column. Each value should represent
- *                       the starting offset into the child elements that corresponds to the
- *                       beginning of the row, with the first row starting at 0. The length of row
- *                       N can be determined by subtracting offsets[N+1] - offsets[N]. The total
- * number of offsets should be 1 longer than the # of rows in the column.
- * @param child_column The column of nested data referenced by the lists represented by the
+ * @param[in] num_lists The number of lists the column represents.
+ * @param[in] offsets_column The column of offset values for this column. Each value should
+ * represent the starting offset into the child elements that corresponds to the beginning of the
+ * row, with the first row starting at 0. The length of row N can be determined by subtracting
+ * offsets[N+1] - offsets[N]. The total number of offsets should be 1 longer than the # of rows in
+ * the column.
+ * @param[in] child_column The column of nested data referenced by the lists represented by the
  *                     offsets_column. Note: the child column may itself be
  *                     further nested.
- * @param null_count The number of null list entries.
- * @param null_mask The bits specifying the null lists in device memory.
+ * @param[in] null_count The number of null list entries.
+ * @param[in] null_mask The bits specifying the null lists in device memory.
  *                  Arrow format for nulls is used for interpeting this bitmask.
- * @param stream Optional stream for use with all memory allocation
+ * @param[in] stream Optional stream for use with all memory allocation
  *               and device kernels
- * @param mr Optional resource to use for device memory
+ * @param[in] mr Optional resource to use for device memory
  *           allocation of the column's `null_mask` and children.
  */
 std::unique_ptr<cudf::column> make_lists_column(
@@ -557,11 +503,11 @@ std::unique_ptr<cudf::column> make_lists_column(
   std::unique_ptr<column> child_column,
   size_type null_count,
   rmm::device_buffer&& null_mask,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Constructs a STRUCT column using specified child columns as members.
+ * @brief Construct a STRUCT column using specified child columns as members.
  *
  * Specified child/member columns and null_mask are adopted by resultant
  * struct column.
@@ -575,60 +521,58 @@ std::unique_ptr<cudf::column> make_lists_column(
  * The specified null mask governs which struct row has a null value. This
  * is orthogonal to the null values of individual child columns.
  *
- * @param num_rows The number of struct values in the struct column.
- * @param child_columns The list of child/members that the struct is comprised of.
- * @param null_count The number of null values in the struct column.
- * @param null_mask The bits specifying the null struct values in the column.
- * @param stream Optional stream for use with all memory allocation and device kernels.
- * @param mr Optional resource to use for device memory allocation.
- *
+ * @param[in] num_rows The number of struct values in the struct column.
+ * @param[in] child_columns The list of child/members that the struct is comprised of.
+ * @param[in] null_count The number of null values in the struct column.
+ * @param[in] null_mask The bits specifying the null struct values in the column.
+ * @param[in] stream Optional stream for use with all memory allocation and device kernels.
+ * @param[in] mr Optional resource to use for device memory allocation.
  */
 std::unique_ptr<cudf::column> make_structs_column(
   size_type num_rows,
   std::vector<std::unique_ptr<column>>&& child_columns,
   size_type null_count,
   rmm::device_buffer&& null_mask,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Return a column with size elements that are all equal to the
- * given scalar.
+ * @brief Construct a column with size elements that are all equal to the given scalar.
  *
  * The output column will have the same type as `s.type()`
  * The output column will contain all null rows if `s.invalid()==false`
- * The output column will be empty if `size==0`.
+ * The output column will be empty if `size==0`. For LIST scalars, the column hierarchy
+ * from @p s is preserved.
  *
- * @param s The scalar to use for values in the column.
- * @param size The number of rows for the output column.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param[in] s The scalar to use for values in the column.
+ * @param[in] size The number of rows for the output column.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory.
  */
 std::unique_ptr<column> make_column_from_scalar(
   scalar const& s,
   size_type size,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Return a dictionary column with size elements that are all equal to the
- * given scalar.
+ * @brief Construct a dictionary column with size elements that are all equal to the given scalar.
  *
  * The output column will have keys of type `s.type()`
  * The output column will be empty if `size==0`.
  *
  * @throw cudf::logic_error if `s.is_valid()==false`
  *
- * @param s The scalar to use for values in the column.
- * @param size The number of rows for the output column.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @param[in] s The scalar to use for values in the column.
+ * @param[in] size The number of rows for the output column.
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory.
  */
 std::unique_ptr<column> make_dictionary_from_scalar(
   scalar const& s,
   size_type size,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0);
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

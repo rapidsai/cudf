@@ -27,13 +27,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
-
 /**
  * A class that holds Host side Column Vector APIs and the OffHeapState.
  * Any children of a HostColumnVector will be instantiated via this class.
  */
-public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> {
+public class HostColumnVectorCore implements AutoCloseable {
 
   private static final Logger log = LoggerFactory.getLogger(HostColumnVector.class);
 
@@ -65,14 +63,14 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   /**
    * Returns the data buffer for a given host side column vector
    */
-  HostMemoryBuffer getData() {
+  public HostMemoryBuffer getData() {
     return offHeap.data;
   }
 
   /**
    * Returns the validity buffer for a given host side column vector
    */
-  HostMemoryBuffer getValidity() {
+  public HostMemoryBuffer getValidity() {
     return offHeap.valid;
   }
 
@@ -83,29 +81,8 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
     return offHeap.offsets;
   }
 
-  @Override
-  public long getColumnViewAddress() {
-    throw new IllegalStateException("getColumnViewAddress is not supported on Host side");
-  }
-
-  @Override
-  public ColumnViewAccess<HostMemoryBuffer> getChildColumnViewAccess(int childIndex) {
+  public HostColumnVectorCore getChildColumnView(int childIndex) {
     return getNestedChildren().get(childIndex);
-  }
-
-  @Override
-  public HostMemoryBuffer getDataBuffer() {
-    return offHeap.data;
-  }
-
-  @Override
-  public HostMemoryBuffer getOffsetBuffer() {
-    return offHeap.offsets;
-  }
-
-  @Override
-  public HostMemoryBuffer getValidityBuffer() {
-    return offHeap.valid;
   }
 
   /**
@@ -128,35 +105,15 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
   }
 
   /**
-   * Get the data type of this column
-   * @return DType of the column
-   */
-  @Override
-  public DType getDataType() {
-    return type;
-  }
-
-  /**
    * Returns the number of rows for a given host side column vector
    */
-  @Override
   public long getRowCount() {
-    return rows;
-  }
-
-  /**
-   * Returns the number of rows for a given host side column vector, deprecated.
-   */
-  @Override
-  @Deprecated
-  public long getNumRows() {
     return rows;
   }
 
   /**
    * Returns the number of children for this column
    */
-  @Override
   public int getNumChildren() {
     return children.size();
   }
@@ -167,9 +124,9 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    * @return an object that would need to be casted to appropriate type based on this vector's data type
    */
   Object getElement(int rowIndex) {
-    if (type == DType.LIST) {
+    if (type.equals(DType.LIST)) {
       return getList(rowIndex);
-    } else if (type == DType.STRUCT) {
+    } else if (type.equals(DType.STRUCT)) {
       return getStruct(rowIndex);
     } else {
       if (isNull(rowIndex)) {
@@ -442,7 +399,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    */
   public List getList(long rowIndex) {
     assert rowIndex < rows;
-    assert type == DType.LIST;
+    assert type.equals(DType.LIST);
     List retList = new ArrayList();
     int start = (int)getStartListOffset(rowIndex);
     int end = (int)getEndListOffset(rowIndex);
@@ -464,7 +421,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    */
   public HostColumnVector.StructData getStruct(int rowIndex) {
     assert rowIndex < rows;
-    assert type == DType.STRUCT;
+    assert type.equals(DType.STRUCT);
     List<Object> retList = new ArrayList<>();
     // check if null or empty
     if (isNull(rowIndex)) {
@@ -557,7 +514,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
    * Close method for the column
    */
   @Override
-  public void close() {
+  public synchronized void close() {
     for (HostColumnVectorCore child : children) {
       if (child != null) {
         child.close();
@@ -596,7 +553,7 @@ public class HostColumnVectorCore implements ColumnViewAccess<HostMemoryBuffer> 
     }
 
     @Override
-    protected boolean cleanImpl(boolean logErrorIfNotClean) {
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       if (data != null || valid != null || offsets != null) {
         try {

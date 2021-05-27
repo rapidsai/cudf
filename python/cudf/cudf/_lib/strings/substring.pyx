@@ -12,8 +12,8 @@ from cudf._lib.cpp.strings.substring cimport (
     slice_strings as cpp_slice_strings
 )
 
-from cudf._lib.scalar import as_scalar
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar import as_device_scalar
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.cpp.scalar.scalar cimport numeric_scalar
 
 
@@ -30,16 +30,17 @@ def slice_strings(Column source_strings,
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef Scalar start_scalar = as_scalar(start, np.int32)
-    cdef Scalar end_scalar = as_scalar(end, np.int32)
-    cdef Scalar step_scalar = as_scalar(step, np.int32)
+    cdef DeviceScalar start_scalar = as_device_scalar(start, np.int32)
+    cdef DeviceScalar end_scalar = as_device_scalar(end, np.int32)
+    cdef DeviceScalar step_scalar = as_device_scalar(step, np.int32)
 
     cdef numeric_scalar[size_type]* start_numeric_scalar = \
-        <numeric_scalar[size_type]*>(start_scalar.c_value.get())
+        <numeric_scalar[size_type]*>(
+            start_scalar.get_raw_ptr())
     cdef numeric_scalar[size_type]* end_numeric_scalar = \
-        <numeric_scalar[size_type]*>(end_scalar.c_value.get())
+        <numeric_scalar[size_type]*>(end_scalar.get_raw_ptr())
     cdef numeric_scalar[size_type]* step_numeric_scalar = \
-        <numeric_scalar[size_type]*>(step_scalar.c_value.get())
+        <numeric_scalar[size_type]*>(step_scalar.get_raw_ptr())
 
     with nogil:
         c_result = move(cpp_slice_strings(
@@ -90,16 +91,17 @@ def get(Column source_strings,
     else:
         next_index = index + 1
         step = 1
-    cdef Scalar start_scalar = as_scalar(index, np.int32)
-    cdef Scalar end_scalar = as_scalar(next_index, np.int32)
-    cdef Scalar step_scalar = as_scalar(step, np.int32)
+    cdef DeviceScalar start_scalar = as_device_scalar(index, np.int32)
+    cdef DeviceScalar end_scalar = as_device_scalar(next_index, np.int32)
+    cdef DeviceScalar step_scalar = as_device_scalar(step, np.int32)
 
     cdef numeric_scalar[size_type]* start_numeric_scalar = \
-        <numeric_scalar[size_type]*>(start_scalar.c_value.get())
+        <numeric_scalar[size_type]*>(
+            start_scalar.get_raw_ptr())
     cdef numeric_scalar[size_type]* end_numeric_scalar = \
-        <numeric_scalar[size_type]*>(end_scalar.c_value.get())
+        <numeric_scalar[size_type]*>(end_scalar.get_raw_ptr())
     cdef numeric_scalar[size_type]* step_numeric_scalar = \
-        <numeric_scalar[size_type]*>(step_scalar.c_value.get())
+        <numeric_scalar[size_type]*>(step_scalar.get_raw_ptr())
 
     with nogil:
         c_result = move(cpp_slice_strings(

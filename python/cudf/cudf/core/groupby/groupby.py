@@ -1,6 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import collections
-import functools
 import pickle
 import warnings
 
@@ -9,16 +8,20 @@ from nvtx import annotate
 
 import cudf
 from cudf._lib import groupby as libgroupby
+from cudf._lib.table import Table
 from cudf.core.abc import Serializable
-from cudf.utils.utils import cached_property
+from cudf.utils.dtypes import is_list_like
+from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
+# Note that all valid aggregation methods (e.g. GroupBy.min) are bound to the
+# class after its definition (see below).
 class GroupBy(Serializable):
 
     _MAX_GROUPS_BEFORE_WARN = 100
 
     def __init__(
-        self, obj, by=None, level=None, sort=True, as_index=True, dropna=True
+        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
     ):
         """
         Group a DataFrame or Series by a set of columns.
@@ -37,9 +40,9 @@ class GroupBy(Serializable):
         level : int, level_name or list, optional
             For objects with a MultiIndex, `level` can be used to specify
             grouping by one or more levels of the MultiIndex.
-        sort : True, optional
-            If True (default), sort results by group9s). Note that
-            unlike Pandas, this also sorts values within each group.
+        sort : bool, default False
+            Sort the result by group keys. Differ from Pandas, cudf defaults
+            to False for better performance.
         as_index : bool, optional
             If as_index=True (default), the group names appear
             as the keys of the resulting DataFrame.
@@ -57,14 +60,6 @@ class GroupBy(Serializable):
             self.grouping = by
         else:
             self.grouping = _Grouping(obj, by, level)
-
-    def __getattribute__(self, key):
-        try:
-            return super().__getattribute__(key)
-        except AttributeError:
-            if key in libgroupby._GROUPBY_AGGS:
-                return functools.partial(self._agg_func_name_with_args, key)
-            raise
 
     def __iter__(self):
         group_names, offsets, _, grouped_values = self._grouped()
@@ -101,8 +96,23 @@ class GroupBy(Serializable):
                     len(self.obj), "int8", masked=False
                 )
             )
-            .groupby(self.grouping)
+            .groupby(self.grouping, sort=self._sort)
             .agg("size")
+        )
+
+    def cumcount(self):
+        """
+        Return the cumulative count of keys in each group.
+        """
+        return (
+            cudf.Series(
+                cudf.core.column.column_empty(
+                    len(self.obj), "int8", masked=False
+                )
+            )
+            .groupby(self.grouping, sort=self._sort)
+            .agg("cumcount")
+            .reset_index(drop=True)
         )
 
     @cached_property
@@ -126,12 +136,13 @@ class GroupBy(Serializable):
         Examples
         --------
         >>> import cudf
-        >>> a = cudf.DataFrame({'a': [1, 1, 2], 'b': [1, 2, 3]})
+        >>> a = cudf.DataFrame(
+            {'a': [1, 1, 2], 'b': [1, 2, 3], 'c': [2, 2, 1]})
         >>> a.groupby('a').agg('sum')
            b
         a
-        1  3
         2  3
+        1  3
 
         Specifying a list of aggregations to perform on each column.
 
@@ -139,8 +150,8 @@ class GroupBy(Serializable):
             b       c
           sum min sum min
         a
-        1   3   1   4   2
         2   3   3   1   1
+        1   3   1   4   2
 
         Using a dict to specify aggregations to perform per column.
 
@@ -148,8 +159,8 @@ class GroupBy(Serializable):
             a   b
           max min mean
         a
-        1   1   1  1.5
         2   2   3  3.0
+        1   1   1  1.5
 
         Using lambdas/callables to specify aggregations taking parameters.
 
@@ -164,6 +175,9 @@ class GroupBy(Serializable):
         """
         normalized_aggs = self._normalize_aggs(func)
 
+        # Note: When there are no key columns, the below produces
+        # a Float64Index, while Pandas returns an Int64Index
+        # (GH: 6945)
         result = self._groupby.aggregate(self.obj, normalized_aggs)
 
         result = cudf.DataFrame._from_table(result)
@@ -190,10 +204,11 @@ class GroupBy(Serializable):
                         raise
 
         # set index names to be group key names
-        result.index.names = self.grouping.names
+        if len(result):
+            result.index.names = self.grouping.names
 
         # copy categorical information from keys to the result index:
-        result.index._postprocess_columns(self.grouping.keys)
+        result.index._copy_type_metadata(self.grouping.keys)
         result._index = cudf.core.index.Index._from_table(result._index)
 
         if not self._as_index:
@@ -213,9 +228,10 @@ class GroupBy(Serializable):
         """
         Return the nth row from each group.
         """
-        result = self.agg(lambda x: x.nth(n))
-        sizes = self.size()
-        return result[n < sizes]
+        result = self.agg(lambda x: x.nth(n)).sort_index()
+        sizes = self.size().sort_index()
+
+        return result[sizes > n]
 
     def serialize(self):
         header = {}
@@ -258,22 +274,9 @@ class GroupBy(Serializable):
 
         grouped_keys = cudf.Index._from_table(grouped_keys)
         grouped_values = self.obj.__class__._from_table(grouped_values)
-        grouped_values._postprocess_columns(self.obj)
+        grouped_values._copy_type_metadata(self.obj)
         group_names = grouped_keys.unique()
         return (group_names, offsets, grouped_keys, grouped_values)
-
-    def _agg_func_name_with_args(self, func_name, *args, **kwargs):
-        """
-        Aggregate given an aggregate function name
-        and arguments to the function, e.g.,
-        `_agg_func_name_with_args("quantile", 0.5)`
-        """
-
-        def func(x):
-            return getattr(x, func_name)(*args, **kwargs)
-
-        func.__name__ = func_name
-        return self.agg(func)
 
     def _normalize_aggs(self, aggs):
         """
@@ -415,7 +418,22 @@ class GroupBy(Serializable):
         chunks = [
             grouped_values[s:e] for s, e in zip(offsets[:-1], offsets[1:])
         ]
-        result = cudf.concat([function(chk) for chk in chunks])
+        chunk_results = [function(chk) for chk in chunks]
+
+        if not len(chunk_results):
+            return self.obj.__class__()
+
+        if cudf.utils.dtypes.is_scalar(chunk_results[0]):
+            result = cudf.Series(
+                chunk_results, index=self.grouping.keys[offsets[:-1]]
+            )
+            result.index.names = self.grouping.names
+        elif isinstance(chunk_results[0], cudf.Series):
+            result = cudf.concat(chunk_results, axis=1).T
+            result.index.names = self.grouping.names
+        else:
+            result = cudf.concat(chunk_results)
+
         if self._sort:
             result = result.sort_index()
         return result
@@ -569,10 +587,185 @@ class GroupBy(Serializable):
         """
         return cudf.core.window.rolling.RollingGroupby(self, *args, **kwargs)
 
+    def count(self, dropna=True):
+        """Compute the number of values in each column.
 
-class DataFrameGroupBy(GroupBy):
+        Parameters
+        ----------
+        dropna : bool
+            If ``True``, don't include null values in the count.
+        """
+
+        def func(x):
+            return getattr(x, "count")(dropna=dropna)
+
+        return self.agg(func)
+
+    def sum(self):
+        """Compute the column-wise sum of the values in each group."""
+        return self.agg("sum")
+
+    def prod(self):
+        """Compute the column-wise product of the values in each group."""
+        return self.agg("prod")
+
+    def idxmin(self):
+        """Get the column-wise index of the minimum value in each group."""
+        return self.agg("idxmin")
+
+    def idxmax(self):
+        """Get the column-wise index of the maximum value in each group."""
+        return self.agg("idxmax")
+
+    def min(self):
+        """Get the column-wise minimum value in each group."""
+        return self.agg("min")
+
+    def max(self):
+        """Get the column-wise maximum value in each group."""
+        return self.agg("max")
+
+    def mean(self):
+        """Compute the column-wise mean of the values in each group."""
+        return self.agg("mean")
+
+    def median(self):
+        """Get the column-wise median of the values in each group."""
+        return self.agg("median")
+
+    def var(self, ddof=1):
+        """Compute the column-wise variance of the values in each group.
+
+        Parameters
+        ----------
+        ddof : int
+            The delta degrees of freedom. N - ddof is the divisor used to
+            normalize the variance.
+        """
+
+        def func(x):
+            return getattr(x, "var")(ddof=ddof)
+
+        return self.agg(func)
+
+    def std(self, ddof=1):
+        """Compute the column-wise std of the values in each group.
+
+        Parameters
+        ----------
+        ddof : int
+            The delta degrees of freedom. N - ddof is the divisor used to
+            normalize the standard deviation.
+        """
+
+        def func(x):
+            return getattr(x, "std")(ddof=ddof)
+
+        return self.agg(func)
+
+    def quantile(self, q=0.5, interpolation="linear"):
+        """Compute the column-wise quantiles of the values in each group.
+
+        Parameters
+        ----------
+        q : float or array-like
+            The quantiles to compute.
+        interpolation : {"linear", "lower", "higher", "midpoint", "nearest"}
+            The interpolation method to use when the desired quantile lies
+            between two data points. Defaults to "linear".
+       """
+
+        def func(x):
+            return getattr(x, "quantile")(q=q, interpolation=interpolation)
+
+        return self.agg(func)
+
+    def nunique(self):
+        """Compute the number of unique values in each column in each group."""
+        return self.agg("nunique")
+
+    def collect(self):
+        """Get a list of all the values for each column in each group."""
+        return self.agg("collect")
+
+    def unique(self):
+        """Get a list of the unique values for each column in each group."""
+        return self.agg("unique")
+
+    def cumsum(self):
+        """Compute the column-wise cumulative sum of the values in
+        each group."""
+        return self.agg("cumsum")
+
+    def cummin(self):
+        """Get the column-wise cumulative minimum value in each group."""
+        return self.agg("cummin")
+
+    def cummax(self):
+        """Get the column-wise cumulative maximum value in each group."""
+        return self.agg("cummax")
+
+    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
+        """
+        Shift each group by ``periods`` positions.
+
+        Parameters
+        ----------
+        periods : int, default 1
+            Number of periods to shift.
+        freq : str, unsupported
+        axis : 0, axis to shift
+            Shift direction. Only row-wise shift is supported
+        fill_value : scalar or list of scalars, optional
+            The scalar value to use for newly introduced missing values. Can be
+            specified with `None`, a single value or multiple values:
+
+            - `None` (default): sets all indeterminable values to null.
+            - Single value: fill all shifted columns with this value. Should
+              match the data type of all columns.
+            - List of values: fill shifted columns with corresponding value in
+              the list. The length of the list should match the number of
+              columns shifted. Each value should match the data type of the
+              column to fill.
+
+        Returns
+        -------
+        Series or DataFrame
+            Object shifted within each group.
+
+        Notes
+        -----
+        Parameter ``freq`` is unsupported.
+        """
+
+        if freq is not None:
+            raise NotImplementedError("Parameter freq is unsupported.")
+
+        if not axis == 0:
+            raise NotImplementedError("Only axis=0 is supported.")
+
+        value_column_names = [
+            x for x in self.obj._column_names if x not in self.grouping.names
+        ]
+        num_columns_to_shift = len(value_column_names)
+        if is_list_like(fill_value):
+            if not len(fill_value) == num_columns_to_shift:
+                raise ValueError(
+                    "Mismatched number of columns and values to fill."
+                )
+        else:
+            fill_value = [fill_value] * num_columns_to_shift
+
+        value_columns = self.obj._data.select_by_label(value_column_names)
+        result = self._groupby.shift(Table(value_columns), periods, fill_value)
+        return self.obj.__class__._from_table(result)
+
+
+class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
+    _PROTECTED_KEYS = frozenset(("obj",))
+
     def __init__(
-        self, obj, by=None, level=None, sort=True, as_index=True, dropna=True
+        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
     ):
         """
         Group DataFrame using a mapper or by a Series of columns.
@@ -599,10 +792,11 @@ class DataFrameGroupBy(GroupBy):
             For aggregated output, return object with group labels as
             the index. Only relevant for DataFrame input.
             as_index=False is effectively “SQL-style” grouped output.
-        sort : bool, default True
-            Sort group keys. Get better performance by turning this off.
-            Note this does not influence the order of observations within each
-            group. Groupby preserves the order of rows within each group.
+        sort : bool, default False
+            Sort result by group key. Differ from Pandas, cudf defaults to
+            ``False`` for better performance. Note this does not influence
+            the order of observations within each group. Groupby preserves
+            the order of rows within each group.
         dropna : bool, optional
             If True (default), do not include the "null" group.
 
@@ -651,8 +845,8 @@ class DataFrameGroupBy(GroupBy):
         >>> df.groupby(level="Type").mean()
                 Max Speed
         Type
-        Captive      210.0
         Wild         185.0
+        Captive      210.0
 
         """
         super().__init__(
@@ -664,18 +858,10 @@ class DataFrameGroupBy(GroupBy):
             dropna=dropna,
         )
 
-    def __getattribute__(self, key):
-        try:
-            return super().__getattribute__(key)
-        except AttributeError:
-            if key in self.obj:
-                return self.obj[key].groupby(
-                    self.grouping, dropna=self._dropna
-                )
-            raise
-
     def __getitem__(self, key):
-        return self.obj[key].groupby(self.grouping, dropna=self._dropna)
+        return self.obj[key].groupby(
+            self.grouping, dropna=self._dropna, sort=self._sort
+        )
 
     def nunique(self):
         """
@@ -686,7 +872,7 @@ class DataFrameGroupBy(GroupBy):
 
 class SeriesGroupBy(GroupBy):
     def __init__(
-        self, obj, by=None, level=None, sort=True, as_index=True, dropna=True
+        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
     ):
         """
         Group Series using a mapper or by a Series of columns.
@@ -713,10 +899,11 @@ class SeriesGroupBy(GroupBy):
             For aggregated output, return object with group labels as
             the index. Only relevant for DataFrame input.
             as_index=False is effectively “SQL-style” grouped output.
-        sort : bool, default True
-            Sort group keys. Get better performance by turning this off.
-            Note this does not influence the order of observations within each
-            group. Groupby preserves the order of rows within each group.
+        sort : bool, default False
+            Sort result by group key. Differ from Pandas, cudf defaults to
+            ``False`` for better performance. Note this does not influence
+            the order of observations within each group. Groupby preserves
+            the order of rows within each group.
 
         Returns
         -------
@@ -759,8 +946,9 @@ class SeriesGroupBy(GroupBy):
         result = super().agg(func)
 
         # downcast the result to a Series:
-        if result.shape[1] == 1 and not pd.api.types.is_list_like(func):
-            return result.iloc[:, 0]
+        if len(result._data):
+            if result.shape[1] == 1 and not pd.api.types.is_list_like(func):
+                return result.iloc[:, 0]
 
         # drop the first level if we have a multiindex
         if (
@@ -793,6 +981,9 @@ class _Grouping(Serializable):
         self._named_columns = []
         self._handle_by_or_level(by, level)
 
+        if len(obj) and not len(self._key_columns):
+            raise ValueError("No group keys passed")
+
     def _handle_by_or_level(self, by=None, level=None):
         if level is not None:
             if by is not None:
@@ -823,7 +1014,10 @@ class _Grouping(Serializable):
     @property
     def keys(self):
         nkeys = len(self._key_columns)
-        if nkeys > 1:
+
+        if nkeys == 0:
+            return cudf.core.index.as_index([], name=None)
+        elif nkeys > 1:
             return cudf.MultiIndex(
                 source_data=cudf.DataFrame(
                     dict(zip(range(nkeys), self._key_columns))

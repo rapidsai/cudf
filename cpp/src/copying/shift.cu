@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,9 +26,13 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
+
 #include <thrust/copy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
+
 #include <algorithm>
 #include <iterator>
 #include <memory>
@@ -42,8 +46,7 @@ inline bool __device__ out_of_bounds(size_type size, size_type idx)
 
 struct shift_functor {
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_fixed_width<T>(), std::unique_ptr<column>> operator()(
-    Args&&... args)
+  std::enable_if_t<not cudf::is_fixed_width<T>(), std::unique_ptr<column>> operator()(Args&&...)
   {
     CUDF_FAIL("shift does not support non-fixed-width types.");
   }
@@ -53,16 +56,15 @@ struct shift_functor {
     column_view const& input,
     size_type offset,
     scalar const& fill_value,
-    rmm::mr::device_memory_resource* mr,
-    cudaStream_t stream)
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr)
   {
-    using Type       = device_storage_type_t<T>;
-    using ScalarType = cudf::scalar_type_t<Type>;
+    using ScalarType = cudf::scalar_type_t<T>;
     auto& scalar     = static_cast<ScalarType const&>(fill_value);
 
     auto device_input = column_device_view::create(input);
     auto output =
-      detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, mr, stream);
+      detail::allocate_like(input, input.size(), mask_allocation_policy::NEVER, stream, mr);
     auto device_output = mutable_column_device_view::create(*output);
 
     auto size        = input.size();
@@ -84,7 +86,7 @@ struct shift_functor {
       output->set_null_count(std::get<1>(mask_pair));
     }
 
-    auto data = device_output->data<Type>();
+    auto data = device_output->data<T>();
 
     // avoid assigning elements we know to be invalid.
     if (not scalar.is_valid()) {
@@ -99,11 +101,10 @@ struct shift_functor {
     auto func_value =
       [size, offset, fill = scalar.data(), input = *device_input] __device__(size_type idx) {
         auto src_idx = idx - offset;
-        return out_of_bounds(size, src_idx) ? *fill : input.element<Type>(src_idx);
+        return out_of_bounds(size, src_idx) ? *fill : input.element<T>(src_idx);
       };
 
-    thrust::transform(
-      rmm::exec_policy(stream)->on(stream), index_begin, index_end, data, func_value);
+    thrust::transform(rmm::exec_policy(stream), index_begin, index_end, data, func_value);
 
     return output;
   }
@@ -111,11 +112,13 @@ struct shift_functor {
 
 }  // anonymous namespace
 
+namespace detail {
+
 std::unique_ptr<column> shift(column_view const& input,
                               size_type offset,
                               scalar const& fill_value,
-                              rmm::mr::device_memory_resource* mr,
-                              cudaStream_t stream)
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(input.type() == fill_value.type(),
@@ -123,7 +126,18 @@ std::unique_ptr<column> shift(column_view const& input,
 
   if (input.is_empty()) { return empty_like(input); }
 
-  return type_dispatcher(input.type(), shift_functor{}, input, offset, fill_value, mr, stream);
+  return type_dispatcher<dispatch_storage_type>(
+    input.type(), shift_functor{}, input, offset, fill_value, stream, mr);
+}
+
+}  // namespace detail
+
+std::unique_ptr<column> shift(column_view const& input,
+                              size_type offset,
+                              scalar const& fill_value,
+                              rmm::mr::device_memory_resource* mr)
+{
+  return detail::shift(input, offset, fill_value, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

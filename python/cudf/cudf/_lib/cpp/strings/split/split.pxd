@@ -20,3 +20,13 @@ cdef extern from "cudf/strings/split/split.hpp" namespace \
         column_view source_strings,
         string_scalar delimiter,
         size_type maxsplit) except +
+
+    cdef unique_ptr[column] split_record(
+        column_view source_strings,
+        string_scalar delimiter,
+        size_type maxsplit) except +
+
+    cdef unique_ptr[column] rsplit_record(
+        column_view source_strings,
+        string_scalar delimiter,
+        size_type maxsplit) except +

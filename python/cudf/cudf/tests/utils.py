@@ -1,8 +1,9 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import re
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
+from decimal import Decimal
 
 import cupy
 import numpy as np
@@ -12,6 +13,7 @@ from pandas import testing as tm
 
 import cudf
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
+from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils import dtypes as dtypeutils
 
 supported_numpy_dtypes = [
@@ -73,7 +75,16 @@ def assert_eq(left, right, **kwargs):
     without switching between assert_frame_equal/assert_series_equal/...
     functions.
     """
-    __tracebackhide__ = True
+    # dtypes that we support but Pandas doesn't will convert to
+    # `object`. Check equality before that happens:
+    if kwargs.get("check_dtype", True):
+        if hasattr(left, "dtype") and hasattr(right, "dtype"):
+            if isinstance(
+                left.dtype, cudf.core.dtypes._BaseDtype
+            ) and not isinstance(
+                left.dtype, cudf.CategoricalDtype
+            ):  # leave categorical comparison to Pandas
+                assert_eq(left.dtype, right.dtype)
 
     if hasattr(left, "to_pandas"):
         left = left.to_pandas()
@@ -98,13 +109,13 @@ def assert_eq(left, right, **kwargs):
         else:
             assert np.array_equal(left, right)
     else:
+        # Use the overloaded __eq__ of the operands
         if left == right:
             return True
+        elif any([np.issubdtype(type(x), np.floating) for x in (left, right)]):
+            np.testing.assert_almost_equal(left, right)
         else:
-            if np.isnan(left):
-                assert np.isnan(right)
-            else:
-                assert np.allclose(left, right, equal_nan=True)
+            np.testing.assert_equal(left, right)
     return True
 
 
@@ -259,8 +270,22 @@ def gen_rand(dtype, size, **kwargs):
         return np.random.randint(low=low, high=high, size=size).astype(dtype)
     elif dtype.kind == "b":
         low = kwargs.get("low", 0)
-        high = kwargs.get("high", 1)
-        return np.random.randint(low=low, high=high, size=size).astype(np.bool)
+        high = kwargs.get("high", 2)
+        return np.random.randint(low=low, high=high, size=size).astype(
+            np.bool_
+        )
+    elif dtype.kind == "M":
+        low = kwargs.get("low", 0)
+        time_unit, _ = np.datetime_data(dtype)
+        high = kwargs.get(
+            "high",
+            1000000000000000000 / _numpy_to_pandas_conversion[time_unit],
+        )
+        return pd.to_datetime(
+            np.random.randint(low=low, high=high, size=size), unit=time_unit
+        )
+    elif dtype.kind == "U":
+        return pd.util.testing.rands_array(10, size)
     raise NotImplementedError(f"dtype.kind={dtype.kind}")
 
 
@@ -272,6 +297,16 @@ def gen_rand_series(dtype, size, **kwargs):
     return cudf.Series(values)
 
 
+def _decimal_series(input, dtype):
+    return cudf.Series(
+        [x if x is None else Decimal(x) for x in input], dtype=dtype,
+    )
+
+
 @contextmanager
 def does_not_raise():
     yield
+
+
+def xfail_param(param, **kwargs):
+    return pytest.param(param, marks=pytest.mark.xfail(**kwargs))

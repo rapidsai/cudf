@@ -20,22 +20,21 @@
 
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_view.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace java {
 
+std::vector<std::unique_ptr<cudf::column>>
+convert_to_rows(cudf::table_view const &tbl,
+                // TODO need something for validity
+                rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+                rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
-std::vector<std::unique_ptr<cudf::column>> convert_to_rows(
-        cudf::table_view const& tbl,
-        // TODO need something for validity
-        cudaStream_t stream = 0,
-        rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::table>
+convert_from_rows(cudf::lists_column_view const &input, std::vector<cudf::data_type> const &schema,
+                  rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+                  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
-std::unique_ptr<cudf::table> convert_from_rows(
-        cudf::lists_column_view const& input,
-        std::vector<cudf::data_type> const& schema,
-        cudaStream_t stream = 0,
-        rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-} // java
-} // cudf
+} // namespace java
+} // namespace cudf

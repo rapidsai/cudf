@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
+#include <io/orc/orc.h>
 #include <algorithm>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/avro.hpp>
 #include <cudf/io/csv.hpp>
+#include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/avro.hpp>
 #include <cudf/io/detail/csv.hpp>
@@ -26,13 +28,10 @@
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/orc.hpp>
+#include <cudf/io/orc_metadata.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
-
-#include "io/orc/orc.h"
-#include "orc/chunked_state.hpp"
-#include "parquet/chunked_state.hpp"
 
 namespace cudf {
 namespace io {
@@ -110,10 +109,11 @@ namespace {
 template <typename reader, typename reader_options>
 std::unique_ptr<reader> make_reader(source_info const& src_info,
                                     reader_options const& options,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   if (src_info.type == io_type::FILEPATH) {
-    return std::make_unique<reader>(src_info.filepaths, options, mr);
+    return std::make_unique<reader>(src_info.filepaths, options, stream, mr);
   }
 
   std::vector<std::unique_ptr<datasource>> datasources;
@@ -125,58 +125,57 @@ std::unique_ptr<reader> make_reader(source_info const& src_info,
     CUDF_FAIL("Unsupported source type");
   }
 
-  return std::make_unique<reader>(std::move(datasources), options, mr);
+  return std::make_unique<reader>(std::move(datasources), options, stream, mr);
 }
 
-template <typename writer, typename writer_options>
-std::unique_ptr<writer> make_writer(sink_info const& sink,
-                                    writer_options const& options,
-                                    rmm::mr::device_memory_resource* mr)
+template <typename writer, typename... Ts>
+std::unique_ptr<writer> make_writer(sink_info const& sink, Ts&&... args)
 {
   if (sink.type == io_type::FILEPATH) {
-    return std::make_unique<writer>(cudf::io::data_sink::create(sink.filepath), options, mr);
+    return std::make_unique<writer>(cudf::io::data_sink::create(sink.filepath),
+                                    std::forward<Ts>(args)...);
   }
   if (sink.type == io_type::HOST_BUFFER) {
-    return std::make_unique<writer>(cudf::io::data_sink::create(sink.buffer), options, mr);
+    return std::make_unique<writer>(cudf::io::data_sink::create(sink.buffer),
+                                    std::forward<Ts>(args)...);
   }
   if (sink.type == io_type::VOID) {
-    return std::make_unique<writer>(cudf::io::data_sink::create(), options, mr);
+    return std::make_unique<writer>(cudf::io::data_sink::create(), std::forward<Ts>(args)...);
   }
   if (sink.type == io_type::USER_IMPLEMENTED) {
-    return std::make_unique<writer>(cudf::io::data_sink::create(sink.user_sink), options, mr);
+    return std::make_unique<writer>(cudf::io::data_sink::create(sink.user_sink),
+                                    std::forward<Ts>(args)...);
   }
   CUDF_FAIL("Unsupported sink type");
 }
 
 }  // namespace
 
-// Freeform API wraps the detail reader class API
 table_with_metadata read_avro(avro_reader_options const& opts, rmm::mr::device_memory_resource* mr)
 {
   namespace avro = cudf::io::detail::avro;
 
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<avro::reader>(opts.get_source(), opts, mr);
+  auto reader = make_reader<avro::reader>(opts.get_source(), opts, rmm::cuda_stream_default, mr);
   return reader->read(opts);
 }
 
-// Freeform API wraps the detail reader class API
 table_with_metadata read_json(json_reader_options const& opts, rmm::mr::device_memory_resource* mr)
 {
   namespace json = cudf::io::detail::json;
 
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<json::reader>(opts.get_source(), opts, mr);
+  auto reader = make_reader<json::reader>(opts.get_source(), opts, rmm::cuda_stream_default, mr);
   return reader->read(opts);
 }
 
-// Freeform API wraps the detail reader class API
 table_with_metadata read_csv(csv_reader_options const& options, rmm::mr::device_memory_resource* mr)
 {
   namespace csv = cudf::io::detail::csv;
 
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<csv::reader>(options.get_source(), options, mr);
+  auto reader =
+    make_reader<csv::reader>(options.get_source(), options, rmm::cuda_stream_default, mr);
 
   return reader->read();
 }
@@ -186,15 +185,14 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
 {
   using namespace cudf::io::detail;
 
-  auto writer = make_writer<csv::writer>(options.get_sink(), options, mr);
+  auto writer = make_writer<csv::writer>(options.get_sink(), options, rmm::cuda_stream_default, mr);
 
   writer->write(options.get_table(), options.get_metadata());
 }
 
 namespace detail_orc = cudf::io::detail::orc;
 
-// Freeform API wraps the detail reader class API
-std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src_info)
+raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 {
   // Get source to read statistics from
   std::unique_ptr<datasource> source;
@@ -211,164 +209,160 @@ std::vector<std::vector<std::string>> read_orc_statistics(source_info const& src
     CUDF_FAIL("Unsupported source type");
   }
 
-  // Get size of file and size of postscript
-  const auto len         = source->size();
-  const auto max_ps_size = std::min(len, static_cast<size_t>(256));
-
-  // Read uncompressed postscript section (max 255 bytes + 1 byte for length)
-  auto buffer            = source->host_read(len - max_ps_size, max_ps_size);
-  const size_t ps_length = buffer->data()[max_ps_size - 1];
-  const uint8_t* ps_data = &buffer->data()[max_ps_size - ps_length - 1];
-  orc::ProtobufReader pb;
-  orc::PostScript ps;
-  pb.init(ps_data, ps_length);
-  CUDF_EXPECTS(pb.read(&ps, ps_length), "Cannot read postscript");
-  CUDF_EXPECTS(ps.footerLength + ps_length < len, "Invalid footer length");
-
-  // If compression is used, all the rest of the metadata is compressed
-  // If no compressed is used, the decompressor is simply a pass-through
-  std::unique_ptr<orc::OrcDecompressor> decompressor =
-    std::make_unique<orc::OrcDecompressor>(ps.compression, ps.compressionBlockSize);
-
-  // Read compressed filefooter section
-  buffer           = source->host_read(len - ps_length - 1 - ps.footerLength, ps.footerLength);
-  size_t ff_length = 0;
-  auto ff_data     = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
-  orc::FileFooter ff;
-  pb.init(ff_data, ff_length);
-  CUDF_EXPECTS(pb.read(&ff, ff_length), "Cannot read filefooter");
-  CUDF_EXPECTS(ff.types.size() > 0, "No columns found");
-
-  // Read compressed metadata section
-  buffer =
-    source->host_read(len - ps_length - 1 - ps.footerLength - ps.metadataLength, ps.metadataLength);
-  size_t md_length = 0;
-  auto md_data     = decompressor->Decompress(buffer->data(), ps.metadataLength, &md_length);
-  orc::Metadata md;
-  pb.init(md_data, md_length);
-  CUDF_EXPECTS(pb.read(&md, md_length), "Cannot read metadata");
+  orc::metadata metadata(source.get());
 
   // Initialize statistics to return
-  std::vector<std::vector<std::string>> statistics_blobs;
+  raw_orc_statistics result;
 
   // Get column names
-  std::vector<std::string> column_names;
-  for (auto i = 0; i < ff.types.size(); i++) { column_names.push_back(ff.GetColumnName(i)); }
-  statistics_blobs.push_back(column_names);
+  for (auto i = 0; i < metadata.get_num_columns(); i++) {
+    result.column_names.push_back(metadata.get_column_name(i));
+  }
 
   // Get file-level statistics, statistics of each column of file
-  std::vector<std::string> file_column_statistics_blobs;
-  for (orc::ColumnStatistics stats : ff.statistics) {
-    file_column_statistics_blobs.push_back(std::string(stats.begin(), stats.end()));
+  for (auto const& stats : metadata.ff.statistics) {
+    result.file_stats.push_back(std::string(stats.cbegin(), stats.cend()));
   }
-  statistics_blobs.push_back(file_column_statistics_blobs);
 
   // Get stripe-level statistics
-  for (orc::StripeStatistics stripe_stats : md.stripeStats) {
-    std::vector<std::string> stripe_column_statistics_blobs;
-    for (orc::ColumnStatistics stats : stripe_stats.colStats) {
-      stripe_column_statistics_blobs.push_back(std::string(stats.begin(), stats.end()));
+  for (auto const& stripes_stats : metadata.md.stripeStats) {
+    result.stripes_stats.emplace_back();
+    for (auto const& stats : stripes_stats.colStats) {
+      result.stripes_stats.back().push_back(std::string(stats.cbegin(), stats.cend()));
     }
-    statistics_blobs.push_back(stripe_column_statistics_blobs);
   }
 
-  return statistics_blobs;
+  return result;
 }
 
-// Freeform API wraps the detail reader class API
+column_statistics::column_statistics(cudf::io::orc::column_statistics&& cs)
+{
+  number_of_values = cs.number_of_values;
+  if (cs.int_stats) {
+    type_specific_stats = *cs.int_stats;
+  } else if (cs.double_stats) {
+    type_specific_stats = *cs.double_stats;
+  } else if (cs.string_stats) {
+    type_specific_stats = *cs.string_stats;
+  } else if (cs.bucket_stats) {
+    type_specific_stats = *cs.bucket_stats;
+  } else if (cs.decimal_stats) {
+    type_specific_stats = *cs.decimal_stats;
+  } else if (cs.date_stats) {
+    type_specific_stats = *cs.date_stats;
+  } else if (cs.binary_stats) {
+    type_specific_stats = *cs.binary_stats;
+  } else if (cs.timestamp_stats) {
+    type_specific_stats = *cs.timestamp_stats;
+  }
+}
+
+parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info)
+{
+  auto const raw_stats = read_raw_orc_statistics(src_info);
+
+  parsed_orc_statistics result;
+  result.column_names = raw_stats.column_names;
+
+  auto parse_column_statistics = [](auto const& raw_col_stats) {
+    orc::column_statistics stats_internal;
+    orc::ProtobufReader(reinterpret_cast<const uint8_t*>(raw_col_stats.c_str()),
+                        raw_col_stats.size())
+      .read(stats_internal);
+    return column_statistics(std::move(stats_internal));
+  };
+
+  std::transform(raw_stats.file_stats.cbegin(),
+                 raw_stats.file_stats.cend(),
+                 std::back_inserter(result.file_stats),
+                 parse_column_statistics);
+
+  for (auto const& raw_stripe_stats : raw_stats.stripes_stats) {
+    result.stripes_stats.emplace_back();
+    std::transform(raw_stripe_stats.cbegin(),
+                   raw_stripe_stats.cend(),
+                   std::back_inserter(result.stripes_stats.back()),
+                   parse_column_statistics);
+  }
+
+  return result;
+}
+
+/**
+ * @copydoc cudf::io::read_orc
+ */
 table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<detail_orc::reader>(options.get_source(), options, mr);
+  auto reader =
+    make_reader<detail_orc::reader>(options.get_source(), options, rmm::cuda_stream_default, mr);
 
   return reader->read(options);
 }
 
-// Freeform API wraps the detail writer class API
+/**
+ * @copydoc cudf::io::write_orc
+ */
 void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto writer = make_writer<detail_orc::writer>(options.get_sink(), options, mr);
 
-  writer->write(options.get_table(), options.get_metadata());
+  namespace io_detail = cudf::io::detail;
+  auto writer         = make_writer<detail_orc::writer>(
+    options.get_sink(), options, io_detail::SingleWriteMode::YES, rmm::cuda_stream_default, mr);
+
+  writer->write(options.get_table());
 }
 
 /**
- * @copydoc cudf::io::write_orc_chunked_begin
- *
- **/
-std::shared_ptr<orc_chunked_state> write_orc_chunked_begin(chunked_orc_writer_options const& opts,
-                                                           rmm::mr::device_memory_resource* mr)
+ * @copydoc cudf::io::orc_chunked_writer::orc_chunked_writer
+ */
+orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& op,
+                                       rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FUNC_RANGE();
-  orc_writer_options options;
-  options.set_compression(opts.get_compression());
-  options.enable_statistics(opts.enable_statistics());
-  auto state = std::make_shared<orc_chunked_state>();
-  state->wp  = make_writer<detail_orc::writer>(opts.get_sink(), options, mr);
-
-  // have to make a copy of the metadata here since we can't really
-  // guarantee the lifetime of the incoming pointer
-  if (opts.get_metadata() != nullptr) {
-    state->user_metadata_with_nullability = *opts.get_metadata();
-    state->user_metadata                  = &state->user_metadata_with_nullability;
-  }
-  state->stream = 0;
-  state->wp->write_chunked_begin(*state);
-  return state;
+  namespace io_detail = cudf::io::detail;
+  writer              = make_writer<detail_orc::writer>(
+    op.get_sink(), op, io_detail::SingleWriteMode::NO, rmm::cuda_stream_default, mr);
 }
 
 /**
- * @copydoc cudf::io::write_orc_chunked
- *
- **/
-void write_orc_chunked(table_view const& table, std::shared_ptr<orc_chunked_state> state)
+ * @copydoc cudf::io::orc_chunked_writer::write
+ */
+orc_chunked_writer& orc_chunked_writer::write(table_view const& table)
 {
   CUDF_FUNC_RANGE();
-  state->wp->write_chunk(table, *state);
+
+  writer->write(table);
+
+  return *this;
 }
 
 /**
- * @copydoc cudf::io::write_orc_chunked_end
- *
- **/
-void write_orc_chunked_end(std::shared_ptr<orc_chunked_state>& state)
+ * @copydoc cudf::io::orc_chunked_writer::close
+ */
+void orc_chunked_writer::close()
 {
   CUDF_FUNC_RANGE();
-  state->wp->write_chunked_end(*state);
-  state.reset();
+
+  writer->close();
 }
 
 using namespace cudf::io::detail::parquet;
 namespace detail_parquet = cudf::io::detail::parquet;
 
-// Freeform API wraps the detail reader class API
 table_with_metadata read_parquet(parquet_reader_options const& options,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto reader = make_reader<detail_parquet::reader>(options.get_source(), options, mr);
+  auto reader = make_reader<detail_parquet::reader>(
+    options.get_source(), options, rmm::cuda_stream_default, mr);
 
   return reader->read(options);
 }
 
-// Freeform API wraps the detail writer class API
-std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const& options,
-                                                    rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  auto writer = make_writer<detail_parquet::writer>(options.get_sink(), options, mr);
-
-  return writer->write(options.get_table(),
-                       options.get_metadata(),
-                       options.is_enabled_return_filemetadata(),
-                       options.get_column_chunks_file_path());
-}
-
 /**
  * @copydoc cudf::io::merge_rowgroup_metadata
- *
- **/
+ */
 std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list)
 {
@@ -376,55 +370,69 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
   return detail_parquet::writer::merge_rowgroup_metadata(metadata_list);
 }
 
-/**
- * @copydoc cudf::io::write_parquet_chunked_begin
- *
- **/
-std::shared_ptr<pq_chunked_state> write_parquet_chunked_begin(
-  chunked_parquet_writer_options const& op, rmm::mr::device_memory_resource* mr)
+table_input_metadata::table_input_metadata(table_view const& table,
+                                           std::map<std::string, std::string> user_data)
+  : user_data{std::move(user_data)}
 {
-  CUDF_FUNC_RANGE();
-  parquet_writer_options options = parquet_writer_options::builder()
-                                     .compression(op.get_compression())
-                                     .stats_level(op.get_stats_level());
+  // Create a metadata hierarchy using `table`
+  std::function<column_in_metadata(column_view const&)> get_children = [&](column_view const& col) {
+    auto col_meta = column_in_metadata{};
+    std::transform(
+      col.child_begin(), col.child_end(), std::back_inserter(col_meta.children), get_children);
+    return col_meta;
+  };
 
-  auto state = std::make_shared<pq_chunked_state>();
-  state->wp  = make_writer<detail_parquet::writer>(op.get_sink(), options, mr);
-
-  // have to make a copy of the metadata here since we can't really
-  // guarantee the lifetime of the incoming pointer
-  if (op.get_nullable_metadata() != nullptr) {
-    state->user_metadata_with_nullability = *op.get_nullable_metadata();
-    state->user_metadata                  = &state->user_metadata_with_nullability;
-  }
-  state->stream = 0;
-  state->wp->write_chunked_begin(*state);
-  return state;
+  std::transform(
+    table.begin(), table.end(), std::back_inserter(this->column_metadata), get_children);
 }
 
 /**
- * @copydoc cudf::io::write_parquet_chunked
- *
- **/
-void write_parquet_chunked(table_view const& table, std::shared_ptr<pq_chunked_state> state)
+ * @copydoc cudf::io::write_parquet
+ */
+std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const& options,
+                                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  state->wp->write_chunk(table, *state);
+  namespace io_detail = cudf::io::detail;
+
+  auto writer = make_writer<detail_parquet::writer>(
+    options.get_sink(), options, io_detail::SingleWriteMode::YES, rmm::cuda_stream_default, mr);
+
+  writer->write(options.get_table());
+  return writer->close(options.get_column_chunks_file_path());
 }
 
 /**
- * @copydoc cudf::io::write_parquet_chunked_end
- *
- **/
-std::unique_ptr<std::vector<uint8_t>> write_parquet_chunked_end(
-  std::shared_ptr<pq_chunked_state>& state,
-  bool return_filemetadata,
-  const std::string& column_chunks_file_path)
+ * @copydoc cudf::io::parquet_chunked_writer::parquet_chunked_writer
+ */
+parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options const& op,
+                                               rmm::mr::device_memory_resource* mr)
+{
+  namespace io_detail = cudf::io::detail;
+  writer              = make_writer<detail_parquet::writer>(
+    op.get_sink(), op, io_detail::SingleWriteMode::NO, rmm::cuda_stream_default, mr);
+}
+
+/**
+ * @copydoc cudf::io::parquet_chunked_writer::write
+ */
+parquet_chunked_writer& parquet_chunked_writer::write(table_view const& table)
 {
   CUDF_FUNC_RANGE();
-  auto meta = state->wp->write_chunked_end(*state, return_filemetadata, column_chunks_file_path);
-  state.reset();
-  return meta;
+
+  writer->write(table);
+
+  return *this;
+}
+
+/**
+ * @copydoc cudf::io::parquet_chunked_writer::close
+ */
+std::unique_ptr<std::vector<uint8_t>> parquet_chunked_writer::close(
+  std::string const& column_chunks_file_path)
+{
+  CUDF_FUNC_RANGE();
+  return writer->close(column_chunks_file_path);
 }
 
 }  // namespace io

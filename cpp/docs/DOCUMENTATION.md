@@ -225,7 +225,7 @@ You can use the `@copydoc` tag to avoid duplicating the comment block for a func
    */
 ```
 
-Also, `@copydoc` is useful when documenting a `detail` function that differs only by the `cudaStream_t` parameter.
+Also, `@copydoc` is useful when documenting a `detail` function that differs only by the `stream` parameter.
 
 ```c++
 /**
@@ -235,7 +235,7 @@ Also, `@copydoc` is useful when documenting a `detail` function that differs onl
  */
 std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
                                                 std::vector<size_type> const& indices,
-                                                cudaStream_t stream = 0);
+                                                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 ```
 
 Note, you must specify the whole signature of the function, including optional parameters, so that doxygen will be able to locate it.

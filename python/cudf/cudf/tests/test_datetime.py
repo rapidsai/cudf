@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
+
 import datetime
 import datetime as dt
 import operator
@@ -402,7 +403,7 @@ def test_datetime_to_arrow(dtype):
 @pytest.mark.parametrize(
     "data",
     [
-        [],
+        pd.Series([], dtype="datetime64[ns]"),
         pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
         pd.Series([None, None], dtype="datetime64[ns]"),
     ],
@@ -411,10 +412,7 @@ def test_datetime_to_arrow(dtype):
     "nulls", ["none", pytest.param("some", marks=pytest.mark.xfail)]
 )
 def test_datetime_unique(data, nulls):
-    psr = pd.Series(data)
-
-    print(data)
-    print(nulls)
+    psr = data.copy()
 
     if len(data) > 0:
         if nulls == "some":
@@ -431,14 +429,14 @@ def test_datetime_unique(data, nulls):
 @pytest.mark.parametrize(
     "data",
     [
-        [],
+        pd.Series([], dtype="datetime64[ns]"),
         pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
         pd.Series([None, None], dtype="datetime64[ns]"),
     ],
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_datetime_nunique(data, nulls):
-    psr = pd.Series(data)
+    psr = data.copy()
 
     if len(data) > 0:
         if nulls == "some":
@@ -540,7 +538,7 @@ def test_datetime_dataframe():
     [
         None,
         [],
-        pd.Series([]),
+        pd.Series([], dtype="float64"),
         pd.Index([]),
         pd.Series([1, 2, 3]),
         pd.Series([0, 1, -1]),
@@ -673,7 +671,7 @@ def test_to_datetime_not_implemented():
     [
         1,
         [],
-        pd.Series([]),
+        pd.Series([], dtype="float64"),
         pd.Index([]),
         pd.Series([1, 2, 3]),
         pd.Series([1, 2.4, 3]),
@@ -970,6 +968,51 @@ def test_datetime_series_ops_with_scalars(data, other_scalars, dtype, op):
         )
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [],
+        [None],
+        [None, None, None, None, None],
+        [12, 12, 22, 343, 4353534, 435342],
+        np.array([10, 20, 30, None, 100]),
+        cp.asarray([10, 20, 30, 100]),
+        [1000000, 200000, 3000000],
+        [1000000, 200000, None],
+        [1],
+        [12, 11, 232, 223432411, 2343241, 234324, 23234],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+        [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
+        [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+    ],
+)
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        datetime.timedelta(days=768),
+        datetime.timedelta(seconds=768),
+        datetime.timedelta(microseconds=7),
+        pytest.param(np.timedelta64("nat"), marks=pytest.mark.xfail),
+        np.timedelta64(1, "s"),
+        np.timedelta64(1, "ms"),
+        np.timedelta64(1, "us"),
+        np.timedelta64(1, "ns"),
+    ],
+)
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+@pytest.mark.parametrize("op", [np.add, np.subtract])
+def test_datetime_series_ops_with_cudf_scalars(data, scalar, dtype, op):
+    gsr = cudf.Series(data=data, dtype=dtype)
+    psr = gsr.to_pandas()
+
+    expect = op(psr, scalar)
+    got = op(gsr, cudf.Scalar(scalar))
+
+    assert_eq(expect, got)
+
+
 def test_datetime_invalid_ops():
     sr = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
     psr = sr.to_pandas()
@@ -1137,7 +1180,7 @@ def test_datetime_stats(data, dtype, stat):
         assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("op", ["max", "min"])
+@pytest.mark.parametrize("op", ["max", "min", "std", "median"])
 @pytest.mark.parametrize(
     "data",
     [
@@ -1156,10 +1199,14 @@ def test_datetime_reductions(data, op, dtype):
     actual = getattr(sr, op)()
     expected = getattr(psr, op)()
 
-    if np.isnat(expected.to_numpy()) and np.isnat(actual):
+    if (
+        expected is pd.NaT
+        and actual is pd.NaT
+        or (np.isnat(expected.to_numpy()) and np.isnat(actual))
+    ):
         assert True
     else:
-        assert_eq(expected.to_numpy(), actual)
+        assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -1196,3 +1243,22 @@ def test_datetime_infer_format(data, dtype):
     actual = sr.astype(dtype)
 
     assert_eq(expected, actual)
+
+
+def test_dateoffset_instance_subclass_check():
+    assert not issubclass(pd.DateOffset, cudf.DateOffset)
+    assert not isinstance(pd.DateOffset(), cudf.DateOffset)
+
+
+def test_datetime_to_datetime_error():
+    assert_exceptions_equal(
+        lfunc=pd.to_datetime,
+        rfunc=cudf.to_datetime,
+        lfunc_args_and_kwargs=(["02-Oct-2017 09:30", "%d-%B-%Y %H:%M"],),
+        rfunc_args_and_kwargs=(["02-Oct-2017 09:30", "%d-%B-%Y %H:%M"],),
+        check_exception_type=False,
+        expected_error_message=re.escape(
+            "errors parameter has to be either one of: ['ignore', 'raise', "
+            "'coerce', 'warn'], found: %d-%B-%Y %H:%M"
+        ),
+    )

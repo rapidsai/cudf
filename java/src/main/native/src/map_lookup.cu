@@ -13,18 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/lists/contains.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/replace.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
 namespace cudf {
@@ -32,20 +37,18 @@ namespace {
 
 /**
  * @brief Device function that searches for the specified lookup_key
- * in the list at index `row_index`, and writes out the index of the 
+ * in the list at index `row_index`, and writes out the index of the
  * first match to the output.
- * 
+ *
  * This function is called once per row of the `input` column
  * If the lookup_key is not found, (-1) is returned for that list row.
  */
 template <bool has_nulls>
-void __device__ search_each_list(size_type row_index,
-                                 column_device_view input,
+void __device__ search_each_list(size_type row_index, column_device_view input,
                                  mutable_column_device_view output,
-                                 string_scalar_device_view lookup_key)
-{
-  if (has_nulls && input.is_null(row_index)) {  // List row is null.
-    output.element<size_type>(row_index) = -1;  // Not found.
+                                 string_scalar_device_view lookup_key) {
+  if (has_nulls && input.is_null(row_index)) { // List row is null.
+    output.element<size_type>(row_index) = -1; // Not found.
     return;
   }
 
@@ -68,7 +71,7 @@ void __device__ search_each_list(size_type row_index,
     }
   }
 
-  output.element<size_type>(row_index) = -1;  // Not found.
+  output.element<size_type>(row_index) = -1; // Not found.
 }
 
 /**
@@ -76,17 +79,16 @@ void __device__ search_each_list(size_type row_index,
  * string in each list<string> row of the `input` column.
  *
  * The kernel writes the index (into the `input` list-column's child) where the `lookup_key`
- * is found, to the `output` column. If the `lookup_key` is not found, (-1) is written instead. 
+ * is found, to the `output` column. If the `lookup_key` is not found, (-1) is written instead.
  *
  * The produces one output row per input, with no nulls. The output may then be used
  * with `cudf::gather()`, to find the values corresponding to the `lookup_key`.
  */
 template <int block_size, bool has_nulls>
-__launch_bounds__(block_size) __global__ void gpu_find_first(column_device_view input,
-                                                             mutable_column_device_view output,
-                                                             string_scalar_device_view lookup_key)
-{
-  size_type tid      = blockIdx.x * block_size + threadIdx.x;
+__launch_bounds__(block_size) __global__
+    void gpu_find_first(column_device_view input, mutable_column_device_view output,
+                        string_scalar_device_view lookup_key) {
+  size_type tid = blockIdx.x * block_size + threadIdx.x;
   size_type stride = block_size * gridDim.x;
 
   // Each CUDA thread processes one row of `input`. Each row is a list<string>.
@@ -106,72 +108,100 @@ __launch_bounds__(block_size) __global__ void gpu_find_first(column_device_view 
  * for each row.
  */
 template <bool has_nulls>
-std::unique_ptr<column> get_gather_map_for_map_values(column_view const& input,
-                                                      string_scalar& lookup_key,
-                                                      rmm::mr::device_memory_resource* mr,
-                                                      cudaStream_t stream)
-{
+std::unique_ptr<column>
+get_gather_map_for_map_values(column_view const &input, string_scalar &lookup_key,
+                              rmm::cuda_stream_view stream, rmm::mr::device_memory_resource *mr) {
   constexpr size_type block_size{256};
   cudf::detail::grid_1d grid{input.size(), block_size};
 
   auto input_device_view = cudf::column_device_view::create(input, stream);
   auto lookup_key_device_view{get_scalar_device_view(lookup_key)};
-  auto gather_map = make_numeric_column(
-    data_type{cudf::type_to_id<size_type>()}, input.size(), mask_state::ALL_VALID, stream, mr);
+  auto gather_map = make_numeric_column(data_type{cudf::type_to_id<size_type>()}, input.size(),
+                                        mask_state::ALL_VALID, stream, mr);
   auto output_view = mutable_column_device_view::create(gather_map->mutable_view(), stream);
 
-  gpu_find_first<block_size, has_nulls><<<grid.num_blocks, block_size, 0, stream>>>(
-    *input_device_view, *output_view, lookup_key_device_view);
+  gpu_find_first<block_size, has_nulls><<<grid.num_blocks, block_size, 0, stream.value()>>>(
+      *input_device_view, *output_view, lookup_key_device_view);
 
-  CHECK_CUDA(stream);
+  CHECK_CUDA(stream.value());
 
   return gather_map;
 }
 
-}  // namespace
-
-namespace jni {
-std::unique_ptr<column> map_lookup(column_view const& map_column,
-                                   string_scalar lookup_key,
-                                   bool has_nulls,
-                                   rmm::mr::device_memory_resource* mr,
-                                   cudaStream_t stream)
-{
-  // Defensive checks.
+/**
+ * @brief a defensive check for the map column that is going to be processed
+ */
+void map_input_check(column_view const &map_column, rmm::cuda_stream_view stream) {
   CUDF_EXPECTS(map_column.type().id() == type_id::LIST, "Expected LIST<STRUCT<key,value>>.");
 
   lists_column_view lcv{map_column};
-  auto structs_column = lcv.get_sliced_child(stream);
+  column_view structs_column = lcv.get_sliced_child(stream);
 
   CUDF_EXPECTS(structs_column.type().id() == type_id::STRUCT, "Expected LIST<STRUCT<key,value>>.");
 
-  structs_column_view scv{structs_column};
   CUDF_EXPECTS(structs_column.num_children() == 2, "Expected LIST<STRUCT<key,value>>.");
   CUDF_EXPECTS(structs_column.child(0).type().id() == type_id::STRING,
                "Expected LIST<STRUCT<key,value>>.");
   CUDF_EXPECTS(structs_column.child(1).type().id() == type_id::STRING,
                "Expected LIST<STRUCT<key,value>>.");
+}
 
+} // namespace
+
+namespace jni {
+
+std::unique_ptr<column> map_contains(column_view const &map_column, string_scalar lookup_key,
+                                     bool has_nulls, rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource *mr) {
+  // Defensive checks.
+  map_input_check(map_column, stream);
+
+  lists_column_view lcv(map_column);
+  structs_column_view scv(lcv.child());
+
+  std::vector<column_view> children;
+  children.push_back(lcv.offsets());
+  children.push_back(scv.child(0));
+
+  column_view list_of_keys(map_column.type(), map_column.size(),
+    nullptr, map_column.null_mask(), map_column.null_count(), 0, children);
+  auto contains_column  = lists::contains(list_of_keys, lookup_key);
+  // null will be skipped in all-aggregation when checking if all rows contain the key,
+  // so replace all nulls with 0.
+  std::unique_ptr<cudf::scalar> replacement =
+        cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::BOOL8));
+  replacement->set_valid(true);
+  using ScalarType = cudf::scalar_type_t<int8_t>;
+  static_cast<ScalarType *>(replacement.get())->set_value(0);
+  auto result = cudf::replace_nulls(contains_column->view(), *replacement);
+  return result;
+}
+
+std::unique_ptr<column> map_lookup(column_view const &map_column, string_scalar lookup_key,
+                                   bool has_nulls, rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource *mr) {
+  // Defensive checks.
+  map_input_check(map_column, stream);
+
+  lists_column_view lcv{map_column};
+  column_view structs_column = lcv.get_sliced_child(stream);
   // Two-pass plan: construct gather map, and then gather() on structs_column.child(1). Plan A.
   // (Can do in one pass perhaps, but that's Plan B.)
 
-  auto gather_map = has_nulls? 
-     get_gather_map_for_map_values<true>(map_column, lookup_key, mr, stream)
-   : get_gather_map_for_map_values<false>(map_column, lookup_key, mr, stream);
+  auto gather_map = has_nulls ?
+                        get_gather_map_for_map_values<true>(map_column, lookup_key, stream, mr) :
+                        get_gather_map_for_map_values<false>(map_column, lookup_key, stream, mr);
 
   // Gather map is now available.
 
-  auto values_column    = structs_column.child(1);
+  auto values_column = structs_column.child(1);
   auto table_for_gather = table_view{std::vector<cudf::column_view>{values_column}};
 
-  auto gathered_table = cudf::detail::gather(table_for_gather,
-                                             gather_map->view(),
-                                             detail::out_of_bounds_policy::IGNORE,
-                                             detail::negative_index_policy::NOT_ALLOWED,
-                                             mr,
-                                             stream);
+  auto gathered_table = cudf::detail::gather(
+      table_for_gather, gather_map->view(), out_of_bounds_policy::NULLIFY,
+      detail::negative_index_policy::NOT_ALLOWED, stream, mr);
 
   return std::make_unique<cudf::column>(std::move(gathered_table->get_column(0)));
 }
-} // namespace jni;
-} // namespace cudf;
+} // namespace jni
+} // namespace cudf

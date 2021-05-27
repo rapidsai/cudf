@@ -15,16 +15,20 @@
  */
 #pragma once
 
-#include <cuda_runtime.h>
 #include <strings/regex/regcomp.h>
+
+#include <rmm/cuda_stream_view.hpp>
+
 #include <functional>
 #include <memory>
 
 namespace cudf {
+
 class string_view;
 
 namespace strings {
 namespace detail {
+
 struct reljunk;
 struct reinst;
 class reprog;
@@ -76,7 +80,7 @@ class reprog_device {
     std::string const& pattern,
     const uint8_t* cp_flags,
     int32_t strings_count,
-    cudaStream_t stream = 0);
+    rmm::cuda_stream_view stream);
   /**
    * @brief Called automatically by the unique_ptr returned from create().
    */

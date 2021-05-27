@@ -21,18 +21,20 @@
 
 #pragma once
 
-#include "json.h"
+#include "json_common.h"
 #include "json_gpu.h"
 
-#include <thrust/device_vector.h>
-#include <hash/concurrent_unordered_map.cuh>
-#include <rmm/device_buffer.hpp>
-
 #include <io/utilities/column_buffer.hpp>
+
+#include <hash/concurrent_unordered_map.cuh>
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/io/json.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
 
 namespace cudf {
 namespace io {
@@ -64,7 +66,6 @@ class reader::impl {
   // Used when the input data is compressed, to ensure the allocated uncompressed data is freed
   std::vector<char> uncomp_data_owner_;
   rmm::device_buffer data_;
-  rmm::device_vector<uint64_t> rec_starts_;
 
   size_t byte_range_offset_ = 0;
   size_t byte_range_size_   = 0;
@@ -117,23 +118,24 @@ class reader::impl {
    * @return Array of keys and a map that maps their hash values to column indices
    */
   std::pair<std::vector<std::string>, col_map_ptr_type> get_json_object_keys_hashes(
-    cudaStream_t stream);
+    device_span<uint64_t const> rec_starts, rmm::cuda_stream_view stream);
 
   /**
    * @brief Decompress the input data, if needed
    *
    * Sets the uncomp_data_ and uncomp_size_ data members
    */
-  void decompress_input(cudaStream_t stream);
+  void decompress_input(rmm::cuda_stream_view stream);
 
   /**
-   * @brief Finds all record starts in the file and stores them in rec_starts_
+   * @brief Finds all record starts in the file.
    *
    * Does not upload the entire file to the GPU
    *
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+   * @return Record starts in the device memory
    */
-  void set_record_starts(cudaStream_t stream);
+  rmm::device_uvector<uint64_t> find_record_starts(rmm::cuda_stream_view stream);
 
   /**
    * @brief Uploads the relevant segment of the input json data onto the GPU.
@@ -142,34 +144,39 @@ class reader::impl {
    * Only rows that need to be parsed are copied, based on the byte range
    * Also updates the array of record starts to match the device data offset.
    */
-  void upload_data_to_device(cudaStream_t stream);
+  void upload_data_to_device(rmm::device_uvector<uint64_t> &rec_starts,
+                             rmm::cuda_stream_view stream);
 
   /**
    * @brief Parse the first row to set the column name
    *
    * Sets the column_names_ data member
    *
+   * @param[in] rec_starts Record starts in device memory
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    */
-  void set_column_names(cudaStream_t stream);
+  void set_column_names(device_span<uint64_t const> rec_starts, rmm::cuda_stream_view stream);
 
   /**
    * @brief Set the data type array data member
    *
    * If user does not pass the data types, deduces types from the file content
    *
+   * @param[in] rec_starts Record starts in device memory
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    */
-  void set_data_types(cudaStream_t stream);
+  void set_data_types(device_span<uint64_t const> rec_starts, rmm::cuda_stream_view stream);
 
   /**
    * @brief Parse the input data and store results a table
    *
+   * @param[in] rec_starts Record starts in device memory
    * @param[in] stream CUDA stream used for device memory operations and kernel launches.
    *
    * @return Table and its metadata
    */
-  table_with_metadata convert_data_to_table(cudaStream_t stream);
+  table_with_metadata convert_data_to_table(device_span<uint64_t const> rec_starts,
+                                            rmm::cuda_stream_view stream);
 
  public:
   /**
@@ -178,6 +185,7 @@ class reader::impl {
   explicit impl(std::unique_ptr<datasource> source,
                 std::string filepath,
                 json_reader_options const &options,
+                rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource *mr);
 
   /**
@@ -188,7 +196,7 @@ class reader::impl {
    *
    * @return Table and its metadata
    */
-  table_with_metadata read(json_reader_options const &options, cudaStream_t stream);
+  table_with_metadata read(json_reader_options const &options, rmm::cuda_stream_view stream);
 };
 
 }  // namespace json

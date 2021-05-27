@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,9 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/span.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <vector>
 
@@ -32,20 +35,20 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-void concatenate_masks(rmm::device_vector<column_device_view> const& d_views,
-                       rmm::device_vector<size_t> const& d_offsets,
+void concatenate_masks(device_span<column_device_view const> d_views,
+                       device_span<size_t const> d_offsets,
                        bitmask_type* dest_mask,
                        size_type output_size,
-                       cudaStream_t stream);
+                       rmm::cuda_stream_view stream);
 
 /**
  * @copydoc cudf::concatenate_masks(std::vector<column_view> const&,bitmask_type*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-void concatenate_masks(std::vector<column_view> const& views,
+void concatenate_masks(host_span<column_view const> views,
                        bitmask_type* dest_mask,
-                       cudaStream_t stream);
+                       rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace cudf

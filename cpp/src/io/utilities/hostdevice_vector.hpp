@@ -16,9 +16,11 @@
 
 #pragma once
 
-#include <rmm/device_buffer.hpp>
-
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/span.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 
 /**
  * @brief A helper class that wraps fixed-length device memory for the GPU, and
@@ -28,7 +30,7 @@
  * initialized upfront, or gradually initialized as required.
  * The host-side memory can be used to manipulate data on the CPU before and
  * after operating on the same data on the GPU.
- **/
+ */
 template <typename T>
 class hostdevice_vector {
  public:
@@ -43,12 +45,15 @@ class hostdevice_vector {
     return *this;
   }
 
-  explicit hostdevice_vector(size_t max_size, cudaStream_t stream = 0)
+  explicit hostdevice_vector(size_t max_size,
+                             rmm::cuda_stream_view stream = rmm::cuda_stream_default)
     : hostdevice_vector(max_size, max_size, stream)
   {
   }
 
-  explicit hostdevice_vector(size_t initial_size, size_t max_size, cudaStream_t stream = 0)
+  explicit hostdevice_vector(size_t initial_size,
+                             size_t max_size,
+                             rmm::cuda_stream_view stream = rmm::cuda_stream_default)
     : num_elements(initial_size), max_elements(max_size)
   {
     if (max_elements != 0) {
@@ -87,16 +92,24 @@ class hostdevice_vector {
     return reinterpret_cast<T const *>(d_data.data()) + offset;
   }
 
-  void host_to_device(cudaStream_t stream, bool synchronize = false)
+  operator cudf::device_span<T>() { return {device_ptr(), max_elements}; }
+  operator cudf::device_span<T const>() const { return {device_ptr(), max_elements}; }
+
+  operator cudf::host_span<T>() { return {h_data, max_elements}; }
+  operator cudf::host_span<T const>() const { return {h_data, max_elements}; }
+
+  void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
   {
-    cudaMemcpyAsync(d_data.data(), h_data, memory_size(), cudaMemcpyHostToDevice, stream);
-    if (synchronize) { cudaStreamSynchronize(stream); }
+    CUDA_TRY(cudaMemcpyAsync(
+      d_data.data(), h_data, memory_size(), cudaMemcpyHostToDevice, stream.value()));
+    if (synchronize) { stream.synchronize(); }
   }
 
-  void device_to_host(cudaStream_t stream, bool synchronize = false)
+  void device_to_host(rmm::cuda_stream_view stream, bool synchronize = false)
   {
-    cudaMemcpyAsync(h_data, d_data.data(), memory_size(), cudaMemcpyDeviceToHost, stream);
-    if (synchronize) { cudaStreamSynchronize(stream); }
+    CUDA_TRY(cudaMemcpyAsync(
+      h_data, d_data.data(), memory_size(), cudaMemcpyDeviceToHost, stream.value()));
+    if (synchronize) { stream.synchronize(); }
   }
 
  private:
@@ -113,9 +126,69 @@ class hostdevice_vector {
     v.h_data       = nullptr;
   }
 
-  cudaStream_t stream = 0;
-  size_t max_elements = 0;
-  size_t num_elements = 0;
-  T *h_data           = nullptr;
-  rmm::device_buffer d_data;
+  rmm::cuda_stream_view stream{};
+  size_t max_elements{};
+  size_t num_elements{};
+  T *h_data{};
+  rmm::device_buffer d_data{};
 };
+
+namespace cudf {
+namespace detail {
+
+/**
+ * @brief Wrapper around hostdevice_vector to enable two-dimensional indexing.
+ *
+ * Does not incur additional allocations.
+ */
+template <typename T>
+class hostdevice_2dvector {
+ public:
+  hostdevice_2dvector(size_t rows,
+                      size_t columns,
+                      rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+    : _size{rows, columns}, _data{rows * columns, stream}
+  {
+  }
+
+  operator device_2dspan<T>() { return {_data.device_ptr(), _size}; }
+  operator device_2dspan<T const>() const { return {_data.device_ptr(), _size}; }
+
+  device_2dspan<T> device_view() { return static_cast<device_2dspan<T>>(*this); }
+  device_2dspan<T> device_view() const { return static_cast<device_2dspan<T const>>(*this); }
+
+  operator host_2dspan<T>() { return {_data.host_ptr(), _size}; }
+  operator host_2dspan<T const>() const { return {_data.host_ptr(), _size}; }
+
+  host_2dspan<T> host_view() { return static_cast<host_2dspan<T>>(*this); }
+  host_2dspan<T> host_view() const { return static_cast<host_2dspan<T const>>(*this); }
+
+  host_span<T> operator[](size_t row)
+  {
+    return {_data.host_ptr() + host_2dspan<T>::flatten_index(row, 0, _size), _size.second};
+  }
+
+  host_span<T const> operator[](size_t row) const
+  {
+    return {_data.host_ptr() + host_2dspan<T>::flatten_index(row, 0, _size), _size.second};
+  }
+
+  auto size() const noexcept { return _size; }
+
+  void host_to_device(rmm::cuda_stream_view stream, bool synchronize = false)
+  {
+    _data.host_to_device(stream, synchronize);
+  }
+
+  void device_to_host(rmm::cuda_stream_view stream, bool synchronize = false)
+  {
+    _data.device_to_host(stream, synchronize);
+  }
+
+ private:
+  hostdevice_vector<T> _data;
+  typename host_2dspan<T>::size_type _size;
+};
+
+}  // namespace detail
+}  // namespace cudf

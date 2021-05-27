@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +15,12 @@
  */
 #pragma once
 
+#include <cudf/column/column_view.hpp>
+
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
-#include "column_view.hpp"
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
 #include <memory>
@@ -48,16 +50,6 @@ class column {
   column& operator=(column&& other) = delete;
 
   /**
-   * @brief Construct a new column by deep copying the contents of `other`.
-   *
-   * All device memory allocation and copying is done using the
-   * `device_memory_resource` and `stream` from `other`.
-   *
-   * @param other The column to copy
-   **/
-  column(column const& other);
-
-  /**
    * @brief Construct a new column object by deep copying the contents of
    *`other`.
    *
@@ -69,7 +61,7 @@ class column {
    * @param mr Device memory resource to use for all device memory allocations
    */
   column(column const& other,
-         cudaStream_t stream,
+         rmm::cuda_stream_view stream        = rmm::cuda_stream_view{},
          rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -78,7 +70,7 @@ class column {
    * After the move, `other.size() == 0` and `other.type() = {EMPTY}`
    *
    * @param other The column whose contents will be moved into the new column
-   **/
+   */
   column(column&& other) noexcept;
 
   /**
@@ -96,7 +88,7 @@ class column {
    * `UNKNOWN_NULL_COUNT` to indicate that the null count should be computed on
    * the first invocation of `null_count()`.
    * @param children Optional, vector of child columns
-   **/
+   */
   template <typename B1, typename B2 = rmm::device_buffer>
   column(data_type dtype,
          size_type size,
@@ -124,7 +116,7 @@ class column {
    * @param mr Device memory resource to use for all device memory allocations
    */
   explicit column(column_view view,
-                  cudaStream_t stream                 = 0,
+                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
@@ -166,18 +158,21 @@ class column {
   /**
    * @brief Sets the column's null value indicator bitmask to `new_null_mask`.
    *
-   * @throws cudf::logic_error if new_null_count is larger than 0 and the size
-   * of `new_null_mask` does not match the size of this column.
+   * @throws cudf::logic_error if new_null_count is larger than 0 and the size of `new_null_mask`
+   * does not match the size of this column.
    *
-   * @param new_null_mask New null value indicator bitmask (lvalue overload &
-   * copied) to set the column's null value indicator mask. May be empty if
-   * `new_null_count` is 0 or `UNKOWN_NULL_COUNT`.
-   * @param new_null_count Optional, the count of null elements. If unknown,
-   * specify `UNKNOWN_NULL_COUNT` to indicate that the null count should be
-   * computed on the first invocation of `null_count()`.
+   * @param new_null_mask New null value indicator bitmask (lvalue overload & copied) to set the
+   * column's null value indicator mask. May be empty if `new_null_count` is 0 or
+   * `UNKOWN_NULL_COUNT`.
+   * @param new_null_count Optional, the count of null elements. If unknown, specify
+   * `UNKNOWN_NULL_COUNT` to indicate that the null count should be computed on the first invocation
+   * of `null_count()`.
+   * @param stream The stream on which to perform the allocation and copy. Uses the default CUDA
+   * stream if none is specified.
    */
   void set_null_mask(rmm::device_buffer const& new_null_mask,
-                     size_type new_null_count = UNKNOWN_NULL_COUNT);
+                     size_type new_null_count     = UNKNOWN_NULL_COUNT,
+                     rmm::cuda_stream_view stream = rmm::cuda_stream_view{});
 
   /**
    * @brief Updates the count of null elements.

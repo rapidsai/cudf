@@ -27,6 +27,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 namespace cudf {
 namespace detail {
 /**
@@ -37,7 +39,7 @@ namespace detail {
 std::unique_ptr<cudf::table> cross_join(
   cudf::table_view const& left,
   cudf::table_view const& right,
-  cudaStream_t stream,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(0 != left.num_columns(), "Left table is empty");
@@ -54,7 +56,7 @@ std::unique_ptr<cudf::table> cross_join(
   }
 
   // Repeat left table
-  auto left_repeated = detail::repeat(left, right.num_rows(), mr, stream);
+  auto left_repeated = detail::repeat(left, right.num_rows(), stream, mr);
 
   // Tile right table
   auto right_tiled = detail::tile(right, left.num_rows(), stream, mr);
@@ -75,7 +77,7 @@ std::unique_ptr<cudf::table> cross_join(cudf::table_view const& left,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::cross_join(left, right, 0, mr);
+  return detail::cross_join(left, right, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

@@ -23,3 +23,24 @@ def test_create_struct_series(data):
     expect = pd.Series(data)
     got = cudf.Series(data)
     assert_eq(expect, got, check_dtype=False)
+
+
+def test_struct_of_struct_copy():
+    sr = cudf.Series([{"a": {"b": 1}}])
+    assert_eq(sr, sr.copy())
+
+
+def test_struct_of_struct_loc():
+    df = cudf.DataFrame({"col": [{"a": {"b": 1}}]})
+    expect = cudf.Series([{"a": {"b": 1}}], name="col")
+    assert_eq(expect, df["col"])
+
+
+@pytest.mark.parametrize(
+    "key, expect", [(0, [1, 3]), (1, [2, 4]), ("a", [1, 3]), ("b", [2, 4])]
+)
+def test_struct_for_field(key, expect):
+    sr = cudf.Series([{"a": 1, "b": 2}, {"a": 3, "b": 4}])
+    expect = cudf.Series(expect)
+    got = sr.struct.field(key)
+    assert_eq(expect, got)

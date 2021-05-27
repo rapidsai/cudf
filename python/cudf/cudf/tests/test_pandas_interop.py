@@ -1,8 +1,7 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
-import pytest
 
 import cudf
 from cudf.core import DataFrame
@@ -24,8 +23,8 @@ def test_to_pandas():
 
     # Notice, the dtype differ when Pandas and cudf boolean series
     # contains None/NaN
-    assert df["c"].dtype == np.bool
-    assert pdf["c"].dtype == np.object
+    assert df["c"].dtype == np.bool_
+    assert pdf["c"].dtype == np.object_
 
     assert len(df["a"]) == len(pdf["a"])
     assert len(df["b"]) == len(pdf["b"])
@@ -85,6 +84,7 @@ def test_from_pandas_rangeindex():
 
 
 def test_from_pandas_rangeindex_step():
-    idx1 = pd.RangeIndex(start=0, stop=8, step=2, name="myindex")
-    with pytest.raises(ValueError):
-        cudf.from_pandas(idx1)
+    expected = pd.RangeIndex(start=0, stop=8, step=2, name="myindex")
+    actual = cudf.from_pandas(expected)
+
+    assert_eq(expected, actual)

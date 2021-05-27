@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
+#include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
@@ -123,10 +125,9 @@ TEST_F(StringScalarDeviceViewTest, Value)
 
   auto scalar_device_view = cudf::get_scalar_device_view(s);
   rmm::device_scalar<bool> result;
-  rmm::device_vector<char> value_v(value.begin(), value.end());
+  auto value_v = cudf::detail::make_device_uvector_sync(value);
 
-  test_string_value<<<1, 1>>>(
-    scalar_device_view, value_v.data().get(), value.size(), result.data());
+  test_string_value<<<1, 1>>>(scalar_device_view, value_v.data(), value.size(), result.data());
   CHECK_CUDA(0);
 
   EXPECT_TRUE(result.value());

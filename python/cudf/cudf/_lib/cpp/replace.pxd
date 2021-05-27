@@ -12,6 +12,11 @@ from cudf._lib.cpp.column.column_view cimport (
 )
 
 cdef extern from "cudf/replace.hpp" namespace "cudf" nogil:
+
+    ctypedef enum replace_policy:
+        PRECEDING 'cudf::replace_policy::PRECEDING',
+        FOLLOWING 'cudf::replace_policy::FOLLOWING'
+
     cdef unique_ptr[column] replace_nulls(
         column_view source_column,
         column_view replacement_column) except +
@@ -19,6 +24,10 @@ cdef extern from "cudf/replace.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] replace_nulls(
         column_view source_column,
         scalar replacement) except +
+
+    cdef unique_ptr[column] replace_nulls(
+        column_view source_column,
+        replace_policy replace_policy) except +
 
     cdef unique_ptr[column] find_and_replace_all(
         column_view source_column,

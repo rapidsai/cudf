@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/partitioning.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf_test/base_fixture.hpp>
-
-#include <rmm/thrust_rmm_allocator.h>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/partitioning.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
@@ -55,12 +55,10 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
-  auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      return (row % 2 == 0) ? 1 : 0;
-    } else
-      return row;
-  });
+  auto sequence_l = cudf::detail::make_counting_transform_iterator(
+    0, [bool8 = (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)](auto row) {
+      return bool8 ? static_cast<decltype(row)>(row % 2 == 0) : row;
+    });
 
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence_l)::value_type>
     rrColWrap2(sequence_l, sequence_l + inputRows);
@@ -102,7 +100,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
     }
 
     std::vector<cudf::size_type> expected_partition_offsets{0, 5, 9};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -140,7 +138,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
     }
 
     std::vector<cudf::size_type> expected_partition_offsets{0, 4, 9};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -178,7 +176,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions13_3)
     }
 
     std::vector<cudf::size_type> expected_partition_offsets{0, 4, 8};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -191,12 +189,10 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3)
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
-  auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      return (row % 2 == 0) ? 1 : 0;
-    } else
-      return row;
-  });
+  auto sequence_l = cudf::detail::make_counting_transform_iterator(
+    0, [bool8 = (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)](auto row) {
+      return bool8 ? static_cast<decltype(row)>(row % 2 == 0) : row;
+    });
 
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence_l)::value_type>
     rrColWrap2(sequence_l, sequence_l + inputRows);
@@ -237,7 +233,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3)
     }
 
     std::vector<cudf::size_type> expected_partition_offsets{0, 4, 8};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -274,7 +270,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3)
     }
 
     std::vector<cudf::size_type> expected_partition_offsets{0, 3, 7};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -311,7 +307,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinPartitions11_3)
     }
 
     std::vector<cudf::size_type> expected_partition_offsets{0, 4, 7};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -324,12 +320,10 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15)
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
-  auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      return (row % 2 == 0) ? 1 : 0;
-    } else
-      return row;
-  });
+  auto sequence_l = cudf::detail::make_counting_transform_iterator(
+    0, [bool8 = (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)](auto row) {
+      return bool8 ? static_cast<decltype(row)>(row % 2 == 0) : row;
+    });
 
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence_l)::value_type>
     rrColWrap2(sequence_l, sequence_l + inputRows);
@@ -371,7 +365,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15)
 
     std::vector<cudf::size_type> expected_partition_offsets{
       0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 11};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -409,7 +403,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15)
 
     std::vector<cudf::size_type> expected_partition_offsets{
       0, 1, 2, 3, 4, 5, 6, 6, 6, 6, 6, 7, 8, 9, 10};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -447,7 +441,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_15)
 
     std::vector<cudf::size_type> expected_partition_offsets{
       0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 10};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -460,12 +454,10 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_11)
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
-  auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      return (row % 2 == 0) ? 1 : 0;
-    } else
-      return row;
-  });
+  auto sequence_l = cudf::detail::make_counting_transform_iterator(
+    0, [bool8 = (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)](auto row) {
+      return bool8 ? static_cast<decltype(row)>(row % 2 == 0) : row;
+    });
 
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence_l)::value_type>
     rrColWrap2(sequence_l, sequence_l + inputRows);
@@ -506,7 +498,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinDegeneratePartitions11_11)
     }
 
     std::vector<cudf::size_type> expected_partition_offsets{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -528,12 +520,10 @@ TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows)
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
-  auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      return (row % 2 == 0) ? 1 : 0;
-    } else
-      return row;
-  });
+  auto sequence_l = cudf::detail::make_counting_transform_iterator(
+    0, [bool8 = (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)](auto row) {
+      return bool8 ? static_cast<decltype(row)>(row % 2 == 0) : row;
+    });
 
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence_l)::value_type>
     rrColWrap2(sequence_l, sequence_l + inputRows);
@@ -584,7 +574,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows)
     }
 
     std::vector<cudf::size_type> expected_partition_offsets{0, 7, 14};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -631,7 +621,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinNPartitionsDivideNRows)
     }
 
     std::vector<cudf::size_type> expected_partition_offsets{0, 7, 14};
-    EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+    EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
 
     EXPECT_EQ(expected_partition_offsets, result.second);
   }
@@ -644,12 +634,10 @@ TYPED_TEST(RoundRobinTest, RoundRobinSinglePartition)
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
-  auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
-    if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
-      return (row % 2 == 0) ? 1 : 0;
-    } else
-      return row;
-  });
+  auto sequence_l = cudf::detail::make_counting_transform_iterator(
+    0, [bool8 = (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8)](auto row) {
+      return bool8 ? static_cast<decltype(row)>(row % 2 == 0) : row;
+    });
 
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence_l)::value_type>
     rrColWrap2(sequence_l, sequence_l + inputRows);
@@ -688,7 +676,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinSinglePartition)
   }
 
   std::vector<cudf::size_type> expected_partition_offsets{0};
-  EXPECT_EQ(num_partitions, expected_partition_offsets.size());
+  EXPECT_EQ(static_cast<std::size_t>(num_partitions), expected_partition_offsets.size());
   EXPECT_EQ(expected_partition_offsets, result.second);
 }
 
@@ -699,7 +687,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinIncorrectNumPartitions)
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
-  auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
+  auto sequence_l = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
       return (row % 2 == 0) ? 1 : 0;
     } else
@@ -725,7 +713,7 @@ TYPED_TEST(RoundRobinTest, RoundRobinIncorrectStartPartition)
 
   cudf::size_type inputRows = static_cast<cudf::column_view const&>(rrColWrap1).size();
 
-  auto sequence_l = cudf::test::make_counting_transform_iterator(0, [](auto row) {
+  auto sequence_l = cudf::detail::make_counting_transform_iterator(0, [](auto row) {
     if (cudf::type_to_id<TypeParam>() == cudf::type_id::BOOL8) {
       return (row % 2 == 0) ? 1 : 0;
     } else

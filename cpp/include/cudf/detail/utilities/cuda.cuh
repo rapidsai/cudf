@@ -21,9 +21,10 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <cub/cub.cuh>
 
-#include <assert.h>
 #include <type_traits>
 
 namespace cudf {
@@ -133,7 +134,7 @@ cudf::size_type elements_per_thread(Kernel kernel,
   int num_sms = 0;
   CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, device));
   int per_thread = total_size / (max_blocks * num_sms * block_size);
-  return std::max(1, std::min(per_thread, max_per_thread));  // switch to std::clamp with C++17
+  return std::clamp(per_thread, 1, max_per_thread);
 }
 
 /**
@@ -168,9 +169,9 @@ __global__ void single_thread_kernel(F f)
  * @param stream CUDA stream used for the kernel launch
  */
 template <class Functor>
-void device_single_thread(Functor functor, cudaStream_t stream = 0)
+void device_single_thread(Functor functor, rmm::cuda_stream_view stream = rmm::cuda_stream_default)
 {
-  single_thread_kernel<<<1, 1, 0, stream>>>(functor);
+  single_thread_kernel<<<1, 1, 0, stream.value()>>>(functor);
 }
 
 }  // namespace detail

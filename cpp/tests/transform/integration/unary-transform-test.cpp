@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -17,10 +17,13 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/transform.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+
 #include "assert-unary.h"
 
 #include <cctype>
@@ -34,8 +37,8 @@ struct UnaryOperationIntegrationTest : public cudf::test::BaseFixture {
 template <class dtype, class Op, class Data>
 void test_udf(const char udf[], Op op, Data data_init, cudf::size_type size, bool is_ptx)
 {
-  auto all_valid = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
-  auto data_iter = cudf::test::make_counting_transform_iterator(0, data_init);
+  auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto data_iter = cudf::detail::make_counting_transform_iterator(0, data_init);
 
   cudf::test::fixed_width_column_wrapper<dtype, typename decltype(data_iter)::value_type> in(
     data_iter, data_iter + size, all_valid);
@@ -205,7 +208,7 @@ TEST_F(UnaryOperationIntegrationTest, Transform_Datetime)
     R"***(
 __device__ inline void f(cudf::timestamp_us* output, cudf::timestamp_us input)
 {
-  using dur = simt::std::chrono::duration<int32_t, simt::std::ratio<86400>>;
+  using dur = cuda::std::chrono::duration<int32_t, cuda::std::ratio<86400>>;
   *output = static_cast<cudf::timestamp_us>(input + dur{1});
 }
 
@@ -213,7 +216,7 @@ __device__ inline void f(cudf::timestamp_us* output, cudf::timestamp_us input)
 
   using dtype = timestamp_us;
   auto op     = [](dtype a) {
-    using dur = simt::std::chrono::duration<int32_t, simt::std::ratio<86400>>;
+    using dur = cuda::std::chrono::duration<int32_t, cuda::std::ratio<86400>>;
     return static_cast<timestamp_us>(a + dur{1});
   };
   auto random_eng = UniformRandomGenerator<timestamp_us::rep>(0, 100000000);

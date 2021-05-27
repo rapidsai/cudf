@@ -27,14 +27,21 @@ public class ParquetOptions extends ColumnFilterOptions {
 
   private final DType unit;
 
+  private final boolean strictDecimalType;
+
 
   private ParquetOptions(Builder builder) {
     super(builder);
     unit = builder.unit;
+    strictDecimalType = builder.strictDecimalType;
   }
 
   DType timeUnit() {
     return unit;
+  }
+
+  boolean isStrictDecimalType() {
+    return strictDecimalType;
   }
 
   public static Builder builder() {
@@ -43,6 +50,7 @@ public class ParquetOptions extends ColumnFilterOptions {
 
   public static class Builder extends ColumnFilterOptions.Builder<Builder> {
     private DType unit = DType.EMPTY;
+    private boolean strictDecimalType = false;
 
     /**
      * Specify the time unit to use when returning timestamps.
@@ -50,8 +58,18 @@ public class ParquetOptions extends ColumnFilterOptions {
      * @return builder for chaining
      */
     public Builder withTimeUnit(DType unit) {
-      assert unit.isTimestamp();
+      assert unit.isTimestampType();
       this.unit = unit;
+      return this;
+    }
+
+    /**
+     * Specify how to deal with decimal columns who are not backed by INT32/64 while reading.
+     * @param strictDecimalType whether strictly reading all decimal columns as fixed-point decimal type
+     * @return builder for chaining
+     */
+    public Builder enableStrictDecimalType(boolean strictDecimalType) {
+      this.strictDecimalType = strictDecimalType;
       return this;
     }
 

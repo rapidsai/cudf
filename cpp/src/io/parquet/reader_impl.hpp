@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,8 @@
 
 #pragma once
 
-#include <io/parquet/parquet.hpp>
-#include <io/parquet/parquet_gpu.hpp>
+#include "parquet.hpp"
+#include "parquet_gpu.hpp"
 
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/hostdevice_vector.hpp>
@@ -30,6 +30,8 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
 #include <string>
@@ -75,7 +77,7 @@ class reader::impl {
   table_with_metadata read(size_type skip_rows,
                            size_type num_rows,
                            std::vector<std::vector<size_type>> const &row_group_indices,
-                           cudaStream_t stream);
+                           rmm::cuda_stream_view stream);
 
  private:
   /**
@@ -89,13 +91,13 @@ class reader::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches.
    *
    */
-  void read_column_chunks(std::vector<rmm::device_buffer> &page_data,
+  void read_column_chunks(std::vector<std::unique_ptr<datasource::buffer>> &page_data,
                           hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
                           size_t begin_chunk,
                           size_t end_chunk,
                           const std::vector<size_t> &column_chunk_offsets,
                           std::vector<size_type> const &chunk_source_map,
-                          cudaStream_t stream);
+                          rmm::cuda_stream_view stream);
 
   /**
    * @brief Returns the number of total pages from the given column chunks
@@ -105,7 +107,8 @@ class reader::impl {
    *
    * @return The total number of pages
    */
-  size_t count_page_headers(hostdevice_vector<gpu::ColumnChunkDesc> &chunks, cudaStream_t stream);
+  size_t count_page_headers(hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
+                            rmm::cuda_stream_view stream);
 
   /**
    * @brief Returns the page information from the given column chunks.
@@ -116,7 +119,7 @@ class reader::impl {
    */
   void decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
                            hostdevice_vector<gpu::PageInfo> &pages,
-                           cudaStream_t stream);
+                           rmm::cuda_stream_view stream);
 
   /**
    * @brief Decompresses the page data, at page granularity.
@@ -129,7 +132,7 @@ class reader::impl {
    */
   rmm::device_buffer decompress_page_data(hostdevice_vector<gpu::ColumnChunkDesc> &chunks,
                                           hostdevice_vector<gpu::PageInfo> &pages,
-                                          cudaStream_t stream);
+                                          rmm::cuda_stream_view stream);
 
   /**
    * @brief Allocate nesting information storage for all pages and set pointers
@@ -149,7 +152,7 @@ class reader::impl {
   void allocate_nesting_info(hostdevice_vector<gpu::ColumnChunkDesc> const &chunks,
                              hostdevice_vector<gpu::PageInfo> &pages,
                              hostdevice_vector<gpu::PageNestingInfo> &page_nesting_info,
-                             cudaStream_t stream);
+                             rmm::cuda_stream_view stream);
 
   /**
    * @brief Preprocess column information for nested schemas.
@@ -174,7 +177,7 @@ class reader::impl {
                           size_t min_row,
                           size_t total_rows,
                           bool has_lists,
-                          cudaStream_t stream);
+                          rmm::cuda_stream_view stream);
 
   /**
    * @brief Converts the page data and outputs to columns.
@@ -191,7 +194,7 @@ class reader::impl {
                         hostdevice_vector<gpu::PageNestingInfo> &page_nesting,
                         size_t min_row,
                         size_t total_rows,
-                        cudaStream_t stream);
+                        rmm::cuda_stream_view stream);
 
  private:
   rmm::mr::device_memory_resource *_mr = nullptr;
@@ -207,6 +210,7 @@ class reader::impl {
 
   bool _strings_to_categorical = false;
   data_type _timestamp_type{type_id::EMPTY};
+  bool _strict_decimal_types = false;
 };
 
 }  // namespace parquet

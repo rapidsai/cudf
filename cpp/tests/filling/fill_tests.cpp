@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/detail/iterator.cuh>
 #include <cudf/filling.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -52,7 +53,7 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
     cudf::test::fixed_width_column_wrapper<T, int32_t> destination(
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(0) + size,
-      cudf::test::make_counting_transform_iterator(0, destination_validity));
+      cudf::detail::make_counting_transform_iterator(0, destination_validity));
 
     std::unique_ptr<cudf::scalar> p_val{nullptr};
     cudf::data_type type{cudf::type_to_id<T>()};
@@ -70,13 +71,13 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
     static_cast<ScalarType*>(p_val.get())->set_valid(value_is_valid);
 
     auto expected_elements =
-      cudf::test::make_counting_transform_iterator(0, [begin, end, value](auto i) {
+      cudf::detail::make_counting_transform_iterator(0, [begin, end, value](auto i) {
         return (i >= begin && i < end) ? value : cudf::test::make_type_param_scalar<T>(i);
       });
     cudf::test::fixed_width_column_wrapper<T> expected(
       expected_elements,
       expected_elements + size,
-      cudf::test::make_counting_transform_iterator(
+      cudf::detail::make_counting_transform_iterator(
         0, [begin, end, value_is_valid, destination_validity](auto i) {
           return (i >= begin && i < end) ? value_is_valid : destination_validity(i);
         }));
@@ -179,12 +180,12 @@ class FillStringTestFixture : public cudf::test::BaseFixture {
   {
     cudf::size_type size{FillStringTestFixture::column_size};
 
-    auto destination_elements = cudf::test::make_counting_transform_iterator(
+    auto destination_elements = cudf::detail::make_counting_transform_iterator(
       0, [](auto i) { return "#" + std::to_string(i); });
     auto destination = cudf::test::strings_column_wrapper(
       destination_elements,
       destination_elements + size,
-      cudf::test::make_counting_transform_iterator(0, destination_validity));
+      cudf::detail::make_counting_transform_iterator(0, destination_validity));
 
     auto p_val       = cudf::make_string_scalar(value);
     using ScalarType = cudf::scalar_type_t<cudf::string_view>;
@@ -193,13 +194,13 @@ class FillStringTestFixture : public cudf::test::BaseFixture {
     auto p_chars   = value.c_str();
     auto num_chars = value.length();
     auto expected_elements =
-      cudf::test::make_counting_transform_iterator(0, [begin, end, p_chars, num_chars](auto i) {
+      cudf::detail::make_counting_transform_iterator(0, [begin, end, p_chars, num_chars](auto i) {
         return (i >= begin && i < end) ? std::string(p_chars, num_chars) : "#" + std::to_string(i);
       });
     auto expected = cudf::test::strings_column_wrapper(
       expected_elements,
       expected_elements + size,
-      cudf::test::make_counting_transform_iterator(
+      cudf::detail::make_counting_transform_iterator(
         0, [begin, end, value_is_valid, destination_validity](auto i) {
           return (i >= begin && i < end) ? value_is_valid : destination_validity(i);
         }));

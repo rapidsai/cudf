@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,15 @@
 
 #include <cudf_test/base_fixture.hpp>
 
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/null_mask.hpp>
-
-#include <thrust/device_vector.h>
-#include <thrust/transform.h>
 #include <cudf/utilities/bit.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/transform.h>
 
 struct valid_bit_functor {
   cudf::bitmask_type const* _null_mask;
@@ -41,12 +45,18 @@ std::ostream& operator<<(std::ostream& stream, thrust::host_vector<bool> const& 
 struct SetBitmaskTest : public cudf::test::BaseFixture {
   void expect_bitmask_equal(cudf::bitmask_type const* bitmask,  // Device Ptr
                             cudf::size_type start_bit,
-                            thrust::host_vector<bool> const& expect)
+                            thrust::host_vector<bool> const& expect,
+                            rmm::cuda_stream_view stream = rmm::cuda_stream_default)
   {
-    auto itb_dev = thrust::make_transform_iterator(thrust::counting_iterator<cudf::size_type>{0},
-                                                   valid_bit_functor{bitmask});
-    thrust::device_vector<bool> result(itb_dev + start_bit, itb_dev + start_bit + expect.size());
-    thrust::host_vector<bool> host_result(result);
+    rmm::device_uvector<bool> result(expect.size(), stream);
+    auto counting_iter = thrust::counting_iterator<cudf::size_type>{0};
+    thrust::transform(rmm::exec_policy(stream),
+                      counting_iter + start_bit,
+                      counting_iter + start_bit + expect.size(),
+                      result.begin(),
+                      valid_bit_functor{bitmask});
+
+    auto host_result = cudf::detail::make_host_vector_sync(result, stream);
     EXPECT_THAT(host_result, testing::ElementsAreArray(expect));
   }
 
@@ -105,8 +115,7 @@ TEST_F(SetBitmaskTest, error_range)
   std::vector<size_pair> begin_end_fail{
     {-1, size},  // begin>=0
     {-2, -1},    // begin>=0
-    {8, 8},      // begin<end
-    {9, 8},      // begin<end
+    {9, 8},      // begin<=end
   };
   for (auto begin_end : begin_end_fail) {
     auto begin = begin_end.first, end = begin_end.second;
@@ -116,8 +125,9 @@ TEST_F(SetBitmaskTest, error_range)
   std::vector<size_pair> begin_end_pass{
     {0, size},         // begin>=0
     {0, 1},            // begin>=0
-    {8, 9},            // begin<end
-    {size - 1, size},  // begin<end
+    {8, 8},            // begin==end
+    {8, 9},            // begin<=end
+    {size - 1, size},  // begin<=end
   };
   for (auto begin_end : begin_end_pass) {
     auto begin = begin_end.first, end = begin_end.second;

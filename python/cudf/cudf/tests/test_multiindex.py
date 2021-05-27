@@ -299,15 +299,36 @@ def test_multiindex_loc(pdf, gdf, pdfIndex, key_tuple):
     assert_eq(pdf.loc[key_tuple], gdf.loc[key_tuple])
 
 
-def test_multiindex_loc_slice(pdf, gdf, pdfIndex):
+@pytest.mark.parametrize(
+    "arg",
+    [
+        slice(("a", "store"), ("b", "house")),
+        slice(None, ("b", "house")),
+        slice(("a", "store"), None),
+        slice(None),
+    ],
+)
+def test_multiindex_loc_slice(pdf, gdf, pdfIndex, arg):
     gdf = cudf.from_pandas(pdf)
     gdfIndex = cudf.from_pandas(pdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    assert_eq(
-        pdf.loc[("a", "store"):("b", "house")],
-        gdf.loc[("a", "store"):("b", "house")],
-    )
+    assert_eq(pdf.loc[arg], gdf.loc[arg])
+
+
+def test_multiindex_loc_errors(pdf, gdf, pdfIndex):
+    gdf = cudf.from_pandas(pdf)
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    gdf.index = gdfIndex
+
+    with pytest.raises(KeyError):
+        gdf.loc[("a", "store", "clouds", "foo")]
+    with pytest.raises(IndexError):
+        gdf.loc[
+            ("a", "store", "clouds", "fire", "x", "y")
+        ]  # too many indexers
+    with pytest.raises(IndexError):
+        gdf.loc[slice(None, ("a", "store", "clouds", "fire", "x", "y"))]
 
 
 def test_multiindex_loc_then_column(pdf, gdf, pdfIndex):
@@ -460,19 +481,19 @@ def test_multiindex_multiple_groupby():
         }
     )
     gdf = cudf.DataFrame.from_pandas(pdf)
-    pdg = pdf.groupby(["a", "b"]).sum()
-    gdg = gdf.groupby(["a", "b"]).sum()
+    pdg = pdf.groupby(["a", "b"], sort=True).sum()
+    gdg = gdf.groupby(["a", "b"], sort=True).sum()
     assert_eq(pdg, gdg)
-    pdg = pdf.groupby(["a", "b"]).x.sum()
-    gdg = gdf.groupby(["a", "b"]).x.sum()
+    pdg = pdf.groupby(["a", "b"], sort=True).x.sum()
+    gdg = gdf.groupby(["a", "b"], sort=True).x.sum()
     assert_eq(pdg, gdg)
 
 
 @pytest.mark.parametrize(
     "func",
     [
-        lambda df: df.groupby(["x", "y"]).z.sum(),
-        lambda df: df.groupby(["x", "y"]).sum(),
+        lambda df: df.groupby(["x", "y"], sort=True).z.sum(),
+        lambda df: df.groupby(["x", "y"], sort=True).sum(),
     ],
 )
 def test_multi_column(func):
@@ -498,7 +519,7 @@ def test_multiindex_equality():
     gdf = cudf.DataFrame(
         {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
     )
-    mi1 = gdf.groupby(["x", "y"]).mean().index
+    mi1 = gdf.groupby(["x", "y"], sort=True).mean().index
     mi2 = cudf.MultiIndex(
         levels=[[1, 3, 4, 5], [1, 2, 5]],
         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
@@ -507,7 +528,7 @@ def test_multiindex_equality():
     assert_eq(mi1, mi2)
 
     # mi made from two groupbys, are they equal?
-    mi2 = gdf.groupby(["x", "y"]).max().index
+    mi2 = gdf.groupby(["x", "y"], sort=True).max().index
     assert_eq(mi1, mi2)
 
     # mi made manually twice are they equal?
@@ -549,7 +570,7 @@ def test_multiindex_equals():
     gdf = cudf.DataFrame(
         {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
     )
-    mi1 = gdf.groupby(["x", "y"]).mean().index
+    mi1 = gdf.groupby(["x", "y"], sort=True).mean().index
     mi2 = cudf.MultiIndex(
         levels=[[1, 3, 4, 5], [1, 2, 5]],
         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
@@ -558,7 +579,7 @@ def test_multiindex_equals():
     assert_eq(mi1.equals(mi2), True)
 
     # mi made from two groupbys, are they equal?
-    mi2 = gdf.groupby(["x", "y"]).max().index
+    mi2 = gdf.groupby(["x", "y"], sort=True).max().index
     assert_eq(mi1.equals(mi2), True)
 
     # mi made manually twice are they equal?
@@ -575,8 +596,8 @@ def test_multiindex_equals():
     assert_eq(mi1.equals(mi2), True)
 
     # mi made from different groupbys are they not equal?
-    mi1 = gdf.groupby(["x", "y"]).mean().index
-    mi2 = gdf.groupby(["x", "z"]).mean().index
+    mi1 = gdf.groupby(["x", "y"], sort=True).mean().index
+    mi2 = gdf.groupby(["x", "z"], sort=True).mean().index
     assert_eq(mi1.equals(mi2), False)
 
     # mi made from different manuals are they not equal?
@@ -647,8 +668,8 @@ def test_multiindex_copy_sem(data, levels, codes, names):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
-    gdf = gdf.groupby(["Date", "Symbol"]).mean()
-    pdf = pdf.groupby(["Date", "Symbol"]).mean()
+    gdf = gdf.groupby(["Date", "Symbol"], sort=True).mean()
+    pdf = pdf.groupby(["Date", "Symbol"], sort=True).mean()
 
     gmi = gdf.index
     gmi_copy = gmi.copy(levels=levels, codes=codes, names=names)
@@ -882,8 +903,8 @@ def test_multiindex_groupby_to_frame():
         {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
     )
     pdf = gdf.to_pandas()
-    gdg = gdf.groupby(["x", "y"]).count()
-    pdg = pdf.groupby(["x", "y"]).count()
+    gdg = gdf.groupby(["x", "y"], sort=True).count()
+    pdg = pdf.groupby(["x", "y"], sort=True).count()
     assert_eq(pdg.index.to_frame(), gdg.index.to_frame())
 
 
@@ -899,22 +920,22 @@ def test_multiindex_groupby_reset_index():
         {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [0, 1, 0, 1, 0]}
     )
     pdf = gdf.to_pandas()
-    gdg = gdf.groupby(["x", "y"]).sum()
-    pdg = pdf.groupby(["x", "y"]).sum()
+    gdg = gdf.groupby(["x", "y"], sort=True).sum()
+    pdg = pdf.groupby(["x", "y"], sort=True).sum()
     assert_eq(pdg.reset_index(), gdg.reset_index())
 
 
 def test_multicolumn_reset_index():
     gdf = cudf.DataFrame({"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5]})
     pdf = gdf.to_pandas()
-    gdg = gdf.groupby(["x"]).agg({"y": ["count", "mean"]})
-    pdg = pdf.groupby(["x"]).agg({"y": ["count", "mean"]})
+    gdg = gdf.groupby(["x"], sort=True).agg({"y": ["count", "mean"]})
+    pdg = pdf.groupby(["x"], sort=True).agg({"y": ["count", "mean"]})
     assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
-    gdg = gdf.groupby(["x"]).agg({"y": ["count"]})
-    pdg = pdf.groupby(["x"]).agg({"y": ["count"]})
+    gdg = gdf.groupby(["x"], sort=True).agg({"y": ["count"]})
+    pdg = pdf.groupby(["x"], sort=True).agg({"y": ["count"]})
     assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
-    gdg = gdf.groupby(["x"]).agg({"y": "count"})
-    pdg = pdf.groupby(["x"]).agg({"y": "count"})
+    gdg = gdf.groupby(["x"], sort=True).agg({"y": "count"})
+    pdg = pdf.groupby(["x"], sort=True).agg({"y": "count"})
     assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
 
 
@@ -923,11 +944,11 @@ def test_multiindex_multicolumn_reset_index():
         {"x": [1, 5, 3, 4, 1], "y": [1, 1, 2, 2, 5], "z": [1, 2, 3, 4, 5]}
     )
     pdf = gdf.to_pandas()
-    gdg = gdf.groupby(["x", "y"]).agg({"y": ["count", "mean"]})
-    pdg = pdf.groupby(["x", "y"]).agg({"y": ["count", "mean"]})
+    gdg = gdf.groupby(["x", "y"], sort=True).agg({"y": ["count", "mean"]})
+    pdg = pdf.groupby(["x", "y"], sort=True).agg({"y": ["count", "mean"]})
     assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
-    gdg = gdf.groupby(["x", "z"]).agg({"y": ["count", "mean"]})
-    pdg = pdf.groupby(["x", "z"]).agg({"y": ["count", "mean"]})
+    gdg = gdf.groupby(["x", "z"], sort=True).agg({"y": ["count", "mean"]})
+    pdg = pdf.groupby(["x", "z"], sort=True).agg({"y": ["count", "mean"]})
     assert_eq(pdg.reset_index(), gdg.reset_index(), check_dtype=False)
 
 
@@ -1340,3 +1361,164 @@ def test_multiIndex_argsort(pdi, ascending):
     actual = gdi.argsort(ascending=ascending)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "idx", [pd.MultiIndex.from_product([["python", "cobra"], [2018, 2019]])]
+)
+@pytest.mark.parametrize(
+    "names", [[None, None], ["a", None], ["new name", "another name"]]
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_multiindex_set_names(idx, names, inplace):
+    pi = idx.copy()
+    gi = cudf.from_pandas(idx)
+
+    expected = pi.set_names(names=names, inplace=inplace)
+    actual = gi.set_names(names=names, inplace=inplace)
+
+    if inplace:
+        expected, actual = pi, gi
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.MultiIndex.from_product(
+            [["python", "cobra"], [2018, 2019], ["aab", "bcd"]]
+        ),
+        pd.MultiIndex.from_product(
+            [["python", "cobra"], [2018, 2019], ["aab", "bcd"]],
+            names=[1, 0, 2],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "level, names",
+    [
+        (0, "abc"),
+        (1, "xyz"),
+        ([2, 1], ["a", "b"]),
+        ([0, 1], ["aa", "bb"]),
+        (None, ["a", "b", "c"]),
+        (None, ["a", None, "c"]),
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_multiindex_set_names_default_and_int_names(
+    idx, level, names, inplace
+):
+    pi = idx.copy()
+    gi = cudf.from_pandas(idx)
+
+    expected = pi.set_names(names=names, level=level, inplace=inplace)
+    actual = gi.set_names(names=names, level=level, inplace=inplace)
+
+    if inplace:
+        expected, actual = pi, gi
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.MultiIndex.from_product(
+            [["python", "cobra"], [2018, 2019], ["aab", "bcd"]],
+            names=["one", None, "three"],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "level, names",
+    [
+        ([None], "abc"),
+        (["three", "one"], ["a", "b"]),
+        (["three", 1], ["a", "b"]),
+        ([0, "three", 1], ["a", "b", "z"]),
+        (["one", 1, "three"], ["a", "b", "z"]),
+        (["one", None, "three"], ["a", "b", "z"]),
+        ([2, 1], ["a", "b"]),
+        (1, "xyz"),
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_multiindex_set_names_string_names(idx, level, names, inplace):
+    pi = idx.copy()
+    gi = cudf.from_pandas(idx)
+
+    expected = pi.set_names(names=names, level=level, inplace=inplace)
+    actual = gi.set_names(names=names, level=level, inplace=inplace)
+
+    if inplace:
+        expected, actual = pi, gi
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "level, names", [(1, ["a"]), (None, "a"), ([1, 2], ["a"]), (None, ["a"])]
+)
+def test_multiindex_set_names_error(level, names):
+    pi = pd.MultiIndex.from_product(
+        [["python", "cobra"], [2018, 2019], ["aab", "bcd"]]
+    )
+    gi = cudf.from_pandas(pi)
+
+    assert_exceptions_equal(
+        lfunc=pi.set_names,
+        rfunc=gi.set_names,
+        lfunc_args_and_kwargs=([], {"names": names, "level": level}),
+        rfunc_args_and_kwargs=([], {"names": names, "level": level}),
+    )
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.MultiIndex.from_product([["python", "cobra"], [2018, 2019]]),
+        pd.MultiIndex.from_product(
+            [["python", "cobra"], [2018, 2019]], names=["old name", None]
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "names",
+    [
+        [None, None],
+        ["a", None],
+        ["new name", "another name"],
+        [1, None],
+        [2, 3],
+        [42, "name"],
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+def test_multiindex_rename(idx, names, inplace):
+    pi = idx.copy()
+    gi = cudf.from_pandas(idx)
+
+    expected = pi.rename(names=names, inplace=inplace)
+    actual = gi.rename(names=names, inplace=inplace)
+
+    if inplace:
+        expected, actual = pi, gi
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "names", ["plain string", 123, ["str"], ["l1", "l2", "l3"]]
+)
+def test_multiindex_rename_error(names):
+    pi = pd.MultiIndex.from_product([["python", "cobra"], [2018, 2019]])
+    gi = cudf.from_pandas(pi)
+
+    assert_exceptions_equal(
+        lfunc=pi.rename,
+        rfunc=gi.rename,
+        lfunc_args_and_kwargs=([], {"names": names}),
+        rfunc_args_and_kwargs=([], {"names": names}),
+    )

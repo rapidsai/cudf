@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,6 @@
 #include <cudf_test/type_list_utilities.hpp>
 
 using namespace cudf::test;  // this will make reading code way easier
-
-namespace std {
-template <class T, class U>
-constexpr bool is_same_v = std::is_same<T, U>::value;
-}
 
 namespace {
 // Work around to remove parentheses surrounding a type
@@ -48,7 +43,7 @@ struct argument_type<T(U)> {
  * // Parentheses around types with commas
  * EXPECT_SAME_TYPE((std::map<int, float>), (std::map<int, float>));
  * ```
- **/
+ */
 #define EXPECT_SAME_TYPE(expected, actual) \
   static_assert(                           \
     std::is_same_v<argument_type<void(expected)>::type, argument_type<void(actual)>::type>, "");
@@ -60,7 +55,7 @@ struct argument_type<T(U)> {
  *
  * @tparam T The type whose name is returned as a string
  * @return std::string The demangled name of `T`
- **/
+ */
 template <typename T>
 std::string type_name()
 {

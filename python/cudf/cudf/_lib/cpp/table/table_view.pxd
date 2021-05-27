@@ -15,6 +15,7 @@ cdef extern from "cudf/table/table_view.hpp" namespace "cudf" nogil:
         column_view column(size_type column_index) except +
         size_type num_columns() except +
         size_type num_rows() except +
+        table_view select(vector[size_type] column_indices) except +
 
     cdef cppclass mutable_table_view:
         mutable_table_view() except +

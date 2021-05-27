@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,9 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <vector>
 
@@ -57,14 +60,14 @@ struct partition_fn {
 
   partition_fn(column_device_view const& d_strings,
                string_view const& d_delimiter,
-               rmm::device_vector<string_index_pair>& indices_left,
-               rmm::device_vector<string_index_pair>& indices_delim,
-               rmm::device_vector<string_index_pair>& indices_right)
+               rmm::device_uvector<string_index_pair>& indices_left,
+               rmm::device_uvector<string_index_pair>& indices_delim,
+               rmm::device_uvector<string_index_pair>& indices_right)
     : d_strings(d_strings),
       d_delimiter(d_delimiter),
-      d_indices_left(indices_left.data().get()),
-      d_indices_delim(indices_delim.data().get()),
-      d_indices_right(indices_right.data().get())
+      d_indices_left(indices_left.data()),
+      d_indices_delim(indices_delim.data()),
+      d_indices_right(indices_right.data())
   {
   }
 
@@ -142,9 +145,9 @@ struct partition_fn {
 struct rpartition_fn : public partition_fn {
   rpartition_fn(column_device_view const& d_strings,
                 string_view const& d_delimiter,
-                rmm::device_vector<string_index_pair>& indices_left,
-                rmm::device_vector<string_index_pair>& indices_delim,
-                rmm::device_vector<string_index_pair>& indices_right)
+                rmm::device_uvector<string_index_pair>& indices_left,
+                rmm::device_uvector<string_index_pair>& indices_delim,
+                rmm::device_uvector<string_index_pair>& indices_right)
     : partition_fn(d_strings, d_delimiter, indices_left, indices_delim, indices_right)
   {
   }
@@ -176,20 +179,21 @@ struct rpartition_fn : public partition_fn {
 std::unique_ptr<table> partition(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
   auto strings_count = strings.size();
   if (strings_count == 0) return std::make_unique<table>(std::vector<std::unique_ptr<column>>());
   auto strings_column = column_device_view::create(strings.parent(), stream);
   string_view d_delimiter(delimiter.data(), delimiter.size());
-  rmm::device_vector<string_index_pair> left_indices(strings_count), delim_indices(strings_count),
-    right_indices(strings_count);
+  auto left_indices  = rmm::device_uvector<string_index_pair>(strings_count, stream);
+  auto delim_indices = rmm::device_uvector<string_index_pair>(strings_count, stream);
+  auto right_indices = rmm::device_uvector<string_index_pair>(strings_count, stream);
   partition_fn partitioner(
     *strings_column, d_delimiter, left_indices, delim_indices, right_indices);
 
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      partitioner);
@@ -203,19 +207,20 @@ std::unique_ptr<table> partition(
 std::unique_ptr<table> rpartition(
   strings_column_view const& strings,
   string_scalar const& delimiter      = string_scalar(""),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  cudaStream_t stream                 = 0)
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
   auto strings_count = strings.size();
   if (strings_count == 0) return std::make_unique<table>(std::vector<std::unique_ptr<column>>());
   auto strings_column = column_device_view::create(strings.parent(), stream);
   string_view d_delimiter(delimiter.data(), delimiter.size());
-  rmm::device_vector<string_index_pair> left_indices(strings_count), delim_indices(strings_count),
-    right_indices(strings_count);
+  auto left_indices  = rmm::device_uvector<string_index_pair>(strings_count, stream);
+  auto delim_indices = rmm::device_uvector<string_index_pair>(strings_count, stream);
+  auto right_indices = rmm::device_uvector<string_index_pair>(strings_count, stream);
   rpartition_fn partitioner(
     *strings_column, d_delimiter, left_indices, delim_indices, right_indices);
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      partitioner);
@@ -236,7 +241,7 @@ std::unique_ptr<table> partition(strings_column_view const& strings,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::partition(strings, delimiter, mr);
+  return detail::partition(strings, delimiter, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<table> rpartition(strings_column_view const& strings,
@@ -244,7 +249,7 @@ std::unique_ptr<table> rpartition(strings_column_view const& strings,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::rpartition(strings, delimiter, mr);
+  return detail::rpartition(strings, delimiter, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

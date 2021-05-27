@@ -19,6 +19,8 @@
 #include <cuda_runtime.h>
 #include <cudf/types.hpp>
 
+#include <limits>
+
 /**
  * @file
  * @brief Concrete type definition for dictionary columns.
@@ -60,6 +62,19 @@ struct dictionary_wrapper {
   CUDA_HOST_DEVICE_CALLABLE explicit operator value_type() const { return _value; }
   // simple accessor
   CUDA_HOST_DEVICE_CALLABLE value_type value() const { return _value; }
+
+  static CUDA_HOST_DEVICE_CALLABLE constexpr value_type max_value()
+  {
+    return std::numeric_limits<value_type>::max();
+  }
+  static CUDA_HOST_DEVICE_CALLABLE constexpr value_type min_value()
+  {
+    return std::numeric_limits<value_type>::min();
+  }
+  static CUDA_HOST_DEVICE_CALLABLE constexpr value_type lowest_value()
+  {
+    return std::numeric_limits<IndexType>::lowest();
+  }
 
  private:
   value_type _value;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/row_operators.cuh>
@@ -24,7 +26,9 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
+
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/sequence.h>
@@ -50,35 +54,29 @@ struct unique_comparator {
 };
 
 // Assign rank from 1 to n unique values. Equal values get same rank value.
-rmm::device_vector<size_type> sorted_dense_rank(column_view input_col,
-                                                column_view sorted_order_view,
-                                                cudaStream_t stream)
+rmm::device_uvector<size_type> sorted_dense_rank(column_view input_col,
+                                                 column_view sorted_order_view,
+                                                 rmm::cuda_stream_view stream)
 {
   auto device_table     = table_device_view::create(table_view{{input_col}}, stream);
   auto const input_size = input_col.size();
-  rmm::device_vector<size_type> dense_rank_sorted(input_size);
+  rmm::device_uvector<size_type> dense_rank_sorted(input_size, stream);
   auto sorted_index_order = thrust::make_permutation_iterator(
     sorted_order_view.begin<size_type>(), thrust::make_counting_iterator<size_type>(0));
   if (input_col.has_nulls()) {
     auto conv = unique_comparator<true, size_type, decltype(sorted_index_order)>(
       *device_table, sorted_index_order);
-    auto unique_it =
-      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), conv);
+    auto unique_it = cudf::detail::make_counting_transform_iterator(0, conv);
 
-    thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
-                           unique_it,
-                           unique_it + input_size,
-                           dense_rank_sorted.data().get());
+    thrust::inclusive_scan(
+      rmm::exec_policy(stream), unique_it, unique_it + input_size, dense_rank_sorted.data());
   } else {
     auto conv = unique_comparator<false, size_type, decltype(sorted_index_order)>(
       *device_table, sorted_index_order);
-    auto unique_it =
-      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0), conv);
+    auto unique_it = cudf::detail::make_counting_transform_iterator(0, conv);
 
-    thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
-                           unique_it,
-                           unique_it + input_size,
-                           dense_rank_sorted.data().get());
+    thrust::inclusive_scan(
+      rmm::exec_policy(stream), unique_it, unique_it + input_size, dense_rank_sorted.data());
   }
   return dense_rank_sorted;
 }
@@ -101,19 +99,19 @@ template <typename TieType,
           typename TieBreaker,
           typename Transformer,
           typename TieIterator>
-void tie_break_ranks_transform(rmm::device_vector<size_type> const &dense_rank_sorted,
+void tie_break_ranks_transform(cudf::device_span<size_type const> dense_rank_sorted,
                                TieIterator tie_iter,
                                column_view const &sorted_order_view,
                                outputIterator rank_iter,
                                TieBreaker tie_breaker,
                                Transformer transformer,
-                               cudaStream_t stream)
+                               rmm::cuda_stream_view stream)
 {
   auto const input_size = sorted_order_view.size();
-  rmm::device_vector<TieType> tie_sorted(input_size, 0);
   // algorithm: reduce_by_key(dense_rank, 1, n, reduction_tie_breaker)
   // reduction_tie_breaker = min, max, min_count
-  thrust::reduce_by_key(rmm::exec_policy(stream)->on(stream),
+  rmm::device_uvector<TieType> tie_sorted(sorted_order_view.size(), stream);
+  thrust::reduce_by_key(rmm::exec_policy(stream),
                         dense_rank_sorted.begin(),
                         dense_rank_sorted.end(),
                         tie_iter,
@@ -126,7 +124,7 @@ void tie_break_ranks_transform(rmm::device_vector<size_type> const &dense_rank_s
     [tied_rank = tie_sorted.begin(), transformer] __device__(auto dense_pos) {
       return transformer(tied_rank[dense_pos - 1]);
     });
-  thrust::scatter(rmm::exec_policy(stream)->on(stream),
+  thrust::scatter(rmm::exec_policy(stream),
                   sorted_tied_rank,
                   sorted_tied_rank + input_size,
                   sorted_order_view.begin<size_type>(),
@@ -136,10 +134,10 @@ void tie_break_ranks_transform(rmm::device_vector<size_type> const &dense_rank_s
 template <typename outputType>
 void rank_first(column_view sorted_order_view,
                 mutable_column_view rank_mutable_view,
-                cudaStream_t stream)
+                rmm::cuda_stream_view stream)
 {
   // stable sort order ranking (no ties)
-  thrust::scatter(rmm::exec_policy(stream)->on(stream),
+  thrust::scatter(rmm::exec_policy(stream),
                   thrust::make_counting_iterator<size_type>(1),
                   thrust::make_counting_iterator<size_type>(rank_mutable_view.size() + 1),
                   sorted_order_view.begin<size_type>(),
@@ -147,13 +145,13 @@ void rank_first(column_view sorted_order_view,
 }
 
 template <typename outputType>
-void rank_dense(rmm::device_vector<size_type> const &dense_rank_sorted,
+void rank_dense(cudf::device_span<size_type const> dense_rank_sorted,
                 column_view sorted_order_view,
                 mutable_column_view rank_mutable_view,
-                cudaStream_t stream)
+                rmm::cuda_stream_view stream)
 {
   // All equal values have same rank and rank always increases by 1 between groups
-  thrust::scatter(rmm::exec_policy(stream)->on(stream),
+  thrust::scatter(rmm::exec_policy(stream),
                   dense_rank_sorted.begin(),
                   dense_rank_sorted.end(),
                   sorted_order_view.begin<size_type>(),
@@ -161,10 +159,10 @@ void rank_dense(rmm::device_vector<size_type> const &dense_rank_sorted,
 }
 
 template <typename outputType>
-void rank_min(rmm::device_vector<size_type> const &group_keys,
+void rank_min(cudf::device_span<size_type const> group_keys,
               column_view sorted_order_view,
               mutable_column_view rank_mutable_view,
-              cudaStream_t stream)
+              rmm::cuda_stream_view stream)
 {
   // min of first in the group
   // All equal values have min of ranks among them.
@@ -179,10 +177,10 @@ void rank_min(rmm::device_vector<size_type> const &group_keys,
 }
 
 template <typename outputType>
-void rank_max(rmm::device_vector<size_type> const &group_keys,
+void rank_max(cudf::device_span<size_type const> group_keys,
               column_view sorted_order_view,
               mutable_column_view rank_mutable_view,
-              cudaStream_t stream)
+              rmm::cuda_stream_view stream)
 {
   // max of first in the group
   // All equal values have max of ranks among them.
@@ -196,10 +194,10 @@ void rank_max(rmm::device_vector<size_type> const &group_keys,
                                        stream);
 }
 
-void rank_average(rmm::device_vector<size_type> const &group_keys,
+void rank_average(cudf::device_span<size_type const> group_keys,
                   column_view sorted_order_view,
                   mutable_column_view rank_mutable_view,
-                  cudaStream_t stream)
+                  rmm::cuda_stream_view stream)
 {
   // k, k+1, .. k+n-1
   // average = (n*k+ n*(n-1)/2)/n
@@ -207,16 +205,18 @@ void rank_average(rmm::device_vector<size_type> const &group_keys,
   // Calculate Min of ranks and Count of equal values
   // algorithm: reduce_by_key(dense_rank, 1, n, min_count)
   //            transform(min+(count-1)/2), scatter
-  using MinCount = thrust::tuple<size_type, size_type>;
+  using MinCount = thrust::pair<size_type, size_type>;
   tie_break_ranks_transform<MinCount>(
     group_keys,
-    thrust::make_zip_iterator(thrust::make_tuple(thrust::make_counting_iterator<size_type>(1),
-                                                 thrust::make_constant_iterator<size_type>(1))),
+    cudf::detail::make_counting_transform_iterator(1,
+                                                   [] __device__(auto i) {
+                                                     return MinCount{i, 1};
+                                                   }),
     sorted_order_view,
     rank_mutable_view.begin<double>(),
     [] __device__(auto rank_count1, auto rank_count2) {
-      return MinCount{std::min(thrust::get<0>(rank_count1), thrust::get<0>(rank_count2)),
-                      thrust::get<1>(rank_count1) + thrust::get<1>(rank_count2)};
+      return MinCount{std::min(rank_count1.first, rank_count2.first),
+                      rank_count1.second + rank_count2.second};
     },
     [] __device__(MinCount minrank_count) {  // min+(count-1)/2
       return static_cast<double>(thrust::get<0>(minrank_count)) +
@@ -233,17 +233,21 @@ std::unique_ptr<column> rank(column_view const &input,
                              null_policy null_handling,
                              null_order null_precedence,
                              bool percentage,
-                             rmm::mr::device_memory_resource *mr,
-                             cudaStream_t stream = 0)
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource *mr)
 {
   data_type const output_type = (percentage or method == rank_method::AVERAGE)
                                   ? data_type(type_id::FLOAT64)
                                   : data_type(type_to_id<size_type>());
-  std::unique_ptr<column> rank_column = [&null_handling, &output_type, &input, &mr, &stream] {
+  std::unique_ptr<column> rank_column = [&null_handling, &output_type, &input, &stream, &mr] {
     // na_option=keep assign NA to NA values
     if (null_handling == null_policy::EXCLUDE)
-      return make_numeric_column(
-        output_type, input.size(), copy_bitmask(input, stream, mr), input.null_count(), stream, mr);
+      return make_numeric_column(output_type,
+                                 input.size(),
+                                 detail::copy_bitmask(input, stream, mr),
+                                 input.null_count(),
+                                 stream,
+                                 mr);
     else
       return make_numeric_column(output_type, input.size(), mask_state::UNALLOCATED, stream, mr);
   }();
@@ -252,18 +256,18 @@ std::unique_ptr<column> rank(column_view const &input,
   std::unique_ptr<column> sorted_order =
     (method == rank_method::FIRST)
       ? detail::stable_sorted_order(
-          table_view{{input}}, {column_order}, {null_precedence}, mr, stream)
-      : detail::sorted_order(table_view{{input}}, {column_order}, {null_precedence}, mr, stream);
+          table_view{{input}}, {column_order}, {null_precedence}, stream, mr)
+      : detail::sorted_order(table_view{{input}}, {column_order}, {null_precedence}, stream, mr);
   column_view sorted_order_view = sorted_order->view();
 
   // dense: All equal values have same rank and rank always increases by 1 between groups
   // acts as key for min, max, average to denote equal value groups
-  rmm::device_vector<size_type> const dense_rank_sorted =
+  rmm::device_uvector<size_type> const dense_rank_sorted =
     [&method, &input, &sorted_order_view, &stream] {
       if (method != rank_method::FIRST)
         return sorted_dense_rank(input, sorted_order_view, stream);
       else
-        return rmm::device_vector<size_type>();
+        return rmm::device_uvector<size_type>(0, stream);
     }();
 
   if (output_type.id() == type_id::FLOAT64) {
@@ -311,9 +315,9 @@ std::unique_ptr<column> rank(column_view const &input,
     auto rank_iter = rank_mutable_view.begin<double>();
     size_type const count =
       (null_handling == null_policy::EXCLUDE) ? input.size() - input.null_count() : input.size();
-    auto drs            = dense_rank_sorted.data().get();
+    auto drs            = dense_rank_sorted.data();
     bool const is_dense = (method == rank_method::DENSE);
-    thrust::transform(rmm::exec_policy(stream)->on(stream),
+    thrust::transform(rmm::exec_policy(stream),
                       rank_iter,
                       rank_iter + input.size(),
                       rank_iter,
@@ -333,6 +337,13 @@ std::unique_ptr<column> rank(column_view const &input,
                              bool percentage,
                              rmm::mr::device_memory_resource *mr)
 {
-  return detail::rank(input, method, column_order, null_handling, null_precedence, percentage, mr);
+  return detail::rank(input,
+                      method,
+                      column_order,
+                      null_handling,
+                      null_precedence,
+                      percentage,
+                      rmm::cuda_stream_default,
+                      mr);
 }
 }  // namespace cudf

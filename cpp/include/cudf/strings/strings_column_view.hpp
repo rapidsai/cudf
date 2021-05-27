@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 
-#include <rmm/thrust_rmm_allocator.h>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
 /**
  * @file
@@ -77,8 +78,8 @@ class strings_column_view : private column_view {
   /**
    * @brief Returns the number of bytes in the chars child column.
    *
-   * This accounts for the offset of the strings' column_view and
-   * for empty columns.
+   * This accounts for empty columns but does not reflect a sliced parent column
+   * view  (i.e.: non-zero offset or reduced row count).
    */
   size_type chars_size() const noexcept;
 };
@@ -86,35 +87,18 @@ class strings_column_view : private column_view {
 //! Strings column APIs.
 namespace strings {
 /**
- * @brief Prints the strings to stdout.
- *
- * @param strings Strings instance for this operation.
- * @param start Index of first string to print.
- * @param end Index of last string to print. Specify -1 for all strings.
- * @param max_width Maximum number of characters to print per string.
- *        Specify -1 to print all characters.
- * @param delimiter The chars to print between each string.
- *        Default is new-line character.
- */
-void print(strings_column_view const& strings,
-           size_type start       = 0,
-           size_type end         = -1,
-           size_type max_width   = -1,
-           const char* delimiter = "\n");
-
-/**
  * @brief Create output per Arrow strings format.
  *
  * The return pair is the vector of chars and the vector of offsets.
  *
  * @param strings Strings instance for this operation.
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned device_vectors.
+ * @param mr Device memory resource used to allocate the returned device vectors.
  * @return Pair containing a vector of chars and a vector of offsets.
  */
-std::pair<rmm::device_vector<char>, rmm::device_vector<size_type>> create_offsets(
+std::pair<rmm::device_uvector<char>, rmm::device_uvector<size_type>> create_offsets(
   strings_column_view const& strings,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace strings

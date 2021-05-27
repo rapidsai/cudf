@@ -110,9 +110,11 @@ public class Decompressor {
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
       if (!closed) {
         cleaner.delRef();
+        cleaner.clean(false);
+        closed = true;
       } else {
         cleaner.logRefCountDebug("double free " + this);
         throw new IllegalStateException("Close called too many times " + this);
@@ -133,7 +135,7 @@ public class Decompressor {
       }
 
       @Override
-      protected boolean cleanImpl(boolean logErrorIfNotClean) {
+      protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
         boolean neededCleanup = false;
         long address = metadata;
         if (metadata != 0) {

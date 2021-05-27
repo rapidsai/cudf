@@ -15,15 +15,21 @@
  */
 #pragma once
 
+#include <cudf/ast/detail/linearizer.hpp>
 #include <cudf/ast/detail/operators.hpp>
-#include <cudf/ast/linearizer.hpp>
+#include <cudf/ast/nodes.hpp>
 #include <cudf/ast/operators.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/assert.cuh>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
+#include <cudf/utilities/traits.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <cstring>
 #include <numeric>
@@ -53,10 +59,19 @@ struct row_output {
    * @param row_index Row index of data column.
    * @param result Value to assign to output.
    */
-  template <typename Element>
+  template <typename Element, CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
   __device__ void resolve_output(detail::device_data_reference device_data_reference,
                                  cudf::size_type row_index,
                                  Element result) const;
+  // Definition below after row_evaluator is a complete type
+
+  template <typename Element, CUDF_ENABLE_IF(not is_rep_layout_compatible<Element>())>
+  __device__ void resolve_output(detail::device_data_reference device_data_reference,
+                                 cudf::size_type row_index,
+                                 Element result) const
+  {
+    cudf_assert(false && "Invalid type in resolve_output.");
+  }
 
  private:
   row_evaluator const& evaluator;
@@ -74,7 +89,7 @@ struct unary_row_output : public row_output {
                              detail::device_data_reference output) const
   {
     using OperatorFunctor = detail::operator_functor<op>;
-    using Out             = simt::std::invoke_result_t<OperatorFunctor, Input>;
+    using Out             = cuda::std::invoke_result_t<OperatorFunctor, Input>;
     resolve_output<Out>(output, row_index, OperatorFunctor{}(input));
   }
 
@@ -85,7 +100,7 @@ struct unary_row_output : public row_output {
                              Input input,
                              detail::device_data_reference output) const
   {
-    release_assert(false && "Invalid unary dispatch operator for the provided input.");
+    cudf_assert(false && "Invalid unary dispatch operator for the provided input.");
   }
 };
 
@@ -102,7 +117,7 @@ struct binary_row_output : public row_output {
                              detail::device_data_reference output) const
   {
     using OperatorFunctor = detail::operator_functor<op>;
-    using Out             = simt::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
+    using Out             = cuda::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
     resolve_output<Out>(output, row_index, OperatorFunctor{}(lhs, rhs));
   }
 
@@ -114,7 +129,7 @@ struct binary_row_output : public row_output {
                              RHS rhs,
                              detail::device_data_reference output) const
   {
-    release_assert(false && "Invalid binary dispatch operator for the provided input.");
+    cudf_assert(false && "Invalid binary dispatch operator for the provided input.");
   }
 };
 
@@ -124,7 +139,6 @@ struct binary_row_output : public row_output {
  * This class is designed for n-ary transform evaluation. Currently this class assumes that there's
  * only one relevant "row index" in its methods, which corresponds to a row in a single input table
  * and the same row index in an output column.
- *
  */
 struct row_evaluator {
   friend struct row_output;
@@ -143,10 +157,11 @@ struct row_evaluator {
    * storing intermediates.
    * @param output_column The output column where results are stored.
    */
-  __device__ row_evaluator(table_device_view const& table,
-                           const cudf::detail::fixed_width_scalar_device_view_base* literals,
-                           std::int64_t* thread_intermediate_storage,
-                           mutable_column_device_view* output_column)
+  __device__ row_evaluator(
+    table_device_view const& table,
+    device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals,
+    std::int64_t* thread_intermediate_storage,
+    mutable_column_device_view* output_column)
     : table(table),
       literals(literals),
       thread_intermediate_storage(thread_intermediate_storage),
@@ -166,7 +181,7 @@ struct row_evaluator {
    * @param row_index Row index of data column.
    * @return Element
    */
-  template <typename Element>
+  template <typename Element, CUDF_ENABLE_IF(column_device_view::has_element_accessor<Element>())>
   __device__ Element resolve_input(detail::device_data_reference device_data_reference,
                                    cudf::size_type row_index) const
   {
@@ -184,6 +199,15 @@ struct row_evaluator {
       memcpy(&tmp, &intermediate, sizeof(Element));
       return tmp;
     }
+  }
+
+  template <typename Element,
+            CUDF_ENABLE_IF(not column_device_view::has_element_accessor<Element>())>
+  __device__ Element resolve_input(detail::device_data_reference device_data_reference,
+                                   cudf::size_type row_index) const
+  {
+    cudf_assert(false && "Unsupported type in resolve_input.");
+    return {};
   }
 
   /**
@@ -238,17 +262,17 @@ struct row_evaluator {
                              detail::device_data_reference rhs,
                              detail::device_data_reference output) const
   {
-    release_assert(false && "Invalid binary dispatch operator for the provided input.");
+    cudf_assert(false && "Invalid binary dispatch operator for the provided input.");
   }
 
  private:
   table_device_view const& table;
-  const cudf::detail::fixed_width_scalar_device_view_base* literals;
+  device_span<const cudf::detail::fixed_width_scalar_device_view_base> literals;
   std::int64_t* thread_intermediate_storage;
   mutable_column_device_view* output_column;
 };
 
-template <typename Element>
+template <typename Element, std::enable_if_t<is_rep_layout_compatible<Element>()>*>
 __device__ void row_output::resolve_output(detail::device_data_reference device_data_reference,
                                            cudf::size_type row_index,
                                            Element result) const
@@ -277,15 +301,15 @@ __device__ void row_output::resolve_output(detail::device_data_reference device_
  * @param num_operators Number of operators.
  * @param row_index Row index of data column(s).
  */
-__device__ void evaluate_row_expression(detail::row_evaluator const& evaluator,
-                                        const detail::device_data_reference* data_references,
-                                        const ast_operator* operators,
-                                        const cudf::size_type* operator_source_indices,
-                                        cudf::size_type num_operators,
-                                        cudf::size_type row_index)
+__device__ void evaluate_row_expression(
+  detail::row_evaluator const& evaluator,
+  device_span<const detail::device_data_reference> data_references,
+  device_span<const ast_operator> operators,
+  device_span<const cudf::size_type> operator_source_indices,
+  cudf::size_type row_index)
 {
-  auto operator_source_index = cudf::size_type(0);
-  for (cudf::size_type operator_index(0); operator_index < num_operators; operator_index++) {
+  auto operator_source_index = static_cast<cudf::size_type>(0);
+  for (cudf::size_type operator_index = 0; operator_index < operators.size(); operator_index++) {
     // Execute operator
     auto const op    = operators[operator_index];
     auto const arity = ast_operator_arity(op);
@@ -310,48 +334,84 @@ __device__ void evaluate_row_expression(detail::row_evaluator const& evaluator,
                       output,
                       op);
     } else {
-      release_assert(false && "Invalid operator arity.");
+      cudf_assert(false && "Invalid operator arity.");
     }
   }
 }
 
+/**
+ * @brief The AST plan creates a device buffer of data needed to execute an AST.
+ *
+ * On construction, an AST plan creates a single "packed" host buffer of all necessary data arrays,
+ * and copies that to the device with a single host-device memory copy. Because the plan tends to be
+ * small, this is the most efficient approach for low latency.
+ *
+ */
 struct ast_plan {
- public:
-  ast_plan() : sizes(), data_pointers() {}
+  ast_plan(linearizer const& expr_linearizer,
+           rmm::cuda_stream_view stream,
+           rmm::mr::device_memory_resource* mr)
+    : _sizes{}, _data_pointers{}
+  {
+    add_to_plan(expr_linearizer.data_references());
+    add_to_plan(expr_linearizer.literals());
+    add_to_plan(expr_linearizer.operators());
+    add_to_plan(expr_linearizer.operator_source_indices());
 
-  using buffer_type = std::pair<std::unique_ptr<char[]>, int>;
+    // Create device buffer
+    auto const buffer_size = std::accumulate(_sizes.cbegin(), _sizes.cend(), 0);
+    auto buffer_offsets    = std::vector<int>(_sizes.size());
+    thrust::exclusive_scan(_sizes.cbegin(), _sizes.cend(), buffer_offsets.begin(), 0);
 
+    auto h_data_buffer = std::make_unique<char[]>(buffer_size);
+    for (unsigned int i = 0; i < _data_pointers.size(); ++i) {
+      std::memcpy(h_data_buffer.get() + buffer_offsets[i], _data_pointers[i], _sizes[i]);
+    }
+
+    _device_data_buffer = rmm::device_buffer(h_data_buffer.get(), buffer_size, stream, mr);
+
+    stream.synchronize();
+
+    // Create device pointers to components of plan
+    auto device_data_buffer_ptr = static_cast<const char*>(_device_data_buffer.data());
+    _device_data_references     = device_span<const detail::device_data_reference>(
+      reinterpret_cast<const detail::device_data_reference*>(device_data_buffer_ptr +
+                                                             buffer_offsets[0]),
+      expr_linearizer.data_references().size());
+    _device_literals = device_span<const cudf::detail::fixed_width_scalar_device_view_base>(
+      reinterpret_cast<const cudf::detail::fixed_width_scalar_device_view_base*>(
+        device_data_buffer_ptr + buffer_offsets[1]),
+      expr_linearizer.literals().size());
+    _device_operators = device_span<const ast_operator>(
+      reinterpret_cast<const ast_operator*>(device_data_buffer_ptr + buffer_offsets[2]),
+      expr_linearizer.operators().size());
+    _device_operator_source_indices = device_span<const cudf::size_type>(
+      reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]),
+      expr_linearizer.operator_source_indices().size());
+  }
+
+  /**
+   * @brief Helper function for adding components (operators, literals, etc) to AST plan
+   *
+   * @tparam T  The underlying type of the input `std::vector`
+   * @param  v  The `std::vector` containing components (operators, literals, etc)
+   */
   template <typename T>
   void add_to_plan(std::vector<T> const& v)
   {
     auto const data_size = sizeof(T) * v.size();
-    sizes.push_back(data_size);
-    data_pointers.push_back(v.data());
+    _sizes.push_back(data_size);
+    _data_pointers.push_back(v.data());
   }
 
-  buffer_type get_host_data_buffer() const
-  {
-    auto const total_size = std::accumulate(sizes.cbegin(), sizes.cend(), 0);
-    auto host_data_buffer = std::make_unique<char[]>(total_size);
-    auto const offsets    = get_offsets();
-    for (unsigned int i = 0; i < data_pointers.size(); ++i) {
-      std::memcpy(host_data_buffer.get() + offsets[i], data_pointers[i], sizes[i]);
-    }
-    return std::make_pair(std::move(host_data_buffer), total_size);
-  }
+  std::vector<cudf::size_type> _sizes;
+  std::vector<const void*> _data_pointers;
 
-  std::vector<cudf::size_type> get_offsets() const
-  {
-    auto offsets = std::vector<int>(sizes.size());
-    // When C++17, use std::exclusive_scan
-    offsets[0] = 0;
-    std::partial_sum(sizes.cbegin(), sizes.cend() - 1, offsets.begin() + 1);
-    return offsets;
-  }
-
- private:
-  std::vector<cudf::size_type> sizes;
-  std::vector<const void*> data_pointers;
+  rmm::device_buffer _device_data_buffer;
+  device_span<const detail::device_data_reference> _device_data_references;
+  device_span<const cudf::detail::fixed_width_scalar_device_view_base> _device_literals;
+  device_span<const ast_operator> _device_operators;
+  device_span<const cudf::size_type> _device_operator_source_indices;
 };
 
 /**
@@ -369,7 +429,7 @@ struct ast_plan {
 std::unique_ptr<column> compute_column(
   table_view const table,
   expression const& expr,
-  cudaStream_t stream                 = 0,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace detail
 

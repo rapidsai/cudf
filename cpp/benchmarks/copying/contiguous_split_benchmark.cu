@@ -71,11 +71,11 @@ void BM_contiguous_split(benchmark::State& state)
 
   // generate input table
   srand(31337);
-  auto valids = cudf::test::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
   std::vector<cudf::test::fixed_width_column_wrapper<int>> src_cols(num_cols);
   for (int idx = 0; idx < num_cols; idx++) {
     auto rand_elements =
-      cudf::test::make_counting_transform_iterator(0, [](int i) { return rand(); });
+      cudf::detail::make_counting_transform_iterator(0, [](int i) { return rand(); });
     if (include_validity) {
       src_cols[idx] = cudf::test::fixed_width_column_wrapper<int>(
         rand_elements, rand_elements + num_rows, valids);
@@ -116,7 +116,7 @@ void BM_contiguous_split_strings(benchmark::State& state)
 
   // generate input table
   srand(31337);
-  auto valids = cudf::test::make_counting_transform_iterator(
+  auto valids = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return i % 2 == 0 ? true : false; });
   std::vector<cudf::test::strings_column_wrapper> src_cols;
   std::vector<const char*> one_col(num_rows);

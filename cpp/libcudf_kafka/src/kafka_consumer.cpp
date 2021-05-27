@@ -100,7 +100,7 @@ size_t kafka_consumer::size() const { return buffer.size(); }
 
 /**
  * Change the TOPPAR assignment for this consumer instance
- **/
+ */
 RdKafka::ErrorCode kafka_consumer::update_consumer_topic_partition_assignment(
   std::string const &topic, int partition, int64_t offset)
 {

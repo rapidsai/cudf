@@ -1,14 +1,16 @@
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 import re
 
 import numpy as np
 import pandas as pd
 import pytest
+from decimal import Decimal
 
 import cudf as gd
 from cudf.tests.utils import assert_eq, assert_exceptions_equal
 from cudf.utils.dtypes import is_categorical_dtype
+from cudf.core.dtypes import Decimal64Dtype
 
 
 def make_frames(index=None, nulls="none"):
@@ -320,7 +322,6 @@ def test_pandas_concat_compatibility_axis1_overlap(index, names, data):
     ps2 = s2.to_pandas()
     got = gd.concat([s1, s2], axis=1)
     expect = pd.concat([ps1, ps2], axis=1)
-
     assert_eq(got, expect)
 
 
@@ -373,8 +374,8 @@ def test_concat_mixed_input():
     [
         [pd.Series([1, 2, 3]), pd.DataFrame({"a": [1, 2]})],
         [pd.Series([1, 2, 3]), pd.DataFrame({"a": []})],
-        [pd.Series([]), pd.DataFrame({"a": []})],
-        [pd.Series([]), pd.DataFrame({"a": [1, 2]})],
+        [pd.Series([], dtype="float64"), pd.DataFrame({"a": []})],
+        [pd.Series([], dtype="float64"), pd.DataFrame({"a": [1, 2]})],
         [pd.Series([1, 2, 3.0, 1.2], name="abc"), pd.DataFrame({"a": [1, 2]})],
         [
             pd.Series(
@@ -593,3 +594,936 @@ def test_concat_dataframe_with_multiIndex(df1, df2):
     actual = pd.concat([pdf1, pdf2], axis=1)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "objs",
+    [
+        [
+            pd.DataFrame(
+                {
+                    "x": range(10),
+                    "y": list(map(float, range(10))),
+                    "z": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                }
+            ),
+            pd.DataFrame(
+                {"x": range(10, 20), "y": list(map(float, range(10, 20)))}
+            ),
+        ],
+        [
+            pd.DataFrame(
+                {
+                    "x": range(10),
+                    "y": list(map(float, range(10))),
+                    "z": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                },
+                index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
+            ),
+            pd.DataFrame(
+                {"x": range(10, 20), "y": list(map(float, range(10, 20)))},
+                index=["k", "l", "m", "n", "o", "p", "q", "r", "s", "t"],
+            ),
+            pd.DataFrame(
+                {
+                    "x": range(10),
+                    "y": list(map(float, range(10))),
+                    "z": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                },
+                index=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"],
+            ),
+            pd.DataFrame(
+                {"x": range(10, 20), "y": list(map(float, range(10, 20)))},
+                index=["a", "b", "c", "d", "z", "f", "g", "h", "i", "w"],
+            ),
+        ],
+    ],
+)
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("join", ["inner", "outer"])
+@pytest.mark.parametrize("axis", [0])
+def test_concat_join(objs, ignore_index, sort, join, axis):
+    gpu_objs = [gd.from_pandas(o) for o in objs]
+
+    assert_eq(
+        pd.concat(
+            objs, sort=sort, join=join, ignore_index=ignore_index, axis=axis
+        ),
+        gd.concat(
+            gpu_objs,
+            sort=sort,
+            join=join,
+            ignore_index=ignore_index,
+            axis=axis,
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "objs",
+    [
+        [
+            pd.DataFrame(
+                {
+                    "x": range(10),
+                    "y": list(map(float, range(10))),
+                    "z": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                }
+            ),
+            pd.DataFrame(
+                {"x": range(10, 20), "y": list(map(float, range(10, 20)))}
+            ),
+        ],
+    ],
+)
+def test_concat_join_axis_1_dup_error(objs):
+    gpu_objs = [gd.from_pandas(o) for o in objs]
+    # we do not support duplicate columns
+    with pytest.raises(NotImplementedError):
+        assert_eq(
+            pd.concat(objs, axis=1,), gd.concat(gpu_objs, axis=1,),
+        )
+
+
+@pytest.mark.parametrize(
+    "objs",
+    [
+        [
+            pd.DataFrame(
+                {
+                    "x": range(10),
+                    "y": list(map(float, range(10))),
+                    "z": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                }
+            ),
+            pd.DataFrame(
+                {"l": range(10, 20), "m": list(map(float, range(10, 20)))}
+            ),
+        ],
+    ],
+)
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("join", ["inner", "outer"])
+@pytest.mark.parametrize("axis", [1])
+def test_concat_join_axis_1(objs, ignore_index, sort, join, axis):
+    # no duplicate columns
+    gpu_objs = [gd.from_pandas(o) for o in objs]
+
+    assert_eq(
+        pd.concat(
+            objs, sort=sort, join=join, ignore_index=ignore_index, axis=axis
+        ),
+        gd.concat(
+            gpu_objs,
+            sort=sort,
+            join=join,
+            ignore_index=ignore_index,
+            axis=axis,
+        ),
+    )
+
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("join", ["inner", "outer"])
+@pytest.mark.parametrize("axis", [1, 0])
+def test_concat_join_many_df_and_empty_df(ignore_index, sort, join, axis):
+    # no duplicate columns
+    pdf1 = pd.DataFrame(
+        {
+            "x": range(10),
+            "y": list(map(float, range(10))),
+            "z": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        }
+    )
+    pdf2 = pd.DataFrame(
+        {"l": range(10, 20), "m": list(map(float, range(10, 20)))}
+    )
+    pdf3 = pd.DataFrame({"j": [1, 2], "k": [1, 2], "s": [1, 2], "t": [1, 2]})
+    pdf_empty1 = pd.DataFrame()
+
+    gdf1 = gd.from_pandas(pdf1)
+    gdf2 = gd.from_pandas(pdf2)
+    gdf3 = gd.from_pandas(pdf3)
+    gdf_empty1 = gd.from_pandas(pdf_empty1)
+
+    assert_eq(
+        pd.concat(
+            [pdf1, pdf2, pdf3, pdf_empty1],
+            sort=sort,
+            join=join,
+            ignore_index=ignore_index,
+            axis=axis,
+        ),
+        gd.concat(
+            [gdf1, gdf2, gdf3, gdf_empty1],
+            sort=sort,
+            join=join,
+            ignore_index=ignore_index,
+            axis=axis,
+        ),
+        check_index_type=False,
+    )
+
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("join", ["inner", "outer"])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_concat_join_one_df(ignore_index, sort, join, axis):
+    pdf1 = pd.DataFrame(
+        {
+            "x": range(10),
+            "y": list(map(float, range(10))),
+            "z": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        }
+    )
+
+    gdf1 = gd.from_pandas(pdf1)
+
+    assert_eq(
+        pd.concat(
+            [pdf1], sort=sort, join=join, ignore_index=ignore_index, axis=axis
+        ),
+        gd.concat(
+            [gdf1], sort=sort, join=join, ignore_index=ignore_index, axis=axis
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "pdf1,pdf2",
+    [
+        (
+            pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),
+            pd.DataFrame({"c": [7, 8, 9], "d": [10, 11, 12]}),
+        ),
+        (
+            pd.DataFrame(
+                {"a": [1, 2, 3], "b": [4, 5, 6]}, index=["p", "q", "r"]
+            ),
+            pd.DataFrame(
+                {"c": [7, 8, 9], "d": [10, 11, 12]}, index=["r", "p", "z"]
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("join", ["inner", "outer"])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_concat_join_no_overlapping_columns(
+    pdf1, pdf2, ignore_index, sort, join, axis
+):
+    gdf1 = gd.from_pandas(pdf1)
+    gdf2 = gd.from_pandas(pdf2)
+    assert_eq(
+        pd.concat(
+            [pdf1, pdf2],
+            sort=sort,
+            join=join,
+            ignore_index=ignore_index,
+            axis=axis,
+        ),
+        gd.concat(
+            [gdf1, gdf2],
+            sort=sort,
+            join=join,
+            ignore_index=ignore_index,
+            axis=axis,
+        ),
+    )
+
+
+@pytest.mark.parametrize("ignore_index", [False, True])
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("join", ["inner", "outer"])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_concat_join_no_overlapping_columns_many_and_empty(
+    ignore_index, sort, join, axis
+):
+    pdf4 = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    pdf5 = pd.DataFrame({"c": [7, 8, 9], "d": [10, 11, 12]})
+    pdf6 = pd.DataFrame(
+        {
+            "x": range(10),
+            "y": list(map(float, range(10))),
+            "z": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        }
+    )
+    pdf_empty = pd.DataFrame()
+
+    gdf4 = gd.from_pandas(pdf4)
+    gdf5 = gd.from_pandas(pdf5)
+    gdf6 = gd.from_pandas(pdf6)
+    gdf_empty = gd.from_pandas(pdf_empty)
+
+    expected = pd.concat(
+        [pdf4, pdf5, pdf6, pdf_empty],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
+    actual = gd.concat(
+        [gdf4, gdf5, gdf6, gdf_empty],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
+    assert_eq(
+        expected, actual, check_index_type=False,
+    )
+
+
+@pytest.mark.parametrize(
+    "objs",
+    [
+        [
+            pd.DataFrame(
+                {"a": [1, 2, 3], "b": [4, 5, 6]}, index=["z", "t", "k"]
+            ),
+            pd.DataFrame(
+                {"c": [7, 8, 9], "d": [10, 11, 12]}, index=["z", "t", "k"]
+            ),
+            pd.DataFrame(
+                {
+                    "x": range(10),
+                    "y": list(map(float, range(10))),
+                    "z": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                },
+                index=["z", "t", "k", "a", "b", "c", "d", "e", "f", "g"],
+            ),
+            pd.DataFrame(index=pd.Index([], dtype="str")),
+        ],
+        [
+            pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),
+            pd.DataFrame({"c": [7, 8, 9], "d": [10, 11, 12]}),
+            pd.DataFrame(
+                {
+                    "x": range(10),
+                    "y": list(map(float, range(10))),
+                    "z": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+                }
+            ),
+            pd.DataFrame(index=pd.Index([], dtype="str")),
+        ],
+        pytest.param(
+            [
+                pd.DataFrame(
+                    {"a": [1, 2, 3], "nb": [10, 11, 12]}, index=["Q", "W", "R"]
+                ),
+                None,
+            ],
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/6821"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("sort", [False, True])
+@pytest.mark.parametrize("join", ["outer", "inner"])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_concat_join_no_overlapping_columns_many_and_empty2(
+    objs, ignore_index, sort, join, axis
+):
+    objs_gd = [gd.from_pandas(o) if o is not None else o for o in objs]
+
+    expected = pd.concat(
+        objs, sort=sort, join=join, ignore_index=ignore_index, axis=axis,
+    )
+    actual = gd.concat(
+        objs_gd, sort=sort, join=join, ignore_index=ignore_index, axis=axis,
+    )
+    assert_eq(expected, actual, check_index_type=False)
+
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("join", ["inner", "outer"])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_concat_join_no_overlapping_columns_empty_df_basic(
+    ignore_index, sort, join, axis
+):
+
+    pdf6 = pd.DataFrame(
+        {
+            "x": range(10),
+            "y": list(map(float, range(10))),
+            "z": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        }
+    )
+    pdf_empty = pd.DataFrame()
+
+    gdf6 = gd.from_pandas(pdf6)
+    gdf_empty = gd.from_pandas(pdf_empty)
+
+    assert_eq(
+        pd.concat(
+            [pdf6, pdf_empty],
+            sort=sort,
+            join=join,
+            ignore_index=ignore_index,
+            axis=axis,
+        ).reset_index(drop=True),
+        gd.concat(
+            [gdf6, gdf_empty],
+            sort=sort,
+            join=join,
+            ignore_index=ignore_index,
+            axis=axis,
+        ),
+    )
+
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("join", ["inner", "outer"])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_concat_join_series(ignore_index, sort, join, axis):
+    s1 = gd.Series(["a", "b", "c"])
+    s2 = gd.Series(["a", "b"])
+    s3 = gd.Series(["a", "b", "c", "d"])
+    s4 = gd.Series()
+
+    ps1 = s1.to_pandas()
+    ps2 = s2.to_pandas()
+    ps3 = s3.to_pandas()
+    ps4 = s4.to_pandas()
+
+    assert_eq(
+        gd.concat(
+            [s1, s2, s3, s4],
+            sort=sort,
+            join=join,
+            ignore_index=ignore_index,
+            axis=axis,
+        ),
+        pd.concat(
+            [ps1, ps2, ps3, ps4],
+            sort=sort,
+            join=join,
+            ignore_index=ignore_index,
+            axis=axis,
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(),
+        pd.DataFrame(index=[10, 20, 30]),
+        pd.DataFrame(
+            {"c": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
+        ),
+        pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
+        pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+        pd.DataFrame({"l": [10]}),
+        pd.DataFrame({"l": [10]}, index=[200]),
+        pd.DataFrame([], index=[100]),
+        pd.DataFrame({"cat": pd.Series(["one", "two"], dtype="category")}),
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        [pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()],
+        [
+            pd.DataFrame(
+                {"b": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
+            ),
+            pd.DataFrame(),
+            pd.DataFrame(),
+            pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
+        ],
+        [
+            pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+            pd.DataFrame({"l": [10]}),
+            pd.DataFrame({"k": [10]}, index=[200]),
+            pd.DataFrame(
+                {"cat": pd.Series(["two", "three"], dtype="category")}
+            ),
+        ],
+        [
+            pd.DataFrame([]),
+            pd.DataFrame([], index=[100]),
+            pd.DataFrame(
+                {"cat": pd.Series(["two", "three"], dtype="category")}
+            ),
+        ],
+    ],
+)
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("join", ["inner", "outer"])
+@pytest.mark.parametrize("axis", [0])
+def test_concat_join_empty_dataframes(
+    df, other, ignore_index, axis, join, sort
+):
+    other_pd = [df] + other
+    gdf = gd.from_pandas(df)
+    other_gd = [gdf] + [gd.from_pandas(o) for o in other]
+
+    expected = pd.concat(
+        other_pd, ignore_index=ignore_index, axis=axis, join=join, sort=sort
+    )
+    actual = gd.concat(
+        other_gd, ignore_index=ignore_index, axis=axis, join=join, sort=sort
+    )
+    if expected.shape != df.shape:
+        if axis == 0:
+            for key, col in actual[actual.columns].iteritems():
+                if is_categorical_dtype(col.dtype):
+                    expected[key] = expected[key].fillna("-1")
+                    actual[key] = col.astype("str").fillna("-1")
+
+            assert_eq(
+                expected.fillna(-1),
+                actual.fillna(-1),
+                check_dtype=False,
+                check_index_type=False
+                if len(expected) == 0 or actual.empty
+                else True,
+                check_column_type=False,
+            )
+        else:
+            # no need to fill in if axis=1
+            assert_eq(
+                expected,
+                actual,
+                check_index_type=False,
+                check_column_type=False,
+            )
+    assert_eq(
+        expected, actual, check_index_type=False, check_column_type=False
+    )
+
+
+@pytest.mark.parametrize(
+    "df",
+    [
+        pd.DataFrame(),
+        pd.DataFrame(index=[10, 20, 30]),
+        pd.DataFrame(
+            {"c": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
+        ),
+        pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
+        pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+        pd.DataFrame({"l": [10]}),
+        pd.DataFrame({"m": [10]}, index=[200]),
+        pd.DataFrame([], index=[100]),
+        pd.DataFrame({"cat": pd.Series(["one", "two"], dtype="category")}),
+    ],
+)
+@pytest.mark.parametrize(
+    "other",
+    [
+        [pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()],
+        [
+            pd.DataFrame(
+                {"b": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
+            ),
+            pd.DataFrame(),
+            pd.DataFrame(),
+            pd.DataFrame([[5, 6], [7, 8]], columns=list("CD")),
+        ],
+        [
+            pd.DataFrame({"g": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+            pd.DataFrame({"h": [10]}),
+            pd.DataFrame({"k": [10]}, index=[200]),
+            pd.DataFrame(
+                {"dog": pd.Series(["two", "three"], dtype="category")}
+            ),
+        ],
+        [
+            pd.DataFrame([]),
+            pd.DataFrame([], index=[100]),
+            pd.DataFrame(
+                {"bird": pd.Series(["two", "three"], dtype="category")}
+            ),
+        ],
+    ],
+)
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize(
+    "join",
+    [
+        "inner",
+        pytest.param(
+            "outer",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/37937"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("axis", [1])
+def test_concat_join_empty_dataframes_axis_1(
+    df, other, ignore_index, axis, join, sort
+):
+    # no duplicate columns
+    other_pd = [df] + other
+    gdf = gd.from_pandas(df)
+    other_gd = [gdf] + [gd.from_pandas(o) for o in other]
+
+    expected = pd.concat(
+        other_pd, ignore_index=ignore_index, axis=axis, join=join, sort=sort
+    )
+    actual = gd.concat(
+        other_gd, ignore_index=ignore_index, axis=axis, join=join, sort=sort
+    )
+    if expected.shape != df.shape:
+        if axis == 0:
+            for key, col in actual[actual.columns].iteritems():
+                if is_categorical_dtype(col.dtype):
+                    expected[key] = expected[key].fillna("-1")
+                    actual[key] = col.astype("str").fillna("-1")
+            # if not expected.empty:
+            assert_eq(
+                expected.fillna(-1),
+                actual.fillna(-1),
+                check_dtype=False,
+                check_index_type=False
+                if len(expected) == 0 or actual.empty
+                else True,
+                check_column_type=False,
+            )
+        else:
+            # no need to fill in if axis=1
+            assert_eq(
+                expected,
+                actual,
+                check_index_type=False,
+                check_column_type=False,
+            )
+    assert_eq(
+        expected, actual, check_index_type=False, check_column_type=False
+    )
+
+
+def test_concat_preserve_order():
+    """Ensure that order is preserved on 'inner' concatenations."""
+    df = pd.DataFrame([["d", 3, 4.0], ["c", 4, 5.0]], columns=["c", "b", "a"])
+    dfs = [df, df]
+
+    assert_eq(
+        pd.concat(dfs, join="inner"),
+        gd.concat([gd.DataFrame(df) for df in dfs], join="inner"),
+    )
+
+
+@pytest.mark.parametrize("ignore_index", [True, False])
+@pytest.mark.parametrize("typ", [gd.DataFrame, gd.Series])
+def test_concat_single_object(ignore_index, typ):
+    """Ensure that concat on a single object does not change it."""
+    obj = typ([1, 2, 3])
+    assert_eq(gd.concat([obj], ignore_index=ignore_index, axis=0), obj)
+
+
+@pytest.mark.parametrize("ltype", [Decimal64Dtype(3, 1), Decimal64Dtype(7, 2)])
+@pytest.mark.parametrize("rtype", [Decimal64Dtype(3, 2), Decimal64Dtype(8, 4)])
+def test_concat_decimal_dataframe(ltype, rtype):
+    gdf1 = gd.DataFrame(
+        {"id": np.random.randint(0, 10, 3), "val": ["22.3", "59.5", "81.1"]}
+    )
+    gdf2 = gd.DataFrame(
+        {"id": np.random.randint(0, 10, 3), "val": ["2.35", "5.59", "8.14"]}
+    )
+
+    gdf1["val"] = gdf1["val"].astype(ltype)
+    gdf2["val"] = gdf2["val"].astype(rtype)
+
+    pdf1 = gdf1.to_pandas()
+    pdf2 = gdf2.to_pandas()
+
+    got = gd.concat([gdf1, gdf2])
+    expected = pd.concat([pdf1, pdf2])
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("ltype", [Decimal64Dtype(4, 1), Decimal64Dtype(8, 2)])
+@pytest.mark.parametrize(
+    "rtype", [Decimal64Dtype(4, 3), Decimal64Dtype(10, 4)]
+)
+def test_concat_decimal_series(ltype, rtype):
+    gs1 = gd.Series(["228.3", "559.5", "281.1"]).astype(ltype)
+    gs2 = gd.Series(["2.345", "5.259", "8.154"]).astype(rtype)
+
+    ps1 = gs1.to_pandas()
+    ps2 = gs2.to_pandas()
+
+    got = gd.concat([gs1, gs2])
+    expected = pd.concat([ps1, ps2])
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "df1, df2, df3, expected",
+    [
+        (
+            gd.DataFrame(
+                {"val": [Decimal("42.5"), Decimal("8.7")]},
+                dtype=Decimal64Dtype(5, 2),
+            ),
+            gd.DataFrame(
+                {"val": [Decimal("9.23"), Decimal("-67.49")]},
+                dtype=Decimal64Dtype(6, 4),
+            ),
+            gd.DataFrame({"val": [8, -5]}, dtype="int32"),
+            gd.DataFrame(
+                {
+                    "val": [
+                        Decimal("42.5"),
+                        Decimal("8.7"),
+                        Decimal("9.23"),
+                        Decimal("-67.49"),
+                        Decimal("8"),
+                        Decimal("-5"),
+                    ]
+                },
+                dtype=Decimal64Dtype(7, 4),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.DataFrame(
+                {"val": [Decimal("95.2"), Decimal("23.4")]},
+                dtype=Decimal64Dtype(5, 2),
+            ),
+            gd.DataFrame({"val": [54, 509]}, dtype="uint16"),
+            gd.DataFrame({"val": [24, -48]}, dtype="int32"),
+            gd.DataFrame(
+                {
+                    "val": [
+                        Decimal("95.2"),
+                        Decimal("23.4"),
+                        Decimal("54"),
+                        Decimal("509"),
+                        Decimal("24"),
+                        Decimal("-48"),
+                    ]
+                },
+                dtype=Decimal64Dtype(5, 2),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.DataFrame(
+                {"val": [Decimal("36.56"), Decimal("-59.24")]},
+                dtype=Decimal64Dtype(9, 4),
+            ),
+            gd.DataFrame({"val": [403.21, 45.13]}, dtype="float32"),
+            gd.DataFrame({"val": [52.262, -49.25]}, dtype="float64"),
+            gd.DataFrame(
+                {
+                    "val": [
+                        Decimal("36.56"),
+                        Decimal("-59.24"),
+                        Decimal("403.21"),
+                        Decimal("45.13"),
+                        Decimal("52.262"),
+                        Decimal("-49.25"),
+                    ]
+                },
+                dtype=Decimal64Dtype(9, 4),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.DataFrame(
+                {"val": [Decimal("9563.24"), Decimal("236.633")]},
+                dtype=Decimal64Dtype(9, 4),
+            ),
+            gd.DataFrame({"val": [5393, -95832]}, dtype="int64"),
+            gd.DataFrame({"val": [-29.234, -31.945]}, dtype="float64"),
+            gd.DataFrame(
+                {
+                    "val": [
+                        Decimal("9563.24"),
+                        Decimal("236.633"),
+                        Decimal("5393"),
+                        Decimal("-95832"),
+                        Decimal("-29.234"),
+                        Decimal("-31.945"),
+                    ]
+                },
+                dtype=Decimal64Dtype(9, 4),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+    ],
+)
+def test_concat_decimal_numeric_dataframe(df1, df2, df3, expected):
+    df = gd.concat([df1, df2, df3])
+    assert_eq(df, expected)
+    assert_eq(df.val.dtype, expected.val.dtype)
+
+
+@pytest.mark.parametrize(
+    "s1, s2, s3, expected",
+    [
+        (
+            gd.Series(
+                [Decimal("32.8"), Decimal("-87.7")], dtype=Decimal64Dtype(6, 2)
+            ),
+            gd.Series(
+                [Decimal("101.243"), Decimal("-92.449")],
+                dtype=Decimal64Dtype(9, 6),
+            ),
+            gd.Series([94, -22], dtype="int32"),
+            gd.Series(
+                [
+                    Decimal("32.8"),
+                    Decimal("-87.7"),
+                    Decimal("101.243"),
+                    Decimal("-92.449"),
+                    Decimal("94"),
+                    Decimal("-22"),
+                ],
+                dtype=Decimal64Dtype(10, 6),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("7.2"), Decimal("122.1")], dtype=Decimal64Dtype(5, 2)
+            ),
+            gd.Series([33, 984], dtype="uint32"),
+            gd.Series([593, -702], dtype="int32"),
+            gd.Series(
+                [
+                    Decimal("7.2"),
+                    Decimal("122.1"),
+                    Decimal("33"),
+                    Decimal("984"),
+                    Decimal("593"),
+                    Decimal("-702"),
+                ],
+                dtype=Decimal64Dtype(5, 2),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("982.94"), Decimal("-493.626")],
+                dtype=Decimal64Dtype(9, 4),
+            ),
+            gd.Series([847.98, 254.442], dtype="float32"),
+            gd.Series([5299.262, -2049.25], dtype="float64"),
+            gd.Series(
+                [
+                    Decimal("982.94"),
+                    Decimal("-493.626"),
+                    Decimal("847.98"),
+                    Decimal("254.442"),
+                    Decimal("5299.262"),
+                    Decimal("-2049.25"),
+                ],
+                dtype=Decimal64Dtype(9, 4),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("492.204"), Decimal("-72824.455")],
+                dtype=Decimal64Dtype(9, 4),
+            ),
+            gd.Series([8438, -27462], dtype="int64"),
+            gd.Series([-40.292, 49202.953], dtype="float64"),
+            gd.Series(
+                [
+                    Decimal("492.204"),
+                    Decimal("-72824.455"),
+                    Decimal("8438"),
+                    Decimal("-27462"),
+                    Decimal("-40.292"),
+                    Decimal("49202.953"),
+                ],
+                dtype=Decimal64Dtype(9, 4),
+                index=[0, 1, 0, 1, 0, 1],
+            ),
+        ),
+    ],
+)
+def test_concat_decimal_numeric_series(s1, s2, s3, expected):
+    s = gd.concat([s1, s2, s3])
+    assert_eq(s, expected)
+
+
+@pytest.mark.parametrize(
+    "s1, s2, expected",
+    [
+        (
+            gd.Series(
+                [Decimal("955.22"), Decimal("8.2")], dtype=Decimal64Dtype(5, 2)
+            ),
+            gd.Series(["2007-06-12", "2006-03-14"], dtype="datetime64"),
+            gd.Series(
+                [
+                    "955.22",
+                    "8.20",
+                    "2007-06-12 00:00:00",
+                    "2006-03-14 00:00:00",
+                ],
+                index=[0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("-52.44"), Decimal("365.22")],
+                dtype=Decimal64Dtype(5, 2),
+            ),
+            gd.Series(
+                np.arange(
+                    "2005-02-01T12", "2005-02-01T15", dtype="datetime64[h]"
+                ),
+                dtype="datetime64[s]",
+            ),
+            gd.Series(
+                [
+                    "-52.44",
+                    "365.22",
+                    "2005-02-01 12:00:00",
+                    "2005-02-01 13:00:00",
+                    "2005-02-01 14:00:00",
+                ],
+                index=[0, 1, 0, 1, 2],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("753.0"), Decimal("94.22")],
+                dtype=Decimal64Dtype(5, 2),
+            ),
+            gd.Series([np.timedelta64(111, "s"), np.timedelta64(509, "s")]),
+            gd.Series(
+                ["753.00", "94.22", "0 days 00:01:51", "0 days 00:08:29"],
+                index=[0, 1, 0, 1],
+            ),
+        ),
+        (
+            gd.Series(
+                [Decimal("753.0"), Decimal("94.22")],
+                dtype=Decimal64Dtype(5, 2),
+            ),
+            gd.Series(
+                [np.timedelta64(940252, "s"), np.timedelta64(758385, "s")]
+            ),
+            gd.Series(
+                ["753.00", "94.22", "10 days 21:10:52", "8 days 18:39:45"],
+                index=[0, 1, 0, 1],
+            ),
+        ),
+    ],
+)
+def test_concat_decimal_non_numeric(s1, s2, expected):
+    s = gd.concat([s1, s2])
+    assert_eq(s, expected)

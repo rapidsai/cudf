@@ -1,3 +1,5 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
 import random
 
 import cupy as cp
@@ -7,11 +9,18 @@ import pytest
 
 import dask
 from dask import dataframe as dd
-from dask.dataframe.core import make_meta, meta_nonempty
+from dask.dataframe.core import meta_nonempty
 
-import dask_cudf as dgd
+try:
+    from dask.dataframe.utils import make_meta_util as dask_make_meta
+except ImportError:
+    from dask.dataframe.core import make_meta as dask_make_meta
+
+from dask.utils import M
 
 import cudf
+
+import dask_cudf as dgd
 
 
 def test_from_cudf():
@@ -582,20 +591,20 @@ def test_hash_object_dispatch(index):
     )
 
     # DataFrame
-    result = dd.utils.hash_object_dispatch(obj, index=index)
+    result = dd.core.hash_object_dispatch(obj, index=index)
     expected = dgd.backends.hash_object_cudf(obj, index=index)
     assert isinstance(result, cudf.Series)
     dd.assert_eq(result, expected)
 
     # Series
-    result = dd.utils.hash_object_dispatch(obj["x"], index=index)
+    result = dd.core.hash_object_dispatch(obj["x"], index=index)
     expected = dgd.backends.hash_object_cudf(obj["x"], index=index)
     assert isinstance(result, cudf.Series)
     dd.assert_eq(result, expected)
 
     # DataFrame with MultiIndex
     obj_multi = obj.set_index(["x", "z"], drop=True)
-    result = dd.utils.hash_object_dispatch(obj_multi, index=index)
+    result = dd.core.hash_object_dispatch(obj_multi, index=index)
     expected = dgd.backends.hash_object_cudf(obj_multi, index=index)
     assert isinstance(result, cudf.Series)
     dd.assert_eq(result, expected)
@@ -635,7 +644,7 @@ def test_make_meta_backends(index):
     df = df.set_index(index)
 
     # Check "empty" metadata types
-    chk_meta = make_meta(df)
+    chk_meta = dask_make_meta(df)
     dd.assert_eq(chk_meta.dtypes, df.dtypes)
 
     # Check "non-empty" metadata types
@@ -657,7 +666,7 @@ def test_make_meta_backends(index):
 @pytest.mark.parametrize(
     "data",
     [
-        pd.Series([]),
+        pd.Series([], dtype="float64"),
         pd.DataFrame({"abc": [], "xyz": []}),
         pd.Series([1, 2, 10, 11]),
         pd.DataFrame({"abc": [1, 2, 10, 11], "xyz": [100, 12, 120, 1]}),
@@ -708,6 +717,19 @@ def test_dataframe_set_index():
     assert_eq(ddf.compute(), pddf.compute())
 
 
+def test_series_describe():
+    random.seed(0)
+    sr = cudf.datasets.randomdata(20)["x"]
+    psr = sr.to_pandas()
+
+    dsr = dgd.from_cudf(sr, npartitions=4)
+    pdsr = dd.from_pandas(psr, npartitions=4)
+
+    dd.assert_eq(
+        dsr.describe(), pdsr.describe(), check_less_precise=3,
+    )
+
+
 def test_dataframe_describe():
     random.seed(0)
     df = cudf.datasets.randomdata(20)
@@ -716,4 +738,110 @@ def test_dataframe_describe():
     ddf = dgd.from_cudf(df, npartitions=4)
     pddf = dd.from_pandas(pdf, npartitions=4)
 
+    dd.assert_eq(
+        ddf.describe(), pddf.describe(), check_exact=False, atol=0.0001
+    )
+
+
+def test_zero_std_describe():
+    num = 84886781
+    df = cudf.DataFrame(
+        {
+            "x": np.full((20,), num, dtype=np.float64),
+            "y": np.full((20,), num, dtype=np.float64),
+        }
+    )
+    pdf = df.to_pandas()
+    ddf = dgd.from_cudf(df, npartitions=4)
+    pddf = dd.from_pandas(pdf, npartitions=4)
+
     dd.assert_eq(ddf.describe(), pddf.describe(), check_less_precise=3)
+
+
+def test_large_numbers_var():
+    num = 8488678001
+    df = cudf.DataFrame(
+        {
+            "x": np.arange(num, num + 1000, dtype=np.float64),
+            "y": np.arange(num, num + 1000, dtype=np.float64),
+        }
+    )
+    pdf = df.to_pandas()
+    ddf = dgd.from_cudf(df, npartitions=4)
+    pddf = dd.from_pandas(pdf, npartitions=4)
+
+    dd.assert_eq(ddf.var(), pddf.var(), check_less_precise=3)
+
+
+def test_index_map_partitions():
+    # https://github.com/rapidsai/cudf/issues/6738
+
+    ddf = dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2)
+    mins_pd = ddf.index.map_partitions(M.min, meta=ddf.index).compute()
+
+    gddf = dgd.from_cudf(cudf.DataFrame({"a": range(10)}), npartitions=2)
+    mins_gd = gddf.index.map_partitions(M.min, meta=gddf.index).compute()
+
+    dd.assert_eq(mins_pd, mins_gd)
+
+
+def test_merging_categorical_columns():
+    try:
+        from dask.dataframe.dispatch import (  # noqa: F401
+            union_categoricals_dispatch,
+        )
+    except ImportError:
+        pytest.skip(
+            "need a version of dask that has union_categoricals_dispatch"
+        )
+
+    df_1 = cudf.DataFrame(
+        {"id_1": [0, 1, 2, 3], "cat_col": ["a", "b", "f", "f"]}
+    )
+
+    ddf_1 = dgd.from_cudf(df_1, npartitions=2)
+
+    ddf_1 = dd.categorical.categorize(ddf_1, columns=["cat_col"])
+
+    df_2 = cudf.DataFrame(
+        {"id_2": [111, 112, 113], "cat_col": ["g", "h", "f"]}
+    )
+
+    ddf_2 = dgd.from_cudf(df_2, npartitions=2)
+
+    ddf_2 = dd.categorical.categorize(ddf_2, columns=["cat_col"])
+    expected = cudf.DataFrame(
+        {
+            "id_1": [2, 3],
+            "cat_col": cudf.Series(
+                ["f", "f"],
+                dtype=cudf.CategoricalDtype(
+                    categories=["a", "b", "f", "g", "h"], ordered=False
+                ),
+            ),
+            "id_2": [113, 113],
+        }
+    )
+    dd.assert_eq(ddf_1.merge(ddf_2), expected)
+
+
+def test_correct_meta():
+    try:
+        from dask.dataframe.utils import make_meta_util  # noqa: F401
+    except ImportError:
+        pytest.skip("need make_meta_util to be preset")
+
+    # Need these local imports in this specific order.
+    # For context: https://github.com/rapidsai/cudf/issues/7946
+    import pandas as pd
+
+    from dask import dataframe as dd
+
+    import dask_cudf  # noqa: F401
+
+    df = pd.DataFrame({"a": [3, 4], "b": [1, 2]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    emb = ddf["a"].apply(pd.Series, meta={"c0": "int64", "c1": "int64"})
+
+    assert isinstance(emb, dd.DataFrame)
+    assert isinstance(emb._meta, pd.DataFrame)

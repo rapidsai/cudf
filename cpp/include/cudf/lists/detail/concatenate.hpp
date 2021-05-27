@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,9 @@
 #include <cudf/column/column.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/span.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace lists {
@@ -40,8 +43,8 @@ namespace detail {
  * @return New column with concatenated results.
  */
 std::unique_ptr<column> concatenate(
-  std::vector<column_view> const& columns,
-  cudaStream_t stream                 = 0,
+  host_span<column_view const> columns,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail

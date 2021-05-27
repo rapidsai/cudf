@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,14 @@
  */
 
 #include <strings/regex/regcomp.h>
-#include <cudf/detail/utilities/integer_utils.hpp>
-#include <rmm/device_buffer.hpp>
 #include <strings/regex/regex.cuh>
+
+#include <cudf/detail/utilities/integer_utils.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
+
+#include <algorithm>
 
 namespace cudf {
 namespace strings {
@@ -37,7 +42,9 @@ namespace {
 std::vector<char32_t> string_to_char32_vector(std::string const& pattern)
 {
   size_type size  = static_cast<size_type>(pattern.size());
-  size_type count = characters_in_string(pattern.c_str(), size);
+  size_type count = std::count_if(pattern.cbegin(), pattern.cend(), [](char ch) {
+    return is_begin_utf8_char(static_cast<uint8_t>(ch));
+  });
   std::vector<char32_t> result(count + 1);
   char32_t* output_ptr  = result.data();
   const char* input_ptr = pattern.data();
@@ -70,9 +77,9 @@ reprog_device::reprog_device(reprog& prog)
 // Create instance of the reprog that can be passed into a device kernel
 std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
   std::string const& pattern,
-  const uint8_t* codepoint_flags,
-  size_type strings_count,
-  cudaStream_t stream)
+  uint8_t const* codepoint_flags,
+  int32_t strings_count,
+  rmm::cuda_stream_view stream)
 {
   std::vector<char32_t> pattern32 = string_to_char32_vector(pattern);
   // compile pattern into host object
@@ -148,7 +155,8 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   }
 
   // copy flat prog to device memory
-  CUDA_TRY(cudaMemcpy(d_buffer->data(), h_buffer.data(), memsize, cudaMemcpyHostToDevice));
+  CUDA_TRY(cudaMemcpyAsync(
+    d_buffer->data(), h_buffer.data(), memsize, cudaMemcpyHostToDevice, stream.value()));
   //
   auto deleter = [d_buffer, d_relists](reprog_device* t) {
     t->destroy();

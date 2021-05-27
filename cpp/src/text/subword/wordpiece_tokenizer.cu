@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,17 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/utilities/error.hpp>
-#include <nvtext/subword_tokenize.hpp>
 #include <text/subword/detail/hash_utils.cuh>
 #include <text/subword/detail/tokenizer_utils.cuh>
 #include <text/subword/detail/wordpiece_tokenizer.hpp>
+
+#include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/strings/string_view.cuh>
+#include <cudf/utilities/error.hpp>
+#include <nvtext/subword_tokenize.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/remove.h>
@@ -97,7 +102,7 @@ __global__ void init_data_and_mark_word_start_and_ends(uint32_t const* code_poin
 /**
  * @brief Resolves the string boundaries for the start and end words.
  *
- * This kernel should be called after `mark_word_start_and_ends` with at
+ * This kernel should be called after `init_data_and_mark_word_start_and_ends` with at
  * least `num_strings` total threads.
  *
  * The start and end indices are updated to honor the string boundaries
@@ -136,6 +141,125 @@ __global__ void mark_string_start_and_ends(uint32_t const* code_points,
     }
   }
 }
+
+/**
+ * @brief Currently supported special tokens.
+ *
+ * Code logic expects these to be 3 upper-case characters along
+ * with a single trailing space.
+ */
+__constant__ char special_tokens[35]{"BOS EOS UNK SEP PAD CLS MASK "};
+constexpr cudf::size_type MIN_ST_WIDTH = 4;  // Min token size in special_tokens
+constexpr cudf::size_type MAX_ST_WIDTH = 5;  // Max token size in special_tokens
+
+struct mark_special_tokens {
+  /**
+   * @brief Check given code-point array to the list of known
+   * special tokens.
+   */
+  __device__ bool is_special_token(uint32_t const* token, cudf::size_type size) const
+  {
+    if (size < MIN_ST_WIDTH || size > MAX_ST_WIDTH) return false;
+    char str_token[MAX_ST_WIDTH];
+    // convert code-points to chars
+    thrust::transform(thrust::seq, token, token + size, str_token, [](uint32_t cp) {
+      // also upper-case them to match again special_tokens array
+      return static_cast<char>(cp >= 'a' ? cp - 'a' + 'A' : cp);
+    });
+    // search the special tokens array for the str_token
+    cudf::string_view tokens(special_tokens, sizeof(special_tokens));
+    return tokens.find(str_token, size) >= 0;
+  }
+
+  /**
+   * @brief Check code-points for special tokens and adjust indices.
+   *
+   * Tokens will appear in the `code_points` array as:
+   * `_[_ttt_]_` where `_` are single space characters and
+   *                   ttt is the variable-length token name
+   *
+   * The logic below uses the following variables to represent position
+   * values in the `code_points` array after locating a special token:
+   * ```
+   * _ [ _ t t t _  ] _
+   *   ^   ^     ^  ^
+   *   si  sp    ep ei
+   * ```
+   * where `si` is `start_index`
+   *       `sp` is `start_pos`
+   *       `ep` is `end_pos`
+   *       `ei` is `end_index`
+   *
+   * When a special token is found, the `code_points` are adjusted
+   * to remove the spaces and capitalize the name.
+   * ```
+   * _ [ _ t t t _ ] _  is updated to
+   * _ [ T T T ] _ ] _
+   * ```
+   * This is required for the downstream word-piece tokenizer to
+   * match it to the vocabulary hash table.
+   *
+   * The `start_word_indices` and `end_word_indices` are updated to
+   * identify the token and to ignore the extra trailing `]` character.
+   */
+  __device__ void operator()(size_t idx) const
+  {
+    uint32_t const start_index = start_word_indices[idx];
+    if ((start_index == std::numeric_limits<uint32_t>::max()) ||
+        ((start_index + MIN_ST_WIDTH + 2) > num_code_points))
+      return;
+    if (code_points[start_index] != '[') return;
+
+    // check for matching end bracket
+    uint32_t const start_pos = start_index + 2;  // after the space delimiter
+    // search for next start-word and then check it is a ']'
+    uint32_t const end_index = [&] {
+      auto const begin = start_word_indices + start_pos;
+      auto const width =
+        std::min(static_cast<size_t>(MAX_ST_WIDTH + 1), (num_code_points - start_pos));
+      auto const end = begin + width;
+      // checking the next start-word is more reliable than arbitrarily searching for ']'
+      // in case the text is split across string rows
+      auto const iter = thrust::find_if(thrust::seq, begin + 1, end, [](auto swi) {
+        return swi != std::numeric_limits<uint32_t>::max();
+      });
+      return iter == end ? start_index : static_cast<uint32_t>(iter - start_word_indices);
+    }();
+    if (code_points[end_index] != ']') return;
+
+    // check for special token
+    auto const size = static_cast<cudf::size_type>(end_index - start_pos);
+    if (!is_special_token(code_points + start_pos, size)) return;
+
+    // special token found
+    // adjust code-points
+    auto const end_pos = end_index - 2;
+    // change _[_ttt_]_ to _[TTT]_
+    for (auto left_idx = start_pos - 1; left_idx <= end_pos; ++left_idx) {
+      auto const cp         = code_points[left_idx + 1];
+      code_points[left_idx] = cp >= 'a' ? cp - 'a' + 'A' : cp;
+    }
+    code_points[end_pos] = ']';
+
+    // erase the intermediate indices
+    thrust::fill(thrust::seq,
+                 start_word_indices + start_index + 1,  // keep the first one
+                 start_word_indices + end_index + 1,
+                 std::numeric_limits<uint32_t>::max());
+    thrust::fill(thrust::seq,
+                 end_word_indices + start_index,
+                 end_word_indices + end_index + 1,
+                 std::numeric_limits<uint32_t>::max());
+
+    // reset the new end-word index
+    end_word_indices[end_pos] = end_pos + 1;
+  }
+
+  uint32_t* const code_points;
+  uint32_t* const start_word_indices;
+  uint32_t* const end_word_indices;
+  size_t const num_code_points;
+};
 
 /**
  * @brief Converts words into token ids.
@@ -270,21 +394,21 @@ wordpiece_tokenizer::wordpiece_tokenizer(hashed_vocabulary const& vocab_table,
                                          uint32_t stride,
                                          bool do_truncate,
                                          bool do_lower_case,
-                                         cudaStream_t stream,
+                                         rmm::cuda_stream_view stream,
                                          uint32_t max_word_length)
   : vocab_table(vocab_table),
+    normalizer(stream, do_lower_case),
     max_sequence_length{max_sequence_length},
-    max_word_length{max_word_length},
     stride(stride),
     do_truncate(do_truncate),
-    normalizer(stream, do_lower_case)
+    max_word_length{max_word_length}
 {
 }
 
 uvector_pair wordpiece_tokenizer::tokenize(char const* d_strings,
                                            uint32_t const* d_offsets,
                                            uint32_t num_strings,
-                                           cudaStream_t stream)
+                                           rmm::cuda_stream_view stream)
 {
   auto cps_and_offsets = normalizer.normalize(d_strings, d_offsets, num_strings, stream);
   tokenize(cps_and_offsets, stream);
@@ -299,7 +423,7 @@ struct tranform_fn {  // just converting uint8 value to uint32
   __device__ uint32_t operator()(uint8_t count) { return count; }
 };
 
-void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, cudaStream_t stream)
+void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stream_view stream)
 {
   uint32_t* device_code_points     = cps_and_offsets.first->data();
   size_t const num_code_points     = cps_and_offsets.first->size();
@@ -321,32 +445,39 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, cudaStream_t s
   detail::init_data_and_mark_word_start_and_ends<<<grid_init.num_blocks,
                                                    grid_init.num_threads_per_block,
                                                    0,
-                                                   stream>>>(device_code_points,
-                                                             device_start_word_indices,
-                                                             device_end_word_indices,
-                                                             num_code_points,
-                                                             device_token_ids.data(),
-                                                             device_tokens_per_word.data());
-  CHECK_CUDA(stream);
+                                                   stream.value()>>>(device_code_points,
+                                                                     device_start_word_indices,
+                                                                     device_end_word_indices,
+                                                                     num_code_points,
+                                                                     device_token_ids.data(),
+                                                                     device_tokens_per_word.data());
+  CHECK_CUDA(stream.value());
 
   cudf::detail::grid_1d const grid_mark{static_cast<cudf::size_type>(num_strings + 1),
                                         THREADS_PER_BLOCK};
   detail::mark_string_start_and_ends<<<grid_mark.num_blocks,
                                        grid_mark.num_threads_per_block,
                                        0,
-                                       stream>>>(device_code_points,
-                                                 device_strings_offsets,
-                                                 device_start_word_indices,
-                                                 device_end_word_indices,
-                                                 num_strings);
-  CHECK_CUDA(stream);
+                                       stream.value()>>>(device_code_points,
+                                                         device_strings_offsets,
+                                                         device_start_word_indices,
+                                                         device_end_word_indices,
+                                                         num_strings);
+  CHECK_CUDA(stream.value());
+
+  // check for special tokens and adjust indices
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator<size_t>(0),
+    num_code_points,
+    mark_special_tokens{
+      device_code_points, device_start_word_indices, device_end_word_indices, num_code_points});
 
   // Now start_word_indices has the word starts scattered throughout the array. We need to select
   // all values not equal to the max uint32_t and place them at the start of the array. We leverage
   // the fact that the start_word_indices and the end_word indices are contiguous to only launch one
   // device select kernel.
-  auto const execpol = rmm::exec_policy(stream);
-  auto itr_end       = thrust::remove(execpol->on(stream),
+  auto itr_end = thrust::remove(rmm::exec_policy(stream),
                                 device_word_indices.begin(),
                                 device_word_indices.end(),
                                 std::numeric_limits<uint32_t>::max());
@@ -359,27 +490,28 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, cudaStream_t s
   device_end_word_indices = device_start_word_indices + num_words;
 
   cudf::detail::grid_1d const grid{static_cast<cudf::size_type>(num_words), THREADS_PER_BLOCK};
-  detail::kernel_wordpiece_tokenizer<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
-    device_code_points,
-    vocab_table.table->view().data<uint64_t>(),
-    vocab_table.bin_coefficients->view().data<uint64_t>(),
-    vocab_table.bin_offsets->view().data<uint16_t>(),
-    vocab_table.unknown_token_id,
-    vocab_table.outer_hash_a,
-    vocab_table.outer_hash_b,
-    vocab_table.num_bins,
-    device_start_word_indices,
-    device_end_word_indices,
-    max_word_length,
-    num_words,
-    device_token_ids.data(),
-    device_tokens_per_word.data());
-  CHECK_CUDA(stream);
+  detail::
+    kernel_wordpiece_tokenizer<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+      device_code_points,
+      vocab_table.table->view().data<uint64_t>(),
+      vocab_table.bin_coefficients->view().data<uint64_t>(),
+      vocab_table.bin_offsets->view().data<uint16_t>(),
+      vocab_table.unknown_token_id,
+      vocab_table.outer_hash_a,
+      vocab_table.outer_hash_b,
+      vocab_table.num_bins,
+      device_start_word_indices,
+      device_end_word_indices,
+      max_word_length,
+      num_words,
+      device_token_ids.data(),
+      device_tokens_per_word.data());
+  CHECK_CUDA(stream.value());
 
   // Repurpose the input array for the token ids. In the worst case, each code point ends up being a
   // token so this will always have enough memory to store the contiguous tokens.
   uint32_t* contiguous_token_ids = device_code_points;
-  thrust::copy_if(execpol->on(stream),
+  thrust::copy_if(rmm::exec_policy(stream),
                   device_token_ids.begin(),
                   device_token_ids.end(),
                   contiguous_token_ids,
@@ -387,7 +519,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, cudaStream_t s
 
   // Repurpose start word indices since it is the same size and type as the required output.
   uint32_t* token_id_counts = device_start_word_indices;
-  thrust::transform_inclusive_scan(execpol->on(stream),
+  thrust::transform_inclusive_scan(rmm::exec_policy(stream),
                                    device_tokens_per_word.data(),
                                    device_tokens_per_word.data() + num_code_points,
                                    token_id_counts,
@@ -395,7 +527,7 @@ void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, cudaStream_t s
                                    thrust::plus<uint32_t>());
 
   // Update the device_strings_offsets using the token_id_counts
-  thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
+  thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<uint32_t>(1),
                      num_strings,
                      update_strings_lengths_fn{token_id_counts, device_strings_offsets});

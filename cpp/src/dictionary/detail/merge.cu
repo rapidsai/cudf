@@ -22,6 +22,9 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
+
 namespace cudf {
 namespace dictionary {
 namespace detail {
@@ -29,8 +32,8 @@ namespace detail {
 std::unique_ptr<column> merge(dictionary_column_view const& lcol,
                               dictionary_column_view const& rcol,
                               cudf::detail::index_vector const& row_order,
-                              rmm::mr::device_memory_resource* mr,
-                              cudaStream_t stream)
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
 {
   auto const lcol_iter = cudf::detail::indexalator_factory::make_input_iterator(lcol.indices());
   auto const rcol_iter = cudf::detail::indexalator_factory::make_input_iterator(rcol.indices());
@@ -44,7 +47,7 @@ std::unique_ptr<column> merge(dictionary_column_view const& lcol,
     cudf::detail::indexalator_factory::make_output_iterator(indices_column->mutable_view());
 
   // merge the input indices columns into the output column
-  thrust::transform(rmm::exec_policy(stream)->on(stream),
+  thrust::transform(rmm::exec_policy(stream),
                     row_order.begin(),
                     row_order.end(),
                     output_iter,

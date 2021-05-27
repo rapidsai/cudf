@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-/** --------------------------------------------------------------------------*
+/**
  * @brief unary functions for thrust::transform_iterator
  * @file transform_unary_functions.cuh
  *
@@ -22,7 +22,7 @@
  * for thrust::transform_iterator.
  * For the detail of example cases,
  * @see iterator.cuh iterator_test.cu
- * -------------------------------------------------------------------------**/
+ */
 
 #pragma once
 
@@ -59,7 +59,7 @@ struct null_replacing_transformer {
   }
 };
 
-/** -------------------------------------------------------------------------*
+/**
  * @brief intermediate struct to calculate mean and variance
  * This is an example case to output a struct from column input.
  *
@@ -69,7 +69,7 @@ struct null_replacing_transformer {
  * and `variance` (= sum of squares / count - mean^2).
  *
  * @tparam ElementType  element data type of value and value_squared.
- * -------------------------------------------------------------------------**/
+ */
 template <typename ElementType>
 struct meanvar {
   ElementType value;          /// the value
@@ -101,7 +101,7 @@ struct meanvar {
 // --------------------------------------------------------------------------
 // transformers
 
-/** -------------------------------------------------------------------------*
+/**
  * @brief Transforms a scalar by first casting to another type, and then squaring the result.
  *
  * This struct transforms the output value as
@@ -110,14 +110,14 @@ struct meanvar {
  * This will be used to compute "sum of squares".
  *
  * @tparam  ResultType  scalar data type of output
- * -------------------------------------------------------------------------**/
+ */
 template <typename ElementType>
 struct transformer_squared {
   CUDA_HOST_DEVICE_CALLABLE
   ElementType operator()(ElementType const &value) { return (value * value); };
 };
 
-/** -------------------------------------------------------------------------*
+/**
  * @brief Uses a scalar value to construct a `meanvar` object.
  * This transforms `thrust::pair<ElementType, bool>` into
  * `ResultType = meanvar<ElementType>` form.
@@ -125,7 +125,7 @@ struct transformer_squared {
  * This struct transforms the value and the squared value and the count at once.
  *
  * @tparam  ElementType         scalar data type of input
- * -------------------------------------------------------------------------**/
+ */
 template <typename ElementType>
 struct transformer_meanvar {
   using ResultType = meanvar<ElementType>;

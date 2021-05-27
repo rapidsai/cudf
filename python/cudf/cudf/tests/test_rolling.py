@@ -1,3 +1,5 @@
+# Copyright (c) 2021, NVIDIA CORPORATION.
+
 import math
 
 import numpy as np
@@ -37,7 +39,7 @@ def test_rolling_series_basic(data, index, agg, nulls, center):
         elif nulls == "all":
             data = [np.nan] * len(data)
 
-    psr = pd.Series(data, index=index)
+    psr = cudf.utils.utils._create_pandas_series(data=data, index=index)
     gsr = cudf.Series(psr)
     for window_size in range(1, len(data) + 1):
         for min_periods in range(1, window_size + 1):
@@ -99,13 +101,7 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
         pytest.param("min"),
         pytest.param("max"),
         pytest.param("mean"),
-        pytest.param(
-            "count",  # Does not follow similar conventions as
-            # with non-offset columns
-            marks=pytest.mark.xfail(
-                reason="Differs from pandas behaviour here"
-            ),
-        ),
+        pytest.param("count"),
     ],
 )
 def test_rolling_with_offset(agg):
@@ -218,7 +214,7 @@ def test_rolling_getitem_window():
 @pytest.mark.parametrize("center", [True, False])
 def test_rollling_series_numba_udf_basic(data, index, center):
 
-    psr = pd.Series(data, index=index)
+    psr = cudf.utils.utils._create_pandas_series(data=data, index=index)
     gsr = cudf.from_pandas(psr)
 
     def some_func(A):
@@ -321,6 +317,18 @@ def test_rolling_groupby_simple(agg):
         got = getattr(gdf.groupby("a").rolling(window_size), agg)().fillna(-1)
         assert_eq(expect, got, check_dtype=False)
 
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 1, 2, 2], "b": [1, 1, 2, 2, 3], "c": [1, 2, 3, 4, 5]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    for window_size in range(1, len(pdf) + 1):
+        expect = getattr(pdf.groupby("a").rolling(window_size), agg)().fillna(
+            -1
+        )
+        got = getattr(gdf.groupby("a").rolling(window_size), agg)().fillna(-1)
+        assert_eq(expect, got, check_dtype=False)
+
 
 @pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count"])
 def test_rolling_groupby_multi(agg):
@@ -335,10 +343,10 @@ def test_rolling_groupby_multi(agg):
 
     for window_size in range(1, len(pdf) + 1):
         expect = getattr(
-            pdf.groupby(["a", "b"]).rolling(window_size), agg
+            pdf.groupby(["a", "b"], sort=True).rolling(window_size), agg
         )().fillna(-1)
         got = getattr(
-            gdf.groupby(["a", "b"]).rolling(window_size), agg
+            gdf.groupby(["a", "b"], sort=True).rolling(window_size), agg
         )().fillna(-1)
         assert_eq(expect, got, check_dtype=False)
 

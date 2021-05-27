@@ -10,12 +10,11 @@ if [ -z "$PROJECT_WORKSPACE" ]; then
     exit 1
 fi
 
-export DOCS_WORKSPACE=$WORKSPACE/docs
+export DOCS_WORKSPACE="$WORKSPACE/docs"
 export PATH=/conda/bin:/usr/local/cuda/bin:$PATH
-export HOME=$WORKSPACE
+export HOME="$WORKSPACE"
 export PROJECT_WORKSPACE=/rapids/cudf
 export LIBCUDF_KERNEL_CACHE_PATH="$HOME/.jitify-cache"
-export NIGHTLY_VERSION=$(echo $BRANCH_VERSION | awk -F. '{print $2}')
 export PROJECTS=(cudf libcudf)
 
 gpuci_logger "Check environment..."
@@ -40,6 +39,7 @@ conda list --show-channel-urls
 #libcudf Doxygen build
 gpuci_logger "Build libcudf docs..."
 cd $PROJECT_WORKSPACE/cpp/doxygen
+wget "https://raw.githubusercontent.com/rapidsai/docs/gh-pages/api/librmm/${BRANCH_VERSION}/rmm.tag" || echo "Failed to download rmm Doxygen tag"
 doxygen Doxyfile
 
 #cudf Sphinx Build
@@ -60,4 +60,3 @@ done
 
 mv $PROJECT_WORKSPACE/docs/cudf/build/html/* $DOCS_WORKSPACE/api/cudf/$BRANCH_VERSION
 mv $PROJECT_WORKSPACE/cpp/doxygen/html/* $DOCS_WORKSPACE/api/libcudf/$BRANCH_VERSION
-

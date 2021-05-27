@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@
  *
  * A `(mutable_)table_view` is non-owning and trivially copyable and should be
  * passed by value.
- **/
+ */
 
 namespace cudf {
 namespace detail {
@@ -45,7 +45,7 @@ namespace detail {
  * available in both `table_view` and `mutable_table_view`.
  *
  * @tparam ColumnView The type of column view the table contains
- **/
+ */
 template <typename ColumnView>
 class table_view_base {
   static_assert(std::is_same<ColumnView, column_view>::value or
@@ -76,17 +76,17 @@ class table_view_base {
    * @throws cudf::logic_error If all views do not have the same size
    *
    * @param cols The vector of columns to construct the table from
-   **/
+   */
   explicit table_view_base(std::vector<ColumnView> const& cols);
 
   /**
    * @brief Returns an iterator to the first view in the `table`.
-   **/
+   */
   iterator begin() noexcept { return std::begin(_columns); }
 
   /**
    * @brief Returns an iterator to the first view in the `table`.
-   **/
+   */
   const_iterator begin() const noexcept { return std::begin(_columns); }
 
   /**
@@ -94,7 +94,7 @@ class table_view_base {
    *
    * `end()` acts as a place holder. Attempting to dereference it results in
    * undefined behavior.
-   **/
+   */
   iterator end() noexcept { return std::end(_columns); }
 
   /**
@@ -102,7 +102,7 @@ class table_view_base {
    *
    * `end()` acts as a place holder. Attempting to dereference it results in
    * undefined behavior.
-   **/
+   */
   const_iterator end() const noexcept { return std::end(_columns); }
 
   /**
@@ -113,18 +113,23 @@ class table_view_base {
    *
    * @param column_index The index of the desired column
    * @return A reference to the desired column
-   **/
+   */
   ColumnView const& column(size_type column_index) const;
 
   /**
    * @brief Returns the number of columns
-   **/
+   */
   size_type num_columns() const noexcept { return _columns.size(); }
 
   /**
    * @brief Returns the number of rows
-   **/
+   */
   size_type num_rows() const noexcept { return _num_rows; }
+
+  /**
+   * @brief Returns true if `num_columns()` returns zero, or false otherwise
+   */
+  size_type is_empty() const noexcept { return num_columns() == 0; }
 
   table_view_base() = default;
 
@@ -145,7 +150,7 @@ class table_view_base {
  *
  * All public member functions and constructors are inherited from
  * `table_view_base<column_view>`.
- **/
+ */
 class table_view : public detail::table_view_base<column_view> {
   using detail::table_view_base<column_view>::table_view_base;
 
@@ -171,8 +176,27 @@ class table_view : public detail::table_view_base<column_view> {
    * If number of rows mismatch
    *
    * @param views The vector of table views to construct the table from
-   **/
+   */
   table_view(std::vector<table_view> const& views);
+
+  /**
+   * @brief Returns a table_view built from a range of column indices.
+   *
+   * @throws std::out_of_range
+   * If any index is outside [0, num_columns())
+   *
+   * @param begin Beginning of the range
+   * @param end Ending of the range
+   * @return A table_view consisting of columns from the original table
+   * specified by the elements of `column_indices`
+   */
+  template <typename InputIterator>
+  table_view select(InputIterator begin, InputIterator end) const
+  {
+    std::vector<column_view> columns(std::distance(begin, end));
+    std::transform(begin, end, columns.begin(), [this](auto index) { return this->column(index); });
+    return table_view(columns);
+  }
 
   /**
    * @brief Returns a table_view with set of specified columns.
@@ -183,7 +207,7 @@ class table_view : public detail::table_view_base<column_view> {
    * @param column_indices Indices of columns in the table
    * @return A table_view consisting of columns from the original table
    * specified by the elements of `column_indices`
-   **/
+   */
   table_view select(std::vector<size_type> const& column_indices) const;
 };
 
@@ -194,7 +218,7 @@ class table_view : public detail::table_view_base<column_view> {
  *
  * All public member functions and constructors are inherited from
  * `table_view_base<mutable_column_view>`.
- **/
+ */
 class mutable_table_view : public detail::table_view_base<mutable_column_view> {
   using detail::table_view_base<mutable_column_view>::table_view_base;
 
@@ -209,7 +233,7 @@ class mutable_table_view : public detail::table_view_base<mutable_column_view> {
   }
   /**
    * @brief Creates an immutable `table_view` of the columns
-   **/
+   */
   operator table_view();
 
   /**
@@ -229,13 +253,23 @@ class mutable_table_view : public detail::table_view_base<mutable_column_view> {
    * If number of rows mismatch
    *
    * @param views The vector of table views to construct the table from
-   **/
+   */
   mutable_table_view(std::vector<mutable_table_view> const& views);
 };
 
-inline bool has_nulls(table_view view)
+inline bool has_nulls(table_view const& view)
 {
-  return std::any_of(view.begin(), view.end(), [](column_view col) { return col.has_nulls(); });
+  return std::any_of(view.begin(), view.end(), [](auto const& col) { return col.has_nulls(); });
+}
+
+inline bool has_nested_nulls(table_view const& input)
+{
+  return std::any_of(input.begin(), input.end(), [](auto const& col) {
+    return col.has_nulls() ||
+           std::any_of(col.child_begin(), col.child_end(), [](auto const& child_col) {
+             return has_nested_nulls(table_view{{child_col}});
+           });
+  });
 }
 
 /**
@@ -272,4 +306,21 @@ table_view scatter_columns(table_view const& source,
                            std::vector<size_type> const& map,
                            table_view const& target);
 
+namespace detail {
+/**
+ * @brief Indicates whether respective columns in input tables are relationally comparable.
+ *
+ * @param lhs The first table
+ * @param rhs The second table (may be the same table as `lhs`)
+ * @return true all of respective columns on `lhs` and 'rhs` tables are comparable.
+ * @return false any of respective columns on `lhs` and 'rhs` tables are not comparable.
+ */
+template <typename TableView>
+bool is_relationally_comparable(TableView const& lhs, TableView const& rhs);
+
+extern template bool is_relationally_comparable<table_view>(table_view const& lhs,
+                                                            table_view const& rhs);
+extern template bool is_relationally_comparable<mutable_table_view>(mutable_table_view const& lhs,
+                                                                    mutable_table_view const& rhs);
+}  // namespace detail
 }  // namespace cudf

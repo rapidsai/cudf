@@ -15,11 +15,13 @@
  */
 #pragma once
 
+#include <cstdint>
+
 namespace cudf {
 namespace strings {
 namespace detail {
 // Type for the character flags table.
-using character_flags_table_type = uint8_t;
+using character_flags_table_type = std::uint8_t;
 
 /**
  * @brief Returns pointer to device memory that contains the static

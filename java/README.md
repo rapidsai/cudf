@@ -21,7 +21,7 @@ unexpected behavior if you try to mix these libraries using the same thread.
 ## Dependency
 
 This is a fat jar with the binary dependencies packaged in the jar.  This means the jar will only
-run on platforms the jar was compiled for.  When this is in an official maven repository we will
+run on platforms the jar was compiled for.  When this is in an official Maven repository we will
 list the platforms that it is compiled and tested for.  In the mean time you will need to build it
 yourself. In official releases there should be no classifier on the jar and it should run against
 most modern cuda drivers.
@@ -38,37 +38,42 @@ In some cases there may be a classifier to indicate the version of cuda required
 Build From Source section below for more information about when this can happen. No official
 release of the jar will have a classifier on it.
 
-CUDA 10.0:
+CUDA 11.0:
 ```xml
 <dependency>
     <groupId>ai.rapids</groupId>
     <artifactId>cudf</artifactId>
-    <classifier>cuda10</classifier>
+    <classifier>cuda11</classifier>
     <version>${cudf.version}</version>
 </dependency>
 ```
 
 ## Build From Source
 
-Build the native code first, and make sure the a JDK is installed and available.
+Build [libcudf](../cpp) first, and make sure the JDK is installed and available. Specify
+the cmake option `-DCUDF_USE_ARROW_STATIC=ON` when building so that Apache Arrow is linked
+statically to libcudf, as this will help create a jar that does not require Arrow and its
+dependencies to be available in the runtime environment.
 
-When building libcudf, make sure you install boost first:
-```bash
-# Install Boost C++ for Ubuntu 16.04/18.04/20.04
-sudo apt install libboost-filesystem-dev
+After building libcudf, the Java bindings can be built via Maven, e.g.:
 ```
-or for a smaller installation footprint (Boost is a large library), build it from the source:
-```bash
-wget https://dl.bintray.com/boostorg/release/1.74.0/source/boost_1_74_0.tar.bz2
-tar xvf boost_1_74_0.tar.bz2
-cd boost_1_74_0
-./bootstrap.sh --with-libraries=filesystem
-./b2 cxxflags=-fPIC link=static
-sudo cp stage/lib/libboost_filesystem.a /usr/local/lib/
+mvn clean install
 ```
-and pass in the cmake options
-`-DARROW_STATIC_LIB=ON -DBoost_USE_STATIC_LIBS=ON` so that Apache Arrow and Boost libraries are
-linked statically.
+
+If you have a compatible GPU on your build system the tests will use it.  If not you will see a
+lot of skipped tests.
+
+## Dynamically Linking Arrow
+
+Since libcudf builds by default with a dynamically linked Arrow dependency, it may be
+desirable to build the Java bindings without requiring a statically-linked Arrow to avoid
+rebuilding an already built libcudf.so. To do so, specify the additional command-line flag
+`-DCUDF_JNI_ARROW_STATIC=OFF` when building the Java bindings with Maven.  However this will
+result in a jar that requires the correct Arrow version to be available in the runtime
+environment, and therefore is not recommended unless you are only performing local testing
+within the libcudf build environment.
+
+## Statically Linking the CUDA Runtime
 
 If you use the default cmake options libcudart will be dynamically linked to libcudf
 which is included.  If you do this the resulting jar will have a classifier associated with it
@@ -76,27 +81,18 @@ because that jar can only be used with a single version of the CUDA runtime.
 
 There is experimental work to try and remove that requirement but it is not fully functional
 you can build cuDF with `-DCUDA_STATIC_RUNTIME=ON` when running cmake, and similarly 
-`-DCUDA_STATIC_RUNTIME=ON` when running maven.  This will statically link in the CUDA runtime
+`-DCUDA_STATIC_RUNTIME=ON` when running Maven.  This will statically link in the CUDA runtime
 and result in a jar with no classifier that should run on any host that has a version of the
-driver new enough to support the runtime that this was built with. Unfortunately `libnvrtc` is still
-required for runtime code generation which also is tied to a specific version of cuda.
+driver new enough to support the runtime that this was built with.
 
-To build with maven for dynamic linking you would run.
-
-```
-mvn clean install
-```
-
-for static linking you would run
-
+To build the Java bindings with a statically-linked CUDA runtime, use a build command like:
 ```
 mvn clean install -DCUDA_STATIC_RUNTIME=ON
 ```
 
-You will get errors if you don't do it consistently.  We tried to detect these up front and stop the build early if there is a mismatch, but there may be some cases we missed and this can result in some very hard to debug errors.
-
-If you have a compatible GPU on your build system the tests will use it.  If not you will see a
-lot of skipped tests.
+You will get errors if the CUDA runtime linking is not consistent.  We tried to detect these
+up front and stop the build early if there is a mismatch, but there may be some cases we missed
+and this can result in some very hard to debug errors.
 
 ## Per-thread Default Stream
 
@@ -118,4 +114,17 @@ then build the jar:
 ```shell script
 cd src/cudf/java
 mvn clean install -DPER_THREAD_DEFAULT_STREAM=ON
+```
+
+## GPUDirect Storage (GDS)
+
+The JNI code can be built with *GPUDirect Storage* (GDS) support, which enables direct copying 
+between GPU device buffers and supported filesystems (see
+https://docs.nvidia.com/gpudirect-storage/).
+
+To enable GDS support, first make sure GDS is installed (see
+https://docs.nvidia.com/gpudirect-storage/troubleshooting-guide/index.html), then run:  
+```shell script
+cd src/cudf/java
+mvn clean install -DUSE_GDS=ON
 ```

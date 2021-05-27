@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@
 
 #include <cudf/utilities/span.hpp>
 
-using cudf::detail::host_span;
+using cudf::host_span;
 
 namespace cudf {
 namespace io {
@@ -55,6 +55,18 @@ class HostDecompressor {
  public:
   static std::unique_ptr<HostDecompressor> Create(int stream_type);
 };
+
+/**
+ * @brief GZIP header flags
+ * See https://tools.ietf.org/html/rfc1952
+ */
+namespace GZIPHeaderFlag {
+constexpr uint8_t ftext    = 0x01;  // ASCII text hint
+constexpr uint8_t fhcrc    = 0x02;  // Header CRC present
+constexpr uint8_t fextra   = 0x04;  // Extra fields present
+constexpr uint8_t fname    = 0x08;  // Original file name present
+constexpr uint8_t fcomment = 0x10;  // Comment present
+};                                  // namespace GZIPHeaderFlag
 
 }  // namespace io
 }  // namespace cudf

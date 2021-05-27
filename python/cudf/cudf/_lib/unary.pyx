@@ -1,6 +1,7 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 from enum import IntEnum
+from cudf.utils.dtypes import is_decimal_dtype
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -21,42 +22,44 @@ from cudf._lib.cpp.types cimport (
 from cudf._lib.column import np_to_cudf_types, cudf_to_np_types
 from cudf._lib.cpp.unary cimport (
     underlying_type_t_unary_op,
-    unary_op,
+    unary_operator,
 )
 
-from cudf._lib.types cimport underlying_type_t_type_id
+from cudf._lib.types cimport underlying_type_t_type_id, dtype_to_data_type
 
 cimport cudf._lib.cpp.unary as libcudf_unary
+cimport cudf._lib.cpp.types as libcudf_types
 
 
 class UnaryOp(IntEnum):
-    SIN = <underlying_type_t_unary_op> unary_op.SIN
-    COS = <underlying_type_t_unary_op> unary_op.COS
-    TAN = <underlying_type_t_unary_op> unary_op.TAN
-    ASIN = <underlying_type_t_unary_op> unary_op.ARCSIN
-    ACOS = <underlying_type_t_unary_op> unary_op.ARCCOS
-    ATAN = <underlying_type_t_unary_op> unary_op.ARCTAN
-    SINH = <underlying_type_t_unary_op> unary_op.SINH
-    COSH = <underlying_type_t_unary_op> unary_op.COSH
-    TANH = <underlying_type_t_unary_op> unary_op.TANH
-    ARCSINH = <underlying_type_t_unary_op> unary_op.ARCSINH
-    ARCCOSH = <underlying_type_t_unary_op> unary_op.ARCCOSH
-    ARCTANH = <underlying_type_t_unary_op> unary_op.ARCTANH
-    EXP = <underlying_type_t_unary_op> unary_op.EXP
-    LOG = <underlying_type_t_unary_op> unary_op.LOG
-    SQRT = <underlying_type_t_unary_op> unary_op.SQRT
-    CBRT = <underlying_type_t_unary_op> unary_op.CBRT
-    CEIL = <underlying_type_t_unary_op> unary_op.CEIL
-    FLOOR = <underlying_type_t_unary_op> unary_op.FLOOR
-    ABS = <underlying_type_t_unary_op> unary_op.ABS
-    RINT = <underlying_type_t_unary_op> unary_op.RINT
-    INVERT = <underlying_type_t_unary_op> unary_op.BIT_INVERT
-    NOT = <underlying_type_t_unary_op> unary_op.NOT
+    SIN = <underlying_type_t_unary_op> unary_operator.SIN
+    COS = <underlying_type_t_unary_op> unary_operator.COS
+    TAN = <underlying_type_t_unary_op> unary_operator.TAN
+    ASIN = <underlying_type_t_unary_op> unary_operator.ARCSIN
+    ACOS = <underlying_type_t_unary_op> unary_operator.ARCCOS
+    ATAN = <underlying_type_t_unary_op> unary_operator.ARCTAN
+    SINH = <underlying_type_t_unary_op> unary_operator.SINH
+    COSH = <underlying_type_t_unary_op> unary_operator.COSH
+    TANH = <underlying_type_t_unary_op> unary_operator.TANH
+    ARCSINH = <underlying_type_t_unary_op> unary_operator.ARCSINH
+    ARCCOSH = <underlying_type_t_unary_op> unary_operator.ARCCOSH
+    ARCTANH = <underlying_type_t_unary_op> unary_operator.ARCTANH
+    EXP = <underlying_type_t_unary_op> unary_operator.EXP
+    LOG = <underlying_type_t_unary_op> unary_operator.LOG
+    SQRT = <underlying_type_t_unary_op> unary_operator.SQRT
+    CBRT = <underlying_type_t_unary_op> unary_operator.CBRT
+    CEIL = <underlying_type_t_unary_op> unary_operator.CEIL
+    FLOOR = <underlying_type_t_unary_op> unary_operator.FLOOR
+    ABS = <underlying_type_t_unary_op> unary_operator.ABS
+    RINT = <underlying_type_t_unary_op> unary_operator.RINT
+    INVERT = <underlying_type_t_unary_op> unary_operator.BIT_INVERT
+    NOT = <underlying_type_t_unary_op> unary_operator.NOT
 
 
 def unary_operation(Column input, object op):
     cdef column_view c_input = input.view()
-    cdef unary_op c_op = <unary_op>(<underlying_type_t_unary_op> op)
+    cdef unary_operator c_op = <unary_operator>(<underlying_type_t_unary_op>
+                                                op)
     cdef unique_ptr[column] c_result
 
     with nogil:
@@ -92,20 +95,17 @@ def is_valid(Column input):
 
 def cast(Column input, object dtype=np.float64):
     cdef column_view c_input = input.view()
-    cdef type_id tid = (
-        <type_id> (
-            <underlying_type_t_type_id> (
-                np_to_cudf_types[np.dtype(dtype)]
-            )
-        )
-    )
-    cdef data_type c_dtype = data_type(tid)
+    cdef data_type c_dtype = dtype_to_data_type(dtype)
+
     cdef unique_ptr[column] c_result
 
     with nogil:
         c_result = move(libcudf_unary.cast(c_input, c_dtype))
 
-    return Column.from_unique_ptr(move(c_result))
+    result = Column.from_unique_ptr(move(c_result))
+    if is_decimal_dtype(result.dtype):
+        result.dtype.precision = dtype.precision
+    return result
 
 
 def is_nan(Column input):

@@ -17,6 +17,8 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdio.h>
+#include <io/utilities/column_buffer.hpp>
 
 namespace cudf {
 namespace io {
@@ -27,7 +29,7 @@ struct block_desc_s {
                                   uint32_t size_,
                                   uint32_t first_row_,
                                   uint32_t num_rows_)
-    : offset(offset_), first_row(first_row_), num_rows(num_rows_), size(size_)
+    : offset(offset_), size(size_), first_row(first_row_), num_rows(num_rows_)
   {
   }
 
@@ -54,6 +56,8 @@ enum type_kind_e {
   type_union,
   type_array,
 };
+
+using cudf::io::detail::string_index_pair;
 
 }  // namespace avro
 }  // namespace io

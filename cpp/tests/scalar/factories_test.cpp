@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,20 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/type_lists.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 class ScalarFactoryTest : public cudf::test::BaseFixture {
-  cudaStream_t _stream{0};
-
  public:
-  cudaStream_t stream() { return _stream; }
+  rmm::cuda_stream_view stream() { return rmm::cuda_stream_default; }
 };
 
 template <typename T>
@@ -88,7 +91,7 @@ TYPED_TEST(TimestampScalarFactory, TypeCast)
 }
 
 template <typename T>
-struct DefaultScalarFactory : public cudf::test::BaseFixture {
+struct DefaultScalarFactory : public ScalarFactoryTest {
   static constexpr auto factory = cudf::make_default_constructed_scalar;
 };
 
@@ -97,7 +100,8 @@ TYPED_TEST_CASE(DefaultScalarFactory, MixedTypes);
 
 TYPED_TEST(DefaultScalarFactory, FactoryDefault)
 {
-  std::unique_ptr<cudf::scalar> s = this->factory(cudf::data_type{cudf::type_to_id<TypeParam>()});
+  std::unique_ptr<cudf::scalar> s =
+    this->factory(cudf::data_type{cudf::type_to_id<TypeParam>()}, this->stream(), this->mr());
 
   EXPECT_EQ(s->type(), cudf::data_type{cudf::type_to_id<TypeParam>()});
   EXPECT_FALSE(s->is_valid());
@@ -105,7 +109,8 @@ TYPED_TEST(DefaultScalarFactory, FactoryDefault)
 
 TYPED_TEST(DefaultScalarFactory, TypeCast)
 {
-  std::unique_ptr<cudf::scalar> s = this->factory(cudf::data_type{cudf::type_to_id<TypeParam>()});
+  std::unique_ptr<cudf::scalar> s =
+    this->factory(cudf::data_type{cudf::type_to_id<TypeParam>()}, this->stream(), this->mr());
 
   auto numeric_s = static_cast<cudf::scalar_type_t<TypeParam>*>(s.get());
 
@@ -156,6 +161,35 @@ TYPED_TEST(FixedPointScalarFactory, ValueProvided)
   EXPECT_EQ(fp_s->value(), rep_value);
   EXPECT_TRUE(fp_s->is_valid());
   EXPECT_TRUE(s->is_valid());
+}
+
+struct StructScalarFactory : public ScalarFactoryTest {
+};
+
+TEST_F(StructScalarFactory, Basic)
+{
+  cudf::test::fixed_width_column_wrapper<int> col0{1};
+  cudf::test::strings_column_wrapper col1{"abc"};
+  cudf::test::lists_column_wrapper<int> col2{{1, 2, 3}};
+  cudf::test::structs_column_wrapper struct_col({col0, col1, col2});
+  cudf::column_view cv = static_cast<cudf::column_view>(struct_col);
+  std::vector<cudf::column_view> children(cv.child_begin(), cv.child_end());
+
+  // table_view constructor
+  {
+    auto sc = cudf::make_struct_scalar(cudf::table_view{children});
+    auto s  = static_cast<cudf::scalar_type_t<cudf::struct_view>*>(sc.get());
+    EXPECT_TRUE(s->is_valid());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(cudf::table_view{children}, s->view());
+  }
+
+  // host_span constructor
+  {
+    auto sc = cudf::make_struct_scalar(cudf::host_span<cudf::column_view const>{children});
+    auto s  = static_cast<cudf::scalar_type_t<cudf::struct_view>*>(sc.get());
+    EXPECT_TRUE(s->is_valid());
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(cudf::table_view{children}, s->view());
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

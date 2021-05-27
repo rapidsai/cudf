@@ -6,7 +6,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.cpp.column.column cimport column
 
 from libc.stdint cimport int32_t
@@ -24,17 +24,21 @@ from cudf._lib.cpp.strings.substring cimport (
 def slice_replace(Column source_strings,
                   size_type start,
                   size_type stop,
-                  Scalar repl):
+                  object py_repl):
     """
     Returns a Column by replacing specified section
-    of each string with `repl`. Positions can be
+    of each string with `py_repl`. Positions can be
     specified with `start` and `stop` params.
     """
+
+    cdef DeviceScalar repl = py_repl.device_value
 
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(repl.c_value.get())
+    cdef const string_scalar* scalar_str = <const string_scalar*>(
+        repl.get_raw_ptr()
+    )
 
     with nogil:
         c_result = move(cpp_replace_slice(
@@ -49,15 +53,20 @@ def slice_replace(Column source_strings,
 
 def insert(Column source_strings,
            size_type start,
-           Scalar repl):
+           object py_repl):
     """
     Returns a Column by inserting a specified
-    string `repl` at a specific position in all strings.
+    string `py_repl` at a specific position in all strings.
     """
+
+    cdef DeviceScalar repl = py_repl.device_value
+
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_str = <string_scalar*>(repl.c_value.get())
+    cdef const string_scalar* scalar_str = <const string_scalar*>(
+        repl.get_raw_ptr()
+    )
 
     with nogil:
         c_result = move(cpp_replace_slice(
@@ -71,20 +80,26 @@ def insert(Column source_strings,
 
 
 def replace(Column source_strings,
-            Scalar target,
-            Scalar repl,
+            object py_target,
+            object py_repl,
             int32_t maxrepl):
     """
     Returns a Column after replacing occurrences of
-    patterns `target` with `repl` in `source_strings`.
+    patterns `py_target` with `py_repl` in `source_strings`.
     `maxrepl` indicates number of replacements to make from start.
     """
+    cdef DeviceScalar target = py_target.device_value
+    cdef DeviceScalar repl = py_repl.device_value
 
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
-    cdef string_scalar* scalar_target = <string_scalar*>(target.c_value.get())
-    cdef string_scalar* scalar_repl = <string_scalar*>(repl.c_value.get())
+    cdef const string_scalar* scalar_target = <const string_scalar*>(
+        target.get_raw_ptr()
+    )
+    cdef const string_scalar* scalar_repl = <const string_scalar*>(
+        repl.get_raw_ptr()
+    )
 
     with nogil:
         c_result = move(cpp_replace(

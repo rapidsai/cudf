@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,11 +22,12 @@ include(ExternalProject)
 
 ExternalProject_Add(nvcomp
     GIT_REPOSITORY  https://github.com/NVIDIA/nvcomp.git
-    GIT_TAG         v1.1.0
+    GIT_TAG         v1.2.1
     GIT_SHALLOW     true
     SOURCE_DIR      "${NVCOMP_ROOT}/nvcomp"
     BINARY_DIR      "${NVCOMP_ROOT}/build"
     INSTALL_DIR     "${NVCOMP_ROOT}/install"
+    PATCH_COMMAND   patch --reject-file=- -p1 -N < ${CMAKE_CURRENT_SOURCE_DIR}/cmake/nvcomp.patch || true
     CMAKE_ARGS      ${NVCOMP_CMAKE_ARGS} -DCMAKE_INSTALL_PREFIX=${NVCOMP_ROOT}/install
     BUILD_COMMAND   ${CMAKE_COMMAND} --build . --target nvcomp
     INSTALL_COMMAND ${CMAKE_COMMAND} -E echo "Skipping nvcomp install step.")

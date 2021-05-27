@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,9 @@
 #include <nvtext/detail/load_hash_file.hpp>
 #include <nvtext/subword_tokenize.hpp>
 #include <text/subword/detail/wordpiece_tokenizer.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/transform_scan.h>
@@ -127,12 +130,13 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   bool do_lower_case,
                                   bool do_truncate,
                                   uint32_t max_rows_tensor,
-                                  cudaStream_t stream,
+                                  rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(stride <= max_sequence_length,
                "stride must be less than or equal to max_sequence_length");
-  CUDF_EXPECTS(max_sequence_length * max_rows_tensor < std::numeric_limits<cudf::size_type>::max(),
+  CUDF_EXPECTS(max_sequence_length * max_rows_tensor <
+                 static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
                "max_sequence_length x max_rows_tensor is too large for cudf output column size");
   auto const strings_count = strings.size();
   if (strings_count == 0 || strings.chars_size() == 0)
@@ -162,9 +166,9 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   // over the number of tokens for each string.
   rmm::device_uvector<uint32_t> offsets_per_tensor(strings_count + 1, stream);
   auto d_offsets_per_tensor = offsets_per_tensor.data();
-  auto const execpol        = rmm::exec_policy(stream);
+
   thrust::transform_exclusive_scan(
-    execpol->on(stream),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<cudf::size_type>(0),
     thrust::make_counting_iterator<cudf::size_type>(strings_count + 1),
     offsets_per_tensor.begin(),
@@ -184,7 +188,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   rmm::device_uvector<uint32_t> row2row_within_tensor(nrows_tensor_token_ids, stream);
   auto d_row2row_within_tensor = row2row_within_tensor.data();
   thrust::for_each_n(
-    execpol->on(stream),
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator<uint32_t>(0),
     strings_count,
     [d_offsets_per_tensor, d_row2tensor, d_row2row_within_tensor] __device__(auto idx) {
@@ -218,7 +222,10 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   constexpr int block_size = 256;
   cudf::detail::grid_1d const grid{
     static_cast<cudf::size_type>(nrows_tensor_token_ids * max_sequence_length), block_size};
-  kernel_compute_tensor_metadata<<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
+  kernel_compute_tensor_metadata<<<grid.num_blocks,
+                                   grid.num_threads_per_block,
+                                   0,
+                                   stream.value()>>>(
     device_token_ids,
     device_offsets,
     d_row2tensor,
@@ -249,16 +256,16 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   uint32_t max_rows_tensor,
                                   rmm::mr::device_memory_resource* mr)
 {
-  hashed_vocabulary vocab_table = load_vocabulary_file(filename_hashed_vocabulary, mr);
+  auto vocab_table = load_vocabulary_file(filename_hashed_vocabulary, mr);
   CUDF_FUNC_RANGE();
   return detail::subword_tokenize(strings,
-                                  vocab_table,
+                                  *vocab_table,
                                   max_sequence_length,
                                   stride,
                                   do_lower_case,
                                   do_truncate,
                                   max_rows_tensor,
-                                  0,
+                                  rmm::cuda_stream_default,
                                   mr);
 }
 
@@ -279,7 +286,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   do_lower_case,
                                   do_truncate,
                                   max_rows_tensor,
-                                  0,
+                                  rmm::cuda_stream_default,
                                   mr);
 }
 

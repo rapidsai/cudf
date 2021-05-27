@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,9 @@
 
 #include <cudf/groupby.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
 #include <utility>
@@ -34,14 +37,14 @@ namespace hash {
  * @return true A hash-based groupby can be used
  * @return false A hash-based groupby cannot be used
  */
-bool can_use_hash_groupby(table_view const& keys, std::vector<aggregation_request> const& requests);
+bool can_use_hash_groupby(table_view const& keys, host_span<aggregation_request const> requests);
 
 // Hash-based groupby
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   table_view const& keys,
-  std::vector<aggregation_request> const& requests,
+  host_span<aggregation_request const> requests,
   null_policy include_null_keys,
-  cudaStream_t stream,
+  rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr);
 }  // namespace hash
 

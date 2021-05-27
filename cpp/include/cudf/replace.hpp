@@ -27,6 +27,14 @@ namespace cudf {
  */
 
 /**
+ * @brief Policy to specify the position of replacement values relative to null rows
+ *
+ * `PRECEDING` means the replacement value is the first non-null value preceding the null row.
+ * `FOLLOWING` means the replacement value is the first non-null value following the null row.
+ */
+enum class replace_policy : bool { PRECEDING, FOLLOWING };
+
+/**
  * @brief Replaces all null values in a column with corresponding values of another column
  *
  * If `input[i]` is NULL, then `output[i]` will contain `replacement[i]`.
@@ -59,6 +67,23 @@ std::unique_ptr<column> replace_nulls(
 std::unique_ptr<column> replace_nulls(
   column_view const& input,
   scalar const& replacement,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Replaces all null values in a column with the first non-null value that precedes/follows.
+ *
+ * If `input[i]` is NULL, then `output[i]` will contain the first non-null value that precedes or
+ * follows the null value, based on `replace_policy`.
+ *
+ * @param[in] input A column whose null values will be replaced.
+ * @param[in] replace_policy Specify the position of replacement values relative to null values.
+ * @param[in] mr Device memory resource used to allocate device memory of the returned column.
+ *
+ * @returns Copy of `input` with null values replaced based on `replace_policy`.
+ */
+std::unique_ptr<column> replace_nulls(
+  column_view const& input,
+  replace_policy const& replace_policy,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

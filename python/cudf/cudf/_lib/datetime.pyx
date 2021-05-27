@@ -9,6 +9,23 @@ from cudf._lib.column cimport Column
 cimport cudf._lib.cpp.datetime as libcudf_datetime
 
 
+def add_months(Column col, Column months):
+    # months must be int16 dtype
+    cdef unique_ptr[column] c_result
+    cdef column_view col_view = col.view()
+    cdef column_view months_view = months.view()
+
+    with nogil:
+        c_result = move(
+            libcudf_datetime.add_calendrical_months(
+                col_view,
+                months_view
+            )
+        )
+
+    return Column.from_unique_ptr(move(c_result))
+
+
 def extract_datetime_component(Column col, object field):
 
     cdef unique_ptr[column] c_result

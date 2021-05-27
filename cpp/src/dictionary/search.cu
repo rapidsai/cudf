@@ -21,6 +21,9 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
+
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 
@@ -34,7 +37,7 @@ struct dispatch_scalar_index {
   template <typename IndexType, std::enable_if_t<is_index_type<IndexType>()>* = nullptr>
   std::unique_ptr<scalar> operator()(size_type index,
                                      bool is_valid,
-                                     cudaStream_t stream,
+                                     rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
     return std::make_unique<numeric_scalar<IndexType>>(index, is_valid, stream, mr);
@@ -42,7 +45,7 @@ struct dispatch_scalar_index {
   template <typename IndexType,
             typename... Args,
             std::enable_if_t<not is_index_type<IndexType>()>* = nullptr>
-  std::unique_ptr<scalar> operator()(Args&&... args)
+  std::unique_ptr<scalar> operator()(Args&&...)
   {
     CUDF_FAIL("indices must be an integral type");
   }
@@ -63,58 +66,41 @@ struct find_index_fn {
                              not std::is_same<Element, struct_view>::value>* = nullptr>
   std::unique_ptr<scalar> operator()(dictionary_column_view const& input,
                                      scalar const& key,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
   {
     if (!key.is_valid())
       return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
     CUDF_EXPECTS(input.keys().type() == key.type(),
                  "search key type must match dictionary keys type");
 
-    using Type       = device_storage_type_t<Element>;
     using ScalarType = cudf::scalar_type_t<Element>;
     auto find_key    = static_cast<ScalarType const&>(key).value(stream);
     auto keys_view   = column_device_view::create(input.keys(), stream);
-    auto iter =
-      thrust::equal_range(thrust::device,  // segfaults: rmm::exec_policy(stream)->on(stream) and
-                                           // thrust::cuda::par.on(stream)
-                          keys_view->begin<Type>(),
-                          keys_view->end<Type>(),
-                          find_key);
+    auto iter = thrust::equal_range(thrust::device,  // segfaults: rmm::exec_policy(stream) and
+                                                     // thrust::cuda::par.on(stream)
+                                    keys_view->begin<Element>(),
+                                    keys_view->end<Element>(),
+                                    find_key);
     return type_dispatcher(input.indices().type(),
                            dispatch_scalar_index{},
-                           thrust::distance(keys_view->begin<Type>(), iter.first),
+                           thrust::distance(keys_view->begin<Element>(), iter.first),
                            (thrust::distance(iter.first, iter.second) > 0),
                            stream,
                            mr);
   }
-  template <typename Element,
-            std::enable_if_t<std::is_same<Element, dictionary32>::value>* = nullptr>
-  std::unique_ptr<scalar> operator()(dictionary_column_view const& input,
-                                     scalar const& key,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const
-  {
-    CUDF_FAIL("dictionary column cannot be the keys column of another dictionary");
-  }
-
-  template <typename Element, std::enable_if_t<std::is_same<Element, list_view>::value>* = nullptr>
-  std::unique_ptr<scalar> operator()(dictionary_column_view const& input,
-                                     scalar const& key,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const
-  {
-    CUDF_FAIL("list_view column cannot be the keys column of a dictionary");
-  }
 
   template <typename Element,
-            std::enable_if_t<std::is_same<Element, struct_view>::value>* = nullptr>
-  std::unique_ptr<scalar> operator()(dictionary_column_view const& input,
-                                     scalar const& key,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const
+            std::enable_if_t<std::is_same<Element, dictionary32>::value or
+                             std::is_same<Element, list_view>::value or
+                             std::is_same<Element, struct_view>::value>* = nullptr>
+  std::unique_ptr<scalar> operator()(dictionary_column_view const&,
+                                     scalar const&,
+                                     rmm::cuda_stream_view,
+                                     rmm::mr::device_memory_resource*) const
   {
-    CUDF_FAIL("struct_view column cannot be the keys column of a dictionary");
+    CUDF_FAIL(
+      "dictionary, list_view, and struct_view columns cannot be the keys column of a dictionary");
   }
 };
 
@@ -125,25 +111,22 @@ struct find_insert_index_fn {
                              not std::is_same<Element, struct_view>::value>* = nullptr>
   std::unique_ptr<scalar> operator()(dictionary_column_view const& input,
                                      scalar const& key,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
   {
     if (!key.is_valid())
       return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
     CUDF_EXPECTS(input.keys().type() == key.type(),
                  "search key type must match dictionary keys type");
 
-    using Type       = device_storage_type_t<Element>;
     using ScalarType = cudf::scalar_type_t<Element>;
     auto find_key    = static_cast<ScalarType const&>(key).value(stream);
     auto keys_view   = column_device_view::create(input.keys(), stream);
-    auto iter        = thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
-                                    keys_view->begin<Type>(),
-                                    keys_view->end<Type>(),
-                                    find_key);
+    auto iter        = thrust::lower_bound(
+      rmm::exec_policy(stream), keys_view->begin<Element>(), keys_view->end<Element>(), find_key);
     return type_dispatcher(input.indices().type(),
                            dispatch_scalar_index{},
-                           thrust::distance(keys_view->begin<Type>(), iter),
+                           thrust::distance(keys_view->begin<Element>(), iter),
                            true,
                            stream,
                            mr);
@@ -153,12 +136,12 @@ struct find_insert_index_fn {
             std::enable_if_t<std::is_same<Element, dictionary32>::value or
                              std::is_same<Element, list_view>::value or
                              std::is_same<Element, struct_view>::value>* = nullptr>
-  std::unique_ptr<scalar> operator()(dictionary_column_view const& input,
-                                     scalar const& key,
-                                     rmm::mr::device_memory_resource* mr,
-                                     cudaStream_t stream) const
+  std::unique_ptr<scalar> operator()(dictionary_column_view const&,
+                                     scalar const&,
+                                     rmm::cuda_stream_view,
+                                     rmm::mr::device_memory_resource*) const
   {
-    CUDF_FAIL("column cannot be the keys for dictionary");
+    CUDF_FAIL("dictionary, list_view, and struct_view columns cannot be the keys for a dictionary");
   }
 };
 
@@ -166,23 +149,24 @@ struct find_insert_index_fn {
 
 std::unique_ptr<scalar> get_index(dictionary_column_view const& dictionary,
                                   scalar const& key,
-                                  rmm::mr::device_memory_resource* mr,
-                                  cudaStream_t stream)
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
 {
   if (dictionary.is_empty())
     return std::make_unique<numeric_scalar<uint32_t>>(0, false, stream, mr);
-  return type_dispatcher(dictionary.keys().type(), find_index_fn(), dictionary, key, mr, stream);
+  return type_dispatcher<dispatch_storage_type>(
+    dictionary.keys().type(), find_index_fn(), dictionary, key, stream, mr);
 }
 
 std::unique_ptr<scalar> get_insert_index(dictionary_column_view const& dictionary,
                                          scalar const& key,
-                                         rmm::mr::device_memory_resource* mr,
-                                         cudaStream_t stream)
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
   if (dictionary.is_empty())
     return std::make_unique<numeric_scalar<uint32_t>>(0, false, stream, mr);
-  return type_dispatcher(
-    dictionary.keys().type(), find_insert_index_fn(), dictionary, key, mr, stream);
+  return type_dispatcher<dispatch_storage_type>(
+    dictionary.keys().type(), find_insert_index_fn(), dictionary, key, stream, mr);
 }
 
 }  // namespace detail
@@ -194,7 +178,7 @@ std::unique_ptr<scalar> get_index(dictionary_column_view const& dictionary,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::get_index(dictionary, key, mr);
+  return detail::get_index(dictionary, key, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace dictionary

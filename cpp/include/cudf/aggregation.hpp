@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,12 +38,18 @@ namespace cudf {
  * @file
  */
 
+// forward declaration
+namespace detail {
+class simple_aggregations_collector;
+class aggregation_finalizer;
+}  // namespace detail
 /**
- * @brief Base class for specifying the desired aggregation in an
+ * @brief Abstract base class for specifying the desired aggregation in an
  * `aggregation_request`.
  *
- * Other kinds of aggregations may derive from this class to encapsulate
- * additional information needed to compute the aggregation.
+ * All aggregations must derive from this class to implement the pure virtual
+ * functions and potentially encapsulate additional information needed to
+ * compute the aggregation.
  */
 class aggregation {
  public:
@@ -69,62 +75,87 @@ class aggregation {
     ARGMIN,          ///< Index of min element
     NUNIQUE,         ///< count number of unique elements
     NTH_ELEMENT,     ///< get the nth element
-    ROW_NUMBER,      ///< get row-number of element
-    COLLECT,         ///< collect values into a list
+    ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
+    COLLECT_LIST,    ///< collect values into a list
+    COLLECT_SET,     ///< collect values into a list without duplicate entries
     LEAD,            ///< window function, accesses row at specified offset following current row
     LAG,             ///< window function, accesses row at specified offset preceding current row
-    PTX,             ///< PTX UDF based reduction
-    CUDA             ///< CUDA UDf based reduction
+    PTX,             ///< PTX  UDF based reduction
+    CUDA             ///< CUDA UDF based reduction
   };
 
+  aggregation() = delete;
   aggregation(aggregation::Kind a) : kind{a} {}
   Kind kind;  ///< The aggregation to perform
+  virtual ~aggregation() = default;
 
   virtual bool is_equal(aggregation const& other) const { return kind == other.kind; }
-
   virtual size_t do_hash() const { return std::hash<int>{}(kind); }
+  virtual std::unique_ptr<aggregation> clone() const = 0;
 
-  virtual std::unique_ptr<aggregation> clone() const
-  {
-    return std::make_unique<aggregation>(*this);
-  }
+  // override functions for compound aggregations
+  virtual std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const = 0;
+  virtual void finalize(cudf::detail::aggregation_finalizer& finalizer) const         = 0;
+};
 
-  virtual ~aggregation() = default;
+/**
+ * @brief Derived class intended for enforcing operation-specific restrictions
+ * when calling various cudf functions.
+ *
+ * As an example, rolling_window will only accept rolling_aggregation inputs,
+ * and the appropriate derived classes (sum_aggregation, mean_aggregation, etc)
+ * derive from this interface to represent these valid options.
+ */
+class rolling_aggregation : public virtual aggregation {
+ public:
+  ~rolling_aggregation() = default;
+
+ protected:
+  rolling_aggregation() {}
 };
 
 enum class udf_type : bool { CUDA, PTX };
 
 /// Factory to create a SUM aggregation
-std::unique_ptr<aggregation> make_sum_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_sum_aggregation();
 
 /// Factory to create a PRODUCT aggregation
-std::unique_ptr<aggregation> make_product_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_product_aggregation();
 
 /// Factory to create a MIN aggregation
-std::unique_ptr<aggregation> make_min_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_min_aggregation();
 
 /// Factory to create a MAX aggregation
-std::unique_ptr<aggregation> make_max_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_max_aggregation();
 
 /**
  * @brief Factory to create a COUNT aggregation
  *
  * @param null_handling Indicates if null values will be counted.
  */
-std::unique_ptr<aggregation> make_count_aggregation(
-  null_policy null_handling = null_policy::EXCLUDE);
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_count_aggregation(null_policy null_handling = null_policy::EXCLUDE);
 
-/// Factory to create a ANY aggregation
-std::unique_ptr<aggregation> make_any_aggregation();
+/// Factory to create an ANY aggregation
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_any_aggregation();
 
 /// Factory to create a ALL aggregation
-std::unique_ptr<aggregation> make_all_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_all_aggregation();
 
 /// Factory to create a SUM_OF_SQUARES aggregation
-std::unique_ptr<aggregation> make_sum_of_squares_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_sum_of_squares_aggregation();
 
 /// Factory to create a MEAN aggregation
-std::unique_ptr<aggregation> make_mean_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_mean_aggregation();
 
 /**
  * @brief Factory to create a VARIANCE aggregation
@@ -132,7 +163,8 @@ std::unique_ptr<aggregation> make_mean_aggregation();
  * @param ddof Delta degrees of freedom. The divisor used in calculation of
  *             `variance` is `N - ddof`, where `N` is the population size.
  */
-std::unique_ptr<aggregation> make_variance_aggregation(size_type ddof = 1);
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_variance_aggregation(size_type ddof = 1);
 
 /**
  * @brief Factory to create a STD aggregation
@@ -140,10 +172,12 @@ std::unique_ptr<aggregation> make_variance_aggregation(size_type ddof = 1);
  * @param ddof Delta degrees of freedom. The divisor used in calculation of
  *             `std` is `N - ddof`, where `N` is the population size.
  */
-std::unique_ptr<aggregation> make_std_aggregation(size_type ddof = 1);
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_std_aggregation(size_type ddof = 1);
 
 /// Factory to create a MEDIAN aggregation
-std::unique_ptr<aggregation> make_median_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_median_aggregation();
 
 /**
  * @brief Factory to create a QUANTILE aggregation
@@ -151,22 +185,25 @@ std::unique_ptr<aggregation> make_median_aggregation();
  * @param quantiles The desired quantiles
  * @param interpolation The desired interpolation
  */
-std::unique_ptr<aggregation> make_quantile_aggregation(std::vector<double> const& q,
-                                                       interpolation i = interpolation::LINEAR);
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_quantile_aggregation(std::vector<double> const& q,
+                                                interpolation i = interpolation::LINEAR);
 
 /**
  * @brief Factory to create an `argmax` aggregation
  *
  * `argmax` returns the index of the maximum element.
  */
-std::unique_ptr<aggregation> make_argmax_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_argmax_aggregation();
 
 /**
  * @brief Factory to create an `argmin` aggregation
  *
  * `argmin` returns the index of the minimum element.
  */
-std::unique_ptr<aggregation> make_argmin_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_argmin_aggregation();
 
 /**
  * @brief Factory to create a `nunique` aggregation
@@ -174,8 +211,8 @@ std::unique_ptr<aggregation> make_argmin_aggregation();
  * `nunique` returns the number of unique elements.
  * @param null_handling Indicates if null values will be counted.
  */
-std::unique_ptr<aggregation> make_nunique_aggregation(
-  null_policy null_handling = null_policy::EXCLUDE);
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_nunique_aggregation(null_policy null_handling = null_policy::EXCLUDE);
 
 /**
  * @brief Factory to create a `nth_element` aggregation
@@ -190,20 +227,55 @@ std::unique_ptr<aggregation> make_nunique_aggregation(
  * @param n index of nth element in each group.
  * @param null_handling Indicates to include/exclude nulls during indexing.
  */
-std::unique_ptr<aggregation> make_nth_element_aggregation(
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_nth_element_aggregation(
   size_type n, null_policy null_handling = null_policy::INCLUDE);
 
 /// Factory to create a ROW_NUMBER aggregation
-std::unique_ptr<aggregation> make_row_number_aggregation();
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_row_number_aggregation();
 
-/// Factory to create a COLLECT_NUMBER aggregation
-std::unique_ptr<aggregation> make_collect_aggregation();
+/**
+ * @brief Factory to create a COLLECT_LIST aggregation
+ *
+ * `COLLECT_LIST` returns a list column of all included elements in the group/series.
+ *
+ * If `null_handling` is set to `EXCLUDE`, null elements are dropped from each
+ * of the list rows.
+ *
+ * @param null_handling Indicates whether to include/exclude nulls in list elements.
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_collect_list_aggregation(
+  null_policy null_handling = null_policy::INCLUDE);
+
+/**
+ * @brief Factory to create a COLLECT_SET aggregation
+ *
+ * `COLLECT_SET` returns a lists column of all included elements in the group/series. Within each
+ * list, the duplicated entries are dropped out such that each entry appears only once.
+ *
+ * If `null_handling` is set to `EXCLUDE`, null elements are dropped from each
+ * of the list rows.
+ *
+ * @param null_handling Indicates whether to include/exclude nulls during collection
+ * @param nulls_equal   Flag to specify whether null entries within each list should be considered
+ * equal
+ * @param nans_equal    Flag to specify whether NaN values in floating point column should be
+ * considered equal
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE,
+                                                   null_equality nulls_equal = null_equality::EQUAL,
+                                                   nan_equality nans_equal = nan_equality::UNEQUAL);
 
 /// Factory to create a LAG aggregation
-std::unique_ptr<aggregation> make_lag_aggregation(size_type offset);
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_lag_aggregation(size_type offset);
 
 /// Factory to create a LEAD aggregation
-std::unique_ptr<aggregation> make_lead_aggregation(size_type offset);
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_lead_aggregation(size_type offset);
 
 /**
  * @brief Factory to create an aggregation base on UDF for PTX or CUDA
@@ -214,9 +286,10 @@ std::unique_ptr<aggregation> make_lead_aggregation(size_type offset);
  *
  * @return aggregation unique pointer housing user_defined_aggregator string.
  */
-std::unique_ptr<aggregation> make_udf_aggregation(udf_type type,
-                                                  std::string const& user_defined_aggregator,
-                                                  data_type output_type);
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_udf_aggregation(udf_type type,
+                                           std::string const& user_defined_aggregator,
+                                           data_type output_type);
 
 /** @} */  // end of group
 }  // namespace cudf

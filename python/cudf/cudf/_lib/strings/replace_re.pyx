@@ -4,7 +4,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from cudf._lib.column cimport Column
-from cudf._lib.scalar cimport Scalar
+from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.cpp.types cimport size_type
 from libcpp.vector cimport vector
 
@@ -20,21 +20,23 @@ from libcpp.string cimport string
 
 def replace_re(Column source_strings,
                object pattern,
-               Scalar repl,
+               object py_repl,
                size_type n):
     """
     Returns a Column after replacing occurrences regular
-    expressions `pattern` with `repl` in `source_strings`.
+    expressions `pattern` with `py_repl` in `source_strings`.
     `n` indicates the number of resplacements to be made from
     start. (-1 indicates all)
     """
+
+    cdef DeviceScalar repl = py_repl.device_value
 
     cdef unique_ptr[column] c_result
     cdef column_view source_view = source_strings.view()
 
     cdef string pattern_string = <string>str(pattern).encode()
-    cdef string_scalar* scalar_repl = \
-        <string_scalar*>(repl.c_value.get())
+    cdef const string_scalar* scalar_repl = \
+        <const string_scalar*>(repl.get_raw_ptr())
 
     with nogil:
         c_result = move(cpp_replace_re(

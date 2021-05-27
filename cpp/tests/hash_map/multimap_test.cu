@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,18 +15,16 @@
  */
 
 #include <cudf_test/base_fixture.hpp>
-
-#include <thrust/device_vector.h>
+#include <cudf_test/cudf_gtest.hpp>
 
 #include <hash/concurrent_unordered_multimap.cuh>
+#include <hash/hash_allocator.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <gtest/gtest.h>
 
-#include <iostream>
 #include <limits>
-#include <vector>
-
-#include <cstdlib>
 
 // This is necessary to do a parametrized typed-test over multiple template
 // arguments
@@ -45,11 +43,15 @@ class MultimapTest : public cudf::test::BaseFixture {
   using value_type = typename T::value_type;
   using size_type  = int;
 
-  using multimap_type = concurrent_unordered_multimap<key_type,
-                                                      value_type,
-                                                      size_type,
-                                                      std::numeric_limits<key_type>::max(),
-                                                      std::numeric_limits<value_type>::max()>;
+  using multimap_type =
+    concurrent_unordered_multimap<key_type,
+                                  value_type,
+                                  size_type,
+                                  std::numeric_limits<key_type>::max(),
+                                  std::numeric_limits<value_type>::max(),
+                                  default_hash<key_type>,
+                                  equal_to<key_type>,
+                                  default_allocator<thrust::pair<key_type, value_type>>>;
 
   std::unique_ptr<multimap_type, std::function<void(multimap_type*)>> the_map;
 
@@ -61,7 +63,7 @@ class MultimapTest : public cudf::test::BaseFixture {
   MultimapTest(const size_type hash_table_size = 100)
     : the_map(multimap_type::create(hash_table_size)), size(hash_table_size)
   {
-    CUDA_TRY(cudaStreamSynchronize(0));
+    rmm::cuda_stream_default.synchronize();
   }
 
   ~MultimapTest() {}
@@ -89,13 +91,4 @@ TYPED_TEST(MultimapTest, InitialState)
   auto begin = this->the_map->begin();
   auto end   = this->the_map->end();
   EXPECT_NE(begin, end);
-}
-
-TYPED_TEST(MultimapTest, CheckUnusedValues)
-{
-  EXPECT_EQ(this->the_map->get_unused_key(), this->unused_key);
-
-  auto begin = this->the_map->begin();
-  EXPECT_EQ(begin->first, this->unused_key);
-  EXPECT_EQ(begin->second, this->unused_value);
 }
