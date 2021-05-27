@@ -1904,10 +1904,55 @@ def test_groupby_shift_row_zero_shift(nelem, fill_value):
     )
 
 
-@pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
-@pytest.mark.parametrize("value", [42])
-def test_groupby_fillna_value(nelem, value):
-    pass
+@pytest.mark.parametrize("nelem", [10, 100, 1000])
+def test_groupby_fillna_multi_value(nelem):
+    t = rand_dataframe(
+    dtypes_meta=[
+        {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+        {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+        {"dtype": "float32", "null_frequency": 0.4, "cardinality": 10},
+        {
+            "dtype": "datetime64[ns]",
+            "null_frequency": 0.4,
+            "cardinality": 10,
+        },
+        {
+            "dtype": "timedelta64[ns]",
+            "null_frequency": 0.4,
+            "cardinality": 10,
+        },
+        {
+            "dtype": "category",
+            "null_frequency": 0.4,
+            "cardinality": 10,
+        },
+        {
+            "dtype": "decimal64",
+            "null_frequency": 0.4,
+            "cardinality": 10,
+        },
+        {
+            "dtype": "str",
+            "null_frequency": 0.4,
+            "cardinality": 10
+        }
+    ],
+    rows=nelem,
+    use_threads=False,
+    seed=0
+    )
+    key_col = '0'
+    value_cols = ['1', '2', '3', '4', '5', '6', '7']
+    pdf = t.to_pandas()
+    gdf = cudf.from_pandas(pdf)
+
+    fill_values = {name: pdf[name].loc[pdf[name].first_valid_index()] for name in value_cols}
+
+    expect = pdf.groupby('0').fillna(value=fill_values)
+    got = gdf.groupby('0').fillna(value=fill_values)
+
+    expect.index = pdf[key_col]
+    assert_groupby_results_equal(expect[value_cols], got[value_cols])
 
 
 @pytest.mark.parametrize("nelem", [10, 100, 1000])

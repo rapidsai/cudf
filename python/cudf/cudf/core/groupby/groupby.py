@@ -795,27 +795,22 @@ class GroupBy(Serializable):
         if value is not None and method is not None:
             raise ValueError("Cannot specify both 'value' and 'method'.")
 
-        if method:
+        if method is not None:
             if method not in {"pad", "ffill", "backfill", "bfill"}:
                 raise ValueError(
                     "Method can only be of 'pad', 'ffill',"
                     "'backfill', 'bfill'."
                 )
             return getattr(self, method, limit)()
-        else:
-            if is_scalar(value):
-                # Verify scalar type match all groupby value columns type
-                # fill with column.fillna
-                pass
-            else:
-                if isinstance(value, (cudf.Series, pd.Series)):
-                    # Verify series type the same as groupby value column
-                    pass
-                elif isinstance(value, (dict, cudf.DataFrame, pd.DataFrame)):
-                    # Verify column number and name matches
-                    # Verify value.column data type match with each groupby
-                    #   value column
-                    pass
+
+        value_columns = self.grouping.values(include_keys=True)
+        grouped_keys, grouped_values, _ = self._groupby.groups(Table(value_columns._data))
+
+        grouped = self.obj.__class__._from_data(grouped_values._data, index=grouped_keys)
+        result = grouped.fillna(value=value, inplace=inplace, axis=axis, limit=limit)
+        return result._copy_type_metadata(value_columns, include_index=True)
+        
+        
 
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """
