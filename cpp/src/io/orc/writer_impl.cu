@@ -1166,27 +1166,25 @@ std::
 }
 
 // returns host vector of per-rowgroup sizes
-encoder_decimal_info decimal_chunk_sizes(table_view const &table,
-                                         table_device_view const &d_table,
-                                         host_span<orc_column_view> orc_columns,
+encoder_decimal_info decimal_chunk_sizes(host_span<orc_column_view> orc_columns,
+                                         device_span<orc_column_device_view const> d_orc_columns,
                                          size_type rowgroup_size,
                                          host_span<stripe_rowgroups const> stripes,
                                          rmm::cuda_stream_view stream)
 {
   std::map<uint32_t, rmm::device_uvector<uint32_t>> elem_sizes;
   // Compute per-element offsets (within each row group) on the device
-  for (size_t col_idx = 0; col_idx < orc_columns.size(); ++col_idx) {
-    auto &orc_col = orc_columns[col_idx];
+  for (auto &orc_col : orc_columns) {
     if (orc_col.orc_kind() == DECIMAL) {
-      auto const &col = table.column(col_idx);
       auto &current_sizes =
-        elem_sizes.insert({col_idx, rmm::device_uvector<uint32_t>(col.size(), stream)})
+        elem_sizes
+          .insert({orc_col.flat_index(), rmm::device_uvector<uint32_t>(orc_col.size(), stream)})
           .first->second;
       thrust::tabulate(rmm::exec_policy(stream),
                        current_sizes.begin(),
                        current_sizes.end(),
-                       [table = d_table, col_idx] __device__(auto idx) {
-                         auto const &col = table.column(col_idx);
+                       [d_orc_columns, col_idx = orc_col.flat_index()] __device__(auto idx) {
+                         auto const &col = *d_orc_columns[col_idx].cudf_column;
                          if (col.is_null(idx)) return 0u;
                          int64_t const element = (col.type().id() == type_id::DECIMAL32)
                                                    ? col.element<int32_t>(idx)
@@ -1205,7 +1203,7 @@ encoder_decimal_info decimal_chunk_sizes(table_view const &table,
       // Compute element offsets within each row group
       thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                     rowgroup_iterator{0, rowgroup_size},
-                                    rowgroup_iterator{col.size(), rowgroup_size},
+                                    rowgroup_iterator{orc_col.size(), rowgroup_size},
                                     current_sizes.begin(),
                                     current_sizes.begin());
 
@@ -1298,7 +1296,7 @@ void writer::impl::write(table_view const &table)
   }
 
   auto dec_chunk_sizes =
-    decimal_chunk_sizes(table, *d_table, orc_columns, row_index_stride_, stripe_bounds, stream);
+    decimal_chunk_sizes(orc_columns, d_orc_columns, row_index_stride_, stripe_bounds, stream);
 
   auto streams =
     create_streams(orc_columns, stripe_bounds, decimal_column_sizes(dec_chunk_sizes.rg_sizes));
