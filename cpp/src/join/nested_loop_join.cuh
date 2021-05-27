@@ -78,22 +78,15 @@ size_type get_conditional_join_output_size(table_device_view left,
   CHECK_CUDA(stream.value());
 
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
-  int numBlocks{-1};
-
-  CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-    &numBlocks, compute_conditional_join_output_size<block_size>, block_size, 0));
-
-  int dev_id{-1};
-  CUDA_TRY(cudaGetDevice(&dev_id));
-
-  int num_sms{-1};
-  CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev_id));
+  detail::grid_1d config(left.num_rows(), block_size);
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
   compute_conditional_join_output_size<block_size>
-    <<<numBlocks * num_sms, block_size, 0, stream.value()>>>(
-      left, right, JoinKind, plan.dev_plan, size.data());
+    <<<config.num_blocks,
+       config.num_threads_per_block,
+       plan.dev_plan.shmem_per_thread,
+       stream.value()>>>(left, right, JoinKind, plan.dev_plan, size.data());
   CHECK_CUDA(stream.value());
 
   return size.value(stream);
