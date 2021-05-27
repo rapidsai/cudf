@@ -190,9 +190,11 @@ __global__ void __launch_bounds__(block_size)
       s->frag.num_values = s->frag.num_rows;
     }
   }
-  dtype = s->col.physical_type;
-  dtype_len =
-    (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
+  dtype     = s->col.physical_type;
+  dtype_len = (dtype == INT96)                      ? 12
+              : (dtype == INT64 || dtype == DOUBLE) ? 8
+              : (dtype == BOOLEAN)                  ? 1
+                                                    : 4;
   if (dtype == INT32) {
     dtype_len_in = GetDtypeLogicalLen(s->col.leaf_column);
   } else if (dtype == INT96) {
@@ -224,11 +226,10 @@ __global__ void __launch_bounds__(block_size)
         } else if (dtype_len_in == 8) {
           hash = uint64_init_hash(s->col.leaf_column->element<uint64_t>(val_idx));
         } else {
-          hash = uint32_init_hash((dtype_len_in == 4)
-                                    ? s->col.leaf_column->element<uint32_t>(val_idx)
-                                    : (dtype_len_in == 2)
-                                        ? s->col.leaf_column->element<uint16_t>(val_idx)
-                                        : s->col.leaf_column->element<uint8_t>(val_idx));
+          hash =
+            uint32_init_hash((dtype_len_in == 4)   ? s->col.leaf_column->element<uint32_t>(val_idx)
+                             : (dtype_len_in == 2) ? s->col.leaf_column->element<uint16_t>(val_idx)
+                                                   : s->col.leaf_column->element<uint8_t>(val_idx));
         }
       }
     } else {
@@ -502,9 +503,9 @@ __global__ void __launch_bounds__(128)
         fragment_data_size = frag_g.fragment_data_size;
       }
       // TODO (dm): this convoluted logic to limit page size needs refactoring
-      max_page_size = (values_in_page * 2 >= ck_g.num_values)
-                        ? 256 * 1024
-                        : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024 : 512 * 1024;
+      max_page_size = (values_in_page * 2 >= ck_g.num_values)   ? 256 * 1024
+                      : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024
+                                                                : 512 * 1024;
       if (num_rows >= ck_g.num_rows ||
           (values_in_page > 0 &&
            (page_size + fragment_data_size > max_page_size ||
@@ -1056,9 +1057,11 @@ __global__ void __launch_bounds__(128, 8)
   }
   // Encode data values
   __syncthreads();
-  dtype = s->col.physical_type;
-  dtype_len_out =
-    (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
+  dtype         = s->col.physical_type;
+  dtype_len_out = (dtype == INT96)                      ? 12
+                  : (dtype == INT64 || dtype == DOUBLE) ? 8
+                  : (dtype == BOOLEAN)                  ? 1
+                                                        : 4;
   if (dtype == INT32) {
     dtype_len_in = GetDtypeLogicalLen(s->col.leaf_column);
   } else if (dtype == INT96) {

@@ -277,7 +277,7 @@ class json_reader_options_builder {
   /**
    * @brief move json_reader_options member once it's built.
    */
-  operator json_reader_options &&() { return std::move(options); }
+  operator json_reader_options&&() { return std::move(options); }
 
   /**
    * @brief move json_reader_options member once it's built.

@@ -236,9 +236,9 @@ std::unique_ptr<column> rank(column_view const &input,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource *mr)
 {
-  data_type const output_type = (percentage or method == rank_method::AVERAGE)
-                                  ? data_type(type_id::FLOAT64)
-                                  : data_type(type_to_id<size_type>());
+  data_type const output_type         = (percentage or method == rank_method::AVERAGE)
+                                          ? data_type(type_id::FLOAT64)
+                                          : data_type(type_to_id<size_type>());
   std::unique_ptr<column> rank_column = [&null_handling, &output_type, &input, &stream, &mr] {
     // na_option=keep assign NA to NA values
     if (null_handling == null_policy::EXCLUDE)

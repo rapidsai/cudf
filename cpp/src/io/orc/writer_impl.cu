@@ -616,7 +616,7 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
           ck.dict_index = (ck.encoding_kind == DICTIONARY_V2)
                             ? column.host_stripe_dict(stripe.id)->dict_index
                             : nullptr;
-          ck.dtype_len = 1;
+          ck.dtype_len  = 1;
         } else {
           ck.dtype_len = column.type_width();
         }
@@ -1143,9 +1143,9 @@ encoder_decimal_info decimal_chunk_sizes(table_view const &table,
                        [table = *d_table, col_idx] __device__(auto idx) {
                          auto const &col = table.column(col_idx);
                          if (col.is_null(idx)) return 0u;
-                         int64_t const element = (col.type().id() == type_id::DECIMAL32)
-                                                   ? col.element<int32_t>(idx)
-                                                   : col.element<int64_t>(idx);
+                         int64_t const element   = (col.type().id() == type_id::DECIMAL32)
+                                                     ? col.element<int32_t>(idx)
+                                                     : col.element<int64_t>(idx);
                          int64_t const sign      = (element < 0) ? 1 : 0;
                          uint64_t zigzaged_value = ((element ^ -sign) * 2) + sign;
 

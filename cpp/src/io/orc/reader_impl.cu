@@ -529,8 +529,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale.value_or(0);
         chunk.rowgroup_id   = num_rowgroups;
         chunk.dtype_len     = (column_types[j].id() == type_id::STRING)
-                            ? sizeof(std::pair<const char *, size_t>)
-                            : cudf::size_of(column_types[j]);
+                                ? sizeof(std::pair<const char *, size_t>)
+                                : cudf::size_of(column_types[j]);
         if (chunk.type_kind == orc::TIMESTAMP) {
           chunk.ts_clock_rate = to_clockrate(_timestamp_type.id());
         }

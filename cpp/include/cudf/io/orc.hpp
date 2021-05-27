@@ -298,7 +298,7 @@ class orc_reader_options_builder {
   /**
    * @brief move orc_reader_options member once it's built.
    */
-  operator orc_reader_options &&() { return std::move(options); }
+  operator orc_reader_options&&() { return std::move(options); }
 
   /**
    * @brief move orc_reader_options member once it's built.
@@ -517,7 +517,7 @@ class orc_writer_options_builder {
   /**
    * @brief move orc_writer_options member once it's built.
    */
-  operator orc_writer_options &&() { return std::move(options); }
+  operator orc_writer_options&&() { return std::move(options); }
 
   /**
    * @brief move orc_writer_options member once it's built.
@@ -691,7 +691,7 @@ class chunked_orc_writer_options_builder {
   /**
    * @brief move chunked_orc_writer_options member once it's built.
    */
-  operator chunked_orc_writer_options &&() { return std::move(options); }
+  operator chunked_orc_writer_options&&() { return std::move(options); }
 
   /**
    * @brief move chunked_orc_writer_options member once it's built.

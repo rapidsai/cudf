@@ -227,23 +227,19 @@ __global__ void __launch_bounds__(block_size, 1)
             val  = s->col.leaf_column->element<uint64_t>(row);
             hash = uint64_hash16(val);
           } else {
-            val = (dtype_len_in == 4)
-                    ? s->col.leaf_column->element<uint32_t>(row)
-                    : (dtype_len_in == 2) ? s->col.leaf_column->element<uint16_t>(row)
-                                          : s->col.leaf_column->element<uint8_t>(row);
+            val  = (dtype_len_in == 4)   ? s->col.leaf_column->element<uint32_t>(row)
+                   : (dtype_len_in == 2) ? s->col.leaf_column->element<uint16_t>(row)
+                                         : s->col.leaf_column->element<uint8_t>(row);
             hash = uint32_hash16(val);
           }
           // Walk the list of rows with the same hash
           next_addr = &s->hashmap[hash];
           while ((next = atomicCAS(next_addr, 0, row + 1)) != 0) {
             auto const current = next - 1;
-            uint64_t val2      = (dtype_len_in == 8)
-                              ? s->col.leaf_column->element<uint64_t>(current)
-                              : (dtype_len_in == 4)
-                                  ? s->col.leaf_column->element<uint32_t>(current)
-                                  : (dtype_len_in == 2)
-                                      ? s->col.leaf_column->element<uint16_t>(current)
-                                      : s->col.leaf_column->element<uint8_t>(current);
+            uint64_t val2 = (dtype_len_in == 8)   ? s->col.leaf_column->element<uint64_t>(current)
+                            : (dtype_len_in == 4) ? s->col.leaf_column->element<uint32_t>(current)
+                            : (dtype_len_in == 2) ? s->col.leaf_column->element<uint16_t>(current)
+                                                  : s->col.leaf_column->element<uint8_t>(current);
             if (val2 == val) {
               is_dupe = 1;
               break;
