@@ -42,6 +42,8 @@ class CudfEngine(ArrowEngine):
 
     @classmethod
     def multi_support(cls):
+        # Assert that this class is CudfEngine
+        # and that multi-part reading is supported
         return cls == CudfEngine
 
     @staticmethod
@@ -72,7 +74,9 @@ class CudfEngine(ArrowEngine):
                     (path, row_group, partition_keys) = piece
                     paths.append(path)
                     rgs.append(
-                        [row_group] if not isinstance(row_group, list) else row_group
+                        [row_group]
+                        if not isinstance(row_group, list)
+                        else row_group
                     )
 
             df = cudf.read_parquet(
