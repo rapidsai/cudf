@@ -264,8 +264,7 @@ std::unique_ptr<column> round_with(column_view const& input,
 
 struct round_type_dispatcher {
   template <typename T, typename... Args>
-  std::enable_if_t<not is_supported_round_type<T>(), std::unique_ptr<column>> operator()(
-    Args&&...)
+  std::enable_if_t<not is_supported_round_type<T>(), std::unique_ptr<column>> operator()(Args&&...)
   {
     CUDF_FAIL("Type not support for cudf::round");
   }
