@@ -238,45 +238,6 @@ TYPED_TEST(TypedStructSearchTest, SimpleInputWithValuesHavingNullsTests)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), print_all);
 }
 
-TYPED_TEST(TypedStructSearchTest, OneColumnHasNullMaskButNoNullElementTest)
-{
-  using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-
-  auto child_col1         = col_wrapper{1, 20, 30};
-  auto const structs_col1 = structs_col{{child_col1}}.release();
-
-  auto child_col2         = col_wrapper{0, 10, 10};
-  auto const structs_col2 = structs_col{child_col2}.release();
-
-  // structs_col3 will have a null mask but no null element
-  auto child_col3         = col_wrapper{{0, 10, 10}, cudf::test::iterator_no_null()};
-  auto const structs_col3 = structs_col{{child_col3}, cudf::test::iterator_no_null()}.release();
-
-  // Search structs_col2 and structs_col3 w.r.t. structs_col1
-  {
-    auto const results1              = search_bounds(structs_col1, structs_col2);
-    auto const results2              = search_bounds(structs_col1, structs_col3);
-    auto const expected_lower_bound  = int32s_col{0, 1, 1};
-    auto const expected_upper_bound  = int32s_col{0, 1, 1};
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results1.first->view(), print_all);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results2.first->view(), print_all);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results1.second->view(), print_all);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results2.second->view(), print_all);
-  }
-
-  // Search structs_col1 w.r.t. structs_col2 and structs_col3
-  {
-    auto const results1              = search_bounds(structs_col2, structs_col1);
-    auto const results2              = search_bounds(structs_col3, structs_col1);
-    auto const expected_lower_bound  = int32s_col{1, 3, 3};
-    auto const expected_upper_bound  = int32s_col{1, 3, 3};
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results1.first->view(), print_all);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results2.first->view(), print_all);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results1.second->view(), print_all);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results2.second->view(), print_all);
-  }
-}
-
 TYPED_TEST(TypedStructSearchTest, SimpleInputWithTargetHavingNullsTests)
 {
   using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
@@ -324,6 +285,45 @@ TYPED_TEST(TypedStructSearchTest, SimpleInputWithTargetHavingNullsTests)
   expected_upper_bound = int32s_col{8, 11, 0, 11, 7, 0};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), print_all);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), print_all);
+}
+
+TYPED_TEST(TypedStructSearchTest, OneColumnHasNullMaskButNoNullElementTest)
+{
+  using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
+
+  auto child_col1         = col_wrapper{1, 20, 30};
+  auto const structs_col1 = structs_col{{child_col1}}.release();
+
+  auto child_col2         = col_wrapper{0, 10, 10};
+  auto const structs_col2 = structs_col{child_col2}.release();
+
+  // structs_col3 will have a null mask but no null element
+  auto child_col3         = col_wrapper{{0, 10, 10}, cudf::test::iterator_no_null()};
+  auto const structs_col3 = structs_col{{child_col3}, cudf::test::iterator_no_null()}.release();
+
+  // Search structs_col2 and structs_col3 w.r.t. structs_col1
+  {
+    auto const results1             = search_bounds(structs_col1, structs_col2);
+    auto const results2             = search_bounds(structs_col1, structs_col3);
+    auto const expected_lower_bound = int32s_col{0, 1, 1};
+    auto const expected_upper_bound = int32s_col{0, 1, 1};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results1.first->view(), print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results2.first->view(), print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results1.second->view(), print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results2.second->view(), print_all);
+  }
+
+  // Search structs_col1 w.r.t. structs_col2 and structs_col3
+  {
+    auto const results1             = search_bounds(structs_col2, structs_col1);
+    auto const results2             = search_bounds(structs_col3, structs_col1);
+    auto const expected_lower_bound = int32s_col{1, 3, 3};
+    auto const expected_upper_bound = int32s_col{1, 3, 3};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results1.first->view(), print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results2.first->view(), print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results1.second->view(), print_all);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results2.second->view(), print_all);
+  }
 }
 
 TYPED_TEST(TypedStructSearchTest, ComplexStructTest)
