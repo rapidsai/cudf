@@ -419,6 +419,35 @@ TEST_F(PackUnpackTest, NestedEmpty)
     this->run_test(src_table);
   }
 }
+
+TEST_F(PackUnpackTest, NestedSliced)
+{ 
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+
+  using LCW = cudf::test::lists_column_wrapper<int>;
+
+  cudf::test::lists_column_wrapper<int> col0{ {{{1, 2, 3}, valids}, {4, 5}},
+                                              {{LCW{}, LCW{}, {7, 8}, LCW{}}, valids},                                              
+                                              {{6, 12}},
+                                              {{{7, 8}, {{9, 10, 11}, valids}, LCW{}}, valids},
+                                              {{LCW{}, {-1, -2, -3, -4, -5}}, valids},
+                                              {LCW{}},
+                                              {{-10}, {-100, -200}} };
+
+  cudf::test::strings_column_wrapper col1{"Vimes", "Carrot", "Angua", "Cheery", "Detritus", "Slant", "Fred"};
+  cudf::test::fixed_width_column_wrapper<float> col2{ 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f };
+
+  std::vector<std::unique_ptr<cudf::column>> children;
+  children.push_back(std::make_unique<cudf::column>(col2));
+  children.push_back(std::make_unique<cudf::column>(col0));
+  children.push_back(std::make_unique<cudf::column>(col1));
+  auto col3 = cudf::make_structs_column(static_cast<cudf::column_view>(col0).size(), std::move(children), 0, rmm::device_buffer{});
+  
+  cudf::table_view t({col0, col1, col2, *col3});
+  this->run_test(t);
+}
+
 // clang-format on
 
 }  // namespace test
