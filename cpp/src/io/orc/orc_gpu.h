@@ -113,7 +113,7 @@ struct RowGroup {
   uint32_t chunk_id;        // Column chunk this entry belongs to
   uint32_t strm_offset[2];  // Index offset for CI_DATA and CI_DATA2 streams
   uint16_t run_pos[2];      // Run position for CI_DATA and CI_DATA2
-  bool valid_row_group = false;
+  bool valid_row_group;
 };
 
 /**
@@ -268,7 +268,7 @@ void DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
  * @param[in] rowidx_stride Row index stride
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void DecodeOrcColumnData(ColumnDesc const *chunks,
+void DecodeOrcColumnData(ColumnDesc *chunks,
                          DictionaryEntry *global_dictionary,
                          uint32_t num_columns,
                          uint32_t num_stripes,

@@ -113,7 +113,7 @@ struct orcdec_state_s {
   orc_bytestream_s bs;
   orc_bytestream_s bs2;
   int is_string;
-  // uint64_t num_child_rows;
+  uint64_t num_child_rows;
   union {
     orc_strdict_state_s dict;
     uint32_t nulls_desc_row;  // number of rows processed for nulls.
@@ -1383,22 +1383,23 @@ __global__ void __launch_bounds__(block_size)
 
   orcdec_state_s *const s = &state_g;
   uint32_t chunk_id;
-  int t                = threadIdx.x;
-  bool is_rowgrp_valid = true;
+  int t         = threadIdx.x;
+  bool is_valid = true;
 
   if (num_rowgroups > 0) {
     if (t == 0) s->top.data.index = row_groups[blockIdx.y * num_columns + blockIdx.x];
     __syncthreads();
-    is_rowgrp_valid = s->top.data.index.valid_row_group;
-    chunk_id        = s->top.data.index.chunk_id;
+    is_valid = s->top.data.index.valid_row_group;
+    chunk_id = s->top.data.index.chunk_id;
   } else {
     chunk_id = blockIdx.x;
   }
-  if (t == 0 and is_rowgrp_valid) s->chunk = chunks[chunk_id];
+  if (t == 0 and is_valid) s->chunk = chunks[chunk_id];
 
   __syncthreads();
+  is_valid     = is_valid && (s->chunk.type_kind != STRUCT);
   max_num_rows = s->chunk.column_num_rows;
-  if (t == 0 and is_rowgrp_valid) {
+  if (t == 0 and is_valid) {
     // If we have an index, seek to the initial run and update row positions
     if (num_rowgroups > 0) {
       uint32_t ofs0 = min(s->top.data.index.strm_offset[0], s->chunk.strm_len[CI_DATA]);
@@ -1433,7 +1434,7 @@ __global__ void __launch_bounds__(block_size)
     bytestream_init(&s->bs2, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
   }
   __syncthreads();
-  while (is_rowgrp_valid && (s->top.data.cur_row < s->top.data.end_row)) {
+  while (is_valid && (s->top.data.cur_row < s->top.data.end_row)) {
     uint64_t list_child_elements = 0;
     bytestream_fill(&s->bs, t);
     bytestream_fill(&s->bs2, t);
@@ -1755,14 +1756,14 @@ __global__ void __launch_bounds__(block_size)
     __syncthreads();
     if (t == 0) {
       s->top.data.cur_row += s->top.data.nrows;
-      // if (s->chunk.type_kind == LIST) { s->num_child_rows += list_child_elements; }
+      if (s->chunk.type_kind == LIST) { s->num_child_rows += list_child_elements; }
       if (s->is_string && !is_dictionary(s->chunk.encoding_kind) && s->top.data.max_vals > 0) {
         s->chunk.dictionary_start += s->vals.u32[s->top.data.max_vals - 1];
       }
     }
     __syncthreads();
   }
-  // if (t == 0) { atomicAdd(&chunks[chunk_id].num_child_rows, s->num_child_rows); }
+  if (t == 0) { atomicAdd(&chunks[chunk_id].num_child_rows, s->num_child_rows); }
 }
 
 /**
