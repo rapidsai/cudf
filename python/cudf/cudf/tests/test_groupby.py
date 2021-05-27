@@ -1709,4 +1709,4 @@ def test_groupby_describe(data, group):
     got = gdf.groupby(group).describe()
     expect = pdf.groupby(group).describe()
 
-    assert_groupby_results_equal(expect, got, check_dtype=False)
+    assert_groupby_results_equal(expect, got)

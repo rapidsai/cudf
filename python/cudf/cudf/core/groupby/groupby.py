@@ -662,16 +662,7 @@ class GroupBy(Serializable):
                 "max",
             ]
         )
-        res.columns = [
-            "count",
-            "mean",
-            "std",
-            "min",
-            "25%",
-            "50%",
-            "75%",
-            "max",
-        ]
+        res.rename(columns={"_quantile_25":"25%", "_quantile_50":"50%", "_quantile_75":"75%"}, level=1)
         return res
 
     def sum(self):
