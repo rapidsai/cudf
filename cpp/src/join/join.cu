@@ -225,12 +225,13 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 conditional_join(table_view left,
                  table_view right,
                  ast::expression binary_pred,
+                 join_kind JoinKind,
                  rmm::cuda_stream_view stream,
                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return get_conditional_join_indices(
-    left, right, false, join_kind::INNER_JOIN, binary_pred, null_equality::EQUAL, stream, mr);
+    left, right, false, JoinKind, binary_pred, null_equality::EQUAL, stream, mr);
 }
 
 }  // namespace detail
@@ -372,12 +373,24 @@ std::unique_ptr<table> full_join(table_view const& left,
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-conditional_join(table_view left,
-                 table_view right,
-                 ast::expression binary_pred,
-                 rmm::mr::device_memory_resource* mr)
+conditional_inner_join(table_view left,
+                       table_view right,
+                       ast::expression binary_pred,
+                       rmm::mr::device_memory_resource* mr)
 {
-  return detail::conditional_join(left, right, binary_pred, rmm::cuda_stream_default, mr);
+  return detail::conditional_join(
+    left, right, binary_pred, detail::join_kind::INNER_JOIN, rmm::cuda_stream_default, mr);
+}
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+conditional_left_join(table_view left,
+                      table_view right,
+                      ast::expression binary_pred,
+                      rmm::mr::device_memory_resource* mr)
+{
+  return detail::conditional_join(
+    left, right, binary_pred, detail::join_kind::LEFT_JOIN, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf
