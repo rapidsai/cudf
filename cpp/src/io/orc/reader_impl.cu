@@ -145,7 +145,8 @@ struct orc_stream_info {
 /**
  * @brief Function that populates column descriptors stream/chunk
  */
-size_t gather_stream_info(const size_t stripe_index,
+size_t gather_stream_info(const size_t stripe_chunk_index,
+                          const size_t stripe_index,
                           const orc::StripeInformation *stripeinfo,
                           const orc::StripeFooter *stripefooter,
                           const std::vector<int> &orc2gdf,
@@ -179,7 +180,7 @@ size_t gather_stream_info(const size_t stripe_index,
             auto child_idx = (idx < orc2gdf.size()) ? orc2gdf[idx] : -1;
             if (child_idx >= 0) {
               col                             = child_idx;
-              auto &chunk                     = chunks[stripe_index * num_columns + col];
+              auto &chunk                     = chunks[stripe_chunk_index * num_columns + col];
               chunk.strm_id[gpu::CI_PRESENT]  = stream_info.size();
               chunk.strm_len[gpu::CI_PRESENT] = stream.length;
             }
@@ -190,7 +191,7 @@ size_t gather_stream_info(const size_t stripe_index,
     if (col != -1) {
       if (src_offset >= stripeinfo->indexLength || use_index) {
         // NOTE: skip_count field is temporarily used to track index ordering
-        auto &chunk = chunks[stripe_index * num_columns + col];
+        auto &chunk = chunks[stripe_chunk_index * num_columns + col];
         const auto idx =
           get_index_type_and_pos(stream.kind, chunk.skip_count, col == orc2gdf[column_id]);
         if (idx.first < gpu::CI_NUM_STREAMS) {
@@ -713,8 +714,15 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                    std::back_inserter(out_columns),
                    [](auto const &dtype) { return make_empty_column(dtype); });
   } else {
+
+    // Get the total number of stripes across all input files.
+    int total_num_stripes = 0;
+    for (const auto &stripe_source_mapping : selected_stripes) {
+      total_num_stripes += stripe_source_mapping.stripe_idx_in_source.size();
+    }
+
     const auto num_columns = _selected_columns.size();
-    const auto num_chunks  = selected_stripes.size() * num_columns;
+    const auto num_chunks  = total_num_stripes * num_columns;
     hostdevice_vector<gpu::ColumnDesc> chunks(num_chunks, stream);
     memset(chunks.host_ptr(), 0, chunks.memory_size());
 
@@ -723,7 +731,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       // Only use if we don't have much work with complete columns & stripes
       // TODO: Consider nrows, gpu, and tune the threshold
       (num_rows > _metadata->get_row_index_stride() && !(_metadata->get_row_index_stride() & 7) &&
-       _metadata->get_row_index_stride() > 0 && num_columns * selected_stripes.size() < 8 * 128) &&
+       _metadata->get_row_index_stride() > 0 && num_columns * total_num_stripes < 8 * 128) &&
       // Only use if first row is aligned to a stripe boundary
       // TODO: Fix logic to handle unaligned rows
       (skip_rows == 0);
@@ -737,16 +745,18 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     size_t stripe_start_row = 0;
     size_t num_dict_entries = 0;
     size_t num_rowgroups    = 0;
-    int stripe_idx          = 0;
 
     for (auto &stripe_source_mapping : selected_stripes) {
       // Iterate through the source files selected stripes
-      for (auto &stripe : stripe_source_mapping.stripe_info) {
-        const auto stripe_info   = stripe.first;
-        const auto stripe_footer = stripe.second;
+      for (size_t stripe_pos_index = 0; stripe_pos_index < stripe_source_mapping.stripe_info.size(); stripe_pos_index++) {
+        auto &stripe_pair        = stripe_source_mapping.stripe_info[stripe_pos_index];
+        int stripe_idx           = stripe_source_mapping.stripe_idx_in_source[stripe_pos_index];
+        const auto stripe_info   = stripe_pair.first;
+        const auto stripe_footer = stripe_pair.second;
 
         auto stream_count          = stream_info.size();
-        const auto total_data_size = gather_stream_info(stripe_idx,
+        const auto total_data_size = gather_stream_info(stripe_pos_index,
+                                                        stripe_idx,
                                                         stripe_info,
                                                         stripe_footer,
                                                         orc_col_map,
@@ -793,7 +803,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
         // Update chunks to reference streams pointers
         for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
-          auto &chunk         = chunks[stripe_idx * num_columns + col_idx];
+          auto &chunk         = chunks[stripe_pos_index * num_columns + col_idx];
           chunk.start_row     = stripe_start_row;
           chunk.num_rows      = stripe_info->numberOfRows;
           chunk.encoding_kind = stripe_footer->columns[_selected_columns[col_idx]].kind;
@@ -815,19 +825,11 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             num_rowgroups += (stripe_info->numberOfRows + _metadata->get_row_index_stride() - 1) /
                              _metadata->get_row_index_stride();
           }
-
-          stripe_idx++;
         }
       }
 
       // Process dataset chunk pages into output columns
       if (stripe_data.size() != 0) {
-
-        // Calculate the total number of stripes across all input files
-        int total_num_stripes = 0;
-        for (auto &stripe_source_mapping : selected_stripes) {
-          total_num_stripes += stripe_source_mapping.stripe_info.size();
-        }
 
         // Setup row group descriptors if using indexes
         rmm::device_uvector<gpu::RowGroup> row_groups(num_rowgroups * num_columns, stream);
@@ -841,6 +843,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                    row_groups,
                                    _metadata->get_row_index_stride(),
                                    stream);
+          // XXX: Could clearing this be causing issues since I'm looping over files now?
           stripe_data.clear();
           stripe_data.push_back(std::move(decomp_data));
         } else {
@@ -850,7 +853,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                     nullptr,
                                     chunks.device_ptr(),
                                     num_columns,
-                                    selected_stripes.size(),
+                                    total_num_stripes,
                                     num_rowgroups,
                                     _metadata->get_row_index_stride(),
                                     stream);
@@ -867,8 +870,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         std::vector<column_buffer> out_buffers;
         for (size_t i = 0; i < column_types.size(); ++i) {
           bool is_nullable = false;
-          // XXX: This very likely needs to be the total number of stripes????
-          for (size_t j = 0; j < selected_stripes.size(); ++j) {
+          for (size_t j = 0; static_cast<int>(j) < total_num_stripes; ++j) {
             if (chunks[j * num_columns + i].strm_len[gpu::CI_PRESENT] != 0) {
               is_nullable = true;
               break;
