@@ -336,11 +336,16 @@ struct agg_specific_empty_output {
 std::unique_ptr<column> empty_output_for_rolling_aggregation(column_view const& input,
                                                              rolling_aggregation const& agg)
 {
-  // TODO: Ideally, for UDF aggregations, the returned column would match
-  //       the agg's return type. It currently returns empty_like(input), because:
-  //         1. This is the behaviour currently expected in Pandas.
-  //         2. The UDF's return type is expressed as `datatype`,
-  //            which does not adequately represent nested types.
+  // TODO:
+  //  Ideally, for UDF aggregations, the returned column would match
+  //  the agg's return type. It currently returns empty_like(input), because:
+  //    1. This preserves prior behaviour for empty input columns.
+  //    2. There is insufficient information to construct nested return colums.
+  //       `cudf::make_udf_aggregation()` expresses the return type as a `data_type`
+  //        which cannot express recursively nested types (e.g. `STRUCT<LIST<INT32>>`.)
+  //    3. In any case, UDFs that return nested types are not currently supported.
+  //  Constructing a more accurate return type for UDFs will be taken up
+  //  at a later date.
   return agg.kind == aggregation::CUDA || agg.kind == aggregation::PTX
            ? empty_like(input)
            : cudf::detail::dispatch_type_and_aggregation(
