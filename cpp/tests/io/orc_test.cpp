@@ -818,7 +818,7 @@ TEST_F(OrcChunkedWriterTest, MismatchedStructure)
   EXPECT_THROW(writer.write(*table2), cudf::logic_error);
 }
 */
-
+/*
 TEST_F(OrcChunkedWriterTest, ReadStripes)
 {
   srand(31337);
@@ -838,7 +838,7 @@ TEST_F(OrcChunkedWriterTest, ReadStripes)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
-
+*/
 /*
 TEST_F(OrcChunkedWriterTest, ReadStripesError)
 {
@@ -1098,7 +1098,7 @@ TEST_F(OrcReaderTest, SingleInputs)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *table1);
 }
-
+*/
 TEST_F(OrcReaderTest, MultipleInputs)
 {
   srand(31537);
@@ -1123,7 +1123,7 @@ TEST_F(OrcReaderTest, MultipleInputs)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
-
+/*
 struct OrcWriterTestDecimal : public OrcWriterTest,
                               public ::testing::WithParamInterface<std::tuple<int, int>> {
 };

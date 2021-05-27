@@ -407,10 +407,14 @@ class aggregate_orc_metadata {
     if (not selected_stripes_mapping.empty()) {
       for (auto &mapping : selected_stripes_mapping) {
         // Resize to all stripe_info for the source level
-        per_file_metadata[mapping.source_idx].stripefooters.resize(mapping.stripe_info.size());
-        int insertion_idx = 0;
-        for (auto &stripe_idx : mapping.stripe_idx_in_source) {
-          const auto stripe         = mapping.stripe_info[insertion_idx].first;
+
+        // Get the number of unique stripes since the same stripes could be specified more than once by the user
+        size_t uniqueCount = std::unique(mapping.stripe_idx_in_source.begin(), mapping.stripe_idx_in_source.end()) - mapping.stripe_idx_in_source.begin();
+        per_file_metadata[mapping.source_idx].stripefooters.resize(uniqueCount);
+
+        for (size_t i = 0; i < uniqueCount; i++) {
+          int stripe_idx            = mapping.stripe_idx_in_source[i];
+          const auto stripe         = mapping.stripe_info[i].first;
           const auto sf_comp_offset = stripe->offset + stripe->indexLength + stripe->dataLength;
           const auto sf_comp_length = stripe->footerLength;
           CUDF_EXPECTS(
@@ -423,9 +427,8 @@ class aggregate_orc_metadata {
             buffer->data(), sf_comp_length, &sf_length);
           ProtobufReader(sf_data, sf_length)
             .read(per_file_metadata[mapping.source_idx].stripefooters[stripe_idx]);
-          mapping.stripe_info[insertion_idx].second =
+          mapping.stripe_info[i].second =
             &per_file_metadata[mapping.source_idx].stripefooters[stripe_idx];
-          insertion_idx++;
         }
       }
     }
@@ -638,11 +641,22 @@ void reader::impl::decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks
                            stream);
   chunks.device_to_host(stream, true);
 
+  printf("Running here\n");
+  int total_null_count = 0;
   for (size_t i = 0; i < num_stripes; ++i) {
+    int stripe_null_count = 0;
     for (size_t j = 0; j < num_columns; ++j) {
+      printf("chunk null count: %d\n", chunks[i * num_columns + j].null_count);
+      if (chunks[i * num_columns + j].null_count > 0) {
+        stripe_null_count += chunks[i * num_columns + j].null_count;
+        auto cnt = chunks[i * num_columns + j].null_count;
+        printf("Stripe Null Count: %d - Increased by: %d for stripe index: %lu, and column index: %lu\n", stripe_null_count, cnt, i, j);
+      }
       out_buffers[j].null_count() += chunks[i * num_columns + j].null_count;
     }
+    total_null_count += stripe_null_count;
   }
+  printf("Total Null Count: %d\n", total_null_count);
 }
 
 reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
@@ -716,7 +730,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   } else {
 
     // Get the total number of stripes across all input files.
-    int total_num_stripes = 0;
+    size_t total_num_stripes = 0;
     for (const auto &stripe_source_mapping : selected_stripes) {
       total_num_stripes += stripe_source_mapping.stripe_idx_in_source.size();
     }
@@ -745,17 +759,18 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     size_t stripe_start_row = 0;
     size_t num_dict_entries = 0;
     size_t num_rowgroups    = 0;
+    size_t stripe_chunk_index = 0;
 
     for (auto &stripe_source_mapping : selected_stripes) {
       // Iterate through the source files selected stripes
-      for (size_t stripe_pos_index = 0; stripe_pos_index < stripe_source_mapping.stripe_info.size(); stripe_pos_index++) {
-        auto &stripe_pair        = stripe_source_mapping.stripe_info[stripe_pos_index];
+      for (size_t stripe_pos_index = 0; stripe_pos_index < stripe_source_mapping.stripe_idx_in_source.size(); stripe_pos_index++) {
         int stripe_idx           = stripe_source_mapping.stripe_idx_in_source[stripe_pos_index];
+        auto &stripe_pair        = stripe_source_mapping.stripe_info[stripe_pos_index];
         const auto stripe_info   = stripe_pair.first;
         const auto stripe_footer = stripe_pair.second;
 
         auto stream_count          = stream_info.size();
-        const auto total_data_size = gather_stream_info(stripe_pos_index,
+        const auto total_data_size = gather_stream_info(stripe_chunk_index,
                                                         stripe_idx,
                                                         stripe_info,
                                                         stripe_footer,
@@ -826,72 +841,74 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                              _metadata->get_row_index_stride();
           }
         }
+
+        stripe_chunk_index++;
+      }
+    }
+
+    // Process dataset chunk pages into output columns
+    if (stripe_data.size() != 0) {
+
+      // Setup row group descriptors if using indexes
+      rmm::device_uvector<gpu::RowGroup> row_groups(num_rowgroups * num_columns, stream);
+      if (_metadata->per_file_metadata[0].ps.compression != orc::NONE) {
+        auto decomp_data =
+          decompress_stripe_data(chunks,
+                                  stripe_data,
+                                  _metadata->per_file_metadata[0].decompressor.get(),
+                                  stream_info,
+                                  total_num_stripes,
+                                  row_groups,
+                                  _metadata->get_row_index_stride(),
+                                  stream);
+        // XXX: Could clearing this be causing issues since I'm looping over files now?
+        stripe_data.clear();
+        stripe_data.push_back(std::move(decomp_data));
+      } else {
+        if (not row_groups.is_empty()) {
+          chunks.host_to_device(stream);
+          gpu::ParseRowGroupIndex(row_groups.data(),
+                                  nullptr,
+                                  chunks.device_ptr(),
+                                  num_columns,
+                                  total_num_stripes,
+                                  num_rowgroups,
+                                  _metadata->get_row_index_stride(),
+                                  stream);
+        }
       }
 
-      // Process dataset chunk pages into output columns
-      if (stripe_data.size() != 0) {
+      // Setup table for converting timestamp columns from local to UTC time
+      auto const tz_table =
+        _has_timestamp_column
+          ? build_timezone_transition_table(
+              selected_stripes[0].stripe_info[0].second->writerTimezone, stream)
+          : timezone_table{};
 
-        // Setup row group descriptors if using indexes
-        rmm::device_uvector<gpu::RowGroup> row_groups(num_rowgroups * num_columns, stream);
-        if (_metadata->per_file_metadata[0].ps.compression != orc::NONE) {
-          auto decomp_data =
-            decompress_stripe_data(chunks,
-                                   stripe_data,
-                                   _metadata->per_file_metadata[0].decompressor.get(),
-                                   stream_info,
-                                   total_num_stripes,
-                                   row_groups,
-                                   _metadata->get_row_index_stride(),
-                                   stream);
-          // XXX: Could clearing this be causing issues since I'm looping over files now?
-          stripe_data.clear();
-          stripe_data.push_back(std::move(decomp_data));
-        } else {
-          if (not row_groups.is_empty()) {
-            chunks.host_to_device(stream);
-            gpu::ParseRowGroupIndex(row_groups.data(),
-                                    nullptr,
-                                    chunks.device_ptr(),
-                                    num_columns,
-                                    total_num_stripes,
-                                    num_rowgroups,
-                                    _metadata->get_row_index_stride(),
-                                    stream);
+      std::vector<column_buffer> out_buffers;
+      for (size_t i = 0; i < column_types.size(); ++i) {
+        bool is_nullable = false;
+        for (size_t j = 0; j < total_num_stripes; ++j) {
+          if (chunks[j * num_columns + i].strm_len[gpu::CI_PRESENT] != 0) {
+            is_nullable = true;
+            break;
           }
         }
+        out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
+      }
 
-        // Setup table for converting timestamp columns from local to UTC time
-        auto const tz_table =
-          _has_timestamp_column
-            ? build_timezone_transition_table(
-                selected_stripes[0].stripe_info[0].second->writerTimezone, stream)
-            : timezone_table{};
+      decode_stream_data(chunks,
+                          num_dict_entries,
+                          skip_rows,
+                          num_rows,
+                          tz_table.view(),
+                          row_groups,
+                          _metadata->get_row_index_stride(),
+                          out_buffers,
+                          stream);
 
-        std::vector<column_buffer> out_buffers;
-        for (size_t i = 0; i < column_types.size(); ++i) {
-          bool is_nullable = false;
-          for (size_t j = 0; static_cast<int>(j) < total_num_stripes; ++j) {
-            if (chunks[j * num_columns + i].strm_len[gpu::CI_PRESENT] != 0) {
-              is_nullable = true;
-              break;
-            }
-          }
-          out_buffers.emplace_back(column_types[i], num_rows, is_nullable, stream, _mr);
-        }
-
-        decode_stream_data(chunks,
-                           num_dict_entries,
-                           skip_rows,
-                           num_rows,
-                           tz_table.view(),
-                           row_groups,
-                           _metadata->get_row_index_stride(),
-                           out_buffers,
-                           stream);
-
-        for (size_t i = 0; i < column_types.size(); ++i) {
-          out_columns.emplace_back(make_column(out_buffers[i], nullptr, stream, _mr));
-        }
+      for (size_t i = 0; i < column_types.size(); ++i) {
+        out_columns.emplace_back(make_column(out_buffers[i], nullptr, stream, _mr));
       }
     }
   }
