@@ -249,6 +249,21 @@ def is_categorical_dtype_cudf(obj):
 
 
 try:
+    from dask.dataframe.dispatch import union_categoricals_dispatch
+
+    @union_categoricals_dispatch.register((cudf.Series, cudf.Index))
+    def union_categoricals_cudf(
+        to_union, sort_categories=False, ignore_order=False
+    ):
+        return cudf.api.types._union_categoricals(
+            to_union, sort_categories=False, ignore_order=False
+        )
+
+
+except ImportError:
+    pass
+
+try:
 
     from dask.dataframe.core import group_split_dispatch, hash_object_dispatch
 
