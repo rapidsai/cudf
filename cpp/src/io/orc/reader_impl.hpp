@@ -60,9 +60,9 @@ class reader::impl {
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::vector<std::unique_ptr<datasource>> &&sources,
-                orc_reader_options const &options,
-                rmm::mr::device_memory_resource *mr);
+  explicit impl(std::vector<std::unique_ptr<datasource>>&& sources,
+                orc_reader_options const& options,
+                rmm::mr::device_memory_resource* mr);
 
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns
@@ -76,7 +76,7 @@ class reader::impl {
    */
   table_with_metadata read(size_type skip_rows,
                            size_type num_rows,
-                           const std::vector<std::vector<size_type>> &stripes,
+                           const std::vector<std::vector<size_type>>& stripes,
                            rmm::cuda_stream_view stream);
 
  private:
@@ -94,10 +94,10 @@ class reader::impl {
    *
    * @return Device buffer to decompressed page data
    */
-  rmm::device_buffer decompress_stripe_data(hostdevice_vector<gpu::ColumnDesc> &chunks,
-                                            const std::vector<rmm::device_buffer> &stripe_data,
-                                            const OrcDecompressor *decompressor,
-                                            std::vector<orc_stream_info> &stream_info,
+  rmm::device_buffer decompress_stripe_data(hostdevice_vector<gpu::ColumnDesc>& chunks,
+                                            const std::vector<rmm::device_buffer>& stripe_data,
+                                            const OrcDecompressor* decompressor,
+                                            std::vector<orc_stream_info>& stream_info,
                                             size_t num_stripes,
                                             device_span<gpu::RowGroup> row_groups,
                                             size_t row_index_stride,
@@ -116,22 +116,47 @@ class reader::impl {
    * @param out_buffers Output columns' device buffers
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks,
+  void decode_stream_data(hostdevice_vector<gpu::ColumnDesc>& chunks,
                           size_t num_dicts,
                           size_t skip_rows,
                           size_t num_rows,
                           timezone_table_view tz_table,
                           device_span<gpu::RowGroup const> row_groups,
                           size_t row_index_stride,
-                          std::vector<column_buffer> &out_buffers,
+                          std::vector<column_buffer>& out_buffers,
                           rmm::cuda_stream_view stream);
 
+  void aggregate_child_meta(hostdevice_vector<gpu::ColumnDesc>& chunks,
+                            std::vector<int32_t>& num_child_rows,
+                            std::vector<int32_t>& child_start_row,
+                            std::vector<int32_t>& num_child_rows_per_stripe,
+                            std::vector<column_meta> const& list_col,
+                            std::vector<int32_t>& orc_col_map,
+                            size_t number_of_stripes,
+                            int32_t level,
+                            rmm::cuda_stream_view stream);
+
+  column_buffer&& assemble_buffer(int32_t orc_col_id,
+                                  std::vector<std::vector<column_buffer>>& col_buffers,
+                                  column_name_info& schema_info,
+                                  std::vector<std::vector<int32_t>> const& orc_col_map,
+                                  int level,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr);
+
+  void create_columns(std::vector<std::vector<column_buffer>>& col_buffers,
+                      std::vector<std::unique_ptr<column>>& out_columns,
+                      std::vector<column_name_info>& schema_info,
+                      std::vector<std::vector<int32_t>> const& orc_col_map,
+                      rmm::cuda_stream_view stream,
+                      rmm::mr::device_memory_resource* mr);
+
  private:
-  rmm::mr::device_memory_resource *_mr = nullptr;
+  rmm::mr::device_memory_resource* _mr = nullptr;
   std::vector<std::unique_ptr<datasource>> _sources;
   std::unique_ptr<aggregate_orc_metadata> _metadata;
   // _output_columns associated schema indices
-  std::vector<std::vector<int>> _selected_columns;
+  std::vector<std::vector<column_meta>> _selected_columns;
 
   bool _use_index            = true;
   bool _use_np_dtypes        = true;

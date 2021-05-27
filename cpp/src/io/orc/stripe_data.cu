@@ -113,6 +113,7 @@ struct orcdec_state_s {
   orc_bytestream_s bs;
   orc_bytestream_s bs2;
   int is_string;
+  // uint64_t num_child_rows;
   union {
     orc_strdict_state_s dict;
     uint32_t nulls_desc_row;  // number of rows processed for nulls.
@@ -132,7 +133,6 @@ struct orcdec_state_s {
     int64_t i64[block_size];
     double f64[block_size];
   } vals;
-  uint64_t num_child_rows = 0;
 };
 
 /**
@@ -1364,7 +1364,7 @@ static const __device__ __constant__ uint32_t kTimestampNanoScale[8] = {
 // blockDim {block_size,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
-  gpuDecodeOrcColumnData(ColumnDesc const *chunks,
+  gpuDecodeOrcColumnData(ColumnDesc *chunks,
                          DictionaryEntry *global_dictionary,
                          timezone_table_view tz_table,
                          const RowGroup *row_groups,
@@ -1389,7 +1389,7 @@ __global__ void __launch_bounds__(block_size)
   if (num_rowgroups > 0) {
     if (t == 0) s->top.data.index = row_groups[blockIdx.y * num_columns + blockIdx.x];
     __syncthreads();
-    is_rowgrp_valid = s->top.data.index.valid;
+    is_rowgrp_valid = s->top.data.index.valid_row_group;
     chunk_id        = s->top.data.index.chunk_id;
   } else {
     chunk_id = blockIdx.x;
@@ -1434,6 +1434,7 @@ __global__ void __launch_bounds__(block_size)
   }
   __syncthreads();
   while (is_rowgrp_valid && (s->top.data.cur_row < s->top.data.end_row)) {
+    uint64_t list_child_elements = 0;
     bytestream_fill(&s->bs, t);
     bytestream_fill(&s->bs2, t);
     __syncthreads();
@@ -1601,9 +1602,9 @@ __global__ void __launch_bounds__(block_size)
         __syncthreads();
       } else if (s->chunk.type_kind == LIST) {
         if (is_rlev1(s->chunk.encoding_kind)) {
-          numvals = Integer_RLEv1<uint64_t>(&s->bs2, &s->u.rlev1, s->vals.u64, numvals, t);
+          numvals = Integer_RLEv1<uint32_t>(&s->bs2, &s->u.rlev1, s->vals.u32, numvals, t);
         } else {
-          numvals = Integer_RLEv2<uint64_t>(&s->bs2, &s->u.rlev2, s->vals.u64, numvals, t);
+          numvals = Integer_RLEv2<uint32_t>(&s->bs2, &s->u.rlev2, s->vals.u32, numvals, t);
         }
         __syncthreads();
       } else if (s->chunk.type_kind == FLOAT) {
@@ -1645,14 +1646,13 @@ __global__ void __launch_bounds__(block_size)
       __syncthreads();
       // Use the valid bits to compute non-null row positions until we get a full batch of values to
       // decode
-      DecodeRowPositions(s, first_row, t, temp_storage.uint32);
+      DecodeRowPositions(s, first_row, t, temp_storage.bk_uint32);
       if (!s->top.data.nrows && !s->u.rowdec.nz_count && !vals_skipped) {
         // This is a bug (could happen with bitstream errors with a bad run that would produce more
         // values than the number of remaining rows)
         return;
       }
 
-      uint64_t list_child_elements = 0;
       // Store decoded values to output
       if (t < min(min(s->top.data.max_vals, s->u.rowdec.nz_count), s->top.data.nrows) &&
           s->u.rowdec.row[t] != 0 &&
@@ -1662,13 +1662,15 @@ __global__ void __launch_bounds__(block_size)
           void *data_out = s->chunk.column_data_base;
           switch (s->chunk.type_kind) {
             case FLOAT:
-            case INT: static_cast<uint32_t *>(data_out)[row] = s->vals.u32[t + vals_skipped]; break;
+            case INT:
+            case LIST:
+              static_cast<uint32_t *>(data_out)[row] = s->vals.u32[t + vals_skipped];
+              list_child_elements                    = s->vals.u32[t + vals_skipped];
+              break;
             case DOUBLE:
             case LONG:
             case DECIMAL:
-            case LIST:
               static_cast<uint64_t *>(data_out)[row] = s->vals.u64[t + vals_skipped];
-
               break;
             case SHORT:
               static_cast<uint16_t *>(data_out)[row] =
@@ -1753,14 +1755,14 @@ __global__ void __launch_bounds__(block_size)
     __syncthreads();
     if (t == 0) {
       s->top.data.cur_row += s->top.data.nrows;
-      if (s->chunk.type_kind == LIST) { s->num_child_rows += list_child_elements; }
+      // if (s->chunk.type_kind == LIST) { s->num_child_rows += list_child_elements; }
       if (s->is_string && !is_dictionary(s->chunk.encoding_kind) && s->top.data.max_vals > 0) {
         s->chunk.dictionary_start += s->vals.u32[s->top.data.max_vals - 1];
       }
     }
     __syncthreads();
   }
-  if (t == 0) { atmoicAdd(&chunks[chunk_id].num_child_rows, s->child_num_rows); }
+  // if (t == 0) { atomicAdd(&chunks[chunk_id].num_child_rows, s->num_child_rows); }
 }
 
 /**
@@ -1803,7 +1805,7 @@ void __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
  * @param[in] rowidx_stride Row index stride
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void __host__ DecodeOrcColumnData(ColumnDesc const *chunks,
+void __host__ DecodeOrcColumnData(ColumnDesc *chunks,
                                   DictionaryEntry *global_dictionary,
                                   uint32_t num_columns,
                                   uint32_t num_stripes,

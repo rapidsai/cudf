@@ -556,6 +556,12 @@ class OrcDecompressor {
   std::vector<uint8_t> m_buf;
 };
 
+struct column_meta {
+  column_meta(uint32_t _id, uint32_t _num_children) : id(_id), num_children(_num_children){};
+  uint32_t id;
+  uint32_t num_children;
+};
+
 /**
  * @brief A helper class for ORC file metadata. Provides some additional
  * convenience methods for initializing and accessing metadata.
@@ -594,8 +600,8 @@ class metadata {
    *
    * @return List of ORC column indexes
    */
-  std::vector<int> select_columns(std::vector<std::string> const &use_names,
-                                  bool &has_timestamp_column) const;
+  std::vector<std::vector<column_meta>> select_columns(std::vector<std::string> const &use_names,
+                                                       bool &has_timestamp_column) const;
 
   size_t get_total_rows() const { return ff.numberOfRows; }
   int get_num_stripes() const { return ff.stripes.size(); }

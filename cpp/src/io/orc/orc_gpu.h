@@ -91,8 +91,8 @@ struct ColumnDesc {
   void *column_data_base;                  // base pointer of column data
   uint32_t start_row;                      // starting row of the stripe
   uint32_t num_rows;                       // number of rows in stripe
-  uint32_t column_num_rows                 // number of rows in whole column
-    uint32_t num_child_rows;               // number of child rows if nested column
+  uint32_t column_num_rows;                // number of rows in whole column
+  uint32_t num_child_rows;                 // number of child rows if nested column
   uint32_t dictionary_start;               // start position in global dictionary
   uint32_t dict_len;                       // length of local dictionary
   uint32_t null_count;                     // number of null values in this stripe's column
