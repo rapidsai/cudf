@@ -26,13 +26,13 @@ from cudf.core.column import (
 )
 from cudf.core.join import merge
 from cudf.utils.dtypes import (
+    find_common_type,
     is_categorical_dtype,
     is_column_like,
     is_decimal_dtype,
     is_numerical_dtype,
     is_scalar,
     min_scalar_type,
-    find_common_type,
 )
 
 T = TypeVar("T", bound="Frame")
@@ -1470,7 +1470,7 @@ class Frame(libcudf.table.Table):
 
         Parameters
         ----------
-        axis : {0 or 'index', 1 or 'columns'}, default 0
+        axis : {0 or 'index'}, default 0
             Index to direct ranking.
         method : {'average', 'min', 'max', 'first', 'dense'}, default 'average'
             How to rank the group of records that have the same value
@@ -1500,10 +1500,17 @@ class Frame(libcudf.table.Table):
         """
         if method not in {"average", "min", "max", "first", "dense"}:
             raise KeyError(method)
+
         method_enum = libcudf.sort.RankMethod[method.upper()]
         if na_option not in {"keep", "top", "bottom"}:
             raise ValueError(
                 "na_option must be one of 'keep', 'top', or 'bottom'"
+            )
+
+        if axis not in (0, "index"):
+            raise NotImplementedError(
+                f"axis must be `0`/`index`, "
+                f"axis={axis} is not yet supported in rank"
             )
 
         source = self

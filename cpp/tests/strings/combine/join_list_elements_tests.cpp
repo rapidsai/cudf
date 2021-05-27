@@ -22,8 +22,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
-
-#include <thrust/iterator/transform_iterator.h>
+#include <cudf_test/iterator_utilities.hpp>
 
 struct StringsListsConcatenateTest : public cudf::test::BaseFixture {
 };
@@ -35,14 +34,13 @@ using INT_LISTS = cudf::test::lists_column_wrapper<int32_t>;
 
 constexpr bool print_all{false};
 
-auto null_at(cudf::size_type idx)
-{
-  return cudf::detail::make_counting_transform_iterator(0, [idx](auto i) { return i != idx; });
-}
+auto all_nulls() { return cudf::test::iterator_all_nulls(); }
 
-auto all_nulls()
+auto null_at(cudf::size_type idx) { return cudf::test::iterator_with_null_at(idx); }
+
+auto null_at(std::vector<cudf::size_type> const& indices)
 {
-  return cudf::detail::make_counting_transform_iterator(0, [](auto) { return false; });
+  return cudf::test::iterator_with_null_at(cudf::host_span<cudf::size_type const>{indices});
 }
 
 auto nulls_from_nullptr(std::vector<const char*> const& strs)
@@ -99,14 +97,81 @@ TEST_F(StringsListsConcatenateTest, ZeroSizeStringsInput)
   auto const string_lists =
     STR_LISTS{STR_LISTS{""}, STR_LISTS{"", "", ""}, STR_LISTS{"", ""}, STR_LISTS{}}.release();
   auto const string_lv = cudf::lists_column_view(string_lists->view());
-  auto const expected  = STR_COL{"", "", "", ""};
 
-  auto results = cudf::strings::join_list_elements(string_lv);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+  // Empty list results in empty string
+  {
+    auto const expected = STR_COL{"", "", "", ""};
 
-  auto const separators = STR_COL{"", "", "", ""}.release();
-  results               = cudf::strings::join_list_elements(string_lv, separators->view());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+    auto results = cudf::strings::join_list_elements(string_lv);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+
+    auto const separators = STR_COL{"", "", "", ""}.release();
+    results               = cudf::strings::join_list_elements(string_lv, separators->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+  }
+
+  // Empty list results in null
+  {
+    auto const expected = STR_COL{{"", "", "", "" /*NULL*/}, null_at(3)};
+    auto results =
+      cudf::strings::join_list_elements(string_lv,
+                                        cudf::string_scalar(""),
+                                        cudf::string_scalar(""),
+                                        cudf::strings::separator_on_nulls::NO,
+                                        cudf::strings::output_if_empty_list::NULL_ELEMENT);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+
+    auto const separators = STR_COL{"", "", "", ""}.release();
+    results               = cudf::strings::join_list_elements(string_lv,
+                                                separators->view(),
+                                                cudf::string_scalar(""),
+                                                cudf::string_scalar(""),
+                                                cudf::strings::separator_on_nulls::NO,
+                                                cudf::strings::output_if_empty_list::NULL_ELEMENT);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+  }
+}
+
+TEST_F(StringsListsConcatenateTest, ColumnHasEmptyListAndNullListInput)
+{
+  auto const string_lists =
+    STR_LISTS{{STR_LISTS{"abc", "def", ""}, STR_LISTS{} /*NULL*/, STR_LISTS{}, STR_LISTS{"gh"}},
+              null_at(1)}
+      .release();
+  auto const string_lv = cudf::lists_column_view(string_lists->view());
+
+  // Empty list results in empty string
+  {
+    auto const expected = STR_COL{{"abc-def-", "" /*NULL*/, "", "gh"}, null_at(1)};
+
+    auto results = cudf::strings::join_list_elements(string_lv, cudf::string_scalar("-"));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+
+    auto const separators = STR_COL{"-", "", "", ""}.release();
+    results               = cudf::strings::join_list_elements(string_lv, separators->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+  }
+
+  // Empty list results in null
+  {
+    auto const expected = STR_COL{{"abc-def-", "" /*NULL*/, "" /*NULL*/, "gh"}, null_at({1, 2})};
+    auto results =
+      cudf::strings::join_list_elements(string_lv,
+                                        cudf::string_scalar("-"),
+                                        cudf::string_scalar(""),
+                                        cudf::strings::separator_on_nulls::NO,
+                                        cudf::strings::output_if_empty_list::NULL_ELEMENT);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+
+    auto const separators = STR_COL{"-", "", "", ""}.release();
+    results               = cudf::strings::join_list_elements(string_lv,
+                                                separators->view(),
+                                                cudf::string_scalar(""),
+                                                cudf::string_scalar(""),
+                                                cudf::strings::separator_on_nulls::NO,
+                                                cudf::strings::output_if_empty_list::NULL_ELEMENT);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
+  }
 }
 
 TEST_F(StringsListsConcatenateTest, AllNullsStringsInput)
@@ -125,12 +190,6 @@ TEST_F(StringsListsConcatenateTest, AllNullsStringsInput)
   auto const separators = STR_COL{{"", "", ""}, all_nulls()}.release();
   results               = cudf::strings::join_list_elements(string_lv, separators->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
-}
-
-auto null_at(std::initializer_list<cudf::size_type> indices)
-{
-  return cudf::detail::make_counting_transform_iterator(
-    0, [indices](auto i) { return std::find(indices.begin(), indices.end(), i) == indices.end(); });
 }
 
 TEST_F(StringsListsConcatenateTest, ScalarSeparator)
