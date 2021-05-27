@@ -452,6 +452,6 @@ def test_concatenate_large_column_strings():
 
     with pytest.raises(
         OverflowError,
-        match="total size of output strings is too large for a cudf column",
+        match="total size of output is too large for a cudf column",
     ):
         cudf.concat([s_1, s_2])
