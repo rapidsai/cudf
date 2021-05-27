@@ -13,6 +13,10 @@ LANG=C.UTF-8
 # Activate common conda env
 source activate gdf
 
+gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
+gpuci_conda_retry install -y "clang=11.0.0"
+gpuci_conda_retry install -y "clang-tools=11.0.0"
+
 # Run isort and get results/return code
 ISORT=`isort --check-only python/**/*.py`
 ISORT_RETVAL=$?
