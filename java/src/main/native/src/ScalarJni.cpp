@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,6 +121,35 @@ JNIEXPORT jbyteArray JNICALL Java_ai_rapids_cudf_Scalar_getUTF8(JNIEnv *env, jcl
     cudf::jni::native_jbyteArray jbytes{env, reinterpret_cast<jbyte const *>(val.data()),
                                         static_cast<int>(val.size())};
     return jbytes.get_jArray();
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_getListAsColumnView(JNIEnv *env, jclass,
+                                                                       jlong scalar_handle) {
+  JNI_NULL_CHECK(env, scalar_handle, "scalar handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto s = reinterpret_cast<cudf::list_scalar *>(scalar_handle);
+    // Creates a column view in heap with the stack one, to let JVM take care of its
+    // life cycle.
+    return reinterpret_cast<jlong>(new cudf::column_view(s->view()));
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Scalar_getChildrenFromStructScalar(JNIEnv *env, jclass,
+                                                                                    jlong scalar_handle) {
+  JNI_NULL_CHECK(env, scalar_handle, "scalar handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    const auto s                  = reinterpret_cast<cudf::struct_scalar*>(scalar_handle);
+    const cudf::table_view& table = s->view();
+    cudf::jni::native_jpointerArray<cudf::column_view> column_handles(env, table.num_columns());
+    for (int i = 0; i < table.num_columns(); i++) {
+      column_handles[i] = new cudf::column_view(table.column(i));
+    }
+    return column_handles.get_jArray();
   }
   CATCH_STD(env, 0);
 }
@@ -441,6 +470,46 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_binaryOpSV(JNIEnv *env, jclas
     std::unique_ptr<cudf::column> result = cudf::binary_operation(
         *lhs, *rhs, op, n_data_type);
     return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeListScalar(JNIEnv *env, jclass,
+                                                                  jlong view_handle,
+                                                                  jboolean is_valid) {
+  JNI_NULL_CHECK(env, view_handle, "Column view should NOT be null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto col_view = reinterpret_cast<cudf::column_view *>(view_handle);
+
+    // Instead of calling the `cudf::empty_like` to create an empty column when `is_valid`
+    // is false, always passes the input view to the scalar, to avoid copying the column
+    // twice.
+    // Let the Java layer make sure the view is empty when `is_valid` is false.
+    cudf::scalar* s = new cudf::list_scalar(*col_view);
+    s->set_valid(is_valid);
+    return reinterpret_cast<jlong>(s);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeStructScalar(JNIEnv *env, jclass,
+                                                                    jlongArray handles,
+                                                                    jboolean is_valid) {
+  JNI_NULL_CHECK(env, handles, "native view handles are null", 0)
+  try {
+    cudf::jni::auto_set_device(env);
+    std::unique_ptr<cudf::column_view> ret;
+    cudf::jni::native_jpointerArray<cudf::column_view> column_pointers(env, handles);
+    std::vector<cudf::column_view> columns;
+    columns.reserve(column_pointers.size());
+    std::transform(column_pointers.data(),
+                   column_pointers.data() + column_pointers.size(),
+                   std::back_inserter(columns),
+                   [](auto const& col_ptr) { return *col_ptr; });
+    auto s = std::make_unique<cudf::struct_scalar>(
+      cudf::host_span<cudf::column_view const>{columns}, is_valid);
+    return reinterpret_cast<jlong>(s.release());
   }
   CATCH_STD(env, 0);
 }

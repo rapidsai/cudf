@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ TYPED_TEST(DistinctCountCommon, NoNull)
 {
   using T = TypeParam;
 
-  std::vector<T> input = cudf::test::make_type_param_vector<T>(
+  auto const input = cudf::test::make_type_param_vector<T>(
     {1, 3, 3, 4, 31, 1, 8, 2, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4});
 
   cudf::test::fixed_width_column_wrapper<T> input_col(input.begin(), input.end());
@@ -55,9 +55,9 @@ TYPED_TEST(DistinctCountCommon, TableNoNull)
 {
   using T = TypeParam;
 
-  std::vector<T> input1 = cudf::test::make_type_param_vector<T>(
+  auto const input1 = cudf::test::make_type_param_vector<T>(
     {1, 3, 3, 4, 31, 1, 8, 2, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4});
-  std::vector<T> input2 = cudf::test::make_type_param_vector<T>(
+  auto const input2 = cudf::test::make_type_param_vector<T>(
     {3, 3, 4, 31, 1, 8, 5, 0, 4, 1, 4, 10, 40, 31, 42, 0, 42, 8, 5, 4, 1});
 
   std::vector<std::pair<T, T>> pair_input;

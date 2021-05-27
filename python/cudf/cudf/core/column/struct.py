@@ -105,6 +105,25 @@ class StructColumn(ColumnBase):
             children=self.base_children,
         )
 
+    @property
+    def __cuda_array_interface__(self):
+        raise NotImplementedError(
+            "Structs are not yet supported via `__cuda_array_interface__`"
+        )
+
+    def _copy_type_metadata(self: ColumnBase, other: ColumnBase) -> ColumnBase:
+        """Copies type metadata from self onto other, returning a new column.
+
+        In addition to the default behavior, if `other` is a StructColumns we
+        rename the fields of `other` to the field names of `self`.
+        """
+        if isinstance(other, cudf.core.column.StructColumn):
+            other = other._rename_fields(
+                self.dtype.fields.keys()  # type: ignore
+            )
+        # Have to ignore typing here because it misdiagnoses super().
+        return super()._copy_type_metadata(other)  # type: ignore
+
 
 class StructMethods(ColumnMethodsMixin):
     """

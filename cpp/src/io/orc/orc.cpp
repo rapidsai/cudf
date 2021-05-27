@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include <io/orc/orc.h>
-#include <io/orc/orc_field_reader.hpp>
-#include <io/orc/orc_field_writer.hpp>
+#include "orc.h"
 #include <string>
+#include "orc_field_reader.hpp"
+#include "orc_field_writer.hpp"
 
 namespace cudf {
 namespace io {
@@ -118,60 +118,56 @@ void ProtobufReader::read(ColumnEncoding &s, size_t maxlen)
 
 void ProtobufReader::read(integer_statistics &s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s._minimum),
-                            make_field_reader(2, s._maximum),
-                            make_field_reader(3, s._sum));
+  auto op = std::make_tuple(
+    make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(double_statistics &s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s._minimum),
-                            make_field_reader(2, s._maximum),
-                            make_field_reader(3, s._sum));
+  auto op = std::make_tuple(
+    make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(string_statistics &s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s._minimum),
-                            make_field_reader(2, s._maximum),
-                            make_field_reader(3, s._sum));
+  auto op = std::make_tuple(
+    make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(bucket_statistics &s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_packed_field_reader(1, s._count));
+  auto op = std::make_tuple(make_packed_field_reader(1, s.count));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(decimal_statistics &s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s._minimum),
-                            make_field_reader(2, s._maximum),
-                            make_field_reader(3, s._sum));
+  auto op = std::make_tuple(
+    make_field_reader(1, s.minimum), make_field_reader(2, s.maximum), make_field_reader(3, s.sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(date_statistics &s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s._minimum), make_field_reader(2, s._maximum));
+  auto op = std::make_tuple(make_field_reader(1, s.minimum), make_field_reader(2, s.maximum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(binary_statistics &s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s._sum));
+  auto op = std::make_tuple(make_field_reader(1, s.sum));
   function_builder(s, maxlen, op);
 }
 
 void ProtobufReader::read(timestamp_statistics &s, size_t maxlen)
 {
-  auto op = std::make_tuple(make_field_reader(1, s._minimum),
-                            make_field_reader(2, s._maximum),
-                            make_field_reader(3, s._minimum_utc),
-                            make_field_reader(4, s._maximum_utc));
+  auto op = std::make_tuple(make_field_reader(1, s.minimum),
+                            make_field_reader(2, s.maximum),
+                            make_field_reader(3, s.minimum_utc),
+                            make_field_reader(4, s.maximum_utc));
   function_builder(s, maxlen, op);
 }
 
@@ -227,7 +223,7 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk,
   if (data_blk >= 0) { sz += put_uint(data_blk); }
   if (data_ofs >= 0) {
     sz += put_uint(data_ofs);
-    if (kind != STRING && kind != FLOAT && kind != DOUBLE) {
+    if (kind != STRING && kind != FLOAT && kind != DOUBLE && kind != DECIMAL) {
       putb(0);  // RLE run pos always zero (assumes RLE aligned with row index boundaries)
       sz++;
       if (kind == BOOLEAN) {
@@ -293,8 +289,8 @@ size_t ProtobufWriter::write(const SchemaType &s)
   w.field_packed_uint(2, s.subtypes);
   w.field_repeated_string(3, s.fieldNames);
   // w.field_uint(4, s.maximumLength);
-  // w.field_uint(5, s.precision);
-  // w.field_uint(6, s.scale);
+  if (s.precision) w.field_uint(5, *s.precision);
+  if (s.scale) w.field_uint(6, *s.scale);
   return w.value();
 }
 

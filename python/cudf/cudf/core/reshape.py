@@ -7,7 +7,7 @@ import pandas as pd
 
 import cudf
 
-_axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
+_AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
 
 def _align_objs(objs, how="outer"):
@@ -71,6 +71,8 @@ def _align_objs(objs, how="outer"):
 
 
 def _normalize_series_and_dataframe(objs, axis):
+    """Convert any cudf.Series objects in objs to DataFrames in place."""
+    # Default to naming series by a numerical id if they are not named.
     sr_name = 0
     for idx, o in enumerate(objs):
         if isinstance(o, cudf.Series):
@@ -201,44 +203,46 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     1      b       2  monkey  george
     """
 
+    # TODO: Do we really need to have different error messages for an empty
+    # list and a list of None?
     if not objs:
         raise ValueError("No objects to concatenate")
 
     objs = [obj for obj in objs if obj is not None]
+
+    if not objs:
+        raise ValueError("All objects passed were None")
+
     # Return for single object
     if len(objs) == 1:
+        obj = objs[0]
+
         if ignore_index:
             if axis == 1:
                 result = cudf.DataFrame(
-                    data=objs[0]._data.copy(deep=True),
-                    index=objs[0].index.copy(deep=True),
+                    data=obj._data.copy(deep=True),
+                    index=obj.index.copy(deep=True),
                 )
-                # TODO: Move following columns setting into
-                # above constructor after following issue is fixed:
-                # https://github.com/rapidsai/cudf/issues/6821
-                result.columns = pd.RangeIndex(len(objs[0]._data.names))
+                # The DataFrame constructor for dict-like data (such as the
+                # ColumnAccessor given by obj._data here) will drop any columns
+                # in the data that are not in `columns`, so we have to rename
+                # after construction.
+                result.columns = pd.RangeIndex(len(obj._data.names))
             elif axis == 0:
-                result = cudf.DataFrame(
-                    data=objs[0]._data.copy(deep=True),
-                    index=cudf.RangeIndex(len(objs[0])),
-                )
+                if isinstance(obj, (pd.Series, cudf.Series)):
+                    result = cudf.Series(
+                        data=obj._data.copy(deep=True),
+                        index=cudf.RangeIndex(len(obj)),
+                    )
+                else:
+                    result = cudf.DataFrame(
+                        data=obj._data.copy(deep=True),
+                        index=cudf.RangeIndex(len(obj)),
+                    )
         else:
-            result = objs[0].copy()
-        if sort:
-            if axis == 0:
-                return result.sort_index()
-            elif not result.columns.is_monotonic:
-                # TODO: Sorting by columns can be done
-                # once the following issue is fixed:
-                # https://github.com/rapidsai/cudf/issues/6821
-                raise NotImplementedError(
-                    "Sorting by columns is not yet supported"
-                )
-        else:
-            return result
+            result = obj.copy()
 
-    if len(objs) == 0:
-        raise ValueError("All objects passed were None")
+        return result.sort_index(axis=axis) if sort else result
 
     # Retrieve the base types of `objs`. In order to support sub-types
     # and object wrappers, we use `isinstance()` instead of comparing
@@ -247,7 +251,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     for o in objs:
         if isinstance(o, cudf.MultiIndex):
             typs.add(cudf.MultiIndex)
-        if issubclass(type(o), cudf.Index):
+        elif isinstance(o, cudf.Index):
             typs.add(type(o))
         elif isinstance(o, cudf.DataFrame):
             typs.add(cudf.DataFrame)
@@ -258,13 +262,11 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
     allowed_typs = {cudf.Series, cudf.DataFrame}
 
-    param_axis = _axis_map.get(axis, None)
-    if param_axis is None:
+    axis = _AXIS_MAP.get(axis, None)
+    if axis is None:
         raise ValueError(
-            f'`axis` must be 0 / "index" or 1 / "columns", got: {param_axis}'
+            f'`axis` must be 0 / "index" or 1 / "columns", got: {axis}'
         )
-    else:
-        axis = param_axis
 
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
@@ -275,44 +277,50 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         df = cudf.DataFrame()
         _normalize_series_and_dataframe(objs, axis=axis)
 
-        old_objs = objs
+        # Inner joins involving empty data frames always return empty dfs, but
+        # We must delay returning until we have set the column names.
+        empty_inner = any(obj.empty for obj in objs) and join == "inner"
+
         objs = [obj for obj in objs if obj.shape != (0, 0)]
+
         if len(objs) == 0:
             return df
-        empty_inner = False
-        if join == "inner":
-            # don't filter out empty df's
-            if any(obj.empty for obj in old_objs):
-                empty_inner = True
 
         objs, match_index = _align_objs(objs, how=join)
 
-        for idx, o in enumerate(objs):
-            if idx == 0:
-                df.index = o.index
-            for col in o._data.names:
-                if col in df._data:
+        df.index = objs[0].index
+        for o in objs:
+            for name, col in o._data.items():
+                if name in df._data:
                     raise NotImplementedError(
-                        f"A Column with duplicate name found: {col}, cuDF "
+                        f"A Column with duplicate name found: {name}, cuDF "
                         f"doesn't support having multiple columns with "
                         f"same names yet."
                     )
-                df[col] = o._data[col]
+                df[name] = col
 
-        result_columns = objs[0].columns
-        for o in objs[1:]:
-            result_columns = result_columns.append(o.columns)
+        result_columns = objs[0].columns.append(
+            [obj.columns for obj in objs[1:]]
+        )
+
         if ignore_index:
             # with ignore_index the column names change to numbers
             df.columns = pd.RangeIndex(len(result_columns.unique()))
         else:
             df.columns = result_columns.unique()
+
         if empty_inner:
             # if join is inner and it contains an empty df
             # we return an empty df
             return df.head(0)
+
+        # This check uses `sort is not False` rather than just `sort=True`
+        # to differentiate between a user-provided `False` value and the
+        # default `None`. This is necessary for pandas compatibility, even
+        # though `True` and `False` are the only valid options from the user.
         if not match_index and sort is not False:
             return df.sort_index()
+
         if sort or join == "inner":
             # when join='outer' and sort=False string indexes
             # are returned unsorted. Everything else seems
@@ -321,8 +329,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         else:
             return df
 
+    # If we get here, we are always concatenating along axis 0 (the rows).
     typ = list(typs)[0]
-
     if len(typs) > 1:
         if allowed_typs == typs:
             # This block of code will run when `objs` has
@@ -343,15 +351,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             # objs are empty dataframes.
             return cudf.DataFrame()
         elif len(objs) == 1:
-            if join == "inner":
-                data = None
-            else:
-                data = objs[0]._data.copy(deep=True)
+            obj = objs[0]
             result = cudf.DataFrame(
-                data=data,
-                index=cudf.RangeIndex(len(objs[0]))
+                data=None if join == "inner" else obj._data.copy(deep=True),
+                index=cudf.RangeIndex(len(obj))
                 if ignore_index
-                else objs[0].index.copy(deep=True),
+                else obj.index.copy(deep=True),
             )
             return result
         else:
@@ -363,7 +368,8 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 axis=axis,
                 join=join,
                 ignore_index=ignore_index,
-                sort=sort,
+                # Explicitly cast rather than relying on None being falsy.
+                sort=bool(sort),
             )
         return result
 

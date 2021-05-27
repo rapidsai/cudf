@@ -23,12 +23,13 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/case.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <strings/utilities.cuh>
+#include <strings/utf8.cuh>
 #include <strings/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -138,8 +139,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& strings,
                          get_special_case_mapping_table()};
 
   // this utility calls the functor to build the offsets and chars columns
-  auto children = cudf::strings::detail::make_strings_children(
-    functor, strings.size(), strings.null_count(), stream, mr);
+  auto children = cudf::strings::detail::make_strings_children(functor, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
                              std::move(children.first),

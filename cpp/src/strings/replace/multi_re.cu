@@ -15,7 +15,6 @@
  */
 
 #include <strings/regex/regex.cuh>
-#include <strings/utilities.cuh>
 #include <strings/utilities.hpp>
 
 #include <cudf/column/column.hpp>
@@ -23,6 +22,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -159,7 +159,7 @@ std::unique_ptr<column> replace_re(
   }
 
   // copy all the reprog_device instances to a device memory array
-  rmm::device_buffer progs_buffer{sizeof(reprog_device) * progs.size()};
+  rmm::device_buffer progs_buffer{sizeof(reprog_device) * progs.size(), stream};
   CUDA_TRY(cudaMemcpyAsync(progs_buffer.data(),
                            progs.data(),
                            progs.size() * sizeof(reprog_device),
@@ -181,7 +181,6 @@ std::unique_ptr<column> replace_re(
         replace_multi_regex_fn<RX_STACK_SMALL>{
           *d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, *d_repls},
         strings_count,
-        strings.null_count(),
         stream,
         mr);
     else if (regex_insts <= RX_MEDIUM_INSTS)
@@ -189,7 +188,6 @@ std::unique_ptr<column> replace_re(
         replace_multi_regex_fn<RX_STACK_MEDIUM>{
           *d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, *d_repls},
         strings_count,
-        strings.null_count(),
         stream,
         mr);
     else
@@ -197,7 +195,6 @@ std::unique_ptr<column> replace_re(
         replace_multi_regex_fn<RX_STACK_LARGE>{
           *d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, *d_repls},
         strings_count,
-        strings.null_count(),
         stream,
         mr);
   }();

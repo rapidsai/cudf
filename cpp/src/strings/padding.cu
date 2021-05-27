@@ -20,11 +20,11 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/padding.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -80,10 +80,10 @@ std::unique_ptr<column> pad(
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // build chars column
-  size_type bytes   = thrust::device_pointer_cast(d_offsets)[strings_count];
-  auto chars_column = strings::detail::create_chars_child_column(
-    strings_count, strings.null_count(), bytes, stream, mr);
-  auto d_chars = chars_column->mutable_view().data<char>();
+  auto const bytes =
+    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
+  auto chars_column = strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto d_chars      = chars_column->mutable_view().data<char>();
 
   if (side == pad_side::LEFT) {
     thrust::for_each_n(
@@ -168,10 +168,10 @@ std::unique_ptr<column> zfill(
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // build chars column
-  size_type bytes   = thrust::device_pointer_cast(d_offsets)[strings_count];
-  auto chars_column = strings::detail::create_chars_child_column(
-    strings_count, strings.null_count(), bytes, stream, mr);
-  auto d_chars = chars_column->mutable_view().data<char>();
+  auto const bytes =
+    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
+  auto chars_column = strings::detail::create_chars_child_column(strings_count, bytes, stream, mr);
+  auto d_chars      = chars_column->mutable_view().data<char>();
 
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
