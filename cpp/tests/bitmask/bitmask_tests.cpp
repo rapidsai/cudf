@@ -384,8 +384,12 @@ void cleanEndWord(rmm::device_buffer &mask, int begin_bit, int end_bit)
   auto number_of_mask_words = cudf::num_bitmask_words(static_cast<size_t>(end_bit - begin_bit));
   auto number_of_bits       = end_bit - begin_bit;
   if (number_of_bits % 32 != 0) {
-    auto end_mask = ptr[number_of_mask_words - 1];
-    end_mask      = end_mask & ((1 << (number_of_bits % 32)) - 1);
+    cudf::bitmask_type end_mask{};
+    CUDA_TRY(cudaMemcpy(
+      &end_mask, ptr + number_of_mask_words - 1, sizeof(end_mask), cudaMemcpyDeviceToHost));
+    end_mask = end_mask & ((1 << (number_of_bits % 32)) - 1);
+    CUDA_TRY(cudaMemcpy(
+      ptr + number_of_mask_words - 1, &end_mask, sizeof(end_mask), cudaMemcpyHostToDevice));
   }
 }
 
