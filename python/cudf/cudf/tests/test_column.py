@@ -377,6 +377,10 @@ def test_as_column_buffer(data, expected):
             ),
         ),
         (
+            pa.array([{"a": 1, "b": 3}, {"c": 2, "d": 4}]),
+            cudf.core.column.as_column([{"a": 1, "b": 3}, {"c": 2, "d": 4}]),
+        ),
+        (
             pa.array([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]),
             cudf.core.column.as_column(
                 [[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]
