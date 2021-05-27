@@ -38,7 +38,7 @@ def assert_packed_frame_equality(df):
 
     packed = pack(df)
     del df
-    unpacked = unpack(packed)
+    unpacked = DataFrame._from_table(unpack(packed))
 
     assert_eq(unpacked, pdf)
 

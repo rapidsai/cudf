@@ -94,7 +94,7 @@ def check_packed_serialization(df):
 
 def assert_packed_frame_picklable(df):
     serialbytes = pickle.dumps(pack(df))
-    loaded = unpack(pickle.loads(serialbytes))
+    loaded = DataFrame._from_table(unpack(pickle.loads(serialbytes)))
     assert_eq(loaded, df)
 
 
