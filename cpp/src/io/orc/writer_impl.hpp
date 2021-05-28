@@ -251,8 +251,8 @@ class writer::impl {
   /**
    * @brief Encodes the input columns into streams.
    *
-   * @param view Table device view representing input table
-   * @param columns List of columns
+   * @param orc_columns Pre-order flattened host array of ORC column views
+   * @param d_orc_columns Pre-order flattened device array of ORC column views
    * @param str_col_flat_indexes List of columns that are strings type
    * @param dict_data Dictionary data memory
    * @param dict_index Dictionary index memory
@@ -261,8 +261,8 @@ class writer::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Encoded data and per-chunk stream descriptors
    */
-  encoded_data encode_columns(const table_device_view& view,
-                              host_span<orc_column_view const> columns,
+  encoded_data encode_columns(host_span<orc_column_view const> orc_columns,
+                              device_span<gpu::orc_column_device_view const> d_orc_columns,
                               host_span<int const> str_col_flat_indexes,
                               rmm::device_uvector<uint32_t>&& dict_data,
                               rmm::device_uvector<uint32_t>&& dict_index,

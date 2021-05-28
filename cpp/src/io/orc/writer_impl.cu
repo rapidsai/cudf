@@ -46,6 +46,7 @@ namespace detail {
 namespace orc {
 using namespace cudf::io::orc;
 using namespace cudf::io;
+using gpu::orc_column_device_view;
 
 struct row_group_index_info {
   int32_t pos       = -1;  // Position
@@ -242,20 +243,6 @@ class orc_column_view {
   // Offsets for encoded decimal elements. Used to enable direct writing of encoded decimal elements
   // into the output stream.
   uint32_t *d_decimal_offsets = nullptr;
-};
-
-struct orc_column_device_view {
-  uint32_t flat_index                   = 0;  // probably not needed
-  column_device_view const *cudf_column = nullptr;
-  int32_t parent_index                  = -1;
-
-  __host__ __device__ orc_column_device_view() = default;
-  __host__ __device__ orc_column_device_view(uint32_t index,
-                                             column_device_view const &col,
-                                             int32_t parent_index)
-    : flat_index{index}, cudf_column{&col}, parent_index{parent_index}
-  {
-  }
 };
 
 std::vector<stripe_rowgroups> writer::impl::gather_stripe_info(
@@ -594,8 +581,8 @@ struct segmented_valid_cnt_input {
   std::vector<size_type> indices;
 };
 
-encoded_data writer::impl::encode_columns(const table_device_view &view,
-                                          host_span<orc_column_view const> columns,
+encoded_data writer::impl::encode_columns(host_span<orc_column_view const> columns,
+                                          device_span<orc_column_device_view const> d_orc_columns,
                                           host_span<int const> str_col_flat_indexes,
                                           rmm::device_uvector<uint32_t> &&dict_data,
                                           rmm::device_uvector<uint32_t> &&dict_index,
@@ -738,7 +725,7 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
   chunks.host_to_device(stream);
   chunk_streams.host_to_device(stream);
 
-  gpu::set_chunk_columns(view, chunks, stream);
+  gpu::set_chunk_columns(d_orc_columns, chunks, stream);
 
   if (!str_col_flat_indexes.empty()) {
     auto d_stripe_dict = columns[str_col_flat_indexes[0]].device_stripe_dict();
@@ -1122,7 +1109,7 @@ void __device__ preorder_append(uint32_t &idx,
                                 column_device_view const &col)
 {
   auto const current_idx = idx;
-  cols[current_idx]      = orc_column_device_view{idx, col, parent_idx};
+  cols[current_idx]      = orc_column_device_view{idx, &col, parent_idx};
   idx++;
   if (col.type().id() == type_id::LIST) preorder_append(idx, current_idx, cols, col.child(1));
   if (col.type().id() == type_id::STRUCT)
@@ -1300,8 +1287,8 @@ void writer::impl::write(table_view const &table)
 
   auto streams =
     create_streams(orc_columns, stripe_bounds, decimal_column_sizes(dec_chunk_sizes.rg_sizes));
-  auto enc_data = encode_columns(*d_table,
-                                 orc_columns,
+  auto enc_data = encode_columns(orc_columns,
+                                 d_orc_columns,
                                  str_col_flat_indexes,
                                  std::move(dict_data),
                                  std::move(dict_index),

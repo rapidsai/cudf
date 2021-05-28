@@ -125,7 +125,7 @@ struct EncChunk {
 
   uint32_t *dict_index;  // dictionary index from row index
   device_span<uint32_t> decimal_offsets;
-  column_device_view *leaf_column;
+  column_device_view const *leaf_column;
 };
 
 /**
@@ -181,6 +181,12 @@ struct StripeDictionary {
   uint32_t dict_char_count;  // total size of dictionary string data
 
   column_device_view *leaf_column;  //!< Pointer to string column
+};
+
+struct orc_column_device_view {
+  uint32_t flat_index                   = 0;  // probably not needed
+  column_device_view const *cudf_column = nullptr;
+  int32_t parent_index                  = -1;
 };
 
 /**
@@ -308,11 +314,11 @@ void EncodeStripeDictionaries(StripeDictionary *stripes,
 /**
  * @brief Set leaf column element of EncChunk
  *
- * @param[in] view table device view representing input table
+ * @param[in] d_orc_columns Pre-order flattened device array of ORC column views
  * @param[in,out] chunks encoder chunk device array [column][rowgroup]
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void set_chunk_columns(const table_device_view &view,
+void set_chunk_columns(device_span<orc_column_device_view const> d_orc_columns,
                        device_2dspan<EncChunk> chunks,
                        rmm::cuda_stream_view stream);
 
