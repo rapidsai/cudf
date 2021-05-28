@@ -27,6 +27,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <algorithm>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -48,18 +49,21 @@ auto left_zero_eq_right_zero =
 }  // namespace
 
 /**
- * The principal fixture for all conditional joins. This class presents a
- * straightforward test function that simplifies input handling so that
- * individual tests can just use initializer lists to generate tables and focus
- * on testing cases. This fixture should be extended by child classes that
- * define the `join` method for different types of joins.
+ * The principal fixture for all conditional joins.
  */
 template <typename T>
 struct ConditionalJoinTest : public cudf::test::BaseFixture {
-  void test(std::vector<std::vector<T>> left_data,
-            std::vector<std::vector<T>> right_data,
-            cudf::ast::expression predicate,
-            std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
+  /**
+   * Convenience utility for parsing initializer lists of input data into
+   * suitable inputs for tables.
+   */
+  std::tuple<std::vector<cudf::test::fixed_width_column_wrapper<T>>,
+             std::vector<cudf::test::fixed_width_column_wrapper<T>>,
+             std::vector<cudf::column_view>,
+             std::vector<cudf::column_view>,
+             cudf::table_view,
+             cudf::table_view>
+  parse_input(std::vector<std::vector<T>> left_data, std::vector<std::vector<T>> right_data)
   {
     // Note that we need to maintain the column wrappers otherwise the
     // resulting column views will be referencing potentially invalid memory.
@@ -79,8 +83,30 @@ struct ConditionalJoinTest : public cudf::test::BaseFixture {
       right_columns.push_back(right_wrappers.back());
     }
 
-    cudf::table_view left(left_columns);
-    cudf::table_view right(right_columns);
+    return std::make_tuple(std::move(left_wrappers),
+                           std::move(right_wrappers),
+                           std::move(left_columns),
+                           std::move(right_columns),
+                           cudf::table_view(left_columns),
+                           cudf::table_view(right_columns));
+  }
+};
+
+/**
+ * Fixture for join types that return both left and right indices (inner, left,
+ * and full joins).
+ */
+template <typename T>
+struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
+  void test(std::vector<std::vector<T>> left_data,
+            std::vector<std::vector<T>> right_data,
+            cudf::ast::expression predicate,
+            std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
+  {
+    // Note that we need to maintain the column wrappers otherwise the
+    // resulting column views will be referencing potentially invalid memory.
+    auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
+      this->parse_input(left_data, right_data);
     auto result = this->join(left, right, predicate);
 
     std::vector<std::pair<cudf::size_type, cudf::size_type>> resulting_pairs;
@@ -112,7 +138,7 @@ struct ConditionalJoinTest : public cudf::test::BaseFixture {
  * Tests of inner joins.
  */
 template <typename T>
-struct ConditionalInnerJoinTest : public ConditionalJoinTest<T> {
+struct ConditionalInnerJoinTest : public ConditionalJoinPairReturnTest<T> {
   std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
             std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
   join(cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
@@ -198,7 +224,7 @@ TYPED_TEST(ConditionalInnerJoinTest, TestComplexConditionMultipleColumns)
  * Tests of left joins.
  */
 template <typename T>
-struct ConditionalLeftJoinTest : public ConditionalJoinTest<T> {
+struct ConditionalLeftJoinTest : public ConditionalJoinPairReturnTest<T> {
   std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
             std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
   join(cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
@@ -221,7 +247,7 @@ TYPED_TEST(ConditionalLeftJoinTest, TestTwoColumnThreeRowSomeEqual)
  * Tests of full joins.
  */
 template <typename T>
-struct ConditionalFullJoinTest : public ConditionalJoinTest<T> {
+struct ConditionalFullJoinTest : public ConditionalJoinPairReturnTest<T> {
   std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
             std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
   join(cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
@@ -240,35 +266,19 @@ TYPED_TEST(ConditionalFullJoinTest, TestTwoColumnThreeRowSomeEqual)
              {{0, 0}, {1, 1}, {2, JoinNoneValue}, {JoinNoneValue, 2}});
 };
 
-// TODO: The input parsing logic should be unified with the ConditionalJoinTest
-// (the output parsing needs to be different).
+/**
+ * Fixture for join types that return both only left indices (left semi and
+ * left anti).
+ */
 template <typename T>
-struct ConditionalSingleJoinTest : public cudf::test::BaseFixture {
+struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
   void test(std::vector<std::vector<T>> left_data,
             std::vector<std::vector<T>> right_data,
             cudf::ast::expression predicate,
             std::vector<cudf::size_type> expected_outputs)
   {
-    // Note that we need to maintain the column wrappers otherwise the
-    // resulting column views will be referencing potentially invalid memory.
-    std::vector<cudf::test::fixed_width_column_wrapper<T>> left_wrappers;
-    std::vector<cudf::test::fixed_width_column_wrapper<T>> right_wrappers;
-
-    std::vector<cudf::column_view> left_columns;
-    std::vector<cudf::column_view> right_columns;
-
-    for (auto v : left_data) {
-      left_wrappers.push_back(cudf::test::fixed_width_column_wrapper<T>(v.begin(), v.end()));
-      left_columns.push_back(left_wrappers.back());
-    }
-
-    for (auto v : right_data) {
-      right_wrappers.push_back(cudf::test::fixed_width_column_wrapper<T>(v.begin(), v.end()));
-      right_columns.push_back(right_wrappers.back());
-    }
-
-    cudf::table_view left(left_columns);
-    cudf::table_view right(right_columns);
+    auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
+      this->parse_input(left_data, right_data);
     auto result = this->join(left, right, predicate);
 
     std::vector<cudf::size_type> resulting_indices;
@@ -297,7 +307,7 @@ struct ConditionalSingleJoinTest : public cudf::test::BaseFixture {
  * Tests of left semi joins.
  */
 template <typename T>
-struct ConditionalLeftSemiJoinTest : public ConditionalSingleJoinTest<T> {
+struct ConditionalLeftSemiJoinTest : public ConditionalJoinSingleReturnTest<T> {
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> join(
     cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
   {
@@ -316,7 +326,7 @@ TYPED_TEST(ConditionalLeftSemiJoinTest, TestTwoColumnThreeRowSomeEqual)
  * Tests of left anti joins.
  */
 template <typename T>
-struct ConditionalLeftAntiJoinTest : public ConditionalSingleJoinTest<T> {
+struct ConditionalLeftAntiJoinTest : public ConditionalJoinSingleReturnTest<T> {
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> join(
     cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
   {
