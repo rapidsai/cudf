@@ -45,7 +45,7 @@ def copy_bitmask(Column col):
     cdef unique_ptr[device_buffer] up_db
 
     with nogil:
-        db = cpp_copy_bitmask(col_view)
+        db = move(cpp_copy_bitmask(col_view))
         up_db = make_unique[device_buffer](move(db))
 
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
@@ -91,7 +91,7 @@ def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
     )
 
     with nogil:
-        db = cpp_create_null_mask(size, c_mask_state)
+        db = move(cpp_create_null_mask(size, c_mask_state))
         up_db = make_unique[device_buffer](move(db))
 
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))

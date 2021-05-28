@@ -362,5 +362,45 @@ TEST_F(groupby_nth_element_string_test, dictionary)
     keys, vals, expect_keys, expect_vals->view(), cudf::make_nth_element_aggregation(2));
 }
 
+template <typename T>
+struct groupby_nth_element_lists_test : BaseFixture {
+};
+
+TYPED_TEST_CASE(groupby_nth_element_lists_test, FixedWidthTypesWithoutFixedPoint);
+
+TYPED_TEST(groupby_nth_element_lists_test, Basics)
+{
+  using K = int32_t;
+  using V = TypeParam;
+
+  using lists = cudf::test::lists_column_wrapper<V, int32_t>;
+
+  auto keys   = fixed_width_column_wrapper<K, int32_t>{1, 1, 2, 2, 3, 3};
+  auto values = lists{{1, 2}, {3, 4}, {5, 6, 7}, lists{}, {9, 10}, {11}};
+
+  auto expected_keys   = fixed_width_column_wrapper<K, int32_t>{1, 2, 3};
+  auto expected_values = lists{{1, 2}, {5, 6, 7}, {9, 10}};
+
+  test_single_agg(
+    keys, values, expected_keys, expected_values, cudf::make_nth_element_aggregation(0));
+}
+
+TYPED_TEST(groupby_nth_element_lists_test, EmptyInput)
+{
+  using K = int32_t;
+  using V = TypeParam;
+
+  using lists = cudf::test::lists_column_wrapper<V, int32_t>;
+
+  auto keys   = fixed_width_column_wrapper<K, int32_t>{};
+  auto values = lists{};
+
+  auto expected_keys   = fixed_width_column_wrapper<K, int32_t>{};
+  auto expected_values = lists{};
+
+  test_single_agg(
+    keys, values, expected_keys, expected_values, cudf::make_nth_element_aggregation(2));
+}
+
 }  // namespace test
 }  // namespace cudf
