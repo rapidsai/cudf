@@ -39,10 +39,21 @@ namespace binops::compiled {
 
 template <typename BinaryOperator>
 struct is_binary_operation_supported {
+  // For types where Out type is fixed. (eg. comparison types)
+  template <typename TypeLhs, typename TypeRhs>
+  inline constexpr bool operator()(void)
+  {
+    if constexpr (std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>) {
+      return column_device_view::has_element_accessor<TypeLhs>() and
+             column_device_view::has_element_accessor<TypeRhs>();
+    } else {
+      return false;
+    }
+  }
   template <typename TypeOut, typename TypeLhs, typename TypeRhs>
   inline constexpr bool operator()(void)
   {
-    if constexpr (std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>()) {
+    if constexpr (std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>) {
       using ReturnType = std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>;
       return column_device_view::has_element_accessor<TypeLhs>() and
              column_device_view::has_element_accessor<TypeRhs>() and

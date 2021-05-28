@@ -525,14 +525,14 @@ TYPED_TEST(BinaryOperationCompiledTest_Bit, ShiftRightUnsigned_Vector_Vector)
 // n n . n
 // t
 // d
-using Logical_types = cudf::test::Types<cudf::test::Types<int16_t, int8_t, int16_t>,
-                                        cudf::test::Types<int64_t, int32_t, uint16_t>,
-                                        cudf::test::Types<int64_t, uint64_t, double>,
-                                        cudf::test::Types<uint16_t, int8_t, int16_t>,
-                                        cudf::test::Types<float, int32_t, uint16_t>,
+using Logical_types = cudf::test::Types<cudf::test::Types<bool, int8_t, int16_t>,
+                                        cudf::test::Types<bool, int32_t, uint16_t>,
+                                        cudf::test::Types<bool, uint64_t, double>,
+                                        cudf::test::Types<bool, int8_t, int16_t>,
+                                        cudf::test::Types<bool, float, uint16_t>,
                                         cudf::test::Types<bool, uint64_t, int64_t>,
-                                        cudf::test::Types<uint16_t, uint8_t, uint32_t>,
-                                        cudf::test::Types<duration_ns, uint64_t, int64_t>>;
+                                        cudf::test::Types<bool, uint8_t, uint32_t>,
+                                        cudf::test::Types<bool, uint64_t, int64_t>>;
 template <typename T>
 struct BinaryOperationCompiledTest_Logical : public BinaryOperationCompiledTest<T> {
 };

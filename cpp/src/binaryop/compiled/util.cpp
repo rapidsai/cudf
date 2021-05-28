@@ -73,17 +73,9 @@ struct is_supported_operation_functor {
         case binary_operator::MOD:                  return call<ops::Mod, TypeOut>();
         case binary_operator::PYMOD:                return call<ops::PyMod, TypeOut>();
         case binary_operator::POW:                  return call<ops::Pow, TypeOut>();
-        case binary_operator::EQUAL:                return call<ops::Equal, TypeOut>();
-        case binary_operator::NOT_EQUAL:            return call<ops::NotEqual, TypeOut>();
-        case binary_operator::LESS:                 return call<ops::Less, TypeOut>();
-        case binary_operator::GREATER:              return call<ops::Greater, TypeOut>();
-        case binary_operator::LESS_EQUAL:           return call<ops::LessEqual, TypeOut>();
-        case binary_operator::GREATER_EQUAL:        return call<ops::GreaterEqual, TypeOut>();
         case binary_operator::BITWISE_AND:          return call<ops::BitwiseAnd, TypeOut>();
         case binary_operator::BITWISE_OR:           return call<ops::BitwiseOr, TypeOut>();
         case binary_operator::BITWISE_XOR:          return call<ops::BitwiseXor, TypeOut>();
-        case binary_operator::LOGICAL_AND:          return call<ops::LogicalAnd, TypeOut>();
-        case binary_operator::LOGICAL_OR:           return call<ops::LogicalOr, TypeOut>();
         //case binary_operator::GENERIC_BINARY:       return call<ops::UserDefinedOp, TypeOut>();
         case binary_operator::SHIFT_LEFT:           return call<ops::ShiftLeft, TypeOut>();
         case binary_operator::SHIFT_RIGHT:          return call<ops::ShiftRight, TypeOut>();
@@ -91,7 +83,6 @@ struct is_supported_operation_functor {
         case binary_operator::LOG_BASE:             return call<ops::LogBase, TypeOut>();
         case binary_operator::ATAN2:                return call<ops::ATan2, TypeOut>();
         case binary_operator::PMOD:                 return call<ops::PMod, TypeOut>();
-        case binary_operator::NULL_EQUALS:          return call<ops::NullEquals, TypeOut>();
         /*
         case binary_operator::NULL_MAX:             return call<ops::NullMax, TypeOut>();
         case binary_operator::NULL_MIN:             return call<ops::NullMin, TypeOut>();
@@ -101,10 +92,29 @@ struct is_supported_operation_functor {
       }
     }
   };
+
+  template <typename BinaryOperator, typename TypeLhs, typename TypeRhs>
+  inline constexpr bool call(data_type out)
+  {
+    return out.id() == type_id::BOOL8 and
+           is_binary_operation_supported<BinaryOperator>{}.template operator()<TypeLhs, TypeRhs>();
+  }
   template <typename TypeLhs, typename TypeRhs>
   inline constexpr bool operator()(data_type out, binary_operator op)
   {
-    return type_dispatcher(out, nested_support_functor<TypeLhs, TypeRhs>{}, op);
+    switch (op) {
+      case binary_operator::LOGICAL_AND: return call<ops::LogicalAnd, TypeLhs, TypeRhs>(out);
+      case binary_operator::LOGICAL_OR: return call<ops::LogicalOr, TypeLhs, TypeRhs>(out);
+      case binary_operator::EQUAL: return call<ops::Equal, TypeLhs, TypeRhs>(out);
+      case binary_operator::NOT_EQUAL: return call<ops::NotEqual, TypeLhs, TypeRhs>(out);
+      case binary_operator::LESS: return call<ops::Less, TypeLhs, TypeRhs>(out);
+      case binary_operator::GREATER: return call<ops::Greater, TypeLhs, TypeRhs>(out);
+      case binary_operator::LESS_EQUAL: return call<ops::LessEqual, TypeLhs, TypeRhs>(out);
+      case binary_operator::GREATER_EQUAL: return call<ops::GreaterEqual, TypeLhs, TypeRhs>(out);
+      case binary_operator::NULL_EQUALS: return call<ops::NullEquals, TypeLhs, TypeRhs>(out);
+      default: return type_dispatcher(out, nested_support_functor<TypeLhs, TypeRhs>{}, op);
+    }
+    return false;
   }
 };
 
