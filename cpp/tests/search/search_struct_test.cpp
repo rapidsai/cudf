@@ -297,11 +297,11 @@ TYPED_TEST(TypedStructSearchTest, OneColumnHasNullMaskButNoNullElementTest)
   auto child_col2         = col_wrapper{0, 10, 10};
   auto const structs_col2 = structs_col{child_col2}.release();
 
-  // structs_col3 will have a null mask but no null element
+  // structs_col3 (and its child column) will have a null mask but no null element
   auto child_col3         = col_wrapper{{0, 10, 10}, cudf::test::iterator_no_null()};
   auto const structs_col3 = structs_col{{child_col3}, cudf::test::iterator_no_null()}.release();
 
-  // Search structs_col2 and structs_col3 w.r.t. structs_col1
+  // Search struct elements of structs_col2 and structs_col3 in the column structs_col1
   {
     auto const results1             = search_bounds(structs_col1, structs_col2);
     auto const results2             = search_bounds(structs_col1, structs_col3);
@@ -313,7 +313,7 @@ TYPED_TEST(TypedStructSearchTest, OneColumnHasNullMaskButNoNullElementTest)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results2.second->view(), print_all);
   }
 
-  // Search structs_col1 w.r.t. structs_col2 and structs_col3
+  // Search struct elements of structs_col1 in the columns structs_col2 and structs_col3
   {
     auto const results1             = search_bounds(structs_col2, structs_col1);
     auto const results2             = search_bounds(structs_col3, structs_col1);
