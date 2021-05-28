@@ -4712,8 +4712,33 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             return self._apply_boolean_mask(boolmask)
 
     def apply(self, func, axis=1):
+        """
+        Apply a function along an axis of the DataFrame.
+
+        Designed to mimic `pandas.DataFrame.apply`. Applies a user
+        defined function row wise over a dataframe, with true null
+        handling. Works with UDFs using `core.udf.pipeline.nulludf`
+        and returns a single series. Uses numba to jit compile the
+        function to PTX via LLVM. 
+
+        Parameters
+        ----------
+        func : function
+            Function to apply to each row.
+
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            Axis along which the function is applied:
+            * 0 or 'index': apply function to each column.
+              Note: axis=0 is not yet supported.
+            * 1 or 'columns': apply function to each row.
+
+        """
+        if axis != 1:
+            raise ValueError(
+                "DataFrame.apply currently only supports row wise ops"
+            )
+
         return func(self)
-        #return super()._apply(func)
 
 
     @applyutils.doc_apply()
