@@ -63,6 +63,10 @@ get_conditional_join_indices(table_view const& left,
 {
   // The `right` table is always used for the inner loop. We want to use the smaller table
   // for the inner loop. Thus, if `left` is smaller than `right`, swap `left/right`.
+  // TODO: I'm not confident that this will give the correct result. An
+  // arbitrary conditional join on two tables can use, for instance, different
+  // columns from each table, in which case flipping the left and right tables
+  // will not respect the table references encoded in the predicate.
   if ((JoinKind == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
     return get_conditional_join_indices(
       right, left, true, JoinKind, binary_pred, compare_nulls, stream, mr);
@@ -101,11 +105,12 @@ get_conditional_join_indices(table_view const& left,
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
+  join_kind KernelJoinKind = JoinKind == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : JoinKind;
   compute_conditional_join_output_size<block_size>
     <<<config.num_blocks,
        config.num_threads_per_block,
        plan.dev_plan.shmem_per_thread,
-       stream.value()>>>(*left_table, *right_table, JoinKind, plan.dev_plan, size.data());
+       stream.value()>>>(*left_table, *right_table, KernelJoinKind, plan.dev_plan, size.data());
   CHECK_CUDA(stream.value());
 
   size_type join_size = size.value(stream);
@@ -128,7 +133,7 @@ get_conditional_join_indices(table_view const& left,
                                                           plan.dev_plan.shmem_per_thread,
                                                           stream.value()>>>(*left_table,
                                                                             *right_table,
-                                                                            JoinKind,
+                                                                            KernelJoinKind,
                                                                             join_output_l,
                                                                             join_output_r,
                                                                             write_index.data(),
@@ -137,7 +142,16 @@ get_conditional_join_indices(table_view const& left,
 
   CHECK_CUDA(stream.value());
 
-  return std::make_pair(std::move(left_indices), std::move(right_indices));
+  auto join_indices = std::make_pair(std::move(left_indices), std::move(right_indices));
+
+  // For full joins, get the indices in the right table that were not joined to
+  // by any row in the left table.
+  if (JoinKind == join_kind::FULL_JOIN) {
+    auto complement_indices = detail::get_left_join_indices_complement(
+      join_indices.second, left.num_rows(), right.num_rows(), stream, mr);
+    join_indices = detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
+  }
+  return join_indices;
 }
 
 }  // namespace detail

@@ -393,6 +393,17 @@ conditional_left_join(table_view left,
     left, right, binary_pred, detail::join_kind::LEFT_JOIN, rmm::cuda_stream_default, mr);
 }
 
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+conditional_full_join(table_view left,
+                      table_view right,
+                      ast::expression binary_pred,
+                      rmm::mr::device_memory_resource* mr)
+{
+  return detail::conditional_join(
+    left, right, binary_pred, detail::join_kind::FULL_JOIN, rmm::cuda_stream_default, mr);
+}
+
 std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
   table_view left,
   table_view right,

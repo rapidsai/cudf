@@ -90,12 +90,11 @@ struct valid_range {
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-get_left_join_indices_complement(
-  std::unique_ptr<rmm::device_uvector<size_type>> &right_indices,
-  size_type left_table_row_count,
-  size_type right_table_row_count,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
+get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>> &right_indices,
+                                 size_type left_table_row_count,
+                                 size_type right_table_row_count,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource *mr)
 {
   // Get array of indices that do not appear in right_indices
 

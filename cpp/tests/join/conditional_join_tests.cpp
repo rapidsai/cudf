@@ -93,6 +93,7 @@ struct ConditionalJoinTest : public cudf::test::BaseFixture {
     }
     std::sort(resulting_pairs.begin(), resulting_pairs.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
+
     EXPECT_TRUE(
       std::equal(resulting_pairs.begin(), resulting_pairs.end(), expected_outputs.begin()));
   }
@@ -214,6 +215,29 @@ TYPED_TEST(ConditionalLeftJoinTest, TestTwoColumnThreeRowSomeEqual)
              {{0, 1, 3}, {30, 40, 50}},
              left_zero_eq_right_zero,
              {{0, 0}, {1, 1}, {2, JoinNoneValue}});
+};
+
+/**
+ * Tests of full joins.
+ */
+template <typename T>
+struct ConditionalFullJoinTest : public ConditionalJoinTest<T> {
+  std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
+            std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
+  join(cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
+  {
+    return cudf::conditional_full_join(left, right, predicate);
+  }
+};
+
+TYPED_TEST_CASE(ConditionalFullJoinTest, cudf::test::IntegralTypesNotBool);
+
+TYPED_TEST(ConditionalFullJoinTest, TestTwoColumnThreeRowSomeEqual)
+{
+  this->test({{0, 1, 2}, {10, 20, 30}},
+             {{0, 1, 3}, {30, 40, 50}},
+             left_zero_eq_right_zero,
+             {{0, 0}, {1, 1}, {2, JoinNoneValue}, {JoinNoneValue, 2}});
 };
 
 // TODO: The input parsing logic should be unified with the ConditionalJoinTest
