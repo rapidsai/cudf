@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #pragma once
 
 #include "binary_ops.hpp"
@@ -22,11 +23,8 @@
 #include <rmm/exec_policy.hpp>
 
 namespace cudf {
-
 namespace binops {
 namespace compiled {
-
-namespace {
 
 // Functors to launch only defined operations.
 
@@ -43,7 +41,7 @@ struct ops_wrapper {
   template <typename TypeCommon>
   __device__ void operator()(size_type i)
   {
-    if constexpr (std::is_invocable_v<BinaryOperator, TypeCommon, TypeCommon>()) {
+    if constexpr (std::is_invocable_v<BinaryOperator, TypeCommon, TypeCommon>) {
       TypeCommon x = type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs);
       TypeCommon y = type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs);
       auto result  = BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(x, y);
@@ -52,6 +50,7 @@ struct ops_wrapper {
       else
         type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
     }
+    (void)i;
   }
 };
 
@@ -64,13 +63,14 @@ struct ops_wrapper<ops::NullEquals, true> {
   template <typename TypeCommon>
   __device__ void operator()(size_type i)
   {
-    if constexpr (std::is_invocable_v<ops::NullEquals, TypeCommon, TypeCommon>()) {
+    if constexpr (std::is_invocable_v<ops::NullEquals, TypeCommon, TypeCommon>) {
       TypeCommon x = type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs);
       TypeCommon y = type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs);
       auto result  = ops::NullEquals{}.template operator()<TypeCommon, TypeCommon>(
         x, y, lhs.is_valid(i), rhs.is_valid(i));
       out.element<decltype(result)>(i) = result;
     }
+    (void)i;
   }
 };
 
@@ -88,7 +88,7 @@ struct ops2_wrapper {
   __device__ void operator()(size_type i)
   {
     if constexpr (!has_common_type_v<TypeLhs, TypeRhs> and
-                  std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>()) {
+                  std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>) {
       TypeLhs x   = lhs.element<TypeLhs>(i);
       TypeRhs y   = rhs.element<TypeRhs>(i);
       auto result = BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(x, y);
@@ -97,6 +97,7 @@ struct ops2_wrapper {
       else
         type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
     }
+    (void)i;
   }
 };
 
@@ -110,13 +111,14 @@ struct ops2_wrapper<ops::NullEquals, true> {
   __device__ void operator()(size_type i)
   {
     if constexpr (!has_common_type_v<TypeLhs, TypeRhs> and
-                  std::is_invocable_v<ops::NullEquals, TypeLhs, TypeRhs>()) {
+                  std::is_invocable_v<ops::NullEquals, TypeLhs, TypeRhs>) {
       TypeLhs x   = lhs.element<TypeLhs>(i);
       TypeRhs y   = rhs.element<TypeRhs>(i);
       auto result = ops::NullEquals{}.template operator()<TypeLhs, TypeRhs>(
         x, y, lhs.is_valid(i), rhs.is_valid(i));
       out.element<decltype(result)>(i) = result;
     }
+    (void)i;
   }
 };
 
@@ -155,7 +157,7 @@ struct device_type_dispatcher {
     }
   }
 };
-}  // namespace
+
 /**
  * @brief Deploys single type or double type dispatcher that runs binary operation on each element
  * of @p lhsd and @p rhsd columns.
