@@ -103,6 +103,22 @@ def test_arith_masked_vs_constant(op, constant):
 
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
+@pytest.mark.parametrize('op', arith_ops)
+@pytest.mark.parametrize('constant', [1, 1.5])
+def test_arith_masked_vs_constant_reflected(op, constant):
+    def func_pdf(x):
+        return op(constant, x)
+
+    @nulludf
+    def func_gdf(x):
+        return op(constant, x)
+
+    # Just a single column -> result will be all NA
+    gdf = cudf.DataFrame({
+        'data': [1, 2, None]
+    })
+
+    run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 @pytest.mark.parametrize('op', comparison_ops)
 @pytest.mark.parametrize('constant', [1, 1.5])
