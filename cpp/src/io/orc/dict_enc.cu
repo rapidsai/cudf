@@ -121,7 +121,7 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s,
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 2)
   gpuInitDictionaryIndices(DictionaryChunk *chunks,
-    device_span<orc_column_device_view const> d_orc_columns,
+                           device_span<orc_column_device_view const> d_orc_columns,
                            uint32_t *dict_data,
                            uint32_t *dict_index,
                            size_t row_index_stride,
@@ -146,8 +146,8 @@ __global__ void __launch_bounds__(block_size, 2)
 
   if (t == 0) {
     auto const leaf_column_view = d_orc_columns[str_col_flat_indexes[col_id]].cudf_column;
-    s->chunk                             = chunks[group_id * num_str_cols + col_id];
-    s->chunk.leaf_column                 = leaf_column_view;
+    s->chunk                    = chunks[group_id * num_str_cols + col_id];
+    s->chunk.leaf_column        = leaf_column_view;
     s->chunk.dict_data =
       dict_data + col_id * leaf_column_view->size() + group_id * row_index_stride;
     s->chunk.dict_index = dict_index + col_id * leaf_column_view->size();

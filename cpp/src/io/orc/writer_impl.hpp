@@ -195,7 +195,7 @@ class writer::impl {
   /**
    * @brief Builds up column dictionaries indices
    *
-* @param d_orc_columns Pre-order flattened device array of ORC column views
+   * @param d_orc_columns Pre-order flattened device array of ORC column views
    * @param columns List of columns
    * @param str_col_flat_indexes List of columns that are strings type
    * @param dict_data Dictionary data memory

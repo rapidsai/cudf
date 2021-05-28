@@ -359,7 +359,7 @@ void CompressOrcDataStreams(uint8_t *compressed_data,
 /**
  * @brief Launches kernel for initializing dictionary chunks
  *
-* @param[in] d_orc_columns Pre-order flattened device array of ORC column views
+ * @param[in] d_orc_columns Pre-order flattened device array of ORC column views
  * @param[in,out] chunks DictionaryChunk device array [rowgroup][column]
  * @param[in] dict_data dictionary data (index of non-null rows)
  * @param[in] dict_index row indices of corresponding string (row from dictionary index)

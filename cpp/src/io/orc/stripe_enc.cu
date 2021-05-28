@@ -954,7 +954,7 @@ __global__ void __launch_bounds__(block_size)
     s->cur_row       = 0;
   }
   auto const string_column = s->u.dict_stripe.leaf_column;
-  auto const dict_data              = s->u.dict_stripe.dict_data;
+  auto const dict_data     = s->u.dict_stripe.dict_data;
   __syncthreads();
   if (s->chunk.encoding_kind != DICTIONARY_V2) {
     return;  // This column isn't using dictionary encoding -> bail out
