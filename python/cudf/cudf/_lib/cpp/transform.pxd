@@ -40,10 +40,8 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[column] generalized_masked_op(
         table_view data_view,
-        string binary_udf,
+        string udf,
         data_type output_type,
-        column_view outcol_view,
-        column_view outmask_view,
     ) except +
 
     cdef pair[unique_ptr[table], unique_ptr[column]] encode(

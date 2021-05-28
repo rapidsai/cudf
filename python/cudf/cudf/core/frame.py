@@ -1455,12 +1455,11 @@ class Frame(libcudf.table.Table):
         return result
 
     def _apply(self, func):
+        '''
+        Apply `func` across the rows of the frame. 
+        '''
         output_dtype, ptx = cudf.core.udf.pipeline.compile_udf(func, self.dtypes)
-
-        output_column = cudf.core.column.column_empty(row_count=len(self), dtype=output_dtype)
-        output_mask = cudf.core.column.column_empty(row_count=len(self), dtype='bool')
-
-        result = cudf._lib.transform.masked_udf(self, ptx, output_column, output_mask)
+        result = cudf._lib.transform.masked_udf(self, ptx, output_dtype)
         return result
 
 

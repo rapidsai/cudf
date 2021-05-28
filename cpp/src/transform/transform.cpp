@@ -173,18 +173,25 @@ std::unique_ptr<column> transform(column_view const& input,
 }
 
 std::unique_ptr<column> generalized_masked_op(table_view data_view, 
-                                               std::string const& binary_udf, 
+                                               std::string const& udf, 
                                                data_type output_type, 
-                                               column_view const& outcol_view,
-                                               column_view const& outmsk_view,
                                                rmm::mr::device_memory_resource* mr)
 {
   rmm::cuda_stream_view stream = rmm::cuda_stream_default;
-  transformation::jit::generalized_operation(data_view, binary_udf, output_type, outcol_view, outmsk_view, mr);
+  std::unique_ptr<column> output = make_fixed_width_column(
+    output_type, data_view.num_rows()
+  );
+  std::unique_ptr<column> output_mask = make_fixed_width_column(
+    cudf::data_type{cudf::type_id::BOOL8}, data_view.num_rows()
+  );
 
-  std::unique_ptr<column> output;
+  mutable_column_view output_view = *output;
+  mutable_column_view output_mask_view = *output_mask;
 
+  transformation::jit::generalized_operation(data_view, udf, output_type, output_view, output_mask_view, mr);
 
+  auto final_output_mask = cudf::bools_to_mask(output_mask_view);
+  output.get()->set_null_mask(std::move(*(final_output_mask.first)));
   return output;
 }
 
@@ -205,11 +212,9 @@ std::unique_ptr<column> transform(column_view const& input,
 std::unique_ptr<column> generalized_masked_op(table_view data_view,
                                               std::string const& binary_udf, 
                                               data_type output_type, 
-                                              column_view const& outcol_view,
-                                              column_view const& outmsk_view,
                                               rmm::mr::device_memory_resource* mr)
 {
-  return detail::generalized_masked_op(data_view, binary_udf, output_type, outcol_view, outmsk_view, mr);
+  return detail::generalized_masked_op(data_view, binary_udf, output_type, mr);
 }
 
 }  // namespace cudf
