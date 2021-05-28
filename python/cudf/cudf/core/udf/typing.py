@@ -43,6 +43,8 @@ class MaskedType(types.Type):
         # MaskedType in Numba shall be parameterized
         # with a value type
         super().__init__(name="Masked")
+        if isinstance(value, MaskedType):
+            breakpoint()
         self.value_type = value
 
     def __repr__(self):
@@ -90,6 +92,8 @@ class MaskedType(types.Type):
         # MaskedType with the original type as its value_type
         if isinstance(other, NAType):
             return self
+        elif isinstance(other, MaskedType):
+            return MaskedType(context.unify_pairs(self.value_type, other.value_type))
 
         # if we have MaskedType and something that results in a
         # scalar, unify between the MaskedType's value_type
@@ -140,7 +144,6 @@ class ClassesTemplate(AttributeTemplate):
     key = types.Module(classes)
 
     def resolve_Masked(self, mod):
-        breakpoint()
         return types.Function(MaskedConstructor)
 
 
