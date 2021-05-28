@@ -27,6 +27,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/execution_policy.h>
+#include <thrust/pair.h>
 #include <thrust/sort.h>
 
 #include <algorithm>
@@ -149,18 +150,33 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     auto result    = this->join(left, right, left_zero_eq_right_zero);
     auto reference = this->reference_join(left, right);
 
-    // TODO: It would be better to check the pairs rather than each vector
-    // independently, but this is much faster until I find a smarter way of
-    // converting a pair of vectors into a vector of pairs using a thrust call.
-    thrust::sort(thrust::device, result.first->begin(), result.first->end());
-    thrust::sort(thrust::device, result.second->begin(), result.second->end());
-    thrust::sort(thrust::device, reference.first->begin(), reference.first->end());
-    thrust::sort(thrust::device, reference.second->begin(), reference.second->end());
+    thrust::device_vector<thrust::pair<cudf::size_type, cudf::size_type>> result_pairs(
+      result.first->size());
+    thrust::device_vector<thrust::pair<cudf::size_type, cudf::size_type>> reference_pairs(
+      reference.first->size());
+
+    thrust::transform(thrust::device,
+                      result.first->begin(),
+                      result.first->end(),
+                      result.second->begin(),
+                      result_pairs.begin(),
+                      [] __device__(cudf::size_type first, cudf::size_type second) {
+                        return thrust::make_pair(first, second);
+                      });
+    thrust::transform(thrust::device,
+                      reference.first->begin(),
+                      reference.first->end(),
+                      reference.second->begin(),
+                      reference_pairs.begin(),
+                      [] __device__(cudf::size_type first, cudf::size_type second) {
+                        return thrust::make_pair(first, second);
+                      });
+
+    thrust::sort(thrust::device, result_pairs.begin(), result_pairs.end());
+    thrust::sort(thrust::device, reference_pairs.begin(), reference_pairs.end());
 
     EXPECT_TRUE(thrust::equal(
-      thrust::device, result.first->begin(), result.first->end(), reference.first->begin()));
-    EXPECT_TRUE(thrust::equal(
-      thrust::device, result.second->begin(), result.second->end(), reference.second->begin()));
+      thrust::device, result_pairs.begin(), result_pairs.end(), reference_pairs.begin()));
   }
 
   /**
