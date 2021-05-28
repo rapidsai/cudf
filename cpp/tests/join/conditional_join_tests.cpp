@@ -27,6 +27,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <algorithm>
+#include <random>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -98,6 +99,11 @@ struct ConditionalJoinTest : public cudf::test::BaseFixture {
  */
 template <typename T>
 struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
+  /*
+   * Perform a join of tables constructed from two input data sets according to
+   * the provided predicate and verify that the outputs match the expected
+   * outputs (up to order).
+   */
   void test(std::vector<std::vector<T>> left_data,
             std::vector<std::vector<T>> right_data,
             cudf::ast::expression predicate,
@@ -109,19 +115,55 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
       this->parse_input(left_data, right_data);
     auto result = this->join(left, right, predicate);
 
-    std::vector<std::pair<cudf::size_type, cudf::size_type>> resulting_pairs;
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
     for (size_t i = 0; i < result.first->size(); ++i) {
       // Note: Not trying to be terribly efficient here since these tests are
       // small, otherwise a batch copy to host before constructing the tuples
       // would be important.
-      resulting_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
-                                 result.second->element(i, rmm::cuda_stream_default)});
+      result_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
+                              result.second->element(i, rmm::cuda_stream_default)});
     }
-    std::sort(resulting_pairs.begin(), resulting_pairs.end());
+    std::sort(result_pairs.begin(), result_pairs.end());
     std::sort(expected_outputs.begin(), expected_outputs.end());
 
-    EXPECT_TRUE(
-      std::equal(resulting_pairs.begin(), resulting_pairs.end(), expected_outputs.begin()));
+    EXPECT_TRUE(std::equal(result_pairs.begin(), result_pairs.end(), expected_outputs.begin()));
+  }
+
+  /*
+   * Perform a join of tables constructed from two input data sets according to
+   * an equality predicate on all corresponding columns and verify that the outputs match the
+   * expected outputs (up to order).
+   */
+  void compare_to_hash_join(std::vector<std::vector<T>> left_data,
+                            std::vector<std::vector<T>> right_data)
+  {
+    // Note that we need to maintain the column wrappers otherwise the
+    // resulting column views will be referencing potentially invalid memory.
+    auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
+      this->parse_input(left_data, right_data);
+    // TODO: Generalize this to support multiple columns by automatically
+    // constructing the appropriate expression.
+    auto result    = this->join(left, right, left_zero_eq_right_zero);
+    auto reference = this->reference_join(left, right);
+
+    // Convert pair of vectors to vector of pairs for equality tests.
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> reference_pairs;
+
+    // TODO Find a smarter thrust algorithm to do this transformation.
+    for (size_t i = 0; i < result.first->size(); ++i) {
+      result_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
+                              result.second->element(i, rmm::cuda_stream_default)});
+    }
+    for (size_t i = 0; i < reference.first->size(); ++i) {
+      reference_pairs.push_back({reference.first->element(i, rmm::cuda_stream_default),
+                                 reference.second->element(i, rmm::cuda_stream_default)});
+    }
+
+    std::sort(result_pairs.begin(), result_pairs.end());
+    std::sort(reference_pairs.begin(), reference_pairs.end());
+
+    EXPECT_TRUE(std::equal(result_pairs.begin(), result_pairs.end(), reference_pairs.begin()));
   }
 
   /**
@@ -132,6 +174,15 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
   virtual std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
                     std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
   join(cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) = 0;
+
+  /**
+   * This method must be implemented by subclasses for specific types of joins.
+   * It should be a simply forwarding of arguments to the appropriate cudf
+   * hash join API for comparison with conditional joins.
+   */
+  virtual std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
+                    std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
+  reference_join(cudf::table_view left, cudf::table_view right) = 0;
 };
 
 /**
@@ -144,6 +195,13 @@ struct ConditionalInnerJoinTest : public ConditionalJoinPairReturnTest<T> {
   join(cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
   {
     return cudf::conditional_inner_join(left, right, predicate);
+  }
+
+  std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
+            std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
+  reference_join(cudf::table_view left, cudf::table_view right) override
+  {
+    return cudf::inner_join(left, right);
   }
 };
 
@@ -220,6 +278,32 @@ TYPED_TEST(ConditionalInnerJoinTest, TestComplexConditionMultipleColumns)
              {{4, 0}, {5, 0}, {6, 0}, {7, 0}});
 };
 
+TYPED_TEST(ConditionalInnerJoinTest, TestCompareRandomToHash)
+{
+  // Generate columns of 10 repeats of the integer range [0, 10), then merge
+  // a shuffled version and compare to hash join.
+  unsigned int N           = 10000;
+  unsigned int num_repeats = 10;
+  unsigned int num_unique  = N / num_repeats;
+
+  std::vector<TypeParam> left(N);
+  std::vector<TypeParam> right(N);
+
+  for (unsigned int i = 0; i < num_repeats; ++i) {
+    std::iota(
+      std::next(left.begin(), num_unique * i), std::next(left.begin(), num_unique * (i + 1)), 0);
+    std::iota(
+      std::next(right.begin(), num_unique * i), std::next(right.begin(), num_unique * (i + 1)), 0);
+  }
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::shuffle(left.begin(), left.end(), gen);
+  std::shuffle(right.begin(), right.end(), gen);
+
+  this->compare_to_hash_join({left}, {right});
+};
+
 /**
  * Tests of left joins.
  */
@@ -230,6 +314,13 @@ struct ConditionalLeftJoinTest : public ConditionalJoinPairReturnTest<T> {
   join(cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
   {
     return cudf::conditional_left_join(left, right, predicate);
+  }
+
+  std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
+            std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
+  reference_join(cudf::table_view left, cudf::table_view right) override
+  {
+    return cudf::left_join(left, right);
   }
 };
 
@@ -254,6 +345,13 @@ struct ConditionalFullJoinTest : public ConditionalJoinPairReturnTest<T> {
   {
     return cudf::conditional_full_join(left, right, predicate);
   }
+
+  std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
+            std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
+  reference_join(cudf::table_view left, cudf::table_view right) override
+  {
+    return cudf::full_join(left, right);
+  }
 };
 
 TYPED_TEST_CASE(ConditionalFullJoinTest, cudf::test::IntegralTypesNotBool);
@@ -272,6 +370,11 @@ TYPED_TEST(ConditionalFullJoinTest, TestTwoColumnThreeRowSomeEqual)
  */
 template <typename T>
 struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
+  /*
+   * Perform a join of tables constructed from two input data sets according to
+   * the provided predicate and verify that the outputs match the expected
+   * outputs (up to order).
+   */
   void test(std::vector<std::vector<T>> left_data,
             std::vector<std::vector<T>> right_data,
             cudf::ast::expression predicate,
@@ -301,6 +404,14 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
    */
   virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> join(
     cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) = 0;
+
+  /**
+   * This method must be implemented by subclasses for specific types of joins.
+   * It should be a simply forwarding of arguments to the appropriate cudf
+   * hash join API for comparison with conditional joins.
+   */
+  virtual std::unique_ptr<rmm::device_uvector<cudf::size_type>> reference_join(
+    cudf::table_view left, cudf::table_view right) = 0;
 };
 
 /**
@@ -312,6 +423,12 @@ struct ConditionalLeftSemiJoinTest : public ConditionalJoinSingleReturnTest<T> {
     cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
   {
     return cudf::conditional_left_semi_join(left, right, predicate);
+  }
+
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> reference_join(
+    cudf::table_view left, cudf::table_view right) override
+  {
+    return cudf::left_semi_join(left, right);
   }
 };
 
@@ -331,6 +448,12 @@ struct ConditionalLeftAntiJoinTest : public ConditionalJoinSingleReturnTest<T> {
     cudf::table_view left, cudf::table_view right, cudf::ast::expression predicate) override
   {
     return cudf::conditional_left_anti_join(left, right, predicate);
+  }
+
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> reference_join(
+    cudf::table_view left, cudf::table_view right) override
+  {
+    return cudf::left_anti_join(left, right);
   }
 };
 
