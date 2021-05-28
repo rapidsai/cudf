@@ -26,6 +26,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/execution_policy.h>
+#include <thrust/sort.h>
+
 #include <algorithm>
 #include <random>
 #include <tuple>
@@ -146,24 +149,18 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
     auto result    = this->join(left, right, left_zero_eq_right_zero);
     auto reference = this->reference_join(left, right);
 
-    // Convert pair of vectors to vector of pairs for equality tests.
-    std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
-    std::vector<std::pair<cudf::size_type, cudf::size_type>> reference_pairs;
+    // TODO: It would be better to check the pairs rather than each vector
+    // independently, but this is much faster until I find a smarter way of
+    // converting a pair of vectors into a vector of pairs using a thrust call.
+    thrust::sort(thrust::device, result.first->begin(), result.first->end());
+    thrust::sort(thrust::device, result.second->begin(), result.second->end());
+    thrust::sort(thrust::device, reference.first->begin(), reference.first->end());
+    thrust::sort(thrust::device, reference.second->begin(), reference.second->end());
 
-    // TODO Find a smarter thrust algorithm to do this transformation.
-    for (size_t i = 0; i < result.first->size(); ++i) {
-      result_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
-                              result.second->element(i, rmm::cuda_stream_default)});
-    }
-    for (size_t i = 0; i < reference.first->size(); ++i) {
-      reference_pairs.push_back({reference.first->element(i, rmm::cuda_stream_default),
-                                 reference.second->element(i, rmm::cuda_stream_default)});
-    }
-
-    std::sort(result_pairs.begin(), result_pairs.end());
-    std::sort(reference_pairs.begin(), reference_pairs.end());
-
-    EXPECT_TRUE(std::equal(result_pairs.begin(), result_pairs.end(), reference_pairs.begin()));
+    EXPECT_TRUE(thrust::equal(
+      thrust::device, result.first->begin(), result.first->end(), reference.first->begin()));
+    EXPECT_TRUE(thrust::equal(
+      thrust::device, result.second->begin(), result.second->end(), reference.second->begin()));
   }
 
   /**
