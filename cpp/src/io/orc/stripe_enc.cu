@@ -953,7 +953,7 @@ __global__ void __launch_bounds__(block_size)
     s->nrows         = s->u.dict_stripe.num_strings;
     s->cur_row       = 0;
   }
-  column_device_view *string_column = s->u.dict_stripe.leaf_column;
+  auto const string_column = s->u.dict_stripe.leaf_column;
   auto const dict_data              = s->u.dict_stripe.dict_data;
   __syncthreads();
   if (s->chunk.encoding_kind != DICTIONARY_V2) {

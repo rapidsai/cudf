@@ -195,14 +195,14 @@ class writer::impl {
   /**
    * @brief Builds up column dictionaries indices
    *
-   * @param view Table device view representing input table
+* @param d_orc_columns Pre-order flattened device array of ORC column views
    * @param columns List of columns
    * @param str_col_flat_indexes List of columns that are strings type
    * @param dict_data Dictionary data memory
    * @param dict_index Dictionary index memory
    * @param dict List of dictionary chunks
    */
-  void init_dictionaries(const table_device_view& view,
+  void init_dictionaries(device_span<gpu::orc_column_device_view const> d_orc_columns,
                          orc_column_view* columns,
                          host_span<int const> str_col_flat_indexes,
                          uint32_t* dict_data,

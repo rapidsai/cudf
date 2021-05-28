@@ -165,7 +165,7 @@ struct DictionaryChunk {
   uint32_t num_dict_strings;  // number of strings in dictionary
   uint32_t dict_char_count;   // size of dictionary string data for this chunk
 
-  column_device_view *leaf_column;  //!< Pointer to string column
+  column_device_view const *leaf_column;  //!< Pointer to string column
 };
 
 /**
@@ -180,7 +180,7 @@ struct StripeDictionary {
   uint32_t num_strings;      // number of unique strings in the dictionary
   uint32_t dict_char_count;  // total size of dictionary string data
 
-  column_device_view *leaf_column;  //!< Pointer to string column
+  column_device_view const *leaf_column;  //!< Pointer to string column
 };
 
 struct orc_column_device_view {
@@ -359,7 +359,7 @@ void CompressOrcDataStreams(uint8_t *compressed_data,
 /**
  * @brief Launches kernel for initializing dictionary chunks
  *
- * @param[in] view table device view representing input table
+* @param[in] d_orc_columns Pre-order flattened device array of ORC column views
  * @param[in,out] chunks DictionaryChunk device array [rowgroup][column]
  * @param[in] dict_data dictionary data (index of non-null rows)
  * @param[in] dict_index row indices of corresponding string (row from dictionary index)
@@ -368,7 +368,7 @@ void CompressOrcDataStreams(uint8_t *compressed_data,
  * @param[in] num_rowgroups Number of row groups
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
-void InitDictionaryIndices(const table_device_view &view,
+void InitDictionaryIndices(device_span<orc_column_device_view const> d_orc_columns,
                            DictionaryChunk *chunks,
                            uint32_t *dict_data,
                            uint32_t *dict_index,

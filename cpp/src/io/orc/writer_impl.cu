@@ -282,7 +282,7 @@ std::vector<stripe_rowgroups> writer::impl::gather_stripe_info(
   return infos;
 }
 
-void writer::impl::init_dictionaries(const table_device_view &view,
+void writer::impl::init_dictionaries(device_span<orc_column_device_view const> d_orc_columns,
                                      orc_column_view *columns,
                                      host_span<int const> str_col_flat_indexes,
                                      uint32_t *dict_data,
@@ -298,7 +298,7 @@ void writer::impl::init_dictionaries(const table_device_view &view,
     str_column.attach_dict_chunk(dict->host_ptr(), dict->device_ptr());
   }
 
-  gpu::InitDictionaryIndices(view,
+  gpu::InitDictionaryIndices(d_orc_columns,
                              dict->device_ptr(),
                              dict_data,
                              dict_index,
@@ -1259,7 +1259,7 @@ void writer::impl::write(table_view const &table)
   const auto num_dict_chunks = num_rowgroups * str_col_flat_indexes.size();
   hostdevice_vector<gpu::DictionaryChunk> dict(num_dict_chunks, stream);
   if (!str_col_flat_indexes.empty()) {
-    init_dictionaries(*d_table,
+    init_dictionaries(d_orc_columns,
                       orc_columns.data(),
                       str_col_flat_indexes,
                       dict_data.data(),

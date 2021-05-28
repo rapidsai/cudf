@@ -121,7 +121,7 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s,
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 2)
   gpuInitDictionaryIndices(DictionaryChunk *chunks,
-                           const table_device_view view,
+    device_span<orc_column_device_view const> d_orc_columns,
                            uint32_t *dict_data,
                            uint32_t *dict_index,
                            size_t row_index_stride,
@@ -145,7 +145,7 @@ __global__ void __launch_bounds__(block_size, 2)
   int t = threadIdx.x;
 
   if (t == 0) {
-    column_device_view *leaf_column_view = view.begin() + str_col_flat_indexes[col_id];
+    auto const leaf_column_view = d_orc_columns[str_col_flat_indexes[col_id]].cudf_column;
     s->chunk                             = chunks[group_id * num_str_cols + col_id];
     s->chunk.leaf_column                 = leaf_column_view;
     s->chunk.dict_data =
@@ -427,7 +427,7 @@ __global__ void __launch_bounds__(block_size)
 /**
  * @copydoc cudf::io::orc::gpu::InitDictionaryIndices
  */
-void InitDictionaryIndices(const table_device_view &view,
+void InitDictionaryIndices(device_span<orc_column_device_view const> d_orc_columns,
                            DictionaryChunk *chunks,
                            uint32_t *dict_data,
                            uint32_t *dict_index,
@@ -440,7 +440,7 @@ void InitDictionaryIndices(const table_device_view &view,
   dim3 dim_block(block_size, 1);
   dim3 dim_grid(str_col_flat_indexes.size(), num_rowgroups);
   gpuInitDictionaryIndices<block_size><<<dim_grid, dim_block, 0, stream.value()>>>(
-    chunks, view, dict_data, dict_index, row_index_stride, str_col_flat_indexes);
+    chunks, d_orc_columns, dict_data, dict_index, row_index_stride, str_col_flat_indexes);
 }
 
 /**
@@ -462,7 +462,7 @@ void BuildStripeDictionaries(StripeDictionary *stripes,
     if (stripes_host[i].dict_data != nullptr) {
       thrust::device_ptr<uint32_t> dict_data_ptr =
         thrust::device_pointer_cast(stripes_host[i].dict_data);
-      column_device_view *string_column = stripes_host[i].leaf_column;
+      auto const string_column = stripes_host[i].leaf_column;
       // NOTE: Requires the --expt-extended-lambda nvcc flag
       thrust::sort(rmm::exec_policy(stream),
                    dict_data_ptr,
