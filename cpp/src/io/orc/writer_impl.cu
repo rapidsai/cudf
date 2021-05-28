@@ -397,14 +397,14 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
     int64_t data2_stream_size   = 0;
     int64_t dict_stream_size    = 0;
 
-    auto const is_nullable = [&]() -> bool{
+    auto const is_nullable = [&]() -> bool {
       if (single_write_mode) {
         return column.nullable();
       } else {
         if (user_metadata_with_nullability.column_nullable.empty()) return true;
-    CUDF_EXPECTS(
-      user_metadata_with_nullability.column_nullable.size() > column.flat_index(),
-      "When passing values in user_metadata_with_nullability, data for all columns must be specified");
+        CUDF_EXPECTS(user_metadata_with_nullability.column_nullable.size() > column.flat_index(),
+                     "When passing values in user_metadata_with_nullability, data for all columns "
+                     "must be specified");
         return user_metadata_with_nullability.column_nullable[column.flat_index()];
       }
     }();
@@ -847,7 +847,8 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   stat_merge.host_to_device(stream);
 
   rmm::device_uvector<column_device_view> leaf_column_views =
-    create_leaf_column_device_views<stats_column_desc>(stat_desc, table, stream); // what needs to be passed here?
+    create_leaf_column_device_views<stats_column_desc>(
+      stat_desc, table, stream);  // what needs to be passed here?
 
   gpu::orc_init_statistics_groups(stat_groups.data(),
                                   stat_desc.device_ptr(),
@@ -1238,9 +1239,7 @@ std::map<uint32_t, size_t> decimal_column_sizes(
 void writer::impl::write(table_view const &table)
 {
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
-  auto const num_columns = table.num_columns();
-  auto const num_rows    = table.num_rows();
-
+  auto const num_rows = table.num_rows();
 
   auto const d_table       = table_device_view::create(table, stream);
   auto const num_rowgroups = div_by_rowgroups<size_t>(num_rows);
@@ -1292,14 +1291,14 @@ void writer::impl::write(table_view const &table)
                                  stripe_bounds,
                                  streams);
   // Assemble individual disparate column chunks into contiguous data streams
-  size_type const num_index_streams = (orc_columns.size() + 1); 
-  const auto num_data_streams  = streams.size() - num_index_streams;
+  size_type const num_index_streams = (orc_columns.size() + 1);
+  const auto num_data_streams       = streams.size() - num_index_streams;
   hostdevice_2dvector<gpu::StripeStream> strm_descs(stripe_bounds.size(), num_data_streams, stream);
   auto stripes =
     gather_stripes(num_rows, num_index_streams, stripe_bounds, &enc_data.streams, &strm_descs);
 
   // Gather column statistics
-  std::vector<std::vector<uint8_t>> column_stats;
+  std::vector<ColStatsBlob> column_stats;
   if (enable_statistics_ && table.num_columns() > 0 && num_rows > 0) {
     column_stats = gather_statistic_blobs(*d_table, orc_columns, stripe_bounds);
   }
@@ -1422,18 +1421,17 @@ void writer::impl::write(table_view const &table)
     // File-level statistics
     // NOTE: Excluded from chunked write mode to avoid the need for merging stats across calls
     if (single_write_mode) {
-      ff.statistics.resize(1 + orc_columns.size());
       // First entry contains total number of rows
       buffer_.resize(0);
       pbw_.putb(1 * 8 + PB_TYPE_VARINT);
       pbw_.put_uint(num_rows);
-      ff.statistics[0] = std::move(buffer_);
-      for (int col_idx = 0; col_idx < num_columns; col_idx++) {
-        size_t idx = stripes.size() * num_columns + col_idx;
-        if (idx < column_stats.size()) {
-          ff.statistics[1 + col_idx] = std::move(column_stats[idx]);
-        }
-      }
+      ff.statistics.reserve(1 + orc_columns.size());
+      ff.statistics.emplace_back(std::move(buffer_));
+      // Add file stats, stored after stripe stats in `column_stats`
+      ff.statistics.insert(
+        ff.statistics.end(),
+        std::make_move_iterator(column_stats.begin()) + stripes.size() * orc_columns.size(),
+        std::make_move_iterator(column_stats.end()));
     }
     // Stripe-level statistics
     size_t first_stripe = md.stripeStats.size();
