@@ -11,7 +11,8 @@ from cudf._lib import groupby as libgroupby
 from cudf._lib.table import Table
 from cudf._typing import DataFrameOrSeries
 from cudf.core.abc import Serializable
-from cudf.utils.dtypes import is_list_like, is_scalar
+from cudf.core.column.column import arange
+from cudf.utils.dtypes import is_list_like
 from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
@@ -709,12 +710,13 @@ class GroupBy(Serializable):
     def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
         """Internal implementation for `ffill` and `bfill`
         """
-        value_columns = self.grouping.values(include_keys=True)
+        value_columns = self.grouping.values()
         result = self._groupby.replace_nulls(
             Table(value_columns._data), method
         )
         result = self.obj.__class__._from_table(result)
-        return result._copy_type_metadata(value_columns, include_index=True)
+        result = self._mimic_pandas_order(result)
+        return result._copy_type_metadata(value_columns)
 
     def pad(self, limit=None):
         """Forward fill NA values.
@@ -760,7 +762,7 @@ class GroupBy(Serializable):
 
         Parameters
         ----------
-        value : scalar, dict, Series or DataFrame
+        value : scalar, dict
             Value to use to fill the holes. Cannot be specified with method.
         method : {'backfill', 'bfill', 'pad', 'ffill', None}, default None
             Method to use for filling holes in reindexed Series
@@ -803,14 +805,15 @@ class GroupBy(Serializable):
                 )
             return getattr(self, method, limit)()
 
-        value_columns = self.grouping.values(include_keys=True)
-        grouped_keys, grouped_values, _ = self._groupby.groups(Table(value_columns._data))
+        value_columns = self.grouping.values()
+        _, grouped_values, _ = self._groupby.groups(Table(value_columns._data))
 
-        grouped = self.obj.__class__._from_data(grouped_values._data, index=grouped_keys)
-        result = grouped.fillna(value=value, inplace=inplace, axis=axis, limit=limit)
-        return result._copy_type_metadata(value_columns, include_index=True)
-        
-        
+        grouped = self.obj.__class__._from_data(grouped_values._data)
+        result = grouped.fillna(
+            value=value, inplace=inplace, axis=axis, limit=limit
+        )
+        result = self._mimic_pandas_order(result)
+        return result._copy_type_metadata(value_columns)
 
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """
@@ -866,6 +869,22 @@ class GroupBy(Serializable):
         value_columns = self.obj._data.select_by_label(value_column_names)
         result = self._groupby.shift(Table(value_columns), periods, fill_value)
         return self.obj.__class__._from_table(result)
+
+    def _mimic_pandas_order(
+        self, result: DataFrameOrSeries
+    ) -> DataFrameOrSeries:
+        """Given a groupby result from libcudf, reconstruct the row orders
+        matching that of pandas. This also adds appropriate indices.
+        """
+        sorted_order_column = arange(0, result._data.nrows)
+        _, order, _ = self._groupby.groups(
+            Table({"sorted_order_column": sorted_order_column})
+        )
+        order = order._data["sorted_order_column"]
+        gather_map = order.argsort()
+        result = result.take(gather_map)
+        result.index = self.obj.index
+        return result
 
 
 class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
@@ -1120,6 +1139,8 @@ class _Grouping(Serializable):
 
     @property
     def keys(self):
+        """Return grouping key column as index
+        """
         nkeys = len(self._key_columns)
 
         if nkeys == 0:
@@ -1136,16 +1157,14 @@ class _Grouping(Serializable):
                 self._key_columns[0], name=self.names[0]
             )
 
-    def values(self, include_keys=False):
-        """Returns value columns as a frame. If include_keys=True, index
-        of the frame is the keys, otherwise default.
+    def values(self):
+        """Returns value columns as a frame.
         """
         value_column_names = [
             x for x in self._obj._column_names if x not in self.names
         ]
         value_columns = self._obj._data.select_by_label(value_column_names)
-        index = self.keys if include_keys else None
-        return self._obj._from_data(value_columns, index=index)
+        return self._obj._from_data(value_columns)
 
     def _handle_callable(self, by):
         by = by(self._obj.index)

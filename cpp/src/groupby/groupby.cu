@@ -246,8 +246,10 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls
                  std::back_inserter(results),
                  [&](auto i) {
                    auto grouped_values = helper().grouped_values(values.column(i), stream);
-                   return detail::group_replace_nulls(
-                     grouped_values->view(), group_labels, replace_policies[i], stream, mr);
+                   column_view view    = grouped_values->view();
+                   return view.nullable() ? detail::group_replace_nulls(
+                                              view, group_labels, replace_policies[i], stream, mr)
+                                          : std::move(grouped_values);
                  });
 
   return std::make_pair(std::move(helper().sorted_keys(stream, mr)),
