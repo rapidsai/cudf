@@ -33,8 +33,13 @@ struct reljunk;
 struct reinst;
 class reprog;
 
+constexpr int32_t RX_STACK_SMALL  = 112;    ///< fastest stack size
+constexpr int32_t RX_STACK_MEDIUM = 1104;   ///< faster stack size
+constexpr int32_t RX_STACK_LARGE  = 10128;  ///< fast stack size
+constexpr int32_t RX_STACK_ANY    = 8;      ///< slowest: uses global memory
+
 /**
- * @brief Maximum number of instructions device code can handle in stack memory
+ * @brief Mapping the number of instructions to device code stack memory size.
  *
  * ```
  * 10128 ≈ 1000 instructions
@@ -42,14 +47,6 @@ class reprog;
  * Stack ≈ (8+2)*x + (x/8) = 10.125x < 11x  where x is number of instructions
  * ```
  */
-constexpr int32_t MAX_STACK_INSTS = 1000;
-
-constexpr int32_t RX_STACK_SMALL  = 112;    ///< fastest stack size
-constexpr int32_t RX_STACK_MEDIUM = 1104;   ///< faster stack size
-constexpr int32_t RX_STACK_LARGE  = 10128;  ///< fast stack size
-constexpr int32_t RX_STACK_ANY    = 8;      ///< slowest: uses global memory
-
-// Formula for converting instructions to stack size range
 constexpr int32_t RX_SMALL_INSTS  = (RX_STACK_SMALL / 11);
 constexpr int32_t RX_MEDIUM_INSTS = (RX_STACK_MEDIUM / 11);
 constexpr int32_t RX_LARGE_INSTS  = (RX_STACK_LARGE / 11);
