@@ -304,4 +304,4 @@ target_compile_definitions(cudfjni PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni ${CUDF_LIB} ${ARROW_LIBRARY} ${NVCOMP_LIB} ${CUDART_LIBRARY} cuda)
+target_link_libraries(cudfjni ${NVCOMP_LIB} ${CUDF_LIB} ${ARROW_LIBRARY} ${CUDART_LIBRARY} cuda)

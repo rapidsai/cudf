@@ -283,7 +283,7 @@ std::unique_ptr<column> rolling_collect_list(column_view const& input,
                                              PrecedingIter preceding_begin_raw,
                                              FollowingIter following_begin_raw,
                                              size_type min_periods,
-                                             rolling_aggregation const& agg,
+                                             null_policy null_handling,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
@@ -321,7 +321,6 @@ std::unique_ptr<column> rolling_collect_list(column_view const& input,
 
   // If gather_map collects null elements, and null_policy == EXCLUDE,
   // those elements must be filtered out, and offsets recomputed.
-  auto null_handling = dynamic_cast<collect_list_aggregation const&>(agg)._null_handling;
   if (null_handling == null_policy::EXCLUDE && input.has_nulls()) {
     auto num_child_nulls = count_child_nulls(input, gather_map, stream);
     if (num_child_nulls != 0) {

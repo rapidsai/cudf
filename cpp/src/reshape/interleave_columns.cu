@@ -69,7 +69,7 @@ struct interleave_columns_functor {
     auto d_table     = *table;
     auto num_strings = num_columns * strings_count;
 
-    std::pair<rmm::device_buffer, size_type> valid_mask{{}, 0};
+    std::pair<rmm::device_buffer, size_type> valid_mask{};
     if (create_mask) {
       // Create resulting null mask
       valid_mask = cudf::detail::valid_if(
