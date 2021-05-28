@@ -4,8 +4,10 @@ from __future__ import annotations
 import pyarrow as pa
 
 import cudf
+from cudf._typing import Dtype
 from cudf.core.column import ColumnBase
 from cudf.core.column.methods import ColumnMethodsMixin
+from cudf.core.dtypes import StructDtype
 from cudf.utils.dtypes import is_struct_dtype
 
 
@@ -111,16 +113,22 @@ class StructColumn(ColumnBase):
             "Structs are not yet supported via `__cuda_array_interface__`"
         )
 
-    def _copy_type_metadata(self: ColumnBase, other: ColumnBase) -> ColumnBase:
+    def _apply_type_metadata(self: StructColumn, dtype: Dtype) -> StructColumn:
+        if isinstance(dtype, StructDtype):
+            self = self._rename_fields(dtype.fields.keys())
+
+        return self
+
+    def _copy_type_metadata(
+        self: StructColumn, other: ColumnBase
+    ) -> ColumnBase:
         """Copies type metadata from self onto other, returning a new column.
 
         In addition to the default behavior, if `other` is a StructColumns we
         rename the fields of `other` to the field names of `self`.
         """
         if isinstance(other, cudf.core.column.StructColumn):
-            other = other._rename_fields(
-                self.dtype.fields.keys()  # type: ignore
-            )
+            other = other._apply_type_metadata(self.dtype)
         # Have to ignore typing here because it misdiagnoses super().
         return super()._copy_type_metadata(other)  # type: ignore
 

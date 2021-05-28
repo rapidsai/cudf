@@ -1269,29 +1269,6 @@ class ColumnBase(Column, Serializable):
         )
 
     def _apply_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
-        if isinstance(dtype, CategoricalDtype) and not (
-            isinstance(self, cudf.core.column.CategoricalColumn)
-        ):
-            self = build_categorical_column(
-                categories=dtype.categories._values,
-                codes=as_column(self.base_data, dtype=self.dtype),
-                mask=self.base_mask,
-                ordered=dtype.ordered,
-                size=self.size,
-                offset=self.offset,
-                null_count=self.null_count,
-            )
-
-        if isinstance(dtype, StructDtype) and isinstance(
-            self, cudf.core.column.StructColumn
-        ):
-            self = self._rename_fields(dtype.fields.keys())
-
-        if isinstance(dtype, Decimal64Dtype) and isinstance(
-            self, cudf.core.column.DecimalColumn
-        ):
-            self.dtype.precision = dtype.precision
-
         return self
 
     def _copy_type_metadata(self: ColumnBase, other: ColumnBase) -> ColumnBase:
@@ -1303,8 +1280,6 @@ class ColumnBase(Column, Serializable):
           and the children of `other`.
         * if none of the above, return `other` without any changes
         """
-        other = other._apply_type_metadata(self.dtype)
-
         # TODO: This logic should probably be moved to a common nested column
         # class.
         if isinstance(other, type(self)):

@@ -1506,6 +1506,24 @@ class CategoricalColumn(column.ColumnBase):
             offset=codes_col.offset,
         )
 
+    def _apply_type_metadata(
+        self: CategoricalColumn, dtype: Dtype
+    ) -> CategoricalColumn:
+        if isinstance(dtype, CategoricalDtype):
+            self = column.build_categorical_column(
+                categories=dtype.categories._values,
+                codes=column.as_column(
+                    self.codes.base_data, dtype=self.codes.dtype
+                ),
+                mask=self.codes.base_mask,
+                ordered=dtype.ordered,
+                size=self.codes.size,
+                offset=self.codes.offset,
+                null_count=self.codes.null_count,
+            )
+
+        return self
+
     def _copy_type_metadata(
         self: CategoricalColumn, other: ColumnBase
     ) -> ColumnBase:
@@ -1515,16 +1533,10 @@ class CategoricalColumn(column.ColumnBase):
         CategoricalColumn, we assume other is a column of codes, and return a
         CategoricalColumn composed of `other`  and the categories of `self`.
         """
-        if not isinstance(other, cudf.core.column.CategoricalColumn):
-            other = column.build_categorical_column(
-                categories=self.categories,
-                codes=column.as_column(other.base_data, dtype=other.dtype),
-                mask=other.base_mask,
-                ordered=self.ordered,
-                size=other.size,
-                offset=other.offset,
-                null_count=other.null_count,
-            )
+        if isinstance(other, cudf.core.column.CategoricalColumn) or isinstance(
+            other, cudf.core.column.NumericalColumn
+        ):
+            other = other._apply_type_metadata(self.dtype)
         # Have to ignore typing here because it misdiagnoses super().
         return super()._copy_type_metadata(other)  # type: ignore
 
