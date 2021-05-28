@@ -16,7 +16,7 @@ from cudf._lib.lists import (
     sort_lists,
 )
 from cudf._lib.table import Table
-from cudf._typing import BinaryOperand
+from cudf._typing import BinaryOperand, Dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethodsMixin
@@ -232,6 +232,26 @@ class ListColumn(ColumnBase):
         raise NotImplementedError(
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
+
+    def _apply_type_metadata(
+        self: "cudf.core.column.ListColumn", dtype: Dtype
+    ) -> "cudf.core.column.ListColumn":
+        if isinstance(dtype, ListDtype):
+            self = ListColumn(
+                size=self.base_size,
+                dtype=self.dtype,
+                mask=self.base_mask,
+                offset=self.offset,
+                null_count=self.null_count,
+                children=(
+                    self.base_children[0],
+                    self.base_children[1]._apply_type_metadata(
+                        dtype.element_type
+                    ),
+                ),
+            )
+
+        return self
 
 
 class ListMethods(ColumnMethodsMixin):

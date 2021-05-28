@@ -1280,17 +1280,7 @@ class ColumnBase(Column, Serializable):
           and the children of `other`.
         * if none of the above, return `other` without any changes
         """
-        # TODO: This logic should probably be moved to a common nested column
-        # class.
-        if isinstance(other, type(self)):
-            if self.base_children and other.base_children:
-                base_children = tuple(
-                    self.base_children[i]._copy_type_metadata(
-                        other.base_children[i]
-                    )
-                    for i in range(len(self.base_children))
-                )
-                other.set_base_children(base_children)
+        other = other._apply_type_metadata(self.dtype)
 
         return other
 
@@ -2226,42 +2216,9 @@ def _copy_type_metadata_from_arrow(
     * When `arrow_array` is decimal type and `cudf_column` is
     Decimal64Dtype, copy precisions.
     """
-    cudf_dtype = _cudf_dtype_from_arrow_type(arrow_array.type)
-    cudf_column = cudf_column._apply_type_metadata(cudf_dtype)
-
-    if isinstance(cudf_column, cudf.core.column.StructColumn):
-        base_children = tuple(
-            _copy_type_metadata_from_arrow(arrow_array.field(i), col_child)
-            for i, col_child in enumerate(cudf_column.base_children)
-        )
-        cudf_column.set_base_children(base_children)
-        return cudf.core.column.StructColumn(
-            data=None,
-            size=cudf_column.base_size,
-            dtype=cudf_dtype,
-            mask=cudf_column.base_mask,
-            offset=cudf_column.offset,
-            null_count=cudf_column.null_count,
-            children=base_children,
-        )
-
-    elif isinstance(cudf_column, cudf.core.column.ListColumn) and (
-        arrow_array.values and cudf_column.base_children
-    ):
-        base_children = (
-            cudf_column.base_children[0],
-            _copy_type_metadata_from_arrow(
-                arrow_array.values, cudf_column.base_children[1]
-            ),
-        )
-        return cudf.core.column.ListColumn(
-            size=cudf_column.base_size,
-            dtype=cudf_dtype,
-            mask=cudf_column.base_mask,
-            offset=cudf_column.offset,
-            null_count=cudf_column.null_count,
-            children=base_children,
-        )
+    cudf_column = cudf_column._apply_type_metadata(
+        _cudf_dtype_from_arrow_type(arrow_array.type)
+    )
 
     return cudf_column
 

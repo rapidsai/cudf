@@ -115,22 +115,20 @@ class StructColumn(ColumnBase):
 
     def _apply_type_metadata(self: StructColumn, dtype: Dtype) -> StructColumn:
         if isinstance(dtype, StructDtype):
-            self = self._rename_fields(dtype.fields.keys())
+            self = StructColumn(
+                data=None,
+                size=self.base_size,
+                dtype=self.dtype,
+                mask=self.base_mask,
+                offset=self.offset,
+                null_count=self.null_count,
+                children=tuple(
+                    self.base_children[i]._apply_type_metadata(dtype.fields[f])
+                    for i, f in enumerate(dtype.fields.keys())
+                ),
+            )._rename_fields(dtype.fields.keys())
 
         return self
-
-    def _copy_type_metadata(
-        self: StructColumn, other: ColumnBase
-    ) -> ColumnBase:
-        """Copies type metadata from self onto other, returning a new column.
-
-        In addition to the default behavior, if `other` is a StructColumns we
-        rename the fields of `other` to the field names of `self`.
-        """
-        if isinstance(other, cudf.core.column.StructColumn):
-            other = other._apply_type_metadata(self.dtype)
-        # Have to ignore typing here because it misdiagnoses super().
-        return super()._copy_type_metadata(other)  # type: ignore
 
 
 class StructMethods(ColumnMethodsMixin):

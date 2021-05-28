@@ -1524,22 +1524,6 @@ class CategoricalColumn(column.ColumnBase):
 
         return self
 
-    def _copy_type_metadata(
-        self: CategoricalColumn, other: ColumnBase
-    ) -> ColumnBase:
-        """Copies type metadata from self onto other, returning a new column.
-
-        In addition to the default behavior, if `other` is not a
-        CategoricalColumn, we assume other is a column of codes, and return a
-        CategoricalColumn composed of `other`  and the categories of `self`.
-        """
-        if isinstance(other, cudf.core.column.CategoricalColumn) or isinstance(
-            other, cudf.core.column.NumericalColumn
-        ):
-            other = other._apply_type_metadata(self.dtype)
-        # Have to ignore typing here because it misdiagnoses super().
-        return super()._copy_type_metadata(other)  # type: ignore
-
 
 def _create_empty_categorical_column(
     categorical_column: CategoricalColumn, dtype: "CategoricalDtype"

@@ -217,19 +217,6 @@ class DecimalColumn(NumericalBaseColumn):
 
         return self
 
-    def _copy_type_metadata(
-        self: "cudf.core.column.DecimalColumn", other: ColumnBase
-    ) -> ColumnBase:
-        """Copies type metadata from self onto other, returning a new column.
-
-        In addition to the default behavior, if `other` is also a decimal
-        column the precision is copied over.
-        """
-        if isinstance(other, DecimalColumn):
-            other = other._apply_type_metadata(self.dtype)  # type: ignore
-        # Have to ignore typing here because it misdiagnoses super().
-        return super()._copy_type_metadata(other)  # type: ignore
-
 
 def _binop_scale(l_dtype, r_dtype, op):
     # This should at some point be hooked up to libcudf's
