@@ -125,6 +125,13 @@ struct encoded_data {
   hostdevice_2dvector<gpu::encoder_chunk_streams> streams;  // streams of encoded data, per chunk
 };
 
+struct string_dictionaries {
+  std::vector<rmm::device_uvector<uint32_t>> data;
+  std::vector<rmm::device_uvector<uint32_t>> index;
+  rmm::device_uvector<device_span<uint32_t>> d_data;
+  rmm::device_uvector<device_span<uint32_t>> d_index;
+};
+
 /**
  * @brief Implementation for ORC writer
  */
@@ -195,18 +202,18 @@ class writer::impl {
   /**
    * @brief Builds up column dictionaries indices
    *
+   * @param d_orc_columns Pre-order flattened host array of ORC column views
    * @param d_orc_columns Pre-order flattened device array of ORC column views
-   * @param columns List of columns
    * @param str_col_flat_indexes List of columns that are strings type
    * @param dict_data Dictionary data memory
    * @param dict_index Dictionary index memory
    * @param dict List of dictionary chunks
    */
-  void init_dictionaries(device_span<gpu::orc_column_device_view const> d_orc_columns,
-                         orc_column_view* columns,
+  void init_dictionaries(host_span<orc_column_view> orc_columns,
+                         device_span<gpu::orc_column_device_view const> d_orc_columns,
                          host_span<int const> str_col_flat_indexes,
-                         uint32_t* dict_data,
-                         uint32_t* dict_index,
+                         device_span<device_span<uint32_t>> dict_data,
+                         device_span<device_span<uint32_t>> dict_index,
                          hostdevice_vector<gpu::DictionaryChunk>* dict);
 
   /**
@@ -223,7 +230,7 @@ class writer::impl {
                           host_span<int const> str_col_flat_indexes,
                           host_span<stripe_rowgroups const> stripe_bounds,
                           hostdevice_vector<gpu::DictionaryChunk> const& dict,
-                          uint32_t* dict_index,
+                          host_span<rmm::device_uvector<uint32_t>> dict_index,
                           hostdevice_vector<gpu::StripeDictionary>& stripe_dict);
 
   /**
@@ -264,8 +271,7 @@ class writer::impl {
   encoded_data encode_columns(host_span<orc_column_view const> orc_columns,
                               device_span<gpu::orc_column_device_view const> d_orc_columns,
                               host_span<int const> str_col_flat_indexes,
-                              rmm::device_uvector<uint32_t>&& dict_data,
-                              rmm::device_uvector<uint32_t>&& dict_index,
+                              string_dictionaries&& dictionaries,
                               encoder_decimal_info&& dec_chunk_sizes,
                               host_span<stripe_rowgroups const> stripe_bounds,
                               orc_streams const& streams);

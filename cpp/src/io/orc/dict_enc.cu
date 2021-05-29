@@ -122,8 +122,8 @@ template <int block_size>
 __global__ void __launch_bounds__(block_size, 2)
   gpuInitDictionaryIndices(DictionaryChunk *chunks,
                            device_span<orc_column_device_view const> d_orc_columns,
-                           uint32_t *dict_data,
-                           uint32_t *dict_index,
+                           device_span<device_span<uint32_t>> dict_data,
+                           device_span<device_span<uint32_t>> dict_index,
                            size_t row_index_stride,
                            device_span<int const> str_col_flat_indexes)
 {
@@ -148,10 +148,9 @@ __global__ void __launch_bounds__(block_size, 2)
     auto const leaf_column_view = d_orc_columns[str_col_flat_indexes[col_id]].cudf_column;
     s->chunk                    = chunks[group_id * num_str_cols + col_id];
     s->chunk.leaf_column        = leaf_column_view;
-    s->chunk.dict_data =
-      dict_data + col_id * leaf_column_view->size() + group_id * row_index_stride;
-    s->chunk.dict_index = dict_index + col_id * leaf_column_view->size();
-    s->chunk.start_row  = group_id * row_index_stride;
+    s->chunk.dict_data          = dict_data[col_id].data() + group_id * row_index_stride;
+    s->chunk.dict_index         = dict_index[col_id].data();
+    s->chunk.start_row          = group_id * row_index_stride;
     s->chunk.num_rows =
       min(row_index_stride,
           max(static_cast<size_t>(leaf_column_view->size() - s->chunk.start_row), size_t{0}));
@@ -168,9 +167,9 @@ __global__ void __launch_bounds__(block_size, 2)
     s->chunk.string_char_count = 0;
     s->total_dupes             = 0;
   }
-  nnz       = s->nnz;
-  dict_data = s->chunk.dict_data;
-  start_row = s->chunk.start_row;
+  nnz              = s->nnz;
+  auto t_dict_data = s->chunk.dict_data;
+  start_row        = s->chunk.start_row;
   for (uint32_t i = 0; i < nnz; i += block_size) {
     uint32_t ck_row = 0;
     uint32_t hash   = 0;
@@ -185,7 +184,7 @@ __global__ void __launch_bounds__(block_size, 2)
     if (t == 0) s->chunk.string_char_count += len;
     if (i + t < nnz) {
       atomicAdd(&s->map.u32[hash >> 1], 1 << ((hash & 1) ? 16 : 0));
-      dict_data[i + t] = start_row + ck_row;
+      t_dict_data[i + t] = start_row + ck_row;
     }
     __syncthreads();
   }
@@ -219,7 +218,7 @@ __global__ void __launch_bounds__(block_size, 2)
     uint32_t ck_row = 0, pos = 0, hash = 0, pos_old, pos_new, sh, colliding_row;
     bool collision;
     if (i + t < nnz) {
-      ck_row                 = dict_data[i + t] - start_row;
+      ck_row                 = t_dict_data[i + t] - start_row;
       string_view string_val = s->chunk.leaf_column->element<string_view>(ck_row + start_row);
       hash                   = hash_string(string_val);
       sh                     = (hash & 1) ? 16 : 0;
@@ -273,7 +272,7 @@ __global__ void __launch_bounds__(block_size, 2)
     if (!t) { s->total_dupes += dupes_in_block; }
     if (i + t < nnz) {
       if (!is_dupe) {
-        dict_data[i + t - dupes_before] = ck_row + start_row;
+        t_dict_data[i + t - dupes_before] = ck_row + start_row;
       } else {
         s->chunk.dict_index[ck_row + start_row] = (ck_row_ref + start_row) | (1u << 31);
       }
@@ -429,8 +428,8 @@ __global__ void __launch_bounds__(block_size)
  */
 void InitDictionaryIndices(device_span<orc_column_device_view const> d_orc_columns,
                            DictionaryChunk *chunks,
-                           uint32_t *dict_data,
-                           uint32_t *dict_index,
+                           device_span<device_span<uint32_t>> dict_data,
+                           device_span<device_span<uint32_t>> dict_index,
                            size_t row_index_stride,
                            device_span<int const> str_col_flat_indexes,
                            uint32_t num_rowgroups,
