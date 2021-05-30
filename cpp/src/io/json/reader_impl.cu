@@ -241,14 +241,18 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
 
   // Support delayed opening of the file if using memory mapping datasource
   // This allows only mapping of a subset of the file if using byte range
-  if (source_ == nullptr) {
-    assert(!filepath_.empty());
-    source_ = datasource::create(filepath_, range_offset, map_range_size);
+  if (sources_.empty()) {
+    assert(!filepaths_.empty());
+    sources_.emplace_back(datasource::create(filepaths_[0], range_offset, map_range_size));
   }
 
-  if (!source_->is_empty()) {
-    auto data_size = (map_range_size != 0) ? map_range_size : source_->size();
-    buffer_        = source_->host_read(range_offset, data_size);
+  // Iterate through the user defined sources and read the contents into the local buffer
+  CUDF_EXPECTS(!sources_.empty(), "No sources were defined");
+  for (const auto &source : sources_) {
+    if (!source->is_empty()) {
+      auto data_size = (map_range_size != 0) ? map_range_size : source->size();
+      buffer_        = source->host_read(range_offset, data_size);
+    }
   }
 
   byte_range_offset_ = range_offset;
@@ -266,7 +270,7 @@ void reader::impl::decompress_input(rmm::cuda_stream_view stream)
 {
   const auto compression_type =
     infer_compression_type(options_.get_compression(),
-                           filepath_,
+                           filepaths_[0], // XXX: Is is a requirement that all files have the same compression type?
                            {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
   if (compression_type == "none") {
     // Do not use the owner vector here to avoid extra copy
@@ -620,12 +624,12 @@ table_with_metadata reader::impl::convert_data_to_table(device_span<uint64_t con
   return table_with_metadata{std::make_unique<table>(std::move(out_columns)), metadata_};
 }
 
-reader::impl::impl(std::unique_ptr<datasource> source,
-                   std::string filepath,
+reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
+                   std::vector<std::string> filepaths,
                    json_reader_options const &options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource *mr)
-  : options_(options), mr_(mr), source_(std::move(source)), filepath_(filepath)
+  : options_(options), mr_(mr), sources_(std::move(sources)), filepaths_(filepaths)
 {
   CUDF_EXPECTS(options_.is_enabled_lines(), "Only JSON Lines format is currently supported.\n");
 
@@ -679,10 +683,10 @@ reader::reader(std::vector<std::string> const &filepaths,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource *mr)
 {
-  CUDF_EXPECTS(filepaths.size() == 1, "Only a single source is currently supported.");
   // Delay actual instantiation of data source until read to allow for
   // partial memory mapping of file using byte ranges
-  _impl = std::make_unique<impl>(nullptr, filepaths[0], options, stream, mr);
+  std::vector<std::unique_ptr<datasource>> src; // Empty datasources
+  _impl = std::make_unique<impl>(std::move(src), filepaths, options, stream, mr);
 }
 
 // Forward to implementation
@@ -691,8 +695,8 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource *mr)
 {
-  CUDF_EXPECTS(sources.size() == 1, "Only a single source is currently supported.");
-  _impl = std::make_unique<impl>(std::move(sources[0]), "", options, stream, mr);
+  std::vector<std::string> file_paths; // Empty filepaths
+  _impl = std::make_unique<impl>(std::move(sources), file_paths, options, stream, mr);
 }
 
 // Destructor within this translation unit
