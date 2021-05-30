@@ -56,7 +56,7 @@ class reader::impl {
 
   rmm::mr::device_memory_resource *mr_ = nullptr;
 
-  std::vector<std::unique_ptr<datasource>> &&sources_;
+  std::vector<std::unique_ptr<datasource>> sources_;
   std::vector<std::string> filepaths_;
   std::unique_ptr<datasource::buffer> buffer_;
 

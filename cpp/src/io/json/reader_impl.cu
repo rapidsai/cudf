@@ -227,7 +227,7 @@ std::pair<std::vector<std::string>, col_map_ptr_type> reader::impl::get_json_obj
 /**
  * @brief Ingest input JSON file/buffer, without decompression.
  *
- * Sets the source_, byte_range_offset_, and byte_range_size_ data members
+ * Sets the sources_, byte_range_offset_, and byte_range_size_ data members
  *
  * @param[in] range_offset Number of bytes offset from the start
  * @param[in] range_size Bytes to read; use `0` for all remaining data
@@ -243,7 +243,9 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
   // This allows only mapping of a subset of the file if using byte range
   if (sources_.empty()) {
     assert(!filepaths_.empty());
-    sources_.emplace_back(datasource::create(filepaths_[0], range_offset, map_range_size));
+    for (const auto &path : filepaths_) {
+      sources_.emplace_back(datasource::create(path, range_offset, map_range_size));
+    }
   }
 
   // Iterate through the user defined sources and read the contents into the local buffer
@@ -251,7 +253,12 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
   for (const auto &source : sources_) {
     if (!source->is_empty()) {
       auto data_size = (map_range_size != 0) ? map_range_size : source->size();
-      buffer_        = source->host_read(range_offset, data_size);
+      if (buffer_ == nullptr || buffer_->size() == 0) {
+        // XXX: Read to an existing buffer in host memory here instead of getting a new buffer_ each time (aka append)
+        buffer_        = source->host_read(range_offset, data_size);
+      } else {
+        printf("Buffer_ already has some data. Lets append to it\n");
+      }
     }
   }
 
@@ -685,7 +692,7 @@ reader::reader(std::vector<std::string> const &filepaths,
 {
   // Delay actual instantiation of data source until read to allow for
   // partial memory mapping of file using byte ranges
-  std::vector<std::unique_ptr<datasource>> src; // Empty datasources
+  std::vector<std::unique_ptr<datasource>> src = {}; // Empty datasources
   _impl = std::make_unique<impl>(std::move(src), filepaths, options, stream, mr);
 }
 
@@ -695,7 +702,7 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource *mr)
 {
-  std::vector<std::string> file_paths; // Empty filepaths
+  std::vector<std::string> file_paths = {}; // Empty filepaths
   _impl = std::make_unique<impl>(std::move(sources), file_paths, options, stream, mr);
 }
 

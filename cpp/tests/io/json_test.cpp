@@ -870,9 +870,9 @@ TEST_F(JsonReaderTest, JsonLinesMultipleFileInputs)
   outfile.close();
 
   const std::string file2 = temp_env->get_temp_dir() + "JsonLinesFileTest2.json";
-  std::ofstream outfile(file2, std::ofstream::out);
-  outfile << "[11, 1.1]\n[22, 2.2]";
-  outfile.close();
+  std::ofstream outfile2(file2, std::ofstream::out);
+  outfile2 << "[11, 1.1]\n[22, 2.2]";
+  outfile2.close();
 
   cudf_io::json_reader_options in_options =
     cudf_io::json_reader_options::builder(cudf_io::source_info{{file1, file2}}).lines(true);
