@@ -142,10 +142,15 @@ struct column_scalar_scatterer_impl<string_view, MapIterator> {
 
 template <typename MapIterator>
 struct column_scalar_scatterer_impl<list_view, MapIterator> {
-  template <typename... Args>
-  std::unique_ptr<column> operator()(Args&&...) const
+  std::unique_ptr<column> operator()(std::reference_wrapper<const scalar> const& source,
+                                     MapIterator scatter_iter,
+                                     size_type scatter_rows,
+                                     column_view const& target,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr) const
   {
-    CUDF_FAIL("scatter scalar to list_view not implemented");
+    return lists::detail::scatter(
+      source, scatter_iter, scatter_iter + scatter_rows, target, stream, mr);
   }
 };
 
@@ -189,8 +194,8 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
     auto contents           = new_indices->release();
     auto indices_column     = std::make_unique<column>(indices_type,
                                                    static_cast<size_type>(output_size),
-                                                   *(contents.data.release()),
-                                                   rmm::device_buffer{0, stream, mr},
+                                                   std::move(*(contents.data.release())),
+                                                   rmm::device_buffer{},
                                                    0);
     // use the keys from the matched column
     std::unique_ptr<column> keys_column(std::move(dict_target->release().children.back()));

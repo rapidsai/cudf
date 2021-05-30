@@ -424,13 +424,13 @@ std::unique_ptr<rmm::device_uvector<size_type>> left_anti_join(
  * TableB: {{1, 2, 3},  {1, 2, 5}}
  * left_on: {0}
  * right_on: {1}
- * Result: {{0}, {1}}
+ * Result: {{0}}
  *
  * TableA: {{0, 1, 2}, {1, 2, 5}}
  * TableB: {{1, 2, 3}}
  * left_on: {0}
  * right_on: {0}
- * Result: { {0} {1} }
+ * Result: { {0}, {1} }
  * @endcode
  *
  * @throw cudf::logic_error if number of elements in `left_on` or `right_on`

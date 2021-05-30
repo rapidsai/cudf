@@ -167,8 +167,8 @@ TYPED_TEST(TypedStructSearchTest, SimpleInputWithNullsTests)
   structs_t   = structs_col{{child_col_t}, null_at(10)}.release();
   results =
     search_bounds(structs_t, structs_values, {cudf::order::ASCENDING}, {cudf::null_order::AFTER});
-  expected_lower_bound = int32s_col{1, 0, 10, 10, 2, 10};
-  expected_upper_bound = int32s_col{2, 0, 10, 11, 6, 10};
+  expected_lower_bound = int32s_col{1, 9, 9, 10, 2, 9};
+  expected_upper_bound = int32s_col{2, 10, 9, 11, 6, 9};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), print_all);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), print_all);
 
@@ -187,8 +187,8 @@ TYPED_TEST(TypedStructSearchTest, SimpleInputWithNullsTests)
   structs_t   = structs_col{{child_col_t}, null_at(10)}.release();
   results =
     search_bounds(structs_t, structs_values, {cudf::order::DESCENDING}, {cudf::null_order::AFTER});
-  expected_lower_bound = int32s_col{7, 11, 0, 0, 3, 0};
-  expected_upper_bound = int32s_col{8, 11, 0, 0, 7, 0};
+  expected_lower_bound = int32s_col{7, 0, 0, 0, 3, 0};
+  expected_upper_bound = int32s_col{8, 0, 0, 0, 7, 0};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), print_all);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), print_all);
 }
@@ -214,8 +214,8 @@ TYPED_TEST(TypedStructSearchTest, SimpleInputWithValuesHavingNullsTests)
   // Sorted asc, search nulls last
   results =
     search_bounds(structs_t, structs_values, {cudf::order::ASCENDING}, {cudf::null_order::AFTER});
-  expected_lower_bound = int32s_col{3, 0, 11, 11, 4, 11};
-  expected_upper_bound = int32s_col{4, 0, 11, 11, 8, 11};
+  expected_lower_bound = int32s_col{3, 11, 11, 11, 4, 11};
+  expected_upper_bound = int32s_col{4, 11, 11, 11, 8, 11};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), print_all);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), print_all);
 
@@ -232,8 +232,8 @@ TYPED_TEST(TypedStructSearchTest, SimpleInputWithValuesHavingNullsTests)
   // Sorted dsc, search nulls last
   results =
     search_bounds(structs_t, structs_values, {cudf::order::DESCENDING}, {cudf::null_order::AFTER});
-  expected_lower_bound = int32s_col{7, 11, 0, 0, 3, 0};
-  expected_upper_bound = int32s_col{8, 11, 0, 0, 7, 0};
+  expected_lower_bound = int32s_col{7, 0, 0, 0, 3, 0};
+  expected_upper_bound = int32s_col{8, 0, 0, 0, 7, 0};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), print_all);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), print_all);
 }
@@ -261,8 +261,8 @@ TYPED_TEST(TypedStructSearchTest, SimpleInputWithTargetHavingNullsTests)
   structs_t   = structs_col{{child_col_t}, null_at(10)}.release();
   results =
     search_bounds(structs_t, structs_values, {cudf::order::ASCENDING}, {cudf::null_order::AFTER});
-  expected_lower_bound = int32s_col{1, 0, 10, 0, 2, 10};
-  expected_upper_bound = int32s_col{2, 1, 10, 1, 6, 10};
+  expected_lower_bound = int32s_col{1, 0, 9, 0, 2, 9};
+  expected_upper_bound = int32s_col{2, 1, 9, 1, 6, 9};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), print_all);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), print_all);
 

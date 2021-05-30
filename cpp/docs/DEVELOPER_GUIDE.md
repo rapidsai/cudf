@@ -414,9 +414,9 @@ Allocates a specified number of bytes of untyped, uninitialized device memory us
 `device_memory_resource`. If no resource is explicitly provided, uses 
 `rmm::mr::get_current_device_resource()`. 
 
-`rmm::device_buffer` is copyable and movable. A copy performs a deep copy of the `device_buffer`'s 
-device memory, whereas a move moves ownership of the device memory from one `device_buffer` to 
-another.
+`rmm::device_buffer` is movable and copyable on a stream. A copy performs a deep copy of the 
+`device_buffer`'s device memory on the specified stream, whereas a move moves ownership of the 
+device memory from one `device_buffer` to another.
 
 ```c++
 // Allocates at least 100 bytes of uninitialized device memory 
@@ -424,11 +424,15 @@ another.
 rmm::device_buffer buff(100, stream, mr); 
 void * raw_data = buff.data(); // Raw pointer to underlying device memory
 
-rmm::device_buffer copy(buff); // Deep copies `buff` into `copy`
-rmm::device_buffer moved_to(std::move(buff)); // Moves contents of `buff` into `moved_to`
+// Deep copies `buff` into `copy` on `stream`
+rmm::device_buffer copy(buff, stream); 
+
+// Moves contents of `buff` into `moved_to`
+rmm::device_buffer moved_to(std::move(buff)); 
 
 custom_memory_resource *mr...;
-rmm::device_buffer custom_buff(100, mr); // Allocates 100 bytes from the custom_memory_resource
+// Allocates 100 bytes from the custom_memory_resource
+rmm::device_buffer custom_buff(100, mr, stream); 
 ```
 
 #### `rmm::device_scalar<T>`
@@ -964,21 +968,18 @@ this compound column representation of strings.
 
 ## Structs columns
 
-Structs are represented similarly to lists, except that they have multiple child data columns.
-The parent column's type is `STRUCT` and contains no data, but its size represents the number of 
-structs in the column, and its null mask represents the validity of each struct element. The parent 
-has `N + 1` children, where `N` is the number of fields in the struct. 
+A struct is a nested data type with a set of child columns each representing an individual field
+of a logical struct. Field names are not represented.
 
-1. A non-nullable column of `INT32` elements that indicates the offset to the beginning of each 
-   struct in each dense column of elements.
-2. For each field, a column containing the actual field data and optional null mask for all elements
-   of all the structs packed together.
-   
-With this representation, `child[0][offsets[i]]` is the first field of struct `i`, 
-`child[1][offsets[i]]` is the second field of struct `i`, etc.
+A structs column with `N` fields has `N` children. Each child is a column storing all the data
+of a single field packed column-wise, with an optional null mask. The parent column's type is
+`STRUCT` and contains no data, its size represents the number of struct rows in the column, and its
+null mask represents the validity of each struct element.
 
-As defined in the [Apache Arrow specification](https://arrow.apache.org/docs/format/Columnar.html#struct-layout),
-in addition to the struct column's null mask, each struct field column has its own optional null
+With this representation, `child[0][10]` is row 10 of the first field of the struct, `child[1][42]`
+is row 42 of the second field of the struct.
+
+Notice that in addition to the struct column's null mask, each struct field column has its own optional null
 mask. A struct field's validity can vary independently from the corresponding struct row. For
 instance, a non-null struct row might have a null field. However, the fields of a null struct row
 are deemed to be null as well. For example, consider a struct column of type 

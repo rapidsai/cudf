@@ -20,6 +20,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
+#include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -51,6 +52,8 @@ struct compute_size_and_concatenate_fn {
   offset_type const* const list_offsets;
   column_device_view const strings_dv;
   string_scalar_device_view const string_narep_dv;
+  separator_on_nulls const separate_nulls;
+  output_if_empty_list const empty_list_policy;
 
   offset_type* d_offsets{nullptr};
 
@@ -61,45 +64,66 @@ struct compute_size_and_concatenate_fn {
   // We need to set `1` or `0` for the validities of the output strings.
   int8_t* d_validities{nullptr};
 
-  __device__ void operator()(size_type const idx)
+  __device__ bool output_is_null(size_type const idx,
+                                 size_type const start_idx,
+                                 size_type const end_idx) const noexcept
+  {
+    if (func.is_null_list(lists_dv, idx)) { return true; }
+    return empty_list_policy == output_if_empty_list::NULL_ELEMENT && start_idx == end_idx;
+  }
+
+  __device__ void operator()(size_type const idx) const noexcept
   {
     // If this is the second pass, and the row `idx` is known to be a null string
-    if (d_chars and not d_validities[idx]) { return; }
+    if (d_chars && !d_validities[idx]) { return; }
 
-    if (not d_chars and func.is_null_list(lists_dv, idx)) {
+    // Indices of the strings within the list row
+    auto const start_idx = list_offsets[idx];
+    auto const end_idx   = list_offsets[idx + 1];
+
+    if (!d_chars && output_is_null(idx, start_idx, end_idx)) {
       d_offsets[idx]    = 0;
       d_validities[idx] = false;
       return;
     }
 
-    auto const separator      = func.separator(idx);
-    auto const separator_size = separator.size_bytes();
-    auto size_bytes           = size_type{0};
-    bool written              = false;
-    char* output_ptr          = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    auto const separator   = func.separator(idx);
+    auto size_bytes        = size_type{0};
+    char* output_ptr       = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    bool has_valid_element = false;
+    bool write_separator   = false;
 
-    for (size_type str_idx = list_offsets[idx], idx_end = list_offsets[idx + 1]; str_idx < idx_end;
-         ++str_idx) {
-      if (not d_chars and (strings_dv.is_null(str_idx) and not string_narep_dv.is_valid())) {
+    for (size_type str_idx = start_idx; str_idx < end_idx; ++str_idx) {
+      bool null_element = strings_dv.is_null(str_idx);
+      has_valid_element = has_valid_element || !null_element;
+
+      if (!d_chars && (null_element && !string_narep_dv.is_valid())) {
         d_offsets[idx]    = 0;
         d_validities[idx] = false;
         return;  // early termination: the entire list of strings will result in a null string
       }
-      auto const d_str = strings_dv.is_null(str_idx) ? string_narep_dv.value()
-                                                     : strings_dv.element<string_view>(str_idx);
-      size_bytes += separator_size + d_str.size_bytes();
-      if (output_ptr) {
-        // Separator is inserted only in between strings
-        if (written) { output_ptr = detail::copy_string(output_ptr, separator); }
-        output_ptr = detail::copy_string(output_ptr, d_str);
-        written    = true;
+
+      if (write_separator && (separate_nulls == separator_on_nulls::YES || !null_element)) {
+        if (output_ptr) output_ptr = detail::copy_string(output_ptr, separator);
+        size_bytes += separator.size_bytes();
+        write_separator = false;
       }
+
+      auto const d_str =
+        null_element ? string_narep_dv.value() : strings_dv.element<string_view>(str_idx);
+      if (output_ptr) output_ptr = detail::copy_string(output_ptr, d_str);
+      size_bytes += d_str.size_bytes();
+
+      write_separator =
+        write_separator || (separate_nulls == separator_on_nulls::YES) || !null_element;
     }
 
-    // Separator is inserted only in between strings
-    if (not d_chars) {
-      d_offsets[idx]    = static_cast<size_type>(size_bytes - separator_size);
-      d_validities[idx] = true;
+    // If there are all null elements, the output should be the same as having an empty list input:
+    // a null or an empty string
+    if (!d_chars) {
+      d_offsets[idx] = has_valid_element ? size_bytes : 0;
+      d_validities[idx] =
+        has_valid_element || empty_list_policy == output_if_empty_list::EMPTY_STRING;
     }
   }
 };
@@ -123,11 +147,13 @@ struct scalar_separator_fn {
 
 }  // namespace
 
-std::unique_ptr<column> concatenate_list_elements(lists_column_view const& lists_strings_column,
-                                                  string_scalar const& separator,
-                                                  string_scalar const& narep,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> join_list_elements(lists_column_view const& lists_strings_column,
+                                           string_scalar const& separator,
+                                           string_scalar const& narep,
+                                           separator_on_nulls separate_nulls,
+                                           output_if_empty_list empty_list_policy,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(lists_strings_column.child().type().id() == type_id::STRING,
                "The input column must be a column of lists of strings");
@@ -146,14 +172,15 @@ std::unique_ptr<column> concatenate_list_elements(lists_column_view const& lists
   auto const sep_dv          = get_scalar_device_view(const_cast<string_scalar&>(separator));
   auto const string_narep_dv = get_scalar_device_view(const_cast<string_scalar&>(narep));
 
-  auto const func    = scalar_separator_fn{sep_dv};
-  auto const comp_fn = compute_size_and_concatenate_fn<decltype(func)>{
-    func,
-    *lists_dv_ptr,
-    lists_strings_column.offsets_begin(),
-    *strings_dv_ptr,
-    string_narep_dv,
-  };
+  auto const func = scalar_separator_fn{sep_dv};
+  auto const comp_fn =
+    compute_size_and_concatenate_fn<decltype(func)>{func,
+                                                    *lists_dv_ptr,
+                                                    lists_strings_column.offsets_begin(),
+                                                    *strings_dv_ptr,
+                                                    string_narep_dv,
+                                                    separate_nulls,
+                                                    empty_list_policy};
   auto [offsets_column, chars_column, null_mask, null_count] =
     make_strings_children_with_null_mask(comp_fn, num_rows, num_rows, stream, mr);
 
@@ -179,7 +206,7 @@ struct column_separators_fn {
   __device__ bool is_null_list(column_device_view const& lists_dv, size_type const idx) const
     noexcept
   {
-    return lists_dv.is_null(idx) or (separators_dv.is_null(idx) and not sep_narep_dv.is_valid());
+    return lists_dv.is_null(idx) || (separators_dv.is_null(idx) && !sep_narep_dv.is_valid());
   }
 
   __device__ string_view separator(size_type const idx) const noexcept
@@ -191,12 +218,14 @@ struct column_separators_fn {
 
 }  // namespace
 
-std::unique_ptr<column> concatenate_list_elements(lists_column_view const& lists_strings_column,
-                                                  strings_column_view const& separators,
-                                                  string_scalar const& separator_narep,
-                                                  string_scalar const& string_narep,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> join_list_elements(lists_column_view const& lists_strings_column,
+                                           strings_column_view const& separators,
+                                           string_scalar const& separator_narep,
+                                           string_scalar const& string_narep,
+                                           separator_on_nulls separate_nulls,
+                                           output_if_empty_list empty_list_policy,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(lists_strings_column.child().type().id() == type_id::STRING,
                "The input column must be a column of lists of strings");
@@ -217,14 +246,15 @@ std::unique_ptr<column> concatenate_list_elements(lists_column_view const& lists
   auto const sep_dv_ptr      = column_device_view::create(separators.parent(), stream);
   auto const sep_narep_dv    = get_scalar_device_view(const_cast<string_scalar&>(separator_narep));
 
-  auto const func    = column_separators_fn{*sep_dv_ptr, sep_narep_dv};
-  auto const comp_fn = compute_size_and_concatenate_fn<decltype(func)>{
-    func,
-    *lists_dv_ptr,
-    lists_strings_column.offsets_begin(),
-    *strings_dv_ptr,
-    string_narep_dv,
-  };
+  auto const func = column_separators_fn{*sep_dv_ptr, sep_narep_dv};
+  auto const comp_fn =
+    compute_size_and_concatenate_fn<decltype(func)>{func,
+                                                    *lists_dv_ptr,
+                                                    lists_strings_column.offsets_begin(),
+                                                    *strings_dv_ptr,
+                                                    string_narep_dv,
+                                                    separate_nulls,
+                                                    empty_list_policy};
   auto [offsets_column, chars_column, null_mask, null_count] =
     make_strings_children_with_null_mask(comp_fn, num_rows, num_rows, stream, mr);
 
@@ -239,25 +269,40 @@ std::unique_ptr<column> concatenate_list_elements(lists_column_view const& lists
 
 }  // namespace detail
 
-std::unique_ptr<column> concatenate_list_elements(lists_column_view const& lists_strings_column,
-                                                  string_scalar const& separator,
-                                                  string_scalar const& narep,
-                                                  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> join_list_elements(lists_column_view const& lists_strings_column,
+                                           string_scalar const& separator,
+                                           string_scalar const& narep,
+                                           separator_on_nulls separate_nulls,
+                                           output_if_empty_list empty_list_policy,
+                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate_list_elements(
-    lists_strings_column, separator, narep, rmm::cuda_stream_default, mr);
+  return detail::join_list_elements(lists_strings_column,
+                                    separator,
+                                    narep,
+                                    separate_nulls,
+                                    empty_list_policy,
+                                    rmm::cuda_stream_default,
+                                    mr);
 }
 
-std::unique_ptr<column> concatenate_list_elements(lists_column_view const& lists_strings_column,
-                                                  strings_column_view const& separators,
-                                                  string_scalar const& separator_narep,
-                                                  string_scalar const& string_narep,
-                                                  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> join_list_elements(lists_column_view const& lists_strings_column,
+                                           strings_column_view const& separators,
+                                           string_scalar const& separator_narep,
+                                           string_scalar const& string_narep,
+                                           separator_on_nulls separate_nulls,
+                                           output_if_empty_list empty_list_policy,
+                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate_list_elements(
-    lists_strings_column, separators, separator_narep, string_narep, rmm::cuda_stream_default, mr);
+  return detail::join_list_elements(lists_strings_column,
+                                    separators,
+                                    separator_narep,
+                                    string_narep,
+                                    separate_nulls,
+                                    empty_list_policy,
+                                    rmm::cuda_stream_default,
+                                    mr);
 }
 
 }  // namespace strings
