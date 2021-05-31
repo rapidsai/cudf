@@ -721,9 +721,8 @@ public abstract class Aggregation {
 
     /**
      * Collect the values into a set.
-     * WARNING: Due to a bug in libcudf (https://github.com/rapidsai/cudf/issues/8405),
-     * NullEquality of UNEQUAL and NaNEquality of ALL_EQUAL doesn't work properly under rolling windows.
-     * It will be fixed in next release.
+     * WARNING: Due to the bug in libcudf (https://github.com/rapidsai/cudf/issues/8405),
+     * NullEquality of UNEQUAL and NaNEquality of ALL_EQUAL doesn't work properly under rolling window.
      *
      * @param nullPolicy   Indicates whether to include/exclude nulls during collection.
      * @param nullEquality Flag to specify whether null entries within each list should be considered equal.
