@@ -137,23 +137,16 @@ struct device_type_dispatcher {
   mutable_column_device_view out;
   column_device_view lhs;
   column_device_view rhs;
-  data_type common_data_type;
-  CUDA_HOST_DEVICE_CALLABLE device_type_dispatcher(mutable_column_device_view ot,
-                                                   column_device_view lt,
-                                                   column_device_view rt,
-                                                   data_type ct)
-    : out(ot), lhs(lt), rhs(rt), common_data_type(ct)
-  {
-  }
+  std::optional<data_type> common_data_type;
 
   __device__ void operator()(size_type i)
   {
-    if (common_data_type == data_type{type_id::EMPTY}) {
+    if (common_data_type) {
+      type_dispatcher(
+        *common_data_type, ops_wrapper<BinaryOperator, store_as_result>{out, lhs, rhs}, i);
+    } else {
       double_type_dispatcher(
         lhs.type(), rhs.type(), ops2_wrapper<BinaryOperator, store_as_result>{out, lhs, rhs}, i);
-    } else {
-      type_dispatcher(
-        common_data_type, ops_wrapper<BinaryOperator, store_as_result>{out, lhs, rhs}, i);
     }
   }
 };
@@ -171,10 +164,10 @@ struct device_type_dispatcher {
  * @param stream CUDA stream used for device memory operations
  */
 template <class BinaryOperator>
-void dispatch_single_double(mutable_column_device_view& outd,
-                            column_device_view const& lhsd,
-                            column_device_view const& rhsd,
-                            rmm::cuda_stream_view stream)
+void compiled_binary_op(mutable_column_device_view& outd,
+                        column_device_view const& lhsd,
+                        column_device_view const& rhsd,
+                        rmm::cuda_stream_view stream)
 {
   auto common_dtype = get_common_type(outd.type(), lhsd.type(), rhsd.type());
 

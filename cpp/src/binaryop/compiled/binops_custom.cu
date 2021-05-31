@@ -29,24 +29,6 @@ namespace cudf {
 namespace binops {
 namespace compiled {
 
-// Defined in cu files
-// // TODO add boolean for scalars.
-template <class BinaryOperator>
-void dispatch_single_double(mutable_column_device_view&,
-                            column_device_view const&,
-                            column_device_view const&,
-                            rmm::cuda_stream_view);
-void dispatch_comparison_op(mutable_column_device_view& outd,
-                            column_device_view const& lhsd,
-                            column_device_view const& rhsd,
-                            binary_operator op,
-                            rmm::cuda_stream_view stream);
-void dispatch_equality_op(mutable_column_device_view& outd,
-                          column_device_view const& lhsd,
-                          column_device_view const& rhsd,
-                          binary_operator op,
-                          rmm::cuda_stream_view stream);
-
 void operator_dispatcher(mutable_column_view& out,
                          column_view const& lhs,
                          column_view const& rhs,
@@ -62,47 +44,48 @@ void operator_dispatcher(mutable_column_view& out,
 
   // clang-format off
   switch (op) {
-    case binary_operator::ADD:                  dispatch_single_double<ops::Add>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::SUB:                  dispatch_single_double<ops::Sub>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::MUL:                  dispatch_single_double<ops::Mul>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::DIV:                  dispatch_single_double<ops::Div>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::TRUE_DIV:             dispatch_single_double<ops::TrueDiv>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::FLOOR_DIV:            dispatch_single_double<ops::FloorDiv>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::MOD:                  dispatch_single_double<ops::Mod>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::PYMOD:                dispatch_single_double<ops::PyMod>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::POW:                  dispatch_single_double<ops::Pow>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::EQUAL:                //dispatch_single_double<ops::Equal>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::NOT_EQUAL:            //dispatch_single_double<ops::NotEqual>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::NULL_EQUALS:          //dispatch_single_double<ops::NullEquals>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::ADD:                  compiled_binary_op<ops::Add>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::SUB:                  compiled_binary_op<ops::Sub>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::MUL:                  compiled_binary_op<ops::Mul>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::DIV:                  compiled_binary_op<ops::Div>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::TRUE_DIV:             compiled_binary_op<ops::TrueDiv>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::FLOOR_DIV:            compiled_binary_op<ops::FloorDiv>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::MOD:                  compiled_binary_op<ops::Mod>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::PYMOD:                compiled_binary_op<ops::PyMod>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::POW:                  compiled_binary_op<ops::Pow>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::EQUAL:                //compiled_binary_op<ops::Equal>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::NOT_EQUAL:            //compiled_binary_op<ops::NotEqual>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::NULL_EQUALS:          //compiled_binary_op<ops::NullEquals>(*outd, *lhsd, *rhsd, stream); break;
       if(out.type().id() != type_id::BOOL8) CUDF_FAIL("Output type of Comparison operator should be bool type");
         dispatch_equality_op(*outd, *lhsd, *rhsd, op, stream); break;
-    case binary_operator::LESS:                 //dispatch_single_double<ops::Less>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::GREATER:              //dispatch_single_double<ops::Greater>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::LESS_EQUAL:           //dispatch_single_double<ops::LessEqual>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::GREATER_EQUAL:        //dispatch_single_double<ops::GreaterEqual>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::LESS:                 //compiled_binary_op<ops::Less>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::GREATER:              //compiled_binary_op<ops::Greater>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::LESS_EQUAL:           //compiled_binary_op<ops::LessEqual>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::GREATER_EQUAL:        //compiled_binary_op<ops::GreaterEqual>(*outd, *lhsd, *rhsd, stream); break;
       if(out.type().id() != type_id::BOOL8) CUDF_FAIL("Output type of Comparison operator should be bool type");
         dispatch_comparison_op(*outd, *lhsd, *rhsd, op, stream); break;
-    case binary_operator::BITWISE_AND:          dispatch_single_double<ops::BitwiseAnd>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::BITWISE_OR:           dispatch_single_double<ops::BitwiseOr>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::BITWISE_XOR:          dispatch_single_double<ops::BitwiseXor>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::LOGICAL_AND:          dispatch_single_double<ops::LogicalAnd>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::LOGICAL_OR:           dispatch_single_double<ops::LogicalOr>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::SHIFT_LEFT:           dispatch_single_double<ops::ShiftLeft>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::SHIFT_RIGHT:          dispatch_single_double<ops::ShiftRight>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::SHIFT_RIGHT_UNSIGNED: dispatch_single_double<ops::ShiftRightUnsigned>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::LOG_BASE:             dispatch_single_double<ops::LogBase>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::ATAN2:                dispatch_single_double<ops::ATan2>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::PMOD:                 dispatch_single_double<ops::PMod>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::BITWISE_AND:          compiled_binary_op<ops::BitwiseAnd>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::BITWISE_OR:           compiled_binary_op<ops::BitwiseOr>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::BITWISE_XOR:          compiled_binary_op<ops::BitwiseXor>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::LOGICAL_AND:          compiled_binary_op<ops::LogicalAnd>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::LOGICAL_OR:           compiled_binary_op<ops::LogicalOr>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::SHIFT_LEFT:           compiled_binary_op<ops::ShiftLeft>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::SHIFT_RIGHT:          compiled_binary_op<ops::ShiftRight>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::SHIFT_RIGHT_UNSIGNED: compiled_binary_op<ops::ShiftRightUnsigned>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::LOG_BASE:             compiled_binary_op<ops::LogBase>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::ATAN2:                compiled_binary_op<ops::ATan2>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::PMOD:                 compiled_binary_op<ops::PMod>(*outd, *lhsd, *rhsd, stream); break;
     /*
-    case binary_operator::NULL_MAX:             dispatch_single_double<ops::NullMax>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::NULL_MIN:             dispatch_single_double<ops::NullMin>(*outd, *lhsd, *rhsd, stream); break;
-    case binary_operator::GENERIC_BINARY:       dispatch_single_double<ops::UserDefinedOp>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::NULL_MAX:             compiled_binary_op<ops::NullMax>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::NULL_MIN:             compiled_binary_op<ops::NullMin>(*outd, *lhsd, *rhsd, stream); break;
+    case binary_operator::GENERIC_BINARY:       compiled_binary_op<ops::UserDefinedOp>(*outd, *lhsd, *rhsd, stream); break;
     */
     default:;
   }
   // clang-format on
 }
 
+// // TODO add boolean for scalars.
 void binary_operation_compiled(mutable_column_view& out,
                                column_view const& lhs,
                                column_view const& rhs,

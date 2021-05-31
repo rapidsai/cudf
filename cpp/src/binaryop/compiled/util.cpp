@@ -29,7 +29,7 @@ struct common_type_functor {
   template <typename TypeLhs, typename TypeRhs>
   struct nested_common_type_functor {
     template <typename TypeOut>
-    data_type operator()()
+    std::optional<data_type> operator()()
     {
       // If common_type exists
       if constexpr (cudf::has_common_type_v<TypeOut, TypeLhs, TypeRhs>) {
@@ -40,11 +40,11 @@ struct common_type_functor {
         // Eg. d=t-t
         return data_type{type_to_id<TypeCommon>()};
       }
-      return data_type{type_id::EMPTY};
+      return {};
     }
   };
   template <typename TypeLhs, typename TypeRhs>
-  data_type operator()(data_type out)
+  std::optional<data_type> operator()(data_type out)
   {
     return type_dispatcher(out, nested_common_type_functor<TypeLhs, TypeRhs>{});
   }
@@ -76,7 +76,6 @@ struct is_supported_operation_functor {
         case binary_operator::BITWISE_AND:          return call<ops::BitwiseAnd, TypeOut>();
         case binary_operator::BITWISE_OR:           return call<ops::BitwiseOr, TypeOut>();
         case binary_operator::BITWISE_XOR:          return call<ops::BitwiseXor, TypeOut>();
-        //case binary_operator::GENERIC_BINARY:       return call<ops::UserDefinedOp, TypeOut>();
         case binary_operator::SHIFT_LEFT:           return call<ops::ShiftLeft, TypeOut>();
         case binary_operator::SHIFT_RIGHT:          return call<ops::ShiftRight, TypeOut>();
         case binary_operator::SHIFT_RIGHT_UNSIGNED: return call<ops::ShiftRightUnsigned, TypeOut>();
@@ -86,6 +85,7 @@ struct is_supported_operation_functor {
         /*
         case binary_operator::NULL_MAX:             return call<ops::NullMax, TypeOut>();
         case binary_operator::NULL_MIN:             return call<ops::NullMin, TypeOut>();
+        case binary_operator::GENERIC_BINARY:       return call<ops::UserDefinedOp, TypeOut>();
         */
         default:                                    return false;
           // clang-format on
@@ -94,7 +94,7 @@ struct is_supported_operation_functor {
   };
 
   template <typename BinaryOperator, typename TypeLhs, typename TypeRhs>
-  inline constexpr bool call(data_type out)
+  inline constexpr bool bool_op(data_type out)
   {
     return out.id() == type_id::BOOL8 and
            is_binary_operation_supported<BinaryOperator>{}.template operator()<TypeLhs, TypeRhs>();
@@ -103,15 +103,16 @@ struct is_supported_operation_functor {
   inline constexpr bool operator()(data_type out, binary_operator op)
   {
     switch (op) {
-      case binary_operator::LOGICAL_AND: return call<ops::LogicalAnd, TypeLhs, TypeRhs>(out);
-      case binary_operator::LOGICAL_OR: return call<ops::LogicalOr, TypeLhs, TypeRhs>(out);
-      case binary_operator::EQUAL: return call<ops::Equal, TypeLhs, TypeRhs>(out);
-      case binary_operator::NOT_EQUAL: return call<ops::NotEqual, TypeLhs, TypeRhs>(out);
-      case binary_operator::LESS: return call<ops::Less, TypeLhs, TypeRhs>(out);
-      case binary_operator::GREATER: return call<ops::Greater, TypeLhs, TypeRhs>(out);
-      case binary_operator::LESS_EQUAL: return call<ops::LessEqual, TypeLhs, TypeRhs>(out);
-      case binary_operator::GREATER_EQUAL: return call<ops::GreaterEqual, TypeLhs, TypeRhs>(out);
-      case binary_operator::NULL_EQUALS: return call<ops::NullEquals, TypeLhs, TypeRhs>(out);
+      // output type should be bool type.
+      case binary_operator::LOGICAL_AND: return bool_op<ops::LogicalAnd, TypeLhs, TypeRhs>(out);
+      case binary_operator::LOGICAL_OR: return bool_op<ops::LogicalOr, TypeLhs, TypeRhs>(out);
+      case binary_operator::EQUAL: return bool_op<ops::Equal, TypeLhs, TypeRhs>(out);
+      case binary_operator::NOT_EQUAL: return bool_op<ops::NotEqual, TypeLhs, TypeRhs>(out);
+      case binary_operator::LESS: return bool_op<ops::Less, TypeLhs, TypeRhs>(out);
+      case binary_operator::GREATER: return bool_op<ops::Greater, TypeLhs, TypeRhs>(out);
+      case binary_operator::LESS_EQUAL: return bool_op<ops::LessEqual, TypeLhs, TypeRhs>(out);
+      case binary_operator::GREATER_EQUAL: return bool_op<ops::GreaterEqual, TypeLhs, TypeRhs>(out);
+      case binary_operator::NULL_EQUALS: return bool_op<ops::NullEquals, TypeLhs, TypeRhs>(out);
       default: return type_dispatcher(out, nested_support_functor<TypeLhs, TypeRhs>{}, op);
     }
     return false;
@@ -120,7 +121,7 @@ struct is_supported_operation_functor {
 
 }  // namespace
 
-data_type get_common_type(data_type out, data_type lhs, data_type rhs)
+std::optional<data_type> get_common_type(data_type out, data_type lhs, data_type rhs)
 {
   return double_type_dispatcher(lhs, rhs, common_type_functor{}, out);
 }

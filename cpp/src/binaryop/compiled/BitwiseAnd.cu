@@ -17,8 +17,8 @@
 #include "binops_custom.cuh"
 
 namespace cudf::binops::compiled {
-template void dispatch_single_double<ops::BitwiseAnd>(mutable_column_device_view&,
-                                                      column_device_view const&,
-                                                      column_device_view const&,
-                                                      rmm::cuda_stream_view);
+template void compiled_binary_op<ops::BitwiseAnd>(mutable_column_device_view&,
+                                                  column_device_view const&,
+                                                  column_device_view const&,
+                                                  rmm::cuda_stream_view);
 }

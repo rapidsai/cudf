@@ -21,7 +21,13 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <optional>
+
 namespace cudf {
+// Forward declarations
+class column_device_view;
+class mutable_column_device_view;
+
 namespace binops {
 namespace detail {
 /**
@@ -124,8 +130,25 @@ std::unique_ptr<column> binary_operation(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 // Defined in util.cpp
-data_type get_common_type(data_type out, data_type lhs, data_type rhs);
+std::optional<data_type> get_common_type(data_type out, data_type lhs, data_type rhs);
 bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op);
+
+// Defined in individual .cu files.
+template <class BinaryOperator>
+void compiled_binary_op(mutable_column_device_view&,
+                        column_device_view const&,
+                        column_device_view const&,
+                        rmm::cuda_stream_view stream);
+void dispatch_comparison_op(mutable_column_device_view& outd,
+                            column_device_view const& lhsd,
+                            column_device_view const& rhsd,
+                            binary_operator op,
+                            rmm::cuda_stream_view stream);
+void dispatch_equality_op(mutable_column_device_view& outd,
+                          column_device_view const& lhsd,
+                          column_device_view const& rhsd,
+                          binary_operator op,
+                          rmm::cuda_stream_view stream);
 }  // namespace compiled
 }  // namespace binops
 }  // namespace cudf
