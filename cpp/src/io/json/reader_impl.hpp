@@ -90,7 +90,8 @@ class reader::impl {
   void set_column_map(col_map_ptr_type &&map)
   {
     key_to_col_idx_map_ = std::move(map);
-    d_key_col_map_      = std::make_unique<rmm::device_scalar<col_map_type>>(*key_to_col_idx_map_);
+    d_key_col_map_      = std::make_unique<rmm::device_scalar<col_map_type>>(*key_to_col_idx_map_,
+                                                                        rmm::cuda_stream_default);
   }
   /**
    * @brief Gets the pointer to the column hash map in the device memory.

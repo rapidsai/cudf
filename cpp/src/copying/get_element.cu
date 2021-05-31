@@ -105,7 +105,7 @@ struct get_element_functor {
 
     if (!key_index_scalar.is_valid(stream)) {
       auto null_result = make_default_constructed_scalar(dict_view.keys().type(), stream, mr);
-      null_result->set_valid(false, stream);
+      null_result->set_valid_async(false, stream);
       return null_result;
     }
 
