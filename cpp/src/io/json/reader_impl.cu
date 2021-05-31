@@ -250,6 +250,15 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
 
   // Iterate through the user defined sources and read the contents into the local buffer
   CUDF_EXPECTS(!sources_.empty(), "No sources were defined");
+  size_t total_source_size = 0;
+  for (const auto &source : sources_) {
+    total_source_size += source->size();
+  }
+
+  // Create the buffer for holding the json data in host memory
+  uint8_t *host_buffer = new uint8_t[total_source_size]; // XXX: This needs to be deleted
+  buffer_ = std::make_unique<non_owning_buffer>(host_buffer, total_source_size);
+
   for (const auto &source : sources_) {
     if (!source->is_empty()) {
       auto data_size = (map_range_size != 0) ? map_range_size : source->size();
