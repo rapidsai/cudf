@@ -82,6 +82,18 @@ std::unique_ptr<table> gather(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Reverses the rows within a table.
+ *
+ */
+std::unique_ptr<table> reverse(
+  table_view const& source_table,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+std::unique_ptr<column> reverse(
+  column_view const& source_table,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Scatters the rows of the source table into a copy of the target table
  * according to a scatter map.
  *
