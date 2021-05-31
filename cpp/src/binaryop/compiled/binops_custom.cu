@@ -14,63 +14,28 @@
  * limitations under the License.
  */
 
-#include "binops_custom.cuh"
+#include "binary_ops.hpp"
+#include "operation.cuh"
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/table/table_view.hpp>
-#include <cudf/utilities/span.hpp>
 
-#include <binaryop/jit/operation.hpp>
-
-#include <rmm/device_uvector.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
-
 namespace binops {
 namespace compiled {
-// Defined in util.cpp
-data_type get_common_type(data_type out, data_type lhs, data_type rhs);
-bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op);
 
-// extern templates
-// TODO add boolean for scalars.
-// clang-format off
-extern template void dispatch_single_double<ops::Add>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::Sub>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::Mul>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::Div>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::TrueDiv>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::FloorDiv>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::Mod>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::PyMod>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::Pow>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-// extern template void dispatch_single_double<ops::Equal>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-// extern template void dispatch_single_double<ops::NotEqual>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-// extern template void dispatch_single_double<ops::Less>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-// extern template void dispatch_single_double<ops::Greater>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-// extern template void dispatch_single_double<ops::LessEqual>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-// extern template void dispatch_single_double<ops::GreaterEqual>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::BitwiseAnd>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::BitwiseOr>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::BitwiseXor>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::LogicalAnd>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::LogicalOr>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::ShiftLeft>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::ShiftRight>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::ShiftRightUnsigned>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::LogBase>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::ATan2>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-extern template void dispatch_single_double<ops::PMod>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-// extern template void dispatch_single_double<ops::NullEquals>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-// extern template void dispatch_single_double<ops::NullMax>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-// extern template void dispatch_single_double<ops::NullMin>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-// extern template void dispatch_single_double<ops::UserDefinedOp>(mutable_column_device_view&, column_device_view const&, column_device_view const&, rmm::cuda_stream_view);
-// clang-format on
+// Defined in cu files
+// // TODO add boolean for scalars.
+template <class BinaryOperator>
+void dispatch_single_double(mutable_column_device_view&,
+                            column_device_view const&,
+                            column_device_view const&,
+                            rmm::cuda_stream_view);
 void dispatch_comparison_op(mutable_column_device_view& outd,
                             column_device_view const& lhsd,
                             column_device_view const& rhsd,
@@ -97,7 +62,6 @@ void operator_dispatcher(mutable_column_view& out,
 
   // clang-format off
   switch (op) {
-      // TODO One more level of indirection to allow double type dispatching for chrono types.
     case binary_operator::ADD:                  dispatch_single_double<ops::Add>(*outd, *lhsd, *rhsd, stream); break;
     case binary_operator::SUB:                  dispatch_single_double<ops::Sub>(*outd, *lhsd, *rhsd, stream); break;
     case binary_operator::MUL:                  dispatch_single_double<ops::Mul>(*outd, *lhsd, *rhsd, stream); break;
