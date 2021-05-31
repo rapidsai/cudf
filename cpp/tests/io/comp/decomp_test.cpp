@@ -18,8 +18,6 @@
 
 #include <cudf_test/base_fixture.hpp>
 
-#include <cudf/utilities/span.hpp>
-
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
