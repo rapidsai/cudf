@@ -45,8 +45,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<column>> group_collect_merge(
   auto const default_mr = rmm::mr::get_current_device_resource();
 
   //
-  // Warning: Below is just a workaround.
-  // This is a more efficient merging API that is WIP by Dave Baranec, and will be adopted here
+  // Warning: Below is just a work-around.
+  // There is a more efficient merging API that is WIP by Dave Baranec, and will be adopted here
   // after finished.
   //
 
