@@ -369,6 +369,27 @@ std::unique_ptr<column> group_collect(column_view const& values,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr);
 
+/**
+ * @brief group_collect_merge
+ *
+ * @param agg_keys
+ * @param agg_results
+ * @param null_precedence
+ * @param column_order
+ * @param null_handling
+ * @param stream
+ * @param mr
+ * @return
+ */
+std::pair<std::unique_ptr<table>, std::unique_ptr<column>> group_collect_merge(
+  host_span<table_view const> agg_keys,
+  host_span<column_view const> agg_results,
+  null_policy null_handling,
+  std::vector<order> column_order,
+  std::vector<null_order> null_precedence,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr);
+
 /** @endinternal
  *
  */

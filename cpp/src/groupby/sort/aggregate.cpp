@@ -406,6 +406,18 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation 
     lists::detail::drop_list_duplicates(
       lists_column_view(collect_result->view()), nulls_equal, nans_equal, stream, mr));
 };
+
+template <>
+std::pair<std::unique_ptr<table>, std::unique_ptr<column>>
+merge_aggregates_functor::operator()<aggregation::Kind::COLLECT_LIST>(
+  aggregation const& agg,
+  host_span<table_view const> agg_keys,
+  host_span<column_view const> agg_results) const
+{
+  return detail::group_collect_merge(
+    agg_keys, agg_results, null_handling, column_order, null_precedence, stream, mr);
+}
+
 }  // namespace detail
 
 // Sort-based groupby
@@ -433,5 +445,18 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort
 
   return std::make_pair(helper().unique_keys(stream, mr), std::move(results));
 }
+
+std::pair<std::unique_ptr<table>, std::unique_ptr<column>> groupby::merge_sort_aggregates(
+  aggregation const& agg,
+  host_span<table_view const> agg_keys,
+  host_span<column_view const> agg_results,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr) const
+{
+  auto const func = detail::merge_aggregates_functor{
+    _include_null_keys, _column_order, _null_precedence, stream, mr};
+  return cudf::detail::aggregation_dispatcher(agg.kind, func, agg, agg_keys, agg_results);
+}
+
 }  // namespace groupby
 }  // namespace cudf

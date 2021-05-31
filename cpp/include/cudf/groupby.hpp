@@ -282,6 +282,27 @@ class groupby {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
+   * @brief Merge multiple results of previous groupby aggregations together.
+   *
+   * Since the results of different aggregations may have dirferent sizes (number of rows),
+   * we cannot call `aggregate` to merge them.
+   *
+   * Currently only support COLLECT_LIST.
+   * Due to COLLECT_LIST is a sort-based aggregation, the keys tables must be sorted.
+   *
+   * TODO: Rewrite doxygen
+   *
+   * @return Pair containing the table with each group's unique key and
+   * an aggregation_result containing the merged result of all provided results.
+   *
+   */
+  std::pair<std::unique_ptr<table>, std::unique_ptr<column>> merge(
+    aggregation const& agg,
+    host_span<table_view const> agg_keys,
+    host_span<column_view const> agg_results,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+
+  /**
    * @brief The grouped data corresponding to a groupby operation on a set of values.
    *
    * A `groups` object holds two tables of identical number of rows:
@@ -391,6 +412,13 @@ class groupby {
     host_span<aggregation_request const> requests,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr);
+
+  std::pair<std::unique_ptr<table>, std::unique_ptr<column>> merge_sort_aggregates(
+    aggregation const& agg,
+    host_span<table_view const> agg_keys,
+    host_span<column_view const> agg_results,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr) const;
 };
 /** @} */
 }  // namespace groupby

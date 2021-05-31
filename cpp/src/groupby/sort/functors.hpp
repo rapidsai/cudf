@@ -91,6 +91,29 @@ struct store_result_functor {
   std::unique_ptr<column> sorted_values;   ///< Memoised grouped and sorted values
   std::unique_ptr<column> grouped_values;  ///< Memoised grouped values
 };
+
+/**
+ * @brief
+ *
+ * TODO
+ */
+struct merge_aggregates_functor {
+  template <aggregation::Kind k>
+  std::pair<std::unique_ptr<table>, std::unique_ptr<column>> operator()(
+    aggregation const&, host_span<table_view const>, host_span<column_view const>) const
+  {
+    CUDF_FAIL("Unsupported aggregation.");
+  }
+
+  // private:
+  // TODO make const
+  null_policy null_handling;                ///< TODO
+  std::vector<order> column_order;          ///< TODO
+  std::vector<null_order> null_precedence;  ///< TODO
+  rmm::cuda_stream_view stream;             ///< CUDA stream on which to execute kernels
+  rmm::mr::device_memory_resource* mr;      ///< Memory resource to allocate space for results
+};
+
 }  // namespace detail
 }  // namespace groupby
 }  // namespace cudf

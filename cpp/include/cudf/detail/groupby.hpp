@@ -39,6 +39,14 @@ namespace hash {
  */
 bool can_use_hash_groupby(table_view const& keys, host_span<aggregation_request const> requests);
 
+/**
+ * TODO
+ * @brief is_hash_aggregation
+ * @param t
+ * @return
+ */
+bool is_hash_aggregation(aggregation::Kind t);
+
 // Hash-based groupby
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   table_view const& keys,

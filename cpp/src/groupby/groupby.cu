@@ -200,6 +200,60 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan
   return sort_scan(requests, rmm::cuda_stream_default, mr);
 }
 
+std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
+  table_view const& values,
+  host_span<size_type const> offsets,
+  std::vector<std::reference_wrapper<const scalar>> const& fill_values,
+  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(values.num_columns() == static_cast<size_type>(fill_values.size()),
+               "Mismatch number of fill_values and columns.");
+  CUDF_EXPECTS(
+    std::all_of(thrust::make_counting_iterator(0),
+                thrust::make_counting_iterator(values.num_columns()),
+                [&](auto i) { return values.column(i).type() == fill_values[i].get().type(); }),
+    "values and fill_value should have the same type.");
+
+  auto stream = rmm::cuda_stream_default;
+  std::vector<std::unique_ptr<column>> results;
+  auto const& group_offsets = helper().group_offsets(stream);
+  std::transform(
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(values.num_columns()),
+    std::back_inserter(results),
+    [&](size_type i) {
+      auto grouped_values = helper().grouped_values(values.column(i), stream);
+      return cudf::detail::segmented_shift(
+        grouped_values->view(), group_offsets, offsets[i], fill_values[i].get(), stream, mr);
+    });
+
+  return std::make_pair(helper().sorted_keys(stream, mr),
+                        std::make_unique<cudf::table>(std::move(results)));
+}
+
+std::pair<std::unique_ptr<table>, std::unique_ptr<column>> groupby::merge(
+  aggregation const& agg,
+  host_span<table_view const> agg_keys,
+  host_span<column_view const> agg_results,
+  rmm::mr::device_memory_resource* mr) const
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(agg.kind == aggregation::Kind::COLLECT_LIST,
+               "Called `groupby::merge` with unsupported aggregation.");
+  CUDF_EXPECTS(agg_keys.size() == agg_results.size(),
+               "Numbers of aggregate keys tables and and aggregate results must be the same.");
+  CUDF_EXPECTS(agg_keys.size() > 1,
+               "Number of aggregate results to merge must be greater than one.");
+  CUDF_EXPECTS(!detail::hash::is_hash_aggregation(agg.kind),
+               "Currently `merge_sort_aggregates` only supports sort-based aggregations.");
+
+  // TODO: check keys columns equal sizes
+
+  auto const stream = rmm::cuda_stream_default;
+  return merge_sort_aggregates(agg, agg_keys, agg_results, stream, mr);
+}
+
 groupby::groups groupby::get_groups(table_view values, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -262,38 +316,6 @@ detail::sort::sort_groupby_helper& groupby::helper()
     _keys, _include_null_keys, _keys_are_sorted);
   return *_helper;
 };
-
-std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
-  table_view const& values,
-  host_span<size_type const> offsets,
-  std::vector<std::reference_wrapper<const scalar>> const& fill_values,
-  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(values.num_columns() == static_cast<size_type>(fill_values.size()),
-               "Mismatch number of fill_values and columns.");
-  CUDF_EXPECTS(
-    std::all_of(thrust::make_counting_iterator(0),
-                thrust::make_counting_iterator(values.num_columns()),
-                [&](auto i) { return values.column(i).type() == fill_values[i].get().type(); }),
-    "values and fill_value should have the same type.");
-
-  auto stream = rmm::cuda_stream_default;
-  std::vector<std::unique_ptr<column>> results;
-  auto const& group_offsets = helper().group_offsets(stream);
-  std::transform(
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(values.num_columns()),
-    std::back_inserter(results),
-    [&](size_type i) {
-      auto grouped_values = helper().grouped_values(values.column(i), stream);
-      return cudf::detail::segmented_shift(
-        grouped_values->view(), group_offsets, offsets[i], fill_values[i].get(), stream, mr);
-    });
-
-  return std::make_pair(helper().sorted_keys(stream, mr),
-                        std::make_unique<cudf::table>(std::move(results)));
-}
 
 }  // namespace groupby
 }  // namespace cudf

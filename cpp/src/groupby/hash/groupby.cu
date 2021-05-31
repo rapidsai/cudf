@@ -87,19 +87,6 @@ constexpr bool array_contains(std::array<T, N> const& haystack, T needle)
   return false;
 }
 
-/**
- * @brief Indicates whether the specified aggregation operation can be computed
- * with a hash-based implementation.
- *
- * @param t The aggregation operation to verify
- * @return true `t` is valid for a hash based groupby
- * @return false `t` is invalid for a hash based groupby
- */
-bool constexpr is_hash_aggregation(aggregation::Kind t)
-{
-  return array_contains(hash_aggregations, t);
-}
-
 class groupby_simple_aggregations_collector final
   : public cudf::detail::simple_aggregations_collector {
  public:
@@ -630,6 +617,16 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
 }
 
 }  // namespace
+
+/**
+ * @brief Indicates whether the specified aggregation operation can be computed
+ * with a hash-based implementation.
+ *
+ * @param t The aggregation operation to verify
+ * @return true `t` is valid for a hash based groupby
+ * @return false `t` is invalid for a hash based groupby
+ */
+bool is_hash_aggregation(aggregation::Kind t) { return array_contains(hash_aggregations, t); }
 
 /**
  * @brief Indicates if a set of aggregation requests can be satisfied with a

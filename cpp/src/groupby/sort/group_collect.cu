@@ -117,6 +117,7 @@ std::unique_ptr<column> group_collect(column_view const &values,
                            stream,
                            mr);
 }
+
 }  // namespace detail
 }  // namespace groupby
 }  // namespace cudf
