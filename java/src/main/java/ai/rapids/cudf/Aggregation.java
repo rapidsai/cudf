@@ -303,7 +303,7 @@ public abstract class Aggregation {
     /**
      * WARNING: https://github.com/rapidsai/cudf/issues/8405
      */
-    private static final class CollectSetAggregation extends Aggregation
+    public static final class CollectSetAggregation extends Aggregation
         implements RollingAggregation<CollectSetAggregation> {
         private final NullPolicy nullPolicy;
         private final NullEquality nullEquality;
