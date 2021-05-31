@@ -57,6 +57,7 @@ ConfigureTest(GROUPBY_TEST
     groupby/argmin_tests.cpp
     groupby/argmax_tests.cpp
     groupby/collect_list_tests.cpp
+    groupby/collect_list_merge_tests.cpp
     groupby/collect_set_tests.cpp
     groupby/count_scan_tests.cpp
     groupby/count_tests.cpp
