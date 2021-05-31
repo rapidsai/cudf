@@ -30,7 +30,7 @@ OUT=${OUT:-out}
 
 SIGN_FILE=$1
 #Set absolute path for OUT_PATH
-OUT_PATH=$WORKSPACE/$OUT
+OUT_PATH="$WORKSPACE/$OUT"
 
 # set on Jenkins parameter
 echo "SIGN_FILE: $SIGN_FILE,\
@@ -52,27 +52,31 @@ export LIBCUDF_KERNEL_CACHE_PATH=/rapids
 export PATH=/usr/local/cmake-3.19.0-Linux-x86_64/bin:$PATH
 
 ###### Build libcudf ######
-rm -rf $WORKSPACE/cpp/build
-mkdir -p $WORKSPACE/cpp/build
-cd $WORKSPACE/cpp/build
-cmake .. -DUSE_NVTX=$ENABLE_NVTX -DCUDF_USE_ARROW_STATIC=ON -DBoost_USE_STATIC_LIBS=ON -DBUILD_TESTS=$SKIP_CPP_TESTS -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL
+rm -rf "$WORKSPACE/cpp/build"
+mkdir -p "$WORKSPACE/cpp/build"
+cd "$WORKSPACE/cpp/build"
+cmake .. -DUSE_NVTX=$ENABLE_NVTX -DCUDF_USE_ARROW_STATIC=ON -DBUILD_TESTS=$SKIP_CPP_TESTS -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL
+
 make -j$PARALLEL_LEVEL
 make install DESTDIR=$INSTALL_PREFIX
 
 ###### Build cudf jar ######
-BUILD_ARG="-Dmaven.repo.local=$WORKSPACE/.m2 -DskipTests=$SKIP_JAVA_TESTS -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL -DUSE_GDS=$ENABLE_GDS"
+BUILD_ARG="-Dmaven.repo.local=\"$WORKSPACE/.m2\" -DskipTests=$SKIP_JAVA_TESTS -DPER_THREAD_DEFAULT_STREAM=$ENABLE_PTDS -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL -DUSE_GDS=$ENABLE_GDS"
 if [ "$SIGN_FILE" == true ]; then
     # Build javadoc and sources only when SIGN_FILE is true
     BUILD_ARG="$BUILD_ARG -Prelease"
 fi
 
-if [ -f $WORKSPACE/java/ci/settings.xml ]; then
+if [ -f "$WORKSPACE/java/ci/settings.xml" ]; then
     # Build with an internal settings.xml
-    BUILD_ARG="$BUILD_ARG -s $WORKSPACE/java/ci/settings.xml"
+    BUILD_ARG="$BUILD_ARG -s \"$WORKSPACE/java/ci/settings.xml\""
 fi
 
-cd $WORKSPACE/java
+cd "$WORKSPACE/java"
 mvn -B clean package $BUILD_ARG
+
+###### Sanity test: fail if static cudart found ######
+find . -name '*.so' | xargs -I{} readelf -Ws {} | grep cuInit && echo "Found statically linked CUDA runtime, this is currently not tested" && exit 1
 
 ###### Stash Jar files ######
 rm -rf $OUT_PATH

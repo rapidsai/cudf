@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
@@ -23,7 +23,7 @@ build:
 
 requirements:
   build:
-    - cmake >=3.17.0
+    - cmake >=3.18
   host:
     - libcudf {{ version }}
     - librdkafka >=1.5.0,<1.5.3

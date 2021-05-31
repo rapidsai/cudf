@@ -64,6 +64,7 @@
 #include <map_lookup.hpp>
 #include "cudf/types.hpp"
 
+#include "prefix_sum.hpp"
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
 #include "jni.h"
@@ -278,26 +279,27 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_rollingWindow(
         reinterpret_cast<cudf::column_view *>(default_output_col);
     cudf::column_view *n_preceding_col = reinterpret_cast<cudf::column_view *>(preceding_col);
     cudf::column_view *n_following_col = reinterpret_cast<cudf::column_view *>(following_col);
-    cudf::aggregation * agg = reinterpret_cast<cudf::aggregation *>(agg_ptr);
+    cudf::rolling_aggregation * agg = dynamic_cast<cudf::rolling_aggregation *>(reinterpret_cast<cudf::aggregation *>(agg_ptr));
+    JNI_ARG_CHECK(env, agg != nullptr, "aggregation is not an instance of rolling_aggregation", 0);
 
     std::unique_ptr<cudf::column> ret;
     if (n_default_output_col != nullptr) {
       if (n_preceding_col != nullptr && n_following_col != nullptr) {
         CUDF_FAIL("A default output column is not currently supported with variable length preceding and following");
         //ret = cudf::rolling_window(*n_input_col, *n_default_output_col, 
-        //        *n_preceding_col, *n_following_col, min_periods, agg->clone());
+        //        *n_preceding_col, *n_following_col, min_periods, agg);
       } else {
         ret = cudf::rolling_window(*n_input_col, *n_default_output_col,
-                preceding, following, min_periods, agg->clone());
+                preceding, following, min_periods, *agg);
       }
 
     } else {
       if (n_preceding_col != nullptr && n_following_col != nullptr) {
         ret = cudf::rolling_window(*n_input_col, *n_preceding_col, *n_following_col,
-                min_periods, agg->clone());
+                min_periods, *agg);
       } else {
         ret = cudf::rolling_window(*n_input_col, preceding, following, min_periods,
-                agg->clone());
+                *agg);
       }
     }
     return reinterpret_cast<jlong>(ret.release());
@@ -1025,29 +1027,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_containsRe(JNIEnv *env, j
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringConcatenation(
-    JNIEnv *env, jobject j_object, jlongArray column_handles, jlong separator, jlong narep) {
-  JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
-  JNI_NULL_CHECK(env, separator, "separator string scalar object is null", 0);
-  JNI_NULL_CHECK(env, narep, "narep string scalar object is null", 0);
-  try {
-    cudf::jni::auto_set_device(env);
-    cudf::string_scalar *separator_scalar = reinterpret_cast<cudf::string_scalar *>(separator);
-    cudf::string_scalar *narep_scalar = reinterpret_cast<cudf::string_scalar *>(narep);
-    cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
-    std::vector<cudf::column_view> column_views;
-    std::transform(n_cudf_columns.data(), n_cudf_columns.data() + n_cudf_columns.size(),
-                   std::back_inserter(column_views),
-                   [](auto const &p_column) { return *p_column; });
-    cudf::table_view *string_columns = new cudf::table_view(column_views);
-
-    std::unique_ptr<cudf::column> result =
-        cudf::strings::concatenate(*string_columns, *separator_scalar, *narep_scalar);
-    return reinterpret_cast<jlong>(result.release());
-  }
-  CATCH_STD(env, 0);
-}
-
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_binaryOpVV(JNIEnv *env, jclass,
                                                                   jlong lhs_view, jlong rhs_view,
                                                                   jint int_op, jint out_dtype,
@@ -1186,6 +1165,22 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapLookup(JNIEnv *env, jc
     cudf::string_scalar *ss_key = reinterpret_cast<cudf::string_scalar *>(lookup_key);
 
     std::unique_ptr<cudf::column> result = cudf::jni::map_lookup(*cv, *ss_key);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_mapContains(JNIEnv *env, jclass,
+                                                                   jlong map_column_view,
+                                                                   jlong lookup_key) {
+  JNI_NULL_CHECK(env, map_column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, lookup_key, "target string scalar is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(map_column_view);
+    cudf::string_scalar *ss_key = reinterpret_cast<cudf::string_scalar *>(lookup_key);
+
+    std::unique_ptr<cudf::column> result = cudf::jni::map_contains(*cv, *ss_key);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
@@ -1347,7 +1342,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
     cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
 
     if (n_cudf_columns.size() == 0) {
-      rmm::device_buffer null_mask{0};
+      rmm::device_buffer null_mask{};
       copy->set_null_mask(null_mask);
       return reinterpret_cast<jlong>(copy.release());
     }
@@ -1755,6 +1750,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_makeStructView(JNIEnv *en
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_prefixSum(JNIEnv *env, jobject j_object,
+                                                                 jlong handle) {
+
+  JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *view = reinterpret_cast<cudf::column_view *>(handle);
+    std::unique_ptr<cudf::column> result = cudf::jni::prefix_sum(*view);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0)
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_nansToNulls(JNIEnv *env, jobject j_object,
                                                                    jlong handle) {
 
@@ -1778,6 +1787,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_nansToNulls(JNIEnv *env, 
   }
   CATCH_STD(env, 0)
 }
+
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isFloat(JNIEnv *env, jobject j_object,
                                                                jlong handle) {
@@ -1858,4 +1868,67 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getJSONObject(JNIEnv *env
   CATCH_STD(env, 0)
 
 }
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringConcatenationListElementsSepCol(JNIEnv *env, jclass,
+                                                                                             jlong column_handle,
+                                                                                             jlong sep_handle,
+                                                                                             jlong separator_narep,
+                                                                                             jlong col_narep,
+                                                                                             jboolean separate_nulls,
+                                                                                             jboolean empty_string_output_if_empty_list) {
+  JNI_NULL_CHECK(env, column_handle, "column handle is null", 0);
+  JNI_NULL_CHECK(env, sep_handle, "separator column handle is null", 0);
+  JNI_NULL_CHECK(env, separator_narep, "separator narep string scalar object is null", 0);
+  JNI_NULL_CHECK(env, col_narep, "column narep string scalar object is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    const auto& separator_narep_scalar = *reinterpret_cast<cudf::string_scalar*>(separator_narep);
+    const auto& col_narep_scalar = *reinterpret_cast<cudf::string_scalar*>(col_narep);
+    auto null_policy = separate_nulls ? cudf::strings::separator_on_nulls::YES
+                                      : cudf::strings::separator_on_nulls::NO;
+    auto empty_list_output =
+        empty_string_output_if_empty_list ? cudf::strings::output_if_empty_list::EMPTY_STRING
+                             : cudf::strings::output_if_empty_list::NULL_ELEMENT;
+
+    cudf::column_view *column = reinterpret_cast<cudf::column_view *>(sep_handle);
+    cudf::strings_column_view strings_column(*column);
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_handle);
+    cudf::lists_column_view lcv(*cv);
+    std::unique_ptr<cudf::column> result =
+      cudf::strings::join_list_elements(lcv, strings_column, separator_narep_scalar,
+                                        col_narep_scalar, null_policy, empty_list_output);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringConcatenationListElements(JNIEnv *env, jclass,
+                                                                                       jlong column_handle,
+                                                                                       jlong separator,
+                                                                                       jlong narep,
+                                                                                       jboolean separate_nulls,
+                                                                                       jboolean empty_string_output_if_empty_list) {
+  JNI_NULL_CHECK(env, column_handle, "column handle is null", 0);
+  JNI_NULL_CHECK(env, separator, "separator string scalar object is null", 0);
+  JNI_NULL_CHECK(env, narep, "separator narep string scalar object is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    const auto& separator_scalar = *reinterpret_cast<cudf::string_scalar*>(separator);
+    const auto& narep_scalar     = *reinterpret_cast<cudf::string_scalar*>(narep);
+    auto null_policy = separate_nulls ? cudf::strings::separator_on_nulls::YES
+                                      : cudf::strings::separator_on_nulls::NO;
+    auto empty_list_output =
+        empty_string_output_if_empty_list ? cudf::strings::output_if_empty_list::EMPTY_STRING
+                             : cudf::strings::output_if_empty_list::NULL_ELEMENT;
+
+    cudf::column_view *cv = reinterpret_cast<cudf::column_view *>(column_handle);
+    cudf::lists_column_view lcv(*cv);
+    std::unique_ptr<cudf::column> result =
+      cudf::strings::join_list_elements(lcv, separator_scalar, narep_scalar,
+                                        null_policy, empty_list_output);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 } // extern "C"

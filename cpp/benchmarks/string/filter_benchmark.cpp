@@ -50,7 +50,7 @@ static void BM_filter_chars(benchmark::State& state, FilterAPI api)
     {cudf::char_utf8{'a'}, cudf::char_utf8{'c'}}};
 
   for (auto _ : state) {
-    cuda_event_timer raii(state, true, 0);
+    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
     switch (api) {
       case filter: cudf::strings::filter_characters_of_type(input, types); break;
       case filter_chars: cudf::strings::filter_characters(input, filter_table); break;
@@ -73,7 +73,7 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
     for (int rowlen = min_rowlen; rowlen <= max_rowlen; rowlen *= len_mult) {
       // avoid generating combinations that exceed the cudf column limit
       size_t total_chars = static_cast<size_t>(row_count) * rowlen;
-      if (total_chars < std::numeric_limits<cudf::size_type>::max()) {
+      if (total_chars < static_cast<size_t>(std::numeric_limits<cudf::size_type>::max())) {
         b->Args({row_count, rowlen});
       }
     }

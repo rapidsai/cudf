@@ -154,6 +154,20 @@ def is_numerical_dtype(obj):
     return dtype.kind in "biuf"
 
 
+def is_integer_dtype(obj):
+    try:
+        dtype = np.dtype(obj)
+    except TypeError:
+        return pd.api.types.is_integer_dtype(obj)
+    return dtype.kind in "iu"
+
+
+def is_integer(obj):
+    if isinstance(obj, cudf.Scalar):
+        return is_integer_dtype(obj.dtype)
+    return pd.api.types.is_integer(obj)
+
+
 def is_string_dtype(obj):
     return (
         pd.api.types.is_string_dtype(obj)
@@ -276,6 +290,17 @@ def is_decimal_dtype(obj):
     )
 
 
+def _find_common_type_decimal(dtypes):
+    # Find the largest scale and the largest difference between
+    # precision and scale of the columns to be concatenated
+    s = max([dtype.scale for dtype in dtypes])
+    lhs = max([dtype.precision - dtype.scale for dtype in dtypes])
+    # Combine to get the necessary precision and clip at the maximum
+    # precision
+    p = min(cudf.Decimal64Dtype.MAX_PRECISION, s + lhs)
+    return cudf.Decimal64Dtype(p, s)
+
+
 def cudf_dtype_from_pydata_dtype(dtype):
     """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
         Python dtype.
@@ -283,6 +308,8 @@ def cudf_dtype_from_pydata_dtype(dtype):
 
     if is_categorical_dtype(dtype):
         return cudf.core.dtypes.CategoricalDtype
+    elif is_decimal_dtype(dtype):
+        return cudf.core.dtypes.Decimal64Dtype
     elif dtype in cudf._lib.types.np_to_cudf_types:
         return dtype.type
 
@@ -306,6 +333,9 @@ def cudf_dtype_to_pa_type(dtype):
 
 
 def cudf_dtype_from_pa_type(typ):
+    """ Given a cuDF pyarrow dtype, converts it into the equivalent
+        cudf pandas dtype.
+    """
     if pa.types.is_list(typ):
         return cudf.core.dtypes.ListDtype.from_arrow(typ)
     elif pa.types.is_struct(typ):
@@ -662,9 +692,15 @@ def find_common_type(dtypes):
     dtypes = set(dtypes)
 
     if any(is_decimal_dtype(dtype) for dtype in dtypes):
-        raise NotImplementedError(
-            "DecimalDtype is not yet supported in find_common_type"
-        )
+        if all(
+            is_decimal_dtype(dtype) or is_numerical_dtype(dtype)
+            for dtype in dtypes
+        ):
+            return _find_common_type_decimal(
+                [dtype for dtype in dtypes if is_decimal_dtype(dtype)]
+            )
+        else:
+            return np.dtype("O")
 
     # Corner case 1:
     # Resort to np.result_type to handle "M" and "m" types separately

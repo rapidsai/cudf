@@ -1,6 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import collections
-import functools
 import pickle
 import warnings
 
@@ -9,8 +8,10 @@ from nvtx import annotate
 
 import cudf
 from cudf._lib import groupby as libgroupby
+from cudf._lib.table import Table
 from cudf.core.abc import Serializable
-from cudf.utils.utils import cached_property
+from cudf.utils.dtypes import is_list_like
+from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
 # Note that all valid aggregation methods (e.g. GroupBy.min) are bound to the
@@ -97,6 +98,21 @@ class GroupBy(Serializable):
             )
             .groupby(self.grouping, sort=self._sort)
             .agg("size")
+        )
+
+    def cumcount(self):
+        """
+        Return the cumulative count of keys in each group.
+        """
+        return (
+            cudf.Series(
+                cudf.core.column.column_empty(
+                    len(self.obj), "int8", masked=False
+                )
+            )
+            .groupby(self.grouping, sort=self._sort)
+            .agg("cumcount")
+            .reset_index(drop=True)
         )
 
     @cached_property
@@ -212,9 +228,10 @@ class GroupBy(Serializable):
         """
         Return the nth row from each group.
         """
-        result = self.agg(lambda x: x.nth(n))
-        sizes = self.size()
-        return result[n < sizes]
+        result = self.agg(lambda x: x.nth(n)).sort_index()
+        sizes = self.size().sort_index()
+
+        return result[sizes > n]
 
     def serialize(self):
         header = {}
@@ -570,50 +587,183 @@ class GroupBy(Serializable):
         """
         return cudf.core.window.rolling.RollingGroupby(self, *args, **kwargs)
 
+    def count(self, dropna=True):
+        """Compute the number of values in each column.
 
-# Set of valid groupby aggregations that are monkey-patched into the GroupBy
-# namespace.
-_VALID_GROUPBY_AGGS = {
-    "count",
-    "sum",
-    "idxmin",
-    "idxmax",
-    "min",
-    "max",
-    "mean",
-    "var",
-    "std",
-    "quantile",
-    "median",
-    "nunique",
-    "collect",
-    "unique",
-}
+        Parameters
+        ----------
+        dropna : bool
+            If ``True``, don't include null values in the count.
+        """
+
+        def func(x):
+            return getattr(x, "count")(dropna=dropna)
+
+        return self.agg(func)
+
+    def sum(self):
+        """Compute the column-wise sum of the values in each group."""
+        return self.agg("sum")
+
+    def prod(self):
+        """Compute the column-wise product of the values in each group."""
+        return self.agg("prod")
+
+    def idxmin(self):
+        """Get the column-wise index of the minimum value in each group."""
+        return self.agg("idxmin")
+
+    def idxmax(self):
+        """Get the column-wise index of the maximum value in each group."""
+        return self.agg("idxmax")
+
+    def min(self):
+        """Get the column-wise minimum value in each group."""
+        return self.agg("min")
+
+    def max(self):
+        """Get the column-wise maximum value in each group."""
+        return self.agg("max")
+
+    def mean(self):
+        """Compute the column-wise mean of the values in each group."""
+        return self.agg("mean")
+
+    def median(self):
+        """Get the column-wise median of the values in each group."""
+        return self.agg("median")
+
+    def var(self, ddof=1):
+        """Compute the column-wise variance of the values in each group.
+
+        Parameters
+        ----------
+        ddof : int
+            The delta degrees of freedom. N - ddof is the divisor used to
+            normalize the variance.
+        """
+
+        def func(x):
+            return getattr(x, "var")(ddof=ddof)
+
+        return self.agg(func)
+
+    def std(self, ddof=1):
+        """Compute the column-wise std of the values in each group.
+
+        Parameters
+        ----------
+        ddof : int
+            The delta degrees of freedom. N - ddof is the divisor used to
+            normalize the standard deviation.
+        """
+
+        def func(x):
+            return getattr(x, "std")(ddof=ddof)
+
+        return self.agg(func)
+
+    def quantile(self, q=0.5, interpolation="linear"):
+        """Compute the column-wise quantiles of the values in each group.
+
+        Parameters
+        ----------
+        q : float or array-like
+            The quantiles to compute.
+        interpolation : {"linear", "lower", "higher", "midpoint", "nearest"}
+            The interpolation method to use when the desired quantile lies
+            between two data points. Defaults to "linear".
+       """
+
+        def func(x):
+            return getattr(x, "quantile")(q=q, interpolation=interpolation)
+
+        return self.agg(func)
+
+    def nunique(self):
+        """Compute the number of unique values in each column in each group."""
+        return self.agg("nunique")
+
+    def collect(self):
+        """Get a list of all the values for each column in each group."""
+        return self.agg("collect")
+
+    def unique(self):
+        """Get a list of the unique values for each column in each group."""
+        return self.agg("unique")
+
+    def cumsum(self):
+        """Compute the column-wise cumulative sum of the values in
+        each group."""
+        return self.agg("cumsum")
+
+    def cummin(self):
+        """Get the column-wise cumulative minimum value in each group."""
+        return self.agg("cummin")
+
+    def cummax(self):
+        """Get the column-wise cumulative maximum value in each group."""
+        return self.agg("cummax")
+
+    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
+        """
+        Shift each group by ``periods`` positions.
+
+        Parameters
+        ----------
+        periods : int, default 1
+            Number of periods to shift.
+        freq : str, unsupported
+        axis : 0, axis to shift
+            Shift direction. Only row-wise shift is supported
+        fill_value : scalar or list of scalars, optional
+            The scalar value to use for newly introduced missing values. Can be
+            specified with `None`, a single value or multiple values:
+
+            - `None` (default): sets all indeterminable values to null.
+            - Single value: fill all shifted columns with this value. Should
+              match the data type of all columns.
+            - List of values: fill shifted columns with corresponding value in
+              the list. The length of the list should match the number of
+              columns shifted. Each value should match the data type of the
+              column to fill.
+
+        Returns
+        -------
+        Series or DataFrame
+            Object shifted within each group.
+
+        Notes
+        -----
+        Parameter ``freq`` is unsupported.
+        """
+
+        if freq is not None:
+            raise NotImplementedError("Parameter freq is unsupported.")
+
+        if not axis == 0:
+            raise NotImplementedError("Only axis=0 is supported.")
+
+        value_column_names = [
+            x for x in self.obj._column_names if x not in self.grouping.names
+        ]
+        num_columns_to_shift = len(value_column_names)
+        if is_list_like(fill_value):
+            if not len(fill_value) == num_columns_to_shift:
+                raise ValueError(
+                    "Mismatched number of columns and values to fill."
+                )
+        else:
+            fill_value = [fill_value] * num_columns_to_shift
+
+        value_columns = self.obj._data.select_by_label(value_column_names)
+        result = self._groupby.shift(Table(value_columns), periods, fill_value)
+        return self.obj.__class__._from_table(result)
 
 
-# Dynamically bind the different aggregation methods.
-def _agg_func_name_with_args(self, func_name, *args, **kwargs):
-    """
-    Aggregate given an aggregate function name and arguments to the
-    function, e.g., `_agg_func_name_with_args("quantile", 0.5)`. The named
-    aggregations must be members of _AggregationFactory.
-    """
+class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
+    _PROTECTED_KEYS = frozenset(("obj",))
 
-    def func(x):
-        """Compute the {} of the group.""".format(func_name)
-        return getattr(x, func_name)(*args, **kwargs)
-
-    func.__name__ = func_name
-    return self.agg(func)
-
-
-for key in _VALID_GROUPBY_AGGS:
-    setattr(
-        GroupBy, key, functools.partialmethod(_agg_func_name_with_args, key)
-    )
-
-
-class DataFrameGroupBy(GroupBy):
     def __init__(
         self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
     ):
@@ -707,17 +857,6 @@ class DataFrameGroupBy(GroupBy):
             as_index=as_index,
             dropna=dropna,
         )
-
-    def __getattr__(self, key):
-        # Without this check, copying can trigger a RecursionError. See
-        # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html  # noqa: E501
-        # for an explanation.
-        if key == "obj":
-            raise AttributeError
-        try:
-            return self[key]
-        except KeyError:
-            raise AttributeError
 
     def __getitem__(self, key):
         return self.obj[key].groupby(

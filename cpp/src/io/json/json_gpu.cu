@@ -21,7 +21,7 @@
 #include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/detail/utilities/hash_functions.cuh>
-#include <cudf/detail/utilities/trie.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.cuh>
 #include <cudf/strings/string_view.cuh>
@@ -29,10 +29,11 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <io/utilities/trie.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include <rmm/device_vector.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/detail/copy.h>
@@ -45,8 +46,6 @@ namespace io {
 namespace json {
 namespace gpu {
 using namespace ::cudf;
-
-using string_pair = std::pair<const char *, size_t>;
 
 namespace {
 /**
@@ -516,7 +515,7 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
     if (!serialized_trie_contains(opts.trie_na, {desc.value_begin, value_len})) {
       // Type dispatcher does not handle strings
       if (column_types[desc.column].id() == type_id::STRING) {
-        auto str_list           = static_cast<string_pair *>(output_columns[desc.column]);
+        auto str_list           = static_cast<string_index_pair *>(output_columns[desc.column]);
         str_list[rec_id].first  = desc.value_begin;
         str_list[rec_id].second = value_len;
 
@@ -537,7 +536,7 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
         }
       }
     } else if (column_types[desc.column].id() == type_id::STRING) {
-      auto str_list           = static_cast<string_pair *>(output_columns[desc.column]);
+      auto str_list           = static_cast<string_index_pair *>(output_columns[desc.column]);
       str_list[rec_id].first  = nullptr;
       str_list[rec_id].second = 0;
     }
@@ -793,17 +792,23 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
   CUDA_TRY(
     cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, detect_data_types_kernel));
 
-  rmm::device_vector<cudf::io::column_type_histogram> d_column_infos(
-    num_columns, cudf::io::column_type_histogram{});
-
-  if (do_set_null_count) {
-    // Set the null count to the row count (all fields assumes to be null).
-    thrust::for_each(
-      rmm::exec_policy(stream),
-      d_column_infos.begin(),
-      d_column_infos.end(),
-      [num_records = row_offsets.size()] __device__(auto &info) { info.null_count = num_records; });
-  }
+  auto d_column_infos = [&]() {
+    if (do_set_null_count) {
+      rmm::device_uvector<cudf::io::column_type_histogram> d_column_infos(num_columns, stream);
+      // Set the null count to the row count (all fields assumes to be null).
+      thrust::generate(
+        rmm::exec_policy(stream),
+        d_column_infos.begin(),
+        d_column_infos.end(),
+        [num_records = static_cast<cudf::size_type>(row_offsets.size())] __device__() {
+          return cudf::io::column_type_histogram{num_records};
+        });
+      return d_column_infos;
+    } else {
+      return cudf::detail::make_zeroed_device_uvector_async<cudf::io::column_type_histogram>(
+        num_columns, stream);
+    }
+  }();
 
   // Calculate actual block count to use based on records count
   const int grid_size = (row_offsets.size() + block_size - 1) / block_size;
@@ -811,13 +816,7 @@ std::vector<cudf::io::column_type_histogram> detect_data_types(
   detect_data_types_kernel<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, row_offsets, col_map, num_columns, d_column_infos);
 
-  CUDA_TRY(cudaGetLastError());
-
-  auto h_column_infos = std::vector<cudf::io::column_type_histogram>(num_columns);
-
-  thrust::copy(d_column_infos.begin(), d_column_infos.end(), h_column_infos.begin());
-
-  return h_column_infos;
+  return cudf::detail::make_std_vector_sync(d_column_infos, stream);
 }
 
 /**

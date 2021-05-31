@@ -16,9 +16,9 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <strings/regex/regex.cuh>
-#include <strings/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -118,7 +118,6 @@ children_pair replace_with_backrefs_medium(column_device_view const& d_strings,
                                            reprog_device& d_prog,
                                            string_view const& d_repl_template,
                                            device_span<backref_type> backrefs,
-                                           size_type null_count,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr);
 
@@ -126,7 +125,6 @@ children_pair replace_with_backrefs_large(column_device_view const& d_strings,
                                           reprog_device& d_prog,
                                           string_view const& d_repl_template,
                                           device_span<backref_type> backrefs,
-                                          size_type null_count,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr);
 

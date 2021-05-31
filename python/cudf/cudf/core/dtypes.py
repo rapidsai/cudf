@@ -2,7 +2,7 @@
 
 import decimal
 import pickle
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -143,6 +143,8 @@ class ListDtype(_BaseDtype):
     def element_type(self) -> Dtype:
         if isinstance(self._typ.value_type, pa.ListType):
             return ListDtype.from_arrow(self._typ.value_type)
+        elif isinstance(self._typ.value_type, pa.StructType):
+            return StructDtype.from_arrow(self._typ.value_type)
         else:
             return np.dtype(self._typ.value_type.to_pandas_dtype()).name
 
@@ -176,10 +178,10 @@ class ListDtype(_BaseDtype):
         return self._typ.equals(other._typ)
 
     def __repr__(self):
-        if isinstance(self.element_type, ListDtype):
-            return f"ListDtype({self.element_type.__repr__()})"
+        if isinstance(self.element_type, (ListDtype, StructDtype)):
+            return f"{type(self).__name__}({self.element_type.__repr__()})"
         else:
-            return f"ListDtype({self.element_type})"
+            return f"{type(self).__name__}({self.element_type})"
 
     def __hash__(self):
         return hash(self._typ)
@@ -269,6 +271,10 @@ class Decimal64Dtype(_BaseDtype):
         self._typ = pa.decimal128(precision, scale)
 
     @property
+    def str(self):
+        return f"decimal64({self.precision}, {self.scale})"
+
+    @property
     def precision(self):
         return self._typ.precision
 
@@ -324,6 +330,13 @@ class Decimal64Dtype(_BaseDtype):
         metadata = decimal.as_tuple()
         precision = max(len(metadata.digits), -metadata.exponent)
         return cls(precision, -metadata.exponent)
+
+    def serialize(self) -> Tuple[dict, list]:
+        return {"precision": self.precision, "scale": self.scale}, []
+
+    @classmethod
+    def deserialize(cls, header: dict, frames: list):
+        return cls(header["precision"], header["scale"])
 
 
 class IntervalDtype(StructDtype):

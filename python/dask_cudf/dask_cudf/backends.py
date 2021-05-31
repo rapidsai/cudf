@@ -6,7 +6,7 @@ import pandas as pd
 import pyarrow as pa
 
 from dask.dataframe.categorical import categorical_dtype_dispatch
-from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
+from dask.dataframe.core import get_parallel_type, meta_nonempty
 from dask.dataframe.methods import (
     concat_dispatch,
     is_categorical_dtype_dispatch,
@@ -18,7 +18,13 @@ from dask.dataframe.utils import (
     _scalar_from_dtype,
     is_arraylike,
     is_scalar,
+    make_meta,
 )
+
+try:
+    from dask.dataframe.utils import make_meta_obj as make_meta_obj
+except ImportError:
+    from dask.dataframe.utils import make_meta as make_meta_obj
 
 import cudf
 from cudf.utils.dtypes import is_string_dtype
@@ -72,18 +78,20 @@ def _get_non_empty_data(s):
             if len(s._column.categories)
             else [UNKNOWN_CATEGORIES]
         )
-        codes = column.full(size=2, fill_value=0, dtype="int32")
+        codes = cudf.core.column.full(size=2, fill_value=0, dtype="int32")
         ordered = s._column.ordered
-        data = column.build_categorical_column(
+        data = cudf.core.column.build_categorical_column(
             categories=categories, codes=codes, ordered=ordered
         )
     elif is_string_dtype(s.dtype):
         data = pa.array(["cat", "dog"])
     else:
         if pd.api.types.is_numeric_dtype(s.dtype):
-            data = column.as_column(cp.arange(start=0, stop=2, dtype=s.dtype))
+            data = cudf.core.column.as_column(
+                cp.arange(start=0, stop=2, dtype=s.dtype)
+            )
         else:
-            data = column.as_column(
+            data = cudf.core.column.as_column(
                 cp.arange(start=0, stop=2, dtype="int64")
             ).astype(s.dtype)
     return data
@@ -131,8 +139,8 @@ def _empty_series(name, dtype, index=None):
     return cudf.Series([], dtype=dtype, name=name, index=index)
 
 
-@make_meta.register(object)
-def make_meta_object(x, index=None):
+@make_meta_obj.register(object)
+def make_meta_object_cudf(x, index=None):
     """Create an empty cudf object containing the desired metadata.
 
     Parameters
@@ -241,10 +249,23 @@ def is_categorical_dtype_cudf(obj):
 
 
 try:
+    from dask.dataframe.dispatch import union_categoricals_dispatch
 
-    from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
+    @union_categoricals_dispatch.register((cudf.Series, cudf.Index))
+    def union_categoricals_cudf(
+        to_union, sort_categories=False, ignore_order=False
+    ):
+        return cudf.api.types._union_categoricals(
+            to_union, sort_categories=False, ignore_order=False
+        )
 
-    from cudf.core.column import column
+
+except ImportError:
+    pass
+
+try:
+
+    from dask.dataframe.core import group_split_dispatch, hash_object_dispatch
 
     def safe_hash(frame):
         index = frame.index
@@ -265,7 +286,7 @@ try:
         if isinstance(ind, cudf.MultiIndex):
             return safe_hash(ind.to_frame(index=False))
 
-        col = column.as_column(ind)
+        col = cudf.core.column.as_column(ind)
         return safe_hash(cudf.Series(col))
 
     @group_split_dispatch.register((cudf.Series, cudf.DataFrame))

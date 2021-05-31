@@ -16,6 +16,9 @@ from cudf._lib.cpp.lists.drop_list_duplicates cimport (
 from cudf._lib.cpp.lists.sorting cimport (
     sort_lists as cpp_sort_lists
 )
+from cudf._lib.cpp.lists.combine cimport (
+    concatenate_rows as cpp_concatenate_rows
+)
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.column.column cimport column
@@ -28,6 +31,7 @@ from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport (
     size_type,
     null_equality,
+    null_policy,
     order,
     null_order,
     nan_equality
@@ -145,7 +149,10 @@ def extract_element(Column col, size_type index):
     return result
 
 
-def contains_scalar(Column col, DeviceScalar search_key):
+def contains_scalar(Column col, object py_search_key):
+
+    cdef DeviceScalar search_key = py_search_key.device_value
+
     cdef shared_ptr[lists_column_view] list_view = (
         make_shared[lists_column_view](col.view())
     )
@@ -158,5 +165,19 @@ def contains_scalar(Column col, DeviceScalar search_key):
             list_view.get()[0],
             search_key_value[0],
         ))
+    result = Column.from_unique_ptr(move(c_result))
+    return result
+
+
+def concatenate_rows(Table tbl):
+    cdef unique_ptr[column] c_result
+
+    cdef table_view c_table_view = tbl.view()
+
+    with nogil:
+        c_result = move(cpp_concatenate_rows(
+            c_table_view,
+        ))
+
     result = Column.from_unique_ptr(move(c_result))
     return result

@@ -28,7 +28,7 @@ elseif(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
   set(CUDF_BUILD_FOR_DETECTED_ARCHS TRUE)
 endif()
 
-project(CUDF VERSION 0.19.0 LANGUAGES C CXX)
+project(CUDF VERSION 21.08.00 LANGUAGES C CXX)
 
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake,
 # causing subsequent runs to have different values for the `Threads::Threads` target.
@@ -121,8 +121,6 @@ find_package(ZLIB REQUIRED)
 find_package(Threads REQUIRED)
 # add third party dependencies using CPM
 include(cmake/thirdparty/CUDF_GetCPM.cmake)
-# find boost
-include(cmake/thirdparty/CUDF_FindBoost.cmake)
 # find jitify
 include(cmake/thirdparty/CUDF_GetJitify.cmake)
 # find thrust/cub
@@ -137,8 +135,8 @@ include(cmake/thirdparty/CUDF_GetDLPack.cmake)
 include(cmake/thirdparty/CUDF_GetLibcudacxx.cmake)
 # find or install GoogleTest
 include(cmake/thirdparty/CUDF_GetGTest.cmake)
-# Stringify libcudf and libcudacxx headers used in JIT operations
-include(cmake/Modules/StringifyJITHeaders.cmake)
+# preprocess jitify-able kernels
+include(cmake/Modules/JitifyPreprocessKernels.cmake)
 # find cuFile
 include(cmake/Modules/FindcuFile.cmake)
 
@@ -153,14 +151,13 @@ add_library(cudf
     src/ast/transform.cu
     src/binaryop/binaryop.cpp
     src/binaryop/compiled/binary_ops.cu
-    src/binaryop/jit/code/kernel.cpp
-    src/binaryop/jit/code/operation.cpp
-    src/binaryop/jit/code/traits.cpp
     src/labeling/label_bins.cu
     src/bitmask/null_mask.cu
+    src/bitmask/is_element_valid.cpp
     src/column/column.cu
     src/column/column_device_view.cu
     src/column/column_factories.cpp
+    src/column/column_factories.cu
     src/column/column_view.cpp
     src/comms/ipc/ipc.cpp
     src/copying/concatenate.cu
@@ -176,6 +173,7 @@ add_library(cudf
     src/copying/shift.cu
     src/copying/slice.cpp
     src/copying/split.cpp
+    src/copying/segmented_shift.cu
     src/datetime/datetime_ops.cu
     src/dictionary/add_keys.cu
     src/dictionary/decode.cu
@@ -202,6 +200,7 @@ add_library(cudf
     src/groupby/sort/group_min.cu
     src/groupby/sort/group_nth_element.cu
     src/groupby/sort/group_nunique.cu
+    src/groupby/sort/group_product.cu
     src/groupby/sort/group_quantiles.cu
     src/groupby/sort/group_std.cu
     src/groupby/sort/group_sum.cu
@@ -210,11 +209,14 @@ add_library(cudf
     src/groupby/sort/group_max_scan.cu
     src/groupby/sort/group_min_scan.cu
     src/groupby/sort/group_sum_scan.cu
+    src/groupby/sort/group_replace_nulls.cu
     src/groupby/sort/sort_helper.cu
     src/hash/hashing.cu
+    src/hash/md5_hash.cu
+    src/hash/murmur_hash.cu
     src/interop/dlpack.cpp
-    src/interop/from_arrow.cpp
-    src/interop/to_arrow.cpp
+    src/interop/from_arrow.cu
+    src/interop/to_arrow.cu
     src/io/avro/avro.cpp
     src/io/avro/avro_gpu.cu
     src/io/avro/reader_impl.cu
@@ -249,14 +251,16 @@ add_library(cudf
     src/io/parquet/parquet.cpp
     src/io/parquet/reader_impl.cu
     src/io/parquet/writer_impl.cu
-    src/io/statistics/column_stats.cu
+    src/io/statistics/orc_column_statistics.cu
+    src/io/statistics/parquet_column_statistics.cu
+    src/io/utilities/column_buffer.cpp
     src/io/utilities/data_sink.cpp
     src/io/utilities/datasource.cpp
     src/io/utilities/file_io_utilities.cpp
     src/io/utilities/parsing_utils.cu
+    src/io/utilities/trie.cu
     src/io/utilities/type_conversion.cpp
     src/jit/cache.cpp
-    src/jit/launcher.cpp
     src/jit/parser.cpp
     src/jit/type.cpp
     src/join/cross_join.cu
@@ -264,14 +268,17 @@ add_library(cudf
     src/join/join.cu
     src/join/semi_join.cu
     src/lists/contains.cu
+    src/lists/combine/concatenate_list_elements.cu		
+    src/lists/combine/concatenate_rows.cu
     src/lists/copying/concatenate.cu
     src/lists/copying/copying.cu
     src/lists/copying/gather.cu
     src/lists/copying/segmented_gather.cu
     src/lists/count_elements.cu
+    src/lists/drop_list_duplicates.cu
     src/lists/explode.cu
     src/lists/extract.cu
-    src/lists/drop_list_duplicates.cu
+    src/lists/interleave_columns.cu
     src/lists/lists_column_factories.cu
     src/lists/lists_column_view.cu
     src/lists/segmented_sort.cu
@@ -289,7 +296,9 @@ add_library(cudf
     src/reductions/nth_element.cu
     src/reductions/product.cu
     src/reductions/reductions.cpp
-    src/reductions/scan.cu
+    src/reductions/scan/scan.cpp
+    src/reductions/scan/scan_exclusive.cu
+    src/reductions/scan/scan_inclusive.cu
     src/reductions/std.cu
     src/reductions/sum.cu
     src/reductions/sum_of_squares.cu
@@ -302,9 +311,8 @@ add_library(cudf
     src/reshape/interleave_columns.cu
     src/reshape/tile.cu
     src/rolling/grouped_rolling.cu
-    src/rolling/jit/code/kernel.cpp
-    src/rolling/jit/code/operation.cpp
     src/rolling/rolling.cu
+    src/rolling/range_window_bounds.cpp
     src/round/round.cu
     src/scalar/scalar.cpp
     src/scalar/scalar_factories.cpp
@@ -326,7 +334,9 @@ add_library(cudf
     src/strings/case.cu
     src/strings/char_types/char_cases.cu
     src/strings/char_types/char_types.cu
-    src/strings/combine.cu
+    src/strings/combine/concatenate.cu
+    src/strings/combine/join.cu
+    src/strings/combine/join_list_elements.cu
     src/strings/contains.cu
     src/strings/convert/convert_booleans.cu
     src/strings/convert/convert_datetime.cu
@@ -369,7 +379,7 @@ add_library(cudf
     src/structs/copying/concatenate.cu
     src/structs/structs_column_factories.cu
     src/structs/structs_column_view.cpp
-    src/structs/utilities.cu
+    src/structs/utilities.cpp
     src/table/table.cpp
     src/table/table_device_view.cu
     src/table/table_view.cpp
@@ -387,7 +397,6 @@ add_library(cudf
     src/text/tokenize.cu
     src/transform/bools_to_mask.cu
     src/transform/encode.cu
-    src/transform/jit/code/kernel.cpp
     src/transform/mask_to_bools.cu
     src/transform/nans_to_nulls.cu
     src/transform/row_bit_count.cu
@@ -402,10 +411,11 @@ add_library(cudf
 
 set_target_properties(cudf
     PROPERTIES BUILD_RPATH                         "\$ORIGIN"
+               INSTALL_RPATH                       "\$ORIGIN"
                # set target compile options
-               CXX_STANDARD                        14
+               CXX_STANDARD                        17
                CXX_STANDARD_REQUIRED               ON
-               CUDA_STANDARD                       14
+               CUDA_STANDARD                       17
                CUDA_STANDARD_REQUIRED              ON
                POSITION_INDEPENDENT_CODE           ON
                INTERFACE_POSITION_INDEPENDENT_CODE ON
@@ -465,20 +475,25 @@ endif()
 target_compile_definitions(cudf PUBLIC "SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM_LOGGING_LEVEL}")
 
 # Compile stringified JIT sources first
-add_dependencies(cudf stringify_run)
+add_dependencies(cudf jitify_preprocess_run)
 
 # Specify the target module library dependencies
 target_link_libraries(cudf
            PUBLIC ZLIB::ZLIB
-                  Boost::filesystem
                   ${ARROW_LIBRARIES}
                   cudf::Thrust
                   rmm::rmm)
 
 if(CUDA_STATIC_RUNTIME)
-    target_link_libraries(cudf PUBLIC CUDA::nvrtc CUDA::cudart_static CUDA::cuda_driver)
+    # Tell CMake what CUDA language runtime to use
+    set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Static)
+    # Make sure to export to consumers what runtime we used
+    target_link_libraries(cudf PUBLIC CUDA::cudart_static CUDA::cuda_driver)
 else()
-    target_link_libraries(cudf PUBLIC CUDA::nvrtc CUDA::cudart CUDA::cuda_driver)
+    # Tell CMake what CUDA language runtime to use
+    set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
+    # Make sure to export to consumers what runtime we used
+    target_link_libraries(cudf PUBLIC CUDA::cudart CUDA::cuda_driver)
 endif()
 
 # Add cuFile interface if available
@@ -517,7 +532,7 @@ target_compile_options(cudftestutil
 )
 
 target_compile_features(cudftestutil
-    PUBLIC cxx_std_14 $<BUILD_INTERFACE:cuda_std_14>)
+    PUBLIC cxx_std_17 $<BUILD_INTERFACE:cuda_std_17>)
 
 target_link_libraries(cudftestutil
                PUBLIC GTest::gmock
