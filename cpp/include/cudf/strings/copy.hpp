@@ -28,51 +28,47 @@ namespace strings {
  */
 
 /**
- * @brief Row-wise concatenates the given list of strings columns and
- * returns a single strings column result.
+ * @brief Repeat the given string scalar by a given number of times.
  *
  * @code{.pseudo}
  * Example:
- * s1 = ['aa', null, '', 'dd']
- * out = concatenate({s1, s2})
- * out is ['aa', null, 'cc', null]
+ * s   = '123XYZ-'
+ * out = repeat_join(s, 3)
+ * out is '123XYZ-123XYZ-123XYZ'
  * @endcode
  *
- * @throw cudf::logic_error if input columns are not all strings columns.
- * @throw cudf::logic_error if separator is not valid.
+ * TODO if `repeat_times` is negative
  * @throw cudf::logic_error if only one column is specified
  *
- * @param strings_columns List of string columns to concatenate.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column with concatenated results.
+ * @param input The scalar containing the string to repeat.
+ * @param mr Device memory resource used to allocate the returned string scalar.
+ * @return New string scalar in which the string is repeated from the input string scalar.
  */
-std::unique_ptr<column> repeat(
-  string_scalar const& string,
+std::unique_ptr<column> repeat_join(
+  string_scalar const& input,
   size_type repeat_times,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief
+ * @brief Repeat each string in the given strings column by a given number of times.
  *
  * @code{.pseudo}
  * Example:
- * c0   = ['aa', null, '',  'ee',  null, 'ff']
- * out = concatenate({c0, c1, c2}, sep)
- * out is [null, null, null, null, null, null]
+ * strs   = ['aa', null, '',  'bbc']
+ * out    = repeat_join(strs, 3)
+ * out is ['aaaaaa', null, '',  'bbcbbcbbc']
  *
  * @endcode
  *
- * @throw cudf::logic_error if no input columns are specified - table view is empty
- * @throw cudf::logic_error if input columns are not all strings columns.
- * @throw cudf::logic_error if the number of rows from @p separators and @p strings_columns
- *                          do not match
+ ** TODO if `repeat_times` is negative
+ * @throw cudf::logic_error
  *
- * @param strings_columns List of strings columns to concatenate.
- * @param mr Resource for allocating device memory.
+ * @param input The column containing strings to repeat.
+ * @param mr Device memory resource used to allocate the returned strings column.
  * @return New column with concatenated results.
  */
-std::unique_ptr<column> repeat(
-  strings_column_view const& strings_column,
+std::unique_ptr<column> repeat_join(
+  strings_column_view const& input,
   size_type repeat_times,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
