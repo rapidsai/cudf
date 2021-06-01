@@ -93,7 +93,7 @@ ConfigureBench(STREAM_COMPACTION_BENCH stream_compaction/drop_duplicates_benchma
 
 ###################################################################################################
 # - join benchmark --------------------------------------------------------------------------------
-ConfigureBench(JOIN_BENCH join/join_benchmark.cu)
+ConfigureBench(JOIN_BENCH join/join_benchmark.cu join/conditional_join_benchmark.cu)
 
 ###################################################################################################
 # - iterator benchmark ----------------------------------------------------------------------------
