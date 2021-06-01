@@ -90,7 +90,7 @@ std::unique_ptr<table> reverse(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> reverse(
-  column_view const& source_table,
+  column_view const& source_column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

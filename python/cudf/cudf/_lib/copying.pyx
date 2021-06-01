@@ -300,7 +300,9 @@ def _reverse_table(Table source_table):
         ))
 
     return Table.from_unique_ptr(
-        move(c_result)
+        move(c_result),
+        column_names=source_table._column_names,
+        index_names=source_table._index_names
     )
 
 

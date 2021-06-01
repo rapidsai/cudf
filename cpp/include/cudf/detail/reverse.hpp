@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ namespace detail {
  */
 std::unique_ptr<table> reverse(
   table_view const& source_table,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_view{},
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -42,7 +43,8 @@ std::unique_ptr<table> reverse(
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> reverse(
-  column_view const& source_table,
+  column_view const& source_column,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_view{},
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
