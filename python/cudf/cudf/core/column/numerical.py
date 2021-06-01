@@ -544,7 +544,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         return False
 
-    def _apply_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
+    def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
             self = column.build_categorical_column(
                 categories=dtype.categories._values,

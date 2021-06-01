@@ -1268,7 +1268,7 @@ class ColumnBase(Column, Serializable):
             }
         )
 
-    def _apply_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
+    def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
         return self
 
     def _copy_type_metadata(self: ColumnBase, other: ColumnBase) -> ColumnBase:
@@ -1280,7 +1280,7 @@ class ColumnBase(Column, Serializable):
           and the children of `other`.
         * if none of the above, return `other` without any changes
         """
-        other = other._apply_type_metadata(self.dtype)
+        other = other._with_type_metadata(self.dtype)
 
         return other
 
@@ -2294,7 +2294,7 @@ def _copy_type_metadata_from_arrow(
     * When `arrow_array` is decimal type and `cudf_column` is
     Decimal64Dtype, copy precisions.
     """
-    cudf_column = cudf_column._apply_type_metadata(
+    cudf_column = cudf_column._with_type_metadata(
         _cudf_dtype_from_arrow_type(arrow_array.type)
     )
 

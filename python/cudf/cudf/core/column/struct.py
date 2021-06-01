@@ -113,12 +113,12 @@ class StructColumn(ColumnBase):
             "Structs are not yet supported via `__cuda_array_interface__`"
         )
 
-    def _apply_type_metadata(self: StructColumn, dtype: Dtype) -> StructColumn:
+    def _with_type_metadata(self: StructColumn, dtype: Dtype) -> StructColumn:
         if isinstance(dtype, StructDtype):
             self = build_struct_column(
                 names=dtype.fields.keys(),
                 children=tuple(
-                    self.base_children[i]._apply_type_metadata(dtype.fields[f])
+                    self.base_children[i]._with_type_metadata(dtype.fields[f])
                     for i, f in enumerate(dtype.fields.keys())
                 ),
                 mask=self.base_mask,

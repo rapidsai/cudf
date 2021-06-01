@@ -233,13 +233,13 @@ class ListColumn(ColumnBase):
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
 
-    def _apply_type_metadata(
+    def _with_type_metadata(
         self: "cudf.core.column.ListColumn", dtype: Dtype
     ) -> "cudf.core.column.ListColumn":
         if isinstance(dtype, ListDtype):
             self = column.build_list_column(
                 indices=self.base_children[0],
-                elements=self.base_children[1]._apply_type_metadata(
+                elements=self.base_children[1]._with_type_metadata(
                     dtype.element_type
                 ),
                 mask=self.base_mask,

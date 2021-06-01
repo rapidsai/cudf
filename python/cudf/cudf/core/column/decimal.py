@@ -209,7 +209,7 @@ class DecimalColumn(NumericalBaseColumn):
             "Decimals are not yet supported via `__cuda_array_interface__`"
         )
 
-    def _apply_type_metadata(
+    def _with_type_metadata(
         self: "cudf.core.column.DecimalColumn", dtype: Dtype
     ) -> "cudf.core.column.DecimalColumn":
         if isinstance(dtype, Decimal64Dtype):

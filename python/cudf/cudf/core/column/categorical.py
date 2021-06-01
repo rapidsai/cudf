@@ -1506,7 +1506,7 @@ class CategoricalColumn(column.ColumnBase):
             offset=codes_col.offset,
         )
 
-    def _apply_type_metadata(
+    def _with_type_metadata(
         self: CategoricalColumn, dtype: Dtype
     ) -> CategoricalColumn:
         if isinstance(dtype, CategoricalDtype):
