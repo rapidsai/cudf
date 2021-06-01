@@ -259,6 +259,8 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(out, inplace=False)
 
+    hex_to_int = htoi
+
     def ip2int(self) -> ParentType:
         """
         This converts ip strings to integers
@@ -289,6 +291,8 @@ class StringMethods(ColumnMethodsMixin):
         out = str_cast.ip2int(self._column)
 
         return self._return_or_inplace(out, inplace=False)
+
+    ip_to_int = ip2int
 
     def __getitem__(self, key):
         if isinstance(key, slice):
@@ -476,7 +480,9 @@ class StringMethods(ColumnMethodsMixin):
 
         If the elements of a Series are lists themselves, join the content of
         these lists using the delimiter passed to the function.
-        This function is an equivalent to :meth:`str.join`.
+        This function is an equivalent to :meth:`str.join`. 
+        In the special case that the lists in the Series contain only ``None``,
+        a `<NA>`/`None` value will always be returned.
 
         Parameters
         ----------
@@ -485,10 +491,11 @@ class StringMethods(ColumnMethodsMixin):
             If array-like, the string at a position is used as a
             delimiter for corresponding row of the list entries.
         string_na_rep : str, default None
-            This character will take the place of any null strings
-            (not empty strings) in the Series.
-            If ``string_na_rep`` is ``None``, it defaults to empty
-            space "".
+            This character will take the place of null strings
+            (not empty strings) in the Series but will be considered
+            only if the Series contains list elements and those lists have
+            at least one non-null string. If ``string_na_rep`` is ``None``, 
+            it defaults to empty space "".
         sep_na_rep : str, default None
             This character will take the place of any null strings
             (not empty strings) in `sep`. This parameter can be used
@@ -552,27 +559,31 @@ class StringMethods(ColumnMethodsMixin):
         dtype: object
 
         We can replace `<NA>`/`None` values present in lists using
-        ``string_na_rep``:
+        ``string_na_rep`` if the lists contain at least one valid string
+        (lists containing all `None` will result in a `<NA>`/`None` value):
 
-        >>> ser = cudf.Series([['a', 'b', None], None, ['c', 'd']])
+        >>> ser = cudf.Series([['a', 'b', None], [None, None, None], None, ['c', 'd']])
         >>> ser
-        0    [a, b, None]
-        1            None
-        2          [c, d]
+        0          [a, b, None]
+        1    [None, None, None]
+        2                  None
+        3                [c, d]
         dtype: list
         >>> ser.str.join(sep='_', string_na_rep='k')
         0    a_b_k
         1     <NA>
-        2      c_d
+        2     <NA>
+        3      c_d
         dtype: object
 
         We can replace `<NA>`/`None` values present in lists of ``sep``
         using ``sep_na_rep``:
 
-        >>> ser.str.join(sep=[None, '.', '-'], sep_na_rep='+')
+        >>> ser.str.join(sep=[None, '^', '.', '-'], sep_na_rep='+')
         0    a+b+
         1    <NA>
-        2     c-d
+        2    <NA>
+        3     c-d
         dtype: object
         """  # noqa E501
         if sep is None:

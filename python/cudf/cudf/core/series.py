@@ -3967,11 +3967,9 @@ class Series(SingleColumnFrame, Serializable):
         4    105
         dtype: int64
         """
-        if callable(udf):
-            res_col = self._unaryop(udf)
-        else:
-            res_col = self._column.applymap(udf, out_dtype=out_dtype)
-        return self._copy_construct(data=res_col)
+        if not callable(udf):
+            raise ValueError("Input UDF must be a callable object.")
+        return self._copy_construct(data=self._unaryop(udf))
 
     #
     # Stats

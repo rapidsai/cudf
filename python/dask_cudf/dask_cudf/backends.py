@@ -19,8 +19,12 @@ from dask.dataframe.utils import (
     is_arraylike,
     is_scalar,
     make_meta,
-    make_meta_obj,
 )
+
+try:
+    from dask.dataframe.utils import make_meta_obj as make_meta_obj
+except ImportError:
+    from dask.dataframe.utils import make_meta as make_meta_obj
 
 import cudf
 from cudf.utils.dtypes import is_string_dtype
@@ -243,6 +247,21 @@ def tolist_cudf(obj):
 def is_categorical_dtype_cudf(obj):
     return cudf.utils.dtypes.is_categorical_dtype(obj)
 
+
+try:
+    from dask.dataframe.dispatch import union_categoricals_dispatch
+
+    @union_categoricals_dispatch.register((cudf.Series, cudf.Index))
+    def union_categoricals_cudf(
+        to_union, sort_categories=False, ignore_order=False
+    ):
+        return cudf.api.types._union_categoricals(
+            to_union, sort_categories=False, ignore_order=False
+        )
+
+
+except ImportError:
+    pass
 
 try:
 
