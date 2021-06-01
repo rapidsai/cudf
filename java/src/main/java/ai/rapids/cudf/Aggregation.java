@@ -309,7 +309,7 @@ public abstract class Aggregation {
         private final NullEquality nullEquality;
         private final NaNEquality nanEquality;
 
-        public CollectSetAggregation(NullPolicy nullPolicy, NullEquality nullEquality, NaNEquality nanEquality) {
+        private CollectSetAggregation(NullPolicy nullPolicy, NullEquality nullEquality, NaNEquality nanEquality) {
             super(Kind.COLLECT_SET);
             this.nullPolicy = nullPolicy;
             this.nullEquality = nullEquality;
