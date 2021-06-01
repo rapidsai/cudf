@@ -60,19 +60,6 @@ rmm::device_uvector<unbound_list_view> list_vector_from_column(
 }
 
 /**
- * @brief Checks that the specified columns have matching schemas, all the way down.
- */
-void assert_same_data_type(column_view const& lhs, column_view const& rhs)
-{
-  CUDF_EXPECTS(lhs.type().id() == rhs.type().id(), "Mismatched Data types.");
-  // Empty string column has no children
-  CUDF_EXPECTS(lhs.type().id() == type_id::STRING or lhs.num_children() == rhs.num_children(),
-               "Mismatched number of child columns.");
-
-  for (int i{0}; i < lhs.num_children(); ++i) { assert_same_data_type(lhs.child(i), rhs.child(i)); }
-}
-
-/**
  * @brief General implementation of scattering into list column
  *
  * Scattering `source` into `target` according to `scatter_map`.
