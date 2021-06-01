@@ -6,10 +6,10 @@ from dask import dataframe as dd
 from dask.distributed import Client
 from distributed.utils_test import loop  # noqa: F401
 
-import dask_cudf
-
 import cudf
 from cudf.testing._utils import assert_eq
+
+import dask_cudf
 
 dask_cuda = pytest.importorskip("dask_cuda")
 

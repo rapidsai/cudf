@@ -18,9 +18,9 @@ except ImportError:
 
 from dask.utils import M
 
-import dask_cudf as dgd
-
 import cudf
+
+import dask_cudf as dgd
 
 
 def test_from_cudf():
