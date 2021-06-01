@@ -24,9 +24,6 @@
 #include <cudf/strings/convert/convert_integers.hpp>
 #include <cudf/types.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
-
 namespace {
 
 template <typename NumericType>
@@ -49,7 +46,7 @@ std::unique_ptr<cudf::column> get_strings_column(cudf::size_type rows)
 }
 }  // anonymous namespace
 
-class StringToNumeric : public cudf::benchmark {
+class StringsToNumeric : public cudf::benchmark {
 };
 
 template <typename NumericType>
@@ -75,7 +72,7 @@ void convert_to_number(benchmark::State& state)
                           (strings_view.chars_size() + rows * sizeof(NumericType)));
 }
 
-class StringFromNumeric : public cudf::benchmark {
+class StringsFromNumeric : public cudf::benchmark {
 };
 
 template <typename NumericType>
@@ -102,38 +99,38 @@ void convert_from_number(benchmark::State& state)
     (cudf::strings_column_view(results->view()).chars_size() + rows * sizeof(NumericType)));
 }
 
-#define CONVERT_TO_NUMERICS_BD(name, type)                              \
-  BENCHMARK_DEFINE_F(StringToNumeric, name)(::benchmark::State & state) \
-  {                                                                     \
-    convert_to_number<type>(state);                                     \
-  }                                                                     \
-  BENCHMARK_REGISTER_F(StringToNumeric, name)                           \
-    ->RangeMultiplier(4)                                                \
-    ->Range(1 << 10, 1 << 17)                                           \
-    ->UseManualTime()                                                   \
+#define CONVERT_TO_NUMERICS_BD(name, type)                               \
+  BENCHMARK_DEFINE_F(StringsToNumeric, name)(::benchmark::State & state) \
+  {                                                                      \
+    convert_to_number<type>(state);                                      \
+  }                                                                      \
+  BENCHMARK_REGISTER_F(StringsToNumeric, name)                           \
+    ->RangeMultiplier(4)                                                 \
+    ->Range(1 << 10, 1 << 17)                                            \
+    ->UseManualTime()                                                    \
     ->Unit(benchmark::kMicrosecond);
 
-#define CONVERT_FROM_NUMERICS_BD(name, type)                              \
-  BENCHMARK_DEFINE_F(StringFromNumeric, name)(::benchmark::State & state) \
-  {                                                                       \
-    convert_from_number<type>(state);                                     \
-  }                                                                       \
-  BENCHMARK_REGISTER_F(StringFromNumeric, name)                           \
-    ->RangeMultiplier(4)                                                  \
-    ->Range(1 << 10, 1 << 17)                                             \
-    ->UseManualTime()                                                     \
+#define CONVERT_FROM_NUMERICS_BD(name, type)                               \
+  BENCHMARK_DEFINE_F(StringsFromNumeric, name)(::benchmark::State & state) \
+  {                                                                        \
+    convert_from_number<type>(state);                                      \
+  }                                                                        \
+  BENCHMARK_REGISTER_F(StringsFromNumeric, name)                           \
+    ->RangeMultiplier(4)                                                   \
+    ->Range(1 << 10, 1 << 17)                                              \
+    ->UseManualTime()                                                      \
     ->Unit(benchmark::kMicrosecond);
 
-CONVERT_TO_NUMERICS_BD(string_to_float32, float);
-CONVERT_TO_NUMERICS_BD(string_to_float64, double);
-CONVERT_TO_NUMERICS_BD(string_to_int32, int32_t);
-CONVERT_TO_NUMERICS_BD(string_to_int64, int64_t);
-CONVERT_TO_NUMERICS_BD(string_to_uint8, uint8_t);
-CONVERT_TO_NUMERICS_BD(string_to_uint16, uint16_t);
+CONVERT_TO_NUMERICS_BD(strings_to_float32, float);
+CONVERT_TO_NUMERICS_BD(strings_to_float64, double);
+CONVERT_TO_NUMERICS_BD(strings_to_int32, int32_t);
+CONVERT_TO_NUMERICS_BD(strings_to_int64, int64_t);
+CONVERT_TO_NUMERICS_BD(strings_to_uint8, uint8_t);
+CONVERT_TO_NUMERICS_BD(strings_to_uint16, uint16_t);
 
-CONVERT_FROM_NUMERICS_BD(string_from_float32, float);
-CONVERT_FROM_NUMERICS_BD(string_from_float64, double);
-CONVERT_FROM_NUMERICS_BD(string_from_int32, int32_t);
-CONVERT_FROM_NUMERICS_BD(string_from_int64, int64_t);
-CONVERT_FROM_NUMERICS_BD(string_from_uint8, uint8_t);
-CONVERT_FROM_NUMERICS_BD(string_from_uint16, uint16_t);
+CONVERT_FROM_NUMERICS_BD(strings_from_float32, float);
+CONVERT_FROM_NUMERICS_BD(strings_from_float64, double);
+CONVERT_FROM_NUMERICS_BD(strings_from_int32, int32_t);
+CONVERT_FROM_NUMERICS_BD(strings_from_int64, int64_t);
+CONVERT_FROM_NUMERICS_BD(strings_from_uint8, uint8_t);
+CONVERT_FROM_NUMERICS_BD(strings_from_uint16, uint16_t);
