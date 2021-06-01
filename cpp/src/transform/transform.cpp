@@ -97,10 +97,6 @@ void generalized_operation(table_view data_view,
 {
 
   std::vector<std::string> template_types = make_template_types(outcol_view, data_view);
-  for (size_t i = 0; i < template_types.size(); i++) {
-      std::cout << template_types[i] << std::endl;
-  };
-  std::cout << template_types.size() << std::endl;
 
   std::string generic_kernel_name = 
   jitify2::reflection::Template("cudf::transformation::jit::generic_udf_kernel")
