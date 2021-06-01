@@ -63,7 +63,6 @@ from cudf.utils.dtypes import (
 from cudf.utils.utils import mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
-ParentType = Union["cudf.Series", "cudf.Index"]
 
 
 class ColumnBase(Column, Serializable):
