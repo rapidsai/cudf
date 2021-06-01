@@ -5206,7 +5206,7 @@ class Series(SingleColumnFrame, Serializable):
             )
 
         res = self.groupby(self, dropna=dropna)
-        # breakpoint()
+        
         res = res.count(dropna=dropna)
         
         res.index.name = None
