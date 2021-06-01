@@ -65,8 +65,8 @@ namespace cudf {
  *  (0,'b', GREEN), (1,'a', NULL), (1,'c', RED)
  *
  *  (third column, the "color", just "goes along for the ride";
- *   meaning is permutted according to the data movements dictated
- *   by lexicographic ordering of columns 0 and 1);
+ *   meaning it is permuted according to the data movements dictated
+ *   by lexicographic ordering of columns 0 and 1)
  *
  *   with result columns:
  *
