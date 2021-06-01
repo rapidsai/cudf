@@ -5666,12 +5666,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         out = super(DataFrame, data).to_arrow()
         metadata = pa.pandas_compat.construct_metadata(
-            columns_to_convert=[
-                col.to_pandas()
-                if isinstance(col, cudf.core.column.CategoricalColumn)
-                else col
-                for col in self._data.columns
-            ],
+            columns_to_convert=[self[col] for col in self._data.names],
             df=self,
             column_names=out.schema.names,
             index_levels=[self.index],
