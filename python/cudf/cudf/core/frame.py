@@ -1501,7 +1501,7 @@ class Frame(libcudf.table.Table):
         pct : bool, default False
             Whether or not to display the returned rankings in percentile
             form.
-f
+
         Returns
         -------
         same type as caller
