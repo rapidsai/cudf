@@ -96,9 +96,7 @@ __global__ void materialize_merged_bitmask_kernel(
     bitmask_type const result_mask{__ballot_sync(active_threads, source_bit_is_valid)};
 
     // Only one thread writes output
-    if (0 == threadIdx.x % warpSize) {
-      out_validity[word_index(destination_row)] = result_mask;
-    }
+    if (0 == threadIdx.x % warpSize) { out_validity[word_index(destination_row)] = result_mask; }
 
     destination_row += blockDim.x * gridDim.x;
     active_threads = __ballot_sync(active_threads, destination_row < num_destination_rows);
