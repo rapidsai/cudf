@@ -44,7 +44,7 @@ namespace strings {
  * @param mr Device memory resource used to allocate the returned string scalar.
  * @return New string scalar in which the string is repeated from the input string scalar.
  */
-std::unique_ptr<column> repeat_join(
+string_scalar repeat_join(
   string_scalar const& input,
   size_type repeat_times,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
