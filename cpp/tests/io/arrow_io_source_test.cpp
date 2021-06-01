@@ -53,8 +53,8 @@ TEST_F(ArrowIOTest, S3Filesystem)
   // Read the Parquet file from S3
   cudf::io::table_with_metadata tbl = cudf::io::read_parquet(options);
 
-  ASSERT_EQ(1, tbl.tbl->num_columns());     // Only single column specified in reader_options
-  ASSERT_EQ(14825128, tbl.tbl->num_rows()); // known number of rows from the S3 file
+  ASSERT_EQ(1, tbl.tbl->num_columns());      // Only single column specified in reader_options
+  ASSERT_EQ(14825128, tbl.tbl->num_rows());  // known number of rows from the S3 file
 }
 
 CUDF_TEST_PROGRAM_MAIN()
