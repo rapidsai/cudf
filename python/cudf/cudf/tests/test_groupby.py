@@ -1946,9 +1946,56 @@ def test_groupby_fillna_multi_value(nelem):
 
     got = gdf.groupby(key_col).fillna(value=fill_values)
 
-    # In this specific case, Pandas returns the rows grouped order.
+    # In this specific case, Pandas returns the rows in grouped order.
     # Cudf returns columns in orginal order.
     expect.index = expect.index.get_level_values(1)
+    assert_groupby_results_equal(expect[value_cols], got[value_cols])
+
+
+# TODO: test for category columns when cudf.Scalar supports category type
+# TODO: cudf.fillna does not support decimal column to column fill yet
+@pytest.mark.parametrize("nelem", [10, 100, 1000])
+def test_groupby_fillna_multi_value_df(nelem):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "float32", "null_frequency": 0.4, "cardinality": 10},
+            {
+                "dtype": "datetime64[ms]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "timedelta64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {"dtype": "str", "null_frequency": 0.4, "cardinality": 10},
+        ],
+        rows=nelem,
+        use_threads=False,
+        seed=0,
+    )
+    key_col = "0"
+    value_cols = ["1", "2", "3", "4", "5"]
+    pdf = t.to_pandas()
+    gdf = cudf.from_pandas(pdf)
+
+    # fill the dataframe with the first non-null item in the column
+    fill_values = {
+        name: pdf[name].loc[pdf[name].first_valid_index()]
+        for name in value_cols
+    }
+    # cudf can't fillna with a pandas.Timedelta type
+    fill_values["4"] = fill_values["4"].to_numpy()
+    fill_values = pd.DataFrame(fill_values, index=pdf.index)
+
+    expect = pdf.groupby(key_col).fillna(value=fill_values)
+
+    fill_values = cudf.from_pandas(fill_values)
+    got = gdf.groupby(key_col).fillna(value=fill_values)
+
     assert_groupby_results_equal(expect[value_cols], got[value_cols])
 
 
