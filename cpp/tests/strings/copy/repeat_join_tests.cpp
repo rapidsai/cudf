@@ -72,18 +72,24 @@ TEST_F(RepeatJoinStringTest, ValidStringScalar)
     CUDF_TEST_EXPECT_EQUAL_BUFFERS(str.data(), result.data(), str.size());
   }
 
-  // Zero repeat time.
+  // Zero repeat times.
   {
     auto const result = cudf::strings::repeat_join(str, 0);
     EXPECT_EQ(result.is_valid(), true);
     EXPECT_EQ(result.size(), 0);
   }
 
-  // Negatitve repeat time.
+  // Negatitve repeat times.
   {
     auto const result = cudf::strings::repeat_join(str, -10);
     EXPECT_EQ(result.is_valid(), true);
     EXPECT_EQ(result.size(), 0);
+  }
+
+  // Repeat too many times.
+  {
+    EXPECT_THROW(cudf::strings::repeat_join(str, std::numeric_limits<int32_t>::max() / 2),
+                 cudf::logic_error);
   }
 }
 
@@ -132,7 +138,7 @@ TEST_F(RepeatJoinStringTest, StringsColumnNoNull)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(strs, *results, print_all);
   }
 
-  // Non-positive repeat time.
+  // Non-positive repeat times.
   {
     auto const expected = STR_COL{"", "", "", "", ""};
 
@@ -143,7 +149,7 @@ TEST_F(RepeatJoinStringTest, StringsColumnNoNull)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
   }
 
-  // Sliced the first half of the column
+  // Sliced the first half of the column.
   {
     auto const sliced_strs = cudf::slice(strs, {0, 3})[0];
     auto const results     = cudf::strings::repeat_join(cudf::strings_column_view(sliced_strs), 2);
@@ -151,7 +157,7 @@ TEST_F(RepeatJoinStringTest, StringsColumnNoNull)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
   }
 
-  // Sliced the middle of the column
+  // Sliced the middle of the column.
   {
     auto const sliced_strs = cudf::slice(strs, {1, 3})[0];
     auto const results     = cudf::strings::repeat_join(cudf::strings_column_view(sliced_strs), 2);
@@ -159,7 +165,7 @@ TEST_F(RepeatJoinStringTest, StringsColumnNoNull)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
   }
 
-  // Sliced the second half of the column
+  // Sliced the second half of the column.
   {
     auto const sliced_strs = cudf::slice(strs, {2, 5})[0];
     auto const results     = cudf::strings::repeat_join(cudf::strings_column_view(sliced_strs), 2);
@@ -204,7 +210,7 @@ TEST_F(RepeatJoinStringTest, StringsColumnWithNulls)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(strs, *results, print_all);
   }
 
-  // Non-positive repeat time.
+  // Non-positive repeat times.
   {
     auto const expected = STR_COL{
       {"", "" /*NULL*/, "", "" /*NULL*/, "", "" /*NULL*/, "", "", "", ""}, null_at({1, 3, 5})};
@@ -216,7 +222,7 @@ TEST_F(RepeatJoinStringTest, StringsColumnWithNulls)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
   }
 
-  // Sliced the first half of the column
+  // Sliced the first half of the column.
   {
     auto const sliced_strs = cudf::slice(strs, {0, 3})[0];
     auto const results     = cudf::strings::repeat_join(cudf::strings_column_view(sliced_strs), 2);
@@ -224,7 +230,7 @@ TEST_F(RepeatJoinStringTest, StringsColumnWithNulls)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
   }
 
-  // Sliced the middle of the column
+  // Sliced the middle of the column.
   {
     auto const sliced_strs = cudf::slice(strs, {2, 7})[0];
     auto const results     = cudf::strings::repeat_join(cudf::strings_column_view(sliced_strs), 2);
@@ -233,7 +239,7 @@ TEST_F(RepeatJoinStringTest, StringsColumnWithNulls)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
   }
 
-  // Sliced the second half of the column
+  // Sliced the second half of the column.
   {
     auto const sliced_strs = cudf::slice(strs, {6, 10})[0];
     auto const results     = cudf::strings::repeat_join(cudf::strings_column_view(sliced_strs), 2);
