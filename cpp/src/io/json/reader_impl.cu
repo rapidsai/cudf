@@ -253,20 +253,12 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
   size_t total_source_size = 0;
   for (const auto &source : sources_) { total_source_size += source->size(); }
 
-  // Create the buffer for holding the json data in host memory
-  uint8_t *host_buffer = new uint8_t[total_source_size];  // XXX: This needs to be deleted
-  buffer_              = std::make_unique<non_owning_buffer>(host_buffer, total_source_size);
-
+  buffer_.resize(total_source_size);
+  size_t bytes_read = 0;
   for (const auto &source : sources_) {
     if (!source->is_empty()) {
       auto data_size = (map_range_size != 0) ? map_range_size : source->size();
-      if (buffer_ == nullptr || buffer_->size() == 0) {
-        // XXX: Read to an existing buffer in host memory here instead of getting a new buffer_ each
-        // time (aka append)
-        buffer_ = source->host_read(range_offset, data_size);
-      } else {
-        printf("Buffer_ already has some data. Lets append to it\n");
-      }
+      bytes_read += source->host_read(range_offset, data_size, &buffer_[bytes_read]);
     }
   }
 
@@ -283,19 +275,19 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
  */
 void reader::impl::decompress_input(rmm::cuda_stream_view stream)
 {
-  const auto compression_type = infer_compression_type(
-    options_.get_compression(),
-    filepaths_[0],  // XXX: Is is a requirement that all files have the same compression type?
-    {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
+  const auto compression_type =
+    infer_compression_type(options_.get_compression(),
+                           filepaths_[0],
+                           {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
   if (compression_type == "none") {
     // Do not use the owner vector here to avoid extra copy
-    uncomp_data_ = reinterpret_cast<const char *>(buffer_->data());
-    uncomp_size_ = buffer_->size();
+    uncomp_data_ = reinterpret_cast<const char *>(buffer_.data());
+    uncomp_size_ = buffer_.size();
   } else {
     uncomp_data_owner_ = get_uncompressed_data(  //
       host_span<char const>(                     //
-        reinterpret_cast<const char *>(buffer_->data()),
-        buffer_->size()),
+        reinterpret_cast<const char *>(buffer_.data()),
+        buffer_.size()),
       compression_type);
 
     uncomp_data_ = uncomp_data_owner_.data();
@@ -671,7 +663,7 @@ table_with_metadata reader::impl::read(json_reader_options const &options,
   auto range_size   = options.get_byte_range_size();
 
   ingest_raw_input(range_offset, range_size);
-  CUDF_EXPECTS(buffer_ != nullptr, "Ingest failed: input data is null.\n");
+  CUDF_EXPECTS(buffer_.size() != 0, "Ingest failed: input data is null.\n");
 
   decompress_input(stream);
   CUDF_EXPECTS(uncomp_data_ != nullptr, "Ingest failed: uncompressed input data is null.\n");
