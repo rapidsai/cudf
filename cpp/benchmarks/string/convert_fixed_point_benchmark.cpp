@@ -24,8 +24,6 @@
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/types.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-
 namespace {
 
 std::unique_ptr<cudf::column> get_strings_column(cudf::size_type rows)
@@ -53,10 +51,9 @@ void convert_to_fixed_point(benchmark::State& state)
     volatile auto results = cudf::strings::to_fixed_point(strings_view, dtype);
   }
 
-  using rep_type = typename cudf::device_storage_type_t<fixed_point_type>;
   // bytes_processed = bytes_input + bytes_output
   state.SetBytesProcessed(state.iterations() *
-                          (strings_view.chars_size() + rows * sizeof(rep_type)));
+                          (strings_view.chars_size() + rows * cudf::size_of(dtype)));
 }
 
 class StringsFromFixedPoint : public cudf::benchmark {
@@ -78,11 +75,10 @@ void convert_from_fixed_point(benchmark::State& state)
     results = cudf::strings::from_fixed_point(fp_col->view());
   }
 
-  using rep_type = typename cudf::device_storage_type_t<fixed_point_type>;
   // bytes_processed = bytes_input + bytes_output
   state.SetBytesProcessed(
     state.iterations() *
-    (cudf::strings_column_view(results->view()).chars_size() + rows * sizeof(rep_type)));
+    (cudf::strings_column_view(results->view()).chars_size() + rows * cudf::size_of(dtype)));
 }
 
 #define CONVERT_TO_FIXED_POINT_BMD(name, fixed_point_type)                  \
