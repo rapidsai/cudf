@@ -347,6 +347,32 @@ TYPED_TEST(ConditionalLeftJoinTest, TestTwoColumnThreeRowSomeEqual)
              {{0, 0}, {1, 1}, {2, JoinNoneValue}});
 };
 
+TYPED_TEST(ConditionalLeftJoinTest, TestCompareRandomToHash)
+{
+  // Generate columns of 10 repeats of the integer range [0, 10), then merge
+  // a shuffled version and compare to hash join.
+  unsigned int N           = 10000;
+  unsigned int num_repeats = 10;
+  unsigned int num_unique  = N / num_repeats;
+
+  std::vector<TypeParam> left(N);
+  std::vector<TypeParam> right(N);
+
+  for (unsigned int i = 0; i < num_repeats; ++i) {
+    std::iota(
+      std::next(left.begin(), num_unique * i), std::next(left.begin(), num_unique * (i + 1)), 0);
+    std::iota(
+      std::next(right.begin(), num_unique * i), std::next(right.begin(), num_unique * (i + 1)), 0);
+  }
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::shuffle(left.begin(), left.end(), gen);
+  std::shuffle(right.begin(), right.end(), gen);
+
+  this->compare_to_hash_join({left}, {right});
+};
+
 /**
  * Tests of full joins.
  */
@@ -375,6 +401,32 @@ TYPED_TEST(ConditionalFullJoinTest, TestTwoColumnThreeRowSomeEqual)
              {{0, 1, 3}, {30, 40, 50}},
              left_zero_eq_right_zero,
              {{0, 0}, {1, 1}, {2, JoinNoneValue}, {JoinNoneValue, 2}});
+};
+
+TYPED_TEST(ConditionalFullJoinTest, TestCompareRandomToHash)
+{
+  // Generate columns of 10 repeats of the integer range [0, 10), then merge
+  // a shuffled version and compare to hash join.
+  unsigned int N           = 10000;
+  unsigned int num_repeats = 10;
+  unsigned int num_unique  = N / num_repeats;
+
+  std::vector<TypeParam> left(N);
+  std::vector<TypeParam> right(N);
+
+  for (unsigned int i = 0; i < num_repeats; ++i) {
+    std::iota(
+      std::next(left.begin(), num_unique * i), std::next(left.begin(), num_unique * (i + 1)), 0);
+    std::iota(
+      std::next(right.begin(), num_unique * i), std::next(right.begin(), num_unique * (i + 1)), 0);
+  }
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::shuffle(left.begin(), left.end(), gen);
+  std::shuffle(right.begin(), right.end(), gen);
+
+  this->compare_to_hash_join({left}, {right});
 };
 
 /**
@@ -408,6 +460,29 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
     std::sort(expected_outputs.begin(), expected_outputs.end());
     EXPECT_TRUE(
       std::equal(resulting_indices.begin(), resulting_indices.end(), expected_outputs.begin()));
+  }
+
+  /*
+   * Perform a join of tables constructed from two input data sets according to
+   * an equality predicate on all corresponding columns and verify that the outputs match the
+   * expected outputs (up to order).
+   */
+  void compare_to_hash_join(std::vector<std::vector<T>> left_data,
+                            std::vector<std::vector<T>> right_data)
+  {
+    // Note that we need to maintain the column wrappers otherwise the
+    // resulting column views will be referencing potentially invalid memory.
+    auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
+      this->parse_input(left_data, right_data);
+    // TODO: Generalize this to support multiple columns by automatically
+    // constructing the appropriate expression.
+    auto result    = this->join(left, right, left_zero_eq_right_zero);
+    auto reference = this->reference_join(left, right);
+
+    thrust::sort(thrust::device, result->begin(), result->end());
+    thrust::sort(thrust::device, reference->begin(), reference->end());
+
+    EXPECT_TRUE(thrust::equal(thrust::device, result->begin(), result->end(), reference->begin()));
   }
 
   /**
@@ -452,6 +527,32 @@ TYPED_TEST(ConditionalLeftSemiJoinTest, TestTwoColumnThreeRowSomeEqual)
   this->test({{0, 1, 2}, {10, 20, 30}}, {{0, 1, 3}, {30, 40, 50}}, left_zero_eq_right_zero, {0, 1});
 };
 
+TYPED_TEST(ConditionalLeftSemiJoinTest, TestCompareRandomToHash)
+{
+  // Generate columns of 10 repeats of the integer range [0, 10), then merge
+  // a shuffled version and compare to hash join.
+  unsigned int N           = 10000;
+  unsigned int num_repeats = 10;
+  unsigned int num_unique  = N / num_repeats;
+
+  std::vector<TypeParam> left(N);
+  std::vector<TypeParam> right(N);
+
+  for (unsigned int i = 0; i < num_repeats; ++i) {
+    std::iota(
+      std::next(left.begin(), num_unique * i), std::next(left.begin(), num_unique * (i + 1)), 0);
+    std::iota(
+      std::next(right.begin(), num_unique * i), std::next(right.begin(), num_unique * (i + 1)), 0);
+  }
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::shuffle(left.begin(), left.end(), gen);
+  std::shuffle(right.begin(), right.end(), gen);
+
+  this->compare_to_hash_join({left}, {right});
+};
+
 /**
  * Tests of left anti joins.
  */
@@ -475,4 +576,30 @@ TYPED_TEST_CASE(ConditionalLeftAntiJoinTest, cudf::test::IntegralTypesNotBool);
 TYPED_TEST(ConditionalLeftAntiJoinTest, TestTwoColumnThreeRowSomeEqual)
 {
   this->test({{0, 1, 2}, {10, 20, 30}}, {{0, 1, 3}, {30, 40, 50}}, left_zero_eq_right_zero, {2});
+};
+
+TYPED_TEST(ConditionalLeftAntiJoinTest, TestCompareRandomToHash)
+{
+  // Generate columns of 10 repeats of the integer range [0, 10), then merge
+  // a shuffled version and compare to hash join.
+  unsigned int N           = 10000;
+  unsigned int num_repeats = 10;
+  unsigned int num_unique  = N / num_repeats;
+
+  std::vector<TypeParam> left(N);
+  std::vector<TypeParam> right(N);
+
+  for (unsigned int i = 0; i < num_repeats; ++i) {
+    std::iota(
+      std::next(left.begin(), num_unique * i), std::next(left.begin(), num_unique * (i + 1)), 0);
+    std::iota(
+      std::next(right.begin(), num_unique * i), std::next(right.begin(), num_unique * (i + 1)), 0);
+  }
+
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::shuffle(left.begin(), left.end(), gen);
+  std::shuffle(right.begin(), right.end(), gen);
+
+  this->compare_to_hash_join({left}, {right});
 };

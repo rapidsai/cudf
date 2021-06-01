@@ -243,8 +243,11 @@ __global__ void compute_conditional_join_output_size(table_device_view left_tabl
     for (cudf::size_type right_row_index = 0; right_row_index < right_num_rows; right_row_index++) {
       evaluator.evaluate(left_row_index, right_row_index, 0);
       if (test_var) {
+        if ((JoinKind != join_kind::LEFT_ANTI_JOIN) &&
+            !(JoinKind == join_kind::LEFT_SEMI_JOIN && found_match)) {
+          ++thread_counter;
+        }
         found_match = true;
-        if (JoinKind != join_kind::LEFT_ANTI_JOIN) { ++thread_counter; }
       }
     }
     if ((JoinKind == join_kind::LEFT_JOIN || JoinKind == join_kind::LEFT_ANTI_JOIN ||
