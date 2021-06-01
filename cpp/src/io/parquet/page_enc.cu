@@ -462,7 +462,7 @@ __global__ void __launch_bounds__(128)
         page_g.max_data_size   = ck_g.dictionary_size;
         page_g.start_row       = cur_row;
         page_g.num_rows        = ck_g.total_dict_entries;
-        page_g.num_leaf_values = ck_g.total_dict_entries;
+        page_g.num_leaf_values = ck_g.num_dict_entries;
         page_g.num_values      = ck_g.total_dict_entries;
         page_offset += page_g.max_hdr_size + page_g.max_data_size;
         comp_page_offset += page_g.max_hdr_size + GetMaxCompressedBfrSize(page_g.max_data_size);
@@ -1077,8 +1077,8 @@ __global__ void __launch_bounds__(128, 8)
       dst[0]     = dict_bits;
       s->rle_out = dst + 1;
     }
-    s->page_start_val = s->page.start_row;
-    if (s->col.parent_column != nullptr) {
+    s->page_start_val = s->page.start_row;  // Dictionary page's start row is chunk's start row
+    if (s->col.parent_column != nullptr) {  // TODO: remove this check. parent is now never nullptr
       auto col                    = *(s->col.parent_column);
       auto current_page_start_val = s->page_start_val;
       while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
@@ -1096,18 +1096,30 @@ __global__ void __launch_bounds__(128, 8)
   }
   __syncthreads();
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
-    uint32_t nvals   = min(s->page.num_leaf_values - cur_val_idx, 128);
-    uint32_t val_idx = s->page_start_val + cur_val_idx + t;
-    uint32_t is_valid, len, pos;
+    uint32_t nvals = min(s->page.num_leaf_values - cur_val_idx, 128);
+    uint32_t len, pos;
 
-    if (s->page.page_type == PageType::DICTIONARY_PAGE) {
-      is_valid = (cur_val_idx + t < s->page.num_leaf_values);
-      val_idx  = (is_valid) ? s->col.dict_data[val_idx] : val_idx;
-    } else {
-      is_valid = (val_idx < s->col.leaf_column->size() && cur_val_idx + t < s->page.num_leaf_values)
-                   ? s->col.leaf_column->is_valid(val_idx)
-                   : 0;
-    }
+    auto [is_valid, val_idx] = [&]() {
+      uint32_t val_idx;
+      uint32_t is_valid;
+
+      size_type val_idx_in_block = cur_val_idx + t;
+      if (s->page.page_type == PageType::DICTIONARY_PAGE) {
+        val_idx  = val_idx_in_block;
+        is_valid = (val_idx < s->page.num_leaf_values);
+        if (is_valid) { val_idx = s->ck.dict_data[val_idx]; }
+      } else {
+        size_type val_idx_in_leaf_col = s->page_start_val + val_idx_in_block;
+
+        is_valid = (val_idx_in_leaf_col < s->col.leaf_column->size() &&
+                    val_idx_in_block < s->page.num_leaf_values)
+                     ? s->col.leaf_column->is_valid(val_idx_in_leaf_col)
+                     : 0;
+        val_idx = (s->ck.use_dictionary) ? val_idx_in_block : val_idx_in_leaf_col;
+      }
+      return std::make_tuple(is_valid, val_idx);
+    }();
+
     cur_val_idx += nvals;
     if (dict_bits >= 0) {
       // Dictionary encoding
@@ -1121,7 +1133,7 @@ __global__ void __launch_bounds__(128, 8)
           if (dtype == BOOLEAN) {
             v = s->col.leaf_column->element<uint8_t>(val_idx);
           } else {
-            v = s->col.dict_index[val_idx];
+            v = s->ck.dict_index[val_idx];
           }
           s->vals[(rle_numvals + pos) & (rle_buffer_size - 1)] = v;
         }
@@ -1559,6 +1571,7 @@ __global__ void __launch_bounds__(128)
     } else {
       // DictionaryPageHeader
       encoder.field_struct_begin(7);
+      // TODO: update old to new
       encoder.field_int32(1, ck_g.total_dict_entries);  // number of values in dictionary
       encoder.field_int32(2, encoding);
       encoder.field_struct_end(7);

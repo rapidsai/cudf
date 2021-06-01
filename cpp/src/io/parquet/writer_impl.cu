@@ -704,7 +704,8 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_s
   }
   desc.num_rows      = cudf_col.size();
   desc.physical_type = static_cast<uint8_t>(physical_type());
-  auto count_bits    = [](uint16_t number) {
+  // TODO: replace with CompactProtocolReader::NumRequiredBits
+  auto count_bits = [](uint16_t number) {
     int16_t nbits = 0;
     while (number > 0) {
       nbits++;
@@ -761,10 +762,20 @@ void writer::impl::build_chunk_dictionaries(
   chunks.device_to_host(stream, true);
 }
 
-void writer::impl::build_chunk_dictionaries2(
-  hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
-  device_span<gpu::parquet_column_device_view const> col_desc,
-  uint32_t num_rows)
+template <typename T>
+void print(rmm::device_uvector<T> const &d_vec, std::string label = "")
+{
+  std::vector<T> h_vec(d_vec.size());
+  cudaMemcpy(h_vec.data(), d_vec.data(), d_vec.size() * sizeof(T), cudaMemcpyDeviceToHost);
+  printf("%s (%lu)\t", label.c_str(), h_vec.size());
+  for (auto &&i : h_vec) std::cout << (int)i << " ";
+  printf("\n");
+}
+
+auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
+                               device_span<gpu::parquet_column_device_view const> col_desc,
+                               uint32_t num_rows,
+                               rmm::cuda_stream_view stream)
 {
   // At this point, we know all chunks and their sizes. We want to allocate dictionaries for each
   // chunk that can have dictionary
@@ -787,6 +798,7 @@ void writer::impl::build_chunk_dictionaries2(
   stream.synchronize();
   gpu::BuildChunkDictionaries2(chunks, num_rows, hash_maps_storage[0], stream);
   stream.synchronize();
+  // print(hash_maps_storage[0], "built dict");
 
   // Make decision about which chunks have dictionary
   // TODO: We wouldn't have to synchronize if the decision also took place in a kernel.
@@ -806,6 +818,7 @@ void writer::impl::build_chunk_dictionaries2(
       if (ck.num_dict_entries > MAX_DICT_SIZE) { return false; }
 
       // calculate size of chunk if dictionary is used
+      // TODO: Replace with CompactProtocolReader::NumRequiredBits
       auto count_bits = [](uint16_t number) {
         int16_t nbits = 0;
         while (number > 0) {
@@ -845,6 +858,8 @@ void writer::impl::build_chunk_dictionaries2(
   gpu::CollectMapEntries(chunks.device_view().flat_view(), stream);
   chunks.device_to_host(stream);
   stream.synchronize();
+  // print(dict_data[0], "dict_data");
+
   for (auto &chunk : chunks.host_view().flat_view()) {
     // std::cout << "dict_size " << chunk.dict_data_size << std::endl;
   }
@@ -858,6 +873,8 @@ void writer::impl::build_chunk_dictionaries2(
   chunks.host_to_device(stream);
   gpu::GetDictionaryIndices(chunks.device_view(), num_rows, stream);
   stream.synchronize();
+  // print(dict_index[0], "dict_index");
+  return std::make_pair(std::move(dict_data), std::move(dict_index));
 }
 
 void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
@@ -1193,7 +1210,7 @@ void writer::impl::write(table_view const &table)
   }
 
   // Yahan banayenge nayi dictionary ka ghar
-  build_chunk_dictionaries2(chunks, col_desc, num_rows);
+  auto dict_info_owner = build_chunk_dictionaries2(chunks, col_desc, num_rows, stream);
 
   // Free unused dictionaries
   for (auto &col : parquet_columns) { col.check_dictionary_used(stream); }

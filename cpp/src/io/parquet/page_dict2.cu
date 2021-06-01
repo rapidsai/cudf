@@ -189,7 +189,8 @@ __global__ void __launch_bounds__(block_size, 1)
             case Type::DOUBLE: return 8;
             case Type::BYTE_ARRAY:
               if (data_col.type().id() == type_id::STRING) {
-                return data_col.element<string_view>(val_idx).size_bytes();
+                // Strings are stored as 4 byte length + string bytes
+                return 4 + data_col.element<string_view>(val_idx).size_bytes();
               }
             case Type::FIXED_LEN_BYTE_ARRAY:
             default: cudf_assert(false && "Unsupported type for dictionary encoding"); return 0;
@@ -221,6 +222,7 @@ __global__ void __launch_bounds__(block_size, 1)
   auto map =
     map_type::device_view(chunk.dict_map_slots, chunk.dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
 
+  // TODO: Does this need to be volatile?
   __shared__ size_type counter;
   if (t == 0) counter = 0;
   __syncthreads();
@@ -236,7 +238,7 @@ __global__ void __launch_bounds__(block_size, 1)
         // TODO: I guess we don't need the temporary dict_data_idx. Go remove it from everywhere.
         // Unless the dictionary being sorted is a requirement. Then we still need it because there
         // would be a sorting step in between the two statements above and below this comment.
-        chunk.dict_map_slots[loc].second.store(t + i);
+        slot->second.store(loc);
         // TODO: ^ This doesn't need to be atomic. Try casting to value_type ptr and just writing.
       }
     }
@@ -323,22 +325,12 @@ __global__ void __launch_bounds__(block_size, 1)
 }
 
 template <typename T>
-void print(rmm::device_uvector<T> const &d_vec, std::string label = "")
-{
-  std::vector<T> h_vec(d_vec.size());
-  cudaMemcpy(h_vec.data(), d_vec.data(), d_vec.size() * sizeof(T), cudaMemcpyDeviceToHost);
-  printf("%s (%lu)\t", label.c_str(), h_vec.size());
-  for (auto &&i : h_vec) std::cout << (int)i << " ";
-  printf("\n");
-}
-
-template <typename T>
 void print(rmm::device_vector<T> const &d_vec, std::string label = "")
 {
-  // thrust::host_vector<T> h_vec = d_vec;
-  // printf("%s \t", label.c_str());
-  // for (auto &&i : h_vec) std::cout << i << " ";
-  // printf("\n");
+  thrust::host_vector<T> h_vec = d_vec;
+  printf("%s \t", label.c_str());
+  for (auto &&i : h_vec) std::cout << i << " ";
+  printf("\n");
 }
 
 struct printer {
@@ -398,7 +390,7 @@ void BuildChunkDictionaries2(cudf::detail::device_2dspan<EncColumnChunk> chunks,
   //   rmm::exec_policy(stream), ck_it, ck_it + chunks.flat_view().size(), dict_sizes.begin());
   // print(dict_sizes, "dict sizes");
 
-  // rmm::device_uvector<size_type> temp(1 << 17, stream);
+  // rmm::device_vector<size_type> temp(onemap.size());
   // thrust::transform(
   //   rmm::exec_policy(), onemap.begin(), onemap.end(), temp.begin(), [] __device__(auto &slot) {
   //     return slot.first.load();

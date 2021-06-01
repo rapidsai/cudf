@@ -318,6 +318,8 @@ struct EncColumnChunk {
   uint32_t dictionary_id;   //!< Dictionary id for this chunk
   uint8_t is_compressed;    //!< Nonzero if the chunk uses compression
   uint8_t has_dictionary;   //!< Nonzero if the chunk uses dictionary encoding
+
+  // This is being set in old dict_enc. Only needed when chunk is partially dictionary
   uint16_t num_dict_fragments;  //!< Number of fragments using dictionary
   uint32_t dictionary_size;     //!< Size of dictionary
   // TODO: remove
