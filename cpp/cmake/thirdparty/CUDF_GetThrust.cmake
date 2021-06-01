@@ -43,14 +43,14 @@ function(find_and_configure_thrust VERSION)
             PATTERN "*.h"
             PATTERN "*.inl")
     install(DIRECTORY "${Thrust_SOURCE_DIR}/dependencies/cub/cub"
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/dependencies/"
         FILES_MATCHING
             PATTERN "*.cuh")
 
     install(DIRECTORY "${Thrust_SOURCE_DIR}/thrust/cmake"
         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/thrust/")
     install(DIRECTORY "${Thrust_SOURCE_DIR}/dependencies/cub/cub/cmake"
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/cub/")
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/dependencies/cub/")
 
 endfunction()
 
