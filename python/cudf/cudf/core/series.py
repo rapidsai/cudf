@@ -1296,7 +1296,9 @@ class Series(SingleColumnFrame, Serializable):
                     # with a series input the IntervalIndex's are turn
                     # into a struct dtype this line will change the
                     # categories back to an intervalIndex.
-                    preprocess.index.dtype._categories = self.index.dtype.categories
+                    preprocess.index.dtype._categories = (
+                        self.index.dtype.categories
+                    )
             output = preprocess.to_pandas().__repr__()
 
         lines = output.split("\n")
@@ -5195,8 +5197,8 @@ class Series(SingleColumnFrame, Serializable):
         dtype: int32
         """
         if bins is not None:
-            self = cudf.cut(self,bins, include_lowest=True)
-        
+            self = cudf.cut(self, bins, include_lowest=True)
+
         if dropna and self.null_count == len(self):
             return Series(
                 [],
@@ -5206,9 +5208,9 @@ class Series(SingleColumnFrame, Serializable):
             )
 
         res = self.groupby(self, dropna=dropna)
-        
+
         res = res.count(dropna=dropna)
-        
+
         res.index.name = None
 
         if sort:
@@ -5216,8 +5218,8 @@ class Series(SingleColumnFrame, Serializable):
 
         if normalize:
             res = res / float(res._column.sum())
-        
-        #we this is how we can get the same index dtype as pandas
+
+        # we this is how we can get the same index dtype as pandas
         if bins is not None:
             res.index = res.index.categories
 
