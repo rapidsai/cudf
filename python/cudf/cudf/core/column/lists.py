@@ -237,18 +237,15 @@ class ListColumn(ColumnBase):
         self: "cudf.core.column.ListColumn", dtype: Dtype
     ) -> "cudf.core.column.ListColumn":
         if isinstance(dtype, ListDtype):
-            self = ListColumn(
-                size=self.base_size,
-                dtype=self.dtype,
+            self = column.build_list_column(
+                indices=self.base_children[0],
+                elements=self.base_children[1]._apply_type_metadata(
+                    dtype.element_type
+                ),
                 mask=self.base_mask,
+                size=self.base_size,
                 offset=self.offset,
                 null_count=self.null_count,
-                children=(
-                    self.base_children[0],
-                    self.base_children[1]._apply_type_metadata(
-                        dtype.element_type
-                    ),
-                ),
             )
 
         return self

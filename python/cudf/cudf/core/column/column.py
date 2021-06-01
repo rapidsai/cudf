@@ -1597,6 +1597,84 @@ def build_interval_column(
     )
 
 
+def build_list_column(
+    indices: ColumnBase,
+    elements: ColumnBase,
+    mask: Buffer = None,
+    size: int = None,
+    offset: int = 0,
+    null_count: int = None,
+) -> "cudf.core.column.ListColumn":
+    """
+    Build a ListColumn
+
+    Parameters
+    ----------
+    indices : ColumnBase
+        Column of list indices
+    elements : ColumnBase
+        Column of list elements
+    mask: Buffer
+        Null mask
+    size: int, optional
+    offset: int, optional
+    """
+    dtype = ListDtype(element_type=elements.dtype)
+
+    result = build_column(
+        data=None,
+        dtype=dtype,
+        mask=mask,
+        size=size,
+        offset=offset,
+        null_count=null_count,
+        children=(indices, elements),
+    )
+
+    return cast("cudf.core.column.ListColumn", result)
+
+
+def build_struct_column(
+    names: Sequence[str],
+    children: Tuple[ColumnBase, ...],
+    dtype: Optional[Dtype] = None,
+    mask: Buffer = None,
+    size: int = None,
+    offset: int = 0,
+    null_count: int = None,
+) -> "cudf.core.column.StructColumn":
+    """
+    Build a StructColumn
+
+    Parameters
+    ----------
+    names : list-like
+        Field names to map to children dtypes
+    children : tuple
+
+    mask: Buffer
+        Null mask
+    size: int, optional
+    offset: int, optional
+    """
+    if dtype is None:
+        dtype = StructDtype(
+            fields={name: col.dtype for name, col in zip(names, children)}
+        )
+
+    result = build_column(
+        data=None,
+        dtype=dtype,
+        mask=mask,
+        size=size,
+        offset=offset,
+        null_count=null_count,
+        children=children,
+    )
+
+    return cast("cudf.core.column.StructColumn", result)
+
+
 def as_column(
     arbitrary: Any,
     nan_as_null: bool = None,
