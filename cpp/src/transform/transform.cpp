@@ -105,44 +105,37 @@ void generalized_operation(table_view data_view,
   std::string generic_cuda_source = cudf::jit::parse_single_function_ptx(
                      binary_udf, "GENERIC_OP", cudf::jit::get_type_name(output_type), {0});
 
-  int n_cols = data_view.num_columns();
-  std::vector<void*> results((n_cols * 3) + 3);
+  // {size, out_ptr, out_mask_ptr, col0_ptr, col0_mask_ptr, col0_offset, col1_ptr...}
+  std::vector<void*> kernel_args((data_view.num_columns() * 3) + 3);
 
   cudf::size_type size = outcol_view.size();
   const void* outcol_ptr = cudf::jit::get_data_ptr(outcol_view);
   const void* outmsk_ptr = cudf::jit::get_data_ptr(outmsk_view);
+  kernel_args.insert(kernel_args.begin(), {&size, &outcol_ptr, &outmsk_ptr});
 
-  results[0] = &size;
-  results[1] = &outcol_ptr;
-  results[2] = &outmsk_ptr;
+  std::vector<const void*> data_ptrs(data_view.num_columns());
+  std::vector<cudf::bitmask_type const*> mask_ptrs(data_view.num_columns());
+  std::vector<int64_t> offsets(data_view.num_columns());
+
   column_view col;
+  for (int col_idx = 0; col_idx < data_view.num_columns(); col_idx++) {
+    col = data_view.column(col_idx);
 
-  std::vector<const void*> data_ptrs(n_cols);
-  std::vector<cudf::bitmask_type const*> mask_ptrs(n_cols);
-  std::vector<int64_t> offsets(n_cols);
+    data_ptrs[col_idx] = cudf::jit::get_data_ptr(col);
+    mask_ptrs[col_idx] = col.null_mask();
+    offsets[col_idx] = col.offset();
 
-  for (int i = 0; i < n_cols; i++) {
-    col = data_view.column(i);
-    data_ptrs[i] = cudf::jit::get_data_ptr(col);
-    mask_ptrs[i] = col.null_mask();
-    offsets[i] = col.offset();
+    kernel_args.insert(kernel_args.begin() + 3 * (col_idx + 1), {&data_ptrs[col_idx], &mask_ptrs[col_idx], &offsets[col_idx]});
+
   }
 
-  int idx = 3;
-  for (int i = 0; i < n_cols; i++) {
-    results[idx] = &data_ptrs[i];
-    results[idx + 1] = &mask_ptrs[i];
-    results[idx + 2] = &offsets[i];
-    idx += 3;
-  }
-  
 
   rmm::cuda_stream_view generic_stream;
   cudf::jit::get_program_cache(*transform_jit_masked_udf_kernel_cu_jit)
     .get_kernel(
       generic_kernel_name, {}, {{"transform/jit/operation-udf.hpp", generic_cuda_source}}, {"-arch=sm_."})  //
     ->configure_1d_max_occupancy(0, 0, 0, generic_stream.value())                                   //
-    ->launch(results.data());
+    ->launch(kernel_args.data());
 
 }
 
