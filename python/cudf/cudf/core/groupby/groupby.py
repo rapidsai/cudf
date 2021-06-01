@@ -770,7 +770,7 @@ class GroupBy(Serializable):
             - pad/ffill: propagate last valid observation forward to next valid
             - backfill/bfill: use next valid observation to fill gap
         axis : {0 or 'index', 1 or 'columns'}
-            Unsupoprted
+            Unsupported
         inplace : bool, default False
             If `True`, fill inplace. Note: this will modify other views on this
             object.
