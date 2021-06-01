@@ -183,6 +183,14 @@ enum class mask_allocation_policy {
 std::unique_ptr<column> empty_like(column_view const& input);
 
 /**
+ * @brief Initializes and returns an empty column of the same type as the `input`.
+ *
+ * @param[in] input Scalar to emulate
+ * @return std::unique_ptr<column> An empty column of same type as `input`
+ */
+std::unique_ptr<column> empty_like(scalar const& input);
+
+/**
  * @brief Creates an uninitialized new column of the same size and type as the `input`.
  * Supports only fixed-width types.
  *
