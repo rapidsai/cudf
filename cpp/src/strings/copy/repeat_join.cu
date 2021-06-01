@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/copy.hpp>
 #include <cudf/strings/detail/utilities.cuh>
@@ -34,25 +35,29 @@ string_scalar repeat_join(string_scalar const& input,
                           rmm::cuda_stream_view stream,
                           rmm::mr::device_memory_resource* mr)
 {
-  // TODO: handle err
+  if (!input.is_valid()) { return string_scalar("", false, stream, mr); }
+  if (input.size() == 0 || repeat_times <= 0) { return string_scalar("", true, stream, mr); }
+  if (repeat_times == 1) { return string_scalar(input, stream, mr); }
 
-  auto new_str =
+  CUDF_EXPECTS(input.size() <= std::numeric_limits<size_type>::max() / repeat_times,
+               "The output string has size that exceeds the maximum allowed size.");
+
+  auto buff =
     rmm::device_buffer(repeat_times * input.size(), stream, rmm::mr::get_current_device_resource());
   for (size_type i = 0, str_size = input.size(); i < repeat_times; ++i) {
     auto const offset = i * str_size;
     thrust::copy(rmm::exec_policy(stream),
                  input.data(),
                  input.data() + str_size,
-                 static_cast<char*>(new_str.data()) + offset);
+                 static_cast<char*>(buff.data()) + offset);
   }
 
-  return string_scalar(
-    string_view(static_cast<char* const>(new_str.data()), new_str.size()), true, stream, mr);
+  return string_scalar(string_view(static_cast<char*>(buff.data()), buff.size()), true, stream, mr);
 }
 
 namespace {
 /**
- * @brief
+ * @brief Functor to compute string sizes and repeat the input strings.
  */
 template <bool has_nulls>
 struct compute_size_and_repeat_fn {
@@ -61,21 +66,22 @@ struct compute_size_and_repeat_fn {
 
   offset_type* d_offsets{nullptr};
 
-  // If d_chars == nullptr: only compute sizes and validities of the output strings.
+  // If d_chars == nullptr: only compute sizes of the output strings.
   // If d_chars != nullptr: only repeat strings.
   char* d_chars{nullptr};
 
-  // We need to set `1` or `0` for the validities of the output strings.
+  // Set `1` or `0` for the validities of the output strings if `has_nulls` is `true`.
   int8_t* d_validities{nullptr};
 
   __device__ void operator()(size_type const idx) const noexcept
   {
     if (!d_chars) {
       auto const is_valid = !has_nulls || strings_dv.is_valid_nocheck(idx);
-      d_offsets[idx] =
-        is_valid ? repeat_times * strings_dv.element<string_view>(idx).size_bytes() : 0;
+      d_offsets[idx]      = is_valid && repeat_times > 0
+                         ? repeat_times * strings_dv.element<string_view>(idx).size_bytes()
+                         : 0;
       if constexpr (has_nulls) { d_validities[idx] = is_valid; }
-    } else if (!has_nulls || d_validities[idx]) {
+    } else if ((!has_nulls || d_validities[idx]) && repeat_times > 0) {
       auto const d_str = strings_dv.element<string_view>(idx);
       auto output_ptr  = d_chars + d_offsets[idx];
       for (size_type i = 0; i < repeat_times; ++i) {
@@ -92,9 +98,18 @@ std::unique_ptr<column> repeat_join(strings_column_view const& input,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  // todo handle err
   auto const num_rows = input.size();
   if (num_rows == 0) { return detail::make_empty_strings_column(stream, mr); }
+  if (num_rows == 1) { return std::make_unique<column>(input.parent(), stream, mr); }
+
+  if (repeat_times > 0) {
+    auto const size_start =
+      cudf::detail::get_value<size_type>(input.offsets(), input.offset(), stream);
+    auto const size_end =
+      cudf::detail::get_value<size_type>(input.offsets(), input.offset() + num_rows, stream);
+    CUDF_EXPECTS(size_end - size_start <= std::numeric_limits<size_type>::max() / repeat_times,
+                 "The output strings have total size that exceeds the maximum allowed size.");
+  }
 
   auto const strings_dv_ptr = column_device_view::create(input.parent(), stream);
   if (input.has_nulls()) {
