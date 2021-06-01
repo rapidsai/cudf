@@ -41,7 +41,6 @@ from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.core.dtypes import (
     CategoricalDtype,
-    Decimal64Dtype,
     IntervalDtype,
     ListDtype,
     StructDtype,
@@ -49,6 +48,7 @@ from cudf.core.dtypes import (
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
     check_cast_unsupported_dtype,
+    cudf_dtype_from_pa_type,
     get_time_unit,
     is_categorical_dtype,
     is_decimal_dtype,
@@ -2272,17 +2272,6 @@ def full(size: int, fill_value: ScalarLike, dtype: Dtype = None) -> ColumnBase:
     return ColumnBase.from_scalar(cudf.Scalar(fill_value, dtype), size)
 
 
-def _cudf_dtype_from_arrow_type(arrow_type: Dtype) -> Dtype:
-    if pa.types.is_decimal(arrow_type):
-        return Decimal64Dtype.from_arrow(arrow_type)
-    elif pa.types.is_struct(arrow_type):
-        return StructDtype.from_arrow(arrow_type)
-    elif pa.types.is_list(arrow_type):
-        return ListDtype.from_arrow(arrow_type)
-
-    return arrow_type
-
-
 def _copy_type_metadata_from_arrow(
     arrow_array: pa.array, cudf_column: ColumnBase
 ) -> ColumnBase:
@@ -2295,7 +2284,7 @@ def _copy_type_metadata_from_arrow(
     Decimal64Dtype, copy precisions.
     """
     cudf_column = cudf_column._with_type_metadata(
-        _cudf_dtype_from_arrow_type(arrow_array.type)
+        cudf_dtype_from_pa_type(arrow_array.type)
     )
 
     return cudf_column
