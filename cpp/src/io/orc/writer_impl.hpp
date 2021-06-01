@@ -51,6 +51,25 @@ using cudf::detail::host_2dspan;
 using cudf::detail::hostdevice_2dvector;
 
 /**
+ * TODO
+ * flattened hierarchy
+ */
+struct orc_table_view {
+  std::vector<orc_column_view> columns;
+  rmm::device_uvector<gpu::orc_column_device_view> d_columns;
+  std::vector<int> string_column_indices;
+
+  auto num_columns() const { return columns.size(); }
+  auto num_string_columns() const { return string_column_indices.size(); }
+
+  auto& column(int idx) { return columns[idx]; }
+  auto const& column(int idx) const { return columns[idx]; }
+
+  auto& string_column(int idx) { return columns[string_column_indices[idx]]; }
+  auto const& string_column(int idx) const { return columns[string_column_indices[idx]]; }
+};
+
+/**
  * @brief Indices of rowgroups contained in a stripe.
  *
  * Provides a container-like interface to iterate over rowgroup indices.
@@ -202,16 +221,12 @@ class writer::impl {
   /**
    * @brief Builds up column dictionaries indices
    *
-   * @param d_orc_columns Pre-order flattened host array of ORC column views
-   * @param d_orc_columns Pre-order flattened device array of ORC column views
-   * @param str_col_flat_indexes List of columns that are strings type
+   * @param orc_table TODO
    * @param dict_data Dictionary data memory
    * @param dict_index Dictionary index memory
    * @param dict List of dictionary chunks
    */
-  void init_dictionaries(host_span<orc_column_view> orc_columns,
-                         device_span<gpu::orc_column_device_view const> d_orc_columns,
-                         host_span<int const> str_col_flat_indexes,
+  void init_dictionaries(orc_table_view& orc_table,
                          device_span<device_span<uint32_t>> dict_data,
                          device_span<device_span<uint32_t>> dict_index,
                          hostdevice_vector<gpu::DictionaryChunk>* dict);
@@ -219,15 +234,13 @@ class writer::impl {
   /**
    * @brief Builds up per-stripe dictionaries for string columns.
    *
-   * @param columns List of columns
-   * @param str_col_flat_indexes List of columns that are strings type
+   * @param orc_table TODO
    * @param stripe_bounds List of stripe boundaries
    * @param dict List of dictionary chunks
    * @param dict_index List of dictionary indices
    * @param stripe_dict List of stripe dictionaries
    */
-  void build_dictionaries(orc_column_view* columns,
-                          host_span<int const> str_col_flat_indexes,
+  void build_dictionaries(orc_table_view& orc_table,
                           host_span<stripe_rowgroups const> stripe_bounds,
                           hostdevice_vector<gpu::DictionaryChunk> const& dict,
                           host_span<rmm::device_uvector<uint32_t>> dict_index,
@@ -258,9 +271,7 @@ class writer::impl {
   /**
    * @brief Encodes the input columns into streams.
    *
-   * @param orc_columns Pre-order flattened host array of ORC column views
-   * @param d_orc_columns Pre-order flattened device array of ORC column views
-   * @param str_col_flat_indexes List of columns that are strings type
+   * @param orc_table TODO
    * @param dict_data Dictionary data memory
    * @param dict_index Dictionary index memory
    * @param dec_chunk_sizes Information about size of encoded decimal columns
@@ -268,9 +279,7 @@ class writer::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Encoded data and per-chunk stream descriptors
    */
-  encoded_data encode_columns(host_span<orc_column_view const> orc_columns,
-                              device_span<gpu::orc_column_device_view const> d_orc_columns,
-                              host_span<int const> str_col_flat_indexes,
+  encoded_data encode_columns(orc_table_view const& orc_table,
                               string_dictionaries&& dictionaries,
                               encoder_decimal_info&& dec_chunk_sizes,
                               host_span<stripe_rowgroups const> stripe_bounds,

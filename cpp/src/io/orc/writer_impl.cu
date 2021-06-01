@@ -282,60 +282,58 @@ std::vector<stripe_rowgroups> writer::impl::gather_stripe_info(
   return infos;
 }
 
-void writer::impl::init_dictionaries(host_span<orc_column_view> orc_columns,
-                                     device_span<orc_column_device_view const> d_orc_columns,
-                                     host_span<int const> str_col_flat_indexes,
+void writer::impl::init_dictionaries(orc_table_view &orc_table,
                                      device_span<device_span<uint32_t>> dict_data,
                                      device_span<device_span<uint32_t>> dict_index,
                                      hostdevice_vector<gpu::DictionaryChunk> *dict)
 {
-  const size_t num_rowgroups = dict->size() / str_col_flat_indexes.size();
+  const size_t num_rowgroups = dict->size() / orc_table.num_string_columns();
 
   // Setup per-rowgroup dictionary indexes for each dictionary-aware column
-  for (size_t i = 0; i < str_col_flat_indexes.size(); ++i) {
-    auto &str_column = orc_columns[str_col_flat_indexes[i]];
-    str_column.set_dict_stride(str_col_flat_indexes.size());
+  for (size_t i = 0; i < orc_table.num_string_columns(); ++i) {
+    auto &str_column = orc_table.string_column(i);
+    str_column.set_dict_stride(orc_table.num_string_columns());
     str_column.attach_dict_chunk(dict->host_ptr(), dict->device_ptr());
   }
 
-  gpu::InitDictionaryIndices(d_orc_columns,
-                             dict->device_ptr(),
-                             dict_data,
-                             dict_index,
-                             row_index_stride_,
-                             cudf::detail::make_device_uvector_async(str_col_flat_indexes, stream),
-                             num_rowgroups,
-                             stream);
+  gpu::InitDictionaryIndices(
+    orc_table.d_columns,
+    dict->device_ptr(),
+    dict_data,
+    dict_index,
+    row_index_stride_,
+    cudf::detail::make_device_uvector_async(orc_table.string_column_indices, stream),
+    num_rowgroups,
+    stream);
   dict->device_to_host(stream, true);
 }
 
-void writer::impl::build_dictionaries(orc_column_view *columns,
-                                      host_span<int const> str_col_flat_indexes,
+void writer::impl::build_dictionaries(orc_table_view &orc_table,
                                       host_span<stripe_rowgroups const> stripe_bounds,
                                       hostdevice_vector<gpu::DictionaryChunk> const &dict,
                                       host_span<rmm::device_uvector<uint32_t>> dict_index,
                                       hostdevice_vector<gpu::StripeDictionary> &stripe_dict)
 {
-  const auto num_rowgroups = dict.size() / str_col_flat_indexes.size();
+  const auto num_rowgroups = dict.size() / orc_table.num_string_columns();
 
-  for (size_t col_idx = 0; col_idx < str_col_flat_indexes.size(); ++col_idx) {
-    auto &str_column = columns[str_col_flat_indexes[col_idx]];
+  for (size_t dict_idx = 0; dict_idx < orc_table.num_string_columns(); ++dict_idx) {
+    auto &str_column = orc_table.string_column(dict_idx);
     str_column.attach_stripe_dict(stripe_dict.host_ptr(), stripe_dict.device_ptr());
 
     for (auto const &stripe : stripe_bounds) {
-      auto &sd           = stripe_dict[stripe.id * str_col_flat_indexes.size() + col_idx];
+      auto &sd           = stripe_dict[stripe.id * orc_table.num_string_columns() + dict_idx];
       sd.dict_data       = str_column.host_dict_chunk(stripe.first)->dict_data;
-      sd.dict_index      = dict_index[col_idx].data();  // Indexed by abs row
-      sd.column_id       = str_col_flat_indexes[col_idx];
+      sd.dict_index      = dict_index[dict_idx].data();  // Indexed by abs row
+      sd.column_id       = orc_table.string_column_indices[dict_idx];
       sd.start_chunk     = stripe.first;
       sd.num_chunks      = stripe.size;
       sd.dict_char_count = 0;
       sd.num_strings =
         std::accumulate(stripe.cbegin(), stripe.cend(), 0, [&](auto dt_str_cnt, auto rg_idx) {
-          const auto &dt = dict[rg_idx * str_col_flat_indexes.size() + col_idx];
+          const auto &dt = dict[rg_idx * orc_table.num_string_columns() + dict_idx];
           return dt_str_cnt + dt.num_dict_strings;
         });
-      sd.leaf_column = dict[col_idx].leaf_column;
+      sd.leaf_column = dict[dict_idx].leaf_column;
     }
 
     if (enable_dictionary_) {
@@ -348,14 +346,14 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
                         stripe_bounds.back().cend(),
                         string_column_cost{},
                         [&](auto cost, auto rg_idx) -> string_column_cost {
-                          const auto &dt = dict[rg_idx * str_col_flat_indexes.size() + col_idx];
+                          const auto &dt = dict[rg_idx * orc_table.num_string_columns() + dict_idx];
                           return {cost.direct + dt.string_char_count,
                                   cost.dictionary + dt.dict_char_count + dt.num_dict_strings};
                         });
       // Disable dictionary if it does not reduce the output size
       if (col_cost.dictionary >= col_cost.direct) {
         for (auto const &stripe : stripe_bounds) {
-          stripe_dict[stripe.id * str_col_flat_indexes.size() + col_idx].dict_data = nullptr;
+          stripe_dict[stripe.id * orc_table.num_string_columns() + dict_idx].dict_data = nullptr;
         }
       }
     }
@@ -367,7 +365,7 @@ void writer::impl::build_dictionaries(orc_column_view *columns,
                                dict.device_ptr(),
                                stripe_bounds.size(),
                                num_rowgroups,
-                               str_col_flat_indexes.size(),
+                               orc_table.string_column_indices.size(),
                                stream);
   stripe_dict.device_to_host(stream, true);
 }
@@ -583,25 +581,23 @@ struct segmented_valid_cnt_input {
   std::vector<size_type> indices;
 };
 
-encoded_data writer::impl::encode_columns(host_span<orc_column_view const> columns,
-                                          device_span<orc_column_device_view const> d_orc_columns,
-                                          host_span<int const> str_col_flat_indexes,
+encoded_data writer::impl::encode_columns(orc_table_view const &orc_table,
                                           string_dictionaries &&dictionaries,
                                           encoder_decimal_info &&dec_chunk_sizes,
                                           host_span<stripe_rowgroups const> stripe_bounds,
                                           orc_streams const &streams)
 {
-  auto const num_columns   = columns.size();
+  auto const num_columns   = orc_table.num_columns();
   auto const num_rowgroups = stripes_size(stripe_bounds);
   hostdevice_2dvector<gpu::EncChunk> chunks(num_columns, num_rowgroups, stream);
   hostdevice_2dvector<gpu::encoder_chunk_streams> chunk_streams(num_columns, num_rowgroups, stream);
-  auto const stream_offsets = streams.compute_offsets(columns, num_rowgroups);
+  auto const stream_offsets = streams.compute_offsets(orc_table.columns, num_rowgroups);
   rmm::device_uvector<uint8_t> encoded_data(stream_offsets.data_size(), stream);
 
   // Initialize column chunks' descriptions
   std::map<size_type, segmented_valid_cnt_input> validity_check_inputs;
 
-  for (auto const &column : columns) {
+  for (auto const &column : orc_table.columns) {
     for (auto const &stripe : stripe_bounds) {
       for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
         auto const rg_idx = *rg_idx_it;
@@ -638,7 +634,7 @@ encoded_data writer::impl::encode_columns(host_span<orc_column_view const> colum
     }
     return indices;
   };
-  for (auto const &column : columns) {
+  for (auto const &column : orc_table.columns) {
     if (column.orc_kind() == TypeKind::BOOLEAN && column.nullable()) {
       validity_check_inputs[column.flat_index()] = {column.null_mask(),
                                                     validity_check_indices(column.flat_index())};
@@ -656,7 +652,7 @@ encoded_data writer::impl::encode_columns(host_span<orc_column_view const> colum
   }
 
   for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
-    auto const &column = columns[col_idx];
+    auto const &column = orc_table.column(col_idx);
     auto col_streams   = chunk_streams[col_idx];
     for (auto const &stripe : stripe_bounds) {
       for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
@@ -726,13 +722,13 @@ encoded_data writer::impl::encode_columns(host_span<orc_column_view const> colum
   chunks.host_to_device(stream);
   chunk_streams.host_to_device(stream);
 
-  gpu::set_chunk_columns(d_orc_columns, chunks, stream);
+  gpu::set_chunk_columns(orc_table.d_columns, chunks, stream);
 
-  if (!str_col_flat_indexes.empty()) {
-    auto d_stripe_dict = columns[str_col_flat_indexes[0]].device_stripe_dict();
+  if (orc_table.num_string_columns() != 0) {
+    auto d_stripe_dict = orc_table.string_column(0).device_stripe_dict();
     gpu::EncodeStripeDictionaries(d_stripe_dict,
                                   chunks,
-                                  str_col_flat_indexes.size(),
+                                  orc_table.num_string_columns(),
                                   stripe_bounds.size(),
                                   chunk_streams,
                                   stream);
@@ -1119,12 +1115,10 @@ void __device__ preorder_append(uint32_t &idx,
       preorder_append(idx, current_idx, cols, col.child(child_idx));
 };
 
-std::
-  tuple<std::vector<orc_column_view>, rmm::device_uvector<orc_column_device_view>, std::vector<int>>
-  get_columns_info(table_view const &table,
-                   table_device_view const &d_table,
-                   table_metadata const *user_metadata,
-                   rmm::cuda_stream_view stream)
+orc_table_view get_columns_info(table_view const &table,
+                                table_device_view const &d_table,
+                                table_metadata const *user_metadata,
+                                rmm::cuda_stream_view stream)
 {
   std::vector<orc_column_view> orc_columns;
   std::vector<int> str_col_flat_indexes;
@@ -1154,16 +1148,26 @@ std::
   return {std::move(orc_columns), std::move(d_orc_columns), std::move(str_col_flat_indexes)};
 }
 
+hostdevice_2dvector<std::pair<uint32_t, uint32_t>> calculate_rowgroup_sizes(
+  orc_table_view const &orc_table, size_t num_rowgroups, rmm::cuda_stream_view stream)
+{
+  // hostdevice_2dvector [num_cols, num_rowgroups] uint32_t start, uint32_t size
+  hostdevice_2dvector<std::pair<uint32_t, uint32_t>> rowgroup_bounds(
+    orc_table.num_columns(), num_rowgroups, stream);
+  // for_each
+
+  return rowgroup_bounds;
+}
+
 // returns host vector of per-rowgroup sizes
-encoder_decimal_info decimal_chunk_sizes(host_span<orc_column_view> orc_columns,
-                                         device_span<orc_column_device_view const> d_orc_columns,
+encoder_decimal_info decimal_chunk_sizes(orc_table_view &orc_table,
                                          size_type rowgroup_size,
                                          host_span<stripe_rowgroups const> stripes,
                                          rmm::cuda_stream_view stream)
 {
   std::map<uint32_t, rmm::device_uvector<uint32_t>> elem_sizes;
   // Compute per-element offsets (within each row group) on the device
-  for (auto &orc_col : orc_columns) {
+  for (auto &orc_col : orc_table.columns) {
     if (orc_col.orc_kind() == DECIMAL) {
       auto &current_sizes =
         elem_sizes
@@ -1172,8 +1176,9 @@ encoder_decimal_info decimal_chunk_sizes(host_span<orc_column_view> orc_columns,
       thrust::tabulate(rmm::exec_policy(stream),
                        current_sizes.begin(),
                        current_sizes.end(),
-                       [d_orc_columns, col_idx = orc_col.flat_index()] __device__(auto idx) {
-                         auto const &col = *d_orc_columns[col_idx].cudf_column;
+                       [d_cols  = device_span<orc_column_device_view const>{orc_table.d_columns},
+                        col_idx = orc_col.flat_index()] __device__(auto idx) {
+                         auto const &col = *d_cols[col_idx].cudf_column;
                          if (col.is_null(idx)) return 0u;
                          int64_t const element = (col.type().id() == type_id::DECIMAL32)
                                                    ? col.element<int32_t>(idx)
@@ -1235,24 +1240,25 @@ std::map<uint32_t, size_t> decimal_column_sizes(
   return column_sizes;
 }
 
-string_dictionaries allocate_dictionaries(host_span<orc_column_view const> orc_columns,
-                                          host_span<int const> str_col_flat_indexes,
+string_dictionaries allocate_dictionaries(orc_table_view const &orc_table,
                                           rmm::cuda_stream_view stream)
 {
   std::vector<rmm::device_uvector<uint32_t>> data;
-  std::transform(
-    str_col_flat_indexes.begin(),
-    str_col_flat_indexes.end(),
-    std::back_inserter(data),
-    [&](auto &idx) { return rmm::device_uvector<uint32_t>(orc_columns[idx].size(), stream); });
+  std::transform(orc_table.string_column_indices.begin(),
+                 orc_table.string_column_indices.end(),
+                 std::back_inserter(data),
+                 [&](auto &idx) {
+                   return rmm::device_uvector<uint32_t>(orc_table.columns[idx].size(), stream);
+                 });
   std::vector<rmm::device_uvector<uint32_t>> index;
-  std::transform(
-    str_col_flat_indexes.begin(),
-    str_col_flat_indexes.end(),
-    std::back_inserter(index),
-    [&](auto &idx) { return rmm::device_uvector<uint32_t>(orc_columns[idx].size(), stream); });
+  std::transform(orc_table.string_column_indices.begin(),
+                 orc_table.string_column_indices.end(),
+                 std::back_inserter(index),
+                 [&](auto &idx) {
+                   return rmm::device_uvector<uint32_t>(orc_table.columns[idx].size(), stream);
+                 });
   stream.synchronize();
-  
+
   std::vector<device_span<uint32_t>> data_ptrs;
   std::transform(data.begin(), data.end(), std::back_inserter(data_ptrs), [](auto &uvec) {
     return device_span<uint32_t>{uvec};
@@ -1276,56 +1282,37 @@ void writer::impl::write(table_view const &table)
   auto const d_table       = table_device_view::create(table, stream);
   auto const num_rowgroups = div_by_rowgroups<size_t>(num_rows);
 
-  // TODO use a struct instead of binding?
-  auto [orc_columns, d_orc_columns, str_col_flat_indexes] =
-    get_columns_info(table, *d_table, user_metadata, stream);
+  auto orc_table = get_columns_info(table, *d_table, user_metadata, stream);
 
-  // rmm::device_uvector<uint32_t> dict_data(str_col_flat_indexes.size() * num_rows, stream);
-  // rmm::device_uvector<uint32_t> dict_index(str_col_flat_indexes.size() * num_rows, stream);
+  // auto const rowgroup_bounds = calculate_rowgroup_sizes();
 
-  auto dictionaries = allocate_dictionaries(orc_columns, str_col_flat_indexes, stream);
+  auto dictionaries = allocate_dictionaries(orc_table, stream);
 
   // Build per-column dictionary indices
-  const auto num_dict_chunks = num_rowgroups * str_col_flat_indexes.size();
+  const auto num_dict_chunks = num_rowgroups * orc_table.num_string_columns();
   hostdevice_vector<gpu::DictionaryChunk> dict(num_dict_chunks, stream);
-  if (!str_col_flat_indexes.empty()) {
-    init_dictionaries(orc_columns,
-                      d_orc_columns,
-                      str_col_flat_indexes,
-                      dictionaries.d_data,
-                      dictionaries.d_index,
-                      &dict);
+  if (orc_table.num_string_columns() != 0) {
+    init_dictionaries(orc_table, dictionaries.d_data, dictionaries.d_index, &dict);
   }
 
   // Decide stripe boundaries early on, based on uncompressed size
-  auto const stripe_bounds = gather_stripe_info(orc_columns, num_rowgroups);
+  auto const stripe_bounds = gather_stripe_info(orc_table.columns, num_rowgroups);
 
   // Build stripe-level dictionaries
-  const auto num_stripe_dict = stripe_bounds.size() * str_col_flat_indexes.size();
+  const auto num_stripe_dict = stripe_bounds.size() * orc_table.num_string_columns();
   hostdevice_vector<gpu::StripeDictionary> stripe_dict(num_stripe_dict, stream);
-  if (!str_col_flat_indexes.empty()) {
-    build_dictionaries(orc_columns.data(),
-                       str_col_flat_indexes,
-                       stripe_bounds,
-                       dict,
-                       dictionaries.index,
-                       stripe_dict);
+  if (orc_table.num_string_columns() != 0) {
+    build_dictionaries(orc_table, stripe_bounds, dict, dictionaries.index, stripe_dict);
   }
 
-  auto dec_chunk_sizes =
-    decimal_chunk_sizes(orc_columns, d_orc_columns, row_index_stride_, stripe_bounds, stream);
+  auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, row_index_stride_, stripe_bounds, stream);
 
-  auto streams =
-    create_streams(orc_columns, stripe_bounds, decimal_column_sizes(dec_chunk_sizes.rg_sizes));
-  auto enc_data = encode_columns(orc_columns,
-                                 d_orc_columns,
-                                 str_col_flat_indexes,
-                                 std::move(dictionaries),
-                                 std::move(dec_chunk_sizes),
-                                 stripe_bounds,
-                                 streams);
+  auto streams = create_streams(
+    orc_table.columns, stripe_bounds, decimal_column_sizes(dec_chunk_sizes.rg_sizes));
+  auto enc_data = encode_columns(
+    orc_table, std::move(dictionaries), std::move(dec_chunk_sizes), stripe_bounds, streams);
   // Assemble individual disparate column chunks into contiguous data streams
-  size_type const num_index_streams = (orc_columns.size() + 1);
+  size_type const num_index_streams = (orc_table.num_columns() + 1);
   const auto num_data_streams       = streams.size() - num_index_streams;
   hostdevice_2dvector<gpu::StripeStream> strm_descs(stripe_bounds.size(), num_data_streams, stream);
   auto stripes =
@@ -1334,7 +1321,7 @@ void writer::impl::write(table_view const &table)
   // Gather column statistics
   std::vector<ColStatsBlob> column_stats;
   if (enable_statistics_ && table.num_columns() > 0 && num_rows > 0) {
-    column_stats = gather_statistic_blobs(*d_table, orc_columns, stripe_bounds);
+    column_stats = gather_statistic_blobs(*d_table, orc_table.columns, stripe_bounds);
   }
 
   // Allocate intermediate output stream buffer
@@ -1407,7 +1394,7 @@ void writer::impl::write(table_view const &table)
     for (size_type stream_id = 0; stream_id < num_index_streams; ++stream_id) {
       write_index_stream(stripe_id,
                          stream_id,
-                         orc_columns,
+                         orc_table.columns,
                          rowgroup_range,
                          enc_data.streams,
                          strm_descs,
@@ -1430,14 +1417,15 @@ void writer::impl::write(table_view const &table)
     // Write stripefooter consisting of stream information
     StripeFooter sf;
     sf.streams = streams;
-    sf.columns.resize(orc_columns.size() + 1);
+    sf.columns.resize(orc_table.num_columns() + 1);
     sf.columns[0].kind = DIRECT;
     for (size_t i = 1; i < sf.columns.size(); ++i) {
-      sf.columns[i].kind           = orc_columns[i - 1].orc_encoding();
-      sf.columns[i].dictionarySize = (sf.columns[i].kind == DICTIONARY_V2)
-                                       ? orc_columns[i - 1].host_stripe_dict(stripe_id)->num_strings
-                                       : 0;
-      if (orc_columns[i - 1].orc_kind() == TIMESTAMP) { sf.writerTimezone = "UTC"; }
+      sf.columns[i].kind = orc_table.column(i - 1).orc_encoding();
+      sf.columns[i].dictionarySize =
+        (sf.columns[i].kind == DICTIONARY_V2)
+          ? orc_table.column(i - 1).host_stripe_dict(stripe_id)->num_strings
+          : 0;
+      if (orc_table.column(i - 1).orc_kind() == TIMESTAMP) { sf.writerTimezone = "UTC"; }
     }
     buffer_.resize((compression_kind_ != NONE) ? 3 : 0);
     pbw_.write(sf);
@@ -1459,24 +1447,24 @@ void writer::impl::write(table_view const &table)
       buffer_.resize(0);
       pbw_.putb(1 * 8 + PB_TYPE_VARINT);
       pbw_.put_uint(num_rows);
-      ff.statistics.reserve(1 + orc_columns.size());
+      ff.statistics.reserve(1 + orc_table.num_columns());
       ff.statistics.emplace_back(std::move(buffer_));
       // Add file stats, stored after stripe stats in `column_stats`
       ff.statistics.insert(
         ff.statistics.end(),
-        std::make_move_iterator(column_stats.begin()) + stripes.size() * orc_columns.size(),
+        std::make_move_iterator(column_stats.begin()) + stripes.size() * orc_table.num_columns(),
         std::make_move_iterator(column_stats.end()));
     }
     // Stripe-level statistics
     size_t first_stripe = md.stripeStats.size();
     md.stripeStats.resize(first_stripe + stripes.size());
     for (size_t stripe_id = 0; stripe_id < stripes.size(); stripe_id++) {
-      md.stripeStats[first_stripe + stripe_id].colStats.resize(1 + orc_columns.size());
+      md.stripeStats[first_stripe + stripe_id].colStats.resize(1 + orc_table.num_columns());
       buffer_.resize(0);
       pbw_.putb(1 * 8 + PB_TYPE_VARINT);
       pbw_.put_uint(stripes[stripe_id].numberOfRows);
       md.stripeStats[first_stripe + stripe_id].colStats[0] = std::move(buffer_);
-      for (size_t col_idx = 0; col_idx < orc_columns.size(); col_idx++) {
+      for (size_t col_idx = 0; col_idx < orc_table.num_columns(); col_idx++) {
         size_t idx = stripes.size() * col_idx + stripe_id;
         if (idx < column_stats.size()) {
           md.stripeStats[first_stripe + stripe_id].colStats[1 + col_idx] =
@@ -1489,11 +1477,11 @@ void writer::impl::write(table_view const &table)
     // First call
     ff.headerLength   = std::strlen(MAGIC);
     ff.rowIndexStride = row_index_stride_;
-    ff.types.resize(1 + orc_columns.size());
+    ff.types.resize(1 + orc_table.num_columns());
     ff.types[0].kind = STRUCT;
     ff.types[0].subtypes.resize(table.num_columns());
     ff.types[0].fieldNames.resize(table.num_columns());
-    for (auto const &column : orc_columns) {
+    for (auto const &column : orc_table.columns) {
       ff.types[column.id()].kind = column.orc_kind();
       if (column.orc_kind() == DECIMAL) {
         ff.types[column.id()].scale     = static_cast<uint32_t>(column.scale());
@@ -1504,11 +1492,11 @@ void writer::impl::write(table_view const &table)
     }
   } else {
     // verify the user isn't passing mismatched tables
-    CUDF_EXPECTS(ff.types.size() == 1 + orc_columns.size(),
+    CUDF_EXPECTS(ff.types.size() == 1 + orc_table.num_columns(),
                  "Mismatch in table structure between multiple calls to write");
     CUDF_EXPECTS(
-      std::all_of(orc_columns.cbegin(),
-                  orc_columns.cend(),
+      std::all_of(orc_table.columns.cbegin(),
+                  orc_table.columns.cend(),
                   [&](auto const &col) { return ff.types[col.id()].kind == col.orc_kind(); }),
       "Mismatch in column types between multiple calls to write");
   }
