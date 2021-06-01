@@ -68,23 +68,21 @@ void unary_operation(mutable_column_view output,
 
 std::vector<std::string> make_template_types(column_view outcol_view, table_view data_view)
 {
-  int entries_per_col = 3; // type, mask, offset
-  std::string mask_type = "uint32_t*";
-
-  // int32_t
+  std::string mskptr_type = cudf::jit::get_type_name(cudf::data_type(cudf::type_to_id<cudf::bitmask_type>())) + "*";
   std::string offset_type = cudf::jit::get_type_name(cudf::data_type(cudf::type_to_id<cudf::offset_type>()));
 
-  std::vector<std::string> template_types(
-    // output type comes first and is one extra
-    (data_view.num_columns() * entries_per_col) + 1
-  );
+  std::vector<std::string> template_types(1);
   template_types[0] = cudf::jit::get_type_name(outcol_view.type());
 
-  for (int i = 0; i < data_view.num_columns(); i++) {
-    int offset = (i * entries_per_col) + 1;
-    template_types[offset] = cudf::jit::get_type_name(data_view.column(i).type()) + "*";
-    template_types[offset + 1] = mask_type;
-    template_types[offset + 2] = offset_type;
+  for (auto const& col: data_view) {
+    auto these_types = {
+       cudf::jit::get_type_name(col.type()) + "*",
+       mskptr_type,
+       offset_type
+    };
+
+    template_types.insert(template_types.end(), these_types);
+    
   }
   return template_types;
 }
@@ -99,6 +97,10 @@ void generalized_operation(table_view data_view,
 {
 
   std::vector<std::string> template_types = make_template_types(outcol_view, data_view);
+  for (size_t i = 0; i < template_types.size(); i++) {
+      std::cout << template_types[i] << std::endl;
+  };
+  std::cout << template_types.size() << std::endl;
 
   std::string generic_kernel_name = 
   jitify2::reflection::Template("cudf::transformation::jit::generic_udf_kernel")
