@@ -70,7 +70,9 @@ std::vector<std::string> make_template_types(column_view outcol_view, table_view
 {
   int entries_per_col = 3; // type, mask, offset
   std::string mask_type = "uint32_t*";
-  std::string offset_type = "int64_t";
+
+  // int32_t
+  std::string offset_type = cudf::jit::get_type_name(cudf::data_type(cudf::type_to_id<cudf::offset_type>()));
 
   std::vector<std::string> template_types(
     // output type comes first and is one extra
@@ -115,7 +117,7 @@ void generalized_operation(table_view data_view,
 
   std::vector<const void*> data_ptrs(data_view.num_columns());
   std::vector<cudf::bitmask_type const*> mask_ptrs(data_view.num_columns());
-  std::vector<int64_t> offsets(data_view.num_columns());
+  std::vector<cudf::offset_type> offsets(data_view.num_columns());
 
   column_view col;
   for (int col_idx = 0; col_idx < data_view.num_columns(); col_idx++) {
@@ -128,7 +130,6 @@ void generalized_operation(table_view data_view,
     kernel_args.insert(kernel_args.begin() + 3 * (col_idx + 1), {&data_ptrs[col_idx], &mask_ptrs[col_idx], &offsets[col_idx]});
 
   }
-
 
   rmm::cuda_stream_view generic_stream;
   cudf::jit::get_program_cache(*transform_jit_masked_udf_kernel_cu_jit)
