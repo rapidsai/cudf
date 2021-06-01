@@ -311,29 +311,21 @@ class arrow_io_source : public datasource {
    *
    * @param Apache Arrow Filesystem URI
    */
-  explicit arrow_io_source(std::string arrow_filesystem_uri) : arrow_uri(arrow_filesystem_uri)
+  explicit arrow_io_source(std::string arrow_uri)
   {
     arrow::Result<std::shared_ptr<arrow::fs::FileSystem>> result =
       arrow::fs::FileSystemFromUri(arrow_uri);
-    if (!result.ok()) { printf("Error: %s", result.status().ToString().c_str()); }
-    CUDF_EXPECTS(
-      result.ok(),
-      "Failed to generate Arrow Filesystem instance from URI. Invalid/unknown URI provided.");
+    CUDF_EXPECTS(result.ok(), "Failed to generate Arrow Filesystem instance from URI.");
+    filesystem = result.ValueOrDie();
 
-    std::shared_ptr<arrow::fs::FileSystem> filesystem = result.ValueOrDie();
-
-    // Retrieve the FileInfo for the target path
-    arrow::Result<arrow::fs::FileInfo> file_info_result =
-      filesystem->GetFileInfo("ursa-labs-taxi-data/2010/06/data.parquet");
-    printf("FileInfo: %s, Size: %ld\n",
-           file_info_result.ValueOrDie().base_name().c_str(),
-           file_info_result.ValueOrDie().size());
-    CUDF_EXPECTS(file_info_result.ok(), "Failed to retrieve FileInfo for provided path");
+    // Parse the path from the URI
+    size_t start = arrow_uri.find(uri_start_delimiter) == std::string::npos ? 0 : arrow_uri.find(uri_start_delimiter) + uri_start_delimiter.size();
+    size_t end = arrow_uri.find(uri_end_delimiter) - start;
+    std::string path = arrow_uri.substr(start, end);
 
     arrow::Result<std::shared_ptr<arrow::io::RandomAccessFile>> in_stream =
-      filesystem->OpenInputFile(file_info_result.ValueOrDie());
+      filesystem->OpenInputFile(path.c_str());
     CUDF_EXPECTS(in_stream.ok(), "Failed to open Arrow RandomAccessFile");
-
     arrow_file = in_stream.ValueOrDie();
   }
 
@@ -342,26 +334,14 @@ class arrow_io_source : public datasource {
    *
    * @param file The `arrow` object from which the data is read
    */
-  explicit arrow_io_source(std::shared_ptr<arrow::io::RandomAccessFile> file) : arrow_file(file)
-  {
-    printf("Is this being called for some reason?????\n");
-    printf("Had seriously better not be!\n");
-  }
+  explicit arrow_io_source(std::shared_ptr<arrow::io::RandomAccessFile> file) : arrow_file(file) {}
 
   /**
    * @brief Returns a buffer with a subset of data from the `arrow` source.
    */
   std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
   {
-    printf("Arrow host_read() Offset: %zu, Size: %zu\n", offset, size);
-    printf("The next `arrow_file->ReadAt()` is where the segfaul is occurring\n");
-
-    // Segfault is occurring here. The status of the `Result<RandomAccessFile>`
-    // from Arrow reports "OK" so I'm assuming the object is fine? That is just an assumption
-    // however. Also the `RandomAccessFile` is reporting the correct size and metadata information
-    // so assume its fine.
     auto result = arrow_file->ReadAt(offset, size);
-    printf("After this\n");
     CUDF_EXPECTS(result.ok(), "Cannot read file data");
     return std::make_unique<arrow_io_buffer>(result.ValueOrDie());
   }
@@ -371,7 +351,6 @@ class arrow_io_source : public datasource {
    */
   size_t host_read(size_t offset, size_t size, uint8_t* dst) override
   {
-    printf("Other Arrow host_read()\n");
     auto result = arrow_file->ReadAt(offset, size, dst);
     CUDF_EXPECTS(result.ok(), "Cannot read file data");
     return result.ValueOrDie();
@@ -382,16 +361,16 @@ class arrow_io_source : public datasource {
    */
   size_t size() const override
   {
-    printf("Arrow Size called\n");
     auto result = arrow_file->GetSize();
-    printf("Size is: %ld\n", result.ValueOrDie());
     CUDF_EXPECTS(result.ok(), "Cannot get file size");
     return result.ValueOrDie();
   }
 
  private:
+  const std::string uri_start_delimiter = "//";
+  const std::string uri_end_delimiter   = "?";
+  std::shared_ptr<arrow::fs::FileSystem> filesystem;
   std::shared_ptr<arrow::io::RandomAccessFile> arrow_file;
-  std::string arrow_uri;
 };
 
 }  // namespace io

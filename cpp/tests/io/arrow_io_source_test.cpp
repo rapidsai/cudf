@@ -45,25 +45,16 @@ TEST_F(ArrowIOTest, S3Filesystem)
 
   // Populate the Parquet Reader Options
   cudf::io::source_info src(datasource.get());
+  std::vector<std::string> single_column;
+  single_column.insert(single_column.begin(), "dropoff_at");
   cudf::io::parquet_reader_options_builder builder(src);
-  cudf::io::parquet_reader_options options = builder.build();
+  cudf::io::parquet_reader_options options = builder.columns(single_column).build();
 
   // Read the Parquet file from S3
-  printf("Before invoking read_parquet\n");
   cudf::io::table_with_metadata tbl = cudf::io::read_parquet(options);
-  printf("Cols: %d, Rows: %d receiving from S3\n", tbl.tbl->num_columns(), tbl.tbl->num_rows());
 
-  //   // Booleans are the same (integer) data type, but valued at 0 or 1
-  //   const auto view = result.tbl->view();
-  //   EXPECT_EQ(4, view.num_columns());
-  //   ASSERT_EQ(cudf::type_id::INT32, view.column(0).type().id());
-  //   ASSERT_EQ(cudf::type_id::INT32, view.column(1).type().id());
-  //   ASSERT_EQ(cudf::type_id::INT16, view.column(2).type().id());
-  //   ASSERT_EQ(cudf::type_id::BOOL8, view.column(3).type().id());
-
-  //   expect_column_data_equal(std::vector<int32_t>{1, 0, 0, 0, 1}, view.column(0));
-  //   expect_column_data_equal(std::vector<int16_t>{0, 1, 1, 0, 1}, view.column(2));
-  //   expect_column_data_equal(std::vector<bool>{true, true, false, true, false}, view.column(3));
+  ASSERT_EQ(1, tbl.tbl->num_columns());     // Only single column specified in reader_options
+  ASSERT_EQ(14825128, tbl.tbl->num_rows()); // known number of rows from the S3 file
 }
 
 CUDF_TEST_PROGRAM_MAIN()
