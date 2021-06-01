@@ -11,28 +11,7 @@ from numba.core.typing.typeof import typeof
 
 
 import operator
-
-arith_ops = [
-    operator.add,
-    operator.sub,
-    operator.mul,
-    operator.truediv,
-    operator.floordiv,
-    operator.mod,
-    operator.pow
-
-]
-
-
-comparison_ops = [
-    operator.eq,
-    operator.ne,
-    operator.lt,
-    operator.le,
-    operator.gt,
-    operator.ge
-]
-
+from ._ops import arith_ops, comparison_ops
 
 class MaskedType(types.Type):
     '''

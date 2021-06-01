@@ -11,26 +11,7 @@ import operator
 from numba.extending import lower_builtin, types
 from llvmlite import ir
 
-arith_ops = [
-    operator.add,
-    operator.sub,
-    operator.mul,
-    operator.truediv,
-    operator.floordiv,
-    operator.mod,
-    operator.pow
-
-]
-
-comparison_ops = [
-    operator.eq,
-    operator.ne,
-    operator.lt,
-    operator.le,
-    operator.gt,
-    operator.ge
-]
-
+from ._ops import arith_ops, comparison_ops
 
 @cuda_lowering_registry.lower_constant(NAType)
 def constant_na(context, builder, ty, pyval):
