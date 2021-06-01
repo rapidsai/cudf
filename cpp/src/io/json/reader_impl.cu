@@ -251,20 +251,19 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
   // Iterate through the user defined sources and read the contents into the local buffer
   CUDF_EXPECTS(!sources_.empty(), "No sources were defined");
   size_t total_source_size = 0;
-  for (const auto &source : sources_) {
-    total_source_size += source->size();
-  }
+  for (const auto &source : sources_) { total_source_size += source->size(); }
 
   // Create the buffer for holding the json data in host memory
-  uint8_t *host_buffer = new uint8_t[total_source_size]; // XXX: This needs to be deleted
-  buffer_ = std::make_unique<non_owning_buffer>(host_buffer, total_source_size);
+  uint8_t *host_buffer = new uint8_t[total_source_size];  // XXX: This needs to be deleted
+  buffer_              = std::make_unique<non_owning_buffer>(host_buffer, total_source_size);
 
   for (const auto &source : sources_) {
     if (!source->is_empty()) {
       auto data_size = (map_range_size != 0) ? map_range_size : source->size();
       if (buffer_ == nullptr || buffer_->size() == 0) {
-        // XXX: Read to an existing buffer in host memory here instead of getting a new buffer_ each time (aka append)
-        buffer_        = source->host_read(range_offset, data_size);
+        // XXX: Read to an existing buffer in host memory here instead of getting a new buffer_ each
+        // time (aka append)
+        buffer_ = source->host_read(range_offset, data_size);
       } else {
         printf("Buffer_ already has some data. Lets append to it\n");
       }
@@ -284,10 +283,10 @@ void reader::impl::ingest_raw_input(size_t range_offset, size_t range_size)
  */
 void reader::impl::decompress_input(rmm::cuda_stream_view stream)
 {
-  const auto compression_type =
-    infer_compression_type(options_.get_compression(),
-                           filepaths_[0], // XXX: Is is a requirement that all files have the same compression type?
-                           {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
+  const auto compression_type = infer_compression_type(
+    options_.get_compression(),
+    filepaths_[0],  // XXX: Is is a requirement that all files have the same compression type?
+    {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
   if (compression_type == "none") {
     // Do not use the owner vector here to avoid extra copy
     uncomp_data_ = reinterpret_cast<const char *>(buffer_->data());
@@ -641,7 +640,7 @@ table_with_metadata reader::impl::convert_data_to_table(device_span<uint64_t con
 }
 
 reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
-                   std::vector<std::string> filepaths,
+                   std::vector<std::string> const &filepaths,
                    json_reader_options const &options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource *mr)
@@ -701,7 +700,7 @@ reader::reader(std::vector<std::string> const &filepaths,
 {
   // Delay actual instantiation of data source until read to allow for
   // partial memory mapping of file using byte ranges
-  std::vector<std::unique_ptr<datasource>> src = {}; // Empty datasources
+  std::vector<std::unique_ptr<datasource>> src = {};  // Empty datasources
   _impl = std::make_unique<impl>(std::move(src), filepaths, options, stream, mr);
 }
 
@@ -711,7 +710,7 @@ reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>> &&sources,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource *mr)
 {
-  std::vector<std::string> file_paths = {}; // Empty filepaths
+  std::vector<std::string> file_paths = {};  // Empty filepaths
   _impl = std::make_unique<impl>(std::move(sources), file_paths, options, stream, mr);
 }
 

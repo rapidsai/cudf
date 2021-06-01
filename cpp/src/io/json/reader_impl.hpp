@@ -183,7 +183,7 @@ class reader::impl {
    * @brief Constructor from a dataset source with reader options.
    */
   explicit impl(std::vector<std::unique_ptr<datasource>> &&sources,
-                std::vector<std::string> filepaths,
+                std::vector<std::string> const &filepaths,
                 json_reader_options const &options,
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource *mr);
