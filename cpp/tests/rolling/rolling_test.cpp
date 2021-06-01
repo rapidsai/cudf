@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "rolling_test.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -298,7 +300,7 @@ class RollingTest : public cudf::test::BaseFixture {
             cudf::aggregation::Kind k,
             typename OutputType,
             bool is_mean,
-            std::enable_if_t<cudf::detail::is_rolling_supported<T, agg_op, k>()>* = nullptr>
+            std::enable_if_t<is_rolling_supported<T, agg_op, k>()>* = nullptr>
   std::unique_ptr<cudf::column> create_reference_output(
     cudf::column_view const& input,
     std::vector<size_type> const& preceding_window_col,
@@ -353,7 +355,7 @@ class RollingTest : public cudf::test::BaseFixture {
             cudf::aggregation::Kind k,
             typename OutputType,
             bool is_mean,
-            std::enable_if_t<!cudf::detail::is_rolling_supported<T, agg_op, k>()>* = nullptr>
+            std::enable_if_t<!is_rolling_supported<T, agg_op, k>()>* = nullptr>
   std::unique_ptr<cudf::column> create_reference_output(
     cudf::column_view const& input,
     std::vector<size_type> const& preceding_window_col,

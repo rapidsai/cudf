@@ -143,6 +143,8 @@ class ListDtype(_BaseDtype):
     def element_type(self) -> Dtype:
         if isinstance(self._typ.value_type, pa.ListType):
             return ListDtype.from_arrow(self._typ.value_type)
+        elif isinstance(self._typ.value_type, pa.StructType):
+            return StructDtype.from_arrow(self._typ.value_type)
         else:
             return np.dtype(self._typ.value_type.to_pandas_dtype()).name
 
@@ -176,10 +178,10 @@ class ListDtype(_BaseDtype):
         return self._typ.equals(other._typ)
 
     def __repr__(self):
-        if isinstance(self.element_type, ListDtype):
-            return f"ListDtype({self.element_type.__repr__()})"
+        if isinstance(self.element_type, (ListDtype, StructDtype)):
+            return f"{type(self).__name__}({self.element_type.__repr__()})"
         else:
-            return f"ListDtype({self.element_type})"
+            return f"{type(self).__name__}({self.element_type})"
 
     def __hash__(self):
         return hash(self._typ)

@@ -1318,7 +1318,6 @@ def test_string_no_children_properties():
     assert empty_col.children == ()
     assert empty_col.size == 0
 
-    assert empty_col._nbytes == 0
     assert getsizeof(empty_col) >= 0  # Accounts for Python GC overhead
 
 
@@ -2527,9 +2526,12 @@ def test_string_hex_to_int(data):
 
     gsr = cudf.Series(data)
 
-    got = gsr.str.htoi()
     expected = cudf.Series([263988422296292, 0, 281474976710655])
 
+    got = gsr.str.htoi()
+    assert_eq(expected, got)
+
+    got = gsr.str.hex_to_int()  # alias
     assert_eq(expected, got)
 
 
@@ -2586,7 +2588,9 @@ def test_string_ip4_to_int():
     expected = cudf.Series([0, None, 0, 698875905, 2130706433, 700776449])
 
     got = gsr.str.ip2int()
+    assert_eq(expected, got)
 
+    got = gsr.str.ip_to_int()  # alias
     assert_eq(expected, got)
 
 
@@ -3131,7 +3135,7 @@ def test_str_join_lists_error():
             "__",
             "=",
             None,
-            cudf.Series(["a__b", "=", "=__hello__=__world"]),
+            cudf.Series(["a__b", None, "=__hello__=__world"]),
         ),
         (
             cudf.Series(
@@ -3145,7 +3149,7 @@ def test_str_join_lists_error():
             ["-", "_", "**", "!"],
             None,
             None,
-            cudf.Series(["a--b", "", "**hello****world", None]),
+            cudf.Series(["a--b", None, "**hello****world", None]),
         ),
         (
             cudf.Series(
@@ -3160,12 +3164,7 @@ def test_str_join_lists_error():
             "rep_str",
             "sep_str",
             cudf.Series(
-                [
-                    "a-rep_str-b",
-                    "rep_str",
-                    "rep_str**hello**rep_str**world",
-                    None,
-                ]
+                ["a-rep_str-b", None, "rep_str**hello**rep_str**world", None]
             ),
         ),
         (
@@ -3173,14 +3172,14 @@ def test_str_join_lists_error():
             ["-", "_", None],
             "rep_str",
             None,
-            cudf.Series(["rep_str-a", "rep_str", None]),
+            cudf.Series(["rep_str-a", None, None]),
         ),
         (
             cudf.Series([[None, "a"], [None], None]),
             ["-", "_", None],
             None,
             "sep_str",
-            cudf.Series(["-a", "", None]),
+            cudf.Series(["-a", None, None]),
         ),
     ],
 )

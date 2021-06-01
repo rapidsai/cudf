@@ -241,42 +241,13 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
   //   1. Struct scalars are not yet available.
   //   2. List scalars do not yet support explosion to a full column.
   CUDF_FAIL("Scalars of nested types are not currently supported!");
+  (void)lhs;
+  (void)rhs;
+  (void)size;
+  (void)is_left;
+  (void)stream;
+  (void)mr;
 }
-
-/**
- * @brief Specialization of copy_if_else_functor for list_views.
- */
-template <>
-struct copy_if_else_functor_impl<list_view> {
-  template <typename Left, typename Right, typename Filter>
-  std::unique_ptr<column> operator()(Left const& lhs,
-                                     Right const& rhs,
-                                     size_type size,
-                                     bool left_nullable,
-                                     bool right_nullable,
-                                     Filter filter,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
-  {
-    return scatter_gather_based_if_else(lhs, rhs, size, filter, stream, mr);
-  }
-};
-
-template <>
-struct copy_if_else_functor_impl<struct_view> {
-  template <typename Left, typename Right, typename Filter>
-  std::unique_ptr<column> operator()(Left const& lhs,
-                                     Right const& rhs,
-                                     size_type size,
-                                     bool left_nullable,
-                                     bool right_nullable,
-                                     Filter filter,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
-  {
-    return scatter_gather_based_if_else(lhs, rhs, size, filter, stream, mr);
-  }
-};
 
 /**
  * @brief Functor called by the `type_dispatcher` to invoke copy_if_else on combinations
@@ -293,6 +264,12 @@ struct copy_if_else_functor {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
+    if constexpr (std::is_same_v<T, cudf::list_view> or std::is_same_v<T, cudf::struct_view>) {
+      (void)left_nullable;
+      (void)right_nullable;
+      return scatter_gather_based_if_else(lhs, rhs, size, filter, stream, mr);
+    }
+
     copy_if_else_functor_impl<T> copier{};
     return copier(lhs, rhs, size, left_nullable, right_nullable, filter, stream, mr);
   }
@@ -312,7 +289,7 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
   CUDF_EXPECTS(boolean_mask.type() == data_type(type_id::BOOL8),
                "Boolean mask column must be of type type_id::BOOL8");
 
-  if (boolean_mask.is_empty()) { return cudf::make_empty_column(lhs.type()); }
+  if (boolean_mask.is_empty()) { return cudf::empty_like(lhs); }
 
   auto bool_mask_device_p             = column_device_view::create(boolean_mask);
   column_device_view bool_mask_device = *bool_mask_device_p;
