@@ -123,10 +123,10 @@ struct device_type_dispatcher {
  * @param stream CUDA stream used for device memory operations
  */
 template <class BinaryOperator>
-void compiled_binary_op(mutable_column_device_view& outd,
-                        column_device_view const& lhsd,
-                        column_device_view const& rhsd,
-                        rmm::cuda_stream_view stream)
+void apply_binary_op(mutable_column_device_view& outd,
+                     column_device_view const& lhsd,
+                     column_device_view const& rhsd,
+                     rmm::cuda_stream_view stream)
 {
   auto common_dtype = get_common_type(outd.type(), lhsd.type(), rhsd.type());
 

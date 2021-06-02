@@ -140,11 +140,10 @@ bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_
 
 // Defined in individual .cu files.
 template <class BinaryOperator>
-// TODO better name.
-void compiled_binary_op(mutable_column_device_view&,
-                        column_device_view const&,
-                        column_device_view const&,
-                        rmm::cuda_stream_view stream);
+void apply_binary_op(mutable_column_device_view&,
+                     column_device_view const&,
+                     column_device_view const&,
+                     rmm::cuda_stream_view stream);
 void dispatch_comparison_op(mutable_column_device_view& outd,
                             column_device_view const& lhsd,
                             column_device_view const& rhsd,
