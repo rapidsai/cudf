@@ -63,6 +63,7 @@ struct ast_plan {
   ast_plan(detail::node const& expr,
            cudf::table_view left,
            cudf::table_view right,
+           bool has_nulls,
            rmm::cuda_stream_view stream,
            rmm::mr::device_memory_resource* mr)
     : _linearizer(expr, left, right)
@@ -106,14 +107,22 @@ struct ast_plan {
       reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]),
       _linearizer.operator_source_indices().size());
     dev_plan.num_intermediates = _linearizer.intermediate_count();
-    dev_plan.shmem_per_thread = static_cast<int>(sizeof(std::int64_t) * dev_plan.num_intermediates);
+
+    // We cannot pull the required type directly from the evaluator, which
+    // would be ideal, because that would introduce a circular dependency
+    // between them. The separation between host and device code in this case
+    // requires this minor duplication of logic.
+    dev_plan.shmem_per_thread =
+      static_cast<int>((has_nulls ? sizeof(thrust::optional<std::int64_t>) : sizeof(std::int64_t)) *
+                       dev_plan.num_intermediates);
   }
 
   ast_plan(detail::node const& expr,
            cudf::table_view left,
+           bool has_nulls,
            rmm::cuda_stream_view stream,
            rmm::mr::device_memory_resource* mr)
-    : ast_plan(expr, left, left, stream, mr)
+    : ast_plan(expr, left, left, has_nulls, stream, mr)
   {
   }
 

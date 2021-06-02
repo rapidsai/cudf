@@ -83,7 +83,7 @@ std::unique_ptr<column> compute_column(table_view const table,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  auto const plan = ast_plan{expr, table, stream, mr};
+  auto const plan = ast_plan{expr, table, false, stream, mr};
 
   // Prepare output column
   auto output_column = cudf::make_fixed_width_column(
