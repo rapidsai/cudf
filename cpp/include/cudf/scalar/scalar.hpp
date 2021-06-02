@@ -446,7 +446,8 @@ class string_scalar : public scalar {
 
   /**
    * @brief Construct a new string scalar object from an orphaned buffer in device memory.
-   * Note that this function move the orphaned buffer into the internal buffer.
+   *
+   * Note that this constructor moves the orphaned buffer into the internal data buffer.
    *
    * @param[in] data The orphaned buffer to take over.
    * @param[in] is_valid Whether the value held by the scalar is valid.
@@ -734,7 +735,8 @@ class struct_scalar : public scalar {
 
   /**
    * @brief Construct a new struct scalar object from an orphaned table in device memory.
-   * Note that this function move the orphaned table into the internal data table.
+   *
+   * Note that this constructor moves the orphaned table into the internal data table.
    *
    * @param[in] data The orphaned data table to take over.
    * @param[in] is_valid Whether the value held by the scalar is valid.
