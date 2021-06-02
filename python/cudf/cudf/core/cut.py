@@ -116,12 +116,12 @@ def cut(
             raise ValueError(
                 "Bin labels must either be False, None or passed in as a "
                 "list-like argument"
-            ) 
+            )
         elif ordered and labels is not None:
             if len(set(labels)) != len(labels):
                 raise ValueError(
-                    "labels must be unique if ordered=True;" 
-                    "pass ordered=False for duplicate labels"  
+                    "labels must be unique if ordered=True;"
+                    "pass ordered=False for duplicate labels"
                 )
 
     # bins can either be an int, sequence of scalars or an intervalIndex
@@ -182,7 +182,7 @@ def cut(
             if isinstance(right_edge, cupy._core.core.ndarray):
                 right_edge = right_edge.item()
             x[x == right_edge] = right_edge + 1
-        
+
         # adjust bin edges decimal precision
         int_label_bins = cupy.around(bins, precision)
 
@@ -195,19 +195,25 @@ def cut(
     else:
         closed = "left"
         left_inclusive = True
-    
+
     if isinstance(bins, pandas_IntervalIndex):
         interval_labels = bins
     elif labels is None:
-        if duplicates=='drop' and len(bins)==1 and len(old_bins) !=1:
+        if duplicates == "drop" and len(bins) == 1 and len(old_bins) != 1:
             if right and include_lowest:
-                old_bins[0] = old_bins[0] - 10 ** (-precision) 
-                interval_labels= interval_range(old_bins[0],old_bins[1],periods=1,closed=closed)
+                old_bins[0] = old_bins[0] - 10 ** (-precision)
+                interval_labels = interval_range(
+                    old_bins[0], old_bins[1], periods=1, closed=closed
+                )
             else:
-                interval_labels = IntervalIndex.from_breaks(old_bins, closed=closed)
+                interval_labels = IntervalIndex.from_breaks(
+                    old_bins, closed=closed
+                )
         else:
             # get labels for categories
-            interval_labels = IntervalIndex.from_breaks(int_label_bins, closed=closed)
+            interval_labels = IntervalIndex.from_breaks(
+                int_label_bins, closed=closed
+            )
     elif labels is not False:
         if not (is_list_like(labels)):
             raise ValueError(
@@ -276,7 +282,7 @@ def cut(
             return cudf.CategoricalIndex(
                 new_data, categories=sorted(set(labels)), ordered=False
             )
-    
+
     col = build_categorical_column(
         categories=interval_labels,
         codes=index_labels,
@@ -285,7 +291,7 @@ def cut(
         size=index_labels.size,
         ordered=ordered,
     )
-    
+
     # we return a categorical index, as we don't have a Categorical method
     categorical_index = cudf.core.index.as_index(col)
 

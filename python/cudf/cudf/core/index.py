@@ -21,7 +21,6 @@ from cudf.core.column import (
     ColumnBase,
     DatetimeColumn,
     IntervalColumn,
-    StructColumn,
     NumericalColumn,
     StringColumn,
     TimeDeltaColumn,

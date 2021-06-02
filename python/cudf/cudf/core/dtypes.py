@@ -76,7 +76,7 @@ class CategoricalDtype(_BaseDtype):
             return categories
         if len(categories) == 0:
             if is_interval_dtype(categories.dtype):
-                dtype=categories.dtype
+                dtype = categories.dtype
             else:
                 dtype = "object"  # type: Any
         else:
