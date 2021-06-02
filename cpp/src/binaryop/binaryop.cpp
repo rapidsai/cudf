@@ -757,4 +757,44 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   return detail::binary_operation(lhs, rhs, ptx, output_type, rmm::cuda_stream_default, mr);
 }
 
+// Experimental Compiled Binary operation
+namespace experimental {
+namespace detail {
+std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                         column_view const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes don't match");
+
+  if (not binops::compiled::is_supported_operation(output_type, lhs.type(), rhs.type(), op))
+    CUDF_FAIL("Unsupported operator for these types");
+
+  // TODO check if scale conversion required?
+  // if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
+  //  CUDF_FAIL("Not yet supported fixed_point");
+  // return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
+
+  auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
+
+  if (lhs.is_empty() or rhs.is_empty()) return out;
+
+  auto out_view = out->mutable_view();
+  cudf::binops::compiled::binary_operation(out_view, lhs, rhs, op, stream);
+  return out;
+}
+}  // namespace detail
+
+std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                         column_view const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::binary_operation(lhs, rhs, op, output_type, rmm::cuda_stream_default, mr);
+}
+}  // namespace experimental
 }  // namespace cudf

@@ -202,12 +202,31 @@ cudf::data_type binary_operation_fixed_point_output_type(binary_operator op,
                                                          cudf::data_type const& lhs,
                                                          cudf::data_type const& rhs);
 
-std::unique_ptr<column> binary_operation_compiled(
+namespace experimental {
+
+/**
+ * @brief Performs a binary operation between two columns.
+ *
+ * The output contains the result of `op(lhs[i], rhs[i])` for all `0 <= i < lhs.size()`
+ *
+ * Regardless of the operator, the validity of the output value is the logical
+ * AND of the validity of the two operands except NullMin and NullMax (logical OR).
+ *
+ * @param lhs         The left operand column
+ * @param rhs         The right operand column
+ * @param output_type The desired data type of the output column
+ * @param mr          Device memory resource used to allocate the returned column's device memory
+ * @return            Output column of `output_type` type containing the result of
+ *                    the binary operation
+ * @throw cudf::logic_error if @p lhs and @p rhs are different sizes
+ * @throw cudf::logic_error if @p output_type dtype isn't fixed-width
+ */
+std::unique_ptr<column> binary_operation(
   column_view const& lhs,
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
+}  // namespace experimental
 /** @} */  // end of group
 }  // namespace cudf

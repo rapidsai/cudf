@@ -129,12 +129,18 @@ std::unique_ptr<column> binary_operation(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+void binary_operation(mutable_column_view& out,
+                      column_view const& lhs,
+                      column_view const& rhs,
+                      binary_operator op,
+                      rmm::cuda_stream_view stream);
 // Defined in util.cpp
 std::optional<data_type> get_common_type(data_type out, data_type lhs, data_type rhs);
 bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op);
 
 // Defined in individual .cu files.
 template <class BinaryOperator>
+// TODO better name.
 void compiled_binary_op(mutable_column_device_view&,
                         column_device_view const&,
                         column_device_view const&,
