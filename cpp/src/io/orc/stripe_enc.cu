@@ -1010,7 +1010,7 @@ __global__ void __launch_bounds__(512)
 {
   // Set leaf_column member of EncChunk
   for (size_type i = threadIdx.x; i < chunks.size().second; i += blockDim.x) {
-    chunks[blockIdx.x][i].leaf_column = d_orc_columns[blockIdx.x].cudf_column;
+    chunks[blockIdx.x][i].leaf_column = &d_orc_columns[blockIdx.x].cudf_column;
   }
 }
 

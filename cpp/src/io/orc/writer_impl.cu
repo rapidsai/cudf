@@ -1106,10 +1106,10 @@ struct rowgroup_iterator {
 void __device__ preorder_append(uint32_t &idx,
                                 int32_t parent_idx,
                                 device_span<orc_column_device_view> cols,
-                                column_device_view const &col)
+                                column_device_view col)
 {
   auto const current_idx = idx;
-  cols[current_idx]      = orc_column_device_view{idx, &col, parent_idx};
+  cols[current_idx]      = orc_column_device_view{idx, col, parent_idx};
   idx++;
   if (col.type().id() == type_id::LIST) preorder_append(idx, current_idx, cols, col.child(1));
   if (col.type().id() == type_id::STRUCT)
@@ -1151,22 +1151,26 @@ orc_table_view get_columns_info(table_view const &table,
 }
 using rg_range = thrust::pair<uint32_t, uint32_t>;
 hostdevice_2dvector<rg_range> calculate_rowgroup_sizes(orc_table_view const &orc_table,
-                                                       size_t row_index_stride,
+                                                       size_t rowgroup_size,
                                                        rmm::cuda_stream_view stream)
 {
   auto const num_rowgroups =
-    cudf::util::div_rounding_up_unsafe<size_t, size_t>(orc_table.num_rows(), row_index_stride);
+    cudf::util::div_rounding_up_unsafe<size_t, size_t>(orc_table.num_rows(), rowgroup_size);
 
   hostdevice_2dvector<rg_range> rowgroup_bounds(num_rowgroups, orc_table.num_columns(), stream);
-  thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0ul),
-    num_rowgroups,
-    [cols      = device_span<orc_column_device_view const>{orc_table.d_columns},
-     rg_bounds = device_2dspan<rg_range>{rowgroup_bounds}] __device__(auto rg_idx) mutable {
-      for (auto col_idx = 0u; col_idx < cols.size(); ++col_idx)
-        rg_bounds[rg_idx][col_idx] = {rg_idx + 10, col_idx + 10};
-    });
+  thrust::for_each_n(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator(0ul),
+                     num_rowgroups,
+                     [cols      = device_span<orc_column_device_view const>{orc_table.d_columns},
+                      rg_bounds = device_2dspan<rg_range>{rowgroup_bounds},
+                      rowgroup_size] __device__(auto rg_idx) mutable {
+                       for (auto col_idx = 0u; col_idx < cols.size(); ++col_idx) {
+                         auto const rows_begin = rg_idx * rowgroup_size;
+                         auto const rows_end   = thrust::min<uint32_t>(
+                           (rg_idx + 1) * rowgroup_size, cols[col_idx].cudf_column.size());
+                         rg_bounds[rg_idx][col_idx] = {rows_begin, rows_end};
+                       }
+                     });
   rowgroup_bounds.device_to_host(stream, true);
 
   for (auto rg_idx = 0u; rg_idx < num_rowgroups; ++rg_idx) {
@@ -1198,7 +1202,7 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view &orc_table,
                        current_sizes.end(),
                        [d_cols  = device_span<orc_column_device_view const>{orc_table.d_columns},
                         col_idx = orc_col.flat_index()] __device__(auto idx) {
-                         auto const &col = *d_cols[col_idx].cudf_column;
+                         auto const &col = d_cols[col_idx].cudf_column;
                          if (col.is_null(idx)) return 0u;
                          int64_t const element = (col.type().id() == type_id::DECIMAL32)
                                                    ? col.element<int32_t>(idx)

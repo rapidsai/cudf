@@ -145,15 +145,14 @@ __global__ void __launch_bounds__(block_size, 2)
   int t = threadIdx.x;
 
   if (t == 0) {
-    auto const leaf_column_view = d_orc_columns[str_col_flat_indexes[col_id]].cudf_column;
-    s->chunk                    = chunks[group_id * num_str_cols + col_id];
-    s->chunk.leaf_column        = leaf_column_view;
-    s->chunk.dict_data          = dict_data[col_id].data() + group_id * row_index_stride;
-    s->chunk.dict_index         = dict_index[col_id].data();
-    s->chunk.start_row          = group_id * row_index_stride;
+    s->chunk             = chunks[group_id * num_str_cols + col_id];
+    s->chunk.leaf_column = &d_orc_columns[str_col_flat_indexes[col_id]].cudf_column;
+    s->chunk.dict_data   = dict_data[col_id].data() + group_id * row_index_stride;
+    s->chunk.dict_index  = dict_index[col_id].data();
+    s->chunk.start_row   = group_id * row_index_stride;
     s->chunk.num_rows =
       min(row_index_stride,
-          max(static_cast<size_t>(leaf_column_view->size() - s->chunk.start_row), size_t{0}));
+          max(static_cast<size_t>(s->chunk.leaf_column->size() - s->chunk.start_row), size_t{0}));
   }
   for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += block_size) {
     if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
