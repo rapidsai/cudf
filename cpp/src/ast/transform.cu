@@ -66,7 +66,17 @@ __launch_bounds__(max_block_size) __global__
                              dev_ast_plan plan,
                              mutable_column_device_view output_column)
 {
-  extern __shared__ std::int64_t intermediate_storage[];
+  // TODO: Try to avoid duplicating this type of declaration in so many places.
+  using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
+
+  // The (required) extern storage of the shared memory array leads to
+  // conflicting declarations between different templates. The easiest
+  // workaround is to declare an arbitrary (here char) array type then cast it
+  // after the fact to the appropriate type.
+  extern __shared__ char raw_intermediate_storage[];
+  IntermediateDataType* intermediate_storage =
+    reinterpret_cast<IntermediateDataType*>(raw_intermediate_storage);
+
   auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * plan.num_intermediates];
   auto const start_idx = static_cast<cudf::size_type>(threadIdx.x + blockIdx.x * blockDim.x);
   auto const stride    = static_cast<cudf::size_type>(blockDim.x * gridDim.x);
@@ -83,11 +93,25 @@ std::unique_ptr<column> compute_column(table_view const table,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  auto const plan = ast_plan{expr, table, false, stream, mr};
+  // Prepare output column. Whether or not the output column is nullable is
+  // determined by whether any of the columns in the input table are nullable.
+  // If none of the input columns actually contain nulls, we can still use the
+  // non-nullable version of the expression evaluation code path for
+  // performance, so we capture that information as well.
+  auto nullable =
+    std::any_of(table.begin(), table.end(), [](column_view c) { return c.nullable(); });
+  auto has_nulls = nullable && std::any_of(table.begin(), table.end(), [](column_view c) {
+                     return c.nullable() && c.has_nulls();
+                   });
 
-  // Prepare output column
+  auto const plan = ast_plan{expr, table, has_nulls, stream, mr};
+
+  auto output_column_mask_state =
+    nullable ? (has_nulls ? mask_state::UNINITIALIZED : mask_state::ALL_VALID)
+             : mask_state::UNALLOCATED;
+
   auto output_column = cudf::make_fixed_width_column(
-    plan.output_type(), table.num_rows(), mask_state::UNALLOCATED, stream, mr);
+    plan.output_type(), table.num_rows(), output_column_mask_state, stream, mr);
   auto mutable_output_device =
     cudf::mutable_column_device_view::create(output_column->mutable_view(), stream);
 
@@ -108,9 +132,15 @@ std::unique_ptr<column> compute_column(table_view const table,
 
   // Execute the kernel
   auto table_device = table_device_view::create(table, stream);
-  cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE, false>
-    <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
-      *table_device, dev_plan, *mutable_output_device);
+  if (has_nulls) {
+    cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE, true>
+      <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
+        *table_device, dev_plan, *mutable_output_device);
+  } else {
+    cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE, false>
+      <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
+        *table_device, dev_plan, *mutable_output_device);
+  }
   CHECK_CUDA(stream.value());
   return output_column;
 }
