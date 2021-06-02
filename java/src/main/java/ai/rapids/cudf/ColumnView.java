@@ -2738,6 +2738,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(listContainsColumn(getNativeView(), key.getNativeView()));
   }
 
+  /**
+   * Get a single item from the column at the specified index as a Scalar.
+   *
+   * Be careful. This is expensive and my involve running a kernel to copy the data out.
+   *
+   * @param index the index to look at
+   * @return the value at that index as a scalar.
+   * @throws CudfException if the index is out of bounds.
+   */
+  public final Scalar getScalarElement(int index) {
+    return new Scalar(getType(), getElement(getNativeView(), index));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -3041,6 +3054,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return column handle of the resultant
    */
   private static native long listContainsColumn(long nativeView, long keyColumn);
+
+  private static native long getElement(long nativeView, int index);
 
   private static native long castTo(long nativeHandle, int type, int scale);
 
