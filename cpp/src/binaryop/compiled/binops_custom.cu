@@ -35,9 +35,6 @@ void operator_dispatcher(mutable_column_view& out,
                          binary_operator op,
                          rmm::cuda_stream_view stream)
 {
-  if (not is_supported_operation(out.type(), lhs.type(), rhs.type(), op))
-    CUDF_FAIL("Unsupported operator for these types");
-
   auto lhsd = column_device_view::create(lhs, stream);
   auto rhsd = column_device_view::create(rhs, stream);
   auto outd = mutable_column_device_view::create(out, stream);
@@ -92,13 +89,8 @@ void binary_operation_compiled(mutable_column_view& out,
                                binary_operator op,
                                rmm::cuda_stream_view stream)
 {
-  // if (is_null_dependent(op)) {
-  //  CUDF_FAIL("Unsupported yet");
-  // TODO cudf::binops::jit::kernel_v_v_with_validity
-  //} else {
   operator_dispatcher(out, lhs, rhs, op, stream);
-  //"cudf::binops::jit::kernel_v_v")  //TODO v_s, s_v.
-  //}
+  // DONE vector_vector  //TODO vector_scalar, scalar_vector
 }
 }  // namespace compiled
 }  // namespace binops
@@ -121,18 +113,13 @@ std::unique_ptr<column> binary_operation_compiled(column_view const& lhs,
 {
   CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes don't match");
 
-  // if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
-  //  return binops::compiled::binary_operation(lhs, rhs, op, output_type, stream, mr);
+  if (not binops::compiled::is_supported_operation(output_type, lhs.type(), rhs.type(), op))
+    CUDF_FAIL("Unsupported operator for these types");
 
   // TODO check if scale conversion required?
   // if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
   //  CUDF_FAIL("Not yet supported fixed_point");
   // return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
-
-  // Check for datatype
-  // CUDF_EXPECTS(is_fixed_width(output_type), "Invalid/Unsupported output datatype");
-  // CUDF_EXPECTS(is_fixed_width(lhs.type()), "Invalid/Unsupported lhs datatype");
-  // CUDF_EXPECTS(is_fixed_width(rhs.type()), "Invalid/Unsupported rhs datatype");
 
   auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
 

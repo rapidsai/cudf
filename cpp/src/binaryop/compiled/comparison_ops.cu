@@ -42,6 +42,5 @@ void dispatch_comparison_op(mutable_column_device_view& outd,
       }
       // clang-format on
     });
-  //"cudf::binops::jit::kernel_v_v")  //TODO v_s, s_v.
 }
 }  // namespace cudf::binops::compiled

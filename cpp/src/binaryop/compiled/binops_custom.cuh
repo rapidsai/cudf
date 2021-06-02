@@ -137,7 +137,6 @@ void compiled_binary_op(mutable_column_device_view& outd,
                    thrust::make_counting_iterator<size_type>(0),
                    thrust::make_counting_iterator<size_type>(outd.size()),
                    binop_func);
-  //"cudf::binops::jit::kernel_v_v")  //TODO v_s, s_v.
 }
 
 }  // namespace compiled
