@@ -91,6 +91,14 @@ string_scalar::string_scalar(value_type const& source,
 {
 }
 
+string_scalar::string_scalar(rmm::device_buffer&& data,
+                             bool is_valid,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
+  : scalar(data_type(type_id::STRING), is_valid, stream, mr), _data(std::move(data))
+{
+}
+
 string_scalar::value_type string_scalar::value(rmm::cuda_stream_view stream) const
 {
   return value_type{data(), size()};
@@ -535,6 +543,15 @@ struct_scalar::struct_scalar(host_span<column_view const> data,
                              rmm::mr::device_memory_resource* mr)
   : scalar(data_type(type_id::STRUCT), is_valid, stream, mr),
     _data(table_view{std::vector<column_view>{data.begin(), data.end()}}, stream, mr)
+{
+  init(is_valid, stream, mr);
+}
+
+struct_scalar::struct_scalar(table&& data,
+                             bool is_valid,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
+  : scalar(data_type(type_id::STRUCT), is_valid, stream, mr), _data(std::move(data))
 {
   init(is_valid, stream, mr);
 }

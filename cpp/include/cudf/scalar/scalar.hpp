@@ -445,6 +445,20 @@ class string_scalar : public scalar {
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
+   * @brief Construct a new string scalar object from an orphaned buffer in device memory.
+   * Note that this function move the orphaned buffer into the internal buffer.
+   *
+   * @param[in] data The orphaned buffer to take over
+   * @param[in] is_valid Whether the value held by the scalar is valid
+   * @param[in] stream CUDA stream used for device memory operations
+   * @param[in] mr Device memory resource to use for device memory allocation
+   */
+  string_scalar(rmm::device_buffer&& data,
+                bool is_valid                       = true,
+                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  /**
    * @brief Implicit conversion operator to get the value of the scalar in a host std::string
    */
   explicit operator std::string() const;
@@ -714,6 +728,20 @@ class struct_scalar : public scalar {
    * @param mr Device memory resource to use for device memory allocation
    */
   struct_scalar(host_span<column_view const> data,
+                bool is_valid                       = true,
+                rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  /**
+   * @brief Construct a new struct scalar object from an orphaned table in device memory.
+   * Note that this function move the orphaned table into the internal data table.
+   *
+   * @param[in] data The orphaned data table to take over
+   * @param[in] is_valid Whether the value held by the scalar is valid
+   * @param[in] stream CUDA stream used for device memory operations
+   * @param[in] mr Device memory resource to use for device memory allocation
+   */
+  struct_scalar(table&& data,
                 bool is_valid                       = true,
                 rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
