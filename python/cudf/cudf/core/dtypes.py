@@ -74,11 +74,8 @@ class CategoricalDtype(_BaseDtype):
         # breakpoint()
         if categories is None:
             return categories
-        if len(categories) == 0:
-            if is_interval_dtype(categories.dtype):
-                dtype = categories.dtype
-            else:
-                dtype = "object"  # type: Any
+        if len(categories) == 0 and not is_interval_dtype(categories.dtype):
+            dtype = "object"  # type: Any
         else:
             dtype = None
 
