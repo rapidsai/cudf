@@ -434,7 +434,7 @@ void reader::impl::set_column_names(device_span<uint64_t const> rec_starts,
     // use keys as column names if input rows are objects
     auto keys_desc         = get_json_object_keys_hashes(rec_starts, stream);
     metadata_.column_names = keys_desc.first;
-    set_column_map(std::move(keys_desc.second));
+    set_column_map(std::move(keys_desc.second), stream);
   } else {
     int cols_found = 0;
     bool quotation = false;
