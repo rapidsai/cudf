@@ -451,9 +451,11 @@ class aggregate_orc_metadata {
     switch (types[id].kind) {
       case orc::LIST:
         if (not types[id].subtypes.empty()) {
+          lvl_cols += 1;
           num_cols_added +=
             add_column(selection, types, level + 1, id + 1, lvl_cols, has_timestamp_column);
         }
+        printf("RGSL : lvl %lu, col_id %d, lvl_cols %u\n", level, col_id, lvl_cols);
         selection[level][col_id].num_children = lvl_cols;
         break;
 
@@ -692,7 +694,8 @@ void reader::impl::aggregate_child_meta(hostdevice_vector<gpu::ColumnDesc> &chun
   auto num_cols               = _selected_columns[level].size();
   auto num_child_cols         = _selected_columns[level + 1].size();
   auto number_of_child_chunks = num_child_cols * number_of_stripes;
-  chunks.host_to_device(stream);
+  chunks.device_to_host(stream, true);
+  printf("RGSL : number of child rows is %d \n", chunks[0].num_child_rows);
   num_child_rows.resize(_selected_columns[level + 1].size());
   child_start_row.resize(number_of_child_chunks);
   num_child_rows_per_stripe.resize(number_of_child_chunks);
@@ -702,10 +705,11 @@ void reader::impl::aggregate_child_meta(hostdevice_vector<gpu::ColumnDesc> &chun
     auto col_idx   = orc_col_map[p_col.id];
     auto start_row = 0;
     for (size_t i = 0; i < number_of_stripes; i++) {
-      auto child_rows = chunks[number_of_stripes * num_cols + col_idx].num_child_rows;
+      auto child_rows = chunks[i * num_cols + col_idx].num_child_rows;
+      printf("RGSL: Child rows is %d p_col.num_children is %d\n", child_rows, p_col.num_children);
       for (uint32_t j = 0; j < p_col.num_children; j++) {
-        num_child_rows_per_stripe[number_of_stripes * num_child_cols + index + j] = child_rows;
-        child_start_row[number_of_stripes * num_child_cols + index + j] = (i == 0) ? 0 : start_row;
+        num_child_rows_per_stripe[i * num_child_cols + index + j] = child_rows;
+        child_start_row[i * num_child_cols + index + j]           = (i == 0) ? 0 : start_row;
         num_child_rows[j] += child_rows;
       }
       start_row += child_rows;
@@ -766,7 +770,7 @@ void reader::impl::create_columns(std::vector<std::vector<column_buffer>> &col_b
     auto col_buffer =
       assemble_buffer(col_meta.id, col_buffers, schema_info.back(), orc_col_map, 0, stream, mr);
     out_columns.emplace_back(make_column(col_buffer, &schema_info.back(), stream, mr));
-    i += col_meta.num_children;
+    i += (col_buffers[0][i].type.id() == type_id::STRUCT) ? col_meta.num_children : 1;
   }
 }
 reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
@@ -813,6 +817,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   // Select only stripes required (aka row groups)
   const auto selected_stripes = _metadata->select_stripes(stripes, skip_rows, num_rows);
 
+  std::vector<int32_t> num_child_rows;
+  std::vector<int32_t> child_start_row;
+  std::vector<int32_t> num_child_rows_per_stripe;
   for (size_t level = 0; level < _selected_columns.size(); level++) {
     printf("RGSL : Selecting column \n");
     auto &selected_columns = _selected_columns[level];
@@ -820,9 +827,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // Association between each ORC column and its cudf::column
     orc_col_map.emplace_back(_metadata->get_num_cols(), -1);
     std::vector<column_meta> list_col;
-    std::vector<int32_t> num_child_rows;
-    std::vector<int32_t> child_start_row;
-    std::vector<int32_t> num_child_rows_per_stripe;
 
     // Get a list of column data types
     std::vector<data_type> column_types;
@@ -945,14 +949,23 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           uint32_t max_num_rows = 0;
           for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
             auto &chunk = chunks[stripe_idx * num_columns + col_idx];
+            printf("RGSL : stripe idx %d num columns %lu colidx %lu \n",
+                   stripe_idx,
+                   num_columns,
+                   col_idx);
             chunk.start_row =
               (level == 0) ? stripe_start_row : child_start_row[stripe_idx * num_columns + col_idx];
+            printf("RGSL : After start row \n");
             chunk.num_rows = (level == 0)
                                ? stripe_info->numberOfRows
                                : num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
+            printf("RGSL : chunk.column_stripe_num_rows %u \n", chunk.num_rows);
+            printf("RGSL : After child row \n");
             chunk.column_num_rows = (level == 0) ? num_rows : num_child_rows[col_idx];
-            chunk.encoding_kind   = stripe_footer->columns[selected_columns[col_idx].id].kind;
-            chunk.type_kind       = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
+            printf("RGSL : chunk.column_num_rows %u \n", chunk.column_num_rows);
+            printf("RGSL : After child rows row \n");
+            chunk.encoding_kind = stripe_footer->columns[selected_columns[col_idx].id].kind;
+            chunk.type_kind     = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
                                 .ff.types[selected_columns[col_idx].id]
                                 .kind;
             chunk.decimal_scale = _metadata->per_file_metadata[stripe_source_mapping.source_idx]

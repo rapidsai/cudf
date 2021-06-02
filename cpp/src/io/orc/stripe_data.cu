@@ -1764,6 +1764,8 @@ __global__ void __launch_bounds__(block_size)
     __syncthreads();
   }
   if (t == 0) { atomicAdd(&chunks[chunk_id].num_child_rows, s->num_child_rows); }
+  __syncthreads();
+  if (t == 0) { printf("RGSL : number of child rows are %d \n", chunks[chunk_id].num_child_rows); }
 }
 
 /**
