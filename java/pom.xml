@@ -21,7 +21,7 @@
 
     <groupId>ai.rapids</groupId>
     <artifactId>cudf</artifactId>
-    <version>21.06.0-SNAPSHOT</version>
+    <version>21.08.0-SNAPSHOT</version>
 
     <name>cudfjni</name>
     <description>
@@ -424,14 +424,6 @@
                                 fail("Could not find cudf as a dependency of libcudfjni out> $sout err> $serr")
                             }
 
-                            def libnvcomp = ~/libnvcomp\\.so\\s+=>\\s+(.*)libnvcomp.*\\.so\\s+.*/
-                            def nvcompm = libnvcomp.matcher(sout)
-                            if (nvcompm.find()) {
-                                pom.properties['native.nvcomp.path'] = nvcompm.group(1)
-                            } else {
-                                fail("Could not find nvcomp as a dependency of libcudfjni out> $sout err> $serr")
-                            }
-
                             def libcudart = ~/libcudart\\.so\\.(.*)\\s+=>.*/
                             def cm = libcudart.matcher(sout)
                             if (cm.find()) {
@@ -514,13 +506,6 @@
                                     <directory>${native.cudf.path}</directory>
                                     <includes>
                                         <include>libcudf.so</include>
-                                    </includes>
-                                </resource>
-                                <resource>
-                                    <!--Set by groovy script-->
-                                    <directory>${native.nvcomp.path}</directory>
-                                    <includes>
-                                        <include>libnvcomp.so</include>
                                     </includes>
                                 </resource>
                             </resources>

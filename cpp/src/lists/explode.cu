@@ -94,7 +94,7 @@ std::unique_ptr<table> build_table(
                    std::make_unique<column>(data_type(type_to_id<size_type>()),
                                             position_size,
                                             position_array->release(),
-                                            nullmask.first,
+                                            std::move(nullmask.first),
                                             nullmask.second));
   }
 

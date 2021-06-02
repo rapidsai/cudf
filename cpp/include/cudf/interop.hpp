@@ -35,8 +35,8 @@ namespace cudf {
 /**
  * @brief Convert a DLPack DLTensor into a cudf table
  *
- * The `device_type` of the DLTensor must be `kDLGPU`, `kDLCPU`, or
- * `kDLCPUPinned`, and `device_id` must match the current device. The `ndim`
+ * The `device_type` of the DLTensor must be `kDLCPU`, `kDLCuda`, or
+ * `kDLCUDAHost`, and `device_id` must match the current device. The `ndim`
  * must be set to 1 or 2. The `dtype` must have 1 lane and the bitsize must
  * match a supported `cudf::data_type`.
  *

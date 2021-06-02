@@ -85,61 +85,71 @@ inline cudf::column make_exp_chrono_column(cudf::type_id type_id)
         cudf::data_type{type_id},
         test_timestamps_D.size(),
         rmm::device_buffer{test_timestamps_D.data(),
-                           test_timestamps_D.size() * sizeof(test_timestamps_D.front())});
+                           test_timestamps_D.size() * sizeof(test_timestamps_D.front()),
+                           rmm::cuda_stream_default});
     case cudf::type_id::TIMESTAMP_SECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_timestamps_s.size(),
         rmm::device_buffer{test_timestamps_s.data(),
-                           test_timestamps_s.size() * sizeof(test_timestamps_s.front())});
+                           test_timestamps_s.size() * sizeof(test_timestamps_s.front()),
+                           rmm::cuda_stream_default});
     case cudf::type_id::TIMESTAMP_MILLISECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_timestamps_ms.size(),
         rmm::device_buffer{test_timestamps_ms.data(),
-                           test_timestamps_ms.size() * sizeof(test_timestamps_ms.front())});
+                           test_timestamps_ms.size() * sizeof(test_timestamps_ms.front()),
+                           rmm::cuda_stream_default});
     case cudf::type_id::TIMESTAMP_MICROSECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_timestamps_us.size(),
         rmm::device_buffer{test_timestamps_us.data(),
-                           test_timestamps_us.size() * sizeof(test_timestamps_us.front())});
+                           test_timestamps_us.size() * sizeof(test_timestamps_us.front()),
+                           rmm::cuda_stream_default});
     case cudf::type_id::TIMESTAMP_NANOSECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_timestamps_ns.size(),
         rmm::device_buffer{test_timestamps_ns.data(),
-                           test_timestamps_ns.size() * sizeof(test_timestamps_ns.front())});
+                           test_timestamps_ns.size() * sizeof(test_timestamps_ns.front()),
+                           rmm::cuda_stream_default});
     case cudf::type_id::DURATION_DAYS:
       return cudf::column(
         cudf::data_type{type_id},
         test_durations_D.size(),
         rmm::device_buffer{test_durations_D.data(),
-                           test_durations_D.size() * sizeof(test_durations_D.front())});
+                           test_durations_D.size() * sizeof(test_durations_D.front()),
+                           rmm::cuda_stream_default});
     case cudf::type_id::DURATION_SECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_durations_s.size(),
         rmm::device_buffer{test_durations_s.data(),
-                           test_durations_s.size() * sizeof(test_durations_s.front())});
+                           test_durations_s.size() * sizeof(test_durations_s.front()),
+                           rmm::cuda_stream_default});
     case cudf::type_id::DURATION_MILLISECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_durations_ms.size(),
         rmm::device_buffer{test_durations_ms.data(),
-                           test_durations_ms.size() * sizeof(test_durations_ms.front())});
+                           test_durations_ms.size() * sizeof(test_durations_ms.front()),
+                           rmm::cuda_stream_default});
     case cudf::type_id::DURATION_MICROSECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_durations_us.size(),
         rmm::device_buffer{test_durations_us.data(),
-                           test_durations_us.size() * sizeof(test_durations_us.front())});
+                           test_durations_us.size() * sizeof(test_durations_us.front()),
+                           rmm::cuda_stream_default});
     case cudf::type_id::DURATION_NANOSECONDS:
       return cudf::column(
         cudf::data_type{type_id},
         test_durations_ns.size(),
         rmm::device_buffer{test_durations_ns.data(),
-                           test_durations_ns.size() * sizeof(test_durations_ns.front())});
+                           test_durations_ns.size() * sizeof(test_durations_ns.front()),
+                           rmm::cuda_stream_default});
     default: CUDF_FAIL("");
   }
 };
