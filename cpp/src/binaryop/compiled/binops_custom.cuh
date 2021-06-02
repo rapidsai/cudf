@@ -54,26 +54,6 @@ struct ops_wrapper {
   }
 };
 
-// Specialize for NullEquals
-template <>
-struct ops_wrapper<ops::NullEquals, true> {
-  mutable_column_device_view& out;
-  column_device_view const& lhs;
-  column_device_view const& rhs;
-  template <typename TypeCommon>
-  __device__ void operator()(size_type i)
-  {
-    if constexpr (std::is_invocable_v<ops::NullEquals, TypeCommon, TypeCommon>) {
-      TypeCommon x = type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs);
-      TypeCommon y = type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs);
-      auto result  = ops::NullEquals{}.template operator()<TypeCommon, TypeCommon>(
-        x, y, lhs.is_valid(i), rhs.is_valid(i));
-      out.element<decltype(result)>(i) = result;
-    }
-    (void)i;
-  }
-};
-
 /**
  * @brief Functor to launch only defined operations without common type.
  *
@@ -96,27 +76,6 @@ struct ops2_wrapper {
         out.element<decltype(result)>(i) = result;
       else
         type_dispatcher(out.type(), typed_casted_writer<decltype(result)>{}, i, out, result);
-    }
-    (void)i;
-  }
-};
-
-// Specialize for NullEquals
-template <>
-struct ops2_wrapper<ops::NullEquals, true> {
-  mutable_column_device_view& out;
-  column_device_view const& lhs;
-  column_device_view const& rhs;
-  template <typename TypeLhs, typename TypeRhs>
-  __device__ void operator()(size_type i)
-  {
-    if constexpr (!has_common_type_v<TypeLhs, TypeRhs> and
-                  std::is_invocable_v<ops::NullEquals, TypeLhs, TypeRhs>) {
-      TypeLhs x   = lhs.element<TypeLhs>(i);
-      TypeRhs y   = rhs.element<TypeRhs>(i);
-      auto result = ops::NullEquals{}.template operator()<TypeLhs, TypeRhs>(
-        x, y, lhs.is_valid(i), rhs.is_valid(i));
-      out.element<decltype(result)>(i) = result;
     }
     (void)i;
   }
