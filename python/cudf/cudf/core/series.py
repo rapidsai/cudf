@@ -46,6 +46,7 @@ from cudf.utils import cudautils, docutils, ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
+    find_common_type,
     is_decimal_dtype,
     is_struct_dtype,
     is_categorical_dtype,
@@ -55,7 +56,6 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     is_scalar,
     min_scalar_type,
-    find_common_type,
 )
 from cudf.utils.utils import (
     get_appropriate_dispatched_func,
@@ -3974,11 +3974,9 @@ class Series(SingleColumnFrame, Serializable):
         4    105
         dtype: int64
         """
-        if callable(udf):
-            res_col = self._unaryop(udf)
-        else:
-            res_col = self._column.applymap(udf, out_dtype=out_dtype)
-        return self._copy_construct(data=res_col)
+        if not callable(udf):
+            raise ValueError("Input UDF must be a callable object.")
+        return self._copy_construct(data=self._unaryop(udf))
 
     #
     # Stats
