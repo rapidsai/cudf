@@ -60,7 +60,7 @@ namespace detail {
  * @param num_intermediates Number of intermediates, used to allocate a portion of shared memory to
  * each thread.
  */
-template <cudf::size_type max_block_size>
+template <cudf::size_type max_block_size, bool has_nulls>
 __launch_bounds__(max_block_size) __global__
   void compute_column_kernel(table_device_view const table,
                              dev_ast_plan plan,
@@ -70,7 +70,7 @@ __launch_bounds__(max_block_size) __global__
   auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * plan.num_intermediates];
   auto const start_idx = static_cast<cudf::size_type>(threadIdx.x + blockIdx.x * blockDim.x);
   auto const stride    = static_cast<cudf::size_type>(blockDim.x * gridDim.x);
-  auto evaluator = cudf::ast::detail::expression_evaluator<mutable_column_device_view*, false>(
+  auto evaluator = cudf::ast::detail::expression_evaluator<mutable_column_device_view*, has_nulls>(
     table, plan, thread_intermediate_storage, &output_column);
 
   for (cudf::size_type row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
@@ -108,7 +108,7 @@ std::unique_ptr<column> compute_column(table_view const table,
 
   // Execute the kernel
   auto table_device = table_device_view::create(table, stream);
-  cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE>
+  cudf::ast::detail::compute_column_kernel<MAX_BLOCK_SIZE, false>
     <<<config.num_blocks, config.num_threads_per_block, shmem_per_block, stream.value()>>>(
       *table_device, dev_plan, *mutable_output_device);
   CHECK_CUDA(stream.value());

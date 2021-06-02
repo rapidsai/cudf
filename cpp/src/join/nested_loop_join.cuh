@@ -106,7 +106,7 @@ get_conditional_join_indices(table_view const& left,
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
   join_kind KernelJoinKind = JoinKind == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : JoinKind;
-  compute_conditional_join_output_size<block_size>
+  compute_conditional_join_output_size<block_size, false>
     <<<config.num_blocks,
        config.num_threads_per_block,
        plan.dev_plan.shmem_per_thread,
@@ -128,17 +128,18 @@ get_conditional_join_indices(table_view const& left,
 
   const auto& join_output_l = flip_join_indices ? right_indices->data() : left_indices->data();
   const auto& join_output_r = flip_join_indices ? left_indices->data() : right_indices->data();
-  conditional_join<block_size, DEFAULT_JOIN_CACHE_SIZE><<<config.num_blocks,
-                                                          config.num_threads_per_block,
-                                                          plan.dev_plan.shmem_per_thread,
-                                                          stream.value()>>>(*left_table,
-                                                                            *right_table,
-                                                                            KernelJoinKind,
-                                                                            join_output_l,
-                                                                            join_output_r,
-                                                                            write_index.data(),
-                                                                            plan.dev_plan,
-                                                                            join_size);
+  conditional_join<block_size, DEFAULT_JOIN_CACHE_SIZE, false>
+    <<<config.num_blocks,
+       config.num_threads_per_block,
+       plan.dev_plan.shmem_per_thread,
+       stream.value()>>>(*left_table,
+                         *right_table,
+                         KernelJoinKind,
+                         join_output_l,
+                         join_output_r,
+                         write_index.data(),
+                         plan.dev_plan,
+                         join_size);
 
   CHECK_CUDA(stream.value());
 

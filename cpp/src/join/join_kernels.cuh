@@ -217,7 +217,7 @@ __global__ void compute_join_output_size(multimap_type multi_map,
  * @param[in] check_row_equality The row equality comparator
  * @param[out] output_size The resulting output size
  */
-template <int block_size>
+template <int block_size, bool has_nulls>
 __global__ void compute_conditional_join_output_size(table_device_view left_table,
                                                      table_device_view right_table,
                                                      join_kind JoinKind,
@@ -234,7 +234,7 @@ __global__ void compute_conditional_join_output_size(table_device_view left_tabl
   const cudf::size_type right_num_rows = right_table.num_rows();
 
   bool test_var;
-  auto evaluator = cudf::ast::detail::expression_evaluator<void*, false>(
+  auto evaluator = cudf::ast::detail::expression_evaluator<void*, has_nulls>(
     left_table, plan, thread_intermediate_storage, &test_var, right_table);
 
   for (cudf::size_type left_row_index = left_start_idx; left_row_index < left_num_rows;
@@ -465,7 +465,7 @@ __global__ void probe_hash_table(multimap_type multi_map,
  * writes to the global output
  * @param[in] max_size The maximum size of the output
  */
-template <cudf::size_type block_size, cudf::size_type output_cache_size>
+template <cudf::size_type block_size, cudf::size_type output_cache_size, bool has_nulls>
 __global__ void conditional_join(table_device_view left_table,
                                  table_device_view right_table,
                                  join_kind JoinKind,
@@ -496,7 +496,7 @@ __global__ void conditional_join(table_device_view left_table,
 
   const unsigned int activemask = __ballot_sync(0xffffffff, left_row_index < left_num_rows);
   bool test_var;
-  auto evaluator = cudf::ast::detail::expression_evaluator<void*, false>(
+  auto evaluator = cudf::ast::detail::expression_evaluator<void*, has_nulls>(
     left_table, plan, thread_intermediate_storage, &test_var, right_table);
 
   if (left_row_index < left_num_rows) {
