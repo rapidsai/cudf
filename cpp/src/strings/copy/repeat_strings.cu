@@ -17,6 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/copy.hpp>
 #include <cudf/strings/detail/utilities.cuh>
@@ -25,6 +26,8 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace strings {
@@ -44,13 +47,14 @@ string_scalar repeat_join(string_scalar const& input,
 
   auto buff =
     rmm::device_buffer(repeat_times * input.size(), stream, rmm::mr::get_current_device_resource());
-  for (size_type i = 0, str_size = input.size(); i < repeat_times; ++i) {
-    auto const offset = i * str_size;
-    thrust::copy(rmm::exec_policy(stream),
-                 input.data(),
-                 input.data() + str_size,
-                 static_cast<char*>(buff.data()) + offset);
-  }
+  auto const iter = thrust::make_counting_iterator(0);
+  thrust::transform(rmm::exec_policy(stream),
+                    iter,
+                    iter + repeat_times * input.size(),
+                    static_cast<char*>(buff.data()),
+                    [in_ptr = input.data(), str_size = input.size()] __device__(const auto idx) {
+                      return in_ptr[idx % str_size];
+                    });
 
   return string_scalar(string_view(static_cast<char*>(buff.data()), buff.size()), true, stream, mr);
 }
@@ -70,18 +74,20 @@ struct compute_size_and_repeat_fn {
   // If d_chars != nullptr: only repeat strings.
   char* d_chars{nullptr};
 
-  // Set `1` or `0` for the validities of the output strings if `has_nulls` is `true`.
-  int8_t* d_validities{nullptr};
-
   __device__ void operator()(size_type const idx) const noexcept
   {
+    // If the number of repetitions is not positive, the output will be either an empty string,
+    // or a null.
+    if (repeat_times <= 0) {
+      if (!d_chars) { d_offsets[idx] = 0; }
+      return;
+    }
+
+    auto const is_valid = !has_nulls || strings_dv.is_valid_nocheck(idx);
     if (!d_chars) {
-      auto const is_valid = !has_nulls || strings_dv.is_valid_nocheck(idx);
-      d_offsets[idx]      = is_valid && repeat_times > 0
-                         ? repeat_times * strings_dv.element<string_view>(idx).size_bytes()
-                         : 0;
-      if constexpr (has_nulls) { d_validities[idx] = is_valid; }
-    } else if ((!has_nulls || d_validities[idx]) && repeat_times > 0) {
+      d_offsets[idx] =
+        is_valid ? repeat_times * strings_dv.element<string_view>(idx).size_bytes() : 0;
+    } else if (is_valid) {
       auto const d_str = strings_dv.element<string_view>(idx);
       auto output_ptr  = d_chars + d_offsets[idx];
       for (size_type i = 0; i < repeat_times; ++i) {
@@ -111,29 +117,26 @@ std::unique_ptr<column> repeat_join(strings_column_view const& input,
                  "The output strings have total size that exceeds the maximum allowed size.");
   }
 
-  auto const strings_dv_ptr = column_device_view::create(input.parent(), stream);
-  if (input.has_nulls()) {
-    auto const fn = compute_size_and_repeat_fn<true>{*strings_dv_ptr, repeat_times};
-    auto [offsets_column, chars_column, null_mask, null_count] =
-      make_strings_children_with_null_mask(fn, num_rows, num_rows, stream, mr);
-    return make_strings_column(num_rows,
-                               std::move(offsets_column),
-                               std::move(chars_column),
-                               null_count,
-                               std::move(null_mask),
-                               stream,
-                               mr);
-  } else {
-    auto const fn = compute_size_and_repeat_fn<false>{*strings_dv_ptr, repeat_times};
-    auto [offsets_column, chars_column] = make_strings_children(fn, num_rows, stream, mr);
-    return make_strings_column(num_rows,
-                               std::move(offsets_column),
-                               std::move(chars_column),
-                               0,
-                               rmm::device_buffer{},
-                               stream,
-                               mr);
-  }
+  auto [offsets_column, chars_column] = [&] {
+    auto const strings_dv_ptr = column_device_view::create(input.parent(), stream);
+    if (input.has_nulls()) {
+      auto const fn = compute_size_and_repeat_fn<true>{*strings_dv_ptr, repeat_times};
+      return make_strings_children(fn, num_rows, stream, mr);
+    } else {
+      auto const fn = compute_size_and_repeat_fn<false>{*strings_dv_ptr, repeat_times};
+      return make_strings_children(fn, num_rows, stream, mr);
+    }
+  }();
+
+  return make_strings_column(num_rows,
+                             std::move(offsets_column),
+                             std::move(chars_column),
+                             input.null_count(),
+                             input.null_count()
+                               ? cudf::detail::copy_bitmask(input.parent(), stream, mr)
+                               : rmm::device_buffer{},
+                             stream,
+                             mr);
 }
 
 }  // namespace detail
