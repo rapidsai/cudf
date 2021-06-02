@@ -145,7 +145,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
   auto const size      = cudf::distance(begin, end);
   auto const elements  = thrust::host_vector<ElementTo>(transform_begin, transform_begin + size);
-  return rmm::device_buffer{elements.data(), size * sizeof(ElementTo)};
+  return rmm::device_buffer{elements.data(), size * sizeof(ElementTo), rmm::cuda_stream_default};
 }
 
 /**
@@ -171,7 +171,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
   auto const size      = cudf::distance(begin, end);
   auto const elements  = thrust::host_vector<RepType>(transform_begin, transform_begin + size);
-  return rmm::device_buffer{elements.data(), size * sizeof(RepType)};
+  return rmm::device_buffer{elements.data(), size * sizeof(RepType), rmm::cuda_stream_default};
 }
 
 /**
@@ -198,7 +198,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto transformer_begin = thrust::make_transform_iterator(begin, to_rep);
   auto const size        = cudf::distance(begin, end);
   auto const elements = thrust::host_vector<RepType>(transformer_begin, transformer_begin + size);
-  return rmm::device_buffer{elements.data(), size * sizeof(RepType)};
+  return rmm::device_buffer{elements.data(), size * sizeof(RepType), rmm::cuda_stream_default};
 }
 
 /**
@@ -245,7 +245,8 @@ rmm::device_buffer make_null_mask(ValidityIterator begin, ValidityIterator end)
 {
   auto null_mask = make_null_mask_vector(begin, end);
   return rmm::device_buffer{null_mask.data(),
-                            null_mask.size() * sizeof(decltype(null_mask.front()))};
+                            null_mask.size() * sizeof(decltype(null_mask.front())),
+                            rmm::cuda_stream_default};
 }
 
 /**
@@ -514,8 +515,10 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
     auto const id           = is_decimal32 ? type_id::DECIMAL32 : type_id::DECIMAL64;
     auto const data_type    = cudf::data_type{id, static_cast<int32_t>(scale)};
 
-    wrapped.reset(
-      new cudf::column{data_type, size, rmm::device_buffer{elements.data(), size * sizeof(Rep)}});
+    wrapped.reset(new cudf::column{
+      data_type,
+      size,
+      rmm::device_buffer{elements.data(), size * sizeof(Rep), rmm::cuda_stream_default}});
   }
 
   /**
@@ -577,11 +580,12 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
     auto const id           = is_decimal32 ? type_id::DECIMAL32 : type_id::DECIMAL64;
     auto const data_type    = cudf::data_type{id, static_cast<int32_t>(scale)};
 
-    wrapped.reset(new cudf::column{data_type,
-                                   size,
-                                   rmm::device_buffer{elements.data(), size * sizeof(Rep)},
-                                   detail::make_null_mask(v, v + size),
-                                   cudf::UNKNOWN_NULL_COUNT});
+    wrapped.reset(new cudf::column{
+      data_type,
+      size,
+      rmm::device_buffer{elements.data(), size * sizeof(Rep), rmm::cuda_stream_default},
+      detail::make_null_mask(v, v + size),
+      cudf::UNKNOWN_NULL_COUNT});
   }
 
   /**
@@ -1514,7 +1518,7 @@ class lists_column_wrapper : public detail::column_wrapper {
                         std::move(offsets),
                         std::move(data),
                         v.size() <= 0 ? 0 : cudf::UNKNOWN_NULL_COUNT,
-                        v.size() <= 0 ? rmm::device_buffer{0}
+                        v.size() <= 0 ? rmm::device_buffer{}
                                       : cudf::test::detail::make_null_mask(v.begin(), v.end()));
   }
 
@@ -1544,7 +1548,7 @@ class lists_column_wrapper : public detail::column_wrapper {
 
     size_type num_elements = offsets->size() == 0 ? 0 : offsets->size() - 1;
     wrapped =
-      make_lists_column(num_elements, std::move(offsets), std::move(c), 0, rmm::device_buffer{0});
+      make_lists_column(num_elements, std::move(offsets), std::move(c), 0, rmm::device_buffer{});
   }
 
   /**
@@ -1776,7 +1780,7 @@ class structs_column_wrapper : public detail::column_wrapper {
       num_rows,
       std::move(child_columns),
       validity.size() <= 0 ? 0 : cudf::UNKNOWN_NULL_COUNT,
-      validity.size() <= 0 ? rmm::device_buffer{0}
+      validity.size() <= 0 ? rmm::device_buffer{}
                            : detail::make_null_mask(validity.begin(), validity.end()));
   }
 

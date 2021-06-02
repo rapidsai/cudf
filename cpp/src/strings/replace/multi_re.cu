@@ -159,7 +159,7 @@ std::unique_ptr<column> replace_re(
   }
 
   // copy all the reprog_device instances to a device memory array
-  rmm::device_buffer progs_buffer{sizeof(reprog_device) * progs.size()};
+  rmm::device_buffer progs_buffer{sizeof(reprog_device) * progs.size(), stream};
   CUDA_TRY(cudaMemcpyAsync(progs_buffer.data(),
                            progs.data(),
                            progs.size() * sizeof(reprog_device),
