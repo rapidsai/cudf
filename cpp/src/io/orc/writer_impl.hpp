@@ -370,18 +370,6 @@ class writer::impl {
   void add_uncompressed_block_headers(std::vector<uint8_t>& byte_vector);
 
   /**
-   * @brief Returns the number of row groups for holding the specified rows
-   *
-   * @tparam T Optional type
-   * @param num_rows Number of rows
-   */
-  template <typename T = size_t>
-  constexpr inline auto div_by_rowgroups(T num_rows) const
-  {
-    return cudf::util::div_rounding_up_unsafe<T, T>(num_rows, row_index_stride_);
-  }
-
-  /**
    * @brief Returns the row index stride divided by the specified number
    *
    * @tparam T Optional type

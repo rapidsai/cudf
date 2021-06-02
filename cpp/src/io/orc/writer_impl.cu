@@ -245,7 +245,7 @@ class orc_column_view {
   uint32_t *d_decimal_offsets = nullptr;
 };
 
-size_type orc_table_view::num_rows() const {return columns.empty() ? 0 :  columns.front().size();}
+size_type orc_table_view::num_rows() const { return columns.empty() ? 0 : columns.front().size(); }
 
 std::vector<stripe_rowgroups> writer::impl::gather_stripe_info(
   host_span<orc_column_view const> columns, size_t num_rowgroups)
@@ -1154,8 +1154,9 @@ hostdevice_2dvector<rg_range> calculate_rowgroup_sizes(orc_table_view const &orc
                                                        size_t row_index_stride,
                                                        rmm::cuda_stream_view stream)
 {
-  auto const num_rowgroups = cudf::util::div_rounding_up_unsafe<size_t, size_t>(orc_table.num_rows(), row_index_stride); // TODO accessor
-  
+  auto const num_rowgroups =
+    cudf::util::div_rounding_up_unsafe<size_t, size_t>(orc_table.num_rows(), row_index_stride);
+
   hostdevice_2dvector<rg_range> rowgroup_bounds(num_rowgroups, orc_table.num_columns(), stream);
   thrust::for_each_n(
     rmm::exec_policy(stream),
@@ -1298,12 +1299,12 @@ void writer::impl::write(table_view const &table)
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
   auto const num_rows = table.num_rows();
 
-  auto const d_table       = table_device_view::create(table, stream);
+  auto const d_table = table_device_view::create(table, stream);
 
   auto orc_table = get_columns_info(table, *d_table, user_metadata, stream);
 
   auto const rowgroup_bounds = calculate_rowgroup_sizes(orc_table, row_index_stride_, stream);
-  auto const num_rowgroups = rowgroup_bounds.size().first;
+  auto const num_rowgroups   = rowgroup_bounds.size().first;
 
   auto dictionaries = allocate_dictionaries(orc_table, stream);
 
