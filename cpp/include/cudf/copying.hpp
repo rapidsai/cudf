@@ -89,6 +89,10 @@ std::unique_ptr<table> reverse(
   table_view const& source_table,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Reverses a column within a table.
+ *
+ */
 std::unique_ptr<column> reverse(
   column_view const& source_column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

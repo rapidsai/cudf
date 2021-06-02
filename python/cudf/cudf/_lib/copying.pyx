@@ -281,7 +281,7 @@ def _reverse_column(Column source_column):
 
     cdef unique_ptr[column] c_result
     with nogil:
-        c_result = move(cpp_filling.reverse(
+        c_result = move(cpp_copying.reverse(
             reverse_column_view
         ))
 
@@ -295,7 +295,7 @@ def _reverse_table(Table source_table):
 
     cdef unique_ptr[table] c_result
     with nogil:
-        c_result = move(cpp_filling.reverse(
+        c_result = move(cpp_copying.reverse(
             reverse_table_view
         ))
 
