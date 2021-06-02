@@ -14,41 +14,29 @@
  * limitations under the License.
  */
 
-#pragma once
-
-#include <cudf/types.hpp>
-
 #include <cudf/column/column_view.hpp>
-#include <cudf/table/table_view.hpp>
-#include <rmm/cuda_stream_view.hpp>
-
 #include <cudf/copying.hpp>
-#include <memory>
+#include <cudf/detail/reverse.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace detail {
-
-/**
- * @copydoc cudf::reverse(table_view const&,
- * rmm::mr::device_memory_resource*)
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
- */
 std::unique_ptr<table> reverse(
   table_view const& source_table,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_view{},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  return std::unique_ptr<table>{};
+}
 
-/**
- * @copydoc cudf::reverse(column_view const&,
- * rmm::mr::device_memory_resource*)
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
- */
 std::unique_ptr<column> reverse(
   column_view const& source_column,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_view{},
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  return std::unique_ptr<column>{};
+}
 
 }  // namespace detail
 }  // namespace cudf

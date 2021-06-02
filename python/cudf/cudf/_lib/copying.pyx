@@ -280,6 +280,7 @@ def _reverse_column(Column source_column):
     cdef column_view reverse_column_view = source_column.view()
 
     cdef unique_ptr[column] c_result
+
     with nogil:
         c_result = move(cpp_copying.reverse(
             reverse_column_view
@@ -306,14 +307,14 @@ def _reverse_table(Table source_table):
     )
 
 
-def reverse(object input):
+def reverse(object source):
     """
     Reversing a column or a table
     """
-    if isinstance(input, Column):
-        return _reverse_column(input)
+    if isinstance(source, Column):
+        return _reverse_column(source)
     else:
-        return _reverse_table(input)
+        return _reverse_table(source)
 
 
 def column_empty_like(Column input_column):
