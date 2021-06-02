@@ -3,7 +3,6 @@
 from decimal import Decimal
 from typing import Any, Sequence, Tuple, Union, cast
 
-import cupy as cp
 import numpy as np
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
@@ -15,11 +14,9 @@ from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
 from cudf._typing import Dtype
-from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, NumericalColumn, as_column
 from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils.dtypes import is_scalar
-from cudf.utils.utils import pa_mask_buffer_to_mask
 
 from .numerical_base import NumericalBaseColumn
 
@@ -40,45 +37,14 @@ class DecimalColumn(NumericalBaseColumn):
 
     @classmethod
     def from_arrow(cls, data: pa.Array):
-        dtype = Decimal64Dtype.from_arrow(data.type)
-        mask_buf = data.buffers()[0]
-        mask = (
-            mask_buf
-            if mask_buf is None
-            else pa_mask_buffer_to_mask(mask_buf, len(data))
-        )
-        data_128 = cp.array(np.frombuffer(data.buffers()[1]).view("int64"))
-        data_64 = data_128[::2].copy()
-        return cls(
-            data=Buffer(data_64.view("uint8")),
-            size=len(data),
-            dtype=dtype,
-            offset=data.offset,
-            mask=mask,
-        )
+        result = super().from_arrow(data)
+        result.dtype.precision = data.type.precision
+        return result
 
     def to_arrow(self):
-        data_buf_64 = self.base_data.to_host_array().view("int64")
-        data_buf_128 = np.empty(len(data_buf_64) * 2, dtype="int64")
-        # use striding to set the first 64 bits of each 128-bit chunk:
-        data_buf_128[::2] = data_buf_64
-        # use striding again to set the remaining bits of each 128-bit chunk:
-        # 0 for non-negative values, -1 for negative values:
-        data_buf_128[1::2] = np.piecewise(
-            data_buf_64, [data_buf_64 < 0], [-1, 0]
-        )
-        data_buf = pa.py_buffer(data_buf_128)
-        mask_buf = (
-            self.base_mask
-            if self.base_mask is None
-            else pa.py_buffer(self.base_mask.to_host_array())
-        )
-        return pa.Array.from_buffers(
-            type=self.dtype.to_arrow(),
-            offset=self._offset,
-            length=self.size,
-            buffers=[mask_buf, data_buf],
-        )
+        result = super().to_arrow()
+        result = result.cast(self.dtype.to_arrow(), safe=False)
+        return result
 
     def binary_operator(self, op, other, reflect=False):
         if reflect:
