@@ -131,7 +131,7 @@ fixed_point_scalar<T>::fixed_point_scalar(rep_type value,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
   : scalar{data_type{type_to_id<T>(), static_cast<int32_t>(scale)}, is_valid, stream, mr},
-    _data{value}
+    _data{value, stream, mr}
 {
 }
 
@@ -140,7 +140,7 @@ fixed_point_scalar<T>::fixed_point_scalar(rep_type value,
                                           bool is_valid,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
-  : scalar{data_type{type_to_id<T>(), 0}, is_valid, stream, mr}, _data{value}
+  : scalar{data_type{type_to_id<T>(), 0}, is_valid, stream, mr}, _data{value, stream, mr}
 {
 }
 
@@ -149,7 +149,8 @@ fixed_point_scalar<T>::fixed_point_scalar(T value,
                                           bool is_valid,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
-  : scalar{data_type{type_to_id<T>(), value.scale()}, is_valid, stream, mr}, _data{value.value()}
+  : scalar{data_type{type_to_id<T>(), value.scale()}, is_valid, stream, mr},
+    _data{value.value(), stream, mr}
 {
 }
 
@@ -159,8 +160,7 @@ fixed_point_scalar<T>::fixed_point_scalar(rmm::device_scalar<rep_type>&& data,
                                           bool is_valid,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
-  : scalar{data_type{type_to_id<T>(), scale}, is_valid, stream, mr},
-    _data{std::forward<rmm::device_scalar<rep_type>>(data)}
+  : scalar{data_type{type_to_id<T>(), scale}, is_valid, stream, mr}, _data{std::move(data)}
 {
 }
 
@@ -230,8 +230,7 @@ fixed_width_scalar<T>::fixed_width_scalar(rmm::device_scalar<T>&& data,
                                           bool is_valid,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
-  : scalar(data_type(type_to_id<T>()), is_valid, stream, mr),
-    _data{std::forward<rmm::device_scalar<T>>(data)}
+  : scalar(data_type(type_to_id<T>()), is_valid, stream, mr), _data{std::move(data)}
 {
 }
 
