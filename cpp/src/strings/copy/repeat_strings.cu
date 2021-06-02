@@ -33,10 +33,10 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
-string_scalar repeat_join(string_scalar const& input,
-                          size_type repeat_times,
-                          rmm::cuda_stream_view stream,
-                          rmm::mr::device_memory_resource* mr)
+string_scalar repeat_strings(string_scalar const& input,
+                             size_type repeat_times,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
 {
   if (!input.is_valid()) { return string_scalar("", false, stream, mr); }
   if (input.size() == 0 || repeat_times <= 0) { return string_scalar("", true, stream, mr); }
@@ -99,10 +99,10 @@ struct compute_size_and_repeat_fn {
 
 }  // namespace
 
-std::unique_ptr<column> repeat_join(strings_column_view const& input,
-                                    size_type repeat_times,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> repeat_strings(strings_column_view const& input,
+                                       size_type repeat_times,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
 {
   auto const num_rows = input.size();
   if (num_rows == 0) { return detail::make_empty_strings_column(stream, mr); }
@@ -141,20 +141,20 @@ std::unique_ptr<column> repeat_join(strings_column_view const& input,
 
 }  // namespace detail
 
-string_scalar repeat_join(string_scalar const& input,
-                          size_type repeat_times,
-                          rmm::mr::device_memory_resource* mr)
+string_scalar repeat_strings(string_scalar const& input,
+                             size_type repeat_times,
+                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_join(input, repeat_times, rmm::cuda_stream_default, mr);
+  return detail::repeat_strings(input, repeat_times, rmm::cuda_stream_default, mr);
 }
 
-std::unique_ptr<column> repeat_join(strings_column_view const& input,
-                                    size_type repeat_times,
-                                    rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> repeat_strings(strings_column_view const& input,
+                                       size_type repeat_times,
+                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::repeat_join(input, repeat_times, rmm::cuda_stream_default, mr);
+  return detail::repeat_strings(input, repeat_times, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

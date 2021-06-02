@@ -38,7 +38,7 @@ namespace strings {
  * @code{.pseudo}
  * Example:
  * s   = '123XYZ-'
- * out = repeat_join(s, 3)
+ * out = repeat_strings(s, 3)
  * out is '123XYZ-123XYZ-123XYZ'
  * @endcode
  *
@@ -50,7 +50,7 @@ namespace strings {
  * @param mr Device memory resource used to allocate the returned string scalar.
  * @return New string scalar in which the string is repeated from the input.
  */
-string_scalar repeat_join(
+string_scalar repeat_strings(
   string_scalar const& input,
   size_type repeat_times,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
@@ -66,7 +66,7 @@ string_scalar repeat_join(
  * @code{.pseudo}
  * Example:
  * strs = ['aa', null, '',  'bbc']
- * out  = repeat_join(strs, 3)
+ * out  = repeat_strings(strs, 3)
  * out is ['aaaaaa', null, '',  'bbcbbcbbc']
  *
  * @endcode
@@ -79,7 +79,7 @@ string_scalar repeat_join(
  * @param mr Device memory resource used to allocate the returned strings column.
  * @return New column with concatenated results.
  */
-std::unique_ptr<column> repeat_join(
+std::unique_ptr<column> repeat_strings(
   strings_column_view const& input,
   size_type repeat_times,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
