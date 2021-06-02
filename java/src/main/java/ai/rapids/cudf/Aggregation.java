@@ -301,7 +301,8 @@ public abstract class Aggregation {
     }
 
     /**
-     * WARNING: https://github.com/rapidsai/cudf/issues/8405
+     * WARNING: For now, NullEquality of UNEQUAL and NaNEquality of ALL_EQUAL doesn't work,
+     * because of incorrect parameter passing in libcudf (https://github.com/rapidsai/cudf/issues/8405).
      */
     public static final class CollectSetAggregation extends Aggregation
         implements RollingAggregation<CollectSetAggregation> {
