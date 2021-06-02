@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "file_io_utilities.hpp"
+#include "../file_io_utilities.hpp"
 
 #include <cudf/io/data_destination.hpp>
 #include <cudf/utilities/span.hpp>
@@ -26,24 +26,6 @@
 
 namespace cudf {
 namespace io {
-
-class void_destination_writer : public data_destination_writer {
- public:
-  void write(cudf::host_span<uint8_t> data){};
-  void write(cudf::device_span<uint8_t> data){};
-};
-
-class void_destination : public data_destination {
- public:
-  void_destination() {}
-
-  static std::unique_ptr<data_destination> create() { return std::make_unique<void_destination>(); }
-
-  std::unique_ptr<data_destination_writer> create_writer(rmm::cuda_stream_view)
-  {
-    return std::make_unique<void_destination_writer>();
-  }
-};
 
 class file_destination_writer : public data_destination_writer {
  public:
@@ -125,6 +107,5 @@ class file_destination : public data_destination {
  private:
   std::string _filepath;
 };
-
 }  // namespace io
 }  // namespace cudf

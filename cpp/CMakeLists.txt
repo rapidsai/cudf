@@ -254,8 +254,10 @@ add_library(cudf
     src/io/statistics/orc_column_statistics.cu
     src/io/statistics/parquet_column_statistics.cu
     src/io/utilities/column_buffer.cpp
+    src/io/utilities/data_destinations/file_destination.cpp
+    src/io/utilities/data_destinations/vector_destination.cpp
+    src/io/utilities/data_destinations/void_destination.cpp
     src/io/utilities/data_sink.cpp
-    src/io/utilities/data_destination.cpp
     src/io/utilities/datasource.cpp
     src/io/utilities/file_io_utilities.cpp
     src/io/utilities/parsing_utils.cu
