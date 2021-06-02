@@ -174,9 +174,8 @@ add_library(cudf
     src/binaryop/compiled/TrueDiv.cu
     src/binaryop/compiled/comparison_ops.cu
     src/binaryop/compiled/equality_ops.cu
-    #src/binaryop/compiled/NullEquals.cu
-    #src/binaryop/compiled/NullMax.cu
-    #src/binaryop/compiled/NullMin.cu
+    src/binaryop/compiled/NullMax.cu
+    src/binaryop/compiled/NullMin.cu
     #src/binaryop/compiled/UserDefinedOp.cu
     src/binaryop/compiled/util.cpp
     src/labeling/label_bins.cu

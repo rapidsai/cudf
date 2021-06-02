@@ -399,6 +399,64 @@ struct NullEquals {
   CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x == y);
 };
 
+struct NullMax {
+  template <typename TypeLhs,
+            typename TypeRhs,
+            typename common_t = std::common_type_t<TypeLhs, TypeRhs>>
+  CUDA_DEVICE_CALLABLE auto operator()(
+    TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid)
+    -> decltype(static_cast<common_t>(static_cast<common_t>(x) > static_cast<common_t>(y) ? x : y))
+  {
+    output_valid      = true;
+    auto const x_conv = static_cast<common_t>(x);
+    auto const y_conv = static_cast<common_t>(y);
+    if (!lhs_valid && !rhs_valid) {
+      output_valid = false;
+      return common_t{};
+    } else if (lhs_valid && rhs_valid) {
+      return (x_conv > y_conv) ? x_conv : y_conv;
+    } else if (lhs_valid)
+      return x_conv;
+    else
+      return y_conv;
+  }
+  // To allow std::is_invocable_v = true
+  template <typename TypeLhs,
+            typename TypeRhs,
+            typename common_t = std::common_type_t<TypeLhs, TypeRhs>>
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y)
+    -> decltype(static_cast<common_t>(static_cast<common_t>(x) > static_cast<common_t>(y) ? x : y));
+};
+
+struct NullMin {
+  template <typename TypeLhs,
+            typename TypeRhs,
+            typename common_t = std::common_type_t<TypeLhs, TypeRhs>>
+  CUDA_DEVICE_CALLABLE auto operator()(
+    TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid)
+    -> decltype(static_cast<common_t>(static_cast<common_t>(x) < static_cast<common_t>(y) ? x : y))
+  {
+    output_valid      = true;
+    auto const x_conv = static_cast<common_t>(x);
+    auto const y_conv = static_cast<common_t>(y);
+    if (!lhs_valid && !rhs_valid) {
+      output_valid = false;
+      return common_t{};
+    } else if (lhs_valid && rhs_valid) {
+      return (x_conv < y_conv) ? x_conv : y_conv;
+    } else if (lhs_valid)
+      return x_conv;
+    else
+      return y_conv;
+  }
+  // To allow std::is_invocable_v = true
+  template <typename TypeLhs,
+            typename TypeRhs,
+            typename common_t = std::common_type_t<TypeLhs, TypeRhs>>
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y)
+    -> decltype(static_cast<common_t>(static_cast<common_t>(x) > static_cast<common_t>(y) ? x : y));
+};
+
 }  // namespace ops
 }  // namespace compiled
 }  // namespace binops

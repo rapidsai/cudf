@@ -75,9 +75,9 @@ void operator_dispatcher(mutable_column_view& out,
     case binary_operator::LOG_BASE:             compiled_binary_op<ops::LogBase>(*outd, *lhsd, *rhsd, stream); break;
     case binary_operator::ATAN2:                compiled_binary_op<ops::ATan2>(*outd, *lhsd, *rhsd, stream); break;
     case binary_operator::PMOD:                 compiled_binary_op<ops::PMod>(*outd, *lhsd, *rhsd, stream); break;
-    /*
     case binary_operator::NULL_MAX:             compiled_binary_op<ops::NullMax>(*outd, *lhsd, *rhsd, stream); break;
     case binary_operator::NULL_MIN:             compiled_binary_op<ops::NullMin>(*outd, *lhsd, *rhsd, stream); break;
+    /*
     case binary_operator::GENERIC_BINARY:       compiled_binary_op<ops::UserDefinedOp>(*outd, *lhsd, *rhsd, stream); break;
     */
     default:;

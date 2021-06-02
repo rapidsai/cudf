@@ -572,20 +572,6 @@ TYPED_TEST(BinaryOperationCompiledTest_Logical, LogicalOr_Vector_Vector)
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, LOGICAL_OR());
 }
 
-// Comparison Operations ==, !=, <, >, <=, >=
-// n<!=>n, t<!=>t, d<!=>d, s<!=>s, dc<!=>dc
-using Comparison_types =
-  cudf::test::Types<cudf::test::Types<bool, int8_t, int16_t>,
-                    cudf::test::Types<bool, uint32_t, uint16_t>,
-                    cudf::test::Types<bool, uint64_t, double>,
-                    // cudf::test::Types<bool, uint64_t, int64_t>, //valid
-                    cudf::test::Types<bool, timestamp_D, timestamp_s>,
-                    cudf::test::Types<bool, timestamp_ns, timestamp_us>,
-                    cudf::test::Types<bool, duration_ns, duration_ns>,
-                    cudf::test::Types<bool, duration_us, duration_s>,
-                    cudf::test::Types<bool, std::string, std::string>,
-                    cudf::test::Types<bool, numeric::decimal32, numeric::decimal32>>;
-
 template <typename T>
 auto lhs_random_column()
 {
@@ -607,6 +593,19 @@ auto rhs_random_column<std::string>()
 {
   return cudf::test::strings_column_wrapper({"ééé", "bbb", "aa", "", "<null>", "bb", "eee"});
 }
+
+// Comparison Operations ==, !=, <, >, <=, >=
+// n<!=>n, t<!=>t, d<!=>d, s<!=>s, dc<!=>dc
+using Comparison_types =
+  cudf::test::Types<cudf::test::Types<bool, int8_t, int16_t>,
+                    cudf::test::Types<bool, uint32_t, uint16_t>,
+                    cudf::test::Types<bool, uint64_t, double>,
+                    cudf::test::Types<bool, timestamp_D, timestamp_s>,
+                    cudf::test::Types<bool, timestamp_ns, timestamp_us>,
+                    cudf::test::Types<bool, duration_ns, duration_ns>,
+                    cudf::test::Types<bool, duration_us, duration_s>,
+                    cudf::test::Types<bool, std::string, std::string>,
+                    cudf::test::Types<bool, numeric::decimal32, numeric::decimal32>>;
 
 template <typename T>
 struct BinaryOperationCompiledTest_Comparison : public BinaryOperationCompiledTest<T> {
@@ -713,6 +712,90 @@ TYPED_TEST(BinaryOperationCompiledTest_Comparison, GreaterEqual_Vector_Vector)
     lhs, rhs, cudf::binary_operator::GREATER_EQUAL, data_type(type_to_id<TypeOut>()));
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, GREATER_EQUAL());
+}
+
+// Null Operations NullMax, NullMin
+// Min(n,n) , Min(t,t), Min(d, d), Min(s, s), Min(dc, dc), Min(n,dc), Min(dc, n)
+//    n   t   d  s  dc
+// n  .             .
+// t      .
+// d          .
+// s             .
+// dc .             .
+using Null_types =
+  cudf::test::Types<cudf::test::Types<int16_t, int8_t, int16_t>,
+                    cudf::test::Types<uint16_t, uint32_t, uint16_t>,
+                    cudf::test::Types<double, uint64_t, double>,
+                    cudf::test::Types<timestamp_s, timestamp_D, timestamp_s>,
+                    cudf::test::Types<duration_ns, duration_us, duration_s>,
+                    // cudf::test::Types<std::string, std::string, std::string>, // only fixed-width
+                    cudf::test::Types<numeric::decimal32, numeric::decimal32, numeric::decimal32>,
+                    cudf::test::Types<numeric::decimal32, uint32_t, numeric::decimal32>,
+                    cudf::test::Types<int64_t, numeric::decimal64, int64_t>>;
+
+template <typename T>
+struct BinaryOperationCompiledTest_NullOps : public BinaryOperationCompiledTest<T> {
+};
+TYPED_TEST_CASE(BinaryOperationCompiledTest_NullOps, Null_types);
+
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+auto NullOp_Result(column_view lhs, column_view rhs, bool is_max)
+{
+  auto [lhs_data, lhs_mask] = cudf::test::to_host<TypeLhs>(lhs);
+  auto [rhs_data, rhs_mask] = cudf::test::to_host<TypeRhs>(rhs);
+  std::vector<TypeOut> result(lhs.size());
+  std::vector<bool> result_mask;
+  std::transform(
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(lhs.size()),
+    result.begin(),
+    [&lhs_data, &lhs_mask, &rhs_data, &rhs_mask, &result_mask, is_max](auto i) -> TypeOut {
+      auto lhs_valid    = cudf::bit_is_set(lhs_mask.data(), i);
+      auto rhs_valid    = cudf::bit_is_set(rhs_mask.data(), i);
+      auto x            = static_cast<TypeOut>(lhs_data[i]);
+      auto y            = static_cast<TypeOut>(rhs_data[i]);
+      bool output_valid = lhs_valid or rhs_valid;
+      result_mask.push_back(output_valid);
+      if (lhs_valid or rhs_valid) {
+        if (is_max)
+          return (lhs_valid and (!rhs_valid or x > y)) ? x : y;
+        else
+          return (lhs_valid and (!rhs_valid or x < y)) ? x : y;
+      } else
+        return TypeOut{};
+    });
+  return cudf::test::fixed_width_column_wrapper<TypeOut>(
+    result.cbegin(), result.cend(), result_mask.cbegin());
+}
+
+TYPED_TEST(BinaryOperationCompiledTest_NullOps, NullMax_Vector_Vector)
+{
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  auto lhs            = lhs_random_column<TypeLhs>();
+  auto rhs            = lhs_random_column<TypeRhs>();
+  auto const expected = NullOp_Result<TypeOut, TypeLhs, TypeRhs>(lhs, rhs, true);
+
+  auto const result = cudf::binary_operation_compiled(
+    lhs, rhs, binary_operator::NULL_MAX, data_type(type_to_id<TypeOut>()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(BinaryOperationCompiledTest_NullOps, NullMin_Vector_Vector)
+{
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  auto lhs            = lhs_random_column<TypeLhs>();
+  auto rhs            = lhs_random_column<TypeRhs>();
+  auto const expected = NullOp_Result<TypeOut, TypeLhs, TypeRhs>(lhs, rhs, false);
+
+  auto const result = cudf::binary_operation_compiled(
+    lhs, rhs, binary_operator::NULL_MIN, data_type(type_to_id<TypeOut>()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
 }  // namespace binop
