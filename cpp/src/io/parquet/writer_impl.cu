@@ -773,7 +773,7 @@ void print(rmm::device_uvector<T> const &d_vec, std::string label = "")
 }
 
 auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
-                               device_span<gpu::parquet_column_device_view const> col_desc,
+                               host_span<gpu::parquet_column_device_view const> col_desc,
                                uint32_t num_rows,
                                rmm::cuda_stream_view stream)
 {
@@ -781,29 +781,26 @@ auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
   // chunk that can have dictionary
 
   // Allocate slots for each chunk
-  // max dict size is 1 << 16. Using 1 << 17 gives the map a 0.5 load factor
-  // constexpr size_t dict_hash_map_size = 1 << 17;
-  // hash map size insufficient. We have to allocate the same size as
   std::vector<rmm::device_uvector<gpu::slot_type>> hash_maps_storage;
   for (auto &chunk : chunks.host_view().flat_view()) {
-    // TODO: Currently allocating for every chunk. Should skip allocating for non-dict types
-    auto &inserted_map   = hash_maps_storage.emplace_back(chunk.num_values, stream);
-    chunk.dict_map_slots = inserted_map.data();
-    chunk.dict_map_size  = inserted_map.size();
+    if (col_desc[chunk.col_desc_id].physical_type == Type::BOOLEAN) {
+      chunk.use_dictionary = false;
+    } else {
+      chunk.use_dictionary = true;
+      auto &inserted_map   = hash_maps_storage.emplace_back(chunk.num_values, stream);
+      chunk.dict_map_slots = inserted_map.data();
+      chunk.dict_map_size  = inserted_map.size();
+    }
   }
 
   chunks.host_to_device(stream);
 
   gpu::InitializeChunkHashMaps(chunks.device_view().flat_view(), hash_maps_storage[0], stream);
-  stream.synchronize();
   gpu::BuildChunkDictionaries2(chunks, num_rows, hash_maps_storage[0], stream);
-  stream.synchronize();
-  // print(hash_maps_storage[0], "built dict");
 
   // Make decision about which chunks have dictionary
   // TODO: We wouldn't have to synchronize if the decision also took place in a kernel.
-  // needs just a thrust::foreach but cannot happen here because this is a private class function.
-  // maybe it shouldn't be.
+  // needs just a thrust::foreach
   chunks.device_to_host(stream);
   stream.synchronize();
 
@@ -811,33 +808,28 @@ auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
   auto allowed_bitsizes = std::array<size_type, 6>{1, 2, 4, 8, 12, 16};
 
   for (auto &ck : chunks.host_view().flat_view()) {
-    // std::cout << "num_dict " << ck.num_dict_entries << std::endl;
-    // std::cout << "uniq_size " << ck.uniq_data_size << std::endl;
+    if (not ck.use_dictionary) { continue; }
     ck.use_dictionary = [&]() {
       // We don't use dictionary if the indices are > 16 bits
       if (ck.num_dict_entries > MAX_DICT_SIZE) { return false; }
 
       // calculate size of chunk if dictionary is used
-      // TODO: Replace with CompactProtocolReader::NumRequiredBits
-      auto count_bits = [](uint16_t number) {
-        int16_t nbits = 0;
-        while (number > 0) {
-          nbits++;
-          number >>= 1;
-        }
-        return nbits;
-      };
-      auto nbits = count_bits(ck.num_dict_entries);
+
+      // If we have N unique values then the idx for the last value is N - 1 and nbits is the number
+      // of bits required to encode indices into the dictionary
+      auto nbits = CompactProtocolReader::NumRequiredBits(ck.num_dict_entries - 1);
+      std::cout << "dict size " << ck.num_dict_entries << "nbits " << nbits << std::endl;
+      CUDF_EXPECTS(nbits <= 16, "Maximum supported bits by dictionary encoder is 16");
 
       // ceil to (1/2/4/8/12/16)
-      auto rle_bits = *std::upper_bound(allowed_bitsizes.begin(), allowed_bitsizes.end(), nbits);
+      auto rle_bits = *std::lower_bound(allowed_bitsizes.begin(), allowed_bitsizes.end(), nbits);
       auto rle_byte_size = util::div_rounding_up_safe(ck.num_values * rle_bits, 8);
 
       auto dict_enc_size = ck.uniq_data_size + rle_byte_size;
 
       return (ck.plain_data_size > dict_enc_size);
     }();
-    // std::cout << "use_dict " << std::boolalpha << ck.use_dictionary << std::endl;
+    std::cout << "use_dict " << std::boolalpha << ck.use_dictionary << std::endl;
 
     // TODO:  Deallocate dictionary storage for chunks that don't use it and clear pointers.
     // If decide to use a kernel for this loop then move this cleanup outside
@@ -858,11 +850,6 @@ auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
   gpu::CollectMapEntries(chunks.device_view().flat_view(), stream);
   chunks.device_to_host(stream);
   stream.synchronize();
-  // print(dict_data[0], "dict_data");
-
-  for (auto &chunk : chunks.host_view().flat_view()) {
-    // std::cout << "dict_size " << chunk.dict_data_size << std::endl;
-  }
 
   // Time to make the dict index.
   std::vector<rmm::device_uvector<uint16_t>> dict_index;
@@ -1155,9 +1142,10 @@ void writer::impl::write(table_view const &table)
       gpu::EncColumnChunk *ck = &chunks[r][i];
       bool dict_enable        = false;
 
-      *ck           = {};
-      ck->col_desc  = col_desc.device_ptr() + i;
-      ck->fragments = &fragments.device_view()[i][f];
+      *ck             = {};
+      ck->col_desc    = col_desc.device_ptr() + i;
+      ck->col_desc_id = i;
+      ck->fragments   = &fragments.device_view()[i][f];
       ck->stats = (frag_stats.size() != 0) ? frag_stats.data() + i * num_fragments + f : nullptr;
       ck->start_row        = start_row;
       ck->num_rows         = (uint32_t)md.row_groups[global_r].num_rows;

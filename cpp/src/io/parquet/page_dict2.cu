@@ -127,7 +127,11 @@ __global__ void __launch_bounds__(block_size, 1)
     s_chunk_uniq_data_size_ptr = &chunks[rg_idx][col_idx].uniq_data_size;
     s_chunk_dict_entries_ptr   = &chunks[rg_idx][col_idx].num_dict_entries;
     s_col                      = *(s_chunk.col_desc);
+  }
+  __syncthreads();
+  if (not s_chunk.use_dictionary) { return; }
 
+  if (t == 0) {
     // Find the bounds of values in leaf column to be inserted into the map for current chunk
     size_type end_value_idx = min(start_row + 5000, num_rows);
 
@@ -193,7 +197,10 @@ __global__ void __launch_bounds__(block_size, 1)
                 return 4 + data_col.element<string_view>(val_idx).size_bytes();
               }
             case Type::FIXED_LEN_BYTE_ARRAY:
-            default: cudf_assert(false && "Unsupported type for dictionary encoding"); return 0;
+            default:
+              printf("type %d\n", s_col.physical_type);
+              cudf_assert(false && "Unsupported type for dictionary encoding");
+              return 0;
           }
         }();
       }

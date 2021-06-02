@@ -302,14 +302,15 @@ struct EncPage;
  */
 struct EncColumnChunk {
   parquet_column_device_view const *col_desc;  //!< Column description
-  PageFragment *fragments;                     //!< First fragment in chunk
-  uint8_t *uncompressed_bfr;                   //!< Uncompressed page data
-  uint8_t *compressed_bfr;                     //!< Compressed page data
-  statistics_chunk const *stats;               //!< Fragment statistics
-  uint32_t bfr_size;                           //!< Uncompressed buffer size
-  uint32_t compressed_size;                    //!< Compressed buffer size
-  uint32_t start_row;                          //!< First row of chunk
-  uint32_t num_rows;                           //!< Number of rows in chunk
+  size_type col_desc_id;
+  PageFragment *fragments;        //!< First fragment in chunk
+  uint8_t *uncompressed_bfr;      //!< Uncompressed page data
+  uint8_t *compressed_bfr;        //!< Compressed page data
+  statistics_chunk const *stats;  //!< Fragment statistics
+  uint32_t bfr_size;              //!< Uncompressed buffer size
+  uint32_t compressed_size;       //!< Compressed buffer size
+  uint32_t start_row;             //!< First row of chunk
+  uint32_t num_rows;              //!< Number of rows in chunk
   size_type num_values;     //!< Number of values in chunk. Different from num_rows for nested types
   uint32_t first_fragment;  //!< First fragment of chunk
   EncPage *pages;           //!< Ptr to pages that belong to this chunk
