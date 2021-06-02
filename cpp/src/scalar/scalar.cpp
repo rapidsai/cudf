@@ -63,7 +63,8 @@ string_scalar::string_scalar(std::string const& string,
                              bool is_valid,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
-  : scalar(data_type(type_id::STRING), is_valid), _data(string.data(), string.size(), stream, mr)
+  : scalar(data_type(type_id::STRING), is_valid, stream, mr),
+    _data(string.data(), string.size(), stream, mr)
 {
 }
 
@@ -86,7 +87,7 @@ string_scalar::string_scalar(value_type const& source,
                              bool is_valid,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
-  : scalar(data_type(type_id::STRING), is_valid),
+  : scalar(data_type(type_id::STRING), is_valid, stream, mr),
     _data(source.data(), source.size_bytes(), stream, mr)
 {
 }
