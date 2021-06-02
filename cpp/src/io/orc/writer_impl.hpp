@@ -60,6 +60,7 @@ struct orc_table_view {
   std::vector<int> string_column_indices;
 
   auto num_columns() const { return columns.size(); }
+  size_type num_rows() const;
   auto num_string_columns() const { return string_column_indices.size(); }
 
   auto& column(int idx) { return columns[idx]; }

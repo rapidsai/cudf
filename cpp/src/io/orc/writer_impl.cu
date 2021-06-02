@@ -245,6 +245,8 @@ class orc_column_view {
   uint32_t *d_decimal_offsets = nullptr;
 };
 
+size_type orc_table_view::num_rows() const {return columns.empty() ? 0 :  columns.front().size();}
+
 std::vector<stripe_rowgroups> writer::impl::gather_stripe_info(
   host_span<orc_column_view const> columns, size_t num_rowgroups)
 {
@@ -1147,15 +1149,32 @@ orc_table_view get_columns_info(table_view const &table,
 
   return {std::move(orc_columns), std::move(d_orc_columns), std::move(str_col_flat_indexes)};
 }
-
-hostdevice_2dvector<std::pair<uint32_t, uint32_t>> calculate_rowgroup_sizes(
-  orc_table_view const &orc_table, size_t num_rowgroups, rmm::cuda_stream_view stream)
+using rg_range = thrust::pair<uint32_t, uint32_t>;
+hostdevice_2dvector<rg_range> calculate_rowgroup_sizes(orc_table_view const &orc_table,
+                                                       size_t row_index_stride,
+                                                       rmm::cuda_stream_view stream)
 {
-  // hostdevice_2dvector [num_cols, num_rowgroups] uint32_t start, uint32_t size
-  hostdevice_2dvector<std::pair<uint32_t, uint32_t>> rowgroup_bounds(
-    orc_table.num_columns(), num_rowgroups, stream);
-  // for_each
+  auto const num_rowgroups = cudf::util::div_rounding_up_unsafe<size_t, size_t>(orc_table.num_rows(), row_index_stride); // TODO accessor
+  
+  hostdevice_2dvector<rg_range> rowgroup_bounds(num_rowgroups, orc_table.num_columns(), stream);
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0ul),
+    num_rowgroups,
+    [cols      = device_span<orc_column_device_view const>{orc_table.d_columns},
+     rg_bounds = device_2dspan<rg_range>{rowgroup_bounds}] __device__(auto rg_idx) mutable {
+      for (auto col_idx = 0u; col_idx < cols.size(); ++col_idx)
+        rg_bounds[rg_idx][col_idx] = {rg_idx + 10, col_idx + 10};
+    });
+  rowgroup_bounds.device_to_host(stream, true);
 
+  for (auto rg_idx = 0u; rg_idx < num_rowgroups; ++rg_idx) {
+    for (auto col_idx = 0u; col_idx < orc_table.num_columns(); ++col_idx) {
+      std::cout << '[' << rowgroup_bounds[rg_idx][col_idx].first << ' '
+                << rowgroup_bounds[rg_idx][col_idx].second << ']';
+    }
+    std::cout << std::endl;
+  }
   return rowgroup_bounds;
 }
 
@@ -1280,11 +1299,11 @@ void writer::impl::write(table_view const &table)
   auto const num_rows = table.num_rows();
 
   auto const d_table       = table_device_view::create(table, stream);
-  auto const num_rowgroups = div_by_rowgroups<size_t>(num_rows);
 
   auto orc_table = get_columns_info(table, *d_table, user_metadata, stream);
 
-  // auto const rowgroup_bounds = calculate_rowgroup_sizes();
+  auto const rowgroup_bounds = calculate_rowgroup_sizes(orc_table, row_index_stride_, stream);
+  auto const num_rowgroups = rowgroup_bounds.size().first;
 
   auto dictionaries = allocate_dictionaries(orc_table, stream);
 
