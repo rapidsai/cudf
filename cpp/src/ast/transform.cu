@@ -70,7 +70,7 @@ __launch_bounds__(max_block_size) __global__
   auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * plan.num_intermediates];
   auto const start_idx = static_cast<cudf::size_type>(threadIdx.x + blockIdx.x * blockDim.x);
   auto const stride    = static_cast<cudf::size_type>(blockDim.x * gridDim.x);
-  auto evaluator       = cudf::ast::detail::expression_evaluator<mutable_column_device_view*>(
+  auto evaluator = cudf::ast::detail::expression_evaluator<mutable_column_device_view*, false>(
     table, plan, thread_intermediate_storage, &output_column);
 
   for (cudf::size_type row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
