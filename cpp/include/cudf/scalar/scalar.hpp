@@ -75,6 +75,10 @@ class scalar {
    */
   void set_valid_async(bool is_valid, rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
+  // We delete the r-value reference overload to prevent asynchronously copying from a literal or
+  // implicit temporary value after it is deleted or goes out of scope.
+  void set_valid_async(bool const&&, rmm::cuda_stream_view);
+
   /**
    * @brief Indicates whether the scalar contains a valid value
    *
