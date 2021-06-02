@@ -1158,19 +1158,21 @@ hostdevice_2dvector<rg_range> calculate_rowgroup_sizes(orc_table_view const &orc
     cudf::util::div_rounding_up_unsafe<size_t, size_t>(orc_table.num_rows(), rowgroup_size);
 
   hostdevice_2dvector<rg_range> rowgroup_bounds(num_rowgroups, orc_table.num_columns(), stream);
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator(0ul),
-                     num_rowgroups,
-                     [cols      = device_span<orc_column_device_view const>{orc_table.d_columns},
-                      rg_bounds = device_2dspan<rg_range>{rowgroup_bounds},
-                      rowgroup_size] __device__(auto rg_idx) mutable {
-                       for (auto col_idx = 0u; col_idx < cols.size(); ++col_idx) {
-                         auto const rows_begin = rg_idx * rowgroup_size;
-                         auto const rows_end   = thrust::min<uint32_t>(
-                           (rg_idx + 1) * rowgroup_size, cols[col_idx].cudf_column.size());
-                         rg_bounds[rg_idx][col_idx] = {rows_begin, rows_end};
-                       }
-                     });
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0ul),
+    num_rowgroups,
+    [cols      = device_span<orc_column_device_view const>{orc_table.d_columns},
+     rg_bounds = device_2dspan<rg_range>{rowgroup_bounds},
+     rowgroup_size] __device__(auto rg_idx) mutable {
+      thrust::transform(
+        thrust::seq, cols.begin(), cols.end(), rg_bounds[rg_idx].begin(), [&](auto const &col) {
+          auto const rows_begin = rg_idx * rowgroup_size;
+          auto const rows_end =
+            thrust::min<uint32_t>((rg_idx + 1) * rowgroup_size, col.cudf_column.size());
+          return rg_range{rows_begin, rows_end};
+        });
+    });
   rowgroup_bounds.device_to_host(stream, true);
 
   for (auto rg_idx = 0u; rg_idx < num_rowgroups; ++rg_idx) {
