@@ -817,8 +817,9 @@ auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
 
       // If we have N unique values then the idx for the last value is N - 1 and nbits is the number
       // of bits required to encode indices into the dictionary
-      auto nbits = CompactProtocolReader::NumRequiredBits(ck.num_dict_entries - 1);
-      std::cout << "dict size " << ck.num_dict_entries << "nbits " << nbits << std::endl;
+      auto max_dict_index = (ck.num_dict_entries > 0) ? ck.num_dict_entries - 1 : 0;
+      auto nbits          = CompactProtocolReader::NumRequiredBits(max_dict_index);
+      std::cout << "dict size " << ck.num_dict_entries << " nbits " << nbits << std::endl;
       CUDF_EXPECTS(nbits <= 16, "Maximum supported bits by dictionary encoder is 16");
 
       // ceil to (1/2/4/8/12/16)
@@ -850,6 +851,7 @@ auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
   gpu::CollectMapEntries(chunks.device_view().flat_view(), stream);
   chunks.device_to_host(stream);
   stream.synchronize();
+  print(dict_data[0], "dict_data");
 
   // Time to make the dict index.
   std::vector<rmm::device_uvector<uint16_t>> dict_index;
