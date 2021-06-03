@@ -101,7 +101,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   auto const matched = dictionary::detail::match_dictionaries({t, values}, stream);
 
   // Prepare to flatten the structs column
-  auto const has_null_elements   = has_nulls(t) or has_nulls(values);
+  auto const has_null_elements   = has_nested_nulls(t) or has_nested_nulls(values);
   auto const flatten_nullability = has_null_elements
                                      ? structs::detail::column_nullability::FORCE
                                      : structs::detail::column_nullability::MATCH_INCOMING;

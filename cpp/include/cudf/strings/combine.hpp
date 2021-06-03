@@ -40,6 +40,15 @@ enum class separator_on_nulls {
 };
 
 /**
+ * @brief Setting for specifying what will be output from `join_list_elements` when an input list
+ * is empty.
+ */
+enum class output_if_empty_list {
+  EMPTY_STRING,  ///< Empty list will result in empty string
+  NULL_ELEMENT   ///< Empty list will result in a null
+};
+
+/**
  * @brief Concatenates all strings in the column into one new string delimited
  * by an optional separator string.
  *
@@ -203,8 +212,15 @@ std::unique_ptr<column> concatenate(
  * column will also result in a null output row unless a valid @p separator_narep scalar is provided
  * to be used in place of the null separators.
  *
- * If @p separate_nulls is set to `NO` and @p narep is valid then separators are not added to the
- * output between null elements. Otherwise, separators are always added if @p narep is valid.
+ * If @p separate_nulls is set to `NO` and @p string_narep is valid then separators are not added to
+ * the output between null elements. Otherwise, separators are always added if @p string_narep is
+ * valid.
+ *
+ * If @p empty_list_policy is set to `EMPTY_STRING`, any row that is an empty list will result in
+ * an empty output string. Otherwise, the output will be a null.
+ *
+ * In the special case when the input list row contains all null elements, the output will be the
+ * same as in case of empty input list regardless of @p string_narep and @p separate_nulls values.
  *
  * @code{.pseudo}
  * Example:
@@ -234,16 +250,19 @@ std::unique_ptr<column> concatenate(
  *        default is an invalid-scalar denoting that list rows containing null strings will result
  *        in null string in the corresponding output rows.
  * @param separate_nulls If YES, then the separator is included for null rows if `narep` is valid.
+ * @param empty_list_policy if set to EMPTY_STRING, any input row that is an empty list will
+ *        result in an empty string. Otherwise, it will result in a null.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column with concatenated results.
  */
 std::unique_ptr<column> join_list_elements(
   const lists_column_view& lists_strings_column,
   const strings_column_view& separators,
-  string_scalar const& separator_narep = string_scalar("", false),
-  string_scalar const& string_narep    = string_scalar("", false),
-  separator_on_nulls separate_nulls    = separator_on_nulls::YES,
-  rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
+  string_scalar const& separator_narep   = string_scalar("", false),
+  string_scalar const& string_narep      = string_scalar("", false),
+  separator_on_nulls separate_nulls      = separator_on_nulls::YES,
+  output_if_empty_list empty_list_policy = output_if_empty_list::EMPTY_STRING,
+  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Given a lists column of strings (each row is a list of strings), concatenates the strings
@@ -258,6 +277,12 @@ std::unique_ptr<column> join_list_elements(
  *
  * If @p separate_nulls is set to `NO` and @p narep is valid then separators are not added to the
  * output between null elements. Otherwise, separators are always added if @p narep is valid.
+ *
+ * If @p empty_list_policy is set to `EMPTY_STRING`, any row that is an empty list will result in
+ * an empty output string. Otherwise, the output will be a null.
+ *
+ * In the special case when the input list row contains all null elements, the output will be the
+ * same as in case of empty input list regardless of @p narep and @p separate_nulls values.
  *
  * @code{.pseudo}
  * Example:
@@ -283,15 +308,18 @@ std::unique_ptr<column> join_list_elements(
  *        is an invalid-scalar denoting that list rows containing null strings will result in null
  *        string in the corresponding output rows.
  * @param separate_nulls If YES, then the separator is included for null rows if `narep` is valid.
+ * @param empty_list_policy if set to EMPTY_STRING, any input row that is an empty list will result
+ *        in an empty string. Otherwise, it will result in a null.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column with concatenated results.
  */
 std::unique_ptr<column> join_list_elements(
   const lists_column_view& lists_strings_column,
-  string_scalar const& separator      = string_scalar(""),
-  string_scalar const& narep          = string_scalar("", false),
-  separator_on_nulls separate_nulls   = separator_on_nulls::YES,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  string_scalar const& separator         = string_scalar(""),
+  string_scalar const& narep             = string_scalar("", false),
+  separator_on_nulls separate_nulls      = separator_on_nulls::YES,
+  output_if_empty_list empty_list_policy = output_if_empty_list::EMPTY_STRING,
+  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings
