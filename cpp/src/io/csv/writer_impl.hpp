@@ -54,7 +54,7 @@ class writer::impl {
    * @param options Settings for controlling behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  impl(std::unique_ptr<data_destination> sink,
+  impl(data_destination* sink,
        csv_writer_options const& options,
        rmm::mr::device_memory_resource* mr);
 
@@ -76,9 +76,10 @@ class writer::impl {
    * @param metadata The metadata associated with the table
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void write_chunked_begin(data_destination_writer& writer,
+  void write_chunked_begin(data_destination& writer,
                            table_view const& table,
-                           const table_metadata* metadata = nullptr);
+                           const table_metadata* metadata = nullptr,
+                           rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
 
   /**
    * @brief Write dataset to CSV format without header.
@@ -87,13 +88,13 @@ class writer::impl {
    * @param metadata The metadata associated with the table
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  void write_chunked(data_destination_writer& writer,
+  void write_chunked(data_destination& writer,
                      strings_column_view const& strings_column,
                      const table_metadata* metadata = nullptr,
                      rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
 
  private:
-  std::unique_ptr<data_destination> out_sink_;
+  data_destination* out_sink_;
   rmm::mr::device_memory_resource* mr_ = nullptr;
   csv_writer_options const options_;
 };

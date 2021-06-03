@@ -26,17 +26,11 @@
 namespace cudf {
 namespace io {
 
-class data_destination_writer {
- public:
-  virtual ~data_destination_writer(){};
-  virtual void write(cudf::host_span<char const> data)   = 0;
-  virtual void write(cudf::device_span<char const> data) = 0;
-};
-
 class data_destination {
  public:
   virtual ~data_destination(){};
-  virtual std::unique_ptr<data_destination_writer> create_writer(rmm::cuda_stream_view) = 0;
+  virtual void write(cudf::host_span<char const> data, rmm::cuda_stream_view stream)   = 0;
+  virtual void write(cudf::device_span<char const> data, rmm::cuda_stream_view stream) = 0;
 };
 
 }  // namespace io

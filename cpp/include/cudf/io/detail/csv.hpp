@@ -90,7 +90,7 @@ class writer {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  writer(std::unique_ptr<cudf::io::data_destination> sinkp,
+  writer(cudf::io::data_destination *sinkp,
          csv_writer_options const &options,
          rmm::cuda_stream_view stream,
          rmm::mr::device_memory_resource *mr);  // cannot provide definition here (because

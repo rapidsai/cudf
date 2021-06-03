@@ -153,19 +153,13 @@ std::unique_ptr<writer> make_writer(sink_info const& sink, Ts&&... args)
 }
 
 template <typename writer, typename... Ts>
-std::unique_ptr<writer> make_destination(sink_info const& sink, Ts&&... args)
+std::unique_ptr<data_destination> make_destination(sink_info const& sink)
 {
-  if (sink.type == io_type::FILEPATH) {
-    return std::make_unique<writer>(cudf::io::create_file_destination(sink.filepath),
-                                    std::forward<Ts>(args)...);
-  }
+  if (sink.type == io_type::FILEPATH) { return cudf::io::create_file_destination(sink.filepath); }
   if (sink.type == io_type::HOST_BUFFER) {
-    return std::make_unique<writer>(cudf::io::create_vector_destination(sink.buffer),
-                                    std::forward<Ts>(args)...);
+    return cudf::io::create_vector_destination(sink.buffer);
   }
-  if (sink.type == io_type::VOID) {
-    return std::make_unique<writer>(cudf::io::create_void_destination(), std::forward<Ts>(args)...);
-  }
+  if (sink.type == io_type::VOID) { return cudf::io::create_void_destination(); }
   // if (sink.type == io_type::USER_IMPLEMENTED) {
   //   return std::make_unique<writer>(cudf::io::create_data_destination(sink.user_sink),
   //                                   std::forward<Ts>(args)...);
@@ -209,8 +203,9 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
 {
   using namespace cudf::io::detail;
 
+  auto destination = make_destination<csv::writer>(options.get_sink());
   auto writer =
-    make_destination<csv::writer>(options.get_sink(), options, rmm::cuda_stream_default, mr);
+    std::make_unique<csv::writer>(destination.get(), options, rmm::cuda_stream_default, mr);
 
   writer->write(options.get_table(), options.get_metadata());
 }

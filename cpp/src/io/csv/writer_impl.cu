@@ -259,7 +259,7 @@ struct column_to_strings_fn {
 }  // unnamed namespace
 
 // Forward to implementation
-writer::writer(std::unique_ptr<data_destination> sink,
+writer::writer(data_destination* sink,
                csv_writer_options const& options,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
@@ -270,7 +270,7 @@ writer::writer(std::unique_ptr<data_destination> sink,
 // Destructor within this translation unit
 writer::~writer() = default;
 
-writer::impl::impl(std::unique_ptr<data_destination> sink,
+writer::impl::impl(data_destination* sink,
                    csv_writer_options const& options,
                    rmm::mr::device_memory_resource* mr)
   : out_sink_(std::move(sink)), mr_(mr), options_(options)
@@ -279,9 +279,10 @@ writer::impl::impl(std::unique_ptr<data_destination> sink,
 
 // write the header: column names:
 //
-void writer::impl::write_chunked_begin(data_destination_writer& writer,
+void writer::impl::write_chunked_begin(data_destination& writer,
                                        table_view const& table,
-                                       const table_metadata* metadata)
+                                       const table_metadata* metadata,
+                                       rmm::cuda_stream_view stream)
 {
   if ((metadata != nullptr) && (options_.is_enabled_include_header())) {
     CUDF_EXPECTS(metadata->column_names.size() == static_cast<size_t>(table.num_columns()),
@@ -297,11 +298,11 @@ void writer::impl::write_chunked_begin(data_destination_writer& writer,
               std::ostream_iterator<std::string>(ss, delimiter_str.c_str()));
     ss << metadata->column_names.back() << options_.get_line_terminator();
 
-    writer.write(ss.str());
+    writer.write(ss.str(), stream);
   }
 }
 
-void writer::impl::write_chunked(data_destination_writer& writer,
+void writer::impl::write_chunked(data_destination& writer,
                                  strings_column_view const& str_column_view,
                                  const table_metadata* metadata,
                                  rmm::cuda_stream_view stream)
@@ -329,12 +330,14 @@ void writer::impl::write_chunked(data_destination_writer& writer,
   strings_column_view strings_column{p_str_col_w_nl->view()};
 
   writer.write(cudf::device_span<char const>(  //
-    strings_column.chars().data<char>(),
-    strings_column.chars().size()));
+                 strings_column.chars().data<char>(),
+                 strings_column.chars().size()),
+               stream);
 
   writer.write(cudf::host_span<char const>(  //
-    nl_terminator.data(),
-    nl_terminator.size()));
+                 nl_terminator.data(),
+                 nl_terminator.size()),
+               stream);
 }
 
 void writer::impl::write(table_view const& table,
@@ -347,9 +350,7 @@ void writer::impl::write(table_view const& table,
   // (even for tables with no rows)
   //
 
-  auto writer = out_sink_->create_writer(stream);
-
-  write_chunked_begin(*writer, table, metadata);
+  write_chunked_begin(*out_sink_, table, metadata, stream);
 
   if (table.num_rows() > 0) {
     // no need to check same-size columns constraint; auto-enforced by table_view
@@ -418,7 +419,7 @@ void writer::impl::write(table_view const& table,
         return cudf::strings::detail::replace_nulls(str_table_view.column(0), narep, stream);
       }();
 
-      write_chunked(*writer, str_concat_col->view(), metadata, stream);
+      write_chunked(*out_sink_, str_concat_col->view(), metadata, stream);
     }
   }
 }

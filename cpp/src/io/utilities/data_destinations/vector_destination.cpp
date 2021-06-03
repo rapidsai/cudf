@@ -24,19 +24,16 @@
 namespace cudf {
 namespace io {
 
-class vector_destination_writer : public data_destination_writer {
+class vector_destination : public data_destination {
  public:
-  vector_destination_writer(std::vector<char>* buffer, rmm::cuda_stream_view stream)
-    : _buffer(buffer), _stream(stream)
-  {
-  }
+  vector_destination(std::vector<char>* buffer) : _buffer(buffer) {}
 
-  void write(cudf::host_span<char const> data)
+  void write(cudf::host_span<char const> data, rmm::cuda_stream_view stream)
   {
     _buffer->insert(_buffer->end(), data.data(), data.data() + data.size());
   };
 
-  void write(cudf::device_span<char const> data)
+  void write(cudf::device_span<char const> data, rmm::cuda_stream_view stream)
   {
     _buffer->resize(_buffer->size() + data.size());
 
@@ -44,22 +41,8 @@ class vector_destination_writer : public data_destination_writer {
                                  data.data(),
                                  data.size(),
                                  cudaMemcpyDeviceToHost,
-                                 _stream.value()));
+                                 stream.value()));
   };
-
- private:
-  std::vector<char>* _buffer;
-  rmm::cuda_stream_view _stream;
-};
-
-class vector_destination : public data_destination {
- public:
-  vector_destination(std::vector<char>* buffer) : _buffer(buffer) {}
-
-  std::unique_ptr<data_destination_writer> create_writer(rmm::cuda_stream_view stream)
-  {
-    return std::make_unique<vector_destination_writer>(_buffer, stream);
-  }
 
  private:
   std::vector<char>* _buffer;

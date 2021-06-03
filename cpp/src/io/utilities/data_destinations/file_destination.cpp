@@ -29,25 +29,24 @@
 namespace cudf {
 namespace io {
 
-class file_destination_writer : public data_destination_writer {
+class file_destination : public data_destination {
  public:
-  file_destination_writer(std::string filepath, rmm::cuda_stream_view stream)
-    : _cufile_out(detail::make_cufile_output(filepath)), _stream(stream)
+  file_destination(std::string filepath) : _cufile_out(detail::make_cufile_output(filepath))
   {
     _output_stream.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
     CUDF_EXPECTS(_output_stream.is_open(), "Cannot open output file");
   }
 
-  ~file_destination_writer() { _output_stream.flush(); }
+  ~file_destination() { _output_stream.flush(); }
 
-  void write(cudf::host_span<char const> data)
+  void write(cudf::host_span<char const> data, rmm::cuda_stream_view stream)
   {
     _output_stream.seekp(_bytes_written);
     _output_stream.write(data.data(), data.size());
     _bytes_written += data.size();
   };
 
-  void write(cudf::device_span<char const> data)
+  void write(cudf::device_span<char const> data, rmm::cuda_stream_view stream)
   {
     if (_cufile_out != nullptr && _cufile_out->is_cufile_io_preferred(data.size())) {
       _cufile_out->write(data.data(), _bytes_written, data.size());
@@ -58,11 +57,11 @@ class file_destination_writer : public data_destination_writer {
     if (_host_buffer.size() < data.size()) { _host_buffer.resize(data.size()); }
 
     CUDA_TRY(cudaMemcpyAsync(
-      _host_buffer.data(), data.data(), data.size(), cudaMemcpyDeviceToHost, _stream.value()));
+      _host_buffer.data(), data.data(), data.size(), cudaMemcpyDeviceToHost, stream.value()));
 
-    _stream.synchronize();  // why even use cudaMemcpyAsync instead of cudaMemcpy?
+    stream.synchronize();  // why even use cudaMemcpyAsync instead of cudaMemcpy?
 
-    write(cudf::host_span<char>(_host_buffer.data(), data.size()));
+    write(cudf::host_span<char>(_host_buffer.data(), data.size()), stream);
   };
 
  private:
@@ -71,19 +70,6 @@ class file_destination_writer : public data_destination_writer {
   std::unique_ptr<detail::cufile_output_impl> _cufile_out;
   rmm::cuda_stream_view _stream;
   thrust::host_vector<char> _host_buffer;
-};
-
-class file_destination : public data_destination {
- public:
-  file_destination(std::string const& filepath) : _filepath(filepath) {}
-
-  std::unique_ptr<data_destination_writer> create_writer(rmm::cuda_stream_view stream)
-  {
-    return std::make_unique<file_destination_writer>(_filepath, stream);
-  }
-
- private:
-  std::string _filepath;
 };
 
 std::unique_ptr<data_destination> create_file_destination(std::string const& filepath)
