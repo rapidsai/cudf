@@ -211,7 +211,8 @@ ConfigureBench(STRINGS_BENCH
   string/contains_benchmark.cpp
   string/convert_datetime_benchmark.cpp
   string/convert_durations_benchmark.cpp
-  string/convert_floats_benchmark.cpp
+  string/convert_fixed_point_benchmark.cpp
+  string/convert_numerics_benchmark.cpp
   string/copy_benchmark.cpp
   string/extract_benchmark.cpp
   string/factory_benchmark.cu
