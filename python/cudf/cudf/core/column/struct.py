@@ -115,7 +115,7 @@ class StructColumn(ColumnBase):
 
     def _with_type_metadata(self: StructColumn, dtype: Dtype) -> StructColumn:
         if isinstance(dtype, StructDtype):
-            self = build_struct_column(
+            return build_struct_column(
                 names=dtype.fields.keys(),
                 children=tuple(
                     self.base_children[i]._with_type_metadata(dtype.fields[f])

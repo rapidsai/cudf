@@ -237,7 +237,7 @@ class ListColumn(ColumnBase):
         self: "cudf.core.column.ListColumn", dtype: Dtype
     ) -> "cudf.core.column.ListColumn":
         if isinstance(dtype, ListDtype):
-            self = column.build_list_column(
+            return column.build_list_column(
                 indices=self.base_children[0],
                 elements=self.base_children[1]._with_type_metadata(
                     dtype.element_type

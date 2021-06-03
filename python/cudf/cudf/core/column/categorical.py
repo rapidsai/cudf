@@ -1510,7 +1510,7 @@ class CategoricalColumn(column.ColumnBase):
         self: CategoricalColumn, dtype: Dtype
     ) -> CategoricalColumn:
         if isinstance(dtype, CategoricalDtype):
-            self = column.build_categorical_column(
+            return column.build_categorical_column(
                 categories=dtype.categories._values,
                 codes=column.as_column(
                     self.codes.base_data, dtype=self.codes.dtype
