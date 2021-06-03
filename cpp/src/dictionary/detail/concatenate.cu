@@ -163,7 +163,8 @@ struct dispatch_compute_indices {
     auto result_itr =
       cudf::detail::indexalator_factory::make_output_iterator(result->mutable_view());
     // new indices values are computed by matching the concatenated keys to the new key set
-#ifdef NDEBUG  // something wrong with this in Debug build
+
+#ifdef NDEBUG  // something goes wrong here in a Debug build
     thrust::lower_bound(rmm::exec_policy(stream),
                         begin,
                         end,
@@ -178,7 +179,7 @@ struct dispatch_compute_indices {
                       result_itr,
                       [begin, end] __device__(auto key) {
                         auto itr = thrust::lower_bound(thrust::seq, begin, end, key);
-                        return (size_type)thrust::distance(begin, itr);
+                        return static_cast<size_type>(thrust::distance(begin, itr));
                       });
 #endif
     return result;
