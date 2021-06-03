@@ -33,8 +33,6 @@
 #include <thrust/reverse.h>
 #include <thrust/scan.h>
 
-#include <stdio.h>
-
 namespace cudf {
 namespace detail {
 std::unique_ptr<table> reverse(table_view const& source_table,
@@ -42,8 +40,7 @@ std::unique_ptr<table> reverse(table_view const& source_table,
                                rmm::mr::device_memory_resource* mr)
 {
   thrust::counting_iterator<cudf::size_type> iter(0);
-  // rmm::device_uvector<cudf::size_type> indices(source_table.num_rows(), stream);
-  thrust::device_vector<cudf::size_type> indices(source_table.num_rows());
+  rmm::device_vector<cudf::size_type> indices(source_table.num_rows());
   thrust::copy(iter, iter + source_table.num_rows(), indices.begin());
 
   thrust::reverse(rmm::exec_policy(stream), indices.begin(), indices.end());

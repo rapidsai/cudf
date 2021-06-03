@@ -1624,7 +1624,6 @@ class Frame(libcudf.table.Table):
 
     def _reverse(self):
         result = self.__class__._from_table(libcudf.copying.reverse(self))
-        print("hello world")
         # result._copy_type_metadata(self)
         return result
 
