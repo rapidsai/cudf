@@ -326,6 +326,8 @@ void writer::impl::write_chunked(data_destination_writer& writer,
     cudf::strings::detail::join_strings(str_column_view, newline, string_scalar("", false), stream);
   // strings_column_view strings_column{p_str_col_w_nl->view()};
 
+  stream.synchronize();
+
   writer.write(cudf::device_span<char const>(  //
     p_str_col_w_nl->view().data<char>(),
     p_str_col_w_nl->view().size()));
