@@ -168,7 +168,7 @@ TEST_F(CollectSetTest, FloatsWithNaN)
   vals_expected = {{-2.3e-5f, 1.0f, 2.3e5f, -NAN, -NAN, NAN, NAN}};
   test_single_agg(
     keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set_null_exclude());
-  // null equal with nan unequal
+  // null equal with nan equal
   vals_expected = {{{-2.3e-5f, 1.0f, 2.3e5f, NAN, 0.0f}, VALIDITY{true, true, true, true, false}}};
   test_single_agg(keys,
                   vals,
@@ -176,7 +176,7 @@ TEST_F(CollectSetTest, FloatsWithNaN)
                   vals_expected,
                   cudf::make_collect_set_aggregation(
                     null_policy::INCLUDE, null_equality::EQUAL, nan_equality::ALL_EQUAL));
-  // null unequal with nan unequal
+  // null unequal with nan equal
   vals_expected = {
     {{-2.3e-5f, 1.0f, 2.3e5f, -NAN, 0.0f, 0.0f}, VALIDITY{true, true, true, true, false, false}}};
   test_single_agg(keys,
