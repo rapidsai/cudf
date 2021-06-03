@@ -38,16 +38,16 @@ class file_destination : public data_destination {
     CUDF_EXPECTS(_output_stream.is_open(), "Cannot open output file");
   }
 
-  ~file_destination() { _output_stream.flush(); }
+  void flush() override { _output_stream.flush(); }
 
-  void write(cudf::host_span<char const> data, rmm::cuda_stream_view stream)
+  void write(cudf::host_span<char const> data, rmm::cuda_stream_view stream) override
   {
     _output_stream.seekp(_bytes_written);
     _output_stream.write(data.data(), data.size());
     _bytes_written += data.size();
   };
 
-  void write(cudf::device_span<char const> data, rmm::cuda_stream_view stream)
+  void write(cudf::device_span<char const> data, rmm::cuda_stream_view stream) override
   {
     if (_cufile_out != nullptr && _cufile_out->is_cufile_io_preferred(data.size())) {
       _cufile_out->write(data.data(), _bytes_written, data.size());

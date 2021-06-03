@@ -843,7 +843,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks
   stream.synchronize();
 }
 
-writer::impl::impl(data_sink *sink,
+writer::impl::impl(data_destination *sink,
                    parquet_writer_options const &options,
                    SingleWriteMode mode,
                    rmm::cuda_stream_view stream,
@@ -862,7 +862,7 @@ writer::impl::impl(data_sink *sink,
   init_state();
 }
 
-writer::impl::impl(data_sink *sink,
+writer::impl::impl(data_destination *sink,
                    chunked_parquet_writer_options const &options,
                    SingleWriteMode mode,
                    rmm::cuda_stream_view stream,
@@ -888,7 +888,8 @@ void writer::impl::init_state()
   // Write file header
   file_header_s fhdr;
   fhdr.magic = parquet_magic;
-  out_sink_->host_write(&fhdr, sizeof(fhdr));
+  out_sink_->write(cudf::host_span<char const>(reinterpret_cast<char const *>(&fhdr), sizeof(fhdr)),
+                   stream);
   current_chunk_offset = sizeof(file_header_s);
 }
 
@@ -1170,7 +1171,7 @@ void writer::impl::write(table_view const &table)
                        num_stats_bfr);
   }
 
-  pinned_buffer<uint8_t> host_bfr{nullptr, cudaFreeHost};
+  // pinned_buffer<uint8_t> host_bfr{nullptr, cudaFreeHost};
 
   // Encode row groups in batches
   for (uint32_t b = 0, r = 0, global_r = global_rowgroup_base; b < (uint32_t)batch_list.size();
@@ -1203,44 +1204,23 @@ void writer::impl::write(table_view const &table)
           dev_bfr = ck->uncompressed_bfr;
         }
 
-        if (out_sink_->is_device_write_preferred(ck->compressed_size)) {
-          // let the writer do what it wants to retrieve the data from the gpu.
-          out_sink_->device_write(dev_bfr + ck->ck_stat_size, ck->compressed_size, stream);
-          // we still need to do a (much smaller) memcpy for the statistics.
-          if (ck->ck_stat_size != 0) {
-            md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
-            CUDA_TRY(
-              cudaMemcpyAsync(md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(),
-                              dev_bfr,
-                              ck->ck_stat_size,
-                              cudaMemcpyDeviceToHost,
-                              stream.value()));
-            stream.synchronize();
-          }
-        } else {
-          if (!host_bfr) {
-            host_bfr = pinned_buffer<uint8_t>{[](size_t size) {
-                                                uint8_t *ptr = nullptr;
-                                                CUDA_TRY(cudaMallocHost(&ptr, size));
-                                                return ptr;
-                                              }(max_chunk_bfr_size),
-                                              cudaFreeHost};
-          }
-          // copy the full data
-          CUDA_TRY(cudaMemcpyAsync(host_bfr.get(),
-                                   dev_bfr,
-                                   ck->ck_stat_size + ck->compressed_size,
-                                   cudaMemcpyDeviceToHost,
-                                   stream.value()));
-          stream.synchronize();
-          out_sink_->host_write(host_bfr.get() + ck->ck_stat_size, ck->compressed_size);
-          if (ck->ck_stat_size != 0) {
-            md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
-            memcpy(md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(),
-                   host_bfr.get(),
-                   ck->ck_stat_size);
-          }
+        if (ck->ck_stat_size != 0) {
+          md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
+          CUDA_TRY(
+            cudaMemcpyAsync(md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(),
+                            dev_bfr,
+                            ck->ck_stat_size,
+                            cudaMemcpyDeviceToHost,
+                            stream.value()));
         }
+
+        out_sink_->write(cudf::device_span<char const>(  //
+                           reinterpret_cast<char const *>(dev_bfr + ck->ck_stat_size),
+                           ck->compressed_size),
+                         stream);
+
+        stream.synchronize();
+
         md.row_groups[global_r].total_byte_size += ck->compressed_size;
         md.row_groups[global_r].columns[i].meta_data.data_page_offset =
           current_chunk_offset + ((ck->has_dictionary) ? ck->dictionary_size : 0);
@@ -1264,8 +1244,11 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
   buffer_.resize(0);
   fendr.footer_len = static_cast<uint32_t>(cpw.write(md));
   fendr.magic      = parquet_magic;
-  out_sink_->host_write(buffer_.data(), buffer_.size());
-  out_sink_->host_write(&fendr, sizeof(fendr));
+  out_sink_->write(
+    cudf::host_span<char const>(reinterpret_cast<char const *>(buffer_.data()), buffer_.size()),
+    stream);
+  out_sink_->write(
+    cudf::host_span<char const>(reinterpret_cast<char const *>(&fendr), sizeof(fendr)), stream);
   out_sink_->flush();
 
   // Optionally output raw file metadata with the specified column chunk file path
@@ -1289,7 +1272,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
 }
 
 // Forward to implementation
-writer::writer(data_sink *sink,
+writer::writer(data_destination *sink,
                parquet_writer_options const &options,
                SingleWriteMode mode,
                rmm::cuda_stream_view stream,
@@ -1298,7 +1281,7 @@ writer::writer(data_sink *sink,
 {
 }
 
-writer::writer(data_sink *sink,
+writer::writer(data_destination *sink,
                chunked_parquet_writer_options const &options,
                SingleWriteMode mode,
                rmm::cuda_stream_view stream,

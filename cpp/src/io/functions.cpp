@@ -20,7 +20,6 @@
 #include <cudf/io/avro.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/data_destinations.hpp>
-#include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/avro.hpp>
 #include <cudf/io/detail/csv.hpp>
@@ -129,15 +128,6 @@ std::unique_ptr<reader> make_reader(source_info const& src_info,
   }
 
   return std::make_unique<reader>(std::move(datasources), options, stream, mr);
-}
-
-std::unique_ptr<data_sink> make_sink(sink_info const& sink)
-{
-  if (sink.type == io_type::FILEPATH) { return data_sink::create(sink.filepath); }
-  if (sink.type == io_type::HOST_BUFFER) { return data_sink::create(sink.buffer); }
-  if (sink.type == io_type::VOID) { return data_sink::create(); }
-  if (sink.type == io_type::USER_IMPLEMENTED) { return data_sink::create(sink.user_sink); }
-  CUDF_FAIL("Unsupported sink type");
 }
 
 std::unique_ptr<data_destination> make_destination(sink_info const& sink)
@@ -410,7 +400,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
   CUDF_FUNC_RANGE();
   namespace io_detail = cudf::io::detail;
 
-  auto sink   = make_sink(options.get_sink());
+  auto sink   = make_destination(options.get_sink());
   auto writer = std::make_unique<detail_parquet::writer>(  //
     sink.get(),
     options,
@@ -429,7 +419,7 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
                                                rmm::mr::device_memory_resource* mr)
 {
   namespace io_detail = cudf::io::detail;
-  sink                = make_sink(op.get_sink());
+  sink                = make_destination(op.get_sink());
   writer              = std::make_unique<detail_parquet::writer>(  //
     sink.get(),
     op,
