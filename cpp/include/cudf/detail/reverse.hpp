@@ -19,10 +19,12 @@
 #include <cudf/types.hpp>
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
-#include <cudf/copying.hpp>
 #include <memory>
 
 namespace cudf {
