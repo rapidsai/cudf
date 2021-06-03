@@ -184,12 +184,6 @@ struct StripeDictionary {
   column_device_view const *leaf_column;  //!< Pointer to string column
 };
 
-struct orc_column_device_view {
-  uint32_t flat_index = 0;  // probably not needed
-  column_device_view cudf_column;
-  int32_t parent_index = -1;
-};
-
 /**
  * @brief Launches kernel for parsing the compressed stripe data
  *

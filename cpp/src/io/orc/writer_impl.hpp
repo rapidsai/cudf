@@ -56,7 +56,7 @@ using cudf::detail::hostdevice_2dvector;
  */
 struct orc_table_view {
   std::vector<orc_column_view> columns;
-  rmm::device_uvector<gpu::orc_column_device_view> d_columns;
+  rmm::device_uvector<orc_column_device_view> d_columns;
   std::vector<int> string_column_indices;
 
   auto num_columns() const { return columns.size(); }

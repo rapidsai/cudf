@@ -22,6 +22,7 @@
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/column/column_device_view.cuh>
 
 #include <stddef.h>
 #include <stdint.h>
@@ -598,6 +599,13 @@ class metadata {
   std::vector<std::string> column_names;
   datasource *const source;
 };
+
+struct orc_column_device_view {
+  uint32_t flat_index = 0;  // probably not needed
+  column_device_view cudf_column;
+  int32_t parent_index = -1;
+};
+
 
 struct rows_range {
   size_type begin;

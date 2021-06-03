@@ -46,7 +46,6 @@ namespace detail {
 namespace orc {
 using namespace cudf::io::orc;
 using namespace cudf::io;
-using gpu::orc_column_device_view;
 
 struct row_group_index_info {
   int32_t pos       = -1;  // Position
