@@ -67,6 +67,7 @@ ConfigureTest(GROUPBY_TEST
     groupby/max_tests.cpp
     groupby/mean_tests.cpp
     groupby/median_tests.cpp
+    groupby/merge_lists_tests.cpp
     groupby/min_scan_tests.cpp
     groupby/nth_element_tests.cpp
     groupby/nunique_tests.cpp
