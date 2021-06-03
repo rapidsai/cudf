@@ -1167,21 +1167,25 @@ hostdevice_2dvector<rg_range> calculate_rowgroup_sizes(orc_table_view const &orc
      rowgroup_size] __device__(auto rg_idx) mutable {
       thrust::transform(
         thrust::seq, cols.begin(), cols.end(), rg_bounds[rg_idx].begin(), [&](auto const &col) {
-          auto const rows_begin = rg_idx * rowgroup_size;
-          auto const rows_end =
-            thrust::min<uint32_t>((rg_idx + 1) * rowgroup_size, col.cudf_column.size());
+          if (col.parent_index < 0) {
+            auto const rows_begin = rg_idx * rowgroup_size;
+            auto const rows_end =
+              thrust::min<uint32_t>((rg_idx + 1) * rowgroup_size, col.cudf_column.size());
+            return rg_range{rows_begin, rows_end};
+          }
+
+          column_device_view parent_col = cols[col.parent_index].cudf_column;
+          if (parent_col.type().id() != type_id::LIST) return rg_bounds[rg_idx][col.parent_index];
+
+          auto parent_offsets         = parent_col.child(lists_column_view::offsets_column_index);
+          auto const &parent_rg_range = rg_bounds[rg_idx][col.parent_index];
+          auto const rows_begin       = parent_offsets.element<size_type>(parent_rg_range.first);
+          auto const rows_end         = parent_offsets.element<size_type>(parent_rg_range.second);
           return rg_range{rows_begin, rows_end};
         });
     });
   rowgroup_bounds.device_to_host(stream, true);
 
-  for (auto rg_idx = 0u; rg_idx < num_rowgroups; ++rg_idx) {
-    for (auto col_idx = 0u; col_idx < orc_table.num_columns(); ++col_idx) {
-      std::cout << '[' << rowgroup_bounds[rg_idx][col_idx].first << ' '
-                << rowgroup_bounds[rg_idx][col_idx].second << ']';
-    }
-    std::cout << std::endl;
-  }
   return rowgroup_bounds;
 }
 
