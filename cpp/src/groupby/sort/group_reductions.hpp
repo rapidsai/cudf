@@ -369,6 +369,18 @@ std::unique_ptr<column> group_collect(column_view const& values,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr);
 
+/**
+ * @brief group_collect_merge
+ *
+ * @return
+ * TODO
+ */
+std::unique_ptr<column> group_collect_merge(column_view const& values,
+                                            cudf::device_span<size_type const> group_offsets,
+                                            size_type num_groups,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr);
+
 /** @endinternal
  *
  */

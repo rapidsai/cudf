@@ -78,6 +78,8 @@ class aggregation {
     ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
     COLLECT_LIST,    ///< collect values into a list
     COLLECT_SET,     ///< collect values into a list without duplicate entries
+    MERGE_LISTS,     ///< merge multiple lists values into one list
+    MERGE_SETS,      ///< merge multiple lists values into one list then drop duplicate entries
     LEAD,            ///< window function, accesses row at specified offset following current row
     LAG,             ///< window function, accesses row at specified offset preceding current row
     PTX,             ///< PTX  UDF based reduction
@@ -268,6 +270,16 @@ template <typename Base = aggregation>
 std::unique_ptr<Base> make_collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE,
                                                    null_equality nulls_equal = null_equality::EQUAL,
                                                    nan_equality nans_equal = nan_equality::UNEQUAL);
+
+/**
+ * @brief
+ *
+ * TODO doc
+ * TODO merge_sets
+ *
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_merge_lists_aggregation();
 
 /// Factory to create a LAG aggregation
 template <typename Base = aggregation>

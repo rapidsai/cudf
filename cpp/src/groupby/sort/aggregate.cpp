@@ -368,7 +368,6 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_LIST>(aggregation
 {
   auto null_handling =
     dynamic_cast<cudf::detail::collect_list_aggregation const&>(agg)._null_handling;
-  agg.do_hash();
 
   if (cache.has_result(col_idx, agg)) return;
 
@@ -406,6 +405,19 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation 
     lists::detail::drop_list_duplicates(
       lists_column_view(collect_result->view()), nulls_equal, nans_equal, stream, mr));
 };
+
+template <>
+void aggregate_result_functor::operator()<aggregation::MERGE_LISTS>(aggregation const& agg)
+{
+  if (cache.has_result(col_idx, agg)) return;
+
+  auto result = detail::group_collect_merge(
+    get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr);
+
+  cache.add_result(col_idx, agg, std::move(result));
+};
+// TODO: merge_sets
+
 }  // namespace detail
 
 // Sort-based groupby
