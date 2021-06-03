@@ -22,7 +22,6 @@
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
@@ -44,7 +43,7 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
                                      rmm::mr::device_memory_resource* mr)
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return detail::make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be a valid string_scalar");
 
