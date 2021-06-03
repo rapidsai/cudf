@@ -19,6 +19,7 @@
 #include <cudf/io/data_destination.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <thrust/host_vector.h>
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda_runtime.h>
@@ -31,20 +32,13 @@ namespace io {
 class file_destination_writer : public data_destination_writer {
  public:
   file_destination_writer(std::string filepath, rmm::cuda_stream_view stream)
-    : _cufile_out(detail::make_cufile_output(filepath)),
-      _stream(stream),
-      _host_buffer(nullptr),
-      _host_buffer_size(0)
+    : _cufile_out(detail::make_cufile_output(filepath)), _stream(stream)
   {
     _output_stream.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
     CUDF_EXPECTS(_output_stream.is_open(), "Cannot open output file");
   }
 
-  ~file_destination_writer()
-  {
-    _output_stream.flush();
-    if (_host_buffer != nullptr) { cudaFreeHost(_host_buffer); }
-  }
+  ~file_destination_writer() { _output_stream.flush(); }
 
   void write(cudf::host_span<char const> data)
   {
@@ -61,38 +55,22 @@ class file_destination_writer : public data_destination_writer {
       return;
     }
 
-    grow_host_buffer(data.size());
+    if (_host_buffer.size() < data.size()) { _host_buffer.resize(data.size()); }
 
     CUDA_TRY(cudaMemcpyAsync(
-      _host_buffer, data.data(), data.size(), cudaMemcpyDeviceToHost, _stream.value()));
+      _host_buffer.data(), data.data(), data.size(), cudaMemcpyDeviceToHost, _stream.value()));
 
-    _stream.synchronize();
+    _stream.synchronize();  // why even use cudaMemcpyAsync instead of cudaMemcpy?
 
-    write(cudf::host_span<char>(_host_buffer, data.size()));
+    write(cudf::host_span<char>(_host_buffer.data(), data.size()));
   };
 
  private:
-  void grow_host_buffer(size_type size)
-  {
-    if (_host_buffer_size >= size) {
-      return;  //
-    }
-
-    if (_host_buffer != nullptr) {
-      cudaFreeHost(_host_buffer);  //
-    }
-
-    // optionally replace cudaMallocHost to specify flags with cudaHostAlloc
-    cudaMallocHost(&_host_buffer, size);
-    _host_buffer_size = size;
-  }
-
   std::ofstream _output_stream;
   size_t _bytes_written = 0;
   std::unique_ptr<detail::cufile_output_impl> _cufile_out;
   rmm::cuda_stream_view _stream;
-  char* _host_buffer;
-  size_type _host_buffer_size;
+  thrust::host_vector<char> _host_buffer;
 };
 
 class file_destination : public data_destination {
