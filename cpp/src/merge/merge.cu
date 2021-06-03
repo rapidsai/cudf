@@ -142,16 +142,6 @@ void materialize_bitmask(column_view const& left_col,
   CHECK_CUDA(stream.value());
 }
 
-void materialize_bitmask(column_view const& left_col,
-                         column_view const& right_col,
-                         mutable_column_view& out_col,
-                         index_type const* merged_indices,
-                         rmm::cuda_stream_view stream)
-{
-  return materialize_bitmask(
-    left_col, right_col, out_col.null_mask(), out_col.size(), merged_indices, stream);
-}
-
 struct side_index_generator {
   side _side;
 
@@ -306,7 +296,8 @@ struct column_merger {
     if (lcol.has_nulls() || rcol.has_nulls()) {
       // resolve null mask:
       //
-      materialize_bitmask(lcol, rcol, merged_view, row_order_.data(), stream);
+      materialize_bitmask(
+        lcol, rcol, merged_view.null_mask(), merged_view.size(), row_order_.data(), stream);
     }
 
     return merged_col;
@@ -332,7 +323,8 @@ std::unique_ptr<column> column_merger::operator()<cudf::string_view>(
                                                    mr);
   if (lcol.has_nulls() || rcol.has_nulls()) {
     auto merged_view = column->mutable_view();
-    materialize_bitmask(lcol, rcol, merged_view, row_order_.data(), stream);
+    materialize_bitmask(
+      lcol, rcol, merged_view.null_mask(), merged_view.size(), row_order_.data(), stream);
   }
   return column;
 }
@@ -351,7 +343,8 @@ std::unique_ptr<column> column_merger::operator()<cudf::dictionary32>(
   // set the validity mask
   if (lcol.has_nulls() || rcol.has_nulls()) {
     auto merged_view = result->mutable_view();
-    materialize_bitmask(lcol, rcol, merged_view, row_order_.data(), stream);
+    materialize_bitmask(
+      lcol, rcol, merged_view.null_mask(), merged_view.size(), row_order_.data(), stream);
   }
   return result;
 }
