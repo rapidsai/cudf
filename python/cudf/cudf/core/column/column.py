@@ -296,7 +296,9 @@ class ColumnBase(Column, Serializable):
             "None"
         ]
 
-        result = _copy_type_metadata_from_arrow(array, result)
+        result = result._with_type_metadata(
+            cudf_dtype_from_pa_type(array.type)
+        )
         return result
 
     def _get_mask_as_column(self) -> ColumnBase:
@@ -409,7 +411,7 @@ class ColumnBase(Column, Serializable):
         """
         if deep:
             result = libcudf.copying.copy_column(self)
-            return cast(T, self._copy_type_metadata(result))
+            return cast(T, result._with_type_metadata(self.dtype))
         else:
             return cast(
                 T,
@@ -1269,20 +1271,13 @@ class ColumnBase(Column, Serializable):
         )
 
     def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
-        return self
-
-    def _copy_type_metadata(self: ColumnBase, other: ColumnBase) -> ColumnBase:
         """
         Copies type metadata from self onto other, returning a new column.
 
-        * when `self` and `other` are nested columns of the same type,
-          recursively apply this function on the children of `self` to the
-          and the children of `other`.
-        * if none of the above, return `other` without any changes
+        When ``self`` is a nested column, recursively apply this function on
+        the children of ``self``.
         """
-        other = other._with_type_metadata(self.dtype)
-
-        return other
+        return self
 
 
 def column_empty_like(
@@ -2270,24 +2265,6 @@ def full(size: int, fill_value: ScalarLike, dtype: Dtype = None) -> ColumnBase:
     dtype: int8
     """
     return ColumnBase.from_scalar(cudf.Scalar(fill_value, dtype), size)
-
-
-def _copy_type_metadata_from_arrow(
-    arrow_array: pa.array, cudf_column: ColumnBase
-) -> ColumnBase:
-    """
-    Similar to `Column._copy_type_metadata`, except copies type metadata
-    from arrow array into a cudf column. Recursive for every level.
-    * When `arrow_array` is struct type and `cudf_column` is StructDtype, copy
-    field names.
-    * When `arrow_array` is decimal type and `cudf_column` is
-    Decimal64Dtype, copy precisions.
-    """
-    cudf_column = cudf_column._with_type_metadata(
-        cudf_dtype_from_pa_type(arrow_array.type)
-    )
-
-    return cudf_column
 
 
 def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:

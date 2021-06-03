@@ -141,7 +141,7 @@ class DecimalColumn(NumericalBaseColumn):
             self, quant, interpolation, sorted_indices, exact
         )
 
-        return self._copy_type_metadata(result)
+        return result._with_type_metadata(self.dtype)
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
@@ -189,7 +189,7 @@ class DecimalColumn(NumericalBaseColumn):
         result = libcudf.replace.replace_nulls(
             input_col=self, replacement=value, method=method, dtype=dtype
         )
-        return self._copy_type_metadata(result)
+        return result._with_type_metadata(self.dtype)
 
     def serialize(self) -> Tuple[dict, list]:
         header, frames = super().serialize()

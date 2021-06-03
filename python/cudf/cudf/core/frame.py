@@ -505,7 +505,7 @@ class Frame(libcudf.table.Table):
         # Reassign precision for any decimal cols
         for name, col in out._data.items():
             if isinstance(col, cudf.core.column.DecimalColumn):
-                col = tables[0]._data[name]._copy_type_metadata(col)
+                col = col._with_type_metadata(tables[0]._data[name].dtype)
 
         # Reassign index and column names
         if isinstance(objs[0].columns, pd.MultiIndex):
@@ -2237,13 +2237,13 @@ class Frame(libcudf.table.Table):
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.
-        See `ColumnBase._copy_type_metadata` for more information.
+        See `ColumnBase._with_type_metadata` for more information.
         """
         for name, col, other_col in zip(
             self._data.keys(), self._data.values(), other._data.values()
         ):
             self._data.set_by_label(
-                name, other_col._copy_type_metadata(col), validate=False
+                name, col._with_type_metadata(other_col.dtype), validate=False
             )
 
         if include_index:
