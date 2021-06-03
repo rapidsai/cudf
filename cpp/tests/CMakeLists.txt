@@ -72,6 +72,7 @@ ConfigureTest(GROUPBY_TEST
     groupby/nunique_tests.cpp
     groupby/product_tests.cpp
     groupby/quantile_tests.cpp
+    groupby/replace_nulls_tests.cpp
     groupby/shift_tests.cpp
     groupby/std_tests.cpp
     groupby/sum_of_squares_tests.cpp
@@ -179,7 +180,7 @@ ConfigureTest(INTEROP_TEST
 
 ###################################################################################################
 # - io tests --------------------------------------------------------------------------------------
-ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cu)
+ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cpp)
 
 ConfigureTest(CSV_TEST io/csv_test.cpp)
 ConfigureTest(ORC_TEST io/orc_test.cpp)
@@ -279,12 +280,13 @@ ConfigureTest(STREAM_COMPACTION_TEST
 ###################################################################################################
 # - rolling tests ---------------------------------------------------------------------------------
 ConfigureTest(ROLLING_TEST
-    rolling/rolling_test.cpp
+    rolling/collect_ops_test.cpp
+    rolling/empty_input_test.cpp
     rolling/grouped_rolling_test.cpp
     rolling/lead_lag_test.cpp
-    rolling/range_window_bounds_test.cpp
     rolling/range_rolling_window_test.cpp
-    rolling/collect_list_test.cpp)
+    rolling/range_window_bounds_test.cpp
+    rolling/rolling_test.cpp)
 
 ###################################################################################################
 # - filling test ----------------------------------------------------------------------------------

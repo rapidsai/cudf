@@ -150,7 +150,7 @@ struct dispatch_to_cudf_column {
 
       // If array is sliced, we have to copy whole mask and then take copy.
       auto out_mask = (num_rows == static_cast<size_type>(data_buffer->size() / sizeof(T)))
-                        ? *tmp_mask
+                        ? std::move(*tmp_mask)
                         : cudf::detail::copy_bitmask(static_cast<bitmask_type*>(tmp_mask->data()),
                                                      array.offset(),
                                                      array.offset() + num_rows,
@@ -166,7 +166,7 @@ struct dispatch_to_cudf_column {
 
 std::unique_ptr<column> get_empty_type_column(size_type size)
 {
-  return std::make_unique<column>(data_type(type_id::EMPTY), size, rmm::device_buffer(0));
+  return std::make_unique<column>(data_type(type_id::EMPTY), size, rmm::device_buffer{});
 }
 
 /**
@@ -215,7 +215,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal64>(
       auto temp_mask = get_mask_buffer(array, stream, mr);
       // If array is sliced, we have to copy whole mask and then take copy.
       return (num_rows == static_cast<size_type>(data_buffer->size() / sizeof(DeviceType)))
-               ? *temp_mask.release()
+               ? std::move(*temp_mask.release())
                : cudf::detail::copy_bitmask(static_cast<bitmask_type*>(temp_mask->data()),
                                             array.offset(),
                                             array.offset() + num_rows,
@@ -350,7 +350,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::struct_view>(
                    return get_column(*child_array, type, false, stream, mr);
                  });
 
-  auto out_mask = *(get_mask_buffer(array, stream, mr));
+  auto out_mask = std::move(*(get_mask_buffer(array, stream, mr)));
   if (struct_array->null_bitmap_data() != nullptr) {
     out_mask = detail::copy_bitmask(static_cast<bitmask_type*>(out_mask.data()),
                                     array.offset(),
@@ -433,7 +433,7 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
                                     return get_column(*array_chunk, cudf_type, false, stream, mr);
                                   });
                    if (concat_columns.empty()) {
-                     return std::make_unique<column>(cudf_type, 0, rmm::device_buffer(0));
+                     return std::make_unique<column>(cudf_type, 0, rmm::device_buffer{});
                    } else if (concat_columns.size() == 1) {
                      return std::move(concat_columns[0]);
                    }

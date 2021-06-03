@@ -36,6 +36,6 @@ function(find_and_configure_dlpack VERSION)
     set(DLPACK_INCLUDE_DIR "${dlpack_SOURCE_DIR}/include" PARENT_SCOPE)
 endfunction()
 
-set(CUDF_MIN_VERSION_dlpack 0.3)
+set(CUDF_MIN_VERSION_dlpack 0.5)
 
 find_and_configure_dlpack(${CUDF_MIN_VERSION_dlpack})
