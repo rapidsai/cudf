@@ -53,9 +53,9 @@ class scalar {
   /**
    * @brief Construct a new scalar object by deep copying another.
    *
-   * @param[in] other The scalar to copy.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param other The scalar to copy.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   scalar(scalar const& other,
          rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -108,10 +108,10 @@ class scalar {
    * @note Do not use this constructor directly. Instead, use a factory method like
    * make_numeric_scalar or make_string_scalar.
    *
-   * @param[in] type Data type of the scalar.
-   * @param[in] is_valid Whether the value held by the scalar is valid.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param type Data type of the scalar.
+   * @param is_valid Whether the value held by the scalar is valid.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   scalar(data_type type,
          bool is_valid                       = false,
@@ -136,9 +136,9 @@ class fixed_width_scalar : public scalar {
   /**
    * @brief Construct a new fixed-width scalar object by deep copying another.
    *
-   * @param[in] other The scalar to copy.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param other The scalar to copy.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   fixed_width_scalar(fixed_width_scalar const& other,
                      rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -182,10 +182,10 @@ class fixed_width_scalar : public scalar {
   /**
    * @brief Construct a new fixed width scalar object.
    *
-   * @param[in] value The initial value of the scalar.
-   * @param[in] is_valid Whether the value held by the scalar is valid.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param value The initial value of the scalar.
+   * @param is_valid Whether the value held by the scalar is valid.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   fixed_width_scalar(T value,
                      bool is_valid                       = true,
@@ -195,10 +195,10 @@ class fixed_width_scalar : public scalar {
   /**
    * @brief Construct a new fixed width scalar object from existing device memory.
    *
-   * @param[in] data The scalar's data in device memory.
-   * @param[in] is_valid Whether the value held by the scalar is valid.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param data The scalar's data in device memory.
+   * @param is_valid Whether the value held by the scalar is valid.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   fixed_width_scalar(rmm::device_scalar<T>&& data,
                      bool is_valid                       = true,
@@ -228,9 +228,9 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
   /**
    * @brief Construct a new numeric scalar object by deep copying another.
    *
-   * @param[in] other The scalar to copy.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param other The scalar to copy.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   numeric_scalar(numeric_scalar const& other,
                  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -239,10 +239,10 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
   /**
    * @brief Construct a new numeric scalar object.
    *
-   * @param[in] value The initial value of the scalar.
-   * @param[in] is_valid Whether the value held by the scalar is valid.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param value The initial value of the scalar.
+   * @param is_valid Whether the value held by the scalar is valid.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   numeric_scalar(T value,
                  bool is_valid                       = true,
@@ -252,10 +252,10 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
   /**
    * @brief Construct a new numeric scalar object from existing device memory.
    *
-   * @param[in] data The scalar's data in device memory.
-   * @param[in] is_valid Whether the value held by the scalar is valid.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param data The scalar's data in device memory.
+   * @param is_valid Whether the value held by the scalar is valid.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   numeric_scalar(rmm::device_scalar<T>&& data,
                  bool is_valid                       = true,
@@ -286,9 +286,9 @@ class fixed_point_scalar : public scalar {
   /**
    * @brief Construct a new fixed_point scalar object by deep copying another.
    *
-   * @param[in] other The scalar to copy.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param other The scalar to copy.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   fixed_point_scalar(fixed_point_scalar const& other,
                      rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -297,11 +297,11 @@ class fixed_point_scalar : public scalar {
   /**
    * @brief Construct a new fixed_point scalar object from already shifted value and scale.
    *
-   * @param[in] value The initial shifted value of the fixed_point scalar.
-   * @param[in] scale The scale of the fixed_point scalar.
-   * @param[in] is_valid Whether the value held by the scalar is valid.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param value The initial shifted value of the fixed_point scalar.
+   * @param scale The scale of the fixed_point scalar.
+   * @param is_valid Whether the value held by the scalar is valid.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   fixed_point_scalar(rep_type value,
                      numeric::scale_type scale,
@@ -312,10 +312,10 @@ class fixed_point_scalar : public scalar {
   /**
    * @brief Construct a new fixed_point scalar object from a value and default 0-scale.
    *
-   * @param[in] value The initial value of the fixed_point scalar.
-   * @param[in] is_valid Whether the value held by the scalar is valid.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param value The initial value of the fixed_point scalar.
+   * @param is_valid Whether the value held by the scalar is valid.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   fixed_point_scalar(rep_type value,
                      bool is_valid                       = true,
@@ -325,10 +325,10 @@ class fixed_point_scalar : public scalar {
   /**
    * @brief Construct a new fixed_point scalar object from a fixed_point number.
    *
-   * @param[in] value The fixed_point number from which the fixed_point scalar will be initialized.
-   * @param[in] is_valid Whether the value held by the scalar is valid.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param value The fixed_point number from which the fixed_point scalar will be initialized.
+   * @param is_valid Whether the value held by the scalar is valid.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   fixed_point_scalar(T value,
                      bool is_valid                       = true,
@@ -338,11 +338,11 @@ class fixed_point_scalar : public scalar {
   /**
    * @brief Construct a new fixed_point scalar object from existing device memory.
    *
-   * @param[in] data The scalar's data in device memory.
-   * @param[in] scale The scale of the fixed_point scalar.
-   * @param[in] is_valid Whether the value held by the scalar is valid.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param data The scalar's data in device memory.
+   * @param scale The scale of the fixed_point scalar.
+   * @param is_valid Whether the value held by the scalar is valid.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   fixed_point_scalar(rmm::device_scalar<rep_type>&& data,
                      numeric::scale_type scale,
@@ -395,9 +395,9 @@ class string_scalar : public scalar {
   /**
    * @brief Construct a new string scalar object by deep copying another string_scalar.
    *
-   * @param[in] other The other string_scalar to copy.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param other The other string_scalar to copy.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   string_scalar(string_scalar const& other,
                 rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -406,10 +406,10 @@ class string_scalar : public scalar {
   /**
    * @brief Construct a new string scalar object.
    *
-   * @param[in] value The value of the string.
-   * @param[in] is_valid Whether the value held by the scalar is valid.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param value The value of the string.
+   * @param is_valid Whether the value held by the scalar is valid.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   string_scalar(std::string const& string,
                 bool is_valid                       = true,
@@ -420,10 +420,10 @@ class string_scalar : public scalar {
    * @brief Construct a new string scalar object from string_view. Note that this function copies
    * the data pointed by string_view.
    *
-   * @param[in] source The string_view pointing the string value to copy.
-   * @param[in] is_valid Whether the value held by the scalar is valid.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param source The string_view pointing the string value to copy.
+   * @param is_valid Whether the value held by the scalar is valid.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   string_scalar(value_type const& source,
                 bool is_valid                       = true,
@@ -434,10 +434,10 @@ class string_scalar : public scalar {
    * @brief Construct a new string scalar object from string_view in device memory. Note that this
    * function copies the data pointed by string_view.
    *
-   * @param[in] data The device_scalar of string_view pointing to the string value to copy.
-   * @param[in] is_valid Whether the value held by the scalar is valid.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param data The device_scalar of string_view pointing to the string value to copy.
+   * @param is_valid Whether the value held by the scalar is valid.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   string_scalar(rmm::device_scalar<value_type>& data,
                 bool is_valid                       = true,
@@ -450,10 +450,10 @@ class string_scalar : public scalar {
    * Note that this constructor moves the existing buffer into the internal data buffer;
    * no copy is performed.
    *
-   * @param[in] data The orphaned buffer to take over.
-   * @param[in] is_valid Whether the value held by the scalar is valid.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param data The orphaned buffer to take over.
+   * @param is_valid Whether the value held by the scalar is valid.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   string_scalar(rmm::device_buffer&& data,
                 bool is_valid                       = true,
@@ -514,9 +514,9 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
   /**
    * @brief Construct a new chrono scalar object by deep copying another.
    *
-   * @param[in] other The scalar to copy.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param other The scalar to copy.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   chrono_scalar(chrono_scalar const& other,
                 rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -525,10 +525,10 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
   /**
    * @brief Construct a new chrono scalar object.
    *
-   * @param[in] value The initial value of the scalar.
-   * @param[in] is_valid Whether the value held by the scalar is valid.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param value The initial value of the scalar.
+   * @param is_valid Whether the value held by the scalar is valid.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   chrono_scalar(T value,
                 bool is_valid                       = true,
@@ -538,10 +538,10 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
   /**
    * @brief Construct a new chrono scalar object from existing device memory.
    *
-   * @param[in] data The scalar's data in device memory.
-   * @param[in] is_valid Whether the value held by the scalar is valid.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param data The scalar's data in device memory.
+   * @param is_valid Whether the value held by the scalar is valid.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   chrono_scalar(rmm::device_scalar<T>&& data,
                 bool is_valid                       = true,
@@ -562,9 +562,9 @@ class timestamp_scalar : public chrono_scalar<T> {
   /**
    * @brief Construct a new timestamp scalar object by deep copying another.
    *
-   * @param[in] other The scalar to copy.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param other The scalar to copy.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   timestamp_scalar(timestamp_scalar const& other,
                    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -605,9 +605,9 @@ class duration_scalar : public chrono_scalar<T> {
   /**
    * @brief Construct a new duration scalar object by deep copying another.
    *
-   * @param[in] other The scalar to copy.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param other The scalar to copy.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   duration_scalar(duration_scalar const& other,
                   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -647,9 +647,9 @@ class list_scalar : public scalar {
   /**
    * @brief Construct a new list scalar object by deep copying another.
    *
-   * @param[in] other The scalar to copy.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param other The scalar to copy.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   list_scalar(list_scalar const& other,
               rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -740,10 +740,10 @@ class struct_scalar : public scalar {
    * Note that this constructor moves the existing table data into the internal data table;
    * no copies are performed.
    *
-   * @param[in] data The orphaned data table to take over.
-   * @param[in] is_valid Whether the value held by the scalar is valid.
-   * @param[in] stream CUDA stream used for device memory operations.
-   * @param[in] mr Device memory resource to use for device memory allocation.
+   * @param data The orphaned data table to take over.
+   * @param is_valid Whether the value held by the scalar is valid.
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for device memory allocation.
    */
   struct_scalar(table&& data,
                 bool is_valid                       = true,
