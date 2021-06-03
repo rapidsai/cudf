@@ -131,37 +131,21 @@ std::unique_ptr<reader> make_reader(source_info const& src_info,
   return std::make_unique<reader>(std::move(datasources), options, stream, mr);
 }
 
-template <typename writer, typename... Ts>
-std::unique_ptr<writer> make_writer(sink_info const& sink, Ts&&... args)
+std::unique_ptr<data_sink> make_sink(sink_info const& sink)
 {
-  if (sink.type == io_type::FILEPATH) {
-    return std::make_unique<writer>(cudf::io::data_sink::create(sink.filepath),
-                                    std::forward<Ts>(args)...);
-  }
-  if (sink.type == io_type::HOST_BUFFER) {
-    return std::make_unique<writer>(cudf::io::data_sink::create(sink.buffer),
-                                    std::forward<Ts>(args)...);
-  }
-  if (sink.type == io_type::VOID) {
-    return std::make_unique<writer>(cudf::io::data_sink::create(), std::forward<Ts>(args)...);
-  }
-  if (sink.type == io_type::USER_IMPLEMENTED) {
-    return std::make_unique<writer>(cudf::io::data_sink::create(sink.user_sink),
-                                    std::forward<Ts>(args)...);
-  }
+  if (sink.type == io_type::FILEPATH) { return data_sink::create(sink.filepath); }
+  if (sink.type == io_type::HOST_BUFFER) { return data_sink::create(sink.buffer); }
+  if (sink.type == io_type::VOID) { return data_sink::create(); }
+  if (sink.type == io_type::USER_IMPLEMENTED) { return data_sink::create(sink.user_sink); }
   CUDF_FAIL("Unsupported sink type");
 }
 
 std::unique_ptr<data_destination> make_destination(sink_info const& sink)
 {
-  if (sink.type == io_type::FILEPATH) { return cudf::io::create_file_destination(sink.filepath); }
-  if (sink.type == io_type::HOST_BUFFER) {
-    return cudf::io::create_vector_destination(sink.buffer);
-  }
-  if (sink.type == io_type::VOID) { return cudf::io::create_void_destination(); }
-  // if (sink.type == io_type::USER_IMPLEMENTED) {
-  //   return cudf::io::create_data_destination(sink.user_sink);
-  // }
+  if (sink.type == io_type::FILEPATH) { return create_file_destination(sink.filepath); }
+  if (sink.type == io_type::HOST_BUFFER) { return create_vector_destination(sink.buffer); }
+  if (sink.type == io_type::VOID) { return create_void_destination(); }
+  // if (sink.type == io_type::USER_IMPLEMENTED) { return create_data_destination(sink.user_sink); }
   CUDF_FAIL("Unsupported sink type");
 }
 
@@ -426,8 +410,13 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
   CUDF_FUNC_RANGE();
   namespace io_detail = cudf::io::detail;
 
-  auto writer = make_writer<detail_parquet::writer>(
-    options.get_sink(), options, io_detail::SingleWriteMode::YES, rmm::cuda_stream_default, mr);
+  auto sink   = make_sink(options.get_sink());
+  auto writer = std::make_unique<detail_parquet::writer>(  //
+    sink.get(),
+    options,
+    io_detail::SingleWriteMode::YES,
+    rmm::cuda_stream_default,
+    mr);
 
   writer->write(options.get_table());
   return writer->close(options.get_column_chunks_file_path());
@@ -440,8 +429,13 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
                                                rmm::mr::device_memory_resource* mr)
 {
   namespace io_detail = cudf::io::detail;
-  writer              = make_writer<detail_parquet::writer>(
-    op.get_sink(), op, io_detail::SingleWriteMode::NO, rmm::cuda_stream_default, mr);
+  sink                = make_sink(op.get_sink());
+  writer              = std::make_unique<detail_parquet::writer>(  //
+    sink.get(),
+    op,
+    io_detail::SingleWriteMode::NO,
+    rmm::cuda_stream_default,
+    mr);
 }
 
 /**

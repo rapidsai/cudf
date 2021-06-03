@@ -73,7 +73,7 @@ class writer::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::unique_ptr<data_sink> sink,
+  explicit impl(data_sink* sink,
                 parquet_writer_options const& options,
                 SingleWriteMode mode,
                 rmm::cuda_stream_view stream,
@@ -88,7 +88,7 @@ class writer::impl {
    * @param mr Device memory resource to use for device memory allocation
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  explicit impl(std::unique_ptr<data_sink> sink,
+  explicit impl(data_sink* sink,
                 chunked_parquet_writer_options const& options,
                 SingleWriteMode mode,
                 rmm::cuda_stream_view stream,
@@ -223,7 +223,7 @@ class writer::impl {
   bool const single_write_mode = true;
 
   std::vector<uint8_t> buffer_;
-  std::unique_ptr<data_sink> out_sink_;
+  data_sink* out_sink_;
 };
 
 }  // namespace parquet

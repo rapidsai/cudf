@@ -22,7 +22,7 @@
 #include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/io/data_sink.hpp>
+#include <cudf/io/data_destination.hpp>
 #include <cudf/io/detail/orc.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/table/table.hpp>

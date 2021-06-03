@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
@@ -1068,6 +1069,7 @@ class parquet_chunked_writer {
 
   // Unique pointer to impl writer class
   std::unique_ptr<cudf::io::detail::parquet::writer> writer;
+  std::unique_ptr<cudf::io::data_sink> sink;
 };
 
 /** @} */  // end of group

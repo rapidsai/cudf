@@ -843,7 +843,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk> &chunks
   stream.synchronize();
 }
 
-writer::impl::impl(std::unique_ptr<data_sink> sink,
+writer::impl::impl(data_sink *sink,
                    parquet_writer_options const &options,
                    SingleWriteMode mode,
                    rmm::cuda_stream_view stream,
@@ -862,7 +862,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
   init_state();
 }
 
-writer::impl::impl(std::unique_ptr<data_sink> sink,
+writer::impl::impl(data_sink *sink,
                    chunked_parquet_writer_options const &options,
                    SingleWriteMode mode,
                    rmm::cuda_stream_view stream,
@@ -1289,7 +1289,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
 }
 
 // Forward to implementation
-writer::writer(std::unique_ptr<data_sink> sink,
+writer::writer(data_sink *sink,
                parquet_writer_options const &options,
                SingleWriteMode mode,
                rmm::cuda_stream_view stream,
@@ -1298,7 +1298,7 @@ writer::writer(std::unique_ptr<data_sink> sink,
 {
 }
 
-writer::writer(std::unique_ptr<data_sink> sink,
+writer::writer(data_sink *sink,
                chunked_parquet_writer_options const &options,
                SingleWriteMode mode,
                rmm::cuda_stream_view stream,
