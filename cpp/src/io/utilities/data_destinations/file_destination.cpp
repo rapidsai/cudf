@@ -38,14 +38,14 @@ class file_destination_writer : public data_destination_writer {
 
   ~file_destination_writer() { _output_stream.flush(); }
 
-  void write(cudf::host_span<uint8_t> data)
+  void write(cudf::host_span<char const> data)
   {
     _output_stream.seekp(_bytes_written);
-    _output_stream.write(reinterpret_cast<char const*>(data.data()), data.size());
+    _output_stream.write(data.data(), data.size());
     _bytes_written += data.size();
   };
 
-  void write(cudf::device_span<uint8_t> data)
+  void write(cudf::device_span<char const> data)
   {
     if (_cufile_out != nullptr && _cufile_out->is_cufile_io_preferred(data.size())) {
       _cufile_out->write(data.data(), _bytes_written, data.size());
@@ -57,13 +57,13 @@ class file_destination_writer : public data_destination_writer {
 
     CUDA_TRY(cudaMemcpyAsync(_host_buffer,
                              data.data(),
-                             data.size() * sizeof(uint8_t),
+                             data.size() * sizeof(char),
                              cudaMemcpyDeviceToHost,
                              _stream.value()));
 
     _stream.synchronize();
 
-    write(cudf::host_span<uint8_t>(_host_buffer, data.size()));
+    write(cudf::host_span<char>(_host_buffer, data.size()));
   };
 
  private:
@@ -86,18 +86,13 @@ class file_destination_writer : public data_destination_writer {
   size_t _bytes_written = 0;
   std::unique_ptr<detail::cufile_output_impl> _cufile_out;
   rmm::cuda_stream_view _stream;
-  uint8_t* _host_buffer;
+  char* _host_buffer;
   size_type _host_buffer_size;
 };
 
 class file_destination : public data_destination {
  public:
   file_destination(std::string const& filepath) : _filepath(filepath) {}
-
-  static std::unique_ptr<data_destination> create(std::string const& filepath)
-  {
-    return std::make_unique<file_destination>(filepath);
-  }
 
   std::unique_ptr<data_destination_writer> create_writer(rmm::cuda_stream_view stream)
   {
@@ -107,5 +102,11 @@ class file_destination : public data_destination {
  private:
   std::string _filepath;
 };
+
+std::unique_ptr<data_destination> create_file_destination(std::string const& filepath)
+{
+  return std::make_unique<file_destination>(filepath);
+}
+
 }  // namespace io
 }  // namespace cudf

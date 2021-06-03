@@ -31,13 +31,12 @@ class vector_destination_writer : public data_destination_writer {
   {
   }
 
-  void write(cudf::host_span<uint8_t> data)
+  void write(cudf::host_span<char const> data)
   {
-    auto char_array = reinterpret_cast<char const*>(data.data());
-    _buffer->insert(_buffer->end(), char_array, char_array + data.size());
+    _buffer->insert(_buffer->end(), data.data(), data.data() + data.size());
   };
 
-  void write(cudf::device_span<uint8_t> data)
+  void write(cudf::device_span<char const> data)
   {
     _buffer->resize(_buffer->size() + data.size());
 
@@ -57,11 +56,6 @@ class vector_destination : public data_destination {
  public:
   vector_destination(std::vector<char>* buffer) : _buffer(buffer) {}
 
-  static std::unique_ptr<data_destination> create(std::vector<char>* buffer)
-  {
-    return std::make_unique<vector_destination>(buffer);
-  }
-
   std::unique_ptr<data_destination_writer> create_writer(rmm::cuda_stream_view stream)
   {
     return std::make_unique<vector_destination_writer>(_buffer, stream);
@@ -70,6 +64,11 @@ class vector_destination : public data_destination {
  private:
   std::vector<char>* _buffer;
 };
+
+std::unique_ptr<data_destination> create_vector_destination(std::vector<char>* buffer)
+{
+  return std::make_unique<vector_destination>(buffer);
+}
 
 }  // namespace io
 }  // namespace cudf

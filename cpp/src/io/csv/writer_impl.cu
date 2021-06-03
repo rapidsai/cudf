@@ -259,7 +259,7 @@ struct column_to_strings_fn {
 }  // unnamed namespace
 
 // Forward to implementation
-writer::writer(std::unique_ptr<data_sink> sink,
+writer::writer(std::unique_ptr<data_destination> sink,
                csv_writer_options const& options,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
@@ -270,7 +270,7 @@ writer::writer(std::unique_ptr<data_sink> sink,
 // Destructor within this translation unit
 writer::~writer() = default;
 
-writer::impl::impl(std::unique_ptr<data_sink> sink,
+writer::impl::impl(std::unique_ptr<data_destination> sink,
                    csv_writer_options const& options,
                    rmm::mr::device_memory_resource* mr)
   : out_sink_(std::move(sink)), mr_(mr), options_(options)
@@ -279,9 +279,9 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
 
 // write the header: column names:
 //
-void writer::impl::write_chunked_begin(table_view const& table,
-                                       const table_metadata* metadata,
-                                       rmm::cuda_stream_view stream)
+void writer::impl::write_chunked_begin(data_destination_writer& writer,
+                                       table_view const& table,
+                                       const table_metadata* metadata)
 {
   if ((metadata != nullptr) && (options_.is_enabled_include_header())) {
     CUDF_EXPECTS(metadata->column_names.size() == static_cast<size_t>(table.num_columns()),
@@ -297,11 +297,12 @@ void writer::impl::write_chunked_begin(table_view const& table,
               std::ostream_iterator<std::string>(ss, delimiter_str.c_str()));
     ss << metadata->column_names.back() << options_.get_line_terminator();
 
-    out_sink_->host_write(ss.str().data(), ss.str().size());
+    writer.write(ss.str());
   }
 }
 
-void writer::impl::write_chunked(strings_column_view const& str_column_view,
+void writer::impl::write_chunked(data_destination_writer& writer,
+                                 strings_column_view const& str_column_view,
                                  const table_metadata* metadata,
                                  rmm::cuda_stream_view stream)
 {
@@ -318,37 +319,20 @@ void writer::impl::write_chunked(strings_column_view const& str_column_view,
 
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
-  cudf::string_scalar newline{options_.get_line_terminator()};
+  auto nl_terminator = options_.get_line_terminator();
+
+  cudf::string_scalar newline{nl_terminator};
   auto p_str_col_w_nl =
     cudf::strings::detail::join_strings(str_column_view, newline, string_scalar("", false), stream);
-  strings_column_view strings_column{p_str_col_w_nl->view()};
+  // strings_column_view strings_column{p_str_col_w_nl->view()};
 
-  auto total_num_bytes      = strings_column.chars_size();
-  char const* ptr_all_bytes = strings_column.chars().data<char>();
+  writer.write(cudf::device_span<char const>(  //
+    p_str_col_w_nl->view().data<char>(),
+    p_str_col_w_nl->view().size()));
 
-  if (out_sink_->is_device_write_preferred(total_num_bytes)) {
-    // Direct write from device memory
-    out_sink_->device_write(ptr_all_bytes, total_num_bytes, stream);
-  } else {
-    // copy the bytes to host to write them out
-    thrust::host_vector<char> h_bytes(total_num_bytes);
-    CUDA_TRY(cudaMemcpyAsync(h_bytes.data(),
-                             ptr_all_bytes,
-                             total_num_bytes * sizeof(char),
-                             cudaMemcpyDeviceToHost,
-                             stream.value()));
-    stream.synchronize();
-
-    out_sink_->host_write(h_bytes.data(), total_num_bytes);
-  }
-
-  // Needs newline at the end, to separate from next chunk
-  if (out_sink_->is_device_write_preferred(newline.size())) {
-    out_sink_->device_write(newline.data(), newline.size(), stream);
-  } else {
-    out_sink_->host_write(options_.get_line_terminator().data(),
-                          options_.get_line_terminator().size());
-  }
+  writer.write(cudf::host_span<char const>(  //
+    nl_terminator.data(),
+    nl_terminator.size()));
 }
 
 void writer::impl::write(table_view const& table,
@@ -360,7 +344,10 @@ void writer::impl::write(table_view const& table,
   // write header: column names separated by delimiter:
   // (even for tables with no rows)
   //
-  write_chunked_begin(table, metadata, stream);
+
+  auto writer = out_sink_->create_writer(stream);
+
+  write_chunked_begin(*writer, table, metadata);
 
   if (table.num_rows() > 0) {
     // no need to check same-size columns constraint; auto-enforced by table_view
@@ -429,13 +416,9 @@ void writer::impl::write(table_view const& table,
         return cudf::strings::detail::replace_nulls(str_table_view.column(0), narep, stream);
       }();
 
-      write_chunked(str_concat_col->view(), metadata, stream);
+      write_chunked(*writer, str_concat_col->view(), metadata, stream);
     }
   }
-
-  // finalize (no-op, for now, but offers a hook for future extensions):
-  //
-  write_chunked_end(table, metadata, stream);
 }
 
 void writer::write(table_view const& table,

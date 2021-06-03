@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -26,9 +28,9 @@ namespace io {
 
 class data_destination_writer {
  public:
-  virtual ~data_destination_writer()                  = 0;
-  virtual void write(cudf::host_span<uint8_t> data)   = 0;
-  virtual void write(cudf::device_span<uint8_t> data) = 0;
+  virtual ~data_destination_writer()                     = 0;
+  virtual void write(cudf::host_span<char const> data)   = 0;
+  virtual void write(cudf::device_span<char const> data) = 0;
 };
 
 class data_destination {

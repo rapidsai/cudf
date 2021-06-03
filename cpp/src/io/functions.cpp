@@ -15,10 +15,11 @@
  */
 
 #include <io/orc/orc.h>
-#include <algorithm>
+
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/avro.hpp>
 #include <cudf/io/csv.hpp>
+#include <cudf/io/data_destinations.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/avro.hpp>
@@ -32,6 +33,8 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <algorithm>
 
 namespace cudf {
 namespace io {
@@ -149,6 +152,27 @@ std::unique_ptr<writer> make_writer(sink_info const& sink, Ts&&... args)
   CUDF_FAIL("Unsupported sink type");
 }
 
+template <typename writer, typename... Ts>
+std::unique_ptr<writer> make_destination(sink_info const& sink, Ts&&... args)
+{
+  if (sink.type == io_type::FILEPATH) {
+    return std::make_unique<writer>(cudf::io::create_file_destination(sink.filepath),
+                                    std::forward<Ts>(args)...);
+  }
+  if (sink.type == io_type::HOST_BUFFER) {
+    return std::make_unique<writer>(cudf::io::create_vector_destination(sink.buffer),
+                                    std::forward<Ts>(args)...);
+  }
+  if (sink.type == io_type::VOID) {
+    return std::make_unique<writer>(cudf::io::create_void_destination(), std::forward<Ts>(args)...);
+  }
+  // if (sink.type == io_type::USER_IMPLEMENTED) {
+  //   return std::make_unique<writer>(cudf::io::create_data_destination(sink.user_sink),
+  //                                   std::forward<Ts>(args)...);
+  // }
+  CUDF_FAIL("Unsupported sink type");
+}
+
 }  // namespace
 
 table_with_metadata read_avro(avro_reader_options const& opts, rmm::mr::device_memory_resource* mr)
@@ -185,7 +209,8 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
 {
   using namespace cudf::io::detail;
 
-  auto writer = make_writer<csv::writer>(options.get_sink(), options, rmm::cuda_stream_default, mr);
+  auto writer =
+    make_destination<csv::writer>(options.get_sink(), options, rmm::cuda_stream_default, mr);
 
   writer->write(options.get_table(), options.get_metadata());
 }

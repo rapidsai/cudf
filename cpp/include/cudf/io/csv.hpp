@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/io/data_destination.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
