@@ -237,6 +237,8 @@ class StructDtype(_BaseDtype):
     def __hash__(self):
         return hash(self._typ)
 
+class Decimal32Dtype(_BaseDtype):
+    pass
 
 class Decimal64Dtype(_BaseDtype):
 
