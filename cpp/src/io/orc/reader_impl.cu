@@ -80,6 +80,7 @@ constexpr type_id to_type_id(const orc::SchemaType &schema,
     default: break;
   }
 
+  printf("RGSL : Returning Empty for kind %d\n", static_cast<int>(schema.kind));
   return type_id::EMPTY;
 }
 
@@ -442,7 +443,7 @@ class aggregate_orc_metadata {
                       bool &has_timestamp_column)
   {
     int num_cols_added = 1;
-    if (level <= selection.size()) { selection.push_back(std::vector<column_meta>()); }
+    if (level == selection.size()) { selection.push_back(std::vector<column_meta>()); }
     selection[level].emplace_back(id, 0);
     int col_id = selection[level].size() - 1;
     if (types[id].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
@@ -720,22 +721,25 @@ void reader::impl::aggregate_child_meta(hostdevice_vector<gpu::ColumnDesc> &chun
 
 column_buffer &&reader::impl::assemble_buffer(int32_t orc_col_id,
                                               std::vector<std::vector<column_buffer>> &col_buffers,
-                                              column_name_info &schema_info,
                                               std::vector<std::vector<int32_t>> const &orc_col_map,
                                               int level,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource *mr)
 {
+  printf("RGSL : Assembling buffer \n");
   auto const col_id = orc_col_map[level][orc_col_id];
   auto &col_buffer  = col_buffers[level][col_id];
-  schema_info.name  = _metadata->get_column_name(0, orc_col_id);
+
+  printf("RGSL : get column name \n");
+  col_buffer.name = _metadata->get_column_name(0, orc_col_id);
+  printf("RGSL : got column name \n");
   switch (col_buffer.type.id()) {
     case type_id::LIST:
-      schema_info.children.emplace_back("");
+      _metadata->get_col_type(orc_col_id).subtypes[0];
+      printf("RGSL : number of child is %d \n", _metadata->get_col_type(orc_col_id).subtypes[0]);
       col_buffer.children.emplace_back(
         assemble_buffer(_metadata->get_col_type(orc_col_id).subtypes[0],
                         col_buffers,
-                        schema_info.children.back(),
                         orc_col_map,
                         level + 1,
                         stream,
@@ -744,9 +748,8 @@ column_buffer &&reader::impl::assemble_buffer(int32_t orc_col_id,
 
     case type_id::STRUCT:
       for (auto col : _metadata->get_col_type(orc_col_id).subtypes) {
-        schema_info.children.emplace_back("");
-        col_buffer.children.emplace_back(assemble_buffer(
-          col, col_buffers, schema_info.children.back(), orc_col_map, level, stream, mr));
+        col_buffer.children.emplace_back(
+          assemble_buffer(col, col_buffers, orc_col_map, level, stream, mr));
       }
 
       break;
@@ -754,6 +757,7 @@ column_buffer &&reader::impl::assemble_buffer(int32_t orc_col_id,
     default: break;
   }
 
+  printf("RGSL : orc_col_id is %d \n", orc_col_id);
   return std::move(col_buffer);
 }
 
@@ -767,10 +771,14 @@ void reader::impl::create_columns(std::vector<std::vector<column_buffer>> &col_b
   for (size_t i = 0; i < _selected_columns[0].size();) {
     auto const &col_meta = _selected_columns[0][i];
     schema_info.emplace_back("");
-    auto col_buffer =
-      assemble_buffer(col_meta.id, col_buffers, schema_info.back(), orc_col_map, 0, stream, mr);
+    auto col_buffer = assemble_buffer(col_meta.id, col_buffers, orc_col_map, 0, stream, mr);
+    printf("RGSL : Name saved is %s \n", schema_info[i].name.c_str());
     out_columns.emplace_back(make_column(col_buffer, &schema_info.back(), stream, mr));
-    i += (col_buffers[0][i].type.id() == type_id::STRUCT) ? col_meta.num_children : 1;
+    printf("RGSL : Name saved after %s \n", schema_info[i].name.c_str());
+    i += (col_buffers[0][i].type.id() == type_id::STRUCT) ? col_meta.num_children + 1 : 1;
+    printf("Value for next itr is %lu _selected_columns[0].size() is %lu\n",
+           i,
+           _selected_columns[0].size());
   }
 }
 reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
@@ -821,7 +829,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   std::vector<int32_t> child_start_row;
   std::vector<int32_t> num_child_rows_per_stripe;
   for (size_t level = 0; level < _selected_columns.size(); level++) {
-    printf("RGSL : Selecting column \n");
+    printf("RGSL : Selecting column %lu -------------------------------------------------------\n",
+           _selected_columns.size());
     auto &selected_columns = _selected_columns[level];
     printf("RGSL : After Selecting column \n");
     // Association between each ORC column and its cudf::column
@@ -974,7 +983,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             chunk.rowgroup_id = num_rowgroups;
             chunk.dtype_len   = (column_types[col_idx].id() == type_id::STRING)
                                 ? sizeof(std::pair<const char *, size_t>)
-                                : (column_types[col_idx].id() == type_id::LIST)
+                                : ((column_types[col_idx].id() == type_id::LIST) or
+                                   (column_types[col_idx].id() == type_id::STRUCT))
                                     ? sizeof(int32_t)
                                     : cudf::size_of(column_types[col_idx]);
             if (chunk.type_kind == orc::TIMESTAMP) {
@@ -1093,16 +1103,23 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         }
         printf("RGSL : After update \n");
       }
-      printf("RGSL : After for \n");
+      printf("RGSL : After for ********************************************\n");
     }
   }
 
   std::vector<column_name_info> schema_info;
+  printf("RGSL : create_columns \n");
   create_columns(out_buffers, out_columns, schema_info, orc_col_map, stream, _mr);
 
   // Return column names (must match order of returned columns)
   out_metadata.column_names.resize(schema_info.size());
   for (size_t i = 0; i < schema_info.size(); i++) {
+    printf("RGSL : name is %s number of children are %lu\n",
+           schema_info[i].name.c_str(),
+           schema_info[i].children.size());
+    for (size_t j = 0; j < schema_info[i].children.size(); j++) {
+      printf("RGSL : child name is %s\n", schema_info[i].children[j].name.c_str());
+    }
     out_metadata.column_names[i] = schema_info[i].name;
   }
   out_metadata.schema_info = std::move(schema_info);

@@ -138,7 +138,6 @@ class reader::impl {
 
   column_buffer&& assemble_buffer(int32_t orc_col_id,
                                   std::vector<std::vector<column_buffer>>& col_buffers,
-                                  column_name_info& schema_info,
                                   std::vector<std::vector<int32_t>> const& orc_col_map,
                                   int level,
                                   rmm::cuda_stream_view stream,

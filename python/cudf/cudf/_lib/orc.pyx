@@ -9,6 +9,10 @@ from libcpp.vector cimport vector
 from libcpp.utility cimport move
 from cudf._lib.cpp.column.column cimport column
 
+from cudf.utils.dtypes import is_struct_dtype
+
+from cudf._lib.column cimport Column
+
 from cudf._lib.cpp.io.orc_metadata cimport (
     raw_orc_statistics,
     read_raw_orc_statistics as libcudf_read_raw_orc_statistics
@@ -22,6 +26,7 @@ from cudf._lib.cpp.io.orc cimport (
     orc_chunked_writer
 )
 from cudf._lib.cpp.io.types cimport (
+    column_name_info,
     compression_type,
     data_sink,
     sink_info,
@@ -65,6 +70,41 @@ cpdef read_raw_orc_statistics(filepath_or_buffer):
     return (raw.column_names, raw.file_stats, raw.stripes_stats)
 
 
+cdef _update_struct_field_names(
+    Table table,
+    vector[column_name_info]& schema_info
+):
+    for i, (name, col) in enumerate(table._data.items()):
+        table._data[name] = _update_column_struct_field_names(
+            col, schema_info[i]
+        )
+
+
+cdef Column _update_column_struct_field_names(
+    Column col,
+    column_name_info& info
+):
+    cdef vector[string] field_names
+
+    if is_struct_dtype(col):
+        field_names.reserve(len(col.base_children))
+        for i in range(info.children.size()):
+            field_names.push_back(info.children[i].name)
+        col = col._rename_fields(
+            field_names
+        )
+
+    if col.children:
+        children = list(col.children)
+        for i, child in enumerate(children):
+            children[i] = _update_column_struct_field_names(
+                child,
+                info.children[i]
+            )
+        col.set_base_children(tuple(children))
+    return col
+
+
 cpdef read_orc(object filepaths_or_buffers,
                object columns=None,
                object stripes=None,
@@ -104,7 +144,11 @@ cpdef read_orc(object filepaths_or_buffers,
 
     names = [name.decode() for name in c_result.metadata.column_names]
 
-    return Table.from_unique_ptr(move(c_result.tbl), names)
+    tbl = Table.from_unique_ptr(move(c_result.tbl), names)
+
+    _update_struct_field_names(tbl, c_result.metadata.schema_info)
+
+    return tbl
 
 
 cdef compression_type _get_comp_type(object compression):

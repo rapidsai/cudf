@@ -1394,7 +1394,10 @@ __global__ void __launch_bounds__(block_size)
   } else {
     chunk_id = blockIdx.x;
   }
-  if (t == 0 and is_valid) s->chunk = chunks[chunk_id];
+  if (t == 0 and is_valid) {
+    s->chunk          = chunks[chunk_id];
+    s->num_child_rows = 0;
+  }
 
   __syncthreads();
   is_valid     = is_valid && (s->chunk.type_kind != STRUCT);
@@ -1665,6 +1668,8 @@ __global__ void __launch_bounds__(block_size)
             case FLOAT:
             case INT:
             case LIST:
+              if (row == 10000)
+                printf("RGSL: val at 10000 is %u \n", s->vals.u32[t + vals_skipped]);
               static_cast<uint32_t *>(data_out)[row] = s->vals.u32[t + vals_skipped];
               list_child_elements                    = s->vals.u32[t + vals_skipped];
               break;
@@ -1765,7 +1770,11 @@ __global__ void __launch_bounds__(block_size)
   }
   if (t == 0) { atomicAdd(&chunks[chunk_id].num_child_rows, s->num_child_rows); }
   __syncthreads();
-  if (t == 0) { printf("RGSL : number of child rows are %d \n", chunks[chunk_id].num_child_rows); }
+  if (t == 0) {
+    printf("RGSL : number of child rows are %d and address is %d\n",
+           chunks[chunk_id].num_child_rows,
+           chunks);
+  }
 }
 
 /**
@@ -1820,6 +1829,7 @@ void __host__ DecodeOrcColumnData(ColumnDesc *chunks,
                                   uint32_t rowidx_stride,
                                   rmm::cuda_stream_view stream)
 {
+  printf("RGSL : number of rowgroups is %u \n", num_rowgroups);
   uint32_t num_chunks = num_columns * num_stripes;
   dim3 dim_block(block_size, 1);  // 1024 threads per chunk
   dim3 dim_grid((num_rowgroups > 0) ? num_columns : num_chunks,
