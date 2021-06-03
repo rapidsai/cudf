@@ -247,7 +247,7 @@ class orc_column_view {
 size_type orc_table_view::num_rows() const { return columns.empty() ? 0 : columns.front().size(); }
 
 std::vector<stripe_rowgroups> writer::impl::gather_stripe_info(
-  host_span<orc_column_view const> columns, size_t num_rowgroups)
+  host_span<orc_column_view const> columns, host_2dspan<rows_range const> rowgroup_ranges)
 {
   auto const is_any_column_string =
     std::any_of(columns.begin(), columns.end(), [](auto const &col) { return col.is_string(); });
@@ -255,26 +255,36 @@ std::vector<stripe_rowgroups> writer::impl::gather_stripe_info(
   size_t const max_stripe_rows = is_any_column_string ? 1000000 : 5000000;
 
   std::vector<stripe_rowgroups> infos;
-  for (size_t rowgroup = 0, stripe_start = 0, stripe_size = 0; rowgroup < num_rowgroups;
-       ++rowgroup) {
+  auto const num_rowgroups = rowgroup_ranges.size().first;
+  size_t stripe_start      = 0;
+  size_t stripe_size       = 0;
+  size_t stripe_rows       = 0;
+  for (size_t rowgroup = 0; rowgroup < num_rowgroups; ++rowgroup) {
+    auto const rowgroup_rows =
+      std::max_element(rowgroup_ranges[rowgroup].begin(),
+                       rowgroup_ranges[rowgroup].end(),
+                       [](auto &l, auto &r) { return l.size() < r.size(); })
+        ->size();
     auto const rowgroup_size =
       std::accumulate(columns.begin(), columns.end(), 0ul, [&](size_t total_size, auto const &col) {
         if (col.is_string()) {
           const auto dt = col.host_dict_chunk(rowgroup);
-          return total_size + row_index_stride_ + dt->string_char_count;
+          return total_size + rowgroup_rows + dt->string_char_count;
         } else {
-          return total_size + col.type_width() * row_index_stride_;
+          return total_size + col.type_width() * rowgroup_rows;
         }
       });
 
-    if ((rowgroup > stripe_start) &&
-        (stripe_size + rowgroup_size > max_stripe_size_ ||
-         (rowgroup + 1 - stripe_start) * row_index_stride_ > max_stripe_rows)) {
+    if ((rowgroup > stripe_start) && (stripe_size + rowgroup_size > max_stripe_size_ ||
+                                      stripe_rows + rowgroup_rows > max_stripe_rows)) {
       infos.emplace_back(infos.size(), stripe_start, rowgroup - stripe_start);
       stripe_start = rowgroup;
       stripe_size  = 0;
+      stripe_rows  = 0;
     }
+
     stripe_size += rowgroup_size;
+    stripe_rows += rowgroup_rows;
     if (rowgroup + 1 == num_rowgroups) {
       infos.emplace_back(infos.size(), stripe_start, num_rowgroups - stripe_start);
     }
@@ -1324,7 +1334,7 @@ void writer::impl::write(table_view const &table)
   }
 
   // Decide stripe boundaries early on, based on uncompressed size
-  auto const stripe_bounds = gather_stripe_info(orc_table.columns, num_rowgroups);
+  auto const stripe_bounds = gather_stripe_info(orc_table.columns, rowgroup_bounds);
 
   // Build stripe-level dictionaries
   const auto num_stripe_dict = stripe_bounds.size() * orc_table.num_string_columns();

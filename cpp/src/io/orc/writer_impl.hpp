@@ -265,11 +265,11 @@ class writer::impl {
    * @brief Gathers stripe information.
    *
    * @param columns List of columns
-   * @param num_rowgroups Total number of rowgroups
+   * @param rowgroup_ranges TODO
    * @return List of stripe descriptors
    */
   std::vector<stripe_rowgroups> gather_stripe_info(host_span<orc_column_view const> columns,
-                                                   size_t num_rowgroups);
+                                                   host_2dspan<rows_range const> rowgroup_ranges);
 
   /**
    * @brief Encodes the input columns into streams.

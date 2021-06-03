@@ -24,8 +24,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 #include <io/utilities/column_buffer.hpp>
-#include "orc_common.h"
 #include "orc.h"
+#include "orc_common.h"
 
 #include <rmm/cuda_stream_view.hpp>
 

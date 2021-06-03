@@ -19,10 +19,10 @@
 #include "orc_common.h"
 
 #include <io/comp/io_uncomp.h>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/column/column_device_view.cuh>
 
 #include <stddef.h>
 #include <stdint.h>
@@ -605,7 +605,6 @@ struct orc_column_device_view {
   column_device_view cudf_column;
   int32_t parent_index = -1;
 };
-
 
 struct rows_range {
   size_type begin;
