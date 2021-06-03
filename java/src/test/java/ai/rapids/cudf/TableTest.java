@@ -3044,6 +3044,85 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testWindowingCollectSet() {
+    // TODO: Add test cases for aggCollectWithUnEqNulls and aggCollectWithEqNaNs after
+    // the issue (https://github.com/rapidsai/cudf/issues/8405) being addressed.
+    Aggregation aggCollect = Aggregation.collectSet();
+    Aggregation aggCollectWithEqNulls = Aggregation.collectSet(NullPolicy.INCLUDE,
+        NullEquality.EQUAL, NaNEquality.UNEQUAL);
+
+    try (Scalar two = Scalar.fromInt(2);
+         Scalar one = Scalar.fromInt(1);
+         WindowOptions winOpts = WindowOptions.builder()
+             .minPeriods(1)
+             .window(two, one)
+             .build()) {
+      try (Table raw = new Table.TestBuilder()
+          .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+          .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3) // GBY Key
+          .column(1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8) // OBY Key
+          .column(5, 5, 1, 1, 1, 4, 3, 4, null, null, 6, 7) // Agg Column of INT32
+          .column(1.1, 1.1, null, 2.2, -3.0, 1.3e-7, -3.0, Double.NaN, 1e-3, null, Double.NaN, Double.NaN) // Agg Column of FLOAT64
+          .build();
+           ColumnVector expectSortedAggColumn = ColumnVector
+               .fromBoxedInts(5, 5, 1, 1, 1, 4, 3, 4, null, null, 6, 7)) {
+        try (Table sorted = raw.orderBy(OrderByArg.asc(0), OrderByArg.asc(1), OrderByArg.asc(2))) {
+          ColumnVector sortedAggColumn = sorted.getColumn(3);
+          assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+          // Primitive type: INT32
+          //  a) excluding nulls
+          try (Table windowAggResults = sorted.groupBy(0, 1)
+              .aggregateWindows(aggCollect.onColumn(3).overWindow(winOpts));
+               ColumnVector expected = ColumnVector.fromLists(
+                   new ListType(false, new BasicType(false, DType.INT32)),
+                   Arrays.asList(5), Arrays.asList(1, 5), Arrays.asList(1, 5), Arrays.asList(1),
+                   Arrays.asList(1, 4), Arrays.asList(1, 3, 4), Arrays.asList(3, 4), Arrays.asList(3, 4),
+                   Arrays.asList(), Arrays.asList(6), Arrays.asList(6, 7), Arrays.asList(6, 7))) {
+            assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+          }
+          //  b) including nulls AND nulls are equal
+          try (Table windowAggResults = sorted.groupBy(0, 1)
+              .aggregateWindows(aggCollectWithEqNulls.onColumn(3).overWindow(winOpts));
+               ColumnVector expected = ColumnVector.fromLists(
+                   new ListType(false, new BasicType(false, DType.INT32)),
+                   Arrays.asList(5), Arrays.asList(1, 5), Arrays.asList(1, 5), Arrays.asList(1),
+                   Arrays.asList(1, 4), Arrays.asList(1, 3, 4), Arrays.asList(3, 4), Arrays.asList(3, 4),
+                   Arrays.asList((Integer) null), Arrays.asList(6, null), Arrays.asList(6, 7, null), Arrays.asList(6, 7))) {
+            assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+          }
+
+          // Primitive type: FLOAT64
+          //  a) excluding nulls
+          try (Table windowAggResults = sorted.groupBy(0, 1)
+              .aggregateWindows(aggCollect.onColumn(4).overWindow(winOpts));
+               ColumnVector expected = ColumnVector.fromLists(
+                   new ListType(false, new BasicType(false, DType.FLOAT64)),
+                   Arrays.asList(1.1), Arrays.asList(1.1), Arrays.asList(1.1, 2.2), Arrays.asList(2.2),
+                   Arrays.asList(-3.0, 1.3e-7), Arrays.asList(-3.0, 1.3e-7),
+                   Arrays.asList(-3.0, 1.3e-7, Double.NaN), Arrays.asList(-3.0, Double.NaN),
+                   Arrays.asList(1e-3), Arrays.asList(1e-3, Double.NaN),
+                   Arrays.asList(Double.NaN, Double.NaN), Arrays.asList(Double.NaN, Double.NaN))) {
+            assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+          }
+          //  b) including nulls AND nulls are equal
+          try (Table windowAggResults = sorted.groupBy(0, 1)
+              .aggregateWindows(aggCollectWithEqNulls.onColumn(4).overWindow(winOpts));
+               ColumnVector expected = ColumnVector.fromLists(
+                   new ListType(false, new BasicType(false, DType.FLOAT64)),
+                   Arrays.asList(1.1), Arrays.asList(1.1, null), Arrays.asList(1.1, 2.2, null), Arrays.asList(2.2, null),
+                   Arrays.asList(-3.0, 1.3e-7), Arrays.asList(-3.0, 1.3e-7),
+                   Arrays.asList(-3.0, 1.3e-7, Double.NaN), Arrays.asList(-3.0, Double.NaN),
+                   Arrays.asList(1e-3, null), Arrays.asList(1e-3, Double.NaN, null),
+                   Arrays.asList(Double.NaN, Double.NaN, null), Arrays.asList(Double.NaN, Double.NaN))) {
+            assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+          }
+        }
+      }
+    }
+  }
+
+  @Test
   void testWindowingLead() {
     try (Table unsorted = new Table.TestBuilder()
         .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
