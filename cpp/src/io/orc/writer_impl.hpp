@@ -84,6 +84,12 @@ struct stripe_rowgroups {
   auto cend() const { return thrust::make_counting_iterator(first + size); }
 };
 
+struct rows_range {
+  size_type begin;
+  size_type end;
+  constexpr auto size() const noexcept { return end - begin; }
+};
+
 /**
  * @brief Holds the sizes of encoded elements of decimal columns.
  */

@@ -1149,39 +1149,39 @@ orc_table_view get_columns_info(table_view const &table,
 
   return {std::move(orc_columns), std::move(d_orc_columns), std::move(str_col_flat_indexes)};
 }
-using rg_range = thrust::pair<uint32_t, uint32_t>;
-hostdevice_2dvector<rg_range> calculate_rowgroup_sizes(orc_table_view const &orc_table,
-                                                       size_t rowgroup_size,
-                                                       rmm::cuda_stream_view stream)
+
+hostdevice_2dvector<rows_range> calculate_rowgroup_sizes(orc_table_view const &orc_table,
+                                                         uint32_t rowgroup_size,
+                                                         rmm::cuda_stream_view stream)
 {
   auto const num_rowgroups =
     cudf::util::div_rounding_up_unsafe<size_t, size_t>(orc_table.num_rows(), rowgroup_size);
 
-  hostdevice_2dvector<rg_range> rowgroup_bounds(num_rowgroups, orc_table.num_columns(), stream);
+  hostdevice_2dvector<rows_range> rowgroup_bounds(num_rowgroups, orc_table.num_columns(), stream);
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator(0ul),
     num_rowgroups,
     [cols      = device_span<orc_column_device_view const>{orc_table.d_columns},
-     rg_bounds = device_2dspan<rg_range>{rowgroup_bounds},
+     rg_bounds = device_2dspan<rows_range>{rowgroup_bounds},
      rowgroup_size] __device__(auto rg_idx) mutable {
       thrust::transform(
         thrust::seq, cols.begin(), cols.end(), rg_bounds[rg_idx].begin(), [&](auto const &col) {
           if (col.parent_index < 0) {
-            auto const rows_begin = rg_idx * rowgroup_size;
+            size_type const rows_begin = rg_idx * rowgroup_size;
             auto const rows_end =
               thrust::min<uint32_t>((rg_idx + 1) * rowgroup_size, col.cudf_column.size());
-            return rg_range{rows_begin, rows_end};
+            return rows_range{rows_begin, rows_end};
           }
 
           column_device_view parent_col = cols[col.parent_index].cudf_column;
           if (parent_col.type().id() != type_id::LIST) return rg_bounds[rg_idx][col.parent_index];
 
-          auto parent_offsets         = parent_col.child(lists_column_view::offsets_column_index);
-          auto const &parent_rg_range = rg_bounds[rg_idx][col.parent_index];
-          auto const rows_begin       = parent_offsets.element<size_type>(parent_rg_range.first);
-          auto const rows_end         = parent_offsets.element<size_type>(parent_rg_range.second);
-          return rg_range{rows_begin, rows_end};
+          auto parent_offsets           = parent_col.child(lists_column_view::offsets_column_index);
+          auto const &parent_rows_range = rg_bounds[rg_idx][col.parent_index];
+          auto const rows_begin = parent_offsets.element<size_type>(parent_rows_range.begin);
+          auto const rows_end   = parent_offsets.element<size_type>(parent_rows_range.end);
+          return rows_range{rows_begin, rows_end};
         });
     });
   rowgroup_bounds.device_to_host(stream, true);
@@ -1341,6 +1341,7 @@ void writer::impl::write(table_view const &table)
     orc_table.columns, stripe_bounds, decimal_column_sizes(dec_chunk_sizes.rg_sizes));
   auto enc_data = encode_columns(
     orc_table, std::move(dictionaries), std::move(dec_chunk_sizes), stripe_bounds, streams);
+
   // Assemble individual disparate column chunks into contiguous data streams
   size_type const num_index_streams = (orc_table.num_columns() + 1);
   const auto num_data_streams       = streams.size() - num_index_streams;
@@ -1415,8 +1416,8 @@ void writer::impl::write(table_view const &table)
 
   // Write stripes
   for (size_t stripe_id = 0; stripe_id < stripes.size(); ++stripe_id) {
-    auto const &rowgroup_range = stripe_bounds[stripe_id];
-    auto &stripe               = stripes[stripe_id];
+    auto const &rowgroups_range = stripe_bounds[stripe_id];
+    auto &stripe                = stripes[stripe_id];
 
     stripe.offset = out_sink_->bytes_written();
 
@@ -1425,7 +1426,7 @@ void writer::impl::write(table_view const &table)
       write_index_stream(stripe_id,
                          stream_id,
                          orc_table.columns,
-                         rowgroup_range,
+                         rowgroups_range,
                          enc_data.streams,
                          strm_descs,
                          comp_out,
@@ -1437,7 +1438,7 @@ void writer::impl::write(table_view const &table)
     // Column data consisting one or more separate streams
     for (auto const &strm_desc : strm_descs[stripe_id]) {
       write_data_stream(strm_desc,
-                        enc_data.streams[strm_desc.column_id][rowgroup_range.first],
+                        enc_data.streams[strm_desc.column_id][rowgroups_range.first],
                         static_cast<uint8_t *>(compressed_data.data()),
                         stream_output.get(),
                         &stripe,
