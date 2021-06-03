@@ -445,9 +445,10 @@ class string_scalar : public scalar {
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Construct a new string scalar object from an orphaned buffer in device memory.
+   * @brief Construct a new string scalar object by moving an existing string data buffer.
    *
-   * Note that this constructor moves the orphaned buffer into the internal data buffer.
+   * Note that this constructor moves the existing buffer into the internal data buffer;
+   * no copy is performed.
    *
    * @param[in] data The orphaned buffer to take over.
    * @param[in] is_valid Whether the value held by the scalar is valid.
@@ -734,9 +735,10 @@ class struct_scalar : public scalar {
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Construct a new struct scalar object from an orphaned table in device memory.
+   * @brief Construct a new struct scalar object from an existing table in device memory.
    *
-   * Note that this constructor moves the orphaned table into the internal data table.
+   * Note that this constructor moves the existing table data into the internal data table;
+   * no copies are performed.
    *
    * @param[in] data The orphaned data table to take over.
    * @param[in] is_valid Whether the value held by the scalar is valid.
