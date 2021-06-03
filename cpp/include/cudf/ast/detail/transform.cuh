@@ -32,6 +32,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/optional.h>
+#include <thrust/pair.h>
 
 #include <cstring>
 #include <numeric>
@@ -439,6 +440,8 @@ struct expression_evaluator {
       auto const ref_type = device_data_reference.reference_type;
       if (ref_type == detail::device_data_reference_type::COLUMN) {
         if constexpr (has_nulls) {
+          // TODO: Handle null equality propertly, right now I'm just assuming
+          // that null translates to null.
           if (result.has_value()) {
             evaluator.output_column->template element<Element>(row_index) = *result;
             evaluator.output_column->set_valid(row_index);
@@ -457,9 +460,19 @@ struct expression_evaluator {
       }
     }
 
+    // TODO: The row index is now completely ignored... not so great.
+    // Also now I have a separate override for thrust::optional that's
+    // exclusively being used when has_nulls is true, but the override is not
+    // specific to that class. Need a better SFINAE, and a better overall design
+    // for return values. It would be better if the thrust::optional version only
+    // existed when has_nulls=true, but really it would be ideal to not have to
+    // go through a lot o fthese hoops in general. Also the use of void * is bad
+    // because it makes all the overloads compile but they'll run erroneously.
+    // Currently this isn't an issue only because the conditional join code
+    // exclusively uses the bool path at runtime.
     template <typename Element,
               CUDF_ENABLE_IF(is_rep_layout_compatible<Element>() &&
-                             std::is_same<OutputType, void*>::value)>
+                             std::is_same<OutputType, thrust::pair<void*, bool>*>::value)>
     __device__ void resolve_output(detail::device_data_reference device_data_reference,
                                    cudf::size_type row_index,
                                    possibly_null_value_t<Element, has_nulls> result) const
@@ -472,11 +485,20 @@ struct expression_evaluator {
       // independent of the nature of the output, but this should be discussed
       // before finalizing.
       if (ref_type == detail::device_data_reference_type::COLUMN) {
+        // TODO: This line assumes that the output optional works whether the
+        // input result is either a raw bool (when has_nulls is false) or
+        // another optional (when has_nulls is true), which is true but kind of
+        // messy here.
         if constexpr (has_nulls) {
-          // TODO: Modify this to actually handle nulls.
-          static_cast<Element*>(evaluator.output_column)[row_index] = *result;
+          // Super kludgy approach to setting the validity to true for the optional.
+          if (result.has_value()) {
+            static_cast<Element*>(evaluator.output_column->first)[row_index] = *result;
+            evaluator.output_column->second                                  = true;
+          } else {
+            evaluator.output_column->second = false;
+          }
         } else {
-          static_cast<Element*>(evaluator.output_column)[row_index] = result;
+          static_cast<Element*>(evaluator.output_column->first)[row_index] = result;
         }
       } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
         // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing.

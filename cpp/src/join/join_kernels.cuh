@@ -28,6 +28,8 @@
 
 #include "join_common_utils.hpp"
 
+#include <thrust/pair.h>
+
 namespace cudf {
 namespace detail {
 /**
@@ -224,7 +226,17 @@ __global__ void compute_conditional_join_output_size(table_device_view left_tabl
                                                      ast::detail::dev_ast_plan plan,
                                                      cudf::size_type* output_size)
 {
-  extern __shared__ std::int64_t intermediate_storage[];
+  // TODO: Try to avoid duplicating this type of declaration in so many places.
+  // Maybe the conversion can be done by a method of the dev_ast_plan.
+  using IntermediateDataType = cudf::ast::detail::possibly_null_value_t<std::int64_t, has_nulls>;
+
+  // The (required) extern storage of the shared memory array leads to
+  // conflicting declarations between different templates. The easiest
+  // workaround is to declare an arbitrary (here char) array type then cast it
+  // after the fact to the appropriate type.
+  extern __shared__ char raw_intermediate_storage[];
+  IntermediateDataType* intermediate_storage =
+    reinterpret_cast<IntermediateDataType*>(raw_intermediate_storage);
   auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * plan.num_intermediates];
 
   cudf::size_type thread_counter(0);
@@ -233,16 +245,21 @@ __global__ void compute_conditional_join_output_size(table_device_view left_tabl
   const cudf::size_type left_num_rows  = left_table.num_rows();
   const cudf::size_type right_num_rows = right_table.num_rows();
 
+  // TODO: The new setup is forcing me to pass an optional through even when
+  // there are no nulls.  Should see if there's a better way.
   bool test_var;
-  auto evaluator = cudf::ast::detail::expression_evaluator<void*, has_nulls>(
-    left_table, plan, thread_intermediate_storage, &test_var, right_table);
+  thrust::pair<void*, bool> test_optional(&test_var, !has_nulls);
+  auto evaluator = cudf::ast::detail::expression_evaluator<thrust::pair<void*, bool>*, has_nulls>(
+    left_table, plan, thread_intermediate_storage, &test_optional, right_table);
 
   for (cudf::size_type left_row_index = left_start_idx; left_row_index < left_num_rows;
        left_row_index += left_stride) {
     bool found_match = false;
     for (cudf::size_type right_row_index = 0; right_row_index < right_num_rows; right_row_index++) {
       evaluator.evaluate(left_row_index, right_row_index, 0);
-      if (test_var) {
+      // TODO: Handle null equality propertly, right now I'm just assuming
+      // that null translates to null.
+      if (test_optional.second && test_var) {
         if ((JoinKind != join_kind::LEFT_ANTI_JOIN) &&
             !(JoinKind == join_kind::LEFT_SEMI_JOIN && found_match)) {
           ++thread_counter;
@@ -480,7 +497,17 @@ __global__ void conditional_join(table_device_view left_table,
   __shared__ cudf::size_type join_shared_l[num_warps][output_cache_size];
   __shared__ cudf::size_type join_shared_r[num_warps][output_cache_size];
 
-  extern __shared__ std::int64_t intermediate_storage[];
+  // TODO: Try to avoid duplicating this type of declaration in so many places.
+  // Maybe the conversion can be done by a method of the dev_ast_plan.
+  using IntermediateDataType = cudf::ast::detail::possibly_null_value_t<std::int64_t, has_nulls>;
+
+  // The (required) extern storage of the shared memory array leads to
+  // conflicting declarations between different templates. The easiest
+  // workaround is to declare an arbitrary (here char) array type then cast it
+  // after the fact to the appropriate type.
+  extern __shared__ char raw_intermediate_storage[];
+  IntermediateDataType* intermediate_storage =
+    reinterpret_cast<IntermediateDataType*>(raw_intermediate_storage);
   auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * plan.num_intermediates];
 
   const int warp_id                    = threadIdx.x / detail::warp_size;
@@ -495,16 +522,19 @@ __global__ void conditional_join(table_device_view left_table,
   cudf::size_type left_row_index = threadIdx.x + blockIdx.x * blockDim.x;
 
   const unsigned int activemask = __ballot_sync(0xffffffff, left_row_index < left_num_rows);
+
   bool test_var;
-  auto evaluator = cudf::ast::detail::expression_evaluator<void*, has_nulls>(
-    left_table, plan, thread_intermediate_storage, &test_var, right_table);
+  thrust::pair<void*, bool> test_optional(&test_var, !has_nulls);
+  auto evaluator = cudf::ast::detail::expression_evaluator<thrust::pair<void*, bool>*, has_nulls>(
+    left_table, plan, thread_intermediate_storage, &test_optional, right_table);
 
   if (left_row_index < left_num_rows) {
     bool found_match = false;
     for (size_type right_row_index(0); right_row_index < right_num_rows; right_row_index++) {
       evaluator.evaluate(left_row_index, right_row_index, 0);
 
-      if (test_var) {
+      // TODO: Handle null equality properly.
+      if (test_optional.second && test_var) {
         // If the rows are equal, then we have found a true match
         // In the case of left anti joins we only add indices from left after
         // the loop if we have found _no_ matches from the right.
