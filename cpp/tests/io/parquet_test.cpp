@@ -18,7 +18,6 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
-#include <cudf/io/data_sink.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
@@ -1050,40 +1049,40 @@ TEST_F(ParquetWriterTest, ListOfStruct)
 }
 
 // custom data sink that supports device writes. uses plain file io.
-class custom_test_data_sink : public cudf::io::data_sink {
- public:
-  explicit custom_test_data_sink(std::string const& filepath)
-  {
-    outfile_.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
-    CUDF_EXPECTS(outfile_.is_open(), "Cannot open output file");
-  }
+// class custom_test_data_sink : public cudf::io::data_destination {
+//  public:
+//   explicit custom_test_data_sink(std::string const& filepath)
+//   {
+//     outfile_.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
+//     CUDF_EXPECTS(outfile_.is_open(), "Cannot open output file");
+//   }
 
-  virtual ~custom_test_data_sink() { flush(); }
+//   virtual ~custom_test_data_sink() { flush(); }
 
-  void host_write(void const* data, size_t size) override
-  {
-    outfile_.write(static_cast<char const*>(data), size);
-  }
+//   void host_write(void const* data, size_t size) override
+//   {
+//     outfile_.write(static_cast<char const*>(data), size);
+//   }
 
-  bool supports_device_write() const override { return true; }
+//   bool supports_device_write() const override { return true; }
 
-  void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
-  {
-    char* ptr = nullptr;
-    CUDA_TRY(cudaMallocHost(&ptr, size));
-    CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
-    stream.synchronize();
-    outfile_.write(ptr, size);
-    CUDA_TRY(cudaFreeHost(ptr));
-  }
+//   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
+//   {
+//     char* ptr = nullptr;
+//     CUDA_TRY(cudaMallocHost(&ptr, size));
+//     CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
+//     stream.synchronize();
+//     outfile_.write(ptr, size);
+//     CUDA_TRY(cudaFreeHost(ptr));
+//   }
 
-  void flush() override { outfile_.flush(); }
+//   void flush() override { outfile_.flush(); }
 
-  size_t bytes_written() override { return outfile_.tellp(); }
+//   size_t bytes_written() override { return outfile_.tellp(); }
 
- private:
-  std::ofstream outfile_;
-};
+//  private:
+//   std::ofstream outfile_;
+// };
 
 // TEST_F(ParquetWriterTest, CustomDataSink)
 // {
@@ -2014,37 +2013,37 @@ TYPED_TEST(ParquetChunkedWriterNumericTypeTest, UnalignedSize2)
 }
 
 // custom mem mapped data sink that supports device writes
-template <bool supports_device_writes>
-class custom_test_memmap_sink : public cudf::io::data_sink {
- public:
-  explicit custom_test_memmap_sink(std::vector<char>* mm_writer_buf)
-  {
-    mm_writer = cudf::io::data_sink::create(mm_writer_buf);
-  }
+// template <bool supports_device_writes>
+// class custom_test_memmap_sink : public cudf::io::data_destination {
+//  public:
+//   explicit custom_test_memmap_sink(std::vector<char>* mm_writer_buf)
+//   {
+//     mm_writer = cudf::io::data_sink::create(mm_writer_buf);
+//   }
 
-  virtual ~custom_test_memmap_sink() { mm_writer->flush(); }
+//   virtual ~custom_test_memmap_sink() { mm_writer->flush(); }
 
-  void host_write(void const* data, size_t size) override { mm_writer->host_write(data, size); }
+//   void host_write(void const* data, size_t size) override { mm_writer->host_write(data, size); }
 
-  bool supports_device_write() const override { return supports_device_writes; }
+//   bool supports_device_write() const override { return supports_device_writes; }
 
-  void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
-  {
-    char* ptr = nullptr;
-    CUDA_TRY(cudaMallocHost(&ptr, size));
-    CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
-    stream.synchronize();
-    mm_writer->host_write(ptr, size);
-    CUDA_TRY(cudaFreeHost(ptr));
-  }
+//   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
+//   {
+//     char* ptr = nullptr;
+//     CUDA_TRY(cudaMallocHost(&ptr, size));
+//     CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
+//     stream.synchronize();
+//     mm_writer->host_write(ptr, size);
+//     CUDA_TRY(cudaFreeHost(ptr));
+//   }
 
-  void flush() override { mm_writer->flush(); }
+//   void flush() override { mm_writer->flush(); }
 
-  size_t bytes_written() override { return mm_writer->bytes_written(); }
+//   size_t bytes_written() override { return mm_writer->bytes_written(); }
 
- private:
-  std::unique_ptr<data_sink> mm_writer;
-};
+//  private:
+//   std::unique_ptr<data_sink> mm_writer;
+// };
 
 // TEST_F(ParquetWriterStressTest, LargeTableWeakCompression)
 // {

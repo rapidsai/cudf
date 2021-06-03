@@ -38,8 +38,8 @@ class RandomAccessFile;
 namespace cudf {
 //! IO interfaces
 namespace io {
-class data_sink;
 class datasource;
+class data_destination;
 }  // namespace io
 }  // namespace cudf
 
@@ -219,8 +219,8 @@ struct source_info {
 struct sink_info {
   io_type type = io_type::VOID;
   std::string filepath;
-  std::vector<char>* buffer      = nullptr;
-  cudf::io::data_sink* user_sink = nullptr;
+  std::vector<char>* buffer             = nullptr;
+  cudf::io::data_destination* user_sink = nullptr;
 
   sink_info() = default;
 
@@ -228,7 +228,7 @@ struct sink_info {
 
   explicit sink_info(std::vector<char>* buffer) : type(io_type::HOST_BUFFER), buffer(buffer) {}
 
-  explicit sink_info(class cudf::io::data_sink* user_sink_)
+  explicit sink_info(class cudf::io::data_destination* user_sink_)
     : type(io_type::USER_IMPLEMENTED), user_sink(user_sink_)
   {
   }

@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/types.hpp>
 

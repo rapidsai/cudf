@@ -1171,8 +1171,6 @@ void writer::impl::write(table_view const &table)
                        num_stats_bfr);
   }
 
-  // pinned_buffer<uint8_t> host_bfr{nullptr, cudaFreeHost};
-
   // Encode row groups in batches
   for (uint32_t b = 0, r = 0, global_r = global_rowgroup_base; b < (uint32_t)batch_list.size();
        b++) {
