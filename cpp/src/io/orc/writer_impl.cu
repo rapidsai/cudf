@@ -285,12 +285,11 @@ std::vector<stripe_rowgroups> writer::impl::gather_stripe_info(
 }
 
 void writer::impl::init_dictionaries(orc_table_view &orc_table,
+                                     device_2dspan<rows_range const> rowgroup_ranges,
                                      device_span<device_span<uint32_t>> dict_data,
                                      device_span<device_span<uint32_t>> dict_index,
                                      hostdevice_vector<gpu::DictionaryChunk> *dict)
 {
-  const size_t num_rowgroups = dict->size() / orc_table.num_string_columns();
-
   // Setup per-rowgroup dictionary indexes for each dictionary-aware column
   for (size_t i = 0; i < orc_table.num_string_columns(); ++i) {
     auto &str_column = orc_table.string_column(i);
@@ -303,9 +302,8 @@ void writer::impl::init_dictionaries(orc_table_view &orc_table,
     dict->device_ptr(),
     dict_data,
     dict_index,
-    row_index_stride_,
+    rowgroup_ranges,
     cudf::detail::make_device_uvector_async(orc_table.string_column_indices, stream),
-    num_rowgroups,
     stream);
   dict->device_to_host(stream, true);
 }
@@ -1170,7 +1168,7 @@ hostdevice_2dvector<rows_range> calculate_rowgroup_sizes(orc_table_view const &o
           if (col.parent_index < 0) {
             size_type const rows_begin = rg_idx * rowgroup_size;
             auto const rows_end =
-              thrust::min<uint32_t>((rg_idx + 1) * rowgroup_size, col.cudf_column.size());
+              thrust::min<size_type>((rg_idx + 1) * rowgroup_size, col.cudf_column.size());
             return rows_range{rows_begin, rows_end};
           }
 
@@ -1322,7 +1320,8 @@ void writer::impl::write(table_view const &table)
   const auto num_dict_chunks = num_rowgroups * orc_table.num_string_columns();
   hostdevice_vector<gpu::DictionaryChunk> dict(num_dict_chunks, stream);
   if (orc_table.num_string_columns() != 0) {
-    init_dictionaries(orc_table, dictionaries.d_data, dictionaries.d_index, &dict);
+    init_dictionaries(
+      orc_table, rowgroup_bounds, dictionaries.d_data_view, dictionaries.d_index_view, &dict);
   }
 
   // Decide stripe boundaries early on, based on uncompressed size

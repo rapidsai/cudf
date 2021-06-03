@@ -84,12 +84,6 @@ struct stripe_rowgroups {
   auto cend() const { return thrust::make_counting_iterator(first + size); }
 };
 
-struct rows_range {
-  size_type begin;
-  size_type end;
-  constexpr auto size() const noexcept { return end - begin; }
-};
-
 /**
  * @brief Holds the sizes of encoded elements of decimal columns.
  */
@@ -154,8 +148,8 @@ struct encoded_data {
 struct string_dictionaries {
   std::vector<rmm::device_uvector<uint32_t>> data;
   std::vector<rmm::device_uvector<uint32_t>> index;
-  rmm::device_uvector<device_span<uint32_t>> d_data;
-  rmm::device_uvector<device_span<uint32_t>> d_index;
+  rmm::device_uvector<device_span<uint32_t>> d_data_view;
+  rmm::device_uvector<device_span<uint32_t>> d_index_view;
 };
 
 /**
@@ -229,11 +223,13 @@ class writer::impl {
    * @brief Builds up column dictionaries indices
    *
    * @param orc_table TODO
+   * @param rowgroup_ranges TODO
    * @param dict_data Dictionary data memory
    * @param dict_index Dictionary index memory
    * @param dict List of dictionary chunks
    */
   void init_dictionaries(orc_table_view& orc_table,
+                         device_2dspan<rows_range const> rowgroup_ranges,
                          device_span<device_span<uint32_t>> dict_data,
                          device_span<device_span<uint32_t>> dict_index,
                          hostdevice_vector<gpu::DictionaryChunk>* dict);

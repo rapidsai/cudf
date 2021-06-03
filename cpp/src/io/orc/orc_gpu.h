@@ -25,6 +25,7 @@
 #include <cudf/utilities/span.hpp>
 #include <io/utilities/column_buffer.hpp>
 #include "orc_common.h"
+#include "orc.h"
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -372,9 +373,8 @@ void InitDictionaryIndices(device_span<orc_column_device_view const> d_orc_colum
                            DictionaryChunk *chunks,
                            device_span<device_span<uint32_t>> dict_data,
                            device_span<device_span<uint32_t>> dict_index,
-                           size_t row_index_stride,
+                           device_2dspan<rows_range const> rowgroup_ranges,
                            device_span<int const> str_col_flat_indexes,
-                           uint32_t num_rowgroups,
                            rmm::cuda_stream_view stream);
 
 /**

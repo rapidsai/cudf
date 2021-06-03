@@ -599,6 +599,12 @@ class metadata {
   datasource *const source;
 };
 
+struct rows_range {
+  size_type begin;
+  size_type end;
+  constexpr auto size() const noexcept { return end - begin; }
+};
+
 }  // namespace orc
 }  // namespace io
 }  // namespace cudf
