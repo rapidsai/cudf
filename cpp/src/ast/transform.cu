@@ -81,10 +81,10 @@ __launch_bounds__(max_block_size) __global__
   auto const start_idx = static_cast<cudf::size_type>(threadIdx.x + blockIdx.x * blockDim.x);
   auto const stride    = static_cast<cudf::size_type>(blockDim.x * gridDim.x);
   auto evaluator = cudf::ast::detail::expression_evaluator<mutable_column_device_view*, has_nulls>(
-    table, plan, thread_intermediate_storage, &output_column);
+    table, plan, thread_intermediate_storage);
 
   for (cudf::size_type row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
-    evaluator.evaluate(row_index);
+    evaluator.evaluate(&output_column, row_index);
   }
 }
 
