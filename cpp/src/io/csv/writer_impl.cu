@@ -322,15 +322,15 @@ void writer::impl::write_chunked(data_destination_writer& writer,
   auto nl_terminator = options_.get_line_terminator();
 
   cudf::string_scalar newline{nl_terminator};
+
   auto p_str_col_w_nl =
     cudf::strings::detail::join_strings(str_column_view, newline, string_scalar("", false), stream);
-  // strings_column_view strings_column{p_str_col_w_nl->view()};
 
-  stream.synchronize();
+  strings_column_view strings_column{p_str_col_w_nl->view()};
 
   writer.write(cudf::device_span<char const>(  //
-    p_str_col_w_nl->view().data<char>(),
-    p_str_col_w_nl->view().size()));
+    strings_column.chars().data<char>(),
+    strings_column.chars().size()));
 
   writer.write(cudf::host_span<char const>(  //
     nl_terminator.data(),
