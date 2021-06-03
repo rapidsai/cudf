@@ -2062,7 +2062,7 @@ TEST_F(CollectSetTest, FloatGroupedRollingWindowWithNaNs)
     {{0.2341, 1.23}, std::initializer_list<bool>{true, true}},
     {{0.2341, 1.23}, std::initializer_list<bool>{true, true}},
     {{-5.23e9, 0.2341}, std::initializer_list<bool>{true, true}},
-    {{-5.23e9, 0.2341, std::nan("1")}, std::initializer_list<bool>{true, true}},
+    {{-5.23e9, 0.2341, std::nan("1")}, std::initializer_list<bool>{true, true, true}},
     {{-5.23e9, std::nan("1")}, std::initializer_list<bool>{true, true}},
     {{1.1, std::nan("1")}, std::initializer_list<bool>{true, true}},
     {{1.1, std::nan("1"), std::nan("1")}, std::initializer_list<bool>{true, true, true}},
