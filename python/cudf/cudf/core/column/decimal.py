@@ -37,7 +37,7 @@ class DecimalColumn(NumericalBaseColumn):
 
     @classmethod
     def from_arrow(cls, data: pa.Array):
-        result = super().from_arrow(data)
+        result = cast(Decimal64Dtype, super().from_arrow(data))
         result.dtype.precision = data.type.precision
         return result
 
