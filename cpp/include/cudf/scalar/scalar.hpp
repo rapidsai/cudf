@@ -38,9 +38,10 @@ namespace cudf {
 /**
  * @brief An owning class to represent a singular value.
  *
- * A scalar is a singular value of any of the supported datatypes in cudf. Classes derived from
- * this class are used to represent a scalar. Objects of derived classes should be upcasted to
- * this class while passing to an external libcudf API.
+ * A scalar is a singular value of any of the supported datatypes in cudf.
+ * Classes derived from this class are used to represent a scalar. Objects of
+ * derived classes should be upcasted to this class while passing to an
+ * external libcudf API.
  */
 class scalar {
  public:
@@ -105,8 +106,8 @@ class scalar {
   /**
    * @brief Construct a new scalar object.
    *
-   * @note Do not use this constructor directly. Instead, use a factory method like
-   * make_numeric_scalar or make_string_scalar.
+   * @note Do not use this constructor directly. Instead, use a factory method
+   * like make_numeric_scalar or make_string_scalar
    *
    * @param type Data type of the scalar.
    * @param is_valid Whether the value held by the scalar is valid.
@@ -417,8 +418,9 @@ class string_scalar : public scalar {
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Construct a new string scalar object from string_view. Note that this function copies
-   * the data pointed by string_view.
+   * @brief Construct a new string scalar object from string_view.
+   *
+   * Note that this function copies the data pointed by string_view.
    *
    * @param source The string_view pointing the string value to copy.
    * @param is_valid Whether the value held by the scalar is valid.
@@ -431,8 +433,9 @@ class string_scalar : public scalar {
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Construct a new string scalar object from string_view in device memory. Note that this
-   * function copies the data pointed by string_view.
+   * @brief Construct a new string scalar object from string_view in device memory.
+   *
+   * Note that this function copies the data pointed by string_view.
    *
    * @param data The device_scalar of string_view pointing to the string value to copy.
    * @param is_valid Whether the value held by the scalar is valid.
@@ -450,7 +453,7 @@ class string_scalar : public scalar {
    * Note that this constructor moves the existing buffer into the internal data buffer;
    * no copy is performed.
    *
-   * @param data The orphaned buffer to take over.
+   * @param data The existing buffer to take over.
    * @param is_valid Whether the value held by the scalar is valid.
    * @param stream CUDA stream used for device memory operations.
    * @param mr Device memory resource to use for device memory allocation.
@@ -571,8 +574,8 @@ class timestamp_scalar : public chrono_scalar<T> {
                    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Construct a new timestamp scalar object from a duration that is convertible
-   * to T::duration.
+   * @brief Construct a new timestamp scalar object from a duration that is
+   * convertible to T::duration
    *
    * @param value Duration representing number of ticks since the UNIX epoch or another duration
    *        that is convertible to timestamps duration.
@@ -737,10 +740,10 @@ class struct_scalar : public scalar {
   /**
    * @brief Construct a new struct scalar object from an existing table in device memory.
    *
-   * Note that this constructor moves the existing table data into the internal data table;
+   * Note that this constructor moves the existing table data into the internal table data;
    * no copies are performed.
    *
-   * @param data The orphaned data table to take over.
+   * @param data The existing table data to take over.
    * @param is_valid Whether the value held by the scalar is valid.
    * @param stream CUDA stream used for device memory operations.
    * @param mr Device memory resource to use for device memory allocation.
