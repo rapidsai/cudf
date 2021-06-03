@@ -2037,6 +2037,68 @@ TEST_F(CollectSetTest, BoolGroupedRollingWindow)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_with_nulls_excluded->view());
 }
 
+TEST_F(CollectSetTest, FloatGroupedRollingWindowWithNaNs)
+{
+  using namespace cudf;
+  using namespace cudf::test;
+
+  auto const group_column = fixed_width_column_wrapper<int32_t>{1, 1, 1, 1, 1, 2, 2, 2, 2};
+  auto const input_column = fixed_width_column_wrapper<double>{
+    {1.23, 0.2341, 0.2341, -5.23e9, std::nan("1"), 1.1, std::nan("1"), std::nan("1"), 0.0},
+    {true, true, true, true, true, true, true, true, false}};
+
+  auto const preceding   = 2;
+  auto const following   = 1;
+  auto const min_periods = 1;
+  // test on nan_equality::UNEQUAL
+  auto const result = grouped_rolling_window(table_view{std::vector<column_view>{group_column}},
+                                             input_column,
+                                             preceding,
+                                             following,
+                                             min_periods,
+                                             *make_collect_set_aggregation<rolling_aggregation>());
+
+  auto const expected_result = lists_column_wrapper<double>{
+    {{0.2341, 1.23}, std::initializer_list<bool>{true, true}},
+    {{0.2341, 1.23}, std::initializer_list<bool>{true, true}},
+    {{-5.23e9, 0.2341}, std::initializer_list<bool>{true, true}},
+    {{-5.23e9, 0.2341, std::nan("1")}, std::initializer_list<bool>{true, true}},
+    {{-5.23e9, std::nan("1")}, std::initializer_list<bool>{true, true}},
+    {{1.1, std::nan("1")}, std::initializer_list<bool>{true, true}},
+    {{1.1, std::nan("1"), std::nan("1")}, std::initializer_list<bool>{true, true, true}},
+    {{std::nan("1"), std::nan("1"), 0.0}, std::initializer_list<bool>{true, true, false}},
+    {{std::nan("1"), 0.0},
+     std::initializer_list<bool>{
+       true, false}}}.release();
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result->view());
+
+  // test on nan_equality::ALL_EQUAL
+  auto const result_nan_equal =
+    grouped_rolling_window(table_view{std::vector<column_view>{group_column}},
+                           input_column,
+                           preceding,
+                           following,
+                           min_periods,
+                           *make_collect_set_aggregation<rolling_aggregation>(
+                             null_policy::INCLUDE, null_equality::EQUAL, nan_equality::ALL_EQUAL));
+
+  auto const expected_result_nan_equal = lists_column_wrapper<double>{
+    {{0.2341, 1.23}, std::initializer_list<bool>{true, true}},
+    {{0.2341, 1.23}, std::initializer_list<bool>{true, true}},
+    {{-5.23e9, 0.2341}, std::initializer_list<bool>{true, true}},
+    {{-5.23e9, 0.2341, std::nan("1")}, std::initializer_list<bool>{true, true, true}},
+    {{-5.23e9, std::nan("1")}, std::initializer_list<bool>{true, true}},
+    {{1.1, std::nan("1")}, std::initializer_list<bool>{true, true}},
+    {{1.1, std::nan("1")}, std::initializer_list<bool>{true, true}},
+    {{std::nan("1"), 0.0}, std::initializer_list<bool>{true, false}},
+    {{std::nan("1"), 0.0},
+     std::initializer_list<bool>{true,
+                                 false}}}.release();
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result_nan_equal->view(), result_nan_equal->view());
+}
+
 TEST_F(CollectSetTest, BasicRollingWindowWithNaNs)
 {
   using namespace cudf;
@@ -2082,6 +2144,27 @@ TEST_F(CollectSetTest, BasicRollingWindowWithNaNs)
                    *make_collect_set_aggregation<rolling_aggregation>(null_policy::EXCLUDE));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result->view(), result_with_nulls_excluded->view());
+
+  auto const expected_result_for_nan_equal =
+    lists_column_wrapper<double>{
+      {0.2341, 1.23},
+      {0.2341, 1.23, std::nan("1")},
+      {0.2341, std::nan("1")},
+      {-5.23e9, std::nan("1")},
+      {-5.23e9, std::nan("1")},
+    }
+      .release();
+
+  auto const result_with_nan_equal =
+    rolling_window(input_column,
+                   2,
+                   1,
+                   1,
+                   *make_collect_set_aggregation<rolling_aggregation>(
+                     null_policy::INCLUDE, null_equality::EQUAL, nan_equality::ALL_EQUAL));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result_for_nan_equal->view(),
+                                      result_with_nan_equal->view());
 }
 
 TEST_F(CollectSetTest, ListTypeRollingWindow)
