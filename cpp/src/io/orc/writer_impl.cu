@@ -972,14 +972,15 @@ void writer::impl::write_index_stream(int32_t stripe_id,
     buffer_[1]             = static_cast<uint8_t>(uncomp_ix_len >> 8);
     buffer_[2]             = static_cast<uint8_t>(uncomp_ix_len >> 16);
   }
-  out_sink_->host_write(buffer_.data(), buffer_.size());
+  out_sink_->write(
+    cudf::host_span<char const>(reinterpret_cast<char const *>(buffer_.data()), buffer_.size()),
+    rmm::cuda_stream_default);
   stripe->indexLength += buffer_.size();
 }
 
 void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
                                      gpu::encoder_chunk_streams const &enc_stream,
                                      uint8_t const *compressed_data,
-                                     uint8_t *stream_out,
                                      StripeInformation *stripe,
                                      orc_streams *streams)
 {
@@ -990,15 +991,9 @@ void writer::impl::write_data_stream(gpu::StripeStream const &strm_desc,
   const auto *stream_in = (compression_kind_ == NONE) ? enc_stream.data_ptrs[strm_desc.stream_type]
                                                       : (compressed_data + strm_desc.bfr_offset);
 
-  if (out_sink_->is_device_write_preferred(length)) {
-    out_sink_->device_write(stream_in, length, stream);
-  } else {
-    CUDA_TRY(
-      cudaMemcpyAsync(stream_out, stream_in, length, cudaMemcpyDeviceToHost, stream.value()));
-    stream.synchronize();
+  out_sink_->write(cudf::device_span<char const>(reinterpret_cast<char const *>(stream_in), length),
+                   stream);
 
-    out_sink_->host_write(stream_out, length);
-  }
   stripe->dataLength += length;
 }
 
@@ -1022,7 +1017,7 @@ void writer::impl::add_uncompressed_block_headers(std::vector<uint8_t> &v)
   }
 }
 
-writer::impl::impl(std::unique_ptr<data_sink> sink,
+writer::impl::impl(data_destination *sink,
                    orc_writer_options const &options,
                    SingleWriteMode mode,
                    rmm::cuda_stream_view stream,
@@ -1038,7 +1033,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
   init_state();
 }
 
-writer::impl::impl(std::unique_ptr<data_sink> sink,
+writer::impl::impl(data_destination *sink,
                    chunked_orc_writer_options const &options,
                    SingleWriteMode mode,
                    rmm::cuda_stream_view stream,
@@ -1063,7 +1058,8 @@ writer::impl::~impl() { close(); }
 void writer::impl::init_state()
 {
   // Write file header
-  out_sink_->host_write(MAGIC, std::strlen(MAGIC));
+  out_sink_->write(cudf::host_span<char const>(MAGIC, std::strlen(MAGIC)),
+                   rmm::cuda_stream_default);
 }
 
 rmm::device_uvector<size_type> get_string_column_ids(const table_device_view &view,
@@ -1289,40 +1285,23 @@ void writer::impl::write(table_view const &table)
   // Allocate intermediate output stream buffer
   size_t compressed_bfr_size   = 0;
   size_t num_compressed_blocks = 0;
-  auto stream_output           = [&]() {
-    size_t max_stream_size = 0;
-    bool all_device_write  = true;
 
-    for (size_t stripe_id = 0; stripe_id < stripe_bounds.size(); stripe_id++) {
-      for (size_t i = 0; i < num_data_streams; i++) {  // TODO range for (at least)
-        gpu::StripeStream *ss = &strm_descs[stripe_id][i];
-        if (!out_sink_->is_device_write_preferred(ss->stream_size)) { all_device_write = false; }
-        size_t stream_size = ss->stream_size;
-        if (compression_kind_ != NONE) {
-          ss->first_block = num_compressed_blocks;
-          ss->bfr_offset  = compressed_bfr_size;
+  for (size_t stripe_id = 0; stripe_id < stripe_bounds.size(); stripe_id++) {
+    for (size_t i = 0; i < num_data_streams; i++) {  // TODO range for (at least)
+      gpu::StripeStream *ss = &strm_descs[stripe_id][i];
+      size_t stream_size    = ss->stream_size;
+      if (compression_kind_ != NONE) {
+        ss->first_block = num_compressed_blocks;
+        ss->bfr_offset  = compressed_bfr_size;
 
-          auto num_blocks = std::max<uint32_t>(
-            (stream_size + compression_blocksize_ - 1) / compression_blocksize_, 1);
-          stream_size += num_blocks * 3;
-          num_compressed_blocks += num_blocks;
-          compressed_bfr_size += stream_size;
-        }
-        max_stream_size = std::max(max_stream_size, stream_size);
+        auto num_blocks = std::max<uint32_t>(
+          (stream_size + compression_blocksize_ - 1) / compression_blocksize_, 1);
+        stream_size += num_blocks * 3;
+        num_compressed_blocks += num_blocks;
+        compressed_bfr_size += stream_size;
       }
     }
-
-    if (all_device_write) {
-      return pinned_buffer<uint8_t>{nullptr, cudaFreeHost};
-    } else {
-      return pinned_buffer<uint8_t>{[](size_t size) {
-                                      uint8_t *ptr = nullptr;
-                                      CUDA_TRY(cudaMallocHost(&ptr, size));
-                                      return ptr;
-                                    }(max_stream_size),
-                                    cudaFreeHost};
-    }
-  }();
+  }
 
   // Compress the data streams
   rmm::device_buffer compressed_data(compressed_bfr_size, stream);
@@ -1371,7 +1350,6 @@ void writer::impl::write(table_view const &table)
       write_data_stream(strm_desc,
                         enc_data.streams[strm_desc.column_id][rowgroup_range.first],
                         static_cast<uint8_t *>(compressed_data.data()),
-                        stream_output.get(),
                         &stripe,
                         &streams);
     }
@@ -1397,7 +1375,9 @@ void writer::impl::write(table_view const &table)
       buffer_[1]             = static_cast<uint8_t>(uncomp_sf_len >> 8);
       buffer_[2]             = static_cast<uint8_t>(uncomp_sf_len >> 16);
     }
-    out_sink_->host_write(buffer_.data(), buffer_.size());
+    out_sink_->write(
+      cudf::host_span<char const>(reinterpret_cast<char const *>(buffer_.data()), buffer_.size()),
+      rmm::cuda_stream_default);
   }
 
   if (column_stats.size() != 0) {
@@ -1488,7 +1468,9 @@ void writer::impl::close()
     pbw_.write(md);
     add_uncompressed_block_headers(buffer_);
     ps.metadataLength = buffer_.size();
-    out_sink_->host_write(buffer_.data(), buffer_.size());
+    out_sink_->write(
+      cudf::host_span<char const>(reinterpret_cast<char const *>(buffer_.data()), buffer_.size()),
+      rmm::cuda_stream_default);
   } else {
     ps.metadataLength = 0;
   }
@@ -1504,12 +1486,13 @@ void writer::impl::close()
   ps.magic                = MAGIC;
   const auto ps_length    = static_cast<uint8_t>(pbw_.write(ps));
   buffer_.push_back(ps_length);
-  out_sink_->host_write(buffer_.data(), buffer_.size());
-  out_sink_->flush();
+  out_sink_->write(
+    cudf::host_span<char const>(reinterpret_cast<char const *>(buffer_.data()), buffer_.size()),
+    rmm::cuda_stream_default);
 }
 
 // Forward to implementation
-writer::writer(std::unique_ptr<data_sink> sink,
+writer::writer(data_destination *sink,
                orc_writer_options const &options,
                SingleWriteMode mode,
                rmm::cuda_stream_view stream,
@@ -1519,7 +1502,7 @@ writer::writer(std::unique_ptr<data_sink> sink,
 }
 
 // Forward to implementation
-writer::writer(std::unique_ptr<data_sink> sink,
+writer::writer(data_destination *sink,
                chunked_orc_writer_options const &options,
                SingleWriteMode mode,
                rmm::cuda_stream_view stream,

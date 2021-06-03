@@ -16,16 +16,17 @@
 
 #pragma once
 
+#include <cudf/io/data_destination.hpp>
 #include <cudf/io/detail/utils.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <memory>
 #include <string>
 #include <vector>
-
-#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
@@ -108,7 +109,7 @@ class writer {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
+  explicit writer(data_destination* sink,
                   orc_writer_options const& options,
                   SingleWriteMode mode,
                   rmm::cuda_stream_view stream,
@@ -123,7 +124,7 @@ class writer {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
+  explicit writer(data_destination* sink,
                   chunked_orc_writer_options const& options,
                   SingleWriteMode mode,
                   rmm::cuda_stream_view stream,

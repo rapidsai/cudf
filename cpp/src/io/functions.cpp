@@ -152,7 +152,6 @@ std::unique_ptr<writer> make_writer(sink_info const& sink, Ts&&... args)
   CUDF_FAIL("Unsupported sink type");
 }
 
-template <typename writer, typename... Ts>
 std::unique_ptr<data_destination> make_destination(sink_info const& sink)
 {
   if (sink.type == io_type::FILEPATH) { return cudf::io::create_file_destination(sink.filepath); }
@@ -161,8 +160,7 @@ std::unique_ptr<data_destination> make_destination(sink_info const& sink)
   }
   if (sink.type == io_type::VOID) { return cudf::io::create_void_destination(); }
   // if (sink.type == io_type::USER_IMPLEMENTED) {
-  //   return std::make_unique<writer>(cudf::io::create_data_destination(sink.user_sink),
-  //                                   std::forward<Ts>(args)...);
+  //   return cudf::io::create_data_destination(sink.user_sink);
   // }
   CUDF_FAIL("Unsupported sink type");
 }
@@ -203,9 +201,12 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
 {
   using namespace cudf::io::detail;
 
-  auto destination = make_destination<csv::writer>(options.get_sink());
-  auto writer =
-    std::make_unique<csv::writer>(destination.get(), options, rmm::cuda_stream_default, mr);
+  auto destination = make_destination(options.get_sink());
+  auto writer      = std::make_unique<csv::writer>(  //
+    destination.get(),
+    options,
+    rmm::cuda_stream_default,
+    mr);
 
   writer->write(options.get_table(), options.get_metadata());
 }
@@ -328,8 +329,13 @@ void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resourc
   CUDF_FUNC_RANGE();
 
   namespace io_detail = cudf::io::detail;
-  auto writer         = make_writer<detail_orc::writer>(
-    options.get_sink(), options, io_detail::SingleWriteMode::YES, rmm::cuda_stream_default, mr);
+  auto destination    = make_destination(options.get_sink());
+  auto writer         = std::make_unique<detail_orc::writer>(  //
+    destination.get(),
+    options,
+    io_detail::SingleWriteMode::YES,
+    rmm::cuda_stream_default,
+    mr);
 
   writer->write(options.get_table());
 }
@@ -341,8 +347,13 @@ orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& op,
                                        rmm::mr::device_memory_resource* mr)
 {
   namespace io_detail = cudf::io::detail;
-  writer              = make_writer<detail_orc::writer>(
-    op.get_sink(), op, io_detail::SingleWriteMode::NO, rmm::cuda_stream_default, mr);
+  destination         = make_destination(op.get_sink());
+  writer              = std::make_unique<detail_orc::writer>(  //
+    destination.get(),
+    op,
+    io_detail::SingleWriteMode::NO,
+    rmm::cuda_stream_default,
+    mr);
 }
 
 /**

@@ -31,6 +31,7 @@ class data_destination {
   virtual ~data_destination(){};
   virtual void write(cudf::host_span<char const> data, rmm::cuda_stream_view stream)   = 0;
   virtual void write(cudf::device_span<char const> data, rmm::cuda_stream_view stream) = 0;
+  virtual size_t bytes_written() const                                                 = 0;
 };
 
 }  // namespace io

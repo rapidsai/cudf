@@ -148,7 +148,7 @@ class writer::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::unique_ptr<data_sink> sink,
+  explicit impl(data_destination* sink,
                 orc_writer_options const& options,
                 SingleWriteMode mode,
                 rmm::cuda_stream_view stream,
@@ -163,7 +163,7 @@ class writer::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::unique_ptr<data_sink> sink,
+  explicit impl(data_destination* sink,
                 chunked_orc_writer_options const& options,
                 SingleWriteMode mode,
                 rmm::cuda_stream_view stream,
@@ -337,14 +337,12 @@ class writer::impl {
    * @param[in] strm_desc Stream's descriptor
    * @param[in] enc_stream Chunk's streams
    * @param[in] compressed_data Compressed stream data
-   * @param[in,out] stream_out Temporary host output buffer
    * @param[in,out] stripe Stream's parent stripe
    * @param[in,out] streams List of all streams
    */
   void write_data_stream(gpu::StripeStream const& strm_desc,
                          gpu::encoder_chunk_streams const& enc_stream,
                          uint8_t const* compressed_data,
-                         uint8_t* stream_out,
                          StripeInformation* stripe,
                          orc_streams* streams);
 
@@ -409,7 +407,7 @@ class writer::impl {
   bool closed = false;
 
   std::vector<uint8_t> buffer_;
-  std::unique_ptr<data_sink> out_sink_;
+  data_destination* out_sink_;
 };
 
 }  // namespace orc

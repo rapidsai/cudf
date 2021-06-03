@@ -23,6 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda_runtime.h>
+
 #include <fstream>
 #include <memory>
 
@@ -63,6 +64,8 @@ class file_destination : public data_destination {
 
     write(cudf::host_span<char>(_host_buffer.data(), data.size()), stream);
   };
+
+  size_t bytes_written() const override { return _bytes_written; }
 
  private:
   std::ofstream _output_stream;

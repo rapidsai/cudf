@@ -26,8 +26,19 @@ namespace io {
 
 class void_destination : public data_destination {
  public:
-  void write(cudf::host_span<char const> data, rmm::cuda_stream_view stream){};
-  void write(cudf::device_span<char const> data, rmm::cuda_stream_view stream){};
+  void write(cudf::host_span<char const> data, rmm::cuda_stream_view stream)
+  {
+    _bytes_written += data.size();
+  };
+  void write(cudf::device_span<char const> data, rmm::cuda_stream_view stream)
+  {
+    _bytes_written += data.size();
+  };
+
+  size_t bytes_written() const override { return _bytes_written; }
+
+ private:
+  size_t _bytes_written = 0;
 };
 
 std::unique_ptr<data_destination> create_void_destination()

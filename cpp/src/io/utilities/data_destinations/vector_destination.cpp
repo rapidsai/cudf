@@ -15,9 +15,12 @@
  */
 
 #include <cudf/io/data_destination.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <cuda_runtime_api.h>
 
 #include <memory>
 
@@ -35,17 +38,21 @@ class vector_destination : public data_destination {
 
   void write(cudf::device_span<char const> data, rmm::cuda_stream_view stream)
   {
-    _buffer->resize(_buffer->size() + data.size());
+    if (_host_buffer.size() < data.size()) { _host_buffer.resize(data.size()); }
 
-    RMM_CUDA_TRY(cudaMemcpyAsync(reinterpret_cast<void*>(_buffer->data()),  //
-                                 data.data(),
-                                 data.size(),
-                                 cudaMemcpyDeviceToHost,
-                                 stream.value()));
+    CUDA_TRY(cudaMemcpyAsync(
+      _host_buffer.data(), data.data(), data.size(), cudaMemcpyDeviceToHost, stream.value()));
+
+    stream.synchronize();  // why even use cudaMemcpyAsync instead of cudaMemcpy?
+
+    write(cudf::host_span<char>(_host_buffer.data(), data.size()), stream);
   };
+
+  size_t bytes_written() const override { return _buffer->size(); }
 
  private:
   std::vector<char>* _buffer;
+  thrust::host_vector<char> _host_buffer;
 };
 
 std::unique_ptr<data_destination> create_vector_destination(std::vector<char>* buffer)

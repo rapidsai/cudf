@@ -754,6 +754,7 @@ class orc_chunked_writer {
 
   // Unique pointer to impl writer class
   std::unique_ptr<cudf::io::detail::orc::writer> writer;
+  std::unique_ptr<cudf::io::data_destination> destination;
 };
 
 /** @} */  // end of group
