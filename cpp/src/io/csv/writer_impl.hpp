@@ -54,7 +54,7 @@ class writer::impl {
    * @param options Settings for controlling behavior
    * @param mr Device memory resource to use for device memory allocation
    */
-  impl(std::unique_ptr<data_destination> sink,
+  impl(data_destination* sink,
        csv_writer_options const& options,
        rmm::mr::device_memory_resource* mr);
 
@@ -93,7 +93,7 @@ class writer::impl {
                      rmm::cuda_stream_view stream   = rmm::cuda_stream_default);
 
  private:
-  std::unique_ptr<data_destination> out_sink_;
+  data_destination* out_sink_;
   rmm::mr::device_memory_resource* mr_ = nullptr;
   csv_writer_options const options_;
 };

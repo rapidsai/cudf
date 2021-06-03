@@ -259,7 +259,7 @@ struct column_to_strings_fn {
 }  // unnamed namespace
 
 // Forward to implementation
-writer::writer(std::unique_ptr<data_destination> sink,
+writer::writer(data_destination* sink,
                csv_writer_options const& options,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
@@ -270,7 +270,7 @@ writer::writer(std::unique_ptr<data_destination> sink,
 // Destructor within this translation unit
 writer::~writer() = default;
 
-writer::impl::impl(std::unique_ptr<data_destination> sink,
+writer::impl::impl(data_destination* sink,
                    csv_writer_options const& options,
                    rmm::mr::device_memory_resource* mr)
   : out_sink_(std::move(sink)), mr_(mr), options_(options)
