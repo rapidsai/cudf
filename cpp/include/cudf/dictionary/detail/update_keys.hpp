@@ -18,6 +18,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -78,7 +79,7 @@ std::unique_ptr<column> set_keys(
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::vector<std::unique_ptr<column>> match_dictionaries(
-  std::vector<dictionary_column_view> input,
+  cudf::host_span<dictionary_column_view const> input,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -147,10 +148,10 @@ std::unique_ptr<column> set_keys(
  *
  * @param input Dictionary columns to match keys.
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New dictionary column.
+ * @return New dictionary columns.
  */
 std::vector<std::unique_ptr<column>> match_dictionaries(
-  std::vector<dictionary_column_view> input,
+  cudf::host_span<dictionary_column_view const> input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
