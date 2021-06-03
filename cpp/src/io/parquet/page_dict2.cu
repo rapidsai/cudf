@@ -104,6 +104,7 @@ __global__ void __launch_bounds__(block_size, 1)
     block_x * 5000;  // This is fragment size. all chunks are multiple of these many rows. TODO:
                      // make it rely on fragment size as a variable or use a better logic that does
                      // not rely on the chunk being a multiple of 5000. Preferably latter
+  size_type end_row = min(start_row + 5000, num_rows);
 
   __shared__ EncColumnChunk s_chunk;
   // TODO: reduce this ptr proliferation by only keeping a ptr to the chunk
@@ -133,25 +134,23 @@ __global__ void __launch_bounds__(block_size, 1)
 
   if (t == 0) {
     // Find the bounds of values in leaf column to be inserted into the map for current chunk
-    size_type end_value_idx = min(start_row + 5000, num_rows);
-
-    auto col                     = *(s_col.parent_column);
-    auto current_start_value_idx = start_row;
+    auto col             = *(s_col.parent_column);
+    auto start_value_idx = start_row;
+    auto end_value_idx   = end_row;
     while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
       if (col.type().id() == type_id::STRUCT) {
-        current_start_value_idx += col.offset();
+        start_value_idx += col.offset();
         end_value_idx += col.offset();
         col = col.child(0);
       } else {
         auto offset_col = col.child(lists_column_view::offsets_column_index);
-        current_start_value_idx =
-          offset_col.element<size_type>(current_start_value_idx + col.offset());
-        end_value_idx = offset_col.element<size_type>(end_value_idx + col.offset());
-        col           = col.child(lists_column_view::child_column_index);
+        start_value_idx = offset_col.element<size_type>(start_value_idx + col.offset());
+        end_value_idx   = offset_col.element<size_type>(end_value_idx + col.offset());
+        col             = col.child(lists_column_view::child_column_index);
       }
     }
-    s_start_value_idx = current_start_value_idx;
-    s_num_values      = end_value_idx - current_start_value_idx;
+    s_start_value_idx = start_value_idx;
+    s_num_values      = end_value_idx - start_value_idx;
   }
   __syncthreads();
 
@@ -207,7 +206,8 @@ __global__ void __launch_bounds__(block_size, 1)
     }
 
     // TODO: Explore using ballot and popc for this reduction as the value to reduce is 1 or 0
-    auto num_unique     = block_reduce(reduce_storage).Sum(is_unique);
+    auto num_unique = block_reduce(reduce_storage).Sum(is_unique);
+    __syncthreads();
     auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
     if (t == 0) {
       atomicAdd(s_chunk_dict_entries_ptr, num_unique);
@@ -251,6 +251,7 @@ __global__ void __launch_bounds__(block_size, 1)
     }
   }
   __syncthreads();
+  // TODO: explore if we can reuse chunk.num_dict_entries
   if (t == 0) { chunk.dict_data_size = counter; }
 }
 
@@ -262,11 +263,13 @@ __global__ void __launch_bounds__(block_size, 1)
   auto block_x = blockIdx.x;
   auto t       = threadIdx.x;
 
-  auto start_row = block_x * 5000;
+  size_type start_row = block_x * 5000;
+  size_type end_row   = min(start_row + 5000, num_rows);
 
   __shared__ EncColumnChunk s_chunk;
   __shared__ parquet_column_device_view s_col;
   __shared__ size_type s_start_value_idx;
+  __shared__ size_type s_ck_start_val_idx;
   __shared__ size_type s_num_values;
 
   if (t == 0) {
@@ -284,25 +287,28 @@ __global__ void __launch_bounds__(block_size, 1)
     s_col   = *(s_chunk.col_desc);
 
     // Find the bounds of values in leaf column to be inserted into the map for current chunk
-    size_type end_value_idx = min(start_row + 5000, num_rows);
 
-    auto col                     = *(s_col.parent_column);
-    auto current_start_value_idx = start_row;
+    auto col                 = *(s_col.parent_column);
+    auto start_value_idx     = start_row;
+    auto end_value_idx       = end_row;
+    auto chunk_start_val_idx = s_chunk.start_row;
     while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
       if (col.type().id() == type_id::STRUCT) {
-        current_start_value_idx += col.offset();
+        start_value_idx += col.offset();
+        chunk_start_val_idx += col.offset();
         end_value_idx += col.offset();
         col = col.child(0);
       } else {
-        auto offset_col = col.child(lists_column_view::offsets_column_index);
-        current_start_value_idx =
-          offset_col.element<size_type>(current_start_value_idx + col.offset());
-        end_value_idx = offset_col.element<size_type>(end_value_idx + col.offset());
-        col           = col.child(lists_column_view::child_column_index);
+        auto offset_col     = col.child(lists_column_view::offsets_column_index);
+        start_value_idx     = offset_col.element<size_type>(start_value_idx + col.offset());
+        chunk_start_val_idx = offset_col.element<size_type>(chunk_start_val_idx + col.offset());
+        end_value_idx       = offset_col.element<size_type>(end_value_idx + col.offset());
+        col                 = col.child(lists_column_view::child_column_index);
       }
     }
-    s_start_value_idx = current_start_value_idx;
-    s_num_values      = end_value_idx - current_start_value_idx;
+    s_start_value_idx  = start_value_idx;
+    s_ck_start_val_idx = chunk_start_val_idx;
+    s_num_values       = end_value_idx - start_value_idx;
   }
   __syncthreads();
 
@@ -321,10 +327,12 @@ __global__ void __launch_bounds__(block_size, 1)
 
       if (is_valid) {
         auto found_slot = type_dispatcher(data_col.type(), map_find_fn{map}, data_col, val_idx);
+        cudf_assert(found_slot != map.end() &&
+                    "Unable to find value in map in dictionary index construction");
         if (found_slot != map.end()) {
-          // No need for atomic as this is not going to be modified
+          // No need for atomic as this is not going to be modified by any other thread
           auto *val_ptr = reinterpret_cast<map_type::mapped_type *>(&found_slot->second);
-          s_chunk.dict_index[i + t] = *val_ptr;
+          s_chunk.dict_index[val_idx - s_ck_start_val_idx] = *val_ptr;
         }
       }
     }
