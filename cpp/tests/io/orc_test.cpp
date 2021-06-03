@@ -216,7 +216,6 @@ struct SkipRowTest {
 
 }  // namespace
 
-/*
 TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn)
 {
   auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
@@ -676,6 +675,7 @@ TEST_F(OrcChunkedWriterTest, SingleTable)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *table1);
 }
 
+/*
 TEST_F(OrcChunkedWriterTest, SimpleTable)
 {
   srand(31337);
@@ -775,6 +775,7 @@ TEST_F(OrcChunkedWriterTest, Strings)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
+*/
 
 TEST_F(OrcChunkedWriterTest, MismatchedTypes)
 {
@@ -817,8 +818,7 @@ TEST_F(OrcChunkedWriterTest, MismatchedStructure)
   writer.write(*table1);
   EXPECT_THROW(writer.write(*table2), cudf::logic_error);
 }
-*/
-/*
+
 TEST_F(OrcChunkedWriterTest, ReadStripes)
 {
   srand(31337);
@@ -836,10 +836,29 @@ TEST_F(OrcChunkedWriterTest, ReadStripes)
     cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).stripes({{1, 0, 1}});
   auto result = cudf_io::read_orc(read_opts);
 
+  printf("\nColumn 0\n\n");
+  cudf::test::print(result.tbl->get_column(0).view(), std::cout, ",\t");
+  cudf::test::print(full_table->get_column(0).view(), std::cout, ",\t");
+
+  printf("\nColumn 1\n\n");
+  cudf::test::print(result.tbl->get_column(1).view(), std::cout, ",\t");
+  cudf::test::print(full_table->get_column(1).view(), std::cout, ",\t");
+
+  printf("\nColumn 2\n\n");
+  cudf::test::print(result.tbl->get_column(2).view(), std::cout, ",\t");
+  cudf::test::print(full_table->get_column(2).view(), std::cout, ",\t");
+
+  printf("\nColumn 3\n\n");
+  cudf::test::print(result.tbl->get_column(3).view(), std::cout, ",\t");
+  cudf::test::print(full_table->get_column(3).view(), std::cout, ",\t");
+
+  printf("\nColumn 4\n\n");
+  cudf::test::print(result.tbl->get_column(4).view(), std::cout, ",\t");
+  cudf::test::print(full_table->get_column(4).view(), std::cout, ",\t");
+
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
-*/
-/*
+
 TEST_F(OrcChunkedWriterTest, ReadStripesError)
 {
   srand(31337);
@@ -857,6 +876,7 @@ TEST_F(OrcChunkedWriterTest, ReadStripesError)
   EXPECT_THROW(cudf_io::read_orc(read_opts), cudf::logic_error);
 }
 
+/*
 TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize)
 {
   // write out two 31 row tables and make sure they get
@@ -950,6 +970,7 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize2)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
+*/
 
 TEST_F(OrcReaderTest, CombinedSkipRowTest)
 {
@@ -1098,7 +1119,7 @@ TEST_F(OrcReaderTest, SingleInputs)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *table1);
 }
-*/
+
 TEST_F(OrcReaderTest, MultipleInputs)
 {
   srand(31537);
@@ -1123,6 +1144,7 @@ TEST_F(OrcReaderTest, MultipleInputs)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
+
 /*
 struct OrcWriterTestDecimal : public OrcWriterTest,
                               public ::testing::WithParamInterface<std::tuple<int, int>> {
@@ -1198,5 +1220,4 @@ TEST_F(OrcWriterTest, Decimal32)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col64, result.tbl->view().column(0));
 }
 */
-
 CUDF_TEST_PROGRAM_MAIN()

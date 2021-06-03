@@ -19,8 +19,8 @@
  * @brief cuDF-IO ORC reader class implementation
  */
 
-#include "reader_impl.hpp"
 #include "io/orc/orc_gpu.h"
+#include "reader_impl.hpp"
 #include "timezone.cuh"
 
 #include <io/comp/gpuinflate.h>
@@ -145,8 +145,7 @@ struct orc_stream_info {
 /**
  * @brief Function that populates column descriptors stream/chunk
  */
-size_t gather_stream_info(const size_t stripe_chunk_index,
-                          const size_t stripe_index,
+size_t gather_stream_info(const size_t stripe_index,
                           const orc::StripeInformation *stripeinfo,
                           const orc::StripeFooter *stripefooter,
                           const std::vector<int> &orc2gdf,
@@ -180,7 +179,7 @@ size_t gather_stream_info(const size_t stripe_chunk_index,
             auto child_idx = (idx < orc2gdf.size()) ? orc2gdf[idx] : -1;
             if (child_idx >= 0) {
               col                             = child_idx;
-              auto &chunk                     = chunks[stripe_chunk_index * num_columns + col];
+              auto &chunk                     = chunks[stripe_index * num_columns + col];
               chunk.strm_id[gpu::CI_PRESENT]  = stream_info.size();
               chunk.strm_len[gpu::CI_PRESENT] = stream.length;
             }
@@ -191,7 +190,7 @@ size_t gather_stream_info(const size_t stripe_chunk_index,
     if (col != -1) {
       if (src_offset >= stripeinfo->indexLength || use_index) {
         // NOTE: skip_count field is temporarily used to track index ordering
-        auto &chunk = chunks[stripe_chunk_index * num_columns + col];
+        auto &chunk = chunks[stripe_index * num_columns + col];
         const auto idx =
           get_index_type_and_pos(stream.kind, chunk.skip_count, col == orc2gdf[column_id]);
         if (idx.first < gpu::CI_NUM_STREAMS) {
@@ -228,7 +227,6 @@ class aggregate_orc_metadata {
 
  public:
   mutable std::vector<cudf::io::orc::metadata> per_file_metadata;
-  mutable std::vector<cudf::io::orc::metadata::stripe_source_mapping> stripe_source_mappings;
   size_type const num_rows;
   size_type const num_columns;
   size_type const num_stripes;
@@ -309,9 +307,9 @@ class aggregate_orc_metadata {
 
   auto get_col_type(int col_idx) const { return per_file_metadata[0].ff.types[col_idx]; }
 
-  auto get_num_rows() const { return num_rows; }
+  size_type get_num_rows() const { return num_rows; }
 
-  auto get_num_cols() const { return num_columns; }
+  size_type get_num_cols() const { return per_file_metadata[0].get_num_columns(); }
 
   auto get_num_stripes() const { return num_stripes; }
 
@@ -320,16 +318,6 @@ class aggregate_orc_metadata {
   auto get_types() const { return per_file_metadata[0].ff.types; }
 
   int get_row_index_stride() const { return per_file_metadata[0].ff.rowIndexStride; }
-
-  auto get_post_script_for_metadata(int metadata_idx) const
-  {
-    return per_file_metadata[metadata_idx].ps;
-  }
-
-  auto get_file_footer_for_metadata(int metadata_idx) const
-  {
-    return per_file_metadata[metadata_idx].ff;
-  }
 
   auto get_column_name(const int source_idx, const int column_idx) const
   {
@@ -408,12 +396,15 @@ class aggregate_orc_metadata {
       for (auto &mapping : selected_stripes_mapping) {
         // Resize to all stripe_info for the source level
 
-        // Get the number of unique stripes since the same stripes could be specified more than once by the user
-        size_t uniqueCount = std::unique(mapping.stripe_idx_in_source.begin(), mapping.stripe_idx_in_source.end()) - mapping.stripe_idx_in_source.begin();
-        per_file_metadata[mapping.source_idx].stripefooters.resize(uniqueCount);
+        // Get the number of unique stripes since the same stripes could be specified more than once
+        // by the user
+        // size_t uniqueCount = std::unique(mapping.stripe_idx_in_source.begin(),
+        // mapping.stripe_idx_in_source.end()) - mapping.stripe_idx_in_source.begin();
+        per_file_metadata[mapping.source_idx].stripefooters.resize(
+          mapping.stripe_idx_in_source.size());
 
-        for (size_t i = 0; i < uniqueCount; i++) {
-          int stripe_idx            = mapping.stripe_idx_in_source[i];
+        for (size_t i = 0; i < mapping.stripe_idx_in_source.size(); i++) {
+          // int stripe_idx            = mapping.stripe_idx_in_source[i];
           const auto stripe         = mapping.stripe_info[i].first;
           const auto sf_comp_offset = stripe->offset + stripe->indexLength + stripe->dataLength;
           const auto sf_comp_length = stripe->footerLength;
@@ -426,9 +417,8 @@ class aggregate_orc_metadata {
           auto sf_data     = per_file_metadata[mapping.source_idx].decompressor->Decompress(
             buffer->data(), sf_comp_length, &sf_length);
           ProtobufReader(sf_data, sf_length)
-            .read(per_file_metadata[mapping.source_idx].stripefooters[stripe_idx]);
-          mapping.stripe_info[i].second =
-            &per_file_metadata[mapping.source_idx].stripefooters[stripe_idx];
+            .read(per_file_metadata[mapping.source_idx].stripefooters[i]);
+          mapping.stripe_info[i].second = &per_file_metadata[mapping.source_idx].stripefooters[i];
         }
       }
     }
@@ -641,22 +631,11 @@ void reader::impl::decode_stream_data(hostdevice_vector<gpu::ColumnDesc> &chunks
                            stream);
   chunks.device_to_host(stream, true);
 
-  printf("Running here\n");
-  int total_null_count = 0;
   for (size_t i = 0; i < num_stripes; ++i) {
-    int stripe_null_count = 0;
     for (size_t j = 0; j < num_columns; ++j) {
-      printf("chunk null count: %d\n", chunks[i * num_columns + j].null_count);
-      if (chunks[i * num_columns + j].null_count > 0) {
-        stripe_null_count += chunks[i * num_columns + j].null_count;
-        auto cnt = chunks[i * num_columns + j].null_count;
-        printf("Stripe Null Count: %d - Increased by: %d for stripe index: %lu, and column index: %lu\n", stripe_null_count, cnt, i, j);
-      }
       out_buffers[j].null_count() += chunks[i * num_columns + j].null_count;
     }
-    total_null_count += stripe_null_count;
   }
-  printf("Total Null Count: %d\n", total_null_count);
 }
 
 reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
@@ -728,7 +707,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                    std::back_inserter(out_columns),
                    [](auto const &dtype) { return make_empty_column(dtype); });
   } else {
-
     // Get the total number of stripes across all input files.
     size_t total_num_stripes = 0;
     for (const auto &stripe_source_mapping : selected_stripes) {
@@ -756,22 +734,23 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // Tracker for eventually deallocating compressed and uncompressed data
     std::vector<rmm::device_buffer> stripe_data;
 
-    size_t stripe_start_row = 0;
-    size_t num_dict_entries = 0;
-    size_t num_rowgroups    = 0;
+    size_t stripe_start_row   = 0;
+    size_t num_dict_entries   = 0;
+    size_t num_rowgroups      = 0;
     size_t stripe_chunk_index = 0;
 
     for (auto &stripe_source_mapping : selected_stripes) {
       // Iterate through the source files selected stripes
-      for (size_t stripe_pos_index = 0; stripe_pos_index < stripe_source_mapping.stripe_idx_in_source.size(); stripe_pos_index++) {
-        int stripe_idx           = stripe_source_mapping.stripe_idx_in_source[stripe_pos_index];
+      for (size_t stripe_pos_index = 0;
+           stripe_pos_index < stripe_source_mapping.stripe_idx_in_source.size();
+           stripe_pos_index++) {
         auto &stripe_pair        = stripe_source_mapping.stripe_info[stripe_pos_index];
         const auto stripe_info   = stripe_pair.first;
         const auto stripe_footer = stripe_pair.second;
 
-        auto stream_count          = stream_info.size();
+        auto stream_count = stream_info.size();
+        // const auto total_data_size = gather_stream_info(stripe_pos_index,
         const auto total_data_size = gather_stream_info(stripe_chunk_index,
-                                                        stripe_idx,
                                                         stripe_info,
                                                         stripe_footer,
                                                         orc_col_map,
@@ -818,7 +797,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
         // Update chunks to reference streams pointers
         for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
-          auto &chunk         = chunks[stripe_pos_index * num_columns + col_idx];
+          auto &chunk         = chunks[stripe_chunk_index * num_columns + col_idx];
           chunk.start_row     = stripe_start_row;
           chunk.num_rows      = stripe_info->numberOfRows;
           chunk.encoding_kind = stripe_footer->columns[_selected_columns[col_idx]].kind;
@@ -830,38 +809,39 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                   .scale.value_or(0);
           chunk.rowgroup_id = num_rowgroups;
           chunk.dtype_len   = (column_types[col_idx].id() == type_id::STRING)
-                                ? sizeof(std::pair<const char *, size_t>)
-                                : cudf::size_of(column_types[col_idx]);
+                              ? sizeof(std::pair<const char *, size_t>)
+                              : cudf::size_of(column_types[col_idx]);
           if (chunk.type_kind == orc::TIMESTAMP) {
             chunk.ts_clock_rate = to_clockrate(_timestamp_type.id());
           }
-          stripe_start_row += stripe_info->numberOfRows;
-          if (use_index) {
-            num_rowgroups += (stripe_info->numberOfRows + _metadata->get_row_index_stride() - 1) /
-                             _metadata->get_row_index_stride();
+          for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
+            chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
           }
         }
 
+        stripe_start_row += stripe_info->numberOfRows;
+        if (use_index) {
+          num_rowgroups += (stripe_info->numberOfRows + _metadata->get_row_index_stride() - 1) /
+                           _metadata->get_row_index_stride();
+        }
         stripe_chunk_index++;
       }
     }
 
     // Process dataset chunk pages into output columns
     if (stripe_data.size() != 0) {
-
       // Setup row group descriptors if using indexes
       rmm::device_uvector<gpu::RowGroup> row_groups(num_rowgroups * num_columns, stream);
       if (_metadata->per_file_metadata[0].ps.compression != orc::NONE) {
         auto decomp_data =
           decompress_stripe_data(chunks,
-                                  stripe_data,
-                                  _metadata->per_file_metadata[0].decompressor.get(),
-                                  stream_info,
-                                  total_num_stripes,
-                                  row_groups,
-                                  _metadata->get_row_index_stride(),
-                                  stream);
-        // XXX: Could clearing this be causing issues since I'm looping over files now?
+                                 stripe_data,
+                                 _metadata->per_file_metadata[0].decompressor.get(),
+                                 stream_info,
+                                 total_num_stripes,
+                                 row_groups,
+                                 _metadata->get_row_index_stride(),
+                                 stream);
         stripe_data.clear();
         stripe_data.push_back(std::move(decomp_data));
       } else {
@@ -879,11 +859,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       }
 
       // Setup table for converting timestamp columns from local to UTC time
-      auto const tz_table =
-        _has_timestamp_column
-          ? build_timezone_transition_table(
-              selected_stripes[0].stripe_info[0].second->writerTimezone, stream)
-          : timezone_table{};
+      auto const tz_table = _has_timestamp_column
+                              ? build_timezone_transition_table(
+                                  selected_stripes[0].stripe_info[0].second->writerTimezone, stream)
+                              : timezone_table{};
 
       std::vector<column_buffer> out_buffers;
       for (size_t i = 0; i < column_types.size(); ++i) {
@@ -898,14 +877,14 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       }
 
       decode_stream_data(chunks,
-                          num_dict_entries,
-                          skip_rows,
-                          num_rows,
-                          tz_table.view(),
-                          row_groups,
-                          _metadata->get_row_index_stride(),
-                          out_buffers,
-                          stream);
+                         num_dict_entries,
+                         skip_rows,
+                         num_rows,
+                         tz_table.view(),
+                         row_groups,
+                         _metadata->get_row_index_stride(),
+                         out_buffers,
+                         stream);
 
       for (size_t i = 0; i < column_types.size(); ++i) {
         out_columns.emplace_back(make_column(out_buffers[i], nullptr, stream, _mr));
