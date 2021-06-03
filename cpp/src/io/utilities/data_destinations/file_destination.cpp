@@ -31,9 +31,10 @@ namespace io {
 class file_destination_writer : public data_destination_writer {
  public:
   file_destination_writer(std::string filepath, rmm::cuda_stream_view stream)
-    : _cufile_out(detail::make_cufile_output(filepath)), _stream(stream)
-  // _host_buffer(nullptr),
-  // _host_buffer_size(0)
+    : _cufile_out(detail::make_cufile_output(filepath)),
+      _stream(stream),
+      _host_buffer(nullptr),
+      _host_buffer_size(0)
   {
     _output_stream.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
     CUDF_EXPECTS(_output_stream.is_open(), "Cannot open output file");
@@ -42,9 +43,7 @@ class file_destination_writer : public data_destination_writer {
   ~file_destination_writer()
   {
     _output_stream.flush();
-    // if (_host_buffer != nullptr) {
-    //   cudaFreeHost(_host_buffer);
-    // }
+    if (_host_buffer != nullptr) { cudaFreeHost(_host_buffer); }
   }
 
   void write(cudf::host_span<char const> data)
@@ -62,46 +61,38 @@ class file_destination_writer : public data_destination_writer {
       return;
     }
 
-    // grow_host_buffer(data.size());
+    grow_host_buffer(data.size());
 
-    char* host_data = nullptr;
+    CUDA_TRY(cudaMemcpyAsync(
+      _host_buffer, data.data(), data.size(), cudaMemcpyDeviceToHost, _stream.value()));
 
-    // CUDA_TRY(cudaMemcpyAsync(
-    //   _host_buffer, data.data(), data.size(), cudaMemcpyDeviceToHost, _stream.value()));
+    _stream.synchronize();
 
-    CUDA_TRY(cudaMallocHost(&host_data, data.size()));
-
-    CUDA_TRY(cudaMemcpy(host_data, data.data(), data.size(), cudaMemcpyDefault));
-
-    // _stream.synchronize();
-
-    write(cudf::host_span<char>(host_data, data.size()));
-
-    cudaFreeHost(host_data);
+    write(cudf::host_span<char>(_host_buffer, data.size()));
   };
 
  private:
-  // void grow_host_buffer(size_type size)
-  // {
-  //   if (_host_buffer_size >= size) {
-  //     return;  //
-  //   }
+  void grow_host_buffer(size_type size)
+  {
+    if (_host_buffer_size >= size) {
+      return;  //
+    }
 
-  //   if (_host_buffer != nullptr) {
-  //     cudaFreeHost(_host_buffer);  //
-  //   }
+    if (_host_buffer != nullptr) {
+      cudaFreeHost(_host_buffer);  //
+    }
 
-  //   // optionally replace cudaMallocHost to specify flags with cudaHostAlloc
-  //   cudaMallocHost(&_host_buffer, size);
-  //   _host_buffer_size = size;
-  // }
+    // optionally replace cudaMallocHost to specify flags with cudaHostAlloc
+    cudaMallocHost(&_host_buffer, size);
+    _host_buffer_size = size;
+  }
 
   std::ofstream _output_stream;
   size_t _bytes_written = 0;
   std::unique_ptr<detail::cufile_output_impl> _cufile_out;
   rmm::cuda_stream_view _stream;
-  // char* _host_buffer;
-  // size_type _host_buffer_size;
+  char* _host_buffer;
+  size_type _host_buffer_size;
 };
 
 class file_destination : public data_destination {
