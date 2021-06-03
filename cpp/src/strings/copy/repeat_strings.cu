@@ -38,7 +38,7 @@ string_scalar repeat_strings(string_scalar const& input,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
-  if (!input.is_valid()) { return string_scalar("", false, stream, mr); }
+  if (!input.is_valid(stream)) { return string_scalar("", false, stream, mr); }
   if (input.size() == 0 || repeat_times <= 0) { return string_scalar("", true, stream, mr); }
   if (repeat_times == 1) { return string_scalar(input, stream, mr); }
 
