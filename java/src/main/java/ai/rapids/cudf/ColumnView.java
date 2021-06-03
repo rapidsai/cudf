@@ -2741,7 +2741,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Get a single item from the column at the specified index as a Scalar.
    *
-   * Be careful. This is expensive and my involve running a kernel to copy the data out.
+   * Be careful. This is expensive and may involve running a kernel to copy the data out.
    *
    * @param index the index to look at
    * @return the value at that index as a scalar.
