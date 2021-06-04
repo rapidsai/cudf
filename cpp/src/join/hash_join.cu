@@ -369,6 +369,9 @@ std::size_t hash_join::hash_join_impl::left_join_size(cudf::table_view const &pr
                                                       rmm::cuda_stream_view stream) const
 {
   CUDF_FUNC_RANGE();
+
+  // Trivial left join case - exit early
+  if (!_hash_table) { return probe.num_rows(); }
   CUDF_EXPECTS(_hash_table, "Hash table of hash join is null.");
 
   auto build_table = cudf::table_device_view::create(_build, stream);
@@ -383,6 +386,9 @@ std::size_t hash_join::hash_join_impl::full_join_size(cudf::table_view const &pr
                                                       rmm::cuda_stream_view stream) const
 {
   CUDF_FUNC_RANGE();
+
+  // Trivial left join case - exit early
+  if (!_hash_table) { return probe.num_rows(); }
   CUDF_EXPECTS(_hash_table, "Hash table of hash join is null.");
 
   auto build_table = cudf::table_device_view::create(_build, stream);
