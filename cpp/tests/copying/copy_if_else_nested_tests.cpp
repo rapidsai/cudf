@@ -115,7 +115,7 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ReflectiveStructsWithNulls)
 
   auto selector_column = bools{0, 1}.release();
 
-  auto lhs_child_0 = ints{{100, 101}, iterator_with_null_at(std::vector<size_type>{0})};
+  auto lhs_child_0 = ints{{100, 101}, iterator_with_null_at(std::vector<size_type>{1})};
 
   auto lhs_structs_column = structs{{lhs_child_0}}.release();
 
