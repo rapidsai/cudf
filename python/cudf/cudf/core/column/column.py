@@ -249,40 +249,18 @@ class ColumnBase(Column, Serializable):
         """
         if not isinstance(array, (pa.Array, pa.ChunkedArray)):
             raise TypeError("array should be PyArrow array or chunked array")
-        data = pa.table([array], [None])
-        if isinstance(array.type, pa.DictionaryType):
-            indices_table = pa.table(
-                {
-                    "None": pa.chunked_array(
-                        [chunk.indices for chunk in data["None"].chunks],
-                        type=array.type.index_type,
-                    )
-                }
-            )
-            dictionaries_table = pa.table(
-                {
-                    "None": pa.chunked_array(
-                        [chunk.dictionary for chunk in data["None"].chunks],
-                        type=array.type.value_type,
-                    )
-                }
-            )
 
-            codes = libcudf.interop.from_arrow(
-                indices_table, indices_table.column_names
-            )._data["None"]
-            categories = libcudf.interop.from_arrow(
-                dictionaries_table, dictionaries_table.column_names
-            )._data["None"]
+        if pa.types.is_dictionary(array.type) and array.type.ordered:
+            # libcudf does not store ordering information for ordered
+            # dictionary types. Thus we pass in a "dummy" ordered keys
+            # for libcudf to function. Real keys are stored in CategoricalDtype
+            internal_keys = pa.array(range(0, len(array.dictionary)))
+            internal_array = pa.DictionaryArray.from_arrays(array.indices, internal_keys)
+            data = pa.table([internal_array], [None])
+        else:
+            data = pa.table([array], [None])
 
-            return build_categorical_column(
-                categories=categories,
-                codes=codes,
-                mask=codes.base_mask,
-                size=codes.size,
-                ordered=array.type.ordered,
-            )
-        elif isinstance(array.type, pa.StructType):
+        if isinstance(array.type, pa.StructType):
             return cudf.core.column.StructColumn.from_arrow(array)
         elif isinstance(
             array.type, pd.core.arrays._arrow_utils.ArrowIntervalType
@@ -909,47 +887,48 @@ class ColumnBase(Column, Serializable):
             return self.as_numerical_column(dtype)
 
     def as_categorical_column(self, dtype, **kwargs) -> ColumnBase:
-        if "ordered" in kwargs:
-            ordered = kwargs["ordered"]
-        else:
-            ordered = False
+        pass
+        # if "ordered" in kwargs:
+        #     ordered = kwargs["ordered"]
+        # else:
+        #     ordered = False
 
-        sr = cudf.Series(self)
+        # sr = cudf.Series(self)
 
-        # Re-label self w.r.t. the provided categories
-        if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
-            labels = sr.label_encoding(cats=dtype.categories)
-            if "ordered" in kwargs:
-                warnings.warn(
-                    "Ignoring the `ordered` parameter passed in `**kwargs`, "
-                    "will be using `ordered` parameter of CategoricalDtype"
-                )
+        # # Re-label self w.r.t. the provided categories
+        # if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
+        #     labels = sr.label_encoding(cats=dtype.categories)
+        #     if "ordered" in kwargs:
+        #         warnings.warn(
+        #             "Ignoring the `ordered` parameter passed in `**kwargs`, "
+        #             "will be using `ordered` parameter of CategoricalDtype"
+        #         )
 
-            return build_categorical_column(
-                categories=dtype.categories,
-                codes=labels._column,
-                mask=self.mask,
-                ordered=dtype.ordered,
-            )
+        #     return build_categorical_column(
+        #         categories=dtype.categories,
+        #         codes=labels._column,
+        #         mask=self.mask,
+        #         ordered=dtype.ordered,
+        #     )
 
-        cats = sr.unique().astype(sr.dtype)
-        label_dtype = min_unsigned_type(len(cats))
-        labels = sr.label_encoding(cats=cats, dtype=label_dtype, na_sentinel=1)
+        # cats = sr.unique().astype(sr.dtype)
+        # label_dtype = min_unsigned_type(len(cats))
+        # labels = sr.label_encoding(cats=cats, dtype=label_dtype, na_sentinel=1)
 
-        # columns include null index in factorization; remove:
-        if self.has_nulls:
-            cats = cats._column.dropna(drop_nan=False)
-            min_type = min_unsigned_type(len(cats), 8)
-            labels = labels - 1
-            if np.dtype(min_type).itemsize < labels.dtype.itemsize:
-                labels = labels.astype(min_type)
+        # # columns include null index in factorization; remove:
+        # if self.has_nulls:
+        #     cats = cats._column.dropna(drop_nan=False)
+        #     min_type = min_unsigned_type(len(cats), 8)
+        #     labels = labels - 1
+        #     if np.dtype(min_type).itemsize < labels.dtype.itemsize:
+        #         labels = labels.astype(min_type)
 
-        return build_categorical_column(
-            categories=cats,
-            codes=labels._column,
-            mask=self.mask,
-            ordered=ordered,
-        )
+        # return build_categorical_column(
+        #     categories=cats,
+        #     codes=labels._column,
+        #     mask=self.mask,
+        #     ordered=ordered,
+        # )
 
     def as_numerical_column(
         self, dtype: Dtype
@@ -1414,12 +1393,6 @@ def build_column(
             null_count=null_count,
         )
     if is_categorical_dtype(dtype):
-        if not len(children) == 1:
-            raise ValueError(
-                "Must specify exactly one child column for CategoricalColumn"
-            )
-        if not isinstance(children[0], ColumnBase):
-            raise TypeError("children must be a tuple of Columns")
         return cudf.core.column.CategoricalColumn(
             dtype=dtype,
             mask=mask,
@@ -1538,11 +1511,8 @@ def build_categorical_column(
     ordered : bool
         Indicates whether the categories are ordered
     """
-    codes_dtype = min_unsigned_type(len(categories))
-    codes = as_column(codes)
-    if codes.dtype != codes_dtype:
-        codes = codes.astype(codes_dtype)
 
+    internal_categories = arange(start=0, stop=categories.size, step=1) if ordered else categories
     dtype = CategoricalDtype(categories=categories, ordered=ordered)
 
     result = build_column(
@@ -1552,7 +1522,7 @@ def build_categorical_column(
         size=size,
         offset=offset,
         null_count=null_count,
-        children=(codes,),
+        children=(internal_categories, codes),
     )
     return cast("cudf.core.column.CategoricalColumn", result)
 
@@ -2249,6 +2219,18 @@ def _copy_type_metadata_from_arrow(
                 offset=cudf_column.offset,
                 null_count=cudf_column.null_count,
                 children=base_children,
+            )
+    elif pa.types.is_dictionary(arrow_array.type) and isinstance(
+        cudf_column, cudf.core.column.CategoricalColumn
+    ):
+        if arrow_array.type.ordered:
+            return cudf.core.column.CategoricalColumn(
+                CategoricalDtype(arrow_array.dictionary, ordered=True),
+                cudf_column.mask,
+                cudf_column.size,
+                cudf_column.offset,
+                cudf_column.null_count,
+                cudf_column.base_children
             )
 
     return cudf_column

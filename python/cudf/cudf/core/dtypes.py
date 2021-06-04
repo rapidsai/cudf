@@ -125,7 +125,6 @@ class CategoricalDtype(_BaseDtype):
         )
         return cls(categories=categories, ordered=ordered)
 
-
 class ListDtype(_BaseDtype):
     _typ: pa.ListType
     name: str = "list"

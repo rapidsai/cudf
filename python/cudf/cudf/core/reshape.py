@@ -542,18 +542,18 @@ def melt(
     if not var_name:
         var_name = "variable"
 
-    mdata[var_name] = cudf.Series(
-        cudf.core.column.build_categorical_column(
-            categories=value_vars,
-            codes=cudf.core.column.as_column(
-                temp._column.base_data, dtype=temp._column.dtype
-            ),
-            mask=temp._column.base_mask,
-            size=temp._column.size,
-            offset=temp._column.offset,
-            ordered=False,
-        )
-    )
+    # mdata[var_name] = cudf.Series(
+    #     cudf.core.column.build_categorical_column(
+    #         categories=value_vars,
+    #         codes=cudf.core.column.as_column(
+    #             temp._column.base_data, dtype=temp._column.dtype
+    #         ),
+    #         mask=temp._column.base_mask,
+    #         size=temp._column.size,
+    #         offset=temp._column.offset,
+    #         ordered=False,
+    #     )
+    # )
 
     # Step 3: add values
     mdata[value_name] = cudf.Series._concat(

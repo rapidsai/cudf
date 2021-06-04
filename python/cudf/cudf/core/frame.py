@@ -21,7 +21,7 @@ from cudf._typing import ColumnLike, DataFrameOrSeries
 from cudf.core.column import (
     ColumnBase,
     as_column,
-    build_categorical_column,
+    # build_categorical_column,
     column_empty,
 )
 from cudf.core.join import merge
@@ -2051,13 +2051,13 @@ class Frame(libcudf.table.Table):
 
             for name in cudf_indices_frame._data.names:
                 codes = cudf_indices_frame._data[name]
-                cudf_category_frame._data[name] = build_categorical_column(
-                    cudf_dictionaries_columns[name],
-                    codes,
-                    mask=codes.base_mask,
-                    size=codes.size,
-                    ordered=dict_ordered[name],
-                )
+                # cudf_category_frame._data[name] = build_categorical_column(
+                #     cudf_dictionaries_columns[name],
+                #     codes,
+                #     mask=codes.base_mask,
+                #     size=codes.size,
+                #     ordered=dict_ordered[name],
+                # )
 
         # Handle non-dict arrays
         cudf_non_category_frame = (
@@ -4100,15 +4100,16 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
 
 
 def _reassign_categories(categories, cols, col_idxs):
-    for name, idx in zip(cols, col_idxs):
-        if idx in categories:
-            cols[name] = build_categorical_column(
-                categories=categories[idx],
-                codes=as_column(cols[name].base_data, dtype=cols[name].dtype),
-                mask=cols[name].base_mask,
-                offset=cols[name].offset,
-                size=cols[name].size,
-            )
+    pass
+    # for name, idx in zip(cols, col_idxs):
+    #     if idx in categories:
+    #         cols[name] = build_categorical_column(
+    #             categories=categories[idx],
+    #             codes=as_column(cols[name].base_data, dtype=cols[name].dtype),
+    #             mask=cols[name].base_mask,
+    #             offset=cols[name].offset,
+    #             size=cols[name].size,
+    #         )
 
 
 def _is_series(obj):

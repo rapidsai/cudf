@@ -9,7 +9,6 @@ import cudf
 
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import (
-    is_categorical_dtype,
     is_decimal_dtype,
     is_list_dtype,
     is_struct_dtype
@@ -320,10 +319,10 @@ cdef class Column:
         return self._view(libcudf_types.UNKNOWN_NULL_COUNT).null_count()
 
     cdef mutable_column_view mutable_view(self) except *:
-        if is_categorical_dtype(self.dtype):
-            col = self.base_children[0]
-        else:
-            col = self
+        """
+        TODO: rename col to self
+        """
+        col = self
         data_dtype = col.dtype
 
         cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
@@ -372,12 +371,8 @@ cdef class Column:
         return self._view(c_null_count)
 
     cdef column_view _view(self, libcudf_types.size_type null_count) except *:
-        if is_categorical_dtype(self.dtype):
-            col = self.base_children[0]
-            data_dtype = col.dtype
-        else:
-            col = self
-            data_dtype = self.dtype
+        col = self
+        data_dtype = self.dtype
 
         cdef libcudf_types.data_type dtype = dtype_to_data_type(data_dtype)
         cdef libcudf_types.size_type offset = self.offset
@@ -472,8 +467,6 @@ cdef class Column:
         """
         column_owner = isinstance(owner, Column)
         mask_owner = owner
-        if column_owner and is_categorical_dtype(owner.dtype):
-            owner = owner.base_children[0]
 
         size = cv.size()
         offset = cv.offset()

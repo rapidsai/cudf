@@ -14,8 +14,9 @@ from cudf._lib.types cimport (
 )
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
-from cudf.core.dtypes import ListDtype, StructDtype, Decimal64Dtype
-from cudf.utils.dtypes import is_decimal_dtype, is_list_dtype, is_struct_dtype
+from cudf._lib.column cimport Column
+from cudf.core.dtypes import ListDtype, StructDtype, Decimal64Dtype, CategoricalDtype
+from cudf.utils.dtypes import is_decimal_dtype, is_list_dtype, is_struct_dtype, is_categorical_dtype
 
 cimport cudf._lib.cpp.types as libcudf_types
 
@@ -65,6 +66,7 @@ class TypeId(IntEnum):
     DURATION_NANOSECONDS = (
         <underlying_type_t_type_id> libcudf_types.type_id.DURATION_NANOSECONDS
     )
+    DICTIONARY32 = <underlying_type_t_type_id> libcudf_types.type_id.DICTIONARY32
     DECIMAL32 = <underlying_type_t_type_id> libcudf_types.type_id.DECIMAL32
     DECIMAL64 = <underlying_type_t_type_id> libcudf_types.type_id.DECIMAL64
 
@@ -195,6 +197,15 @@ cdef dtype_from_decimal_column_view(column_view cv):
     scale = -cv.type().scale()
     return Decimal64Dtype(precision=Decimal64Dtype.MAX_PRECISION, scale=scale)
 
+cdef dtype_from_dictionary_column_view(column_view cv):
+    """
+    cuDF CategoricalDtype requires ordering information, which is not
+    carried in libucdf dictionray columns. This information will need
+    to be recovered at a later stage.
+    """
+    categories = Column.from_column_view(cv.child(1), None)
+    return CategoricalDtype(categories=categories, ordered=False)
+
 cdef dtype_from_column_view(column_view cv):
     cdef libcudf_types.type_id tid = cv.type().id()
     if tid == libcudf_types.type_id.LIST:
@@ -206,6 +217,8 @@ cdef dtype_from_column_view(column_view cv):
     elif tid == libcudf_types.type_id.DECIMAL32:
         raise NotImplementedError("decimal32 types are not supported yet. "
                                   "Use decimal64 instead")
+    elif tid == libcudf_types.type_id.DICTIONARY32:
+        return dtype_from_dictionary_column_view(cv)
     else:
         return cudf_to_np_types[<underlying_type_t_type_id>(tid)]
 
@@ -216,6 +229,8 @@ cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
         tid = libcudf_types.type_id.STRUCT
     elif is_decimal_dtype(dtype):
         tid = libcudf_types.type_id.DECIMAL64
+    elif is_categorical_dtype(dtype):
+        tid = libcudf_types.type_id.DICTIONARY32
     else:
         tid = <libcudf_types.type_id> (
             <underlying_type_t_type_id> (

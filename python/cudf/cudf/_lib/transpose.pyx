@@ -61,17 +61,17 @@ def transpose(Table source):
         column_names=range(source._num_rows)
     )
 
-    if cats is not None:
-        result = Table(index=result._index, data=[
-            (name, cudf.core.column.column.build_categorical_column(
-                codes=cudf.core.column.column.as_column(
-                    col.base_data, dtype=col.dtype),
-                mask=col.base_mask,
-                size=col.size,
-                categories=cats,
-                offset=col.offset,
-            ))
-            for name, col in result._data.items()
-        ])
+    # if cats is not None:
+    #     result = Table(index=result._index, data=[
+    #         (name, cudf.core.column.column.build_categorical_column(
+    #             codes=cudf.core.column.column.as_column(
+    #                 col.base_data, dtype=col.dtype),
+    #             mask=col.base_mask,
+    #             size=col.size,
+    #             categories=cats,
+    #             offset=col.offset,
+    #         ))
+    #         for name, col in result._data.items()
+    #     ])
 
     return result

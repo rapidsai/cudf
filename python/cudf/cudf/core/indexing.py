@@ -29,16 +29,16 @@ def indices_from_labels(obj, labels):
     if not isinstance(labels, cudf.MultiIndex):
         labels = column.as_column(labels)
 
-        if is_categorical_dtype(obj.index):
-            labels = labels.astype("category")
-            codes = labels.codes.astype(obj.index._values.codes.dtype)
-            labels = column.build_categorical_column(
-                categories=labels.dtype.categories,
-                codes=codes,
-                ordered=labels.dtype.ordered,
-            )
-        else:
-            labels = labels.astype(obj.index.dtype)
+        # if is_categorical_dtype(obj.index):
+        #     labels = labels.astype("category")
+        #     codes = labels.codes.astype(obj.index._values.codes.dtype)
+        #     labels = column.build_categorical_column(
+        #         categories=labels.dtype.categories,
+        #         codes=codes,
+        #         ordered=labels.dtype.ordered,
+        #     )
+        # else:
+        labels = labels.astype(obj.index.dtype)
 
     # join is not guaranteed to maintain the index ordering
     # so we will sort it with its initial ordering which is stored
