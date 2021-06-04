@@ -168,6 +168,100 @@ public class ColumnVectorTest extends CudfTestBase {
       }
   }
 
+  @Test
+  void testGetElementInt() {
+    try (ColumnVector cv = ColumnVector.fromBoxedInts(3, 2, 1, null);
+         Scalar s0 = cv.getScalarElement(0);
+         Scalar s1 = cv.getScalarElement(1);
+         Scalar s2 = cv.getScalarElement(2);
+         Scalar s3 = cv.getScalarElement(3)) {
+      assertEquals(3, s0.getInt());
+      assertEquals(2, s1.getInt());
+      assertEquals(1, s2.getInt());
+      assertFalse(s3.isValid());
+    }
+  }
+
+  @Test
+  void testGetElementByte() {
+    try (ColumnVector cv = ColumnVector.fromBoxedBytes((byte)3, (byte)2, (byte)1, null);
+         Scalar s0 = cv.getScalarElement(0);
+         Scalar s1 = cv.getScalarElement(1);
+         Scalar s2 = cv.getScalarElement(2);
+         Scalar s3 = cv.getScalarElement(3)) {
+      assertEquals(3, s0.getByte());
+      assertEquals(2, s1.getByte());
+      assertEquals(1, s2.getByte());
+      assertFalse(s3.isValid());
+    }
+  }
+
+  @Test
+  void testGetElementFloat() {
+    try (ColumnVector cv = ColumnVector.fromBoxedFloats(3f, 2f, 1f, null);
+         Scalar s0 = cv.getScalarElement(0);
+         Scalar s1 = cv.getScalarElement(1);
+         Scalar s2 = cv.getScalarElement(2);
+         Scalar s3 = cv.getScalarElement(3)) {
+      assertEquals(3f, s0.getFloat());
+      assertEquals(2f, s1.getFloat());
+      assertEquals(1f, s2.getFloat());
+      assertFalse(s3.isValid());
+    }
+  }
+
+  @Test
+  void testGetElementString() {
+    try (ColumnVector cv = ColumnVector.fromStrings("3a", "2b", "1c", null);
+         Scalar s0 = cv.getScalarElement(0);
+         Scalar s1 = cv.getScalarElement(1);
+         Scalar s2 = cv.getScalarElement(2);
+         Scalar s3 = cv.getScalarElement(3)) {
+      assertEquals("3a", s0.getJavaString());
+      assertEquals("2b", s1.getJavaString());
+      assertEquals("1c", s2.getJavaString());
+      assertFalse(s3.isValid());
+    }
+  }
+
+  @Test
+  void testGetElementDecimal() {
+    try (ColumnVector cv = ColumnVector.decimalFromLongs(1,3, 2, 1, -1);
+         Scalar s0 = cv.getScalarElement(0);
+         Scalar s1 = cv.getScalarElement(1);
+         Scalar s2 = cv.getScalarElement(2);
+         Scalar s3 = cv.getScalarElement(3)) {
+      assertEquals(1, s0.getType().getScale());
+      assertEquals(new BigDecimal("3E+1"), s0.getBigDecimal());
+      assertEquals(new BigDecimal("2E+1"), s1.getBigDecimal());
+      assertEquals(new BigDecimal("1E+1"), s2.getBigDecimal());
+      assertEquals(new BigDecimal("-1E+1"), s3.getBigDecimal());
+    }
+  }
+
+  @Test
+  void testGetElementList() {
+    HostColumnVector.DataType dt = new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT32));
+    try (ColumnVector cv = ColumnVector.fromLists(dt, Arrays.asList(3, 2),
+        Arrays.asList(1), Arrays.asList(), null);
+         Scalar s0 = cv.getScalarElement(0);
+         ColumnView s0Cv = s0.getListAsColumnView();
+         ColumnVector expected0 = ColumnVector.fromInts(3, 2);
+         Scalar s1 = cv.getScalarElement(1);
+         ColumnView s1Cv = s1.getListAsColumnView();
+         ColumnVector expected1 = ColumnVector.fromInts(1);
+         Scalar s2 = cv.getScalarElement(2);
+         ColumnView s2Cv = s2.getListAsColumnView();
+         ColumnVector expected2 = ColumnVector.fromInts();
+         Scalar s3 = cv.getScalarElement(3)) {
+      assertColumnsAreEqual(expected0, s0Cv);
+      assertColumnsAreEqual(expected1, s1Cv);
+      assertColumnsAreEqual(expected2, s2Cv);
+      assertFalse(s3.isValid());
+    }
+  }
+
  @Test
   void testStringCreation() {
     try (ColumnVector cv = ColumnVector.fromStrings("d", "sd", "sde", null, "END");
