@@ -352,6 +352,48 @@ hash_join::hash_join_impl::full_join(cudf::table_view const &probe,
   return compute_hash_join<cudf::detail::join_kind::FULL_JOIN>(probe, compare_nulls, stream, mr);
 }
 
+std::size_t hash_join::hash_join_impl::inner_join_size(cudf::table_view const &probe,
+                                                       null_equality compare_nulls,
+                                                       rmm::cuda_stream_view stream) const
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(_hash_table, "Hash table of hash join is null.");
+
+  auto build_table = cudf::table_device_view::create(_build, stream);
+  auto probe_table = cudf::table_device_view::create(probe, stream);
+
+  return cudf::detail::compute_join_output_size<cudf::detail::join_kind::INNER_JOIN>(
+    *build_table, *probe_table, *_hash_table, compare_nulls, stream);
+}
+
+std::size_t hash_join::hash_join_impl::left_join_size(cudf::table_view const &probe,
+                                                      null_equality compare_nulls,
+                                                      rmm::cuda_stream_view stream) const
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(_hash_table, "Hash table of hash join is null.");
+
+  auto build_table = cudf::table_device_view::create(_build, stream);
+  auto probe_table = cudf::table_device_view::create(probe, stream);
+
+  return cudf::detail::compute_join_output_size<cudf::detail::join_kind::LEFT_JOIN>(
+    *build_table, *probe_table, *_hash_table, compare_nulls, stream);
+}
+
+std::size_t hash_join::hash_join_impl::full_join_size(cudf::table_view const &probe,
+                                                      null_equality compare_nulls,
+                                                      rmm::cuda_stream_view stream) const
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(_hash_table, "Hash table of hash join is null.");
+
+  auto build_table = cudf::table_device_view::create(_build, stream);
+  auto probe_table = cudf::table_device_view::create(probe, stream);
+
+  return cudf::detail::compute_join_output_size<cudf::detail::join_kind::FULL_JOIN>(
+    *build_table, *probe_table, *_hash_table, compare_nulls, stream);
+}
+
 template <cudf::detail::join_kind JoinKind>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
