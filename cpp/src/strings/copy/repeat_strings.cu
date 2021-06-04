@@ -157,16 +157,13 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
   // If `repeat_times == 1`, just make a copy of the input.
   if (repeat_times == 1) { return std::make_unique<column>(input.parent(), stream, mr); }
 
-  // The output strings column should have size that can be properly handled by cudf.
-  auto const size_start =
-    cudf::detail::get_value<size_type>(input.offsets(), input.offset(), stream);
-  auto const size_end =
-    cudf::detail::get_value<size_type>(input.offsets(), input.offset() + strings_count, stream);
-  CUDF_EXPECTS(size_end - size_start <= std::numeric_limits<size_type>::max() / repeat_times,
-               "The output strings have total size that exceeds the maximum allowed size.");
-
   auto const strings_dv_ptr = column_device_view::create(input.parent(), stream);
   auto const fn = compute_size_and_repeat_fn{*strings_dv_ptr, repeat_times, input.has_nulls()};
+
+  // Repeat the strings in each row.
+  // Note that this cannot handle the cases when the size of the output column exceeds the maximum
+  // value that can be indexed by size_type (offset_type).
+  // In such situations, an exception may be thrown, or the output result is be undefined.
   auto [offsets_column, chars_column] =
     make_strings_children(fn, strings_count * repeat_times, strings_count, stream, mr);
 

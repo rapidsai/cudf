@@ -63,6 +63,10 @@ string_scalar repeat_strings(
  * a positve value, all the rows of the output strings column will be an empty string. Any null row
  * will result in a null row regardless of the value of `repeat_times` parameter.
  *
+ * Note that this function cannot handle the cases when the size of the output column exceeds the
+ * maximum value that can be indexed by size_type (offset_type). In such situations, an exception
+ * may be thrown, or the output result is be undefined.
+ *
  * @code{.pseudo}
  * Example:
  * strs = ['aa', null, '',  'bbc']
