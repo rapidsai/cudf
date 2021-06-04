@@ -253,6 +253,10 @@ struct hash_join::hash_join_impl {
             rmm::cuda_stream_view stream,
             rmm::mr::device_memory_resource* mr) const;
 
+  std::size_t inner_join_size(cudf::table_view const& probe,
+                              null_equality compare_nulls  = null_equality::EQUAL,
+                              rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+
  private:
   template <cudf::detail::join_kind JoinKind>
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
