@@ -39,6 +39,87 @@
 namespace cudf {
 namespace detail {
 /**
+ * @brief Calculates the exact size of the join output produced when
+ * joining two tables together.
+ *
+ * @throw cudf::logic_error if JoinKind is not INNER_JOIN or LEFT_JOIN
+ * @throw cudf::logic_error if the exact size overflows cudf::size_type
+ *
+ * @tparam JoinKind The type of join to be performed
+ * @tparam multimap_type The type of the hash table
+ *
+ * @param build_table The right hand table
+ * @param probe_table The left hand table
+ * @param hash_table A hash table built on the build table that maps the index
+ * of every row to the hash value of that row.
+ * @param compare_nulls Controls whether null join-key values should match or not.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ *
+ * @return The exact size of the output of the join operation
+ */
+template <join_kind JoinKind, typename multimap_type>
+std::size_t compute_join_output_size(table_device_view build_table,
+                                     table_device_view probe_table,
+                                     multimap_type const& hash_table,
+                                     null_equality compare_nulls,
+                                     rmm::cuda_stream_view stream)
+{
+  const size_type build_table_num_rows{build_table.num_rows()};
+  const size_type probe_table_num_rows{probe_table.num_rows()};
+
+  // If the build table is empty, we know exactly how large the output
+  // will be for the different types of joins and can return immediately
+  if (0 == build_table_num_rows) {
+    switch (JoinKind) {
+      // Inner join with an empty table will have no output
+      case join_kind::INNER_JOIN: return 0;
+
+      // Left join with an empty table will have an output of NULL rows
+      // equal to the number of rows in the probe table
+      case join_kind::LEFT_JOIN: return probe_table_num_rows;
+
+      default: CUDF_FAIL("Unsupported join type");
+    }
+  }
+
+  // Allocate storage for the counter used to get the size of the join output
+  std::size_t h_size{0};
+  rmm::device_scalar<std::size_t> d_size(0, stream);
+
+  CHECK_CUDA(stream.value());
+
+  constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
+  int numBlocks{-1};
+
+  CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+    &numBlocks, compute_join_output_size<JoinKind, multimap_type, block_size>, block_size, 0));
+
+  int dev_id{-1};
+  CUDA_TRY(cudaGetDevice(&dev_id));
+
+  int num_sms{-1};
+  CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev_id));
+
+  row_hash hash_probe{probe_table};
+  row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
+  // Probe the hash table without actually building the output to simply
+  // find what the size of the output will be.
+  compute_join_output_size<JoinKind, multimap_type, block_size>
+    <<<numBlocks * num_sms, block_size, 0, stream.value()>>>(hash_table,
+                                                             build_table,
+                                                             probe_table,
+                                                             hash_probe,
+                                                             equality,
+                                                             probe_table_num_rows,
+                                                             d_size.data());
+
+  CHECK_CUDA(stream.value());
+  h_size = d_size.value(stream);
+
+  return h_size;
+}
+
+/**
  * @brief Gives an estimate of the size of the join output produced when
  * joining two tables together.
  *
