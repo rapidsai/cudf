@@ -21,6 +21,7 @@
 #include <benchmarks/io/cuio_benchmark_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
+#include <cudf/io/data_destinations.hpp>
 #include <cudf/io/orc.hpp>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
@@ -53,9 +54,9 @@ void BM_orc_write_varying_inout(benchmark::State& state)
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     cudf_io::orc_writer_options options =
-      cudf_io::orc_writer_options::builder(source_sink.make_sink_info(), view)
-        .compression(compression);
-    cudf_io::write_orc(options);
+      cudf_io::orc_writer_options::builder(view).compression(compression);
+    auto destination = source_sink.make_destination();
+    cudf_io::write_orc(destination.get(), options);
   }
 
   state.SetBytesProcessed(data_size * state.iterations());
@@ -77,11 +78,11 @@ void BM_orc_write_varying_options(benchmark::State& state)
   cuio_source_sink_pair source_sink(io_type::FILEPATH);
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
-    cudf_io::orc_writer_options const options =
-      cudf_io::orc_writer_options::builder(source_sink.make_sink_info(), view)
-        .compression(compression)
-        .enable_statistics(enable_stats);
-    cudf_io::write_orc(options);
+    auto options = cudf_io::orc_writer_options::builder(view)
+                     .compression(compression)
+                     .enable_statistics(enable_stats);
+    auto destination = source_sink.make_destination();
+    cudf_io::write_orc(destination.get(), options);
   }
 
   state.SetBytesProcessed(data_size * state.iterations());

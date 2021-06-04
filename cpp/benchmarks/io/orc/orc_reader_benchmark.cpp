@@ -21,6 +21,7 @@
 #include <benchmarks/io/cuio_benchmark_common.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
+#include <cudf/io/data_destinations.hpp>
 #include <cudf/io/orc.hpp>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
@@ -51,9 +52,9 @@ void BM_orc_read_varying_input(benchmark::State& state)
 
   cuio_source_sink_pair source_sink(source_type);
   cudf_io::orc_writer_options opts =
-    cudf_io::orc_writer_options::builder(source_sink.make_sink_info(), view)
-      .compression(compression);
-  cudf_io::write_orc(opts);
+    cudf_io::orc_writer_options::builder(view).compression(compression);
+  auto destination = source_sink.make_destination();
+  cudf_io::write_orc(destination.get(), opts);
 
   cudf_io::orc_reader_options read_opts =
     cudf_io::orc_reader_options::builder(source_sink.make_source_info());
@@ -96,9 +97,9 @@ void BM_orc_read_varying_options(benchmark::State& state)
   auto const view = tbl->view();
 
   std::vector<char> orc_data;
-  cudf_io::orc_writer_options options =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{&orc_data}, view);
-  cudf_io::write_orc(options);
+  auto options     = cudf_io::orc_writer_options::builder(view);
+  auto destination = cudf_io::create_vector_destination(&orc_data);
+  cudf_io::write_orc(destination.get(), options);
 
   auto const cols_to_read = select_column_names(get_col_names(orc_data), col_sel);
   cudf_io::orc_reader_options read_options =

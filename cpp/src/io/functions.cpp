@@ -56,16 +56,15 @@ orc_reader_options_builder orc_reader_options::builder(source_info const& src)
 }
 
 // Returns builder for orc_writer_options
-orc_writer_options_builder orc_writer_options::builder(sink_info const& sink,
-                                                       table_view const& table)
+orc_writer_options_builder orc_writer_options::builder(table_view const& table)
 {
-  return orc_writer_options_builder{sink, table};
+  return orc_writer_options_builder{table};
 }
 
 // Returns builder for chunked_orc_writer_options
-chunked_orc_writer_options_builder chunked_orc_writer_options::builder(sink_info const& sink)
+chunked_orc_writer_options_builder chunked_orc_writer_options::builder()
 {
-  return chunked_orc_writer_options_builder{sink};
+  return chunked_orc_writer_options_builder{};
 }
 
 // Returns builder for avro_reader_options
@@ -298,14 +297,15 @@ table_with_metadata read_orc(orc_reader_options const& options, rmm::mr::device_
 /**
  * @copydoc cudf::io::write_orc
  */
-void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resource* mr)
+void write_orc(data_destination* destination,
+               orc_writer_options const& options,
+               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
   namespace io_detail = cudf::io::detail;
-  auto destination    = make_destination(options.get_sink());
   auto writer         = std::make_unique<detail_orc::writer>(  //
-    destination.get(),
+    destination,
     options,
     io_detail::SingleWriteMode::YES,
     rmm::cuda_stream_default,
@@ -317,13 +317,13 @@ void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resourc
 /**
  * @copydoc cudf::io::orc_chunked_writer::orc_chunked_writer
  */
-orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& op,
+orc_chunked_writer::orc_chunked_writer(data_destination* destination,
+                                       chunked_orc_writer_options const& op,
                                        rmm::mr::device_memory_resource* mr)
 {
   namespace io_detail = cudf::io::detail;
-  destination         = make_destination(op.get_sink());
   writer              = std::make_unique<detail_orc::writer>(  //
-    destination.get(),
+    destination,
     op,
     io_detail::SingleWriteMode::NO,
     rmm::cuda_stream_default,
