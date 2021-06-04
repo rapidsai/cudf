@@ -316,23 +316,23 @@ struct hash_join::hash_join_impl {
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(cudf::table_view const& probe,
-             null_equality compare_nulls,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr) const;
+             null_equality compare_nulls         = null_equality::EQUAL,
+             rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   left_join(cudf::table_view const& probe,
-            null_equality compare_nulls,
-            rmm::cuda_stream_view stream,
-            rmm::mr::device_memory_resource* mr) const;
+            null_equality compare_nulls         = null_equality::EQUAL,
+            rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   full_join(cudf::table_view const& probe,
-            null_equality compare_nulls,
-            rmm::cuda_stream_view stream,
-            rmm::mr::device_memory_resource* mr) const;
+            null_equality compare_nulls         = null_equality::EQUAL,
+            rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
   std::size_t inner_join_size(cudf::table_view const& probe,
                               null_equality compare_nulls  = null_equality::EQUAL,
