@@ -191,7 +191,7 @@ def cut(
         closed = "left"
         left_inclusive = True
 
-    if isinstance(bins, pandas_IntervalIndex):
+    if isinstance(bins, pd.IntervalIndex):
         interval_labels = bins
     elif labels is None:
         if duplicates == "drop" and len(bins) == 1 and len(old_bins) != 1:
@@ -234,7 +234,7 @@ def cut(
                     labels if len(set(labels)) == len(labels) else None
                 )
 
-    if isinstance(bins, pandas_IntervalIndex):
+    if isinstance(bins, pd.IntervalIndex):
         # get the left and right edges of the bins as columns
         # we cannot typecast an IntervalIndex, so we need to
         # make the edges the same type as the input array
