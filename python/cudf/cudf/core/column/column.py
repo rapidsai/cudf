@@ -347,7 +347,7 @@ class ColumnBase(Column, Serializable):
 
         return self.to_gpu_array(fillna=fillna).copy_to_host()
 
-    def _reverse(self):
+    def reverse(self):
         return libcudf.copying.reverse(self)
 
     def _fill(
