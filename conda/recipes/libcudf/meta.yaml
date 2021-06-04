@@ -180,7 +180,6 @@ test:
     - test -f $PREFIX/include/cudf/strings/convert/convert_integers.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_ipv4.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_urls.hpp
-    - test -f $PREFIX/include/cudf/strings/copy.hpp
     - test -f $PREFIX/include/cudf/strings/detail/combine.hpp
     - test -f $PREFIX/include/cudf/strings/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/strings/detail/converters.hpp
@@ -196,6 +195,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/json.hpp
     - test -f $PREFIX/include/cudf/strings/padding.hpp
     - test -f $PREFIX/include/cudf/strings/replace.hpp
+    - test -f $PREFIX/include/cudf/strings/repeat_strings.hpp
     - test -f $PREFIX/include/cudf/strings/replace_re.hpp
     - test -f $PREFIX/include/cudf/strings/split/partition.hpp
     - test -f $PREFIX/include/cudf/strings/split/split.hpp

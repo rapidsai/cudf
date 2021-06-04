@@ -19,7 +19,7 @@
 #include <cudf_test/iterator_utilities.hpp>
 
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/copy.hpp>
+#include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 namespace {
