@@ -377,7 +377,7 @@ class aggregate_orc_metadata {
 
         for (size_t stripe_idx = 0; stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size();
              ++stripe_idx) {
-          count += per_file_metadata[src_file_idx].ff.numberOfRows;
+          count += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
           if (count > row_start || count == 0) {
             stripe_idxs.push_back(stripe_idx);
             stripe_infos.push_back(
