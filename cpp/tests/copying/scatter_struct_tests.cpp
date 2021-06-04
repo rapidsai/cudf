@@ -241,3 +241,21 @@ TYPED_TEST(TypedStructScatterTest, SourceSmallerThanTargetScatterTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *structs_expected, scatter_structs(structs_src, structs_tgt, scatter_map), print_all);
 }
+
+TYPED_TEST(TypedStructScatterTest, IntStructNullMaskRegression)
+{
+  auto child_0      = int32s_col({0, -1, 2}, null_at(1));
+  auto struct_col_0 = structs_col({child_0}).release();
+
+  auto child_1      = int32s_col({20});
+  auto struct_col_1 = structs_col({child_1}).release();
+
+  auto scatter_map = int32s_col{2}.release();
+
+  auto expected_child  = int32s_col({0, -1, 20}, null_at(1));
+  auto expected_struct = structs_col({expected_child}).release();
+
+  auto result_ptr = scatter_structs(struct_col_1, struct_col_0, scatter_map);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_struct, result_ptr, print_all);
+}
