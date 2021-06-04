@@ -24,6 +24,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/io/csv.hpp>
+#include <cudf/io/data_destinations.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
@@ -256,14 +257,15 @@ void write_csv_helper(std::string const& filename,
     });
   }
 
-  cudf_io::csv_writer_options writer_options =
-    cudf_io::csv_writer_options::builder(cudf_io::sink_info(filename), table)
+  auto destination = cudf_io::create_file_destination(filename);
+  auto writer_options =
+    cudf_io::csv_writer_options::builder(table)
       .include_header(include_header)
       .rows_per_chunk(
         1)  // Note: this gets adjusted to multiple of 8 (per legacy code logic and requirements)
       .metadata(&metadata);
 
-  cudf_io::write_csv(writer_options);
+  cudf_io::write_csv(destination.get(), writer_options);
 }
 
 template <typename T>
@@ -347,10 +349,10 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnNegativeScale)
 
   auto filepath = temp_env->get_temp_dir() + "FixedPointSingleColumnNegativeScale.csv";
 
-  cudf_io::csv_writer_options writer_options =
-    cudf_io::csv_writer_options::builder(cudf_io::sink_info(filepath), input_table);
+  auto destination    = cudf_io::create_file_destination(filepath);
+  auto writer_options = cudf_io::csv_writer_options::builder(input_table);
 
-  cudf_io::write_csv(writer_options);
+  cudf_io::write_csv(destination.get(), writer_options);
 
   std::vector<std::string> result_strings;
   result_strings.reserve(reference_strings.size());
@@ -393,10 +395,10 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnPositiveScale)
 
   auto filepath = temp_env->get_temp_dir() + "FixedPointSingleColumnPositiveScale.csv";
 
-  cudf_io::csv_writer_options writer_options =
-    cudf_io::csv_writer_options::builder(cudf_io::sink_info(filepath), input_table);
+  auto destination    = cudf_io::create_file_destination(filepath);
+  auto writer_options = cudf_io::csv_writer_options::builder(input_table);
 
-  cudf_io::write_csv(writer_options);
+  cudf_io::write_csv(destination.get(), writer_options);
 
   std::vector<std::string> result_strings;
   result_strings.reserve(reference_strings.size());
@@ -2039,8 +2041,7 @@ TEST_F(CsvReaderTest, DefaultWriteChunkSize)
     auto input_column = column_wrapper<int32_t>(sequence, sequence + num_rows);
     auto input_table  = cudf::table_view{std::vector<cudf::column_view>{input_column}};
 
-    cudf_io::csv_writer_options opts =
-      cudf_io::csv_writer_options::builder(cudf_io::sink_info{"unused.path"}, input_table);
+    cudf_io::csv_writer_options opts = cudf_io::csv_writer_options::builder(input_table);
     ASSERT_EQ(num_rows, opts.get_rows_per_chunk());
   }
 }

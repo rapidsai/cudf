@@ -63,6 +63,8 @@ class cuio_source_sink_pair {
    */
   cudf::io::sink_info make_sink_info();
 
+  std::unique_ptr<cudf::io::data_destination> make_destination();
+
  private:
   static temp_directory const tmpdir;
 

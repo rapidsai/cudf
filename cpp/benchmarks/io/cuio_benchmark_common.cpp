@@ -15,6 +15,7 @@
  */
 
 #include <benchmarks/io/cuio_benchmark_common.hpp>
+#include <cudf/io/data_destinations.hpp>
 
 #include <numeric>
 #include <string>
@@ -56,6 +57,16 @@ cudf_io::sink_info cuio_source_sink_pair::make_sink_info()
     case io_type::VOID: return cudf_io::sink_info();
     case io_type::FILEPATH: return cudf_io::sink_info(file_name);
     case io_type::HOST_BUFFER: return cudf_io::sink_info(&buffer);
+    default: CUDF_FAIL("invalid output type");
+  }
+}
+
+std::unique_ptr<cudf_io::data_destination> cuio_source_sink_pair::make_destination()
+{
+  switch (type) {
+    case io_type::VOID: return cudf_io::create_void_destination();
+    case io_type::FILEPATH: return cudf_io::create_file_destination(file_name);
+    case io_type::HOST_BUFFER: return cudf_io::create_vector_destination(&buffer);
     default: CUDF_FAIL("invalid output type");
   }
 }

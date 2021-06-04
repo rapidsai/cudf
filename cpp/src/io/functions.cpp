@@ -44,10 +44,9 @@ csv_reader_options_builder csv_reader_options::builder(source_info const& src)
 }
 
 // Returns builder for csv_writer_options
-csv_writer_options_builder csv_writer_options::builder(sink_info const& sink,
-                                                       table_view const& table)
+csv_writer_options_builder csv_writer_options::builder(table_view const& table)
 {
-  return csv_writer_options_builder{sink, table};
+  return csv_writer_options_builder{table};
 }
 
 // Returns builder for orc_reader_options
@@ -171,13 +170,14 @@ table_with_metadata read_csv(csv_reader_options const& options, rmm::mr::device_
 }
 
 // Freeform API wraps the detail writer class API
-void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resource* mr)
+void write_csv(data_destination* destination,
+               csv_writer_options const& options,
+               rmm::mr::device_memory_resource* mr)
 {
   using namespace cudf::io::detail;
 
-  auto destination = make_destination(options.get_sink());
-  auto writer      = std::make_unique<csv::writer>(  //
-    destination.get(),
+  auto writer = std::make_unique<csv::writer>(  //
+    destination,
     options,
     rmm::cuda_stream_default,
     mr);

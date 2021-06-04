@@ -22,6 +22,7 @@
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/io/csv.hpp>
+#include <cudf/io/data_destinations.hpp>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
@@ -43,10 +44,10 @@ void BM_csv_read_varying_input(benchmark::State& state)
 
   cuio_source_sink_pair source_sink(source_type);
   cudf_io::csv_writer_options options =
-    cudf_io::csv_writer_options::builder(source_sink.make_sink_info(), view)
-      .include_header(true)
-      .rows_per_chunk(1 << 14);  // TODO: remove once default is sensible
-  cudf_io::write_csv(options);
+    cudf_io::csv_writer_options::builder(view).include_header(true).rows_per_chunk(
+      1 << 14);  // TODO: remove once default is sensible
+  auto destination = source_sink.make_destination();
+  cudf_io::write_csv(destination.get(), options);
 
   cudf_io::csv_reader_options const read_options =
     cudf_io::csv_reader_options::builder(source_sink.make_source_info());
@@ -78,11 +79,12 @@ void BM_csv_read_varying_options(benchmark::State& state)
 
   std::vector<char> csv_data;
   cudf_io::csv_writer_options options =
-    cudf_io::csv_writer_options::builder(cudf_io::sink_info{&csv_data}, view)
+    cudf_io::csv_writer_options::builder(view)
       .include_header(true)
       .line_terminator("\r\n")
       .rows_per_chunk(1 << 14);  // TODO: remove once default is sensible
-  cudf_io::write_csv(options);
+  auto destination = cudf_io::create_vector_destination(&csv_data);
+  cudf_io::write_csv(destination.get(), options);
 
   cudf_io::csv_reader_options read_options =
     cudf_io::csv_reader_options::builder(cudf_io::source_info{csv_data.data(), csv_data.size()})
