@@ -1387,7 +1387,10 @@ __global__ void __launch_bounds__(block_size)
   bool is_valid = true;
 
   if (num_rowgroups > 0) {
-    if (t == 0) s->top.data.index = row_groups[blockIdx.y * num_columns + blockIdx.x];
+    if (t == 0) {
+      s->top.data.index = row_groups[blockIdx.y * num_columns + blockIdx.x];
+      printf("RGSL : Is valid rowgroup %d \n", s->top.data.index.valid_row_group);
+    }
     __syncthreads();
     is_valid = s->top.data.index.valid_row_group;
     chunk_id = s->top.data.index.chunk_id;
@@ -1398,7 +1401,7 @@ __global__ void __launch_bounds__(block_size)
     s->chunk          = chunks[chunk_id];
     s->num_child_rows = 0;
   }
-
+  if (t == 1) printf("RGSL : chunk is valid and is being used %d\n", is_valid);
   __syncthreads();
   is_valid     = is_valid && (s->chunk.type_kind != STRUCT);
   max_num_rows = s->chunk.column_num_rows;
@@ -1412,10 +1415,12 @@ __global__ void __launch_bounds__(block_size)
       s->chunk.strm_len[CI_DATA] -= ofs0;
       s->chunk.streams[CI_DATA2] += ofs1;
       s->chunk.strm_len[CI_DATA2] -= ofs1;
+      printf("RGSL : ofs1 is %u \n", ofs1);
       rowgroup_rowofs = min((blockIdx.y - min(s->chunk.rowgroup_id, blockIdx.y)) * rowidx_stride,
                             s->chunk.num_rows);
       s->chunk.start_row += rowgroup_rowofs;
       s->chunk.num_rows -= rowgroup_rowofs;
+      printf("RGSL : start row %u and num rows %u \n", s->chunk.start_row, s->chunk.num_rows);
     }
     s->is_string = (s->chunk.type_kind == STRING || s->chunk.type_kind == BINARY ||
                     s->chunk.type_kind == VARCHAR || s->chunk.type_kind == CHAR);
@@ -1428,6 +1433,7 @@ __global__ void __launch_bounds__(block_size)
     }
     if (num_rowgroups > 0) {
       s->top.data.end_row = min(s->top.data.end_row, s->chunk.start_row + rowidx_stride);
+      printf("RGSL : end row %u \n", s->top.data.end_row);
     }
     if (!is_dictionary(s->chunk.encoding_kind)) { s->chunk.dictionary_start = 0; }
 
@@ -1437,6 +1443,8 @@ __global__ void __launch_bounds__(block_size)
     bytestream_init(&s->bs2, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
   }
   __syncthreads();
+
+  if (t == 5) printf("RGSL : After chunk is valid and is being used %d---------------\n", is_valid);
   while (is_valid && (s->top.data.cur_row < s->top.data.end_row)) {
     uint64_t list_child_elements = 0;
     bytestream_fill(&s->bs, t);
@@ -1543,6 +1551,27 @@ __global__ void __launch_bounds__(block_size)
           numvals = Integer_RLEv2(&s->bs, &s->u.rlev2, s->vals.i32, numvals, t);
         }
         __syncthreads();
+      } else if (s->chunk.type_kind == LIST) {
+        if (is_rlev1(s->chunk.encoding_kind)) {
+          numvals = Integer_RLEv1<uint32_t>(&s->bs2, &s->u.rlev1, s->vals.u32, numvals, t);
+        } else {
+          numvals = Integer_RLEv2<uint32_t>(&s->bs2, &s->u.rlev2, s->vals.u32, numvals, t);
+        }
+        if (t == 0) printf("RGSL : numvals read is %d \n", numvals);
+        // If we're using an index, we may have to drop values from the initial run
+        uint32_t skip = 0;
+        if (num_rowgroups > 0 and false) {
+          uint32_t run_pos = s->top.data.index.run_pos[CI_DATA2];
+          if (run_pos) {
+            skip = min(numvals, run_pos);
+            __syncthreads();
+            if (t == 0) { s->top.data.index.run_pos[CI_DATA2] = 0; }
+            numvals -= skip;
+          }
+        }
+        if (t == 0) printf("RGSL : after numvals read is %d \n", numvals);
+
+        __syncthreads();
       } else if (s->chunk.type_kind == BYTE) {
         numvals = Byte_RLE(&s->bs, &s->u.rle8, s->vals.u8, numvals, t);
         __syncthreads();
@@ -1604,13 +1633,6 @@ __global__ void __launch_bounds__(block_size)
             &s->bs, &s->u.rle8, s->vals, val_scale, numvals, s->chunk.decimal_scale, t);
         }
         __syncthreads();
-      } else if (s->chunk.type_kind == LIST) {
-        if (is_rlev1(s->chunk.encoding_kind)) {
-          numvals = Integer_RLEv1<uint32_t>(&s->bs2, &s->u.rlev1, s->vals.u32, numvals, t);
-        } else {
-          numvals = Integer_RLEv2<uint32_t>(&s->bs2, &s->u.rlev2, s->vals.u32, numvals, t);
-        }
-        __syncthreads();
       } else if (s->chunk.type_kind == FLOAT) {
         numvals = min(numvals, (bytestream_buffer_size - 8u) >> 2);
         if (t < numvals) { s->vals.u32[t] = bytestream_readu32(&s->bs, s->bs.pos + t * 4); }
@@ -1632,12 +1654,16 @@ __global__ void __launch_bounds__(block_size)
       } else {
         vals_skipped = 0;
         if (num_rowgroups > 0) {
-          uint32_t run_pos = s->top.data.index.run_pos[CI_DATA];
+          uint32_t run_pos = (s->chunk.type_kind == LIST) ? s->top.data.index.run_pos[CI_DATA2]
+                                                          : s->top.data.index.run_pos[CI_DATA];
           if (run_pos) {
             vals_skipped = min(numvals, run_pos);
             numvals -= vals_skipped;
             __syncthreads();
-            if (t == 0) { s->top.data.index.run_pos[CI_DATA] = 0; }
+            if (t == 0) {
+              (s->chunk.type_kind == LIST) ? s->top.data.index.run_pos[CI_DATA2] = 0
+                                           : s->top.data.index.run_pos[CI_DATA]  = 0;
+            }
           }
         }
       }
@@ -1668,8 +1694,10 @@ __global__ void __launch_bounds__(block_size)
             case FLOAT:
             case INT:
             case LIST:
-              if (row == 10000)
-                printf("RGSL: val at 10000 is %u \n", s->vals.u32[t + vals_skipped]);
+              if (row == 19998)
+                printf("RGSL: val at 19998 is %u \n", s->vals.u32[t + vals_skipped]);
+              if (row == 19999)
+                printf("RGSL: val at 19999 is %u \n", s->vals.u32[t + vals_skipped]);
               static_cast<uint32_t *>(data_out)[row] = s->vals.u32[t + vals_skipped];
               list_child_elements                    = s->vals.u32[t + vals_skipped];
               break;
@@ -1768,7 +1796,10 @@ __global__ void __launch_bounds__(block_size)
     }
     __syncthreads();
   }
-  if (t == 0) { atomicAdd(&chunks[chunk_id].num_child_rows, s->num_child_rows); }
+  if (t == 0) {
+    printf("RGSL : Number of child are %d is_valid row group %d\n", s->num_child_rows, is_valid);
+    atomicAdd(&chunks[chunk_id].num_child_rows, s->num_child_rows);
+  }
   __syncthreads();
   if (t == 0) {
     printf("RGSL : number of child rows are %d and address is %d\n",
