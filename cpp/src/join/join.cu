@@ -45,18 +45,16 @@ inner_join(table_view const& left_input,
   auto const left  = matched.second.front();
   auto const right = matched.second.back();
 
-  std::optional<std::size_t> output_size;
-
   // For `inner_join`, we can freely choose either the `left` or `right` table to use for
   // building/probing the hash map. Because building is typically more expensive than probing, we
   // build the hash map from the smaller table.
   if (right.num_rows() > left.num_rows()) {
     cudf::hash_join hj_obj(left, compare_nulls, stream);
-    auto result = hj_obj.inner_join(right, compare_nulls, output_size, stream, mr);
+    auto result = hj_obj.inner_join(right, compare_nulls, std::nullopt, stream, mr);
     return std::make_pair(std::move(result.second), std::move(result.first));
   } else {
     cudf::hash_join hj_obj(right, compare_nulls, stream);
-    return hj_obj.inner_join(left, compare_nulls, output_size, stream, mr);
+    return hj_obj.inner_join(left, compare_nulls, std::nullopt, stream, mr);
   }
 }
 
@@ -113,10 +111,8 @@ left_join(table_view const& left_input,
   table_view const left  = matched.second.front();
   table_view const right = matched.second.back();
 
-  std::optional<std::size_t> output_size;
-
   cudf::hash_join hj_obj(right, compare_nulls, stream);
-  return hj_obj.left_join(left, compare_nulls, output_size, stream, mr);
+  return hj_obj.left_join(left, compare_nulls, std::nullopt, stream, mr);
 }
 
 std::unique_ptr<table> left_join(table_view const& left_input,
@@ -178,10 +174,8 @@ full_join(table_view const& left_input,
   table_view const left  = matched.second.front();
   table_view const right = matched.second.back();
 
-  std::optional<std::size_t> output_size;
-
   cudf::hash_join hj_obj(right, compare_nulls, stream);
-  return hj_obj.full_join(left, compare_nulls, output_size, stream, mr);
+  return hj_obj.full_join(left, compare_nulls, std::nullopt, stream, mr);
 }
 
 std::unique_ptr<table> full_join(table_view const& left_input,
