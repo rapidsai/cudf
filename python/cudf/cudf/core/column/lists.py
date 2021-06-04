@@ -76,7 +76,10 @@ class ListColumn(ColumnBase):
 
     @property
     def base_size(self):
-        return len(self.base_children[0]) - 1
+        # in some cases, libcudf will return an empty ListColumn with no
+        # indices; in these cases, we must manually set the base_size to 0 to
+        # avoid it being negative
+        return max(0, len(self.base_children[0]) - 1)
 
     def binary_operator(
         self, binop: str, other: BinaryOperand, reflect: bool = False
