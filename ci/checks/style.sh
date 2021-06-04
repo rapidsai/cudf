@@ -14,19 +14,19 @@ LANG=C.UTF-8
 source activate gdf
 
 # Run isort-cudf and get results/return code
-ISORT_CUDF=`isort python/cudf --check-only --settings-path=python/cudf/setup.cfg --skip-glob *.pyx --skip-glob *.pyi 2>&1`
+ISORT_CUDF=`isort python/cudf --check-only --settings-path=python/cudf/setup.cfg 2>&1`
 ISORT_CUDF_RETVAL=$?
 
 # Run isort-cudf-kafka and get results/return code
-ISORT_CUDF_KAFKA=`isort python/cudf_kafka --check-only --settings-path=python/cudf_kafka/setup.cfg --skip-glob *.pyx --skip-glob *.pyi 2>&1`
+ISORT_CUDF_KAFKA=`isort python/cudf_kafka --check-only --settings-path=python/cudf_kafka/setup.cfg 2>&1`
 ISORT_CUDF_KAFKA_RETVAL=$?
 
 # Run isort-custreamz and get results/return code
-ISORT_CUSTREAMZ=`isort python/custreamz --check-only --settings-path=python/custreamz/setup.cfg --skip-glob *.pyx --skip-glob *.pyi 2>&1`
+ISORT_CUSTREAMZ=`isort python/custreamz --check-only --settings-path=python/custreamz/setup.cfg 2>&1`
 ISORT_CUSTREAMZ_RETVAL=$?
 
 # Run isort-dask-cudf and get results/return code
-ISORT_DASK_CUDF=`isort python/dask_cudf --check-only --settings-path=python/dask_cudf/setup.cfg --skip-glob *.pyx --skip-glob *.pyi 2>&1`
+ISORT_DASK_CUDF=`isort python/dask_cudf --check-only --settings-path=python/dask_cudf/setup.cfg 2>&1`
 ISORT_DASK_CUDF_RETVAL=$?
 
 # Run black and get results/return code

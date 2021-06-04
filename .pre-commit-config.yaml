@@ -1,6 +1,6 @@
 repos:
-      - repo: https://github.com/timothycrosley/isort
-        rev: 5.0.7
+      - repo: https://github.com/pycqa/isort
+        rev: 5.6.0
         hooks:
               - id: isort
                 alias: isort-cudf
@@ -8,11 +8,15 @@ repos:
                 args: ["--settings-path=python/cudf/setup.cfg"]
                 files: python/cudf/.*
                 exclude: __init__.py$
+                types: [text]
+                types_or: [python, cython, pyi]
               - id: isort
                 alias: isort-cudf-kafka
                 name: isort-cudf-kafka
                 args: ["--settings-path=python/cudf_kafka/setup.cfg"]
                 files: python/cudf_kafka/.*
+                types: [text]
+                types_or: [python, cython]
               - id: isort
                 alias: isort-custreamz
                 name: isort-custreamz
