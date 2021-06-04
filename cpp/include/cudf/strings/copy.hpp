@@ -47,6 +47,7 @@ namespace strings {
  *        (i.e., `input.size() * repeat_times > numeric_limits<size_type>::max()`).
  *
  * @param input The scalar containing the string to repeat.
+ * @param repeat_times The number for repeating string.
  * @param mr Device memory resource used to allocate the returned string scalar.
  * @return New string scalar in which the string is repeated from the input.
  */
@@ -72,14 +73,10 @@ string_scalar repeat_strings(
  * strs = ['aa', null, '',  'bbc']
  * out  = repeat_strings(strs, 3)
  * out is ['aaaaaa', null, '',  'bbcbbcbbc']
- *
  * @endcode
  *
- * @throw cudf::logic_error if the total size of the ouput strings exceeds the maximum value that
- *        can be stored by the index type
- *        (i.e., `sum(str.size(), str in input) * repeat_times > numeric_limits<size_type>::max()`).
- *
  * @param input The column containing strings to repeat.
+ * @param repeat_times The number for repeating string.
  * @param mr Device memory resource used to allocate the returned strings column.
  * @return New column with concatenated results.
  */
