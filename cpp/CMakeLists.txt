@@ -347,9 +347,9 @@ add_library(cudf
     src/strings/convert/convert_integers.cu
     src/strings/convert/convert_ipv4.cu
     src/strings/convert/convert_urls.cu
-    src/strings/copy/concatenate.cu
-    src/strings/copy/copying.cu
-    src/strings/copy/repeat_strings.cu
+    src/strings/copying/concatenate.cu
+    src/strings/copying/copying.cu
+    src/strings/repeat_strings.cu
     src/strings/extract.cu
     src/strings/filling/fill.cu
     src/strings/filter_chars.cu
