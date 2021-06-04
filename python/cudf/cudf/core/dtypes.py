@@ -2,7 +2,7 @@
 
 import decimal
 import pickle
-from typing import Any, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -12,6 +12,7 @@ from pandas.core.arrays._arrow_utils import ArrowIntervalType
 
 import cudf
 from cudf._typing import Dtype
+from cudf.core.buffer import Buffer
 
 
 class _BaseDtype(ExtensionDtype):
@@ -186,6 +187,29 @@ class ListDtype(_BaseDtype):
     def __hash__(self):
         return hash(self._typ)
 
+    def serialize(self) -> Tuple[dict, list]:
+        header: Dict[str, Dtype] = {}
+        frames = []
+        if isinstance(self.element_type, _BaseDtype):
+            header["element-type-cls"] = self.element_type.__class__
+            (
+                header["element-type-header"],
+                frames,
+            ) = self.element_type.serialize()
+        else:
+            header["element-type"] = self.element_type
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header: dict, frames: list):
+        if "element-type-cls" in header:
+            element_type = header["element-type-cls"].deserialize(
+                header["element-type-header"], frames
+            )
+        else:
+            element_type = header["element-type"]
+        return cls(element_type)
+
 
 class StructDtype(_BaseDtype):
 
@@ -236,6 +260,36 @@ class StructDtype(_BaseDtype):
 
     def __hash__(self):
         return hash(self._typ)
+
+    def serialize(self) -> Tuple[dict, list]:
+        header = {}
+        frames: List[Buffer] = []
+        for k, dtype in self.fields.items():
+            if isinstance(dtype, _BaseDtype):
+                dtype_header, dtype_frames = dtype.serialize()
+                header[k] = {
+                    "cls": dtype.__class__,
+                    "header": dtype_header,
+                    "frames": (len(frames), len(frames) + len(dtype_frames)),
+                }
+                frames.extend(dtype_frames)
+            else:
+                header[k] = dtype
+
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header: dict, frames: list):
+        fields = {}
+        for k, dtype in header.items():
+            if isinstance(dtype, dict):
+                fields[k] = dtype["cls"].deserialize(
+                    dtype["header"],
+                    frames[dtype["frames"][0] : dtype["frames"][1]],
+                )
+            else:
+                fields[k] = dtype
+        return cls(fields)
 
 
 class Decimal64Dtype(_BaseDtype):
