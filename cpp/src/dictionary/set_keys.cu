@@ -72,7 +72,7 @@ struct dispatch_compute_indices {
     auto result_itr =
       cudf::detail::indexalator_factory::make_output_iterator(result->mutable_view());
 
-#ifdef NDEBUG  // something goes wrong here in a Debug build
+#ifdef NDEBUG
     thrust::lower_bound(rmm::exec_policy(stream),
                         begin,
                         end,
@@ -81,6 +81,9 @@ struct dispatch_compute_indices {
                         result_itr,
                         thrust::less<Element>());
 #else
+    // There is a problem with thrust::lower_bound and the output_indexalator
+    // https://github.com/NVIDIA/thrust/issues/1452
+    // This is a workaround.
     thrust::transform(rmm::exec_policy(stream),
                       dictionary_itr,
                       dictionary_itr + input.size(),

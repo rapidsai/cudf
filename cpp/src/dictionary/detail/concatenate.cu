@@ -164,7 +164,7 @@ struct dispatch_compute_indices {
       cudf::detail::indexalator_factory::make_output_iterator(result->mutable_view());
     // new indices values are computed by matching the concatenated keys to the new key set
 
-#ifdef NDEBUG  // something goes wrong here in a Debug build
+#ifdef NDEBUG
     thrust::lower_bound(rmm::exec_policy(stream),
                         begin,
                         end,
@@ -173,6 +173,9 @@ struct dispatch_compute_indices {
                         result_itr,
                         thrust::less<Element>());
 #else
+    // There is a problem with thrust::lower_bound and the output_indexalator
+    // https://github.com/NVIDIA/thrust/issues/1452
+    // This is a workaround.
     thrust::transform(rmm::exec_policy(stream),
                       all_itr,
                       all_itr + all_indices.size(),
