@@ -56,7 +56,6 @@ std::unique_ptr<column> reverse(column_view const& source_column,
   std::vector<std::unique_ptr<column>> columns = reversed_column->release();
 
   return std::move(columns.at(0));
-  ;
 }
 }  // namespace detail
 
