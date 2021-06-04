@@ -2749,6 +2749,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector listSortRows(boolean isDescending, boolean isNullSmallest) {
     assert type.equals(DType.LIST) : "column type must be a LIST";
     return new ColumnVector(listSortRows(getNativeView(), isDescending, isNullSmallest));
+  }
 
   /**
    * Get a single item from the column at the specified index as a Scalar.

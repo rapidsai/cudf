@@ -3073,7 +3073,7 @@ public class TableTest extends CudfTestBase {
           assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
 
           // Primitive type: INT32
-          //  a) excluding nulls
+          //  a) excluding NULLs
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(aggCollect.onColumn(3).overWindow(winOpts));
                ColumnVector expected = ColumnVector.fromLists(
@@ -3083,7 +3083,7 @@ public class TableTest extends CudfTestBase {
                    Arrays.asList(), Arrays.asList(6), Arrays.asList(6, 7), Arrays.asList(6, 7))) {
             assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
           }
-          //  b) including nulls AND nulls are equal
+          //  b) including NULLs AND NULLs are equal
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(aggCollectWithEqNulls.onColumn(3).overWindow(winOpts));
                ColumnVector expected = ColumnVector.fromLists(
@@ -3093,7 +3093,7 @@ public class TableTest extends CudfTestBase {
                    Arrays.asList((Integer) null), Arrays.asList(6, null), Arrays.asList(6, 7, null), Arrays.asList(6, 7))) {
             assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
           }
-          //  c) including nulls AND nulls are unequal
+          //  c) including NULLs AND NULLs are unequal
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(aggCollectWithUnEqNulls.onColumn(3).overWindow(winOpts));
                ColumnVector expected = ColumnVector.fromLists(
@@ -3105,7 +3105,7 @@ public class TableTest extends CudfTestBase {
           }
 
           // Primitive type: FLOAT64
-          //  a) excluding nulls
+          //  a) excluding NULLs
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(aggCollect.onColumn(4).overWindow(winOpts));
                ColumnVector expected = ColumnVector.fromLists(
@@ -3117,7 +3117,7 @@ public class TableTest extends CudfTestBase {
                    Arrays.asList(Double.NaN, Double.NaN), Arrays.asList(Double.NaN, Double.NaN))) {
             assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
           }
-          //  b) including nulls AND nulls are equal
+          //  b) including NULLs AND NULLs are equal
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(aggCollectWithEqNulls.onColumn(4).overWindow(winOpts));
                ColumnVector expected = ColumnVector.fromLists(
@@ -3129,7 +3129,7 @@ public class TableTest extends CudfTestBase {
                    Arrays.asList(Double.NaN, Double.NaN, null), Arrays.asList(Double.NaN, Double.NaN))) {
             assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
           }
-          //  c) including nulls AND nulls are equal AND nans are equal
+          //  c) including NULLs AND NULLs are equal AND NaNs are equal
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(aggCollectWithEqNaNs.onColumn(4).overWindow(winOpts));
                ColumnVector expected = ColumnVector.fromLists(
