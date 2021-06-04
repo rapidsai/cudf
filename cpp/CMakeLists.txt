@@ -349,7 +349,6 @@ add_library(cudf
     src/strings/convert/convert_urls.cu
     src/strings/copying/concatenate.cu
     src/strings/copying/copying.cu
-    src/strings/repeat_strings.cu
     src/strings/extract.cu
     src/strings/filling/fill.cu
     src/strings/filter_chars.cu
@@ -360,6 +359,7 @@ add_library(cudf
     src/strings/json/json_path.cu
     src/strings/regex/regcomp.cpp
     src/strings/regex/regexec.cu
+    src/strings/repeat_strings.cu
     src/strings/replace/backref_re.cu
     src/strings/replace/backref_re_large.cu
     src/strings/replace/backref_re_medium.cu
