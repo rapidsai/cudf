@@ -163,7 +163,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
   // Repeat the strings in each row.
   // Note that this cannot handle the cases when the size of the output column exceeds the maximum
   // value that can be indexed by size_type (offset_type).
-  // In such situations, an exception may be thrown, or the output result is be undefined.
+  // In such situations, an exception may be thrown, or the output result is undefined.
   auto [offsets_column, chars_column] =
     make_strings_children(fn, strings_count * repeat_times, strings_count, stream, mr);
 
