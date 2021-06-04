@@ -336,7 +336,6 @@ ConfigureTest(STRINGS_TEST
     strings/combine/join_strings_tests.cpp
     strings/concatenate_tests.cpp
     strings/contains_tests.cpp
-    strings/copy/repeat_strings_tests.cpp
     strings/datetime_tests.cpp
     strings/durations_tests.cpp
     strings/extract_tests.cpp
@@ -352,6 +351,7 @@ ConfigureTest(STRINGS_TEST
     strings/ipv4_tests.cpp
     strings/json_tests.cpp
     strings/pad_tests.cpp
+    strings/repeat_strings_tests.cpp
     strings/replace_regex_tests.cpp
     strings/replace_tests.cpp
     strings/split_tests.cpp
