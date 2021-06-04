@@ -1154,7 +1154,7 @@ TEST_P(OrcWriterTestDecimal, Decimal64)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(tbl->view().column(0), result.tbl->view().column(0));
 }
-/*
+
 INSTANTIATE_TEST_CASE_P(OrcWriterTest,
                         OrcWriterTestDecimal,
                         ::testing::Combine(::testing::Values(1, 10000, 10001, 34567),
@@ -1194,5 +1194,5 @@ TEST_F(OrcWriterTest, Decimal32)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col64, result.tbl->view().column(0));
 }
-*/
+
 CUDF_TEST_PROGRAM_MAIN()
