@@ -7,6 +7,7 @@ repos:
                 name: isort-cudf
                 args: ["--settings-path=python/cudf/setup.cfg"]
                 files: python/cudf/.*
+                exclude: __init__.py$
               - id: isort
                 alias: isort-cudf-kafka
                 name: isort-cudf-kafka
