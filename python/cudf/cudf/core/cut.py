@@ -138,12 +138,8 @@ def cut(
                 bins = cupy.unique(bins).tolist()
 
     # if bins is an intervalIndex we ignore the value of right
-    if (
-        right is False
-        and isinstance(bins, pandas_IntervalIndex)
-        and bins.closed == "right"
-    ):
-        right = True
+    if isinstance(bins, (pd.IntervalIndex, cudf.IntervalIndex)):
+        right = bins.closed == "right"
 
     # create bins if given an int or single scalar
     if not isinstance(bins, pandas_IntervalIndex):
