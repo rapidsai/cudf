@@ -39,21 +39,18 @@ std::unique_ptr<table> reverse(table_view const& source_table,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  thrust::counting_iterator<cudf::size_type> iter(0);
-  rmm::device_vector<cudf::size_type> indices(source_table.num_rows());
-  thrust::copy(iter, iter + source_table.num_rows(), indices.begin());
+  size_type num_rows = source_table.num_rows();
+  auto elements =
+    make_counting_transform_iterator(0, [num_rows] __device__(auto i) { return num_rows - i - 1; });
+  auto elements_end = elements + source_table.num_rows();
 
-  thrust::reverse(rmm::exec_policy(stream), indices.begin(), indices.end());
-
-  return gather(
-    source_table, indices.begin(), indices.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
+  return gather(source_table, elements, elements_end, out_of_bounds_policy::DONT_CHECK, stream, mr);
 }
 
 std::unique_ptr<column> reverse(column_view const& source_column,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
-  // rmm::device_uvector<size_type> indices(output_size, stream);
   return std::unique_ptr<column>{};
 }
 }  // namespace detail
