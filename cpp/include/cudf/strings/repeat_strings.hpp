@@ -23,8 +23,8 @@ namespace strings {
 /**
  * @addtogroup strings_copy
  * @{
- * @file strings/copy.hpp
- * @brief Strings APIs for copying
+ * @file strings/repeat_strings.hpp
+ * @brief Strings APIs for copying strings.
  */
 
 /**
