@@ -2,7 +2,6 @@ from cudf._lib.labeling import label_bins
 from cudf.core.column import as_column
 from cudf.core.column import build_categorical_column
 from cudf.core.index import IntervalIndex, interval_range
-from pandas.core.indexes.interval import IntervalIndex as pandas_IntervalIndex
 from cudf.utils.dtypes import is_list_like
 import cupy
 import cudf
@@ -33,7 +32,7 @@ def cut(
     ----------
     x : array-like
         The input array to be binned. Must be 1-dimensional.
-    bins : int, sequence of scalars, or IntervalIndex
+    bins : int, of scalars, or IntervalIndex
         The criteria to bin by.
         * int : Defines the number of equal-width bins in the
         range of x. The range of x is extended by .1% on each
@@ -138,15 +137,11 @@ def cut(
                 bins = cupy.unique(bins).tolist()
 
     # if bins is an intervalIndex we ignore the value of right
-    if (
-        right is False
-        and isinstance(bins, pandas_IntervalIndex)
-        and bins.closed == "right"
-    ):
-        right = True
+    if isinstance(bins, (pd.IntervalIndex, cudf.IntervalIndex)):
+        right = bins.closed == "right"
 
     # create bins if given an int or single scalar
-    if not isinstance(bins, pandas_IntervalIndex):
+    if not isinstance(bins, pd.IntervalIndex):
         if not isinstance(bins, (Sequence)):
             if isinstance(
                 x, (pd.Series, cudf.Series, np.ndarray, cupy.ndarray)
@@ -176,7 +171,7 @@ def cut(
             bins[0] = bins[0] - 10 ** (-precision)
 
         # if right is false the last bin edge is not included
-        if right is False:
+        if not right:
             right_edge = bins[len(bins) - 1]
             x = cupy.asarray(x)
             if isinstance(right_edge, cupy._core.core.ndarray):
