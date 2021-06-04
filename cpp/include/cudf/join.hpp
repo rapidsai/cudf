@@ -22,6 +22,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <optional>
 #include <vector>
 
 namespace cudf {

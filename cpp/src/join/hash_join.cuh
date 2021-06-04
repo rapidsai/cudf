@@ -316,35 +316,38 @@ struct hash_join::hash_join_impl {
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(cudf::table_view const& probe,
-             null_equality compare_nulls         = null_equality::EQUAL,
-             rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+             null_equality compare_nulls,
+             std::optional<std::size_t> output_size,
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr) const;
 
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   left_join(cudf::table_view const& probe,
-            null_equality compare_nulls         = null_equality::EQUAL,
-            rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+            null_equality compare_nulls,
+            std::optional<std::size_t> output_size,
+            rmm::cuda_stream_view stream,
+            rmm::mr::device_memory_resource* mr) const;
 
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   full_join(cudf::table_view const& probe,
-            null_equality compare_nulls         = null_equality::EQUAL,
-            rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+            null_equality compare_nulls,
+            std::optional<std::size_t> output_size,
+            rmm::cuda_stream_view stream,
+            rmm::mr::device_memory_resource* mr) const;
 
   std::size_t inner_join_size(cudf::table_view const& probe,
-                              null_equality compare_nulls  = null_equality::EQUAL,
-                              rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+                              null_equality compare_nulls,
+                              rmm::cuda_stream_view stream) const;
 
   std::size_t left_join_size(cudf::table_view const& probe,
-                             null_equality compare_nulls  = null_equality::EQUAL,
-                             rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+                             null_equality compare_nulls,
+                             rmm::cuda_stream_view stream) const;
 
   std::size_t full_join_size(cudf::table_view const& probe,
-                             null_equality compare_nulls  = null_equality::EQUAL,
-                             rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+                             null_equality compare_nulls,
+                             rmm::cuda_stream_view stream) const;
 
  private:
   template <cudf::detail::join_kind JoinKind>
@@ -352,13 +355,15 @@ struct hash_join::hash_join_impl {
             std::unique_ptr<rmm::device_uvector<size_type>>>
   compute_hash_join(cudf::table_view const& probe,
                     null_equality compare_nulls,
+                    std::optional<std::size_t> output_size,
                     rmm::cuda_stream_view stream,
                     rmm::mr::device_memory_resource* mr) const;
 
   /**
    * @brief Probes the `_hash_table` built from `_build` for tuples in `probe_table`,
    * and returns the output indices of `build_table` and `probe_table` as a combined table,
-   * i.e. if full join is specified as the join type then left join is called.
+   * i.e. if full join is specified as the join type then left join is called. Behavior
+   * is undefined if the provided `output_size` is smaller than the actual output size.
    *
    * @throw cudf::logic_error if hash table is null.
    *
@@ -366,6 +371,7 @@ struct hash_join::hash_join_impl {
    *
    * @param probe_table Table of probe side columns to join.
    * @param compare_nulls Controls whether null join-key values should match or not.
+   * @param output_size Optional value which allows users to specify the exact output size.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned vectors.
    *
@@ -376,6 +382,7 @@ struct hash_join::hash_join_impl {
             std::unique_ptr<rmm::device_uvector<size_type>>>
   probe_join_indices(cudf::table_view const& probe,
                      null_equality compare_nulls,
+                     std::optional<std::size_t> output_size,
                      rmm::cuda_stream_view stream,
                      rmm::mr::device_memory_resource* mr) const;
 };
