@@ -180,7 +180,7 @@ ConfigureTest(INTEROP_TEST
 
 ###################################################################################################
 # - io tests --------------------------------------------------------------------------------------
-ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cu)
+ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cpp)
 
 ConfigureTest(CSV_TEST io/csv_test.cpp)
 ConfigureTest(ORC_TEST io/orc_test.cpp)
