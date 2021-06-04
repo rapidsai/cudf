@@ -228,6 +228,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_ifElseSS(JNIEnv *env, jcl
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getElement(JNIEnv *env, jclass,
+                                                                  jlong from,
+                                                                  jint index) {
+  JNI_NULL_CHECK(env, from, "from column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto from_vec = reinterpret_cast<cudf::column_view *>(from);
+    std::unique_ptr<cudf::scalar> result =
+        cudf::get_element(*from_vec, index);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_reduce(JNIEnv *env, jclass,
                                                               jlong j_col_view,
                                                               jlong j_agg,

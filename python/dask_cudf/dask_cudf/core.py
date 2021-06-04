@@ -14,7 +14,13 @@ from dask.base import normalize_token, tokenize
 from dask.compatibility import apply
 from dask.context import _globals
 from dask.core import flatten
-from dask.dataframe.core import Scalar, finalize, handle_out, map_partitions
+from dask.dataframe.core import (
+    Scalar,
+    finalize,
+    handle_out,
+    make_meta as dask_make_meta,
+    map_partitions,
+)
 from dask.dataframe.utils import raise_on_meta_error
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
@@ -25,11 +31,6 @@ from cudf import _lib as libcudf
 
 from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods
-
-try:
-    from dask.dataframe.utils import make_meta_util as dask_make_meta
-except ImportError:
-    from dask.dataframe.core import make_meta as dask_make_meta
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
