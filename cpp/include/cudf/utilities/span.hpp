@@ -258,7 +258,7 @@ class base_2dspan {
     return row * size.second + column;
   }
 
-  constexpr RowType<T, dynamic_extent> operator[](size_t row)
+  constexpr RowType<T, dynamic_extent> operator[](size_t row) const
   {
     return {this->data() + flatten_index(row, 0, this->size()), this->size().second};
   }

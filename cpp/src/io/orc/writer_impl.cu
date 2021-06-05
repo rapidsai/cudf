@@ -219,8 +219,9 @@ class orc_column_view {
  private:
   column_view cudf_column;
 
-  // Identifier within set of columns and string columns, respectively
-  uint32_t _index  = 0;
+  // Identifier within the set of columns
+  uint32_t _index = 0;
+  // Identifier within the set of string columns
   uint32_t _str_id = 0;
 
   size_t _type_width = 0;
@@ -1073,43 +1074,6 @@ void writer::impl::init_state()
   out_sink_->host_write(MAGIC, std::strlen(MAGIC));
 }
 
-/**
- * @brief Iterates over row indexes but returns the corresponding rowgroup index.
- *
- */
-struct rowgroup_iterator {
-  using difference_type   = long;
-  using value_type        = int;
-  using pointer           = int *;
-  using reference         = int &;
-  using iterator_category = thrust::output_device_iterator_tag;
-  size_type idx;
-  size_type rowgroup_size;
-
-  CUDA_HOST_DEVICE_CALLABLE rowgroup_iterator(int offset, size_type rg_size)
-    : idx{offset}, rowgroup_size{rg_size}
-  {
-  }
-  CUDA_HOST_DEVICE_CALLABLE value_type operator*() const { return idx / rowgroup_size; }
-  CUDA_HOST_DEVICE_CALLABLE auto operator+(int i) const
-  {
-    return rowgroup_iterator{idx + i, rowgroup_size};
-  }
-  CUDA_HOST_DEVICE_CALLABLE rowgroup_iterator &operator++()
-  {
-    ++idx;
-    return *this;
-  }
-  CUDA_HOST_DEVICE_CALLABLE value_type operator[](int offset)
-  {
-    return (idx + offset) / rowgroup_size;
-  }
-  CUDA_HOST_DEVICE_CALLABLE bool operator!=(rowgroup_iterator const &other)
-  {
-    return idx != other.idx;
-  }
-};
-
 void __device__ preorder_append(uint32_t &idx,
                                 int32_t parent_idx,
                                 device_span<orc_column_device_view> cols,
@@ -1198,10 +1162,11 @@ hostdevice_2dvector<rows_range> calculate_rowgroup_sizes(orc_table_view const &o
 
 // returns host vector of per-rowgroup sizes
 encoder_decimal_info decimal_chunk_sizes(orc_table_view &orc_table,
-                                         size_type rowgroup_size,
+                                         device_2dspan<rows_range const> rowgroup_ranges,
                                          host_span<stripe_rowgroups const> stripes,
                                          rmm::cuda_stream_view stream)
 {
+  auto const num_rowgroups = rowgroup_ranges.size().first;
   std::map<uint32_t, rmm::device_uvector<uint32_t>> elem_sizes;
   // Compute per-element offsets (within each row group) on the device
   for (auto &orc_col : orc_table.columns) {
@@ -1232,11 +1197,18 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view &orc_table,
                        });
 
       // Compute element offsets within each row group
-      thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
-                                    rowgroup_iterator{0, rowgroup_size},
-                                    rowgroup_iterator{orc_col.size(), rowgroup_size},
-                                    current_sizes.begin(),
-                                    current_sizes.begin());
+      thrust::for_each_n(rmm::exec_policy(stream),
+                         thrust::make_counting_iterator(0ul),
+                         num_rowgroups,
+                         [sizes     = device_span<uint32_t>{current_sizes},
+                          rg_bounds = device_2dspan<rows_range const>{rowgroup_ranges},
+                          col_idx   = orc_col.flat_index()] __device__(auto rg_idx) {
+                           auto const &range = rg_bounds[rg_idx][col_idx];
+                           thrust::inclusive_scan(thrust::seq,
+                                                  sizes.begin() + range.begin,
+                                                  sizes.begin() + range.end,
+                                                  sizes.begin() + range.begin);
+                         });
 
       orc_col.attach_decimal_offsets(current_sizes.data());
     }
@@ -1244,7 +1216,6 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view &orc_table,
   if (elem_sizes.empty()) return {};
 
   // Gather the row group sizes and copy to host
-  auto const num_rowgroups  = stripes_size(stripes);
   auto d_tmp_rowgroup_sizes = rmm::device_uvector<uint32_t>(num_rowgroups, stream);
   std::map<uint32_t, std::vector<uint32_t>> rg_sizes;
   for (auto const &[col_idx, esizes] : elem_sizes) {
@@ -1253,8 +1224,11 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view &orc_table,
       rmm::exec_policy(stream),
       d_tmp_rowgroup_sizes.begin(),
       d_tmp_rowgroup_sizes.end(),
-      [src = esizes.data(), num_rows = esizes.size(), rg_size = rowgroup_size] __device__(
-        auto idx) { return src[thrust::min<size_type>(num_rows, rg_size * (idx + 1)) - 1]; });
+      [src       = esizes.data(),
+       col_idx   = col_idx,
+       rg_bounds = device_2dspan<rows_range const>{rowgroup_ranges}] __device__(auto idx) {
+        return src[rg_bounds[idx][col_idx].end - 1];
+      });
 
     rg_sizes[col_idx] = cudf::detail::make_std_vector_async(d_tmp_rowgroup_sizes, stream);
   }
@@ -1343,7 +1317,7 @@ void writer::impl::write(table_view const &table)
     build_dictionaries(orc_table, stripe_bounds, dict, dictionaries.index, stripe_dict);
   }
 
-  auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, row_index_stride_, stripe_bounds, stream);
+  auto dec_chunk_sizes = decimal_chunk_sizes(orc_table, rowgroup_bounds, stripe_bounds, stream);
 
   auto streams = create_streams(
     orc_table.columns, stripe_bounds, decimal_column_sizes(dec_chunk_sizes.rg_sizes));
