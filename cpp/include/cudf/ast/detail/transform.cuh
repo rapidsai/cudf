@@ -237,7 +237,7 @@ struct ast_plan {
  * This class is designed for n-ary transform evaluation. It operates on two
  * separate tables, and knows the rows of each one.
  */
-template <typename OutputType, bool has_nulls>
+template <bool has_nulls>
 struct expression_evaluator {
  private:
   using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
@@ -332,7 +332,7 @@ struct expression_evaluator {
    * @param input Input data reference.
    * @param output Output data reference.
    */
-  template <typename Input>
+  template <typename Input, typename OutputType>
   __device__ void operator()(OutputType output_object,
                              cudf::size_type input_row_index,
                              const detail::device_data_reference input,
@@ -360,7 +360,7 @@ struct expression_evaluator {
    * @param rhs Right input data reference.
    * @param output Output data reference.
    */
-  template <typename LHS, typename RHS>
+  template <typename LHS, typename RHS, typename OutputType>
   __device__ void operator()(OutputType output_object,
                              cudf::size_type left_row_index,
                              cudf::size_type right_row_index,
@@ -384,6 +384,7 @@ struct expression_evaluator {
   template <typename OperatorFunctor,
             typename LHS,
             typename RHS,
+            typename OutputType,
             std::enable_if_t<!detail::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
   __device__ void operator()(OutputType output_object,
                              cudf::size_type left_row_index,
@@ -409,6 +410,7 @@ struct expression_evaluator {
    * @param num_operators Number of operators.
    * @param row_index Row index of data column(s).
    */
+  template <typename OutputType>
   __device__ void evaluate(OutputType output_object, cudf::size_type row_index)
   {
     evaluate(output_object, row_index, row_index, row_index);
@@ -426,6 +428,7 @@ struct expression_evaluator {
    * @param num_operators Number of operators.
    * @param row_index Row index of data column(s).
    */
+  template <typename OutputType>
   __device__ void evaluate(OutputType output_object,
                            cudf::size_type left_row_index,
                            cudf::size_type right_row_index,
@@ -482,7 +485,7 @@ struct expression_evaluator {
  private:
   struct expression_output {
    public:
-    __device__ expression_output(expression_evaluator<OutputType, has_nulls> const& evaluator)
+    __device__ expression_output(expression_evaluator<has_nulls> const& evaluator)
       : evaluator(evaluator)
     {
     }
@@ -509,7 +512,9 @@ struct expression_evaluator {
     // because it makes all the overloads compile but they'll run erroneously.
     // Currently this isn't an issue only because the conditional join code
     // exclusively uses the bool path at runtime.
-    template <typename Element, CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
+    template <typename Element,
+              typename OutputType,
+              CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
     __device__ void resolve_output(OutputType output_object,
                                    detail::device_data_reference device_data_reference,
                                    cudf::size_type row_index,
@@ -527,7 +532,9 @@ struct expression_evaluator {
       }
     }
 
-    template <typename Element, CUDF_ENABLE_IF(not is_rep_layout_compatible<Element>())>
+    template <typename Element,
+              typename OutputType,
+              CUDF_ENABLE_IF(not is_rep_layout_compatible<Element>())>
     __device__ void resolve_output(OutputType output_object,
                                    detail::device_data_reference device_data_reference,
                                    cudf::size_type row_index,
@@ -537,18 +544,19 @@ struct expression_evaluator {
     }
 
    private:
-    expression_evaluator<OutputType, has_nulls> const& evaluator;
+    expression_evaluator<has_nulls> const& evaluator;
   };
 
   template <typename Input>
   struct unary_expression_output : public expression_output {
-    __device__ unary_expression_output(expression_evaluator<OutputType, has_nulls> const& evaluator)
+    __device__ unary_expression_output(expression_evaluator<has_nulls> const& evaluator)
       : expression_output(evaluator)
     {
     }
 
     template <
       ast_operator op,
+      typename OutputType,
       std::enable_if_t<detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
     __device__ void operator()(OutputType output_object,
                                cudf::size_type output_row_index,
@@ -570,6 +578,7 @@ struct expression_evaluator {
 
     template <
       ast_operator op,
+      typename OutputType,
       std::enable_if_t<!detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
     __device__ void operator()(OutputType output_object,
                                cudf::size_type output_row_index,
@@ -582,13 +591,13 @@ struct expression_evaluator {
 
   template <typename LHS, typename RHS>
   struct binary_expression_output : public expression_output {
-    __device__ binary_expression_output(
-      expression_evaluator<OutputType, has_nulls> const& evaluator)
+    __device__ binary_expression_output(expression_evaluator<has_nulls> const& evaluator)
       : expression_output(evaluator)
     {
     }
 
     template <ast_operator op,
+              typename OutputType,
               std::enable_if_t<
                 detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* = nullptr>
     __device__ void operator()(OutputType output_object,
@@ -611,6 +620,7 @@ struct expression_evaluator {
     }
 
     template <ast_operator op,
+              typename OutputType,
               std::enable_if_t<
                 !detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* = nullptr>
     __device__ void operator()(OutputType output_object,

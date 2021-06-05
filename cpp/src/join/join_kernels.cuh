@@ -249,9 +249,8 @@ __global__ void compute_conditional_join_output_size(table_device_view left_tabl
   // there are no nulls.  Should see if there's a better way.
   bool test_var;
   thrust::pair<void*, bool> test_optional(&test_var, !has_nulls);
-  auto evaluator = cudf::ast::detail::expression_evaluator<
-    cudf::ast::detail::value_container<has_nulls, thrust::pair<void*, bool>*>,
-    has_nulls>(left_table, plan, thread_intermediate_storage, right_table);
+  auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
+    left_table, plan, thread_intermediate_storage, right_table);
 
   for (cudf::size_type left_row_index = left_start_idx; left_row_index < left_num_rows;
        left_row_index += left_stride) {
@@ -528,9 +527,8 @@ __global__ void conditional_join(table_device_view left_table,
 
   bool test_var;
   thrust::pair<void*, bool> test_optional(&test_var, !has_nulls);
-  auto evaluator = cudf::ast::detail::expression_evaluator<
-    cudf::ast::detail::value_container<has_nulls, thrust::pair<void*, bool>*>,
-    has_nulls>(left_table, plan, thread_intermediate_storage, right_table);
+  auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
+    left_table, plan, thread_intermediate_storage, right_table);
 
   if (left_row_index < left_num_rows) {
     bool found_match = false;
