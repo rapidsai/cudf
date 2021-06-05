@@ -1998,6 +1998,26 @@ def test_groupby_fillna_multi_value_df(nelem):
     assert_groupby_results_equal(expect[value_cols], got[value_cols])
 
 
+@pytest.mark.parametrize(
+    "by",
+    [pd.Series([1, 1, 2, 2, 3, 4]), lambda x: x % 2 == 0, pd.Grouper(level=0)],
+)
+@pytest.mark.parametrize(
+    "data", [[1, None, 2, None, 3, None], [1, 2, 3, 4, 5, 6]]
+)
+@pytest.mark.parametrize("args", [{"value": 42}, {"method": "ffill"}])
+def test_groupby_various_by_fillna(by, data, args):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.groupby(by).fillna(**args)
+    if isinstance(by, pd.Grouper):
+        by = cudf.Grouper(level=by.level)
+    got = gs.groupby(by).fillna(**args)
+
+    assert_groupby_results_equal(expect, got, check_dtype=False)
+
+
 @pytest.mark.parametrize("nelem", [10, 100, 1000])
 @pytest.mark.parametrize("method", ["pad", "ffill", "backfill", "bfill"])
 def test_groupby_fillna_method(nelem, method):

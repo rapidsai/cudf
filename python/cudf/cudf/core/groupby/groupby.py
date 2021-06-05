@@ -710,7 +710,7 @@ class GroupBy(Serializable):
     def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
         """Internal implementation for `ffill` and `bfill`
         """
-        value_columns = self.grouping.values()
+        value_columns = self.grouping.values
         result = self._groupby.replace_nulls(
             Table(value_columns._data), method
         )
@@ -805,7 +805,7 @@ class GroupBy(Serializable):
                 )
             return getattr(self, method, limit)()
 
-        value_columns = self.grouping.values()
+        value_columns = self.grouping.values
         _, grouped_values, _ = self._groupby.groups(Table(value_columns._data))
 
         grouped = self.obj.__class__._from_data(grouped_values._data)
@@ -1101,6 +1101,14 @@ class _Grouping(Serializable):
         self._obj = obj
         self._key_columns = []
         self.names = []
+        # For transform operations, we want to filter out only the value
+        # columns that will be used. When part of the key columns are composed
+        # from columns in `obj`, these columns are not included in the value
+        # columns. This only happens when `by` is specified with
+        # column labels or `Grouper` object with `key` param. To avoid that
+        # external objects overlaps in names to `obj`, these column
+        # names are recorded separately in this list.
+        self._key_column_names_from_obj = []
 
         # Need to keep track of named key columns
         # to support `as_index=False` correctly
@@ -1139,7 +1147,7 @@ class _Grouping(Serializable):
 
     @property
     def keys(self):
-        """Return grouping key column as index
+        """Return grouping key columns as index
         """
         nkeys = len(self._key_columns)
 
@@ -1157,14 +1165,24 @@ class _Grouping(Serializable):
                 self._key_columns[0], name=self.names[0]
             )
 
+    @property
     def values(self):
-        """Returns value columns as a frame.
+        """Return value columns as a frame.
+
+        Note that in aggregation, value columns can be arbitrarily
+        specified. While this method returns all non-key columns from `obj` as
+        a frame.
+
+        This is mainly used in transform-like operations.
         """
+        # If the key columns are in `obj`, filter them out
         value_column_names = [
-            x for x in self._obj._column_names if x not in self.names
+            x
+            for x in self._obj._data.names
+            if x not in self._key_column_names_from_obj
         ]
         value_columns = self._obj._data.select_by_label(value_column_names)
-        return self._obj._from_data(value_columns)
+        return self._obj.__class__._from_data(value_columns)
 
     def _handle_callable(self, by):
         by = by(self._obj.index)
@@ -1187,6 +1205,7 @@ class _Grouping(Serializable):
         self._key_columns.append(self._obj._data[by])
         self.names.append(by)
         self._named_columns.append(by)
+        self._key_column_names_from_obj.append(by)
 
     def _handle_grouper(self, by):
         if by.key:
