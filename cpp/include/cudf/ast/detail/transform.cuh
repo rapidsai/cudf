@@ -61,7 +61,7 @@ struct possibly_null_value<T, false> {
 template <typename T, bool has_nulls>
 using possibly_null_value_t = typename possibly_null_value<T, has_nulls>::type;
 
-template <typename T, bool has_nulls>
+template <bool has_nulls, typename T>
 struct value_container {
   __device__ value_container(T obj)
   {
@@ -79,7 +79,7 @@ struct value_container {
 };
 
 template <bool has_nulls>
-struct value_container<mutable_column_device_view*, has_nulls> {
+struct value_container<has_nulls, mutable_column_device_view*> {
   __device__ value_container(mutable_column_device_view* obj) : _obj(obj) {}
 
   template <typename Element>
@@ -101,7 +101,7 @@ struct value_container<mutable_column_device_view*, has_nulls> {
 };
 
 template <bool has_nulls>
-struct value_container<thrust::pair<void*, bool>*, has_nulls> {
+struct value_container<has_nulls, thrust::pair<void*, bool>*> {
   __device__ value_container(thrust::pair<void*, bool>* obj) : _obj(obj) {}
 
   template <typename Element>
@@ -499,12 +499,6 @@ struct expression_evaluator {
      * @param expression_index Row index of data column.
      * @param result Value to assign to output.
      */
-    // TODO: Rather than creating a separate device data reference for
-    // outputting to an arbitrary pointer I templated the
-    // expression_evaluator. I think this makes more sense because I think
-    // that conceptually the parsing of the expression tree should be
-    // independent of the nature of the output, but this should be discussed
-    // before finalizing.
     // TODO: The row index is now completely ignored... not so great.
     // Also now I have a separate override for thrust::optional that's
     // exclusively being used when has_nulls is true, but the override is not
@@ -515,9 +509,6 @@ struct expression_evaluator {
     // because it makes all the overloads compile but they'll run erroneously.
     // Currently this isn't an issue only because the conditional join code
     // exclusively uses the bool path at runtime.
-    // template <typename Element,
-    //          CUDF_ENABLE_IF(is_rep_layout_compatible<Element>() &&
-    //                         std::is_same<OutputType, mutable_column_device_view*>::value)>
     template <typename Element, CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
     __device__ void resolve_output(OutputType output_object,
                                    detail::device_data_reference device_data_reference,
