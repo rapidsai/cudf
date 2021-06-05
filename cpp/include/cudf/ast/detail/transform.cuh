@@ -43,6 +43,85 @@ namespace ast {
 
 namespace detail {
 
+// Type trait for wrapping nullable types in a thrust::optional. Non-nullable
+// types are returned as is.
+template <typename T, bool has_nulls>
+struct possibly_null_value;
+
+template <typename T>
+struct possibly_null_value<T, true> {
+  using type = thrust::optional<T>;
+};
+
+template <typename T>
+struct possibly_null_value<T, false> {
+  using type = T;
+};
+
+template <typename T, bool has_nulls>
+using possibly_null_value_t = typename possibly_null_value<T, has_nulls>::type;
+
+template <typename T, bool has_nulls>
+struct value_container {
+  __device__ value_container(T obj)
+  {
+    if constexpr (!(std::is_same_v<T, mutable_column_device_view*> ||
+                    std::is_same_v<T, thrust::pair<void*, bool>*>)) {
+      cudf_assert(false && "Invalid constructor.");
+    }
+  }
+
+  template <typename Element>
+  __device__ void set_value(cudf::size_type index, possibly_null_value_t<Element, has_nulls> result)
+  {
+    cudf_assert(false && "Invalid type.");
+  }
+};
+
+template <bool has_nulls>
+struct value_container<mutable_column_device_view*, has_nulls> {
+  __device__ value_container(mutable_column_device_view* obj) : _obj(obj) {}
+
+  template <typename Element>
+  __device__ void set_value(cudf::size_type index, possibly_null_value_t<Element, has_nulls> result)
+  {
+    if constexpr (has_nulls) {
+      if (result.has_value()) {
+        _obj->template element<Element>(index) = *result;
+        _obj->set_valid(index);
+      } else {
+        _obj->set_null(index);
+      }
+    } else {
+      _obj->template element<Element>(index) = *result;
+    }
+  }
+
+  mutable_column_device_view* _obj;
+};
+
+template <bool has_nulls>
+struct value_container<thrust::pair<void*, bool>*, has_nulls> {
+  __device__ value_container(thrust::pair<void*, bool>* obj) : _obj(obj) {}
+
+  template <typename Element>
+  __device__ void set_value(cudf::size_type index, possibly_null_value_t<Element, has_nulls> result)
+  {
+    if constexpr (has_nulls) {
+      if (result.has_value()) {
+        static_cast<Element*>(_obj->first)[index] = *result;
+        _obj->second                              = true;
+      } else {
+        _obj->second = false;
+      }
+    } else {
+      static_cast<Element*>(_obj->first)[index] = result;
+    }
+  }
+
+  thrust::pair<void*, bool>* _obj;
+};
+
 /**
  * @brief The AST plan creates a device buffer of data needed to execute an AST.
  *
@@ -151,24 +230,6 @@ struct ast_plan {
   rmm::device_buffer _device_data_buffer;
   linearizer const _linearizer;
 };
-
-// Type trait for wrapping nullable types in a thrust::optional. Non-nullable
-// types are returned as is.
-template <typename T, bool has_nulls>
-struct possibly_null_value;
-
-template <typename T>
-struct possibly_null_value<T, true> {
-  using type = thrust::optional<T>;
-};
-
-template <typename T>
-struct possibly_null_value<T, false> {
-  using type = T;
-};
-
-template <typename T, bool has_nulls>
-using possibly_null_value_t = typename possibly_null_value<T, has_nulls>::type;
 
 /**
  * @brief An expression evaluator owned by a single thread operating on rows of two table.

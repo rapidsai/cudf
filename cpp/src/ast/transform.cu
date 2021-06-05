@@ -84,6 +84,7 @@ __launch_bounds__(max_block_size) __global__
     table, plan, thread_intermediate_storage);
 
   for (cudf::size_type row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
+    auto output_dest = value_container<mutable_column_device_view*, has_nulls>(&output_column);
     evaluator.evaluate(&output_column, row_index);
   }
 }

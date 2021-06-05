@@ -531,6 +531,8 @@ __global__ void conditional_join(table_device_view left_table,
   if (left_row_index < left_num_rows) {
     bool found_match = false;
     for (size_type right_row_index(0); right_row_index < right_num_rows; right_row_index++) {
+      auto output_dest =
+        cudf::ast::detail::value_container<thrust::pair<void*, bool>*, has_nulls>(&test_optional);
       evaluator.evaluate(&test_optional, left_row_index, right_row_index, 0);
 
       // TODO: Handle null equality properly.
