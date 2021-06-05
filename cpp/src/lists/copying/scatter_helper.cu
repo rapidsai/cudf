@@ -133,7 +133,6 @@ std::pair<rmm::device_buffer, size_type> construct_child_nullmask(
  *    The caller may construct this with an `inclusive_scan()` on `list_vector`
  *    element sizes.
  */
-
 struct list_child_constructor {
  private:
   /**
@@ -319,9 +318,10 @@ struct list_child_constructor {
     auto const num_child_rows{
       cudf::detail::get_value<size_type>(list_offsets, list_offsets.size() - 1, stream)};
 
-    if (num_child_rows == 0)
+    if (num_child_rows == 0) {
       // make an empty lists column using the input child type
       return empty_like(source_lists_column_view.child());
+    }
 
     auto child_list_views = rmm::device_uvector<unbound_list_view>(num_child_rows, stream, mr);
 
