@@ -93,7 +93,7 @@ struct value_container<mutable_column_device_view*, has_nulls> {
         _obj->set_null(index);
       }
     } else {
-      _obj->template element<Element>(index) = *result;
+      _obj->template element<Element>(index) = result;
     }
   }
 
@@ -499,37 +499,12 @@ struct expression_evaluator {
      * @param expression_index Row index of data column.
      * @param result Value to assign to output.
      */
-    template <typename Element,
-              CUDF_ENABLE_IF(is_rep_layout_compatible<Element>() &&
-                             std::is_same<OutputType, mutable_column_device_view*>::value)>
-    __device__ void resolve_output(OutputType output_object,
-                                   detail::device_data_reference device_data_reference,
-                                   cudf::size_type row_index,
-                                   possibly_null_value_t<Element, has_nulls> result) const
-    {
-      auto const ref_type = device_data_reference.reference_type;
-      if (ref_type == detail::device_data_reference_type::COLUMN) {
-        if constexpr (has_nulls) {
-          // TODO: Handle null equality propertly, right now I'm just assuming
-          // that null translates to null.
-          if (result.has_value()) {
-            output_object->template element<Element>(row_index) = *result;
-            output_object->set_valid(row_index);
-          } else {
-            output_object->set_null(row_index);
-          }
-        } else {
-          output_object->template element<Element>(row_index) = result;
-        }
-      } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
-        // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing.
-        // Using a temporary variable ensures that the compiler knows the result is aligned.
-        IntermediateDataType tmp;
-        memcpy(&tmp, &result, sizeof(possibly_null_value_t<Element, has_nulls>));
-        evaluator.thread_intermediate_storage[device_data_reference.data_index] = tmp;
-      }
-    }
-
+    // TODO: Rather than creating a separate device data reference for
+    // outputting to an arbitrary pointer I templated the
+    // expression_evaluator. I think this makes more sense because I think
+    // that conceptually the parsing of the expression tree should be
+    // independent of the nature of the output, but this should be discussed
+    // before finalizing.
     // TODO: The row index is now completely ignored... not so great.
     // Also now I have a separate override for thrust::optional that's
     // exclusively being used when has_nulls is true, but the override is not
@@ -540,37 +515,18 @@ struct expression_evaluator {
     // because it makes all the overloads compile but they'll run erroneously.
     // Currently this isn't an issue only because the conditional join code
     // exclusively uses the bool path at runtime.
-    template <typename Element,
-              CUDF_ENABLE_IF(is_rep_layout_compatible<Element>() &&
-                             std::is_same<OutputType, thrust::pair<void*, bool>*>::value)>
+    // template <typename Element,
+    //          CUDF_ENABLE_IF(is_rep_layout_compatible<Element>() &&
+    //                         std::is_same<OutputType, mutable_column_device_view*>::value)>
+    template <typename Element, CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
     __device__ void resolve_output(OutputType output_object,
                                    detail::device_data_reference device_data_reference,
                                    cudf::size_type row_index,
                                    possibly_null_value_t<Element, has_nulls> result) const
     {
       auto const ref_type = device_data_reference.reference_type;
-      // TODO: Rather than creating a separate device data reference for
-      // outputting to an arbitrary pointer I templated the
-      // expression_evaluator. I think this makes more sense because I think
-      // that conceptually the parsing of the expression tree should be
-      // independent of the nature of the output, but this should be discussed
-      // before finalizing.
       if (ref_type == detail::device_data_reference_type::COLUMN) {
-        // TODO: This line assumes that the output optional works whether the
-        // input result is either a raw bool (when has_nulls is false) or
-        // another optional (when has_nulls is true), which is true but kind of
-        // messy here.
-        if constexpr (has_nulls) {
-          // Super kludgy approach to setting the validity to true for the optional.
-          if (result.has_value()) {
-            static_cast<Element*>(output_object->first)[row_index] = *result;
-            output_object->second                                  = true;
-          } else {
-            output_object->second = false;
-          }
-        } else {
-          static_cast<Element*>(output_object->first)[row_index] = result;
-        }
+        output_object.template set_value<Element>(row_index, result);
       } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
         // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing.
         // Using a temporary variable ensures that the compiler knows the result is aligned.

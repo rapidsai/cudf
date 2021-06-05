@@ -249,14 +249,17 @@ __global__ void compute_conditional_join_output_size(table_device_view left_tabl
   // there are no nulls.  Should see if there's a better way.
   bool test_var;
   thrust::pair<void*, bool> test_optional(&test_var, !has_nulls);
-  auto evaluator = cudf::ast::detail::expression_evaluator<thrust::pair<void*, bool>*, has_nulls>(
-    left_table, plan, thread_intermediate_storage, right_table);
+  auto evaluator = cudf::ast::detail::expression_evaluator<
+    cudf::ast::detail::value_container<thrust::pair<void*, bool>*, has_nulls>,
+    has_nulls>(left_table, plan, thread_intermediate_storage, right_table);
 
   for (cudf::size_type left_row_index = left_start_idx; left_row_index < left_num_rows;
        left_row_index += left_stride) {
     bool found_match = false;
     for (cudf::size_type right_row_index = 0; right_row_index < right_num_rows; right_row_index++) {
-      evaluator.evaluate(&test_optional, left_row_index, right_row_index, 0);
+      auto output_dest =
+        cudf::ast::detail::value_container<thrust::pair<void*, bool>*, has_nulls>(&test_optional);
+      evaluator.evaluate(output_dest, left_row_index, right_row_index, 0);
       // TODO: Handle null equality propertly, right now I'm just assuming
       // that null translates to null.
       if (test_optional.second && test_var) {
@@ -525,15 +528,16 @@ __global__ void conditional_join(table_device_view left_table,
 
   bool test_var;
   thrust::pair<void*, bool> test_optional(&test_var, !has_nulls);
-  auto evaluator = cudf::ast::detail::expression_evaluator<thrust::pair<void*, bool>*, has_nulls>(
-    left_table, plan, thread_intermediate_storage, right_table);
+  auto evaluator = cudf::ast::detail::expression_evaluator<
+    cudf::ast::detail::value_container<thrust::pair<void*, bool>*, has_nulls>,
+    has_nulls>(left_table, plan, thread_intermediate_storage, right_table);
 
   if (left_row_index < left_num_rows) {
     bool found_match = false;
     for (size_type right_row_index(0); right_row_index < right_num_rows; right_row_index++) {
       auto output_dest =
         cudf::ast::detail::value_container<thrust::pair<void*, bool>*, has_nulls>(&test_optional);
-      evaluator.evaluate(&test_optional, left_row_index, right_row_index, 0);
+      evaluator.evaluate(output_dest, left_row_index, right_row_index, 0);
 
       // TODO: Handle null equality properly.
       if (test_optional.second && test_var) {
