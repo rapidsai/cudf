@@ -25,7 +25,10 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.scalar import as_device_scalar
 from cudf._lib.transform import bools_to_mask
-# from cudf._lib.categories.update_categories import set_categories as cpp_set_categories, codes_column_index, unordered_category_column_index
+from cudf._lib.categories import set_categories as cpp_set_categories
+from cudf._lib.null_mask import create_null_mask, MaskState
+from cudf._lib.stream_compaction import drop_duplicates
+from cudf._lib.table import Table
 from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
@@ -484,7 +487,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         new_categories : list-like
             The categories in new order.
 
-        ordered : bool, default None
+        ordered : optional bool, default False
             Whether or not the categorical is treated as
             a ordered categorical. If not given, do
             not change the ordered information.
@@ -538,7 +541,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         dtype: category
         Categories (2, int64): [1, 10]
         """
-        ordered = ordered if ordered is not None else self.ordered
+        ordered = self.ordered if ordered is None else ordered
         new_categories = column.as_column(new_categories)
 
         if isinstance(new_categories, CategoricalColumn):
@@ -554,10 +557,27 @@ class CategoricalAccessor(ColumnMethodsMixin):
                     "new_categories must have the same "
                     "number of items as old categories"
                 )
+            return column.build_column(
+                dtype=CategoricalDtype(new_categories, ordered),
+                data=None,
+                size=self._column.size,
+                mask=self._column.mask.copy(),
+                offset=0,
+                null_count=self._column.null_count,
+                children=(new_categories, self._column.codes)
+            )
 
         if type(self._column.categories) is not type(new_categories):
-            # out_col = _create_null_filled_categorical_column(self._column, CategoricalDtype(categories=new_categories, ordered=ordered))
-            pass
+            # Return a new categorical column of same size, but null-filled
+            return column.build_column(
+                dtype=CategoricalDtype(new_categories, ordered),
+                data=None,
+                size=self._column.size,
+                mask=create_null_mask(self._column.size, MaskState.ALL_NULL),
+                offset=0,
+                null_count=self._column.size,
+                children=(new_categories, self._column.codes)
+            )
         else:
             out_col = self._set_categories(new_categories, ordered=ordered)
         return self._return_or_inplace(out_col, inplace=inplace)
@@ -687,13 +707,10 @@ class CategoricalAccessor(ColumnMethodsMixin):
         new_categories = column.as_column(new_categories)
 
         if not is_unique or not new_categories.is_unique():
-            new_categories = new_categories.drop_duplicates()
+            new_categories = drop_duplicates(Table({None: new_categories}))._columns[0]
 
         new_col = cpp_set_categories(self._column, new_categories)
         new_col.dtype.ordered = ordered
-        if ordered:
-            new_order = new_categories.arg_sort()
-            new_col._set_category_order(new_order)
 
         return new_col
 
@@ -1337,7 +1354,7 @@ class CategoricalColumn(column.ColumnBase):
         result = libcudf.copying.copy_column(self) if deep else self
         return column.build_column(data=None,
                                     dtype=self.dtype,
-                                    mask=result.mask,
+                                    mask=result.base_mask,
                                     size=result.size,
                                     offset=result.offset,
                                     null_count=result.null_count,

@@ -250,15 +250,7 @@ class ColumnBase(Column, Serializable):
         if not isinstance(array, (pa.Array, pa.ChunkedArray)):
             raise TypeError("array should be PyArrow array or chunked array")
 
-        if pa.types.is_dictionary(array.type) and array.type.ordered:
-            # libcudf does not store ordering information for ordered
-            # dictionary types. Thus we pass in a "dummy" ordered keys
-            # for libcudf to function. Real keys are stored in CategoricalDtype
-            internal_keys = pa.array(range(0, len(array.dictionary)))
-            internal_array = pa.DictionaryArray.from_arrays(array.indices, internal_keys)
-            data = pa.table([internal_array], [None])
-        else:
-            data = pa.table([array], [None])
+        data = pa.table([array], [None])
 
         if isinstance(array.type, pa.StructType):
             return cudf.core.column.StructColumn.from_arrow(array)
