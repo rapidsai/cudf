@@ -781,7 +781,7 @@ class GroupBy(Serializable):
 
         Returns
         -------
-        DataFrame
+        DataFrame or Series
         """
         if inplace:
             raise NotImplementedError("Does not support inplace yet.")
