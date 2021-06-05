@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,7 +61,7 @@ TEST_F(DictionaryFactoriesTest, CreateFromColumns)
   cudf::test::fixed_width_column_wrapper<uint32_t> values(h_values.begin(), h_values.end());
 
   auto dictionary =
-    cudf::make_dictionary_column(keys.release(), values.release(), rmm::device_buffer{0}, 0);
+    cudf::make_dictionary_column(keys.release(), values.release(), rmm::device_buffer{}, 0);
   cudf::dictionary_column_view view(dictionary->view());
 
   cudf::test::strings_column_wrapper keys_expected(h_keys.begin(), h_keys.end());
@@ -104,7 +104,7 @@ TEST_F(DictionaryFactoriesTest, IndicesWithNulls)
   cudf::test::fixed_width_column_wrapper<int32_t> keys{0, 1, 2, 3, 4};
   cudf::test::fixed_width_column_wrapper<uint32_t> indices{{5, 4, 3, 2, 1, 0}, {1, 1, 1, 0, 1, 0}};
   EXPECT_THROW(
-    cudf::make_dictionary_column(keys.release(), indices.release(), rmm::device_buffer{0}, 0),
+    cudf::make_dictionary_column(keys.release(), indices.release(), rmm::device_buffer{}, 0),
     cudf::logic_error);
 }
 
@@ -114,6 +114,6 @@ TEST_F(DictionaryFactoriesTest, InvalidIndices)
   cudf::test::fixed_width_column_wrapper<int16_t> indices{5, 4, 3, 2, 1, 0};
   EXPECT_THROW(cudf::make_dictionary_column(keys, indices), cudf::logic_error);
   EXPECT_THROW(
-    cudf::make_dictionary_column(keys.release(), indices.release(), rmm::device_buffer{0}, 0),
+    cudf::make_dictionary_column(keys.release(), indices.release(), rmm::device_buffer{}, 0),
     cudf::logic_error);
 }

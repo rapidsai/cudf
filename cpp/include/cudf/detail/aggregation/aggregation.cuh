@@ -53,6 +53,14 @@ struct corresponding_operator<aggregation::MAX> {
   using type = DeviceMax;
 };
 template <>
+struct corresponding_operator<aggregation::ARGMIN> {
+  using type = DeviceMin;
+};
+template <>
+struct corresponding_operator<aggregation::ARGMAX> {
+  using type = DeviceMax;
+};
+template <>
 struct corresponding_operator<aggregation::ANY> {
   using type = DeviceMax;
 };
@@ -81,6 +89,10 @@ struct corresponding_operator<aggregation::VARIANCE> {
   using type = DeviceSum;
 };
 template <>
+struct corresponding_operator<aggregation::MEAN> {
+  using type = DeviceSum;
+};
+template <>
 struct corresponding_operator<aggregation::COUNT_VALID> {
   using type = DeviceCount;
 };
@@ -91,6 +103,12 @@ struct corresponding_operator<aggregation::COUNT_ALL> {
 
 template <aggregation::Kind k>
 using corresponding_operator_t = typename corresponding_operator<k>::type;
+
+template <aggregation::Kind k>
+constexpr bool has_corresponding_operator()
+{
+  return !std::is_same<typename corresponding_operator<k>::type, void>::value;
+}
 
 template <typename Source,
           aggregation::Kind k,

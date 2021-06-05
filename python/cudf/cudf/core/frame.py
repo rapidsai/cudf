@@ -26,6 +26,7 @@ from cudf.core.column import (
 )
 from cudf.core.join import merge
 from cudf.utils.dtypes import (
+    find_common_type,
     is_categorical_dtype,
     is_column_like,
     is_decimal_dtype,
@@ -155,6 +156,15 @@ class Frame(libcudf.table.Table):
         5
         """
         return self._num_columns * self._num_rows
+
+    @property
+    def _is_homogeneous(self):
+        # make sure that the dataframe has columns
+        if not self._data.columns:
+            return True
+
+        first_type = self._data.columns[0].dtype.name
+        return all(x.dtype.name == first_type for x in self._data.columns)
 
     @property
     def empty(self):
@@ -1460,7 +1470,7 @@ class Frame(libcudf.table.Table):
 
         Parameters
         ----------
-        axis : {0 or 'index', 1 or 'columns'}, default 0
+        axis : {0 or 'index'}, default 0
             Index to direct ranking.
         method : {'average', 'min', 'max', 'first', 'dense'}, default 'average'
             How to rank the group of records that have the same value
@@ -1490,10 +1500,17 @@ class Frame(libcudf.table.Table):
         """
         if method not in {"average", "min", "max", "first", "dense"}:
             raise KeyError(method)
+
         method_enum = libcudf.sort.RankMethod[method.upper()]
         if na_option not in {"keep", "top", "bottom"}:
             raise ValueError(
                 "na_option must be one of 'keep', 'top', or 'bottom'"
+            )
+
+        if axis not in (0, "index"):
+            raise NotImplementedError(
+                f"axis must be `0`/`index`, "
+                f"axis={axis} is not yet supported in rank"
             )
 
         source = self
@@ -4029,8 +4046,11 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
         # default to the first non-null dtype
         dtypes[idx] = cols[0].dtype
         # If all the non-null dtypes are int/float, find a common dtype
-        if all(is_numerical_dtype(col.dtype) for col in cols):
-            dtypes[idx] = np.find_common_type([col.dtype for col in cols], [])
+        if all(
+            is_numerical_dtype(col.dtype) or is_decimal_dtype(col.dtype)
+            for col in cols
+        ):
+            dtypes[idx] = find_common_type([col.dtype for col in cols])
         # If all categorical dtypes, combine the categories
         elif all(
             isinstance(col, cudf.core.column.CategoricalColumn) for col in cols
@@ -4045,17 +4065,6 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
             # Set the column dtype to the codes' dtype. The categories
             # will be re-assigned at the end
             dtypes[idx] = min_scalar_type(len(categories[idx]))
-        elif all(
-            isinstance(col, cudf.core.column.DecimalColumn) for col in cols
-        ):
-            # Find the largest scale and the largest difference between
-            # precision and scale of the columns to be concatenated
-            s = max([col.dtype.scale for col in cols])
-            lhs = max([col.dtype.precision - col.dtype.scale for col in cols])
-            # Combine to get the necessary precision and clip at the maximum
-            # precision
-            p = min(cudf.Decimal64Dtype.MAX_PRECISION, s + lhs)
-            dtypes[idx] = cudf.Decimal64Dtype(p, s)
         # Otherwise raise an error if columns have different dtypes
         elif not all(is_dtype_equal(c.dtype, dtypes[idx]) for c in cols):
             raise ValueError("All columns must be the same type")

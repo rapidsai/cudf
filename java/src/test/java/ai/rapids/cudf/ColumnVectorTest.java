@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -167,12 +168,119 @@ public class ColumnVectorTest extends CudfTestBase {
       }
   }
 
+  @Test
+  void testGetElementInt() {
+    try (ColumnVector cv = ColumnVector.fromBoxedInts(3, 2, 1, null);
+         Scalar s0 = cv.getScalarElement(0);
+         Scalar s1 = cv.getScalarElement(1);
+         Scalar s2 = cv.getScalarElement(2);
+         Scalar s3 = cv.getScalarElement(3)) {
+      assertEquals(3, s0.getInt());
+      assertEquals(2, s1.getInt());
+      assertEquals(1, s2.getInt());
+      assertFalse(s3.isValid());
+    }
+  }
+
+  @Test
+  void testGetElementByte() {
+    try (ColumnVector cv = ColumnVector.fromBoxedBytes((byte)3, (byte)2, (byte)1, null);
+         Scalar s0 = cv.getScalarElement(0);
+         Scalar s1 = cv.getScalarElement(1);
+         Scalar s2 = cv.getScalarElement(2);
+         Scalar s3 = cv.getScalarElement(3)) {
+      assertEquals(3, s0.getByte());
+      assertEquals(2, s1.getByte());
+      assertEquals(1, s2.getByte());
+      assertFalse(s3.isValid());
+    }
+  }
+
+  @Test
+  void testGetElementFloat() {
+    try (ColumnVector cv = ColumnVector.fromBoxedFloats(3f, 2f, 1f, null);
+         Scalar s0 = cv.getScalarElement(0);
+         Scalar s1 = cv.getScalarElement(1);
+         Scalar s2 = cv.getScalarElement(2);
+         Scalar s3 = cv.getScalarElement(3)) {
+      assertEquals(3f, s0.getFloat());
+      assertEquals(2f, s1.getFloat());
+      assertEquals(1f, s2.getFloat());
+      assertFalse(s3.isValid());
+    }
+  }
+
+  @Test
+  void testGetElementString() {
+    try (ColumnVector cv = ColumnVector.fromStrings("3a", "2b", "1c", null);
+         Scalar s0 = cv.getScalarElement(0);
+         Scalar s1 = cv.getScalarElement(1);
+         Scalar s2 = cv.getScalarElement(2);
+         Scalar s3 = cv.getScalarElement(3)) {
+      assertEquals("3a", s0.getJavaString());
+      assertEquals("2b", s1.getJavaString());
+      assertEquals("1c", s2.getJavaString());
+      assertFalse(s3.isValid());
+    }
+  }
+
+  @Test
+  void testGetElementDecimal() {
+    try (ColumnVector cv = ColumnVector.decimalFromLongs(1,3, 2, 1, -1);
+         Scalar s0 = cv.getScalarElement(0);
+         Scalar s1 = cv.getScalarElement(1);
+         Scalar s2 = cv.getScalarElement(2);
+         Scalar s3 = cv.getScalarElement(3)) {
+      assertEquals(1, s0.getType().getScale());
+      assertEquals(new BigDecimal("3E+1"), s0.getBigDecimal());
+      assertEquals(new BigDecimal("2E+1"), s1.getBigDecimal());
+      assertEquals(new BigDecimal("1E+1"), s2.getBigDecimal());
+      assertEquals(new BigDecimal("-1E+1"), s3.getBigDecimal());
+    }
+  }
+
+  @Test
+  void testGetElementList() {
+    HostColumnVector.DataType dt = new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT32));
+    try (ColumnVector cv = ColumnVector.fromLists(dt, Arrays.asList(3, 2),
+        Arrays.asList(1), Arrays.asList(), null);
+         Scalar s0 = cv.getScalarElement(0);
+         ColumnView s0Cv = s0.getListAsColumnView();
+         ColumnVector expected0 = ColumnVector.fromInts(3, 2);
+         Scalar s1 = cv.getScalarElement(1);
+         ColumnView s1Cv = s1.getListAsColumnView();
+         ColumnVector expected1 = ColumnVector.fromInts(1);
+         Scalar s2 = cv.getScalarElement(2);
+         ColumnView s2Cv = s2.getListAsColumnView();
+         ColumnVector expected2 = ColumnVector.fromInts();
+         Scalar s3 = cv.getScalarElement(3)) {
+      assertColumnsAreEqual(expected0, s0Cv);
+      assertColumnsAreEqual(expected1, s1Cv);
+      assertColumnsAreEqual(expected2, s2Cv);
+      assertFalse(s3.isValid());
+    }
+  }
+
  @Test
   void testStringCreation() {
     try (ColumnVector cv = ColumnVector.fromStrings("d", "sd", "sde", null, "END");
          HostColumnVector host = cv.copyToHost();
          ColumnVector backAgain = host.copyToDevice()) {
       TableTest.assertColumnsAreEqual(cv, backAgain);
+    }
+  }
+
+  @Test
+  void testUTF8StringCreation() {
+    try (ColumnVector cv = ColumnVector.fromUTF8Strings(
+            "d".getBytes(StandardCharsets.UTF_8),
+            "sd".getBytes(StandardCharsets.UTF_8),
+            "sde".getBytes(StandardCharsets.UTF_8),
+            null,
+            "END".getBytes(StandardCharsets.UTF_8));
+         ColumnVector expected = ColumnVector.fromStrings("d", "sd", "sde", null, "END")) {
+      TableTest.assertColumnsAreEqual(expected, cv);
     }
   }
 
@@ -1174,8 +1282,14 @@ public class ColumnVectorTest extends CudfTestBase {
           s = Scalar.durationFromLong(DType.create(type), 21313);
           break;
         case EMPTY:
-        case STRUCT:
           continue;
+        case STRUCT:
+          try (ColumnVector col1 = ColumnVector.fromInts(1);
+               ColumnVector col2 = ColumnVector.fromStrings("A");
+               ColumnVector col3 = ColumnVector.fromDoubles(1.23)) {
+            s = Scalar.structFromColumnViews(col1, col2, col3);
+          }
+          break;
         case LIST:
           try (ColumnVector list = ColumnVector.fromInts(1, 2, 3)) {
             s = Scalar.listFromColumnView(list);
@@ -1353,8 +1467,24 @@ public class ColumnVectorTest extends CudfTestBase {
           break;
         }
         case EMPTY:
-        case STRUCT:
           continue;
+        case STRUCT:
+          try (ColumnVector col0 = ColumnVector.fromInts(1);
+               ColumnVector col1 = ColumnVector.fromBoxedDoubles((Double) null);
+               ColumnVector col2 = ColumnVector.fromStrings("a");
+               ColumnVector col3 = ColumnVector.fromDecimals(BigDecimal.TEN);
+               ColumnVector col4 = ColumnVector.daysFromInts(10)) {
+            s = Scalar.structFromColumnViews(col0, col1, col2, col3, col4);
+            StructData structData = new StructData(1, null, "a", BigDecimal.TEN, 10);
+            expected = ColumnVector.fromStructs(new HostColumnVector.StructType(true,
+                    new HostColumnVector.BasicType(true, DType.INT32),
+                    new HostColumnVector.BasicType(true, DType.FLOAT64),
+                    new HostColumnVector.BasicType(true, DType.STRING),
+                    new HostColumnVector.BasicType(true, DType.create(DType.DTypeEnum.DECIMAL32, 0)),
+                    new HostColumnVector.BasicType(true, DType.TIMESTAMP_DAYS)),
+                structData, structData, structData, structData);
+          }
+          break;
         case LIST:
           try (ColumnVector list = ColumnVector.fromInts(1, 2, 3)) {
             s = Scalar.listFromColumnView(list);
@@ -1517,6 +1647,63 @@ public class ColumnVectorTest extends CudfTestBase {
       try (ColumnVector ret = ColumnVector.fromScalar(s, 0)) {
         assertEquals(ret.getRowCount(), 0);
         assertEquals(ret.getNullCount(), 0);
+      }
+    }
+  }
+
+  @Test
+  void testFromScalarNullStruct() {
+    final int rowCount = 4;
+    for (DType.DTypeEnum typeEnum : DType.DTypeEnum.values()) {
+      DType dType = typeEnum.isDecimalType() ? DType.create(typeEnum, -8) : DType.create(typeEnum);
+      DataType hDataType;
+      if (DType.EMPTY.equals(dType)) {
+        continue;
+      } else if (DType.LIST.equals(dType)) {
+        // list of list of int32
+        hDataType = new ListType(true, new BasicType(true, DType.INT32));
+      } else if (DType.STRUCT.equals(dType)) {
+        // list of struct of int32
+        hDataType = new StructType(true, new BasicType(true, DType.INT32));
+      } else {
+        // list of non nested type
+        hDataType = new BasicType(true, dType);
+      }
+      try (Scalar s = Scalar.structFromNull(hDataType, hDataType, hDataType);
+           ColumnVector c = ColumnVector.fromScalar(s, rowCount);
+           HostColumnVector hc = c.copyToHost()) {
+        assertEquals(DType.STRUCT, c.getType());
+        assertEquals(rowCount, c.getRowCount());
+        assertEquals(rowCount, c.getNullCount());
+        for (int i = 0; i < rowCount; ++i) {
+          assertTrue(hc.isNull(i));
+        }
+        assertEquals(3, c.getNumChildren());
+        ColumnView[] children = new ColumnView[]{c.getChildColumnView(0),
+            c.getChildColumnView(1), c.getChildColumnView(2)};
+        try {
+          for (ColumnView child : children) {
+            assertEquals(dType, child.getType());
+            assertEquals(rowCount, child.getRowCount());
+            assertEquals(rowCount, child.getNullCount());
+            if (child.getType() == DType.LIST) {
+              try (ColumnView childOfChild = child.getChildColumnView(0)) {
+                assertEquals(DType.INT32, childOfChild.getType());
+                assertEquals(0L, childOfChild.getRowCount());
+                assertEquals(0L, childOfChild.getNullCount());
+              }
+            } else if (child.getType() == DType.STRUCT) {
+              assertEquals(1, child.getNumChildren());
+              try (ColumnView childOfChild = child.getChildColumnView(0)) {
+                assertEquals(DType.INT32, childOfChild.getType());
+                assertEquals(rowCount, childOfChild.getRowCount());
+                assertEquals(rowCount, childOfChild.getNullCount());
+              }
+            }
+          }
+        } finally {
+          for (ColumnView cv : children) cv.close();
+        }
       }
     }
   }
@@ -2085,15 +2272,16 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(concat, e_concat);
     }
 
-    try (ColumnVector v = ColumnVector.fromStrings("a", "B", "cd", "\u0480\u0481", "E\tf",
-        "g\nH", "IJ\"\u0100\u0101\u0500\u0501",
-        "kl m", "Nop1", "\\qRs2", null,
-        "3tuV\'", "wX4Yz", "\ud720\ud721");
-         Scalar emptyString = Scalar.fromString("");
-         Scalar nullSubstitute = Scalar.fromString("NULL");
-         ColumnVector concat = ColumnVector.stringConcatenate(emptyString, nullSubstitute, new ColumnView[]{v})) {
-      assertColumnsAreEqual(v, concat);
-    }
+    assertThrows(CudfException.class, () -> {
+      try (ColumnVector v = ColumnVector.fromStrings("a", "B", "cd", "\u0480\u0481", "E\tf",
+          "g\nH", "IJ\"\u0100\u0101\u0500\u0501",
+          "kl m", "Nop1", "\\qRs2", null,
+          "3tuV\'", "wX4Yz", "\ud720\ud721");
+           Scalar emptyString = Scalar.fromString("");
+           Scalar nullSubstitute = Scalar.fromString("NULL");
+           ColumnVector concat = ColumnVector.stringConcatenate(emptyString, nullSubstitute, new ColumnView[]{v})) {
+      }
+    });
   }
 
   @Test
@@ -2106,6 +2294,330 @@ public class ColumnVectorTest extends CudfTestBase {
          Scalar nullString = Scalar.fromString(null);
          ColumnVector concat = ColumnVector.stringConcatenate(separatorString, nullString, new ColumnView[]{sv1, sv2})) {
       assertColumnsAreEqual(concat, e_concat);
+    }
+  }
+
+  @Test
+  void testStringConcatSeparatorsEmptyStringForNull() {
+    try (ColumnVector sv1 = ColumnVector.fromStrings("a", "B", "cd", "\u0480\u0481", "E\tf", null, null, "\\G\u0100");
+         ColumnVector sv2 = ColumnVector.fromStrings("b", "C", "\u0500\u0501", "x\nYz", null, null, "", null);
+         ColumnVector e_concat = ColumnVector.fromStrings("aA1\t\ud721b", "BA1\t\ud721C", "cdA1\t\ud721\u0500\u0501",
+             "\u0480\u0481A1\t\ud721x\nYz", "E\tf", "", "", "\\G\u0100");
+         Scalar separatorString = Scalar.fromString("A1\t\ud721");
+         Scalar narep = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenate(separatorString, narep, new ColumnView[]{sv1, sv2}, false)) {
+      assertColumnsAreEqual(concat, e_concat);
+    }
+  }
+
+  @Test
+  void testConcatWsTypeError() {
+    try (ColumnVector v0 = ColumnVector.fromInts(1, 2, 3, 4);
+         ColumnVector v1 = ColumnVector.fromFloats(5.0f, 6.0f);
+         ColumnVector sep_col = ColumnVector.fromStrings("-*");
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar nullString = Scalar.fromString(null)) {
+      assertThrows(CudfException.class, () -> ColumnVector.stringConcatenate(
+          new ColumnView[]{v0, v1}, sep_col, separatorString, nullString, false));
+    }
+  }
+
+  @Test
+  void testConcatWsNoColumn() {
+    try (ColumnVector sep_col = ColumnVector.fromStrings("-*");
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar nullString = Scalar.fromString(null)) {
+      assertThrows(AssertionError.class, () -> ColumnVector.stringConcatenate(
+          new ColumnView[]{}, sep_col, separatorString, nullString, false));
+    }
+  }
+
+  @Test
+  void testStringConcatWsSimple() {
+    try (ColumnVector sv1 = ColumnVector.fromStrings("a");
+         ColumnVector sv2 = ColumnVector.fromStrings("B");
+         ColumnVector sv3 = ColumnVector.fromStrings("cd");
+         ColumnVector sv4 = ColumnVector.fromStrings("\u0480\u0481");
+         ColumnVector sv5 = ColumnVector.fromStrings("E\tf");
+         ColumnVector sv6 = ColumnVector.fromStrings("M");
+         ColumnVector sv7 = ColumnVector.fromStrings("\\G\u0100");
+         ColumnVector sep_col = ColumnVector.fromStrings("-*");
+         ColumnVector e_concat = ColumnVector.fromStrings("a-*B-*cd-*\u0480\u0481-*E\tf-*M-*\\G\u0100");
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenate(
+             new ColumnView[]{sv1, sv2, sv3, sv4, sv5, sv6, sv7}, sep_col, separatorString,
+             col_narep, false)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsSimpleOtherApi() {
+    try (ColumnVector sv1 = ColumnVector.fromStrings("a");
+         ColumnVector sv2 = ColumnVector.fromStrings("B");
+         ColumnVector sv3 = ColumnVector.fromStrings("cd");
+         ColumnVector sv4 = ColumnVector.fromStrings("\u0480\u0481");
+         ColumnVector sv5 = ColumnVector.fromStrings("E\tf");
+         ColumnVector sv6 = ColumnVector.fromStrings("M");
+         ColumnVector sv7 = ColumnVector.fromStrings("\\G\u0100");
+         ColumnVector sep_col = ColumnVector.fromStrings("-*");
+         ColumnVector e_concat = ColumnVector.fromStrings("a-*B-*cd-*\u0480\u0481-*E\tf-*M-*\\G\u0100");
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenate(
+             new ColumnView[]{sv1, sv2, sv3, sv4, sv5, sv6, sv7}, sep_col)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsOneCol() {
+    try (ColumnVector sv1 = ColumnVector.fromStrings("a");
+         ColumnVector sep_col = ColumnVector.fromStrings("-*");
+         ColumnVector e_concat = ColumnVector.fromStrings("a");
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenate(
+             new ColumnView[]{sv1}, sep_col, separatorString,
+             col_narep, false)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsNullSep() {
+    try (ColumnVector sv1 = ColumnVector.fromStrings("a", "c");
+         ColumnVector sv2 = ColumnVector.fromStrings("b", "d");
+         Scalar nullString = Scalar.fromString(null);
+         ColumnVector sep_col = ColumnVector.fromScalar(nullString, 2);
+         ColumnVector e_concat = ColumnVector.fromScalar(nullString, 2);
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenate(new ColumnView[]{sv1, sv2},
+             sep_col, separatorString, col_narep, false)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsNullValueInCol() {
+    try (ColumnVector sv1 = ColumnVector.fromStrings("a", "c", null);
+         ColumnVector sv2 = ColumnVector.fromStrings("b", "", "e");
+         ColumnVector sep_col = ColumnVector.fromStrings("-", "-", "-");
+         ColumnVector e_concat = ColumnVector.fromStrings("a-b", "c-", "e");
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenate(new ColumnView[]{sv1, sv2},
+             sep_col, separatorString, col_narep, false)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsNullValueInColKeepNull() {
+    try (ColumnVector sv1 = ColumnVector.fromStrings("a", "c", null);
+         ColumnVector sv2 = ColumnVector.fromStrings("b", "", "e");
+         ColumnVector sep_col = ColumnVector.fromStrings("-", "-", "-");
+         ColumnVector e_concat = ColumnVector.fromStrings("a-b", "c-", null);
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar col_narep = Scalar.fromString(null);
+         ColumnVector concat = ColumnVector.stringConcatenate(new ColumnView[]{sv1, sv2},
+             sep_col, separatorString, col_narep, true)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsNullValueInColSepTrue() {
+    try (ColumnVector sv1 = ColumnVector.fromStrings("a", "c", null);
+         ColumnVector sv2 = ColumnVector.fromStrings("b", "", "e");
+         ColumnVector sep_col = ColumnVector.fromStrings("-", "-", "-");
+         // this is failing?
+         ColumnVector e_concat = ColumnVector.fromStrings("a-b", "c-", "-e");
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenate(new ColumnView[]{sv1, sv2},
+             sep_col, separatorString, col_narep, true)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsSingleCol() {
+    try (ColumnVector sv1 = ColumnVector.fromStrings("a", "c", "e");
+         ColumnVector sep_col = ColumnVector.fromStrings("-", "-", "-");
+         ColumnVector e_concat = ColumnVector.fromStrings("a", "c", "e");
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenate(new ColumnView[]{sv1},
+             sep_col, separatorString, col_narep, false)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsNullAllCol() {
+    try (Scalar nullString = Scalar.fromString(null);
+         ColumnVector sv1 = ColumnVector.fromScalar(nullString, 3);
+         ColumnVector sv2 = ColumnVector.fromScalar(nullString, 3);
+         ColumnVector sep_col = ColumnVector.fromStrings("-", "-", "-");
+         ColumnVector e_concat = ColumnVector.fromStrings("", "", "");
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenate(new ColumnView[]{sv1, sv2},
+             sep_col, separatorString, col_narep, false)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsNullAllColSepTrue() {
+    try (Scalar nullString = Scalar.fromString(null);
+         ColumnVector sv1 = ColumnVector.fromScalar(nullString, 3);
+         ColumnVector sv2 = ColumnVector.fromScalar(nullString, 3);
+         ColumnVector sep_col = ColumnVector.fromStrings("-", "-", "-");
+         ColumnVector e_concat = ColumnVector.fromStrings("-", "-", "-");
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = ColumnVector.stringConcatenate(new ColumnView[]{sv1, sv2},
+             sep_col, separatorString, col_narep, true)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsSingleListCol() {
+    try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+           new HostColumnVector.BasicType(true, DType.STRING)),
+           Arrays.asList("aaa"), Arrays.asList("b", "c", "d"),
+           Arrays.asList("\u0480\u0481", null, "asdfbe", null));
+         ColumnVector sep_col = ColumnVector.fromStrings("-", "-", "*");
+         ColumnVector e_concat = ColumnVector.fromStrings("aaa", "b-c-d", "\u0480\u0481*asdfbe");
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = cv1.stringConcatenateListElements(sep_col, separatorString,
+             col_narep, false, false)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsSingleListColDefaultApi() {
+    try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+           new HostColumnVector.BasicType(true, DType.STRING)),
+           Arrays.asList("aaa"), Arrays.asList("b", "c", "d"),
+           Arrays.asList("\u0480\u0481", null, "asdfbe", null));
+         ColumnVector sep_col = ColumnVector.fromStrings("-", "-", "*");
+         ColumnVector e_concat = ColumnVector.fromStrings("aaa", "b-c-d", "\u0480\u0481*asdfbe");
+         ColumnVector concat = cv1.stringConcatenateListElements(sep_col)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsSingleListColScalarSep() {
+    try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+           new HostColumnVector.BasicType(true, DType.STRING)),
+           Arrays.asList("aaa"), Arrays.asList("b", "c", "d"),
+           Arrays.asList("\u0480\u0481", null, "asdfbe", null));
+         Scalar separatorString = Scalar.fromString("-");
+         ColumnVector e_concat = ColumnVector.fromStrings("aaa", "b-c-d", "\u0480\u0481-asdfbe");
+         Scalar narep = Scalar.fromString("");
+         ColumnVector concat = cv1.stringConcatenateListElements(separatorString, narep, false,
+             false)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsSingleListColAllNulls() {
+    try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+           new HostColumnVector.BasicType(true, DType.STRING)),
+           Arrays.asList("aaa"), Arrays.asList(null, null, null));
+         ColumnVector sep_col = ColumnVector.fromStrings("-", "-");
+         ColumnVector e_concat = ColumnVector.fromStrings("aaa", null);
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = cv1.stringConcatenateListElements(sep_col, separatorString,
+             col_narep, false, false)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsSingleListColAllNullsScalarSep() {
+    try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+           new HostColumnVector.BasicType(true, DType.STRING)),
+           Arrays.asList("aaa"), Arrays.asList(null, null, null));
+         ColumnVector e_concat = ColumnVector.fromStrings("aaa", null);
+         Scalar separatorString = Scalar.fromString("-");
+         Scalar narep = Scalar.fromString("");
+         ColumnVector concat = cv1.stringConcatenateListElements(separatorString, narep,
+             false, false)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsSingleListColAllNullsSepTrue() {
+    try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+           new HostColumnVector.BasicType(true, DType.STRING)),
+           Arrays.asList("aaa"), Arrays.asList(null, null, null));
+         ColumnVector sep_col = ColumnVector.fromStrings("-", "-");
+         ColumnVector e_concat = ColumnVector.fromStrings("aaa", null);
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar col_narep = Scalar.fromString("");
+         ColumnVector concat = cv1.stringConcatenateListElements(sep_col, separatorString,
+             col_narep, true, false)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsSingleListColAllNullsKeepNulls() {
+    try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+           new HostColumnVector.BasicType(true, DType.STRING)),
+           Arrays.asList("aaa"), Arrays.asList(null, null, null));
+         ColumnVector sep_col = ColumnVector.fromStrings("-", "-");
+         ColumnVector e_concat = ColumnVector.fromStrings("aaa", null);
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar col_narep = Scalar.fromString(null);
+         ColumnVector concat = cv1.stringConcatenateListElements(sep_col, separatorString,
+             col_narep, true, false)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsSingleListColEmptyArray() {
+    try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+           new HostColumnVector.BasicType(true, DType.STRING)),
+           Arrays.asList("aaa", "bbbb"), Arrays.asList());
+         ColumnVector sep_col = ColumnVector.fromStrings("-", "-");
+         ColumnVector e_concat = ColumnVector.fromStrings("aaa-bbbb", null);
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar col_narep = Scalar.fromString("");
+         // set the parameter to return null on empty array
+         ColumnVector concat = cv1.stringConcatenateListElements(sep_col, separatorString,
+             col_narep, false, false)) {
+      assertColumnsAreEqual(e_concat, concat);
+    }
+  }
+
+  @Test
+  void testStringConcatWsSingleListColEmptyArrayReturnEmpty() {
+    try (ColumnVector cv1 = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+           new HostColumnVector.BasicType(true, DType.STRING)),
+           Arrays.asList("aaa", "bbbb"), Arrays.asList());
+         ColumnVector sep_col = ColumnVector.fromStrings("-", "-");
+         ColumnVector e_concat = ColumnVector.fromStrings("aaa-bbbb", "");
+         Scalar separatorString = Scalar.fromString(null);
+         Scalar col_narep = Scalar.fromString("");
+         // set the parameter to return empty string on empty array
+         ColumnVector concat = cv1.stringConcatenateListElements(sep_col, separatorString,
+             col_narep, false, true)) {
+      assertColumnsAreEqual(e_concat, concat);
     }
   }
 

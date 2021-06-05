@@ -21,6 +21,7 @@
 
 #include "writer_impl.hpp"
 
+#include <io/statistics/column_statistics.cuh>
 #include <io/utilities/column_utils.cuh>
 
 #include <cudf/detail/iterator.cuh>
@@ -862,18 +863,20 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
                                   row_index_stride_,
                                   stream);
 
-  GatherColumnStatistics(stat_chunks.data(), stat_groups.data(), num_chunks, stream);
-  MergeColumnStatistics(stat_chunks.data() + num_chunks,
-                        stat_chunks.data(),
-                        stat_merge.device_ptr(),
-                        stripe_bounds.size() * columns.size(),
-                        stream);
+  detail::calculate_group_statistics<detail::io_file_format::ORC>(
+    stat_chunks.data(), stat_groups.data(), num_chunks, stream);
+  detail::merge_group_statistics<detail::io_file_format::ORC>(stat_chunks.data() + num_chunks,
+                                                              stat_chunks.data(),
+                                                              stat_merge.device_ptr(),
+                                                              stripe_bounds.size() * columns.size(),
+                                                              stream);
 
-  MergeColumnStatistics(stat_chunks.data() + num_chunks + stripe_bounds.size() * columns.size(),
-                        stat_chunks.data() + num_chunks,
-                        stat_merge.device_ptr(stripe_bounds.size() * columns.size()),
-                        columns.size(),
-                        stream);
+  detail::merge_group_statistics<detail::io_file_format::ORC>(
+    stat_chunks.data() + num_chunks + stripe_bounds.size() * columns.size(),
+    stat_chunks.data() + num_chunks,
+    stat_merge.device_ptr(stripe_bounds.size() * columns.size()),
+    columns.size(),
+    stream);
   gpu::orc_init_statistics_buffersize(
     stat_merge.device_ptr(), stat_chunks.data() + num_chunks, num_stat_blobs, stream);
   stat_merge.device_to_host(stream, true);

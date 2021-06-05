@@ -8,7 +8,6 @@ import warnings
 from types import SimpleNamespace
 from typing import (
     Any,
-    Callable,
     Dict,
     List,
     MutableSequence,
@@ -40,7 +39,12 @@ from cudf._lib.transform import bools_to_mask
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
-from cudf.core.dtypes import CategoricalDtype, IntervalDtype
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    IntervalDtype,
+    ListDtype,
+    StructDtype,
+)
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
     check_cast_unsupported_dtype,
@@ -291,8 +295,7 @@ class ColumnBase(Column, Serializable):
             "None"
         ]
 
-        if isinstance(result.dtype, cudf.Decimal64Dtype):
-            result.dtype.precision = array.type.precision
+        result = _copy_type_metadata_from_arrow(array, result)
         return result
 
     def _get_mask_as_column(self) -> ColumnBase:
@@ -305,16 +308,6 @@ class ColumnBase(Column, Serializable):
 
     def default_na_value(self) -> Any:
         raise NotImplementedError()
-
-    def applymap(
-        self, udf: Callable[[ScalarLike], ScalarLike], out_dtype: Dtype = None
-    ) -> ColumnBase:
-        """Apply an element-wise function to the values in the Column."""
-        # Subclasses that support applymap must override this behavior.
-        raise TypeError(
-            "User-defined functions are currently not supported on data "
-            f"with dtype {self.dtype}."
-        )
 
     def to_gpu_array(self, fillna=None) -> "cuda.devicearray.DeviceNDArray":
         """Get a dense numba device array for the data.
@@ -1135,6 +1128,11 @@ class ColumnBase(Column, Serializable):
             f"{other.dtype}."
         )
 
+    def normalize_binop_value(
+        self, other: ScalarLike
+    ) -> Union[ColumnBase, ScalarLike]:
+        raise NotImplementedError
+
     def min(self, skipna: bool = None, dtype: Dtype = None):
         result_col = self._process_for_reduction(skipna=skipna)
         if isinstance(result_col, ColumnBase):
@@ -1269,46 +1267,18 @@ class ColumnBase(Column, Serializable):
             }
         )
 
-    def _copy_type_metadata(self: T, other: ColumnBase) -> ColumnBase:
+    def _copy_type_metadata(self: ColumnBase, other: ColumnBase) -> ColumnBase:
         """
         Copies type metadata from self onto other, returning a new column.
 
-        * when `self` is a CategoricalColumn and `other` is not, we assume
-          other is a column of codes, and return a CategoricalColumn composed
-          of `other`  and the categories of `self`.
-        * when both `self` and `other` are StructColumns, rename the fields
-          of `other` to the field names of `self`.
-        * when both `self` and `other` are DecimalColumns, copy the precision
-          from self.dtype to other.dtype
         * when `self` and `other` are nested columns of the same type,
           recursively apply this function on the children of `self` to the
           and the children of `other`.
         * if none of the above, return `other` without any changes
         """
-        if isinstance(self, cudf.core.column.CategoricalColumn) and not (
-            isinstance(other, cudf.core.column.CategoricalColumn)
-        ):
-            other = build_categorical_column(
-                categories=self.categories,
-                codes=as_column(other.base_data, dtype=other.dtype),
-                mask=other.base_mask,
-                ordered=self.ordered,
-                size=other.size,
-                offset=other.offset,
-                null_count=other.null_count,
-            )
-
-        if isinstance(other, cudf.core.column.StructColumn) and isinstance(
-            self, cudf.core.column.StructColumn
-        ):
-            other = other._rename_fields(self.dtype.fields.keys())
-
-        if isinstance(other, cudf.core.column.DecimalColumn) and isinstance(
-            self, cudf.core.column.DecimalColumn
-        ):
-            other.dtype.precision = self.dtype.precision
-
-        if type(self) is type(other):
+        # TODO: This logic should probably be moved to a common nested column
+        # class.
+        if isinstance(other, type(self)):
             if self.base_children and other.base_children:
                 base_children = tuple(
                     self.base_children[i]._copy_type_metadata(
@@ -2230,6 +2200,60 @@ def full(size: int, fill_value: ScalarLike, dtype: Dtype = None) -> ColumnBase:
     return ColumnBase.from_scalar(cudf.Scalar(fill_value, dtype), size)
 
 
+def _copy_type_metadata_from_arrow(
+    arrow_array: pa.array, cudf_column: ColumnBase
+) -> ColumnBase:
+    """
+    Similar to `Column._copy_type_metadata`, except copies type metadata
+    from arrow array into a cudf column. Recursive for every level.
+    * When `arrow_array` is struct type and `cudf_column` is StructDtype, copy
+    field names.
+    * When `arrow_array` is decimal type and `cudf_column` is
+    Decimal64Dtype, copy precisions.
+    """
+    if pa.types.is_decimal(arrow_array.type) and isinstance(
+        cudf_column, cudf.core.column.DecimalColumn
+    ):
+        cudf_column.dtype.precision = arrow_array.type.precision
+    elif pa.types.is_struct(arrow_array.type) and isinstance(
+        cudf_column, cudf.core.column.StructColumn
+    ):
+        base_children = tuple(
+            _copy_type_metadata_from_arrow(arrow_array.field(i), col_child)
+            for i, col_child in enumerate(cudf_column.base_children)
+        )
+        cudf_column.set_base_children(base_children)
+        return cudf.core.column.StructColumn(
+            data=None,
+            size=cudf_column.base_size,
+            dtype=StructDtype.from_arrow(arrow_array.type),
+            mask=cudf_column.base_mask,
+            offset=cudf_column.offset,
+            null_count=cudf_column.null_count,
+            children=base_children,
+        )
+    elif pa.types.is_list(arrow_array.type) and isinstance(
+        cudf_column, cudf.core.column.ListColumn
+    ):
+        if arrow_array.values and cudf_column.base_children:
+            base_children = (
+                cudf_column.base_children[0],
+                _copy_type_metadata_from_arrow(
+                    arrow_array.values, cudf_column.base_children[1]
+                ),
+            )
+            return cudf.core.column.ListColumn(
+                size=cudf_column.base_size,
+                dtype=ListDtype.from_arrow(arrow_array.type),
+                mask=cudf_column.base_mask,
+                offset=cudf_column.offset,
+                null_count=cudf_column.null_count,
+                children=base_children,
+            )
+
+    return cudf_column
+
+
 def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     """Concatenate a sequence of columns."""
     if len(objs) == 0:
@@ -2288,5 +2312,12 @@ def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     else:
         # Filter out inputs that have 0 length, then concatenate.
         objs = [o for o in objs if len(o)]
-        col = libcudf.concat.concat_columns(objs)
+        try:
+            col = libcudf.concat.concat_columns(objs)
+        except RuntimeError as e:
+            if "concatenated rows exceeds size_type range" in str(e):
+                raise OverflowError(
+                    "total size of output is too large for a cudf column"
+                ) from e
+            raise
     return col

@@ -1,9 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 """Common abstract base classes for cudf."""
 
-import abc
 import sys
-from abc import abstractmethod
 
 import rmm
 
@@ -18,7 +16,7 @@ else:
     import pickle  # type: ignore
 
 
-class Serializable(abc.ABC):
+class Serializable:
     """A serializable object composed of device memory buffers.
 
     This base class defines a standard serialization protocol for objects
@@ -32,7 +30,6 @@ class Serializable(abc.ABC):
     latter converts back from that representation into an equivalent object.
     """
 
-    @abstractmethod
     def serialize(self):
         """Generate an equivalent serializable representation of an object.
 
@@ -53,10 +50,11 @@ class Serializable(abc.ABC):
 
         :meta private:
         """
-        pass
+        raise NotImplementedError(
+            "Subclasses of Serializable must implement serialize"
+        )
 
     @classmethod
-    @abstractmethod
     def deserialize(cls, header, frames):
         """Generate an object from a serialized representation.
 
@@ -80,7 +78,9 @@ class Serializable(abc.ABC):
 
         :meta private:
         """
-        pass
+        raise NotImplementedError(
+            "Subclasses of Serializable must implement deserialize"
+        )
 
     def device_serialize(self):
         """Serialize data and metadata associated with device memory.
