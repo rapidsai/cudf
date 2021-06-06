@@ -208,16 +208,18 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
                                                       out_of_bounds_policy::DONT_CHECK,
                                                       stream);
 
+    auto lhs_table_view = table_view{std::vector<column_view>{lhs}};
+
     auto result = cudf::detail::scatter(
       table_view{std::vector<column_view>{scatter_src_rhs->get_column(0).view()}},
       scatter_map_rhs.begin(),
       scatter_map_end,
-      table_view{std::vector<column_view>{lhs}},
+      lhs_table_view,
       false,
       stream,
       mr);
 
-    return std::move(result->release()[0]);
+    return std::make_unique<column>(lhs, stream, mr);
   }
 
   // Bail out for Scalars.
