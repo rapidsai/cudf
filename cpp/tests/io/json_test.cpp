@@ -866,12 +866,12 @@ TEST_F(JsonReaderTest, JsonLinesMultipleFileInputs)
 {
   const std::string file1 = temp_env->get_temp_dir() + "JsonLinesFileTest1.json";
   std::ofstream outfile(file1, std::ofstream::out);
-  outfile << "[11, 1.1]\n[22, 2.2]";
+  outfile << "[11, 1.1]\n[22, 2.2]\n";
   outfile.close();
 
   const std::string file2 = temp_env->get_temp_dir() + "JsonLinesFileTest2.json";
   std::ofstream outfile2(file2, std::ofstream::out);
-  outfile2 << "[11, 1.1]\n[22, 2.2]";
+  outfile2 << "[33, 3.3]\n[44, 4.4]";
   outfile2.close();
 
   cudf_io::json_reader_options in_options =
@@ -890,8 +890,10 @@ TEST_F(JsonReaderTest, JsonLinesMultipleFileInputs)
 
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{11, 22}, validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper{{11, 22, 33, 44}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
+                                 float64_wrapper{{1.1, 2.2, 3.3, 4.4}, validity});
 }
 
 CUDF_TEST_PROGRAM_MAIN()
