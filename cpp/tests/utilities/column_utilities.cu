@@ -724,6 +724,7 @@ struct column_view_printer {
     structs_column_view view{col};
 
     std::ostringstream out_stream;
+    printf("\n# GERA_DEBUG %s %s %d\n", __PRETTY_FUNCTION__, __FILE__, __LINE__);
 
     out_stream << get_nested_type_str(col) << ":\n"
                << indent << "Length : " << view.size() << ":\n";
@@ -731,7 +732,6 @@ struct column_view_printer {
       out_stream << indent << "Null count: " << view.null_count() << "\n"
                  << detail::to_string(bitmask_to_host(col), col.size(), indent) << "\n";
     }
-
     auto iter = thrust::make_counting_iterator(0);
     std::transform(
       iter,
@@ -739,7 +739,6 @@ struct column_view_printer {
       std::ostream_iterator<std::string>(out_stream, "\n"),
       [&](size_type index) {
         auto child = view.get_sliced_child(index);
-
         // non-nested types don't typically display their null masks, so do it here for convenience.
         return (!is_nested(child.type()) && child.nullable()
                   ? "   " + detail::to_string(bitmask_to_host(child), child.size(), indent) + "\n"
@@ -760,6 +759,7 @@ namespace detail {
  */
 std::vector<std::string> to_strings(cudf::column_view const& col, std::string const& indent)
 {
+  printf("\n# GERA_DEBUG %s %s %d\n", __PRETTY_FUNCTION__, __FILE__, __LINE__);
   std::vector<std::string> reply;
   cudf::type_dispatcher(col.type(), column_view_printer{}, col, reply, indent);
   return reply;
@@ -774,6 +774,7 @@ std::string to_string(cudf::column_view const& col,
                       std::string const& delimiter,
                       std::string const& indent)
 {
+  printf("\n# GERA_DEBUG %s %s %d\n", __PRETTY_FUNCTION__, __FILE__, __LINE__);
   std::ostringstream buffer;
   std::vector<std::string> h_data = to_strings(col, indent);
 
@@ -796,6 +797,7 @@ std::string to_string(std::vector<bitmask_type> const& null_mask,
                       size_type null_mask_size,
                       std::string const& indent)
 {
+  printf("\n# GERA_DEBUG %s %s %d\n", __PRETTY_FUNCTION__, __FILE__, __LINE__);
   std::ostringstream buffer;
   buffer << indent;
   for (int idx = null_mask_size - 1; idx >= 0; idx--) {
