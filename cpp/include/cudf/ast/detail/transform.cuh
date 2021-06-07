@@ -63,19 +63,48 @@ using possibly_null_value_t = typename possibly_null_value<T, has_nulls>::type;
 
 template <bool has_nulls, typename T>
 struct value_container {
-  __device__ value_container(T obj)
-  {
-    if constexpr (!(std::is_same_v<T, mutable_column_device_view> ||
-                    std::is_same_v<T, thrust::pair<void*, bool>*>)) {
-      cudf_assert(false && "Invalid constructor.");
-    }
-  }
+  __device__ value_container() {}
 
+  // TODO: Index is ignored by this function.
   template <typename Element>
   __device__ void set_value(cudf::size_type index, possibly_null_value_t<Element, has_nulls> result)
   {
-    cudf_assert(false && "Invalid type.");
+    if constexpr (std::is_same_v<Element, T>) {
+      if constexpr (has_nulls) {
+        if (result.has_value()) {
+          _obj.first  = *result;
+          _obj.second = true;
+        } else {
+          _obj.second = false;
+        }
+      } else {
+        _obj = result;
+      }
+    } else {
+      // We cannot SFINAE away this branch because we need the function to be
+      // defined, so we must provide a runtime error.
+      cudf_assert(false && "Output type does not match container type.");
+    }
   }
+
+  __device__ bool is_valid() const
+  {
+    if constexpr (has_nulls) { return _obj.second; }
+    return true;
+  }
+
+  // Note that accessing the value is undefined if the value is not valid.
+  __device__ T value() const
+  {
+    // Using two separate constexprs silences compiler warnings, whereas an
+    // if/else does not. An unconditional return is not ignored by the compiler
+    // when has_nulls is true, and therefore raises a compiler error because a
+    // pair is not convertible to the value type.
+    if constexpr (has_nulls) { return _obj.first; }
+    if constexpr (!has_nulls) { return _obj; }
+  }
+
+  std::conditional_t<has_nulls, thrust::pair<T, bool>, T> _obj;
 };
 
 template <bool has_nulls>
@@ -98,28 +127,6 @@ struct value_container<has_nulls, mutable_column_device_view> {
   }
 
   mutable_column_device_view& _obj;
-};
-
-template <bool has_nulls>
-struct value_container<has_nulls, thrust::pair<void*, bool>> {
-  __device__ value_container(thrust::pair<void*, bool>& obj) : _obj(obj) {}
-
-  template <typename Element>
-  __device__ void set_value(cudf::size_type index, possibly_null_value_t<Element, has_nulls> result)
-  {
-    if constexpr (has_nulls) {
-      if (result.has_value()) {
-        static_cast<Element*>(_obj.first)[index] = *result;
-        _obj.second                              = true;
-      } else {
-        _obj.second = false;
-      }
-    } else {
-      static_cast<Element*>(_obj.first)[index] = result;
-    }
-  }
-
-  thrust::pair<void*, bool>& _obj;
 };
 
 /**

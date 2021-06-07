@@ -243,8 +243,6 @@ __global__ void compute_conditional_join_output_size(table_device_view left_tabl
 
   // TODO: The new setup is forcing me to pass an optional through even when
   // there are no nulls.  Should see if there's a better way.
-  bool test_var;
-  thrust::pair<void*, bool> test_optional(&test_var, !has_nulls);
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, plan, thread_intermediate_storage, right_table);
 
@@ -252,12 +250,11 @@ __global__ void compute_conditional_join_output_size(table_device_view left_tabl
        left_row_index += left_stride) {
     bool found_match = false;
     for (cudf::size_type right_row_index = 0; right_row_index < right_num_rows; right_row_index++) {
-      auto output_dest =
-        cudf::ast::detail::value_container<has_nulls, thrust::pair<void*, bool>>(test_optional);
+      auto output_dest = cudf::ast::detail::value_container<has_nulls, bool>();
       evaluator.evaluate(output_dest, left_row_index, right_row_index, 0);
       // TODO: Handle null equality propertly, right now I'm just assuming
       // that null translates to null.
-      if (test_optional.second && test_var) {
+      if (output_dest.is_valid() && output_dest.value()) {
         if ((JoinKind != join_kind::LEFT_ANTI_JOIN) &&
             !(JoinKind == join_kind::LEFT_SEMI_JOIN && found_match)) {
           ++thread_counter;
@@ -517,20 +514,17 @@ __global__ void conditional_join(table_device_view left_table,
 
   const unsigned int activemask = __ballot_sync(0xffffffff, left_row_index < left_num_rows);
 
-  bool test_var;
-  thrust::pair<void*, bool> test_optional(&test_var, !has_nulls);
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, plan, thread_intermediate_storage, right_table);
 
   if (left_row_index < left_num_rows) {
     bool found_match = false;
     for (size_type right_row_index(0); right_row_index < right_num_rows; right_row_index++) {
-      auto output_dest =
-        cudf::ast::detail::value_container<has_nulls, thrust::pair<void*, bool>>(test_optional);
+      auto output_dest = cudf::ast::detail::value_container<has_nulls, bool>();
       evaluator.evaluate(output_dest, left_row_index, right_row_index, 0);
 
       // TODO: Handle null equality properly.
-      if (test_optional.second && test_var) {
+      if (output_dest.is_valid() && output_dest.value()) {
         // If the rows are equal, then we have found a true match
         // In the case of left anti joins we only add indices from left after
         // the loop if we have found _no_ matches from the right.
