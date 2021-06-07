@@ -173,11 +173,14 @@ def test_categorical_element_indexing():
     Element indexing to a cat column must give the underlying object
     not the numerical index.
     """
-    cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
+    cat = pd.Categorical(["a", "a", "_", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
     sr = cudf.Series(cat)
     assert_eq(pdsr, sr)
     assert_eq(pdsr.cat.codes, sr.cat.codes, check_dtype=False)
+
+    for i in range(len(sr)):
+        assert pdsr.iloc[i] == sr.iloc[i]
 
 
 def test_categorical_masking():
