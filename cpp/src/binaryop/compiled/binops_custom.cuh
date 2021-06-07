@@ -51,12 +51,16 @@ struct ops_wrapper {
       auto result = [&]() {
         if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals>) {
           return BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(
-            x, y, lhs.is_valid(i), rhs.is_valid(i));
+            x, y, lhs.is_valid(is_lhs_scalar ? 0 : i), rhs.is_valid(is_rhs_scalar ? 0 : i));
         } else if constexpr (std::is_same_v<BinaryOperator, ops::NullMax> or
                              std::is_same_v<BinaryOperator, ops::NullMin>) {
           bool output_valid = false;
           auto result       = BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(
-            x, y, lhs.is_valid(i), rhs.is_valid(i), output_valid);
+            x,
+            y,
+            lhs.is_valid(is_lhs_scalar ? 0 : i),
+            rhs.is_valid(is_rhs_scalar ? 0 : i),
+            output_valid);
           if (out.nullable() && !output_valid) out.set_null(i);
           return result;
         } else {
@@ -96,12 +100,16 @@ struct ops2_wrapper {
       auto result = [&]() {
         if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals>) {
           return BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(
-            x, y, lhs.is_valid(i), rhs.is_valid(i));
+            x, y, lhs.is_valid(is_lhs_scalar ? 0 : i), rhs.is_valid(is_rhs_scalar ? 0 : i));
         } else if constexpr (std::is_same_v<BinaryOperator, ops::NullMax> or
                              std::is_same_v<BinaryOperator, ops::NullMin>) {
           bool output_valid = false;
           auto result       = BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(
-            x, y, lhs.is_valid(i), rhs.is_valid(i), output_valid);
+            x,
+            y,
+            lhs.is_valid(is_lhs_scalar ? 0 : i),
+            rhs.is_valid(is_rhs_scalar ? 0 : i),
+            output_valid);
           if (out.nullable() && !output_valid) out.set_null(i);
           return result;
         } else {
