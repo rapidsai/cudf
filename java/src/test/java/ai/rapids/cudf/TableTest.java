@@ -3045,11 +3045,13 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testWindowingCollectSet() {
-    // TODO: Add test cases for aggCollectWithUnEqNulls and aggCollectWithEqNaNs after
-    // the issue (https://github.com/rapidsai/cudf/issues/8405) being addressed.
     Aggregation aggCollect = Aggregation.collectSet();
     Aggregation aggCollectWithEqNulls = Aggregation.collectSet(NullPolicy.INCLUDE,
         NullEquality.EQUAL, NaNEquality.UNEQUAL);
+    Aggregation aggCollectWithUnEqNulls = Aggregation.collectSet(NullPolicy.INCLUDE,
+        NullEquality.UNEQUAL, NaNEquality.UNEQUAL);
+    Aggregation aggCollectWithEqNaNs = Aggregation.collectSet(NullPolicy.INCLUDE,
+        NullEquality.EQUAL, NaNEquality.ALL_EQUAL);
 
     try (Scalar two = Scalar.fromInt(2);
          Scalar one = Scalar.fromInt(1);
@@ -3071,7 +3073,7 @@ public class TableTest extends CudfTestBase {
           assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
 
           // Primitive type: INT32
-          //  a) excluding nulls
+          //  a) excluding NULLs
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(aggCollect.onColumn(3).overWindow(winOpts));
                ColumnVector expected = ColumnVector.fromLists(
@@ -3081,7 +3083,7 @@ public class TableTest extends CudfTestBase {
                    Arrays.asList(), Arrays.asList(6), Arrays.asList(6, 7), Arrays.asList(6, 7))) {
             assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
           }
-          //  b) including nulls AND nulls are equal
+          //  b) including NULLs AND NULLs are equal
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(aggCollectWithEqNulls.onColumn(3).overWindow(winOpts));
                ColumnVector expected = ColumnVector.fromLists(
@@ -3091,9 +3093,19 @@ public class TableTest extends CudfTestBase {
                    Arrays.asList((Integer) null), Arrays.asList(6, null), Arrays.asList(6, 7, null), Arrays.asList(6, 7))) {
             assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
           }
+          //  c) including NULLs AND NULLs are unequal
+          try (Table windowAggResults = sorted.groupBy(0, 1)
+              .aggregateWindows(aggCollectWithUnEqNulls.onColumn(3).overWindow(winOpts));
+               ColumnVector expected = ColumnVector.fromLists(
+                   new ListType(false, new BasicType(false, DType.INT32)),
+                   Arrays.asList(5), Arrays.asList(1, 5), Arrays.asList(1, 5), Arrays.asList(1),
+                   Arrays.asList(1, 4), Arrays.asList(1, 3, 4), Arrays.asList(3, 4), Arrays.asList(3, 4),
+                   Arrays.asList(null, null), Arrays.asList(6, null, null), Arrays.asList(6, 7, null), Arrays.asList(6, 7))) {
+            assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+          }
 
           // Primitive type: FLOAT64
-          //  a) excluding nulls
+          //  a) excluding NULLs
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(aggCollect.onColumn(4).overWindow(winOpts));
                ColumnVector expected = ColumnVector.fromLists(
@@ -3105,7 +3117,7 @@ public class TableTest extends CudfTestBase {
                    Arrays.asList(Double.NaN, Double.NaN), Arrays.asList(Double.NaN, Double.NaN))) {
             assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
           }
-          //  b) including nulls AND nulls are equal
+          //  b) including NULLs AND NULLs are equal
           try (Table windowAggResults = sorted.groupBy(0, 1)
               .aggregateWindows(aggCollectWithEqNulls.onColumn(4).overWindow(winOpts));
                ColumnVector expected = ColumnVector.fromLists(
@@ -3115,6 +3127,18 @@ public class TableTest extends CudfTestBase {
                    Arrays.asList(-3.0, 1.3e-7, Double.NaN), Arrays.asList(-3.0, Double.NaN),
                    Arrays.asList(1e-3, null), Arrays.asList(1e-3, Double.NaN, null),
                    Arrays.asList(Double.NaN, Double.NaN, null), Arrays.asList(Double.NaN, Double.NaN))) {
+            assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
+          }
+          //  c) including NULLs AND NULLs are equal AND NaNs are equal
+          try (Table windowAggResults = sorted.groupBy(0, 1)
+              .aggregateWindows(aggCollectWithEqNaNs.onColumn(4).overWindow(winOpts));
+               ColumnVector expected = ColumnVector.fromLists(
+                   new ListType(false, new BasicType(false, DType.FLOAT64)),
+                   Arrays.asList(1.1), Arrays.asList(1.1, null), Arrays.asList(1.1, 2.2, null), Arrays.asList(2.2, null),
+                   Arrays.asList(-3.0, 1.3e-7), Arrays.asList(-3.0, 1.3e-7),
+                   Arrays.asList(-3.0, 1.3e-7, Double.NaN), Arrays.asList(-3.0, Double.NaN),
+                   Arrays.asList(1e-3, null), Arrays.asList(1e-3, Double.NaN, null),
+                   Arrays.asList(Double.NaN, null), Arrays.asList(Double.NaN))) {
             assertColumnsAreEqual(expected, windowAggResults.getColumn(0));
           }
         }
