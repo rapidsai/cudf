@@ -277,7 +277,7 @@ void reader::impl::decompress_input(rmm::cuda_stream_view stream)
 {
   const auto compression_type =
     infer_compression_type(options_.get_compression(),
-                           filepaths_[0],
+                           filepaths_.size() > 0 ? filepaths_[0] : "",
                            {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
   if (compression_type == "none") {
     // Do not use the owner vector here to avoid extra copy

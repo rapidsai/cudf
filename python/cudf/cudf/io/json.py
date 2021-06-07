@@ -3,10 +3,13 @@ import warnings
 from io import BytesIO, StringIO
 
 import pandas as pd
+from fsspec.core import get_fs_token_paths
+from fsspec.utils import stringify_path
 
 import cudf
 from cudf._lib import json as libjson
 from cudf.utils import ioutils
+from cudf.utils.dtypes import is_list_like
 
 
 @ioutils.doc_read_json()
@@ -27,24 +30,37 @@ def read_json(
     if engine == "auto":
         engine = "cudf" if lines else "pandas"
 
-    is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
-        path_or_data=path_or_buf, **kwargs,
-    )
-    if not is_single_filepath_or_buffer:
-        raise NotImplementedError(
-            "`read_json` does not yet support reading multiple files"
-        )
+    # Multiple sources are passed as a list. If a single source is passed,
+    # wrap it in a list for unified processing downstream.
+    if not is_list_like(path_or_buf):
+        path_or_buf = [path_or_buf]
 
-    path_or_buf, compression = ioutils.get_filepath_or_buffer(
-        path_or_data=path_or_buf,
-        compression=compression,
-        iotypes=(BytesIO, StringIO),
-        **kwargs,
-    )
+    filepaths_or_buffers = []
+    for source in path_or_buf:
+        if ioutils.is_directory(source, **kwargs):
+            fs = _ensure_filesystem(passed_filesystem=None, path=source)
+            source = stringify_path(source)
+            source = fs.sep.join([source, "*.json"])
+
+        tmp_source, compression = ioutils.get_filepath_or_buffer(
+            path_or_data=source,
+            compression=None,
+            iotypes=(BytesIO, StringIO),
+            **kwargs,
+        )
+        if compression is not None:
+            raise ValueError(
+                "URL content-encoding decompression is not supported"
+            )
+        if isinstance(tmp_source, list):
+            filepaths_or_buffers.extend(tmp_source)
+        else:
+            filepaths_or_buffers.append(tmp_source)
+
     if engine == "cudf":
         return cudf.DataFrame._from_table(
             libjson.read_json(
-                path_or_buf, dtype, lines, compression, byte_range
+                filepaths_or_buffers, dtype, lines, compression, byte_range
             )
         )
     else:
@@ -61,6 +77,15 @@ def read_json(
                 **kwargs,
             )
         else:
+            # Pandas cannot accept a list of sources so we must narrow and warn
+            if is_list_like(path_or_buf):
+                if len(path_or_buf) > 1:
+                    raise ValueError(
+                        "Pandas cannot accept a list of input "
+                        + "sources, size of input list is: "
+                        + str(len(path_or_buf))
+                    )
+                path_or_buf = path_or_buf[0]
             pd_value = pd.read_json(
                 path_or_buf,
                 lines=lines,
@@ -72,6 +97,14 @@ def read_json(
         df = cudf.from_pandas(pd_value)
 
     return df
+
+
+def _ensure_filesystem(passed_filesystem, path):
+    if passed_filesystem is None:
+        return get_fs_token_paths(path[0] if isinstance(path, list) else path)[
+            0
+        ]
+    return passed_filesystem
 
 
 @ioutils.doc_to_json()
