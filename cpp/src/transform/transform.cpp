@@ -72,12 +72,12 @@ std::vector<std::string> make_template_types(column_view outcol_view, table_view
   std::string offset_type =
     cudf::jit::get_type_name(cudf::data_type(cudf::type_to_id<cudf::offset_type>()));
 
-  std::vector<std::string> template_types(1);
-  template_types[0] = cudf::jit::get_type_name(outcol_view.type());
+  std::vector<std::string> template_types;
+  template_types.reserve(data_view.num_columns() + 1);
 
+  template_types.push_back(cudf::jit::get_type_name(outcol_view.type()));
   for (auto const& col : data_view) {
     auto these_types = {cudf::jit::get_type_name(col.type()) + "*", mskptr_type, offset_type};
-
     template_types.insert(template_types.end(), these_types);
   }
   return template_types;
@@ -86,8 +86,8 @@ std::vector<std::string> make_template_types(column_view outcol_view, table_view
 void generalized_operation(table_view data_view,
                            std::string const& binary_udf,
                            data_type output_type,
-                           column_view const& outcol_view,
-                           column_view const& outmsk_view,
+                           mutable_column_view outcol_view,
+                           mutable_column_view outmsk_view,
                            rmm::mr::device_memory_resource* mr)
 {
   std::vector<std::string> template_types = make_template_types(outcol_view, data_view);
@@ -100,16 +100,21 @@ void generalized_operation(table_view data_view,
     binary_udf, "GENERIC_OP", cudf::jit::get_type_name(output_type), {0});
 
   // {size, out_ptr, out_mask_ptr, col0_ptr, col0_mask_ptr, col0_offset, col1_ptr...}
-  std::vector<void*> kernel_args((data_view.num_columns() * 3) + 3);
+  std::vector<void*> kernel_args;
+  kernel_args.reserve((data_view.num_columns() * 3) + 3);
 
   cudf::size_type size   = outcol_view.size();
   const void* outcol_ptr = cudf::jit::get_data_ptr(outcol_view);
   const void* outmsk_ptr = cudf::jit::get_data_ptr(outmsk_view);
   kernel_args.insert(kernel_args.begin(), {&size, &outcol_ptr, &outmsk_ptr});
 
-  std::vector<const void*> data_ptrs(data_view.num_columns());
-  std::vector<cudf::bitmask_type const*> mask_ptrs(data_view.num_columns());
-  std::vector<cudf::offset_type> offsets(data_view.num_columns());
+  std::vector<const void*> data_ptrs;
+  std::vector<cudf::bitmask_type const*> mask_ptrs;
+  std::vector<cudf::offset_type> offsets;
+
+  data_ptrs.reserve(data_view.num_columns());
+  mask_ptrs.reserve(data_view.num_columns());
+  offsets.reserve(data_view.num_columns());
 
   column_view col;
   for (int col_idx = 0; col_idx < data_view.num_columns(); col_idx++) {
@@ -169,13 +174,10 @@ std::unique_ptr<column> generalized_masked_op(table_view data_view,
   std::unique_ptr<column> output_mask =
     make_fixed_width_column(cudf::data_type{cudf::type_id::BOOL8}, data_view.num_rows());
 
-  mutable_column_view output_view      = *output;
-  mutable_column_view output_mask_view = *output_mask;
-
   transformation::jit::generalized_operation(
-    data_view, udf, output_type, output_view, output_mask_view, mr);
+    data_view, udf, output_type, *output, *output_mask, mr);
 
-  auto final_output_mask = cudf::bools_to_mask(output_mask_view);
+  auto final_output_mask = cudf::bools_to_mask(*output_mask);
   output.get()->set_null_mask(std::move(*(final_output_mask.first)));
   return output;
 }
