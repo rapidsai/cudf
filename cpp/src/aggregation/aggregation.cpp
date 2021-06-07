@@ -488,7 +488,14 @@ std::unique_ptr<Base> make_merge_lists_aggregation()
   return std::make_unique<detail::merge_lists_aggregation>();
 }
 template std::unique_ptr<aggregation> make_merge_lists_aggregation<aggregation>();
-// TODO merge sets
+
+/// Factory to create a MERGE_SETS aggregation
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_merge_sets_aggregation()
+{
+  return std::make_unique<detail::merge_sets_aggregation>();
+}
+template std::unique_ptr<aggregation> make_merge_sets_aggregation<aggregation>();
 
 /// Factory to create a LAG aggregation
 template <typename Base = aggregation>
