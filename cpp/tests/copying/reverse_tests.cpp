@@ -35,12 +35,7 @@
 #include <random>
 
 template <typename T>
-class ReverseTypedTestFixture : public cudf::test::BaseFixture,
-                                cudf::test::UniformRandomGenerator<cudf::size_type> {
- public:
-  ReverseTypedTestFixture() : cudf::test::UniformRandomGenerator<cudf::size_type>{0, 10} {}
-
-  cudf::size_type repeat_count() { return this->generate(); }
+class ReverseTypedTestFixture : public cudf::test::BaseFixture {
 };
 
 TYPED_TEST_CASE(ReverseTypedTestFixture, cudf::test::FixedWidthTypes);
@@ -90,22 +85,19 @@ TYPED_TEST(ReverseTypedTestFixture, ReverseColumn)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(column_ret->view(), expected, true);
 }
 
-TYPED_TEST(ReverseTypedTestFixture, Nullable)
+TYPED_TEST(ReverseTypedTestFixture, ReverseNullable)
 {
   using T = TypeParam;
   static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
 
   constexpr cudf::size_type num_values{20};
 
-  // we first generate the array for column
   std::vector<int64_t> input_values(num_values);
   std::iota(input_values.begin(), input_values.end(), 1);
 
-  // we then generate the null indexes
   std::vector<bool> input_valids(num_values);
   for (size_t i{0}; i < input_valids.size(); i++) { input_valids[i] = (i % 2) == 0 ? true : false; }
 
-  // we then generate the expected values
   std::vector<T> expected_values;
   std::vector<bool> expected_valids;
   for (int i = 19; i > -1; i--) {
@@ -113,12 +105,83 @@ TYPED_TEST(ReverseTypedTestFixture, Nullable)
     expected_valids.push_back(input_valids[i]);
   }
 
-  // we then create the necessary tables
   cudf::test::fixed_width_column_wrapper<T, int64_t> input(
     input_values.begin(), input_values.end(), input_valids.begin());
 
   cudf::test::fixed_width_column_wrapper<T> expected(
     expected_values.begin(), expected_values.end(), expected_valids.begin());
+
+  cudf::table_view input_table{{input}};
+  auto p_ret = cudf::reverse(input_table);
+
+  EXPECT_EQ(p_ret->num_columns(), 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected);
+}
+
+TYPED_TEST(ReverseTypedTestFixture, ZeroSizeInput)
+{
+  using T = TypeParam;
+  static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
+
+  cudf::test::fixed_width_column_wrapper<T, int32_t> input(thrust::make_counting_iterator(0),
+                                                           thrust::make_counting_iterator(0));
+
+  cudf::test::fixed_width_column_wrapper<T, int32_t> expected(thrust::make_counting_iterator(0),
+                                                              thrust::make_counting_iterator(0));
+
+  cudf::table_view input_table{{input}};
+  auto p_ret = cudf::reverse(input_table);
+
+  EXPECT_EQ(p_ret->num_columns(), 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected);
+}
+
+class ReverseStringTestFixture : public cudf::test::BaseFixture {
+};
+
+TEST_F(ReverseStringTestFixture, ReverseNullable)
+{
+  constexpr cudf::size_type num_values{20};
+
+  // generating string column and valid inputs
+  std::vector<std::string> input_values(num_values);
+  std::vector<bool> input_valids(num_values);
+  for (size_t i{0}; i < num_values; i++) {
+    input_values[i] = "#" + std::to_string(i);
+    input_valids[i] = (i % 2) == 0 ? true : false;
+  }
+
+  // we then generate the expected values
+  std::vector<std::string> expected_values;
+  std::vector<bool> expected_valids;
+  for (int i = 19; i > -1; i--) {
+    expected_values.push_back(input_values[i]);
+    expected_valids.push_back(input_valids[i]);
+  }
+
+  // we then create the necessary tables
+  auto input = cudf::test::strings_column_wrapper(
+    input_values.begin(), input_values.end(), input_valids.begin());
+
+  auto expected = cudf::test::strings_column_wrapper(
+    expected_values.begin(), expected_values.end(), expected_valids.begin());
+
+  cudf::table_view input_table{{input}};
+  auto p_ret = cudf::reverse(input_table);
+
+  EXPECT_EQ(p_ret->num_columns(), 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(p_ret->view().column(0), expected);
+}
+
+TEST_F(ReverseStringTestFixture, ZeroSizeInput)
+{
+  std::vector<std::string> input_values{};
+  auto input = cudf::test::strings_column_wrapper(input_values.begin(), input_values.end());
+
+  auto count = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0));
+
+  auto expected = cudf::test::strings_column_wrapper(input_values.begin(), input_values.end());
 
   cudf::table_view input_table{{input}};
   auto p_ret = cudf::reverse(input_table);
