@@ -44,7 +44,6 @@ namespace detail {
  *
  * @param left  Table of left columns to join
  * @param right Table of right  columns to join
- * @param flip_join_indices Flag that indicates whether the left and right
  * tables have been flipped, meaning the output indices should also be flipped
  * @param JoinKind The type of join to be performed
  * @param compare_nulls Controls whether null join-key values should match or not.
@@ -56,24 +55,12 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 get_conditional_join_indices(table_view const& left,
                              table_view const& right,
-                             bool flip_join_indices,
                              join_kind JoinKind,
                              ast::expression binary_pred,
                              null_equality compare_nulls,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
-  // The `right` table is always used for the inner loop. We want to use the smaller table
-  // for the inner loop. Thus, if `left` is smaller than `right`, swap `left/right`.
-  // TODO: I'm not confident that this will give the correct result. An
-  // arbitrary conditional join on two tables can use, for instance, different
-  // columns from each table, in which case flipping the left and right tables
-  // will not respect the table references encoded in the predicate.
-  if ((JoinKind == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows())) {
-    return get_conditional_join_indices(
-      right, left, true, JoinKind, binary_pred, compare_nulls, stream, mr);
-  }
-
   // We can immediately filter out cases where the right table is empty. In
   // some cases, we return all the rows of the left table with a corresponding
   // null index for the right table; in others, we return an empty output.
@@ -151,8 +138,8 @@ get_conditional_join_indices(table_view const& left,
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
 
-  const auto& join_output_l = flip_join_indices ? right_indices->data() : left_indices->data();
-  const auto& join_output_r = flip_join_indices ? left_indices->data() : right_indices->data();
+  const auto& join_output_l = left_indices->data();
+  const auto& join_output_r = right_indices->data();
   if (has_nulls) {
     conditional_join<block_size, DEFAULT_JOIN_CACHE_SIZE, true>
       <<<config.num_blocks,

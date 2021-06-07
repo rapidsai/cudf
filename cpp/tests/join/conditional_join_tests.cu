@@ -268,6 +268,37 @@ TYPED_TEST(ConditionalInnerJoinTest, TestGreaterComparison)
   this->test({{0, 1, 2}}, {{1, 0, 0}}, expression, {{1, 1}, {1, 2}, {2, 0}, {2, 1}, {2, 2}});
 };
 
+TYPED_TEST(ConditionalInnerJoinTest, TestGreaterTwoColumnComparison)
+{
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::GREATER, col_ref_0, col_ref_1);
+
+  this->test({{0, 1, 2}, {0, 0, 0}},
+             {{0, 0, 0}, {1, 0, 0}},
+             expression,
+             {{1, 1}, {1, 2}, {2, 0}, {2, 1}, {2, 2}});
+};
+
+TYPED_TEST(ConditionalInnerJoinTest, TestGreaterDifferentNumberColumnComparison)
+{
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::GREATER, col_ref_0, col_ref_1);
+
+  this->test(
+    {{0, 1, 2}}, {{0, 0, 0}, {1, 0, 0}}, expression, {{1, 1}, {1, 2}, {2, 0}, {2, 1}, {2, 2}});
+};
+
+TYPED_TEST(ConditionalInnerJoinTest, TestGreaterDifferentNumberColumnDifferentSizeComparison)
+{
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
+  auto expression = cudf::ast::expression(cudf::ast::ast_operator::GREATER, col_ref_0, col_ref_1);
+
+  this->test({{0, 1}}, {{0, 0, 0}, {1, 0, 0}}, expression, {{1, 1}, {1, 2}});
+};
+
 TYPED_TEST(ConditionalInnerJoinTest, TestComplexConditionMultipleColumns)
 {
   // LEFT is implicit, but specifying explicitly to validate that it works.

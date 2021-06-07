@@ -231,7 +231,7 @@ conditional_join(table_view left,
 {
   CUDF_FUNC_RANGE();
   return get_conditional_join_indices(
-    left, right, false, JoinKind, binary_pred, null_equality::EQUAL, stream, mr);
+    left, right, JoinKind, binary_pred, null_equality::EQUAL, stream, mr);
 }
 
 }  // namespace detail
