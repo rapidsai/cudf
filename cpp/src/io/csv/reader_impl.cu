@@ -566,6 +566,9 @@ std::vector<data_type> reader::impl::gather_column_types(device_span<char const>
                                                          device_span<uint64_t const> row_offsets,
                                                          rmm::cuda_stream_view stream)
 {
+  // if vector of data_types was provdided this takes precedence over other options
+  if (!opts_.get_data_types().empty()) { return opts_.get_data_types(); }
+
   std::vector<data_type> dtypes;
 
   if (opts_.get_dtypes().empty()) {

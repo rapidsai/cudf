@@ -109,6 +109,8 @@ class csv_reader_options {
 
   // Conversion settings
 
+  // Per-column types; if provided, this takes precedence over _dtypes
+  std::vector<data_type> _data_types;
   // Per-column types; disables type inference on those columns
   std::vector<std::string> _dtypes;
   // Additional values to recognize as boolean true values
@@ -285,6 +287,11 @@ class csv_reader_options {
    * @brief Returns indexes of columns to read as datetime.
    */
   std::vector<int> const& get_infer_date_indexes() const { return _infer_date_indexes; }
+
+  /**
+   * @brief Returns per-column types.
+   */
+  std::vector<data_type> const& get_data_types() const { return _data_types; }
 
   /**
    * @brief Returns per-column types.
@@ -557,6 +564,13 @@ class csv_reader_options {
   {
     _infer_date_indexes = std::move(col_ind);
   }
+
+  /**
+   * @brief Sets per-column types. If this is set, this takes precedence over dtypes.
+   *
+   * @param types Vector specifying the columns' target data types.
+   */
+  void set_data_types(std::vector<data_type> types) { _data_types = std::move(types); }
 
   /**
    * @brief Sets per-column types.
@@ -959,6 +973,18 @@ class csv_reader_options_builder {
   csv_reader_options_builder& infer_date_indexes(std::vector<int> col_ind)
   {
     options._infer_date_indexes = std::move(col_ind);
+    return *this;
+  }
+
+  /**
+   * @brief Sets per-column types.
+   *
+   * @param types Vector of data types in which the column needs to be read.
+   * @return this for chaining.
+   */
+  csv_reader_options_builder& data_types(std::vector<data_type> types)
+  {
+    options._data_types = std::move(types);
     return *this;
   }
 
