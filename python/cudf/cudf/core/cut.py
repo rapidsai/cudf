@@ -2,7 +2,6 @@ from cudf._lib.labeling import label_bins
 from cudf.core.column import as_column
 from cudf.core.column import build_categorical_column
 from cudf.core.index import IntervalIndex, interval_range
-from pandas.core.indexes.interval import IntervalIndex as pandas_IntervalIndex
 from cudf.utils.dtypes import is_list_like
 import cupy
 import cudf
@@ -135,18 +134,18 @@ def cut(
                 )
             elif duplicates == "drop":
                 # get unique values but maintain list dtype
-                bins = cupy.unique(bins).tolist()
+                bins = list(dict.fromkeys(bins))
 
     # if bins is an intervalIndex we ignore the value of right
     if (
         right is False
-        and isinstance(bins, pandas_IntervalIndex)
+        and isinstance(bins, pd.IntervalIndex)
         and bins.closed == "right"
     ):
         right = True
 
     # create bins if given an int or single scalar
-    if not isinstance(bins, pandas_IntervalIndex):
+    if not isinstance(bins, pd.IntervalIndex):
         if not isinstance(bins, (Sequence)):
             if isinstance(
                 x, (pd.Series, cudf.Series, np.ndarray, cupy.ndarray)
@@ -161,9 +160,7 @@ def cut(
                 mn = cudf.Scalar(min(x), dtype="float64")
                 mx = cudf.Scalar(max(x), dtype="float64")
             step = cudf.Scalar((mx - mn) / bins, dtype="float64")
-            bins = sequence(
-                size=bins + 1, init=mn.device_value, step=step.device_value
-            ).values
+            bins = cupy.linspace(mn.value, mx.value, bins + 1, endpoint=True)
             adj = (mx - mn).value * 0.001
             if right:
                 bins[0] -= adj
@@ -196,7 +193,7 @@ def cut(
         closed = "left"
         left_inclusive = True
 
-    if isinstance(bins, pandas_IntervalIndex):
+    if isinstance(bins, pd.IntervalIndex):
         interval_labels = bins
     elif labels is None:
         if duplicates == "drop" and len(bins) == 1 and len(old_bins) != 1:
@@ -239,7 +236,7 @@ def cut(
                     labels if len(set(labels)) == len(labels) else None
                 )
 
-    if isinstance(bins, pandas_IntervalIndex):
+    if isinstance(bins, pd.IntervalIndex):
         # get the left and right edges of the bins as columns
         # we cannot typecast an IntervalIndex, so we need to
         # make the edges the same type as the input array
