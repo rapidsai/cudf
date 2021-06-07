@@ -1326,6 +1326,14 @@ class Series(SingleColumnFrame, Serializable):
         if isinstance(other, cudf.DataFrame):
             return NotImplemented
 
+        if (
+            self.isnull().all()
+            and fill_value is None
+            and fn
+            in ("add", "sub", "mul", "mod", "pow", "truediv", "floordiv")
+        ):
+            return self
+
         if isinstance(other, Series):
             if (
                 not can_reindex

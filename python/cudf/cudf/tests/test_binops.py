@@ -2870,3 +2870,19 @@ def generate_test_null_equals_columnops_data():
 )
 def test_null_equals_columnops(lcol, rcol, ans, case):
     assert lcol._null_equals(rcol).all() == ans
+
+
+@pytest.mark.parametrize("binop", _binops)
+@pytest.mark.parametrize("data", [None, [-9, 7], [5, -2], [12, 18]])
+@pytest.mark.parametrize("scalar", [1, 3, 12, np.nan])
+def test_empty_column(binop, data, scalar):
+    gdf = cudf.DataFrame(columns=["a", "b"])
+    if data is not None:
+        gdf["a"] = data
+
+    pdf = gdf.to_pandas()
+
+    got = binop(gdf, scalar)
+    expected = binop(pdf, scalar)
+
+    utils.assert_eq(expected, got)
