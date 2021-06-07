@@ -253,7 +253,7 @@ __global__ void compute_conditional_join_output_size(table_device_view left_tabl
     bool found_match = false;
     for (cudf::size_type right_row_index = 0; right_row_index < right_num_rows; right_row_index++) {
       auto output_dest =
-        cudf::ast::detail::value_container<has_nulls, thrust::pair<void*, bool>*>(&test_optional);
+        cudf::ast::detail::value_container<has_nulls, thrust::pair<void*, bool>>(test_optional);
       evaluator.evaluate(output_dest, left_row_index, right_row_index, 0);
       // TODO: Handle null equality propertly, right now I'm just assuming
       // that null translates to null.
@@ -526,7 +526,7 @@ __global__ void conditional_join(table_device_view left_table,
     bool found_match = false;
     for (size_type right_row_index(0); right_row_index < right_num_rows; right_row_index++) {
       auto output_dest =
-        cudf::ast::detail::value_container<has_nulls, thrust::pair<void*, bool>*>(&test_optional);
+        cudf::ast::detail::value_container<has_nulls, thrust::pair<void*, bool>>(test_optional);
       evaluator.evaluate(output_dest, left_row_index, right_row_index, 0);
 
       // TODO: Handle null equality properly.

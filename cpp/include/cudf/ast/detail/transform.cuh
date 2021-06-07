@@ -65,7 +65,7 @@ template <bool has_nulls, typename T>
 struct value_container {
   __device__ value_container(T obj)
   {
-    if constexpr (!(std::is_same_v<T, mutable_column_device_view*> ||
+    if constexpr (!(std::is_same_v<T, mutable_column_device_view> ||
                     std::is_same_v<T, thrust::pair<void*, bool>*>)) {
       cudf_assert(false && "Invalid constructor.");
     }
@@ -79,47 +79,47 @@ struct value_container {
 };
 
 template <bool has_nulls>
-struct value_container<has_nulls, mutable_column_device_view*> {
-  __device__ value_container(mutable_column_device_view* obj) : _obj(obj) {}
+struct value_container<has_nulls, mutable_column_device_view> {
+  __device__ value_container(mutable_column_device_view& obj) : _obj(obj) {}
 
   template <typename Element>
   __device__ void set_value(cudf::size_type index, possibly_null_value_t<Element, has_nulls> result)
   {
     if constexpr (has_nulls) {
       if (result.has_value()) {
-        _obj->template element<Element>(index) = *result;
-        _obj->set_valid(index);
+        _obj.template element<Element>(index) = *result;
+        _obj.set_valid(index);
       } else {
-        _obj->set_null(index);
+        _obj.set_null(index);
       }
     } else {
-      _obj->template element<Element>(index) = result;
+      _obj.template element<Element>(index) = result;
     }
   }
 
-  mutable_column_device_view* _obj;
+  mutable_column_device_view& _obj;
 };
 
 template <bool has_nulls>
-struct value_container<has_nulls, thrust::pair<void*, bool>*> {
-  __device__ value_container(thrust::pair<void*, bool>* obj) : _obj(obj) {}
+struct value_container<has_nulls, thrust::pair<void*, bool>> {
+  __device__ value_container(thrust::pair<void*, bool>& obj) : _obj(obj) {}
 
   template <typename Element>
   __device__ void set_value(cudf::size_type index, possibly_null_value_t<Element, has_nulls> result)
   {
     if constexpr (has_nulls) {
       if (result.has_value()) {
-        static_cast<Element*>(_obj->first)[index] = *result;
-        _obj->second                              = true;
+        static_cast<Element*>(_obj.first)[index] = *result;
+        _obj.second                              = true;
       } else {
-        _obj->second = false;
+        _obj.second = false;
       }
     } else {
-      static_cast<Element*>(_obj->first)[index] = result;
+      static_cast<Element*>(_obj.first)[index] = result;
     }
   }
 
-  thrust::pair<void*, bool>* _obj;
+  thrust::pair<void*, bool>& _obj;
 };
 
 /**
@@ -334,7 +334,7 @@ struct expression_evaluator {
    * @param output Output data reference.
    */
   template <typename Input, typename OutputType>
-  __device__ void operator()(OutputType output_object,
+  __device__ void operator()(OutputType& output_object,
                              const cudf::size_type input_row_index,
                              const detail::device_data_reference input,
                              const detail::device_data_reference output,
@@ -362,7 +362,7 @@ struct expression_evaluator {
    * @param output Output data reference.
    */
   template <typename LHS, typename RHS, typename OutputType>
-  __device__ void operator()(OutputType output_object,
+  __device__ void operator()(OutputType& output_object,
                              const cudf::size_type left_row_index,
                              const cudf::size_type right_row_index,
                              const detail::device_data_reference lhs,
@@ -387,7 +387,7 @@ struct expression_evaluator {
             typename RHS,
             typename OutputType,
             std::enable_if_t<!detail::is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
-  __device__ void operator()(OutputType output_object,
+  __device__ void operator()(OutputType& output_object,
                              cudf::size_type left_row_index,
                              cudf::size_type right_row_index,
                              const detail::device_data_reference lhs,
@@ -412,7 +412,7 @@ struct expression_evaluator {
    * @param row_index Row index of data column(s).
    */
   template <typename OutputType>
-  __device__ void evaluate(OutputType output_object, cudf::size_type const row_index)
+  __device__ void evaluate(OutputType& output_object, cudf::size_type const row_index)
   {
     evaluate(output_object, row_index, row_index, row_index);
   }
@@ -430,7 +430,7 @@ struct expression_evaluator {
    * @param row_index Row index of data column(s).
    */
   template <typename OutputType>
-  __device__ void evaluate(OutputType output_object,
+  __device__ void evaluate(OutputType& output_object,
                            cudf::size_type const left_row_index,
                            cudf::size_type const right_row_index,
                            cudf::size_type const output_row_index)
@@ -509,14 +509,14 @@ struct expression_evaluator {
     // specific to that class. Need a better SFINAE, and a better overall design
     // for return values. It would be better if the thrust::optional version only
     // existed when has_nulls=true, but really it would be ideal to not have to
-    // go through a lot o fthese hoops in general. Also the use of void * is bad
+    // go through a lot of these hoops in general. Also the use of void * is bad
     // because it makes all the overloads compile but they'll run erroneously.
     // Currently this isn't an issue only because the conditional join code
     // exclusively uses the bool path at runtime.
     template <typename Element,
               typename OutputType,
               CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
-    __device__ void resolve_output(OutputType output_object,
+    __device__ void resolve_output(OutputType& output_object,
                                    const detail::device_data_reference device_data_reference,
                                    const cudf::size_type row_index,
                                    const possibly_null_value_t<Element, has_nulls> result) const
@@ -536,7 +536,7 @@ struct expression_evaluator {
     template <typename Element,
               typename OutputType,
               CUDF_ENABLE_IF(not is_rep_layout_compatible<Element>())>
-    __device__ void resolve_output(OutputType output_object,
+    __device__ void resolve_output(OutputType& output_object,
                                    const detail::device_data_reference device_data_reference,
                                    const cudf::size_type row_index,
                                    const possibly_null_value_t<Element, has_nulls> result) const
@@ -559,7 +559,7 @@ struct expression_evaluator {
       ast_operator op,
       typename OutputType,
       std::enable_if_t<detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
-    __device__ void operator()(OutputType output_object,
+    __device__ void operator()(OutputType& output_object,
                                const cudf::size_type output_row_index,
                                const possibly_null_value_t<Input, has_nulls> input,
                                const detail::device_data_reference output) const
@@ -581,7 +581,7 @@ struct expression_evaluator {
       ast_operator op,
       typename OutputType,
       std::enable_if_t<!detail::is_valid_unary_op<detail::operator_functor<op>, Input>>* = nullptr>
-    __device__ void operator()(OutputType output_object,
+    __device__ void operator()(OutputType& output_object,
                                const cudf::size_type output_row_index,
                                const possibly_null_value_t<Input, has_nulls> input,
                                const detail::device_data_reference output) const
@@ -601,7 +601,7 @@ struct expression_evaluator {
               typename OutputType,
               std::enable_if_t<
                 detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* = nullptr>
-    __device__ void operator()(OutputType output_object,
+    __device__ void operator()(OutputType& output_object,
                                const cudf::size_type output_row_index,
                                const possibly_null_value_t<LHS, has_nulls> lhs,
                                const possibly_null_value_t<RHS, has_nulls> rhs,
@@ -624,7 +624,7 @@ struct expression_evaluator {
               typename OutputType,
               std::enable_if_t<
                 !detail::is_valid_binary_op<detail::operator_functor<op>, LHS, RHS>>* = nullptr>
-    __device__ void operator()(OutputType output_object,
+    __device__ void operator()(OutputType& output_object,
                                const cudf::size_type output_row_index,
                                const possibly_null_value_t<LHS, has_nulls> lhs,
                                const possibly_null_value_t<RHS, has_nulls> rhs,
