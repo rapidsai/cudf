@@ -1,0 +1,1106 @@
+/*
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include <iostream>
+#include <iterator>
+#include <limits>
+
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/sequence.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/utilities/bit.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+
+#include <cudf/row_conversion.hpp>
+#include "cudf/types.hpp"
+#include "rmm/device_buffer.hpp"
+#include "thrust/iterator/counting_iterator.h"
+#include "thrust/iterator/transform_iterator.h"
+
+namespace cudf {
+
+namespace detail {
+
+static inline __host__ __device__ int32_t align_offset(int32_t offset, std::size_t alignment)
+{
+  return (offset + alignment - 1) & ~(alignment - 1);
+}
+
+
+/**
+ * Copy a simple vector to device memory asynchronously. Be sure to read
+ * the data on the same stream as is used to copy it.
+ */
+template <typename T>
+std::unique_ptr<rmm::device_uvector<T>> copy_to_dev_async(const std::vector<T> &input,
+                                                          rmm::cuda_stream_view stream,
+                                                          rmm::mr::device_memory_resource *mr)
+{
+  std::unique_ptr<rmm::device_uvector<T>> ret(new rmm::device_uvector<T>(input.size(), stream, mr));
+  CUDA_TRY(cudaMemcpyAsync(
+    ret->data(), input.data(), sizeof(T) * input.size(), cudaMemcpyHostToDevice, stream.value()));
+  return ret;
+}
+
+template <typename T>
+rmm::device_uvector<T> copy_to_dev_async2(
+  const std::vector<T> &input,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource *mr)
+{
+  rmm::device_uvector<T> ret(input.size(), stream, mr);
+  CUDA_TRY(cudaMemcpyAsync(
+    ret.data(), input.data(), sizeof(T) * input.size(), cudaMemcpyHostToDevice, stream.value()));
+  return ret;
+}
+
+__global__ void copy_to_fixed_width_columns(const cudf::size_type num_rows,
+                                            const cudf::size_type num_columns,
+                                            const cudf::size_type row_size,
+                                            const cudf::size_type *input_offset_in_row,
+                                            const cudf::size_type *num_bytes,
+                                            int8_t **output_data,
+                                            cudf::bitmask_type **output_nm,
+                                            const int8_t *input_data)
+{
+  // We are going to copy the data in two passes.
+  // The first pass copies a chunk of data into shared memory.
+  // The second pass copies that chunk from shared memory out to the final location.
+
+  // Because shared memory is limited we copy a subset of the rows at a time.
+  // For simplicity we will refer to this as a row_group
+
+  // In practice we have found writing more than 4 columns of data per thread
+  // results in performance loss. As such we are using a 2 dimensional
+  // kernel in terms of threads, but not in terms of blocks. Columns are
+  // controlled by the y dimension (there is no y dimension in blocks). Rows
+  // are controlled by the x dimension (there are multiple blocks in the x
+  // dimension).
+
+  cudf::size_type rows_per_group   = blockDim.x;
+  cudf::size_type row_group_start  = blockIdx.x;
+  cudf::size_type row_group_stride = gridDim.x;
+  cudf::size_type row_group_end    = (num_rows + rows_per_group - 1) / rows_per_group + 1;
+
+  extern __shared__ int8_t shared_data[];
+
+  // Because we are copying fixed width only data and we stride the rows
+  // this thread will always start copying from shared data in the same place
+  int8_t *row_tmp     = &shared_data[row_size * threadIdx.x];
+  int8_t *row_vld_tmp = &row_tmp[input_offset_in_row[num_columns - 1] + num_bytes[num_columns - 1]];
+
+  for (cudf::size_type row_group_index = row_group_start; row_group_index < row_group_end;
+       row_group_index += row_group_stride) {
+    // Step 1: Copy the data into shared memory
+    // We know row_size is always aligned with and a multiple of int64_t;
+    int64_t *long_shared      = reinterpret_cast<int64_t *>(shared_data);
+    const int64_t *long_input = reinterpret_cast<int64_t const *>(input_data);
+
+    cudf::size_type shared_output_index  = threadIdx.x + (threadIdx.y * blockDim.x);
+    cudf::size_type shared_output_stride = blockDim.x * blockDim.y;
+    cudf::size_type row_index_end        = ((row_group_index + 1) * rows_per_group);
+    if (row_index_end > num_rows) { row_index_end = num_rows; }
+    cudf::size_type num_rows_in_group = row_index_end - (row_group_index * rows_per_group);
+    cudf::size_type shared_length     = row_size * num_rows_in_group;
+
+    cudf::size_type shared_output_end = shared_length / sizeof(int64_t);
+
+    cudf::size_type start_input_index =
+      (row_size * row_group_index * rows_per_group) / sizeof(int64_t);
+
+    for (cudf::size_type shared_index = shared_output_index; shared_index < shared_output_end;
+         shared_index += shared_output_stride) {
+      long_shared[shared_index] = long_input[start_input_index + shared_index];
+    }
+    // Wait for all of the data to be in shared memory
+    __syncthreads();
+
+    // Step 2 copy the data back out
+
+    // Within the row group there should be 1 thread for each row.  This is a
+    // requirement for launching the kernel
+    cudf::size_type row_index = (row_group_index * rows_per_group) + threadIdx.x;
+    // But we might not use all of the threads if the number of rows does not go
+    // evenly into the thread count. We don't want those threads to exit yet
+    // because we may need them to copy data in for the next row group.
+    uint32_t active_mask = __ballot_sync(0xffffffff, row_index < num_rows);
+    if (row_index < num_rows) {
+      cudf::size_type col_index_start  = threadIdx.y;
+      cudf::size_type col_index_stride = blockDim.y;
+      for (cudf::size_type col_index = col_index_start; col_index < num_columns;
+           col_index += col_index_stride) {
+        cudf::size_type col_size = num_bytes[col_index];
+        const int8_t *col_tmp    = &(row_tmp[input_offset_in_row[col_index]]);
+        int8_t *col_output       = output_data[col_index];
+        switch (col_size) {
+          case 1: {
+            col_output[row_index] = *col_tmp;
+            break;
+          }
+          case 2: {
+            int16_t *short_col_output   = reinterpret_cast<int16_t *>(col_output);
+            short_col_output[row_index] = *reinterpret_cast<const int16_t *>(col_tmp);
+            break;
+          }
+          case 4: {
+            int32_t *int_col_output   = reinterpret_cast<int32_t *>(col_output);
+            int_col_output[row_index] = *reinterpret_cast<const int32_t *>(col_tmp);
+            break;
+          }
+          case 8: {
+            int64_t *long_col_output   = reinterpret_cast<int64_t *>(col_output);
+            long_col_output[row_index] = *reinterpret_cast<const int64_t *>(col_tmp);
+            break;
+          }
+          default: {
+            cudf::size_type output_offset = col_size * row_index;
+            // TODO this should just not be supported for fixed width columns, but just in case...
+            for (cudf::size_type b = 0; b < col_size; b++) {
+              col_output[b + output_offset] = col_tmp[b];
+            }
+            break;
+          }
+        }
+
+        cudf::bitmask_type *nm          = output_nm[col_index];
+        int8_t *valid_byte              = &row_vld_tmp[col_index / 8];
+        cudf::size_type byte_bit_offset = col_index % 8;
+        int predicate                   = *valid_byte & (1 << byte_bit_offset);
+        uint32_t bitmask                = __ballot_sync(active_mask, predicate);
+        if (row_index % 32 == 0) { nm[word_index(row_index)] = bitmask; }
+      }  // end column loop
+    }    // end row copy
+    // wait for the row_group to be totally copied before starting on the next row group
+    __syncthreads();
+  }
+}
+
+__global__ void copy_from_fixed_width_columns(const cudf::size_type start_row,
+                                              const cudf::size_type num_rows,
+                                              const cudf::size_type num_columns,
+                                              const cudf::size_type row_size,
+                                              const cudf::size_type *output_offset_in_row,
+                                              const cudf::size_type *num_bytes,
+                                              const int8_t **input_data,
+                                              const cudf::bitmask_type **input_nm,
+                                              int8_t *output_data)
+{
+  // We are going to copy the data in two passes.
+  // The first pass copies a chunk of data into shared memory.
+  // The second pass copies that chunk from shared memory out to the final location.
+
+  // Because shared memory is limited we copy a subset of the rows at a time.
+  // We do not support copying a subset of the columns in a row yet, so we don't
+  // currently support a row that is wider than shared memory.
+  // For simplicity we will refer to this as a row_group
+
+  // In practice we have found reading more than 4 columns of data per thread
+  // results in performance loss. As such we are using a 2 dimensional
+  // kernel in terms of threads, but not in terms of blocks. Columns are
+  // controlled by the y dimension (there is no y dimension in blocks). Rows
+  // are controlled by the x dimension (there are multiple blocks in the x
+  // dimension).
+
+  cudf::size_type rows_per_group   = blockDim.x;
+  cudf::size_type row_group_start  = blockIdx.x;
+  cudf::size_type row_group_stride = gridDim.x;
+  cudf::size_type row_group_end    = (num_rows + rows_per_group - 1) / rows_per_group + 1;
+
+  extern __shared__ int8_t shared_data[];
+
+  // Because we are copying fixed width only data and we stride the rows
+  // this thread will always start copying to shared data in the same place
+  int8_t *row_tmp = &shared_data[row_size * threadIdx.x];
+  int8_t *row_vld_tmp =
+    &row_tmp[output_offset_in_row[num_columns - 1] + num_bytes[num_columns - 1]];
+
+  for (cudf::size_type row_group_index = row_group_start; row_group_index < row_group_end;
+       row_group_index += row_group_stride) {
+    // Within the row group there should be 1 thread for each row.  This is a
+    // requirement for launching the kernel
+    cudf::size_type row_index = start_row + (row_group_index * rows_per_group) + threadIdx.x;
+    // But we might not use all of the threads if the number of rows does not go
+    // evenly into the thread count. We don't want those threads to exit yet
+    // because we may need them to copy data back out.
+    if (row_index < (start_row + num_rows)) {
+      cudf::size_type col_index_start  = threadIdx.y;
+      cudf::size_type col_index_stride = blockDim.y;
+      for (cudf::size_type col_index = col_index_start; col_index < num_columns;
+           col_index += col_index_stride) {
+        cudf::size_type col_size = num_bytes[col_index];
+        int8_t *col_tmp          = &(row_tmp[output_offset_in_row[col_index]]);
+        const int8_t *col_input  = input_data[col_index];
+        switch (col_size) {
+          case 1: {
+            *col_tmp = col_input[row_index];
+            break;
+          }
+          case 2: {
+            const int16_t *short_col_input        = reinterpret_cast<const int16_t *>(col_input);
+            *reinterpret_cast<int16_t *>(col_tmp) = short_col_input[row_index];
+            break;
+          }
+          case 4: {
+            const int32_t *int_col_input          = reinterpret_cast<const int32_t *>(col_input);
+            *reinterpret_cast<int32_t *>(col_tmp) = int_col_input[row_index];
+            break;
+          }
+          case 8: {
+            const int64_t *long_col_input         = reinterpret_cast<const int64_t *>(col_input);
+            *reinterpret_cast<int64_t *>(col_tmp) = long_col_input[row_index];
+            break;
+          }
+          default: {
+            cudf::size_type input_offset = col_size * row_index;
+            // TODO this should just not be supported for fixed width columns, but just in case...
+            for (cudf::size_type b = 0; b < col_size; b++) {
+              col_tmp[b] = col_input[b + input_offset];
+            }
+            break;
+          }
+        }
+        // atomicOr only works on 32 bit or 64 bit  aligned values, and not byte aligned
+        // so we have to rewrite the addresses to make sure that it is 4 byte aligned
+        int8_t *valid_byte              = &row_vld_tmp[col_index / 8];
+        cudf::size_type byte_bit_offset = col_index % 8;
+        uint64_t fixup_bytes            = reinterpret_cast<uint64_t>(valid_byte) % 4;
+        int32_t *valid_int              = reinterpret_cast<int32_t *>(valid_byte - fixup_bytes);
+        cudf::size_type int_bit_offset  = byte_bit_offset + (fixup_bytes * 8);
+        // Now copy validity for the column
+        if (input_nm[col_index]) {
+          if (bit_is_set(input_nm[col_index], row_index)) {
+            atomicOr_block(valid_int, 1 << int_bit_offset);
+          } else {
+            atomicAnd_block(valid_int, ~(1 << int_bit_offset));
+          }
+        } else {
+          // It is valid so just set the bit
+          atomicOr_block(valid_int, 1 << int_bit_offset);
+        }
+      }  // end column loop
+    }    // end row copy
+    // wait for the row_group to be totally copied into shared memory
+    __syncthreads();
+
+    // Step 2: Copy the data back out
+    // We know row_size is always aligned with and a multiple of int64_t;
+    int64_t *long_shared = reinterpret_cast<int64_t *>(shared_data);
+    int64_t *long_output = reinterpret_cast<int64_t *>(output_data);
+
+    cudf::size_type shared_input_index  = threadIdx.x + (threadIdx.y * blockDim.x);
+    cudf::size_type shared_input_stride = blockDim.x * blockDim.y;
+    cudf::size_type row_index_end       = ((row_group_index + 1) * rows_per_group);
+    if (row_index_end > num_rows) { row_index_end = num_rows; }
+    cudf::size_type num_rows_in_group = row_index_end - (row_group_index * rows_per_group);
+    cudf::size_type shared_length     = row_size * num_rows_in_group;
+
+    cudf::size_type shared_input_end = shared_length / sizeof(int64_t);
+
+    cudf::size_type start_output_index =
+      (row_size * row_group_index * rows_per_group) / sizeof(int64_t);
+
+    for (cudf::size_type shared_index = shared_input_index; shared_index < shared_input_end;
+         shared_index += shared_input_stride) {
+      long_output[start_output_index + shared_index] = long_shared[shared_index];
+    }
+    __syncthreads();
+    // Go for the next round
+  }
+}
+
+struct block_info {
+  int start_col;
+  int start_row;
+  int end_col;
+  int end_row;
+  int buffer_num;
+};
+
+/**
+ * @brief copy data from cudf columns into x format, which is row-based
+ *
+ * @param num_rows total number of rows in the table
+ * @param num_columns total number of columns in the table
+ * @param input_data pointer to raw table data
+ * @param input_nm pointer to validity data
+ * @param col_sizes array of sizes for each element in a column - one per column
+ * @param col_offsets offset into input data row for each column's start
+ * @param block_infos information about the blocks of work
+ * @param row_offsets offset to a specific row in the input data
+ * @param output_data pointer to output data
+ * 
+ */
+__global__ void copy_from_columns(const cudf::size_type num_rows,
+                                  const cudf::size_type num_columns,
+                                  const int8_t **input_data,
+                                  const cudf::bitmask_type **input_nm,
+                                  const cudf::size_type *col_sizes,
+                                  const cudf::size_type *col_offsets,
+                                  const block_info *block_infos,
+                                  const uint64_t *row_offsets,
+                                  int8_t **output_data)
+{
+  // We are going to copy the data in two passes.
+  // The first pass copies a chunk of data into shared memory.
+  // The second pass copies that chunk from shared memory out to the final location.
+
+  // Because shared memory is limited we copy a subset of the rows at a time.
+  // This has been broken up for us in the block_info struct, so we don't have
+  // any calculation to do here, but it is important to note.
+
+  auto block = block_infos[blockIdx.x];
+  extern __shared__ int8_t shared_data[];
+  uint64_t const output_start_offset = col_offsets[block.start_col] + row_offsets[block.start_row];
+  uint8_t const dest_shim_offset = reinterpret_cast<uint64_t>(&output_data[0][output_start_offset]) & 7; // offset for alignment shim in order to match shared memory with final dest
+
+    printf("copying from column %d to column %d with rows %d to row %d(grid dim %d, blockIdx %d)\n", block.start_col, block.end_col, block.start_row, block.end_row, gridDim.x, blockIdx.x);
+
+  // each thread is responsible for every threadcount rows of data.
+  // the data is copies into shared memory in the final layout.
+  auto const shmem_row_size = align_offset(col_offsets[block.end_col] + col_sizes[block.end_col] - col_offsets[block.start_col] + dest_shim_offset, 8); // 8 byte alignment required for shared memory rows
+  auto const validity_offset = col_offsets[num_columns];
+  for (int col=block.start_col; col<=block.end_col; ++col) {
+    /*if (!col_is_variable) */{
+      uint64_t col_offset = 0;
+      cudf::size_type col_size = col_sizes[col];
+      auto const dest_col_offset = col_offsets[col] - col_offsets[block.start_col] + dest_shim_offset;
+      for (int row=block.start_row + threadIdx.x; row<block.end_row; row+=gridDim.x) {
+        int8_t *shmem_dest = &shared_data[dest_col_offset + shmem_row_size * row];
+        switch (col_size) {
+          case 1: {
+            *shmem_dest = input_data[col][row];
+            break;
+          }
+          case 2: {
+            const int16_t *short_col_input        = reinterpret_cast<const int16_t *>(input_data[col]);
+            *reinterpret_cast<int16_t *>(shmem_dest) = short_col_input[row];
+            break;
+          }
+          case 4: {
+            const int32_t *int_col_input          = reinterpret_cast<const int32_t *>(input_data[col]);
+            *reinterpret_cast<int32_t *>(shmem_dest) = int_col_input[row];
+            break;
+          }
+          case 8: {
+            const int64_t *long_col_input         = reinterpret_cast<const int64_t *>(input_data[col]);
+            *reinterpret_cast<int64_t *>(shmem_dest) = long_col_input[row];
+            break;
+          }
+          default: {
+            cudf::size_type input_offset = col_size * row;
+            // TODO this should just not be supported for fixed width columns, but just in case...
+            for (cudf::size_type b = 0; b < col_size; b++) {
+              shmem_dest[b] = input_data[col][b + input_offset];
+            }
+            break;
+          }
+        }
+
+        // atomicOr only works on 32 bit or 64 bit  aligned values, and not byte aligned
+        // so we have to rewrite the addresses to make sure that it is 4 byte aligned
+        // we do this directly in the final location because the entire row may not
+        // fit in shared memory and may require many blocks to process it entirely
+        int8_t *valid_byte              = &output_data[block.buffer_num][row_offsets[row] + validity_offset + col / 8];
+        cudf::size_type byte_bit_offset = col % 8;
+        uint64_t fixup_bytes            = reinterpret_cast<uint64_t>(valid_byte) % 4;
+        int32_t *valid_int              = reinterpret_cast<int32_t *>(valid_byte - fixup_bytes);
+        cudf::size_type int_bit_offset  = byte_bit_offset + (fixup_bytes * 8);
+        // Now copy validity for the column
+        if (input_nm[col]) {
+          if (bit_is_set(input_nm[col], row)) {
+            atomicOr_block(valid_int, 1 << int_bit_offset);
+          } else {
+            atomicAnd_block(valid_int, ~(1 << int_bit_offset));
+          }
+        } else {
+          // It is valid so just set the bit
+          atomicOr_block(valid_int, 1 << int_bit_offset);
+        }
+      } // end row
+
+      col_offset += col_sizes[col] * (block.end_row - block.start_row);
+    }
+  } // end col
+
+  // wait for the data to be totally copied into shared memory
+  __syncthreads();
+
+  // Step 2: Copy the data from shared memory to final destination
+  // each block is potentially a slice of the table, so no assumptions
+  // can be made about alignments. We do know that the alignment in shared
+  // memory matches the final destination alignment. Also note that
+  // we are not writing to entirely contiguous destinations as each
+  // row in shared memory may not be an entire row of the destination.
+  //
+  auto const thread_start_offset = threadIdx.x * 8;
+  auto const thread_stride = gridDim.x * 8;
+  for (auto src_offset = thread_start_offset; src_offset < shmem_row_size * (block.end_row - block.start_row); src_offset += thread_stride) {
+    auto const output_row_num = src_offset / shmem_row_size;
+    auto const row_offset = row_offsets[block.start_row + output_row_num];
+    auto const col_offset = src_offset % shmem_row_size;
+    int8_t *output_ptr = &output_data[block.buffer_num][row_offset + col_offset];
+    int8_t *input_ptr = &shared_data[src_offset];
+    // the first part and last part of the row is unaligned data copy. This is copied a single byte
+    // at a time.
+    if (dest_shim_offset > 0 && src_offset % shmem_row_size == 0) {
+      // first part of a row, copy single bytes
+      auto const num_single_bytes = 8 - dest_shim_offset;
+      for (auto i=0; i<num_single_bytes; ++i) {
+        output_ptr[i] = input_ptr[i + dest_shim_offset];
+      }
+    } else if (dest_shim_offset > 0 && (src_offset + 8) % shmem_row_size == 0) {
+      // last part of a row, copy single bytes
+      auto const num_single_bytes = dest_shim_offset;
+      for (auto i=0; i<num_single_bytes; ++i) {
+        output_ptr[i] = input_ptr[i + dest_shim_offset];
+      }
+    } else {
+      // copy 8 bytes aligned
+      const int64_t *long_col_input         = reinterpret_cast<const int64_t *>(input_ptr);
+      *reinterpret_cast<int64_t *>(output_ptr) = *long_col_input;
+    }
+  }
+}
+
+/**
+ * Calculate the dimensions of the kernel for fixed width only columns.
+ * @param [in] num_columns the number of columns being copied.
+ * @param [in] num_rows the number of rows being copied.
+ * @param [in] size_per_row the size each row takes up when padded.
+ * @param [out] blocks the size of the blocks for the kernel
+ * @param [out] threads the size of the threads for the kernel
+ * @return the size in bytes of shared memory needed for each block.
+ */
+static int calc_fixed_width_kernel_dims(const cudf::size_type num_columns,
+                                        const cudf::size_type num_rows,
+                                        const cudf::size_type size_per_row,
+                                        dim3 &blocks,
+                                        dim3 &threads)
+{
+  // We have found speed degrades when a thread handles more than 4 columns.
+  // Each block is 2 dimensional. The y dimension indicates the columns.
+  // We limit this to 32 threads in the y dimension so we can still
+  // have at least 32 threads in the x dimension (1 warp) which should
+  // result in better coalescing of memory operations. We also
+  // want to guarantee that we are processing a multiple of 32 threads
+  // in the x dimension because we use atomic operations at the block
+  // level when writing validity data out to main memory, and that would
+  // need to change if we split a word of validity data between blocks.
+  int y_block_size = (num_columns + 3) / 4;
+  if (y_block_size > 32) { y_block_size = 32; }
+  int x_possible_block_size = 1024 / y_block_size;
+  // 48KB is the default setting for shared memory per block according to the cuda tutorials
+  // If someone configures the GPU to only have 16 KB this might not work.
+  int max_shared_size = 48 * 1024;
+  int max_block_size  = max_shared_size / size_per_row;
+  // If we don't have enough shared memory there is no point in having more threads
+  // per block that will just sit idle
+  max_block_size = max_block_size > x_possible_block_size ? x_possible_block_size : max_block_size;
+  // Make sure that the x dimension is a multiple of 32 this not only helps
+  // coalesce memory access it also lets us do a ballot sync for validity to write
+  // the data back out the warp level.  If x is a multiple of 32 then each thread in the y
+  // dimension is associated with one or more warps, that should correspond to the validity
+  // words directly.
+  int block_size = (max_block_size / 32) * 32;
+  CUDF_EXPECTS(block_size != 0, "Row size is too large to fit in shared memory");
+
+  int num_blocks = (num_rows + block_size - 1) / block_size;
+  if (num_blocks < 1) {
+    num_blocks = 1;
+  } else if (num_blocks > 10240) {
+    // The maximum number of blocks supported in the x dimension is 2 ^ 31 - 1
+    // but in practice haveing too many can cause some overhead that I don't totally
+    // understand. Playing around with this haveing as little as 600 blocks appears
+    // to be able to saturate memory on V100, so this is an order of magnitude higher
+    // to try and future proof this a bit.
+    num_blocks = 10240;
+  }
+  blocks.x  = num_blocks;
+  blocks.y  = 1;
+  blocks.z  = 1;
+  threads.x = block_size;
+  threads.y = y_block_size;
+  threads.z = 1;
+  return size_per_row * block_size;
+}
+
+/**
+ * When converting to rows it is possible that the size of the table was too big to fit
+ * in a single column. This creates an output column for a subset of the rows in a table
+ * going from start row and containing the next num_rows.  Most of the parameters passed
+ * into this function are common between runs and should be calculated once.
+ */
+static std::unique_ptr<cudf::column> fixed_width_convert_to_rows(
+  const cudf::size_type start_row,
+  const cudf::size_type num_rows,
+  const cudf::size_type num_columns,
+  const cudf::size_type size_per_row,
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> &column_start,
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> &column_size,
+  std::unique_ptr<rmm::device_uvector<const int8_t *>> &input_data,
+  std::unique_ptr<rmm::device_uvector<const cudf::bitmask_type *>> &input_nm,
+  const cudf::scalar &zero,
+  const cudf::scalar &scalar_size_per_row,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource *mr)
+{
+  int64_t total_allocation = size_per_row * num_rows;
+  // We made a mistake in the split somehow
+  CUDF_EXPECTS(total_allocation < std::numeric_limits<int>::max(), "Table is too large to fit!");
+
+  // Allocate and set the offsets row for the byte array
+  std::unique_ptr<cudf::column> offsets =
+    cudf::detail::sequence(num_rows + 1, zero, scalar_size_per_row, stream);
+
+  std::unique_ptr<cudf::column> data =
+    cudf::make_numeric_column(cudf::data_type(cudf::type_id::INT8),
+                              static_cast<cudf::size_type>(total_allocation),
+                              cudf::mask_state::UNALLOCATED,
+                              stream,
+                              mr);
+
+  dim3 blocks;
+  dim3 threads;
+  int shared_size =
+    detail::calc_fixed_width_kernel_dims(num_columns, num_rows, size_per_row, blocks, threads);
+
+  copy_from_fixed_width_columns<<<blocks, threads, shared_size, stream.value()>>>(
+    start_row,
+    num_rows,
+    num_columns,
+    size_per_row,
+    column_start->data(),
+    column_size->data(),
+    input_data->data(),
+    input_nm->data(),
+    data->mutable_view().data<int8_t>());
+
+  return cudf::make_lists_column(num_rows,
+                                 std::move(offsets),
+                                 std::move(data),
+                                 0,
+                                 rmm::device_buffer{0, rmm::cuda_stream_default, mr},
+                                 stream,
+                                 mr);
+}
+
+static cudf::data_type get_data_type(const cudf::column_view &v) { return v.type(); }
+
+static inline bool are_all_fixed_width(std::vector<cudf::data_type> const &schema)
+{
+  return std::all_of(
+    schema.begin(), schema.end(), [](const cudf::data_type &t) { return cudf::is_fixed_width(t); });
+}
+
+/**
+ * Given a set of fixed width columns, calculate how the data will be laid out in memory.
+ * @param [in] schema the types of columns that need to be laid out.
+ * @param [out] column_start the byte offset where each column starts in the row.
+ * @param [out] column_size the size in bytes of the data for each columns in the row.
+ * @return the size in bytes each row needs.
+ */
+static inline int32_t compute_fixed_width_layout(std::vector<cudf::data_type> const &schema,
+                                                 std::vector<cudf::size_type> &column_start,
+                                                 std::vector<cudf::size_type> &column_size)
+{
+  // We guarantee that the start of each column is 64-bit aligned so anything can go
+  // there, but to make the code simple we will still do an alignment for it.
+  int32_t at_offset = 0;
+  for (auto col = schema.begin(); col < schema.end(); col++) {
+    cudf::size_type s = cudf::size_of(*col);
+    column_size.emplace_back(s);
+    std::size_t allocation_needed = s;
+    std::size_t alignment_needed  = allocation_needed;  // They are the same for fixed width types
+    at_offset                     = align_offset(at_offset, alignment_needed);
+    column_start.emplace_back(at_offset);
+    at_offset += allocation_needed;
+  }
+
+  // Now we need to add in space for validity
+  // Eventually we can think about nullable vs not nullable, but for now we will just always add it
+  // in
+  int32_t validity_bytes_needed = (schema.size() + 7) / 8;
+  // validity comes at the end and is byte aligned so we can pack more in.
+  at_offset += validity_bytes_needed;
+  // Now we need to pad the end so all rows are 64 bit aligned
+  return align_offset(at_offset, 8);  // 8 bytes (64 bits)
+}
+
+}  // namespace detail
+
+//#define DEBUG
+std::vector<std::unique_ptr<cudf::column>> convert_to_rows2(cudf::table_view const &tbl,
+                                                            rmm::cuda_stream_view stream,
+                                                            rmm::mr::device_memory_resource *mr)
+{
+  // not scientifically chosen - the ideal window is long enough to allow coalesced reads of the data, but small enough
+  // that multiple columns fit in memory so the writes can coalese as well. Potential optimization for window sizes.
+  constexpr int max_window_height = 1024;
+  const size_type num_columns = tbl.num_columns();
+  const size_type num_rows    = tbl.num_rows();
+
+  #if defined(DEBUG)
+  auto pretty_print = [](uint64_t i) {
+    if (i > (1 * 1024 * 1024 * 1024)) {
+      printf("%.2f GB", i / float(1 * 1024 * 1024 * 1024));
+    } else if (i > (1 * 1024 * 1024)) {
+      printf("%.2f MB", i / float(1 * 1024 * 1024));
+    } else if (i > (1 * 1024)) {
+      printf("%.2f KB", float(i / 1024));
+    } else {
+      printf("%lu Bytes", i);
+    }
+  };
+  #endif
+
+  int device_id;
+  CUDA_TRY(cudaGetDevice(&device_id));
+  int shmem_limit_per_block;
+  CUDA_TRY(
+    cudaDeviceGetAttribute(&shmem_limit_per_block, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
+
+  // break up the work into blocks, which are a starting and ending row/col #.
+  // this window size is calculated based on the shared memory size available
+  // we want a single block to fill up the entire shared memory space available
+  // for the transpose-like conversion.
+
+  // There are two different processes going on here. The GPU conversion of the data
+  // and the writing of the data into the list of byte columns that are a maximum of
+  // 2 gigs each due to offset maximum size. The GPU conversion portion has to understand
+  // this limitation because the column must own the data inside and as a result it must be
+  // a distinct allocation for that column. Copying the data into these final buffers would
+  // be prohibitively expensive, so care is taken to ensure the GPU writes to the proper buffer.
+  // The windows are broken at the boundaries of specific rows based on the row sizes up
+  // to that point. These are row batches and they are decided first before building the
+  // windows so the windows can be properly cut around them.
+
+  std::vector<size_type> row_sizes; // size of each row in bytes including any alignment padding
+  std::vector<uint64_t> row_offsets; // offset from the start of the data to this row
+  std::vector<size_type> column_sizes;  // byte size of each column
+  std::vector<size_type> column_starts; // offset of column inside a row including alignment
+  std::vector<column_view> variable_width_columns; // list of the variable width columns in the table
+  row_sizes.reserve(num_rows);
+  row_offsets.reserve(num_rows);
+  column_sizes.reserve(num_columns);
+  column_starts.reserve(num_columns+1); // we add a final offset for validity data start
+
+  size_type fixed_width_size_per_row = 0;
+  for (int col = 0; col < num_columns; ++col) {
+    auto cv = tbl.column(col);
+    auto col_type = cv.type();
+    bool nested_type = col_type.id() == type_id::LIST || col_type.id() == type_id::STRING;
+
+    if (nested_type) { variable_width_columns.push_back(cv);}
+
+    // a list or string column will write a single uint64
+    // of data here for offset/length
+    auto col_size = nested_type ? 8 : size_of(col_type);
+
+    // align size for this type
+    std::size_t const alignment_needed  = col_size;  // They are the same for fixed width types
+    fixed_width_size_per_row                  = detail::align_offset(fixed_width_size_per_row, alignment_needed);
+    column_starts.push_back(fixed_width_size_per_row);
+    column_sizes.push_back(col_size);
+    fixed_width_size_per_row += col_size;
+  }
+  
+  // When building the columns to return, we have to be mindful of the offset limit in cudf.
+  // It is 32-bit and these data columns are capable of surpassing that easily. The data should
+  // not be cut off exactly at the limit though due to the validity buffers. The most efficient
+  // place to cut the validity is on a 32-row boundary, so as we calculate the row sizes
+  // we keep track of the cut points for the validity, which we call row batches. If the row
+  // is larger than can be represented with the 32-bit offsets, we use the last 32-row boundary we hit.
+  // Note that this boundary is for our book-keeping with column pointers and not anything
+  // that the kernel needs to worry about. We cut the output at convienient boundaries
+  // when assembling the outgoing data stream.
+  struct row_batch {
+    size_type num_bytes;
+    size_type row_count;
+  };
+  std::vector<row_batch> row_batches;
+
+  auto calculate_variable_width_row_data_size = [](int const row) {
+    // each level of variable-width data will add an offset/length
+    // uint64 of data. The first of which is inside the fixed-width
+    // data itself and needs to be aligned based on what is around
+    // that data. This is handled above with the fixed-width calculations
+    // for that reason. We may still need to add more of these offset/length
+    // combinations if the nesting is deeper than one level as these
+    // will be included in the variable-width data blob at the end of the
+    // row.
+    return 0;
+/*      auto c = variable_width_columns[col];
+        while (true) {
+          auto col_offsets   = c.child(0).data<size_type>();
+          auto col_data_size = size_of(c.child(1).type());
+          std::size_t alignment_needed  = col_data_size;
+    
+        row_sizes[row] += (col_offsets[row + 1] - col_offsets[row]) * col_data_size;
+        if (c.num_children() == 0) {
+          break;
+        }
+        c = c.child(1);
+      }
+*/
+  };
+
+  uint64_t row_batch_size   = 0;
+  uint64_t total_table_size = 0;
+  size_type row_batch_rows = 0;
+  uint64_t row_offset = 0;
+
+  // fixed_width_size_per_row is the size of the fixed-width portion of a row. We need to then calculate
+  // the size of each row's variable-width data as well.
+  for (int row = 0; row < num_rows; ++row) {
+    row_sizes[row] = fixed_width_size_per_row + calculate_variable_width_row_data_size(row);
+    if (row_batch_size + row_sizes[row] > std::numeric_limits<size_type>::max()) {
+      // a new batch starts at the last 32-row boundary
+      row_batches.push_back(row_batch{static_cast<size_type>(row_batch_size), row_batch_rows & ~31});
+      row_batch_size = 0;
+      row_batch_rows = row_batch_rows & 31;
+      row_offset = 0;
+    }
+    row_offset                  = detail::align_offset(row_offset, 8); // rows are 8 byte aligned
+    row_offsets.push_back(row_offset);
+    row_batch_size += row_sizes[row];
+    row_offset += row_sizes[row];
+    total_table_size = detail::align_offset(total_table_size, 8); // rows are 8 byte aligned
+    total_table_size += row_sizes[row];
+    row_batch_rows++;
+  }
+  if (row_batch_size > 0) {
+    row_batches.push_back(row_batch{static_cast<size_type>(row_batch_size), row_batch_rows & ~31});
+  }
+
+  #if defined(DEBUG)
+  printf("%lu batches:\n", row_batches.size());
+  for (auto i = 0; i < (int)row_batches.size(); ++i) {
+    printf("%d: %d rows, ", i, row_batches[i].row_count);
+    pretty_print(row_batches[i].num_bytes);
+    printf("\n");
+  }
+  #endif
+
+  std::vector<detail::block_info> block_infos;
+
+  // block infos are organized with the windows going "down" the columns
+  // this provides the most coalescing of memory access
+  int current_window_size      = 0;
+  int current_window_start_col = 0;
+
+  // build the blocks for a specific set of columns
+  auto build_blocks = [&block_infos, &row_batches, num_rows](int const start_col, int const end_col, int const desired_window_height) {
+    int current_window_start_row = 0;
+    int current_window_row_batch = 0;
+    int rows_left_in_batch = row_batches[current_window_row_batch].row_count;
+    int i = 0;
+    while (i < num_rows) {
+      if (rows_left_in_batch == 0) {
+        current_window_row_batch++;
+        rows_left_in_batch = row_batches[current_window_row_batch].row_count;
+      }
+      int const window_height = std::min(desired_window_height, rows_left_in_batch);
+
+      block_infos.emplace_back(
+        detail::block_info{start_col,
+                   current_window_start_row,
+                   start_col + end_col,
+                   std::min(current_window_start_row + window_height - 1, num_rows), current_window_row_batch});
+
+      i += window_height;
+      current_window_start_row += window_height;
+      rows_left_in_batch -= window_height;
+    }
+  };
+
+  int const window_height = std::min(std::min(max_window_height, num_rows), row_batches[0].row_count);
+
+  int row_size = 0;
+
+  // march each column and build the blocks of appropriate sizes
+  for (int col = 0; col < num_columns; ++col) {
+    auto const col_size = column_sizes[col];
+
+    // align size for this type
+    std::size_t alignment_needed  = col_size;  // They are the same for fixed width types
+    auto row_size_with_this_col = detail::align_offset(row_size, alignment_needed) + col_size;
+
+    if (row_size_with_this_col * window_height > shmem_limit_per_block) {
+      // too large, close this window, generate vertical blocks and restart
+      build_blocks(current_window_start_col, col - 1, window_height);
+      row_size = detail::align_offset(column_starts[col] & 7, alignment_needed) + col_size; // alignment required for shared memory window boundary to match alignment of output row
+      current_window_start_col = col;
+    } else {
+      row_size = row_size_with_this_col;
+    }
+  }
+
+  auto validity_offset = detail::align_offset(column_starts.back(), 4);
+  column_starts.push_back(validity_offset);
+  
+  // build last set of blocks
+  if (current_window_size > 0) { build_blocks(current_window_start_col, (int)tbl.num_columns() - 1, window_height); }
+
+  // Get the pointers to the input columnar data ready - possibly moved up to copy to gpu while calculating other things
+  std::vector<const int8_t *> input_data;
+  std::vector<bitmask_type const *> input_nm;
+  for (size_type column_number = 0; column_number < num_columns; column_number++) {
+    column_view cv = tbl.column(column_number);
+    auto const col_type = cv.type();
+    bool nested_type = col_type.id() == type_id::LIST || col_type.id() == type_id::STRING;
+
+    if (!nested_type) {
+      input_data.emplace_back(cv.data<int8_t>());
+      input_nm.emplace_back(cv.null_mask());
+    }
+  }
+
+  #if defined(DEBUG)
+  printf("%lu windows for %d columns, %d rows to fit in ", block_infos.size(), block_infos[0].end_col - block_infos[0].start_col, block_infos[0].end_row - block_infos[0].start_row);
+  pretty_print(shmem_limit_per_block);
+  printf(" shared mem(");
+  pretty_print(fixed_width_size_per_row);
+  printf("/row, %d columns, %d rows, ", num_columns, num_rows);
+  pretty_print(total_table_size);
+  printf(" total):\n");
+  #endif
+
+  auto dev_input_data  = detail::copy_to_dev_async2(input_data, stream, mr);
+  auto dev_input_nm    = detail::copy_to_dev_async2(input_nm, stream, mr);
+  auto dev_col_sizes   = detail::copy_to_dev_async2(column_sizes, stream, mr);
+  auto dev_col_starts   = detail::copy_to_dev_async2(column_starts, stream, mr);
+  auto dev_block_infos = detail::copy_to_dev_async2(block_infos, stream, mr);
+  auto dev_row_offsets   = detail::copy_to_dev_async2(row_offsets, stream, mr);
+
+  std::vector<rmm::device_buffer> output_data;
+  output_data.reserve(row_batches.size());
+  for (uint i=0; i<row_batches.size(); ++i) {
+    output_data.push_back(rmm::device_buffer(row_batches[i].num_bytes, stream, mr));
+  }
+  auto dev_output_data   = detail::copy_to_dev_async2(row_offsets, stream, mr);
+
+  // blast through the entire table and convert it
+  dim3 blocks;
+  dim3 threads;
+  blocks.x  = block_infos.size();
+  blocks.y  = 0;
+  blocks.z  = 0;
+  threads.x = 1024;
+  threads.y = 0;
+  threads.z = 0;
+  detail::copy_from_columns<<<blocks, threads, shmem_limit_per_block, stream.value()>>>(num_rows,
+                                                                                num_columns,
+                                                                                dev_input_data.data(),
+                                                                                dev_input_nm.data(),
+                                                                                dev_col_sizes.data(),
+                                                                                dev_col_starts.data(),
+                                                                                dev_block_infos.data(),
+                                                                                dev_row_offsets.data(),
+                                                                                reinterpret_cast<int8_t **>(dev_output_data.data()));
+
+  // split up the output buffer into multiple buffers based on row batch sizes
+  // and create list of byte columns
+  int offset_offset = 0;
+  std::vector<std::unique_ptr<cudf::column>> ret;
+  for (uint i=0; i<row_batches.size(); ++i) {
+  
+    // compute offsets for this row batch
+    std::vector<size_type> offset_vals;
+    offset_vals.reserve(row_batches[i].row_count + 1);
+    size_type cur_offset = 0;
+    offset_vals.push_back(cur_offset);
+    for (int row=0; row<row_batches[i].row_count; ++row) {
+      cur_offset += row_sizes[row + offset_offset];
+      offset_vals.push_back(cur_offset);
+    }
+    offset_offset += row_batches[i].row_count;
+
+    auto dev_offsets   = detail::copy_to_dev_async2(offset_vals, stream, mr);
+    auto offsets =
+      std::make_unique<column>(data_type{type_id::INT32}, (size_type)offset_vals.size(), dev_offsets.release());
+
+    auto data =
+      std::make_unique<column>(data_type{cudf::type_id::INT8},
+                                row_batches[i].num_bytes,
+                                std::move(output_data[i]));
+
+    ret.push_back(cudf::make_lists_column(row_batches[i].row_count,
+      std::move(offsets),
+      std::move(data),
+      0,
+      rmm::device_buffer{0, rmm::cuda_stream_default, mr},
+      stream,
+      mr));
+  }
+  
+  return ret;
+}
+
+std::vector<std::unique_ptr<cudf::column>> convert_to_rows(cudf::table_view const &tbl,
+                                                           rmm::cuda_stream_view stream,
+                                                           rmm::mr::device_memory_resource *mr)
+{
+  const cudf::size_type num_columns = tbl.num_columns();
+
+  std::vector<cudf::data_type> schema;
+  schema.resize(num_columns);
+  std::transform(tbl.begin(), tbl.end(), schema.begin(), detail::get_data_type);
+
+  if (detail::are_all_fixed_width(schema)) {
+    std::vector<cudf::size_type> column_start;
+    std::vector<cudf::size_type> column_size;
+
+    int32_t size_per_row  = detail::compute_fixed_width_layout(schema, column_start, column_size);
+    auto dev_column_start = detail::copy_to_dev_async(column_start, stream, mr);
+    auto dev_column_size  = detail::copy_to_dev_async(column_size, stream, mr);
+
+    int32_t max_rows_per_batch = std::numeric_limits<int>::max() / size_per_row;
+    // Make the number of rows per batch a multiple of 32 so we don't have to worry about
+    // splitting validity at a specific row offset.  This might change in the future.
+    max_rows_per_batch = (max_rows_per_batch / 32) * 32;
+
+    cudf::size_type num_rows = tbl.num_rows();
+
+    // Get the pointers to the input columnar data ready
+    std::vector<const int8_t *> input_data;
+    std::vector<cudf::bitmask_type const *> input_nm;
+    for (cudf::size_type column_number = 0; column_number < num_columns; column_number++) {
+      cudf::column_view cv = tbl.column(column_number);
+      input_data.emplace_back(cv.data<int8_t>());
+      input_nm.emplace_back(cv.null_mask());
+    }
+    auto dev_input_data = detail::copy_to_dev_async(input_data, stream, mr);
+    auto dev_input_nm   = detail::copy_to_dev_async(input_nm, stream, mr);
+
+    using ScalarType = cudf::scalar_type_t<cudf::size_type>;
+    auto zero = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32), stream.value());
+    zero->set_valid(true, stream);
+    static_cast<ScalarType *>(zero.get())->set_value(0, stream);
+
+    auto step = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32), stream.value());
+    step->set_valid(true, stream);
+    static_cast<ScalarType *>(step.get())
+      ->set_value(static_cast<cudf::size_type>(size_per_row), stream);
+
+    std::vector<std::unique_ptr<cudf::column>> ret;
+    for (cudf::size_type row_start = 0; row_start < num_rows; row_start += max_rows_per_batch) {
+      cudf::size_type row_count = num_rows - row_start;
+      row_count                 = row_count > max_rows_per_batch ? max_rows_per_batch : row_count;
+      ret.emplace_back(detail::fixed_width_convert_to_rows(row_start,
+                                                           row_count,
+                                                           num_columns,
+                                                           size_per_row,
+                                                           dev_column_start,
+                                                           dev_column_size,
+                                                           dev_input_data,
+                                                           dev_input_nm,
+                                                           *zero,
+                                                           *step,
+                                                           stream,
+                                                           mr));
+    }
+
+    return ret;
+  } else {
+    CUDF_FAIL("Only fixed width types are currently supported");
+  }
+}
+
+std::unique_ptr<cudf::table> convert_from_rows(cudf::lists_column_view const &input,
+                                               std::vector<cudf::data_type> const &schema,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource *mr)
+{
+  // verify that the types are what we expect
+  cudf::column_view child = input.child();
+  cudf::type_id list_type = child.type().id();
+  CUDF_EXPECTS(list_type == cudf::type_id::INT8 || list_type == cudf::type_id::UINT8,
+               "Only a list of bytes is supported as input");
+
+  cudf::size_type num_columns = schema.size();
+
+  if (detail::are_all_fixed_width(schema)) {
+    std::vector<cudf::size_type> column_start;
+    std::vector<cudf::size_type> column_size;
+
+    cudf::size_type num_rows = input.parent().size();
+    int32_t size_per_row = detail::compute_fixed_width_layout(schema, column_start, column_size);
+
+    // Ideally we would check that the offsets are all the same, etc. but for now
+    // this is probably fine
+    CUDF_EXPECTS(size_per_row * num_rows == child.size(),
+                 "The layout of the data appears to be off");
+    auto dev_column_start = detail::copy_to_dev_async(column_start, stream, mr);
+    auto dev_column_size  = detail::copy_to_dev_async(column_size, stream, mr);
+
+    // Allocate the columns we are going to write into
+    std::vector<std::unique_ptr<cudf::column>> output_columns;
+    std::vector<int8_t *> output_data;
+    std::vector<cudf::bitmask_type *> output_nm;
+    for (cudf::size_type i = 0; i < num_columns; i++) {
+      auto column = cudf::make_fixed_width_column(
+        schema[i], num_rows, cudf::mask_state::UNINITIALIZED, stream, mr);
+      auto mut = column->mutable_view();
+      output_data.emplace_back(mut.data<int8_t>());
+      output_nm.emplace_back(mut.null_mask());
+      output_columns.emplace_back(std::move(column));
+    }
+
+    auto dev_output_data = detail::copy_to_dev_async(output_data, stream, mr);
+    auto dev_output_nm   = detail::copy_to_dev_async(output_nm, stream, mr);
+
+    dim3 blocks;
+    dim3 threads;
+    int shared_size =
+      detail::calc_fixed_width_kernel_dims(num_columns, num_rows, size_per_row, blocks, threads);
+
+    detail::copy_to_fixed_width_columns<<<blocks, threads, shared_size, stream.value()>>>(
+      num_rows,
+      num_columns,
+      size_per_row,
+      dev_column_start->data(),
+      dev_column_size->data(),
+      dev_output_data->data(),
+      dev_output_nm->data(),
+      child.data<int8_t>());
+
+    return std::make_unique<cudf::table>(std::move(output_columns));
+  } else {
+    CUDF_FAIL("Only fixed width types are currently supported");
+  }
+}
+
+std::unique_ptr<cudf::table> convert_from_rows(
+  std::vector<std::unique_ptr<cudf::column>> const &input,
+  std::vector<cudf::data_type> const &schema,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource *mr)
+{
+  CUDF_EXPECTS(input.size() == 1, "Too large of an input, need to concat the output tables...");
+
+  //    for (uint i=0; i<input.size(); ++i) {
+  cudf::lists_column_view lcv = input[0]->view();
+  auto ret                    = convert_from_rows(lcv, schema, stream, mr);
+
+  return ret;
+  //    }
+}
+
+}  // namespace cudf
