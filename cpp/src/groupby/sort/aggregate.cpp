@@ -366,35 +366,32 @@ void aggregate_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation 
 template <>
 void aggregate_result_functor::operator()<aggregation::COLLECT_LIST>(aggregation const& agg)
 {
-  auto null_handling =
+  if (cache.has_result(col_idx, agg)) { return; }
+
+  auto const null_handling =
     dynamic_cast<cudf::detail::collect_list_aggregation const&>(agg)._null_handling;
-
-  if (cache.has_result(col_idx, agg)) return;
-
   auto result = detail::group_collect(get_grouped_values(),
                                       helper.group_offsets(stream),
                                       helper.num_groups(stream),
                                       null_handling,
                                       stream,
                                       mr);
-
   cache.add_result(col_idx, agg, std::move(result));
 };
 
 template <>
 void aggregate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation const& agg)
 {
-  auto const null_handling =
-    dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._null_handling;
-
   if (cache.has_result(col_idx, agg)) { return; }
 
+  auto const null_handling =
+    dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._null_handling;
   auto const collect_result = detail::group_collect(get_grouped_values(),
                                                     helper.group_offsets(stream),
                                                     helper.num_groups(stream),
                                                     null_handling,
                                                     stream,
-                                                    mr);
+                                                    rmm::mr::get_current_device_resource());
   auto const nulls_equal =
     dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._nulls_equal;
   auto const nans_equal =
@@ -409,14 +406,35 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation 
 template <>
 void aggregate_result_functor::operator()<aggregation::MERGE_LISTS>(aggregation const& agg)
 {
-  if (cache.has_result(col_idx, agg)) return;
+  if (cache.has_result(col_idx, agg)) { return; }
 
-  auto result = detail::group_collect_merge(
-    get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr);
-
-  cache.add_result(col_idx, agg, std::move(result));
+  cache.add_result(
+    col_idx,
+    agg,
+    detail::group_collect_merge(
+      get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr));
 };
-// TODO: merge_sets
+
+template <>
+void aggregate_result_functor::operator()<aggregation::MERGE_SETS>(aggregation const& agg)
+{
+  if (cache.has_result(col_idx, agg)) { return; }
+
+  auto const merged_result = detail::group_collect_merge(get_grouped_values(),
+                                                         helper.group_offsets(stream),
+                                                         helper.num_groups(stream),
+                                                         stream,
+                                                         rmm::mr::get_current_device_resource());
+  auto const nulls_equal =
+    dynamic_cast<cudf::detail::merge_sets_aggregation const&>(agg)._nulls_equal;
+  auto const nans_equal =
+    dynamic_cast<cudf::detail::merge_sets_aggregation const&>(agg)._nans_equal;
+  cache.add_result(
+    col_idx,
+    agg,
+    lists::detail::drop_list_duplicates(
+      lists_column_view(merged_result->view()), nulls_equal, nans_equal, stream, mr));
+};
 
 }  // namespace detail
 

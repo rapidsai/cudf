@@ -77,9 +77,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
                                                           class collect_set_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class merge_lists_aggregation const& agg);
-  //  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-  //                                                          class merge_sets_aggregation const&
-  //                                                          agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class merge_sets_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class lead_lag_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
@@ -111,7 +110,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class collect_list_aggregation const& agg);
   virtual void visit(class collect_set_aggregation const& agg);
   virtual void visit(class merge_lists_aggregation const& agg);
-  //  virtual void visit(class merge_sets_aggregation const& agg);
+  virtual void visit(class merge_sets_aggregation const& agg);
   virtual void visit(class lead_lag_aggregation const& agg);
   virtual void visit(class udf_aggregation const& agg);
 };
@@ -636,9 +635,6 @@ class collect_set_aggregation final : public rolling_aggregation {
 
 /**
  * @brief Derived aggregation class for specifying MERGE_LISTs aggregation
- *
- * TODO
- * TODO merge_sets
  */
 class merge_lists_aggregation final : public aggregation {
  public:
@@ -654,6 +650,47 @@ class merge_lists_aggregation final : public aggregation {
     return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
+ * @brief Derived aggregation class for specifying MERGE_SETs aggregation
+ */
+class merge_sets_aggregation final : public aggregation {
+ public:
+  explicit merge_sets_aggregation(null_equality nulls_equal, nan_equality nans_equal)
+    : aggregation{MERGE_SETS}
+  {
+  }
+
+  null_equality _nulls_equal;  ///< whether to consider nulls as equal value
+  nan_equality _nans_equal;    ///< whether to consider NaNs as equal value (applicable only to
+                               ///< floating point types)
+
+  bool is_equal(aggregation const& _other) const override
+  {
+    if (!this->aggregation::is_equal(_other)) { return false; }
+    auto const& other = dynamic_cast<merge_sets_aggregation const&>(_other);
+    return (_nulls_equal == other._nulls_equal && _nans_equal == other._nans_equal);
+  }
+
+  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
+
+  std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<merge_sets_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+
+ protected:
+  size_t hash_impl() const
+  {
+    return std::hash<int>{}(static_cast<int>(_nulls_equal) ^ static_cast<int>(_nans_equal));
+  }
 };
 
 /**
