@@ -44,7 +44,23 @@ struct ops_wrapper {
     if constexpr (std::is_invocable_v<BinaryOperator, TypeCommon, TypeCommon>) {
       TypeCommon x = type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs);
       TypeCommon y = type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs);
-      auto result  = BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(x, y);
+      auto result  = [&]() {
+        if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals>) {
+          return BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(
+            x, y, lhs.is_valid(i), rhs.is_valid(i));
+        } else if constexpr (std::is_same_v<BinaryOperator, ops::NullMax> or
+                             std::is_same_v<BinaryOperator, ops::NullMin>) {
+          bool output_valid = false;
+          auto result       = BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(
+            x, y, lhs.is_valid(i), rhs.is_valid(i), output_valid);
+          if (out.nullable() && !output_valid) out.set_null(i);
+          return result;
+        } else {
+          return BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(x, y);
+        }
+        // To supress nvcc warning
+        return std::invoke_result_t<BinaryOperator, TypeCommon, TypeCommon>{};
+      }();
       if constexpr (store_as_result)
         out.element<decltype(result)>(i) = result;
       else
@@ -71,7 +87,23 @@ struct ops2_wrapper {
                   std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>) {
       TypeLhs x   = lhs.element<TypeLhs>(i);
       TypeRhs y   = rhs.element<TypeRhs>(i);
-      auto result = BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(x, y);
+      auto result = [&]() {
+        if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals>) {
+          return BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(
+            x, y, lhs.is_valid(i), rhs.is_valid(i));
+        } else if constexpr (std::is_same_v<BinaryOperator, ops::NullMax> or
+                             std::is_same_v<BinaryOperator, ops::NullMin>) {
+          bool output_valid = false;
+          auto result       = BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(
+            x, y, lhs.is_valid(i), rhs.is_valid(i), output_valid);
+          if (out.nullable() && !output_valid) out.set_null(i);
+          return result;
+        } else {
+          return BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(x, y);
+        }
+        // To supress nvcc warning
+        return std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>{};
+      }();
       if constexpr (store_as_result)
         out.element<decltype(result)>(i) = result;
       else
