@@ -32,7 +32,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/optional.h>
-#include <thrust/pair.h>
 
 #include <cstring>
 #include <numeric>
@@ -62,24 +61,15 @@ template <typename T, bool has_nulls>
 using possibly_null_value_t = typename possibly_null_value<T, has_nulls>::type;
 
 template <bool has_nulls, typename T>
-struct value_container {
-  __device__ value_container() {}
+struct expression_result {
+  __device__ expression_result() {}
 
   // TODO: Index is ignored by this function.
   template <typename Element>
   __device__ void set_value(cudf::size_type index, possibly_null_value_t<Element, has_nulls> result)
   {
     if constexpr (std::is_same_v<Element, T>) {
-      if constexpr (has_nulls) {
-        if (result.has_value()) {
-          _obj.first  = *result;
-          _obj.second = true;
-        } else {
-          _obj.second = false;
-        }
-      } else {
-        _obj = result;
-      }
+      _obj = result;
     } else {
       // We cannot SFINAE away this branch because we need the function to be
       // defined, so we must provide a runtime error.
@@ -89,7 +79,7 @@ struct value_container {
 
   __device__ bool is_valid() const
   {
-    if constexpr (has_nulls) { return _obj.second; }
+    if constexpr (has_nulls) { return _obj.has_value(); }
     return true;
   }
 
@@ -98,18 +88,17 @@ struct value_container {
   {
     // Using two separate constexprs silences compiler warnings, whereas an
     // if/else does not. An unconditional return is not ignored by the compiler
-    // when has_nulls is true, and therefore raises a compiler error because a
-    // pair is not convertible to the value type.
-    if constexpr (has_nulls) { return _obj.first; }
+    // when has_nulls is true and therefore raises a compiler error.
+    if constexpr (has_nulls) { return _obj.value(); }
     if constexpr (!has_nulls) { return _obj; }
   }
 
-  std::conditional_t<has_nulls, thrust::pair<T, bool>, T> _obj;
+  possibly_null_value_t<T, has_nulls> _obj;
 };
 
 template <bool has_nulls>
-struct value_container<has_nulls, mutable_column_device_view> {
-  __device__ value_container(mutable_column_device_view& obj) : _obj(obj) {}
+struct expression_result<has_nulls, mutable_column_device_view> {
+  __device__ expression_result(mutable_column_device_view& obj) : _obj(obj) {}
 
   template <typename Element>
   __device__ void set_value(cudf::size_type index, possibly_null_value_t<Element, has_nulls> result)
@@ -350,7 +339,7 @@ struct expression_evaluator {
   {
     auto const typed_input = resolve_input<Input>(input, input_row_index);
     ast_operator_dispatcher(op,
-                            unary_expression_output<Input>(*this),
+                            unary_expression_output_handler<Input>(*this),
                             output_object,
                             output_row_index,
                             typed_input,
@@ -381,7 +370,7 @@ struct expression_evaluator {
     auto const typed_lhs = resolve_input<LHS>(lhs, left_row_index);
     auto const typed_rhs = resolve_input<RHS>(rhs, right_row_index);
     ast_operator_dispatcher(op,
-                            binary_expression_output<LHS, RHS>(*this),
+                            binary_expression_output_handler<LHS, RHS>(*this),
                             output_object,
                             output_row_index,
                             typed_lhs,
@@ -491,9 +480,9 @@ struct expression_evaluator {
   }
 
  private:
-  struct expression_output {
+  struct expression_output_handler {
    public:
-    __device__ expression_output(expression_evaluator<has_nulls> const& evaluator)
+    __device__ expression_output_handler(expression_evaluator<has_nulls> const& evaluator)
       : evaluator(evaluator)
     {
     }
@@ -556,9 +545,9 @@ struct expression_evaluator {
   };
 
   template <typename Input>
-  struct unary_expression_output : public expression_output {
-    __device__ unary_expression_output(expression_evaluator<has_nulls> const& evaluator)
-      : expression_output(evaluator)
+  struct unary_expression_output_handler : public expression_output_handler {
+    __device__ unary_expression_output_handler(expression_evaluator<has_nulls> const& evaluator)
+      : expression_output_handler(evaluator)
     {
     }
 
@@ -598,9 +587,9 @@ struct expression_evaluator {
   };
 
   template <typename LHS, typename RHS>
-  struct binary_expression_output : public expression_output {
-    __device__ binary_expression_output(expression_evaluator<has_nulls> const& evaluator)
-      : expression_output(evaluator)
+  struct binary_expression_output_handler : public expression_output_handler {
+    __device__ binary_expression_output_handler(expression_evaluator<has_nulls> const& evaluator)
+      : expression_output_handler(evaluator)
     {
     }
 
