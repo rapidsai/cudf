@@ -628,13 +628,17 @@ class hash_join {
    * @param probe The probe table, from which the tuples are probed.
    * @param compare_nulls Controls whether null join-key values should match or not.
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the intermediate table and columns' device
+   * memory.
    *
    * @return The exact number of output when performing a full join between two tables with `build`
    * and `probe` as the the join keys .
    */
-  std::size_t full_join_size(cudf::table_view const& probe,
-                             null_equality compare_nulls  = null_equality::EQUAL,
-                             rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
+  std::size_t full_join_size(
+    cudf::table_view const& probe,
+    null_equality compare_nulls         = null_equality::EQUAL,
+    rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
   struct hash_join_impl;

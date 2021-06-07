@@ -218,7 +218,8 @@ struct hash_join::hash_join_impl {
 
   std::size_t full_join_size(cudf::table_view const& probe,
                              null_equality compare_nulls,
-                             rmm::cuda_stream_view stream) const;
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr) const;
 
  private:
   template <cudf::detail::join_kind JoinKind>

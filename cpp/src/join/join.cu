@@ -279,9 +279,10 @@ std::size_t hash_join::left_join_size(cudf::table_view const& probe,
 
 std::size_t hash_join::full_join_size(cudf::table_view const& probe,
                                       null_equality compare_nulls,
-                                      rmm::cuda_stream_view stream) const
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr) const
 {
-  return impl->full_join_size(probe, compare_nulls, stream);
+  return impl->full_join_size(probe, compare_nulls, stream, mr);
 }
 
 // external APIs
