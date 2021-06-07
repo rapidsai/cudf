@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -85,15 +85,12 @@ struct dispatch_compute_indices {
     return result;
   }
 
-  template <typename Element>
+  template <typename Element, typename... Args>
   typename std::enable_if_t<!cudf::is_relationally_comparable<Element, Element>(),
                             std::unique_ptr<column>>
-  operator()(dictionary_column_view const& input,
-             column_view const& new_keys,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr)
+  operator()(Args&&...)
   {
-    CUDF_FAIL("list_view dictionary set_keys not supported yet");
+    CUDF_FAIL("dictionary set_keys not supported for this column type");
   }
 };
 
@@ -153,9 +150,10 @@ std::unique_ptr<column> set_keys(
                                 new_nulls.second);
 }
 
-std::vector<std::unique_ptr<column>> match_dictionaries(std::vector<dictionary_column_view> input,
-                                                        rmm::cuda_stream_view stream,
-                                                        rmm::mr::device_memory_resource* mr)
+std::vector<std::unique_ptr<column>> match_dictionaries(
+  cudf::host_span<dictionary_column_view const> input,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   std::vector<column_view> keys(input.size());
   std::transform(input.begin(), input.end(), keys.begin(), [](auto& col) { return col.keys(); });
@@ -222,6 +220,13 @@ std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column
 {
   CUDF_FUNC_RANGE();
   return detail::set_keys(dictionary_column, keys, rmm::cuda_stream_default, mr);
+}
+
+std::vector<std::unique_ptr<column>> match_dictionaries(
+  cudf::host_span<dictionary_column_view const> input, rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::match_dictionaries(input, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace dictionary

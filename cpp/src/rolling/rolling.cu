@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/aggregation/aggregation.hpp>
 #include "rolling_detail.cuh"
 
 namespace cudf {
@@ -55,7 +56,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 {
   CUDF_FUNC_RANGE();
 
-  if (input.is_empty()) return empty_like(input);
+  if (input.is_empty()) { return cudf::detail::empty_output_for_rolling_aggregation(input, agg); }
+
   CUDF_EXPECTS((min_periods >= 0), "min_periods must be non-negative");
 
   CUDF_EXPECTS((default_outputs.is_empty() || default_outputs.size() == input.size()),
@@ -99,8 +101,9 @@ std::unique_ptr<column> rolling_window2(column_view const& input,
 {
   CUDF_FUNC_RANGE();
 
-  if (preceding_window.is_empty() || following_window.is_empty() || input.is_empty())
-    return empty_like(input);
+  if (preceding_window.is_empty() || following_window.is_empty() || input.is_empty()) {
+    return cudf::detail::empty_output_for_rolling_aggregation(input, agg);
+  }
 
   CUDF_EXPECTS(preceding_window.type().id() == type_id::INT32 &&
                  following_window.type().id() == type_id::INT32,

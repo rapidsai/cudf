@@ -16,6 +16,7 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/unary.hpp>
@@ -92,11 +93,22 @@ struct flattened_table {
                              order col_order,
                              null_order col_null_order)
   {
-    if (nullability == column_nullability::FORCE || col.nullable()) {
-      // nullable columns could be required for comparisions such as joins
+    // Even if it is not required to extract the bitmask to a separate column,
+    // we should always do that if the structs column has any null element.
+    //
+    // In addition, we should check for null by calling to `has_nulls()`, not `nullable()`.
+    // This is because when comparing structs columns, if one column has bitmask while the other
+    // does not (and both columns do not have any null element) then flattening them using
+    // `nullable()` will result in tables with different number of columns.
+    //
+    // Notice that, for comparing structs columns when one column has null while the other
+    // doesn't, `nullability` must be passed in with value `column_nullability::FORCE` to make
+    // sure the flattening results are tables having the same number of columns.
+
+    if (nullability == column_nullability::FORCE || col.has_nulls()) {
       validity_as_column.push_back(cudf::is_valid(col));
-      if (col.nullable()) {
-        // copy bitmask only works if the column is nullable
+      if (col.has_nulls()) {
+        // copy bitmask is needed only if the column has null
         validity_as_column.back()->set_null_mask(copy_bitmask(col));
       }
       flat_columns.push_back(validity_as_column.back()->view());
@@ -106,13 +118,11 @@ struct flattened_table {
     for (decltype(col.num_children()) i = 0; i < col.num_children(); ++i) {
       auto const& child = col.get_sliced_child(i);
       if (child.type().id() == type_id::STRUCT) {
-        flatten_struct_column(structs_column_view{child}, col_order, null_order::BEFORE);
-        // default spark behaviour is null_order::BEFORE
+        flatten_struct_column(structs_column_view{child}, col_order, col_null_order);
       } else {
         flat_columns.push_back(child);
         if (not column_order.empty()) flat_column_order.push_back(col_order);
-        if (not null_precedence.empty()) flat_null_precedence.push_back(null_order::BEFORE);
-        // default spark behaviour is null_order::BEFORE
+        if (not null_precedence.empty()) flat_null_precedence.push_back(col_null_order);
       }
     }
   }
@@ -165,6 +175,51 @@ flatten_nested_columns(table_view const& input,
     return std::make_tuple(input, column_order, null_precedence, std::move(validity_as_column));
 
   return flattened_table{input, column_order, null_precedence, nullability}();
+}
+
+// Helper function to superimpose validity of parent struct
+// over the specified member (child) column.
+void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
+                              size_type parent_null_count,
+                              column& child,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
+{
+  if (!child.nullable()) {
+    // Child currently has no null mask. Copy parent's null mask.
+    child.set_null_mask(rmm::device_buffer{
+      parent_null_mask, cudf::bitmask_allocation_size_bytes(child.size()), stream, mr});
+    child.set_null_count(parent_null_count);
+  } else {
+    // Child should have a null mask.
+    // `AND` the child's null mask with the parent's.
+
+    auto current_child_mask = child.mutable_view().null_mask();
+
+    std::vector<bitmask_type const*> masks{
+      reinterpret_cast<bitmask_type const*>(parent_null_mask),
+      reinterpret_cast<bitmask_type const*>(current_child_mask)};
+    std::vector<size_type> begin_bits{0, 0};
+    cudf::detail::inplace_bitmask_and(
+      device_span<bitmask_type>(current_child_mask, num_bitmask_words(child.size())),
+      masks,
+      begin_bits,
+      child.size(),
+      stream,
+      mr);
+    child.set_null_count(UNKNOWN_NULL_COUNT);
+  }
+
+  // If the child is also a struct, repeat for all grandchildren.
+  if (child.type().id() == cudf::type_id::STRUCT) {
+    const auto current_child_mask = child.mutable_view().null_mask();
+    std::for_each(thrust::make_counting_iterator(0),
+                  thrust::make_counting_iterator(child.num_children()),
+                  [&current_child_mask, &child, stream, mr](auto i) {
+                    superimpose_parent_nulls(
+                      current_child_mask, UNKNOWN_NULL_COUNT, child.child(i), stream, mr);
+                  });
+  }
 }
 
 }  // namespace detail

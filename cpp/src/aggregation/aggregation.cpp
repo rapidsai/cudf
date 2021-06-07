@@ -508,6 +508,8 @@ std::unique_ptr<Base> make_collect_set_aggregation(null_policy null_handling,
 }
 template std::unique_ptr<aggregation> make_collect_set_aggregation<aggregation>(
   null_policy null_handling, null_equality nulls_equal, nan_equality nans_equal);
+template std::unique_ptr<rolling_aggregation> make_collect_set_aggregation<rolling_aggregation>(
+  null_policy null_handling, null_equality nulls_equal, nan_equality nans_equal);
 
 /// Factory to create a LAG aggregation
 template <typename Base = aggregation>
