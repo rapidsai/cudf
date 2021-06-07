@@ -49,11 +49,9 @@ struct ops_wrapper {
       TypeCommon y =
         type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs, is_rhs_scalar);
       auto result = [&]() {
-        if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals>) {
-          return BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(
-            x, y, lhs.is_valid(is_lhs_scalar ? 0 : i), rhs.is_valid(is_rhs_scalar ? 0 : i));
-        } else if constexpr (std::is_same_v<BinaryOperator, ops::NullMax> or
-                             std::is_same_v<BinaryOperator, ops::NullMin>) {
+        if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals> or
+                      std::is_same_v<BinaryOperator, ops::NullMax> or
+                      std::is_same_v<BinaryOperator, ops::NullMin>) {
           bool output_valid = false;
           auto result       = BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(
             x,
@@ -98,11 +96,9 @@ struct ops2_wrapper {
       TypeLhs x   = lhs.element<TypeLhs>(is_lhs_scalar ? 0 : i);
       TypeRhs y   = rhs.element<TypeRhs>(is_rhs_scalar ? 0 : i);
       auto result = [&]() {
-        if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals>) {
-          return BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(
-            x, y, lhs.is_valid(is_lhs_scalar ? 0 : i), rhs.is_valid(is_rhs_scalar ? 0 : i));
-        } else if constexpr (std::is_same_v<BinaryOperator, ops::NullMax> or
-                             std::is_same_v<BinaryOperator, ops::NullMin>) {
+        if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals> or
+                      std::is_same_v<BinaryOperator, ops::NullMax> or
+                      std::is_same_v<BinaryOperator, ops::NullMin>) {
           bool output_valid = false;
           auto result       = BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(
             x,

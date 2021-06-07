@@ -388,9 +388,10 @@ struct ATan2 {
 
 struct NullEquals {
   template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid)
-    -> decltype(x == y)
+  CUDA_DEVICE_CALLABLE auto operator()(
+    TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) -> decltype(x == y)
   {
+    output_valid = true;
     if (!lhs_valid && !rhs_valid) return true;
     if (lhs_valid && rhs_valid) return x == y;
     return false;
