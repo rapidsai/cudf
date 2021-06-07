@@ -323,6 +323,46 @@ struct PyMod {
   }
 };
 
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+struct NullEquals {
+  TypeOut operator()(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) const
+  {
+    output_valid = true;
+    if (!lhs_valid && !rhs_valid) return true;
+    using common_t = std::common_type_t<TypeLhs, TypeRhs>;
+    if (lhs_valid && rhs_valid) return static_cast<common_t>(x) == static_cast<common_t>(y);
+    return false;
+  }
+};
+
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+struct NullMax {
+  TypeOut operator()(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) const
+  {
+    output_valid = lhs_valid or rhs_valid;
+    if (lhs_valid or rhs_valid) {
+      return (lhs_valid and (!rhs_valid or static_cast<TypeOut>(x) > static_cast<TypeOut>(y)))
+               ? static_cast<TypeOut>(x)
+               : static_cast<TypeOut>(y);
+    } else
+      return TypeOut{};
+  }
+};
+
+template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+struct NullMin {
+  TypeOut operator()(TypeLhs x, TypeRhs y, bool lhs_valid, bool rhs_valid, bool& output_valid) const
+  {
+    output_valid = lhs_valid or rhs_valid;
+    if (lhs_valid or rhs_valid) {
+      return (lhs_valid and (!rhs_valid or static_cast<TypeOut>(x) < static_cast<TypeOut>(y)))
+               ? static_cast<TypeOut>(x)
+               : static_cast<TypeOut>(y);
+    } else
+      return TypeOut{};
+  }
+};
+
 }  // namespace operation
 }  // namespace library
 }  // namespace cudf
