@@ -1,9 +1,11 @@
 from cudf.core.udf.typing import MaskedType
 from numba.np import numpy_support
 from numba import cuda
+from cudf.utils import cudautils
+from nvtx import annotate
 
-
-def compile_udf(func, dtypes):
+@annotate("NUMBA JIT", color="green", domain="cudf_python")
+def compile_masked_udf(func, dtypes):
     '''
     Generate an inlineable PTX function that will be injected into
     a variadic kernel inside libcudf
@@ -16,9 +18,7 @@ def compile_udf(func, dtypes):
         for arg in (numpy_support.from_dtype(np_type) for np_type in dtypes)
     )
     # Get the inlineable PTX function
-    ptx, numba_output_type = cuda.compile_ptx_for_current_device(
-        func, to_compiler_sig, device=True
-    )
+    ptx, numba_output_type = cudautils.compile_udf(func, to_compiler_sig)
     numpy_output_type = numpy_support.as_dtype(
         numba_output_type.value_type
     )
