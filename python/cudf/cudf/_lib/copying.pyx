@@ -292,7 +292,7 @@ def _reverse_column(Column source_column):
 
 
 def _reverse_table(Table source_table):
-    cdef table_view reverse_table_view = source_table.data_view()
+    cdef table_view reverse_table_view = source_table.view()
 
     cdef unique_ptr[table] c_result
     with nogil:
@@ -303,7 +303,7 @@ def _reverse_table(Table source_table):
     return Table.from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
-        # index_names=source_table._index_names
+        index_names=source_table._index_names
     )
 
 

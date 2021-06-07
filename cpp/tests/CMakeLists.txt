@@ -217,7 +217,8 @@ ConfigureTest(COPYING_TEST
     copying/shift_tests.cpp
     copying/slice_tests.cpp
     copying/split_tests.cpp
-    copying/utility_tests.cpp)
+    copying/utility_tests.cpp
+    copying/reverse_tests.cpp)
 
 ###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------
