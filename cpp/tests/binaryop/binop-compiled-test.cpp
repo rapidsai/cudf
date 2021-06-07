@@ -292,7 +292,36 @@ TYPED_TEST(BinaryOperationCompiledTest_Mod, Vector_Vector)
 
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, MOD());
 }
-// TODO PYMOD (same types as MOD)
+
+// PYMOD
+//     n      t     d
+// n n % n
+// t
+// d      	     	d % d
+using PyMod_types = cudf::test::Types<cudf::test::Types<int16_t, u_int64_t, u_int64_t>,
+                                      cudf::test::Types<double, int8_t, int64_t>,
+                                      cudf::test::Types<double, double, double>,
+                                      cudf::test::Types<duration_ns, duration_us, duration_ns>>;
+template <typename T>
+struct BinaryOperationCompiledTest_PyMod : public BinaryOperationCompiledTest<T> {
+};
+TYPED_TEST_CASE(BinaryOperationCompiledTest_PyMod, PyMod_types);
+TYPED_TEST(BinaryOperationCompiledTest_PyMod, Vector_Vector)
+{
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  using PYMOD = cudf::library::operation::PyMod<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = BinaryOperationTest::make_random_wrapped_column<TypeLhs>(col_size);
+  auto rhs = BinaryOperationTest::make_random_wrapped_column<TypeRhs>(col_size);
+
+  auto out = cudf::experimental::binary_operation(
+    lhs, rhs, cudf::binary_operator::PYMOD, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PYMOD());
+}
 
 // POW
 //     n      t     d
@@ -791,7 +820,7 @@ TYPED_TEST(BinaryOperationCompiledTest_NullOps, NullMax_Vector_Vector)
   auto const expected = NullOp_Result<TypeOut, TypeLhs, TypeRhs>(lhs, rhs, true);
 
   auto const result = cudf::experimental::binary_operation(
-    lhs, rhs, binary_operator::NULL_MAX, data_type(type_to_id<TypeOut>()));
+    lhs, rhs, cudf::binary_operator::NULL_MAX, data_type(type_to_id<TypeOut>()));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
@@ -806,7 +835,7 @@ TYPED_TEST(BinaryOperationCompiledTest_NullOps, NullMin_Vector_Vector)
   auto const expected = NullOp_Result<TypeOut, TypeLhs, TypeRhs>(lhs, rhs, false);
 
   auto const result = cudf::experimental::binary_operation(
-    lhs, rhs, binary_operator::NULL_MIN, data_type(type_to_id<TypeOut>()));
+    lhs, rhs, cudf::binary_operator::NULL_MIN, data_type(type_to_id<TypeOut>()));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
