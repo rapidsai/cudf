@@ -20,6 +20,8 @@ namespace cudf::binops::compiled {
 void dispatch_comparison_op(mutable_column_device_view& outd,
                             column_device_view const& lhsd,
                             column_device_view const& rhsd,
+                            bool is_lhs_scalar,
+                            bool is_rhs_scalar,
                             binary_operator op,
                             rmm::cuda_stream_view stream)
 {
@@ -30,14 +32,14 @@ void dispatch_comparison_op(mutable_column_device_view& outd,
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(outd.size()),
-    [op, outd, lhsd, rhsd, common_dtype] __device__(size_type i) {
+    [op, outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, common_dtype] __device__(size_type i) {
       // clang-format off
       switch (op) {
       // Similar enabled template types should go together (performance)
-      case binary_operator::LESS:          device_type_dispatcher<ops::Less, true>{outd, lhsd, rhsd, common_dtype}(i); break;
-      case binary_operator::GREATER:       device_type_dispatcher<ops::Greater, true>{outd, lhsd, rhsd, common_dtype}(i); break;
-      case binary_operator::LESS_EQUAL:    device_type_dispatcher<ops::LessEqual, true>{outd, lhsd, rhsd, common_dtype}(i); break;
-      case binary_operator::GREATER_EQUAL: device_type_dispatcher<ops::GreaterEqual, true>{outd, lhsd, rhsd, common_dtype}(i); break;
+      case binary_operator::LESS:          device_type_dispatcher<ops::Less, true>{outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, common_dtype}(i); break;
+      case binary_operator::GREATER:       device_type_dispatcher<ops::Greater, true>{outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, common_dtype}(i); break;
+      case binary_operator::LESS_EQUAL:    device_type_dispatcher<ops::LessEqual, true>{outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, common_dtype}(i); break;
+      case binary_operator::GREATER_EQUAL: device_type_dispatcher<ops::GreaterEqual, true>{outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, common_dtype}(i); break;
       default:;
       }
       // clang-format on

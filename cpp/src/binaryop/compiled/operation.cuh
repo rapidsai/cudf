@@ -33,11 +33,13 @@ namespace compiled {
 template <typename CastType>
 struct type_casted_accessor {
   template <typename Element>
-  CUDA_DEVICE_CALLABLE CastType operator()(cudf::size_type i, column_device_view const col) const
+  CUDA_DEVICE_CALLABLE CastType operator()(cudf::size_type i,
+                                           column_device_view const& col,
+                                           bool is_scalar) const
   {
     if constexpr (column_device_view::has_element_accessor<Element>() and
                   std::is_convertible_v<Element, CastType>)
-      return static_cast<CastType>(col.element<Element>(i));
+      return static_cast<CastType>(col.element<Element>(is_scalar ? 0 : i));
     return {};
   }
 };
@@ -50,7 +52,7 @@ template <typename FromType>
 struct typed_casted_writer {
   template <typename Element>
   CUDA_DEVICE_CALLABLE void operator()(cudf::size_type i,
-                                       mutable_column_device_view const col,
+                                       mutable_column_device_view const& col,
                                        FromType val) const
   {
     if constexpr (mutable_column_device_view::has_element_accessor<Element>() and

@@ -130,6 +130,16 @@ std::unique_ptr<column> binary_operation(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 void binary_operation(mutable_column_view& out,
+                      scalar const& lhs,
+                      column_view const& rhs,
+                      binary_operator op,
+                      rmm::cuda_stream_view stream);
+void binary_operation(mutable_column_view& out,
+                      column_view const& lhs,
+                      scalar const& rhs,
+                      binary_operator op,
+                      rmm::cuda_stream_view stream);
+void binary_operation(mutable_column_view& out,
                       column_view const& lhs,
                       column_view const& rhs,
                       binary_operator op,
@@ -143,15 +153,21 @@ template <class BinaryOperator>
 void apply_binary_op(mutable_column_device_view&,
                      column_device_view const&,
                      column_device_view const&,
+                     bool is_lhs_scalar,
+                     bool is_rhs_scalar,
                      rmm::cuda_stream_view stream);
 void dispatch_comparison_op(mutable_column_device_view& outd,
                             column_device_view const& lhsd,
                             column_device_view const& rhsd,
+                            bool is_lhs_scalar,
+                            bool is_rhs_scalar,
                             binary_operator op,
                             rmm::cuda_stream_view stream);
 void dispatch_equality_op(mutable_column_device_view& outd,
                           column_device_view const& lhsd,
                           column_device_view const& rhsd,
+                          bool is_lhs_scalar,
+                          bool is_rhs_scalar,
                           binary_operator op,
                           rmm::cuda_stream_view stream);
 }  // namespace compiled

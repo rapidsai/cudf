@@ -38,13 +38,17 @@ struct ops_wrapper {
   mutable_column_device_view& out;
   column_device_view const& lhs;
   column_device_view const& rhs;
+  bool is_lhs_scalar;
+  bool is_rhs_scalar;
   template <typename TypeCommon>
   __device__ void operator()(size_type i)
   {
     if constexpr (std::is_invocable_v<BinaryOperator, TypeCommon, TypeCommon>) {
-      TypeCommon x = type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs);
-      TypeCommon y = type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs);
-      auto result  = [&]() {
+      TypeCommon x =
+        type_dispatcher(lhs.type(), type_casted_accessor<TypeCommon>{}, i, lhs, is_lhs_scalar);
+      TypeCommon y =
+        type_dispatcher(rhs.type(), type_casted_accessor<TypeCommon>{}, i, rhs, is_rhs_scalar);
+      auto result = [&]() {
         if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals>) {
           return BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(
             x, y, lhs.is_valid(i), rhs.is_valid(i));
@@ -80,13 +84,15 @@ struct ops2_wrapper {
   mutable_column_device_view& out;
   column_device_view const& lhs;
   column_device_view const& rhs;
+  bool is_lhs_scalar;
+  bool is_rhs_scalar;
   template <typename TypeLhs, typename TypeRhs>
   __device__ void operator()(size_type i)
   {
     if constexpr (!has_common_type_v<TypeLhs, TypeRhs> and
                   std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>) {
-      TypeLhs x   = lhs.element<TypeLhs>(i);
-      TypeRhs y   = rhs.element<TypeRhs>(i);
+      TypeLhs x   = lhs.element<TypeLhs>(is_lhs_scalar ? 0 : i);
+      TypeRhs y   = rhs.element<TypeRhs>(is_rhs_scalar ? 0 : i);
       auto result = [&]() {
         if constexpr (std::is_same_v<BinaryOperator, ops::NullEquals>) {
           return BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(
@@ -128,16 +134,23 @@ struct device_type_dispatcher {
   mutable_column_device_view out;
   column_device_view lhs;
   column_device_view rhs;
+  bool is_lhs_scalar;
+  bool is_rhs_scalar;
   std::optional<data_type> common_data_type;
 
   __device__ void operator()(size_type i)
   {
     if (common_data_type) {
       type_dispatcher(
-        *common_data_type, ops_wrapper<BinaryOperator, store_as_result>{out, lhs, rhs}, i);
+        *common_data_type,
+        ops_wrapper<BinaryOperator, store_as_result>{out, lhs, rhs, is_lhs_scalar, is_rhs_scalar},
+        i);
     } else {
       double_type_dispatcher(
-        lhs.type(), rhs.type(), ops2_wrapper<BinaryOperator, store_as_result>{out, lhs, rhs}, i);
+        lhs.type(),
+        rhs.type(),
+        ops2_wrapper<BinaryOperator, store_as_result>{out, lhs, rhs, is_lhs_scalar, is_rhs_scalar},
+        i);
     }
   }
 };
@@ -158,12 +171,15 @@ template <class BinaryOperator>
 void apply_binary_op(mutable_column_device_view& outd,
                      column_device_view const& lhsd,
                      column_device_view const& rhsd,
+                     bool is_lhs_scalar,
+                     bool is_rhs_scalar,
                      rmm::cuda_stream_view stream)
 {
   auto common_dtype = get_common_type(outd.type(), lhsd.type(), rhsd.type());
 
   // Create binop functor instance
-  auto binop_func = device_type_dispatcher<BinaryOperator>{outd, lhsd, rhsd, common_dtype};
+  auto binop_func = device_type_dispatcher<BinaryOperator>{
+    outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, common_dtype};
   // Execute it on every element
   thrust::for_each(rmm::exec_policy(stream),
                    thrust::make_counting_iterator<size_type>(0),
