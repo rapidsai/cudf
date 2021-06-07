@@ -80,7 +80,7 @@ gpuci_conda_retry install -y \
                   "rapids-notebook-env=$MINOR_VERSION.*" \
                   "dask-cuda=${MINOR_VERSION}" \
                   "rmm=$MINOR_VERSION.*" \
-                  "ucx-py=${MINOR_VERSION}"
+                  "ucx-py=0.21.*"
 
 # https://docs.rapids.ai/maintainers/depmgmt/
 # gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
@@ -101,8 +101,8 @@ function install_dask {
     # Install the main version of dask, distributed, and streamz
     gpuci_logger "Install the main version of dask, distributed, and streamz"
     set -x
-    pip install "git+https://github.com/dask/distributed.git@2021.05.1" --upgrade --no-deps
-    pip install "git+https://github.com/dask/dask.git@2021.05.1" --upgrade --no-deps
+    pip install "git+https://github.com/dask/distributed.git@main" --upgrade --no-deps
+    pip install "git+https://github.com/dask/dask.git@main" --upgrade --no-deps
     pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
     set +x
 }
