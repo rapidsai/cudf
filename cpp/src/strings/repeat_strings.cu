@@ -16,7 +16,6 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.cuh>
@@ -79,10 +78,10 @@ auto generate_empty_output(strings_column_view const& input,
 
   static_assert(std::is_same_v<offset_type, int32_t> && std::is_same_v<size_type, int32_t>);
   auto offsets_column = make_numeric_column(
-    data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
-  CUDA_TRY(cudaMemsetAsync(offsets_column->mutable_view().template begin<offset_type>(),
+    data_type{type_to_id<offset_type>()}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
+  CUDA_TRY(cudaMemsetAsync(offsets_column->mutable_view().template data<offset_type>(),
                            0,
-                           (strings_count + 1) * sizeof(offset_type),
+                           offsets_column->size() * sizeof(offset_type),
                            stream.value()));
 
   return make_strings_column(strings_count,
@@ -99,7 +98,9 @@ auto generate_empty_output(strings_column_view const& input,
 /**
  * @brief Functor to compute string sizes and repeat the input strings.
  *
- * This functor is called only when `repeat_times > 0`.
+ * This functor is called only when `repeat_times > 0`. In addition, the total number of threads
+ * running this functor is `repeat_times * strings_count` (instead of `string_count`) for maximizing
+ * parallelism and better load-balancing.
  */
 struct compute_size_and_repeat_fn {
   column_device_view const strings_dv;
@@ -115,11 +116,10 @@ struct compute_size_and_repeat_fn {
   // `idx` will be in the range of [0, repeat_times * strings_count).
   __device__ void operator()(size_type const idx) const noexcept
   {
-    auto const str_idx    = idx / repeat_times;
-    auto const repeat_idx = idx % repeat_times;
+    auto const str_idx    = idx / repeat_times;  // value cycles in [0, string_count)
+    auto const repeat_idx = idx % repeat_times;  // value cycles in [0, repeat_times)
     auto const is_valid   = !has_nulls || strings_dv.is_valid_nocheck(str_idx);
 
-    // Only `strings_count` threads will compute string sizes.
     if (!d_chars && repeat_idx == 0) {
       d_offsets[str_idx] =
         is_valid ? repeat_times * strings_dv.element<string_view>(str_idx).size_bytes() : 0;

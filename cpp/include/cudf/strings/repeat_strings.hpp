@@ -23,7 +23,7 @@ namespace strings {
 /**
  * @addtogroup strings_copy
  * @{
- * @file strings/repeat_strings.hpp
+ * @file
  * @brief Strings APIs for copying strings.
  */
 
@@ -47,7 +47,7 @@ namespace strings {
  *        (i.e., `input.size() * repeat_times > numeric_limits<size_type>::max()`).
  *
  * @param input The scalar containing the string to repeat.
- * @param repeat_times The number for repeating string.
+ * @param repeat_times The number of times the `input` string is copied to the output.
  * @param mr Device memory resource used to allocate the returned string scalar.
  * @return New string scalar in which the string is repeated from the input.
  */
@@ -76,7 +76,7 @@ string_scalar repeat_strings(
  * @endcode
  *
  * @param input The column containing strings to repeat.
- * @param repeat_times The number for repeating string.
+ * @param repeat_times The number of times each input string is copied to the output.
  * @param mr Device memory resource used to allocate the returned strings column.
  * @return New column with concatenated results.
  */
