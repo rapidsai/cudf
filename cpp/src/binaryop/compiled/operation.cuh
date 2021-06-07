@@ -221,11 +221,10 @@ struct PMod {
     return rem;
   }
 
-  template <typename TypeOut,
-            typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<!(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>>)and(
-              std::is_floating_point_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
+  template <
+    typename TypeLhs,
+    typename TypeRhs,
+    std::enable_if_t<(std::is_floating_point_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
   CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y)
   {
     using common_t = std::common_type_t<TypeLhs, TypeRhs>;

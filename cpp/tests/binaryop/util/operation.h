@@ -292,8 +292,8 @@ struct PMod {
 
   TypeOut operator()(TypeLhs x, TypeRhs y) const
   {
-    CommonArgsT xconv{x};
-    CommonArgsT yconv{y};
+    CommonArgsT xconv{static_cast<CommonArgsT>(x)};
+    CommonArgsT yconv{static_cast<CommonArgsT>(y)};
     auto rem = std::fmod(xconv, yconv);
     if (rem < 0) rem = std::fmod(rem + yconv, yconv);
     return static_cast<TypeOut>(rem);

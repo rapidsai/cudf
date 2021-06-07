@@ -390,6 +390,23 @@ TYPED_TEST(BinaryOperationCompiledTest_Pow, ATan2_Vector_Vector)
   ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, ATAN2(), NearEqualComparator<TypeOut>{2});
 }
 
+TYPED_TEST(BinaryOperationCompiledTest_Pow, PMod_Vector_Vector)
+{
+  using TypeOut = typename TestFixture::TypeOut;
+  using TypeLhs = typename TestFixture::TypeLhs;
+  using TypeRhs = typename TestFixture::TypeRhs;
+
+  using PMOD = cudf::library::operation::PMod<TypeOut, TypeLhs, TypeRhs>;
+
+  auto lhs = BinaryOperationTest::make_random_wrapped_column<TypeLhs>(col_size);
+  auto rhs = BinaryOperationTest::make_random_wrapped_column<TypeRhs>(col_size);
+
+  auto out = cudf::experimental::binary_operation(
+    lhs, rhs, cudf::binary_operator::PMOD, data_type(type_to_id<TypeOut>()));
+
+  ASSERT_BINOP<TypeOut, TypeLhs, TypeRhs>(*out, lhs, rhs, PMOD());
+}
+
 // Bit Operations
 //     n      t     d
 // n n . n
