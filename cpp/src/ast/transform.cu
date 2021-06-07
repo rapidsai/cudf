@@ -66,16 +66,13 @@ __launch_bounds__(max_block_size) __global__
                              dev_ast_plan plan,
                              mutable_column_device_view output_column)
 {
-  // TODO: Try to avoid duplicating this type of declaration in so many places.
-  using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
-
   // The (required) extern storage of the shared memory array leads to
   // conflicting declarations between different templates. The easiest
   // workaround is to declare an arbitrary (here char) array type then cast it
   // after the fact to the appropriate type.
   extern __shared__ char raw_intermediate_storage[];
-  IntermediateDataType* intermediate_storage =
-    reinterpret_cast<IntermediateDataType*>(raw_intermediate_storage);
+  IntermediateDataType<has_nulls>* intermediate_storage =
+    reinterpret_cast<IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
 
   auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * plan.num_intermediates];
   auto const start_idx = static_cast<cudf::size_type>(threadIdx.x + blockIdx.x * blockDim.x);

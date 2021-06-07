@@ -231,6 +231,10 @@ struct ast_plan {
   linearizer const _linearizer;
 };
 
+// Type used for intermediate storage in expression evaluation.
+template <bool has_nulls>
+using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
+
 /**
  * @brief An expression evaluator owned by a single thread operating on rows of two table.
  *
@@ -239,9 +243,6 @@ struct ast_plan {
  */
 template <bool has_nulls>
 struct expression_evaluator {
- private:
-  using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
-
  public:
   /**
    * @brief Construct a row evaluator.
@@ -253,7 +254,7 @@ struct expression_evaluator {
    */
   __device__ expression_evaluator(table_device_view const& left,
                                   dev_ast_plan const& plan,
-                                  IntermediateDataType* thread_intermediate_storage,
+                                  IntermediateDataType<has_nulls>* thread_intermediate_storage,
                                   table_device_view const& right)
     : left(left), plan(plan), thread_intermediate_storage(thread_intermediate_storage), right(right)
   {
@@ -262,7 +263,7 @@ struct expression_evaluator {
   // Overloaded constructor for single-table case.
   __device__ expression_evaluator(table_device_view const& left,
                                   dev_ast_plan const& plan,
-                                  IntermediateDataType* thread_intermediate_storage)
+                                  IntermediateDataType<has_nulls>* thread_intermediate_storage)
     : left(left), plan(plan), thread_intermediate_storage(thread_intermediate_storage), right(left)
   {
   }
@@ -304,7 +305,7 @@ struct expression_evaluator {
     } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
       // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
       // Using a temporary variable ensures that the compiler knows the result is aligned
-      IntermediateDataType intermediate = thread_intermediate_storage[data_index];
+      IntermediateDataType<has_nulls> intermediate = thread_intermediate_storage[data_index];
       ReturnType tmp;
       memcpy(&tmp, &intermediate, sizeof(ReturnType));
       return tmp;
@@ -526,7 +527,7 @@ struct expression_evaluator {
       } else {  // Assumes ref_type == detail::device_data_reference_type::INTERMEDIATE
         // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing.
         // Using a temporary variable ensures that the compiler knows the result is aligned.
-        IntermediateDataType tmp;
+        IntermediateDataType<has_nulls> tmp;
         memcpy(&tmp, &result, sizeof(possibly_null_value_t<Element, has_nulls>));
         evaluator.thread_intermediate_storage[device_data_reference.data_index] = tmp;
       }
@@ -636,7 +637,7 @@ struct expression_evaluator {
   table_device_view const& left;
   table_device_view const& right;
   dev_ast_plan const& plan;
-  IntermediateDataType* thread_intermediate_storage;
+  IntermediateDataType<has_nulls>* thread_intermediate_storage;
 };
 
 /**

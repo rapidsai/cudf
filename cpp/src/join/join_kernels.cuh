@@ -226,17 +226,13 @@ __global__ void compute_conditional_join_output_size(table_device_view left_tabl
                                                      ast::detail::dev_ast_plan plan,
                                                      cudf::size_type* output_size)
 {
-  // TODO: Try to avoid duplicating this type of declaration in so many places.
-  // Maybe the conversion can be done by a method of the dev_ast_plan.
-  using IntermediateDataType = cudf::ast::detail::possibly_null_value_t<std::int64_t, has_nulls>;
-
   // The (required) extern storage of the shared memory array leads to
   // conflicting declarations between different templates. The easiest
   // workaround is to declare an arbitrary (here char) array type then cast it
   // after the fact to the appropriate type.
   extern __shared__ char raw_intermediate_storage[];
-  IntermediateDataType* intermediate_storage =
-    reinterpret_cast<IntermediateDataType*>(raw_intermediate_storage);
+  cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
+    reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * plan.num_intermediates];
 
   cudf::size_type thread_counter(0);
@@ -499,17 +495,13 @@ __global__ void conditional_join(table_device_view left_table,
   __shared__ cudf::size_type join_shared_l[num_warps][output_cache_size];
   __shared__ cudf::size_type join_shared_r[num_warps][output_cache_size];
 
-  // TODO: Try to avoid duplicating this type of declaration in so many places.
-  // Maybe the conversion can be done by a method of the dev_ast_plan.
-  using IntermediateDataType = cudf::ast::detail::possibly_null_value_t<std::int64_t, has_nulls>;
-
   // The (required) extern storage of the shared memory array leads to
   // conflicting declarations between different templates. The easiest
   // workaround is to declare an arbitrary (here char) array type then cast it
   // after the fact to the appropriate type.
   extern __shared__ char raw_intermediate_storage[];
-  IntermediateDataType* intermediate_storage =
-    reinterpret_cast<IntermediateDataType*>(raw_intermediate_storage);
+  cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
+    reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage = &intermediate_storage[threadIdx.x * plan.num_intermediates];
 
   const int warp_id                    = threadIdx.x / detail::warp_size;
