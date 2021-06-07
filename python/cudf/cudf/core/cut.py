@@ -8,7 +8,6 @@ import cudf
 import numpy as np
 import pandas as pd
 from collections.abc import Sequence
-from cudf._lib.filling import sequence
 
 
 def cut(
@@ -133,8 +132,7 @@ def cut(
                     "kwarg"
                 )
             elif duplicates == "drop":
-                # get unique values but maintain list dtype
-                bins = cupy.unique(bins).tolist()
+                bins = list(dict.fromkeys(bins))
 
     # if bins is an intervalIndex we ignore the value of right
     if isinstance(bins, (pd.IntervalIndex, cudf.IntervalIndex)):
@@ -155,7 +153,6 @@ def cut(
             else:
                 mn = cudf.Scalar(min(x), dtype="float64")
                 mx = cudf.Scalar(max(x), dtype="float64")
-            step = cudf.Scalar((mx - mn) / bins, dtype="float64")
             bins = cupy.linspace(mn.value, mx.value, bins + 1, endpoint=True)
             adj = (mx - mn).value * 0.001
             if right:

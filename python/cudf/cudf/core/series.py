@@ -1289,7 +1289,9 @@ class Series(SingleColumnFrame, Serializable):
                 na_rep=cudf._NA_REP,
             )
         else:
-            if not isinstance(self.index, cudf.MultiIndex) and is_categorical_dtype(self.index):
+            if not isinstance(
+                self.index, cudf.MultiIndex
+            ) and is_categorical_dtype(self.index):
                 if is_interval_dtype(
                     self.index.dtype.categories
                 ) and is_struct_dtype(preprocess.index.categories):
