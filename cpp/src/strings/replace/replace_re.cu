@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ namespace {
  * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
  * Longer patterns require global memory. Shorter patterns are common in data cleaning.
  */
-template <size_t stack_size>
+template <int stack_size>
 struct replace_regex_fn {
   column_device_view const d_strings;
   reprog_device prog;
@@ -63,9 +63,6 @@ struct replace_regex_fn {
       if (!d_chars) d_offsets[idx] = 0;
       return;
     }
-    u_char data1[stack_size];
-    u_char data2[stack_size];
-    prog.set_stack_mem(data1, data2);
     auto const d_str  = d_strings.element<string_view>(idx);
     auto const nchars = d_str.length();                  // number of characters in input string
     auto nbytes       = d_str.size_bytes();              // number of bytes in input string
@@ -78,8 +75,9 @@ struct replace_regex_fn {
     // copy input to output replacing strings as we go
     while (mxn-- > 0)  // maximum number of replaces
     {
-      if (prog.is_empty() || prog.find(idx, d_str, begin, end) <= 0) break;  // no more matches
-      auto spos = d_str.byte_offset(begin);                                  // get offset for these
+      if (prog.is_empty() || prog.find<stack_size>(idx, d_str, begin, end) <= 0)
+        break;                                        // no more matches
+      auto spos = d_str.byte_offset(begin);           // get offset for these
       auto epos = d_str.byte_offset(end);             // character position values
       nbytes += d_repl.size_bytes() - (epos - spos);  // compute new size
       if (out_ptr)                                    // replace
@@ -128,27 +126,34 @@ std::unique_ptr<column> replace_re(
   auto null_count = strings.null_count();
 
   // create child columns
-  std::pair<std::unique_ptr<column>, std::unique_ptr<column>> children(nullptr, nullptr);
-  // Each invocation is predicated on the stack size which is dependent on the number of regex
-  // instructions
-  if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
-    children =
-      make_strings_children(replace_regex_fn<RX_STACK_SMALL>{d_strings, d_prog, d_repl, maxrepl},
-                            strings_count,
-                            stream,
-                            mr);
-  else if (regex_insts <= RX_MEDIUM_INSTS)
-    children =
-      make_strings_children(replace_regex_fn<RX_STACK_MEDIUM>{d_strings, d_prog, d_repl, maxrepl},
-                            strings_count,
-                            stream,
-                            mr);
-  else
-    children =
-      make_strings_children(replace_regex_fn<RX_STACK_LARGE>{d_strings, d_prog, d_repl, maxrepl},
-                            strings_count,
-                            stream,
-                            mr);
+  auto children = [&] {
+    // Each invocation is predicated on the stack size which is dependent on the number of regex
+    // instructions
+    if (regex_insts <= RX_SMALL_INSTS)
+      return make_strings_children(
+        replace_regex_fn<RX_STACK_SMALL>{d_strings, d_prog, d_repl, maxrepl},
+        strings_count,
+        stream,
+        mr);
+    else if (regex_insts <= RX_MEDIUM_INSTS)
+      return make_strings_children(
+        replace_regex_fn<RX_STACK_MEDIUM>{d_strings, d_prog, d_repl, maxrepl},
+        strings_count,
+        stream,
+        mr);
+    else if (regex_insts <= RX_LARGE_INSTS)
+      return make_strings_children(
+        replace_regex_fn<RX_STACK_LARGE>{d_strings, d_prog, d_repl, maxrepl},
+        strings_count,
+        stream,
+        mr);
+    else
+      return make_strings_children(
+        replace_regex_fn<RX_STACK_ANY>{d_strings, d_prog, d_repl, maxrepl},
+        strings_count,
+        stream,
+        mr);
+  }();
 
   return make_strings_column(strings_count,
                              std::move(children.first),
