@@ -2862,4 +2862,40 @@ TEST_F(ParquetReaderTest, DecimalRead)
   }
 }
 
+TEST_F(ParquetReaderTest, EmptyOutput)
+{
+  cudf::test::fixed_width_column_wrapper<int> c0;
+  cudf::test::strings_column_wrapper c1;
+  cudf::test::fixed_point_column_wrapper<int> c2({}, numeric::scale_type{2});
+  cudf::test::lists_column_wrapper<float> _c3{{{1, 2}, {3, 4}}, {{5, 6}, {7, 8}}};
+  auto c3 = cudf::empty_like(_c3);
+
+  cudf::test::fixed_width_column_wrapper<int> sc0;
+  cudf::test::strings_column_wrapper sc1;
+  cudf::test::lists_column_wrapper<int> _sc2{{1, 2}};
+  std::vector<std::unique_ptr<cudf::column>> struct_children;
+  struct_children.push_back(sc0.release());
+  struct_children.push_back(sc1.release());
+  struct_children.push_back(cudf::empty_like(_sc2));
+  cudf::test::structs_column_wrapper c4(std::move(struct_children));
+
+  table_view expected({c0, c1, c2, *c3, c4});
+
+  // set precision on the decimal column
+  cudf_io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[2].set_decimal_precision(1);
+
+  auto filepath = temp_env->get_temp_filepath("EmptyOutput.parquet");
+  cudf_io::parquet_writer_options out_args =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected);
+  out_args.set_metadata(&expected_metadata);
+  cudf_io::write_parquet(out_args);
+
+  cudf_io::parquet_reader_options read_args =
+    cudf::io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+  auto result = cudf_io::read_parquet(read_args);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
 CUDF_TEST_PROGRAM_MAIN()

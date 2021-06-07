@@ -21,7 +21,7 @@
 
     <groupId>ai.rapids</groupId>
     <artifactId>cudf</artifactId>
-    <version>21.06.0-SNAPSHOT</version>
+    <version>21.08.0-SNAPSHOT</version>
 
     <name>cudfjni</name>
     <description>
@@ -155,6 +155,7 @@
         <RMM_LOGGING_LEVEL>INFO</RMM_LOGGING_LEVEL>
         <USE_GDS>OFF</USE_GDS>
         <GPU_ARCHS>ALL</GPU_ARCHS>
+        <CUDF_JNI_ARROW_STATIC>ON</CUDF_JNI_ARROW_STATIC>
         <native.build.path>${project.build.directory}/cmake-build</native.build.path>
         <slf4j.version>1.7.30</slf4j.version>
         <arrow.version>0.15.1</arrow.version>
@@ -378,6 +379,7 @@
                                     <arg value="-DCMAKE_EXPORT_COMPILE_COMMANDS=${CMAKE_EXPORT_COMPILE_COMMANDS}"/>
                                     <arg value="-DCUDF_CPP_BUILD_DIR=${CUDF_CPP_BUILD_DIR}"/>
                                     <arg value="-DGPU_ARCHS=${GPU_ARCHS}"/>
+                                    <arg value="-DCUDF_JNI_ARROW_STATIC=${CUDF_JNI_ARROW_STATIC}"/>
                                 </exec>
                                 <exec dir="${native.build.path}"
                                       failonerror="true"
@@ -420,14 +422,6 @@
                                 pom.properties['native.cudf.path'] = cudfm.group(1)
                             } else {
                                 fail("Could not find cudf as a dependency of libcudfjni out> $sout err> $serr")
-                            }
-
-                            def libnvcomp = ~/libnvcomp\\.so\\s+=>\\s+(.*)libnvcomp.*\\.so\\s+.*/
-                            def nvcompm = libnvcomp.matcher(sout)
-                            if (nvcompm.find()) {
-                                pom.properties['native.nvcomp.path'] = nvcompm.group(1)
-                            } else {
-                                fail("Could not find nvcomp as a dependency of libcudfjni out> $sout err> $serr")
                             }
 
                             def libcudart = ~/libcudart\\.so\\.(.*)\\s+=>.*/
@@ -512,13 +506,6 @@
                                     <directory>${native.cudf.path}</directory>
                                     <includes>
                                         <include>libcudf.so</include>
-                                    </includes>
-                                </resource>
-                                <resource>
-                                    <!--Set by groovy script-->
-                                    <directory>${native.nvcomp.path}</directory>
-                                    <includes>
-                                        <include>libnvcomp.so</include>
                                     </includes>
                                 </resource>
                             </resources>

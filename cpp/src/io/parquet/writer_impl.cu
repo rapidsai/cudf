@@ -19,6 +19,7 @@
  * @brief cuDF-IO parquet writer class implementation
  */
 
+#include <io/statistics/column_statistics.cuh>
 #include "writer_impl.hpp"
 
 #include <io/utilities/column_utils.cuh>
@@ -739,7 +740,7 @@ void writer::impl::gather_fragment_statistics(
     device_2dspan<statistics_group>(frag_stats_group.data(), num_columns, num_fragments);
 
   gpu::InitFragmentStatistics(frag_stats_group_2dview, frag, col_desc, stream);
-  GatherColumnStatistics(
+  detail::calculate_group_statistics<detail::io_file_format::PARQUET>(
     frag_stats_chunk.data(), frag_stats_group.data(), num_fragments * num_columns, stream);
   stream.synchronize();
 }
@@ -885,13 +886,15 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk> &
                    (num_stats_bfr > num_pages) ? page_stats_mrg.data() + num_pages : nullptr,
                    stream);
   if (num_stats_bfr > 0) {
-    MergeColumnStatistics(page_stats, frag_stats, page_stats_mrg.data(), num_pages, stream);
+    detail::merge_group_statistics<detail::io_file_format::PARQUET>(
+      page_stats, frag_stats, page_stats_mrg.data(), num_pages, stream);
     if (num_stats_bfr > num_pages) {
-      MergeColumnStatistics(page_stats + num_pages,
-                            page_stats,
-                            page_stats_mrg.data() + num_pages,
-                            num_stats_bfr - num_pages,
-                            stream);
+      detail::merge_group_statistics<detail::io_file_format::PARQUET>(
+        page_stats + num_pages,
+        page_stats,
+        page_stats_mrg.data() + num_pages,
+        num_stats_bfr - num_pages,
+        stream);
     }
   }
   stream.synchronize();
