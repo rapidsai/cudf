@@ -411,7 +411,7 @@ void aggregate_result_functor::operator()<aggregation::MERGE_LISTS>(aggregation 
   cache.add_result(
     col_idx,
     agg,
-    detail::group_collect_merge(
+    detail::group_merge_lists(
       get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr));
 };
 
@@ -420,11 +420,11 @@ void aggregate_result_functor::operator()<aggregation::MERGE_SETS>(aggregation c
 {
   if (cache.has_result(col_idx, agg)) { return; }
 
-  auto const merged_result = detail::group_collect_merge(get_grouped_values(),
-                                                         helper.group_offsets(stream),
-                                                         helper.num_groups(stream),
-                                                         stream,
-                                                         rmm::mr::get_current_device_resource());
+  auto const merged_result = detail::group_merge_lists(get_grouped_values(),
+                                                       helper.group_offsets(stream),
+                                                       helper.num_groups(stream),
+                                                       stream,
+                                                       rmm::mr::get_current_device_resource());
   auto const nulls_equal =
     dynamic_cast<cudf::detail::merge_sets_aggregation const&>(agg)._nulls_equal;
   auto const nans_equal =
