@@ -156,9 +156,7 @@ def cut(
                 mn = cudf.Scalar(min(x), dtype="float64")
                 mx = cudf.Scalar(max(x), dtype="float64")
             step = cudf.Scalar((mx - mn) / bins, dtype="float64")
-            bins = sequence(
-                size=bins + 1, init=mn.device_value, step=step.device_value
-            ).values
+            bins = cupy.linspace(mn.value, mx.value, bins + 1, endpoint=True)
             adj = (mx - mn).value * 0.001
             if right:
                 bins[0] -= adj
