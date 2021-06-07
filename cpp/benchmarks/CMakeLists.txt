@@ -22,10 +22,21 @@ target_compile_options(
                       "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
 )
 
+<<<<<<< HEAD
 target_link_libraries(
   cudf_datagen PUBLIC GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main
                       benchmark::benchmark nvbench::nvbench Threads::Threads cudf
 )
+=======
+target_link_libraries(cudf_datagen
+               PUBLIC GTest::gmock
+                      GTest::gtest
+                      GTest::gmock_main
+                      GTest::gtest_main
+                      benchmark::benchmark
+                      Threads::Threads
+                      cudf)
+>>>>>>> working on row and column conversions
 
 target_include_directories(
   cudf_datagen
@@ -46,6 +57,7 @@ target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen)
 # This function takes in a benchmark name and benchmark source and handles setting all of the
 # associated properties and linking to build the benchmark
 function(ConfigureBench CMAKE_BENCH_NAME)
+<<<<<<< HEAD
   add_executable(${CMAKE_BENCH_NAME} ${ARGN})
   set_target_properties(
     ${CMAKE_BENCH_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY
@@ -71,6 +83,17 @@ endfunction()
 
 # ##################################################################################################
 # * column benchmarks -----------------------------------------------------------------------------
+=======
+    add_executable(${CMAKE_BENCH_NAME} ${ARGN})
+    set_target_properties(${CMAKE_BENCH_NAME}
+        PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gbenchmarks>")
+    target_link_libraries(${CMAKE_BENCH_NAME}
+        PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main)
+endfunction()
+
+###################################################################################################
+# - column benchmarks -----------------------------------------------------------------------------
+>>>>>>> working on row and column conversions
 ConfigureBench(COLUMN_CONCAT_BENCH column/concatenate_benchmark.cpp)
 
 # ##################################################################################################
@@ -81,12 +104,17 @@ ConfigureBench(GATHER_BENCH copying/gather_benchmark.cu)
 # * scatter benchmark -----------------------------------------------------------------------------
 ConfigureBench(SCATTER_BENCH copying/scatter_benchmark.cu)
 
+<<<<<<< HEAD
 # ##################################################################################################
 # * lists scatter benchmark -----------------------------------------------------------------------
 ConfigureBench(SCATTER_LISTS_BENCH lists/copying/scatter_lists_benchmark.cu)
 
 # ##################################################################################################
 # * contiguous_split benchmark  -------------------------------------------------------------------
+=======
+###################################################################################################
+# - contiguous_split benchmark  -------------------------------------------------------------------
+>>>>>>> working on row and column conversions
 ConfigureBench(CONTIGUOUS_SPLIT_BENCH copying/contiguous_split_benchmark.cu)
 
 # ##################################################################################################
@@ -110,10 +138,16 @@ ConfigureBench(APPLY_BOOLEAN_MASK_BENCH stream_compaction/apply_boolean_mask_ben
 # * stream_compaction benchmark -------------------------------------------------------------------
 ConfigureBench(STREAM_COMPACTION_BENCH stream_compaction/drop_duplicates_benchmark.cpp)
 
+<<<<<<< HEAD
 # ##################################################################################################
 # * join benchmark --------------------------------------------------------------------------------
 ConfigureBench(JOIN_BENCH join/join_benchmark.cu join/conditional_join_benchmark.cu)
 ConfigureNVBench(JOIN_NVBENCH join/join_nvbench.cu)
+=======
+###################################################################################################
+# - join benchmark --------------------------------------------------------------------------------
+ConfigureBench(JOIN_BENCH join/join_benchmark.cu)
+>>>>>>> working on row and column conversions
 
 # ##################################################################################################
 # * iterator benchmark ----------------------------------------------------------------------------
@@ -239,7 +273,6 @@ ConfigureBench(
   string/factory_benchmark.cu
   string/filter_benchmark.cpp
   string/find_benchmark.cpp
-  string/repeat_strings_benchmark.cpp
   string/replace_benchmark.cpp
   string/replace_re_benchmark.cpp
   string/split_benchmark.cpp
@@ -248,6 +281,7 @@ ConfigureBench(
   string/url_decode_benchmark.cpp
 )
 
+<<<<<<< HEAD
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
 ConfigureBench(JSON_BENCH string/json_benchmark.cpp)
@@ -255,3 +289,8 @@ ConfigureBench(JSON_BENCH string/json_benchmark.cpp)
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------
 ConfigureBench(MULTIBYTE_SPLIT_BENCHMARK io/text/multibyte_split_benchmark.cpp)
+=======
+###################################################################################################
+# - row conversion benchmark ----------------------------------------------------------------------------
+ConfigureBench(ROW_CONVERSION_BENCH row_conversion/row_conversion.cpp)
+>>>>>>> working on row and column conversions

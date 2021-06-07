@@ -48,16 +48,4 @@ std::unique_ptr<cudf::table> convert_from_rows(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
-std::unique_ptr<cudf::table> convert_from_rows2(
-  cudf::lists_column_view const &input,
-  std::vector<cudf::data_type> const &schema,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
-
-std::unique_ptr<cudf::table> convert_from_rows2(
-  std::vector<std::unique_ptr<cudf::column>> const &input,
-  std::vector<cudf::data_type> const &schema,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
-
 }  // namespace cudf
