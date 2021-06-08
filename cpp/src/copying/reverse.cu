@@ -55,12 +55,14 @@ std::unique_ptr<column> reverse(column_view const& source_column,
 
 std::unique_ptr<table> reverse(table_view const& source_table, rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::reverse(source_table, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> reverse(column_view const& source_column,
                                 rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::reverse(source_column, rmm::cuda_stream_default, mr);
 }
 }  // namespace cudf
