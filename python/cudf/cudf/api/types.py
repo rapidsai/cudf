@@ -1,6 +1,8 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 """Define common type operations."""
 
+from __future__ import annotations
+
 from collections.abc import Sequence
 from functools import wraps
 from inspect import isclass
