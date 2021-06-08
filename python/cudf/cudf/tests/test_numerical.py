@@ -399,7 +399,9 @@ def test_series_construction_with_nulls(dtype, input_obj):
     assert_eq(expect, got)
 
     # Test numpy array of objects case
-    np_data = [dtype.type(v) if v is not cudf.NA else cudf.NA for v in input_obj]
+    np_data = [
+        dtype.type(v) if v is not cudf.NA else cudf.NA for v in input_obj
+    ]
 
     expect = pd.Series(np_data, dtype=cudf_dtypes_to_pandas_dtypes[dtype])
     got = cudf.Series(np_data, dtype=dtype).to_pandas(nullable=True)
