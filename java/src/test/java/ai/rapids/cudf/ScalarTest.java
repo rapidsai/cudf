@@ -18,23 +18,20 @@
 
 package ai.rapids.cudf;
 
+import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
+import static org.junit.jupiter.api.Assertions.*;
+
 import ai.rapids.cudf.HostColumnVector.BasicType;
 import ai.rapids.cudf.HostColumnVector.DataType;
 import ai.rapids.cudf.HostColumnVector.ListType;
 import ai.rapids.cudf.HostColumnVector.StructData;
 import ai.rapids.cudf.HostColumnVector.StructType;
-
-import org.junit.jupiter.api.Test;
-
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-
-import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 public class ScalarTest extends CudfTestBase {
-
   @Test
   public void testDoubleClose() {
     Scalar s = Scalar.fromNull(DType.INT32);
@@ -86,8 +83,7 @@ public class ScalarTest extends CudfTestBase {
       }
 
       // test list scalar with elementType(`type`)
-      try (Scalar s = Scalar.listFromNull(hDataType);
-           ColumnView listCv = s.getListAsColumnView()) {
+      try (Scalar s = Scalar.listFromNull(hDataType); ColumnView listCv = s.getListAsColumnView()) {
         assertFalse(s.isValid(), "null validity for " + type);
         assertEquals(DType.LIST, s.getType());
         assertEquals(type, listCv.getType());
@@ -186,16 +182,21 @@ public class ScalarTest extends CudfTestBase {
 
   @Test
   public void testDecimal() {
-    BigDecimal[] bigDecimals = new BigDecimal[]{
+    BigDecimal[] bigDecimals = new BigDecimal[] {
         BigDecimal.valueOf(1234, 0),
         BigDecimal.valueOf(12345678, 2),
         BigDecimal.valueOf(1234567890123L, 6),
     };
-    for (BigDecimal dec: bigDecimals) {
+    for (BigDecimal dec : bigDecimals) {
       try (Scalar s = Scalar.fromDecimal(dec)) {
-        assertEquals(DType.fromJavaBigDecimal(dec), s.getType());
+        DType dtype = DType.fromJavaBigDecimal(dec);
+        assertEquals(dtype, s.getType());
         assertTrue(s.isValid());
-        assertEquals(dec.unscaledValue().longValueExact(), s.getLong());
+        if (dtype.getTypeId() == DType.DTypeEnum.DECIMAL64) {
+          assertEquals(dec.unscaledValue().longValueExact(), s.getLong());
+        } else {
+          assertEquals(dec.unscaledValue().intValueExact(), s.getInt());
+        }
         assertEquals(dec, s.getBigDecimal());
       }
       try (Scalar s = Scalar.fromDecimal(-dec.scale(), dec.unscaledValue().intValueExact())) {
@@ -260,7 +261,7 @@ public class ScalarTest extends CudfTestBase {
       assertEquals(DType.STRING, s.getType());
       assertTrue(s.isValid());
       assertEquals("TEST", s.getJavaString());
-      assertArrayEquals(new byte[]{'T', 'E', 'S', 'T'}, s.getUTF8());
+      assertArrayEquals(new byte[] {'T', 'E', 'S', 'T'}, s.getUTF8());
     }
   }
 
@@ -270,13 +271,13 @@ public class ScalarTest extends CudfTestBase {
       assertEquals(DType.STRING, s.getType());
       assertTrue(s.isValid());
       assertEquals("TEST", s.getJavaString());
-      assertArrayEquals(new byte[]{'T', 'E', 'S', 'T'}, s.getUTF8());
+      assertArrayEquals(new byte[] {'T', 'E', 'S', 'T'}, s.getUTF8());
     }
     try (Scalar s = Scalar.fromUTF8String("".getBytes(StandardCharsets.UTF_8))) {
       assertEquals(DType.STRING, s.getType());
       assertTrue(s.isValid());
       assertEquals("", s.getJavaString());
-      assertArrayEquals(new byte[]{}, s.getUTF8());
+      assertArrayEquals(new byte[] {}, s.getUTF8());
     }
   }
 
@@ -293,11 +294,10 @@ public class ScalarTest extends CudfTestBase {
     }
 
     // list of list
-    HostColumnVector.DataType listDT = new HostColumnVector.ListType(true,
-            new HostColumnVector.BasicType(true, DType.INT32));
-    try (ColumnVector listList = ColumnVector.fromLists(listDT,
-            Arrays.asList(1, 2, 3),
-            Arrays.asList(4, 5, 6));
+    HostColumnVector.DataType listDT =
+        new HostColumnVector.ListType(true, new HostColumnVector.BasicType(true, DType.INT32));
+    try (ColumnVector listList =
+             ColumnVector.fromLists(listDT, Arrays.asList(1, 2, 3), Arrays.asList(4, 5, 6));
          Scalar s = Scalar.listFromColumnView(listList)) {
       assertEquals(DType.LIST, s.getType());
       assertTrue(s.isValid());
@@ -377,22 +377,20 @@ public class ScalarTest extends CudfTestBase {
     }
 
     // test Struct Scalar with nested types
-    HostColumnVector.DataType listType = new HostColumnVector.ListType(true,
-        new HostColumnVector.BasicType(true, DType.INT32));
-    HostColumnVector.DataType structType = new HostColumnVector.StructType(true,
-        new HostColumnVector.BasicType(true, DType.INT32),
-        new HostColumnVector.BasicType(true, DType.INT64));
-    HostColumnVector.DataType nestedStructType = new HostColumnVector.StructType(true,
-        new HostColumnVector.BasicType(true, DType.STRING),
-        listType, structType);
+    HostColumnVector.DataType listType =
+        new HostColumnVector.ListType(true, new HostColumnVector.BasicType(true, DType.INT32));
+    HostColumnVector.DataType structType =
+        new HostColumnVector.StructType(true, new HostColumnVector.BasicType(true, DType.INT32),
+            new HostColumnVector.BasicType(true, DType.INT64));
+    HostColumnVector.DataType nestedStructType = new HostColumnVector.StructType(
+        true, new HostColumnVector.BasicType(true, DType.STRING), listType, structType);
     try (ColumnVector strCol = ColumnVector.fromStrings("AAAAAA");
          ColumnVector listCol = ColumnVector.fromLists(listType, Arrays.asList(1, 2, 3, 4, 5));
-         ColumnVector structCol = ColumnVector.fromStructs(structType,
-             new HostColumnVector.StructData(1, -1L));
+         ColumnVector structCol =
+             ColumnVector.fromStructs(structType, new HostColumnVector.StructData(1, -1L));
          ColumnVector nestedStructCol = ColumnVector.fromStructs(nestedStructType,
-             new HostColumnVector.StructData(null,
-                 Arrays.asList(1, 2, null),
-                 new HostColumnVector.StructData(null, 10L)));
+             new HostColumnVector.StructData(
+                 null, Arrays.asList(1, 2, null), new HostColumnVector.StructData(null, 10L)));
          Scalar s = Scalar.structFromColumnViews(strCol, listCol, structCol, nestedStructCol)) {
       assertEquals(DType.STRUCT, s.getType());
       assertTrue(s.isValid());
