@@ -658,7 +658,7 @@ class merge_lists_aggregation final : public aggregation {
 class merge_sets_aggregation final : public aggregation {
  public:
   explicit merge_sets_aggregation(null_equality nulls_equal, nan_equality nans_equal)
-    : aggregation{MERGE_SETS}
+    : aggregation{MERGE_SETS}, _nulls_equal(nulls_equal), _nans_equal(nans_equal)
   {
   }
 
