@@ -1901,3 +1901,25 @@ def test_groupby_shift_row_zero_shift(nelem, fill_value):
     assert_groupby_results_equal(
         expected[["1", "2", "3", "4"]], got[["1", "2", "3", "4"]]
     )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"Speed": [380.0, 370.0, 24.0, 26.0], "Score": [50, 30, 90, 80]},
+        {
+            "Speed": [380.0, 370.0, 24.0, 26.0],
+            "Score": [50, 30, 90, 80],
+            "Other": [10, 20, 30, 40],
+        },
+    ],
+)
+@pytest.mark.parametrize("group", ["Score", "Speed"])
+def test_groupby_describe(data, group):
+    pdf = pd.DataFrame(data)
+    gdf = cudf.from_pandas(pdf)
+
+    got = gdf.groupby(group).describe()
+    expect = pdf.groupby(group).describe()
+
+    assert_groupby_results_equal(expect, got, check_dtype=False)

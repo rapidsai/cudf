@@ -43,7 +43,7 @@ namespace {
  * @brief This functor handles extracting matched strings by applying the compiled regex pattern
  * and creating string_index_pairs for all the substrings.
  */
-template <size_t stack_size>
+template <int stack_size>
 struct findall_fn {
   column_device_view const d_strings;
   reprog_device prog;
@@ -64,17 +64,14 @@ struct findall_fn {
     string_index_pair result{nullptr, 0};
     if (d_strings.is_null(idx) || (d_counts && (column_index >= d_counts[idx])))
       return findall_result{0, result};
-    u_char data1[stack_size];
-    u_char data2[stack_size];
-    prog.set_stack_mem(data1, data2);
     string_view d_str      = d_strings.element<string_view>(idx);
     auto const nchars      = d_str.length();
     int32_t spos           = 0;
     int32_t epos           = static_cast<int32_t>(nchars);
     size_type column_count = 0;
     while (spos <= nchars) {
-      if (prog.find(idx, d_str, spos, epos) <= 0) break;  // no more matches found
-      if (column_count == column_index) break;            // found our column
+      if (prog.find<stack_size>(idx, d_str, spos, epos) <= 0) break;  // no more matches found
+      if (column_count == column_index) break;                        // found our column
       spos = epos > spos ? epos : spos + 1;
       epos = static_cast<int32_t>(nchars);
       ++column_count;
@@ -129,7 +126,7 @@ std::unique_ptr<table> findall_re(
   rmm::device_uvector<size_type> find_counts(strings_count, stream);
   auto d_find_counts = find_counts.data();
 
-  if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
+  if (regex_insts <= RX_SMALL_INSTS)
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_count),
@@ -141,12 +138,18 @@ std::unique_ptr<table> findall_re(
                       thrust::make_counting_iterator<size_type>(strings_count),
                       d_find_counts,
                       findall_count_fn<RX_STACK_MEDIUM>{*d_strings, *d_prog});
-  else
+  else if (regex_insts <= RX_LARGE_INSTS)
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_count),
                       d_find_counts,
                       findall_count_fn<RX_STACK_LARGE>{*d_strings, *d_prog});
+  else
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(strings_count),
+                      d_find_counts,
+                      findall_count_fn<RX_STACK_ANY>{*d_strings, *d_prog});
 
   std::vector<std::unique_ptr<column>> results;
 
@@ -167,7 +170,7 @@ std::unique_ptr<table> findall_re(
   for (int32_t column_index = 0; column_index < columns; ++column_index) {
     rmm::device_uvector<string_index_pair> indices(strings_count, stream);
 
-    if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
+    if (regex_insts <= RX_SMALL_INSTS)
       thrust::transform(
         rmm::exec_policy(stream),
         thrust::make_counting_iterator<size_type>(0),
@@ -181,13 +184,20 @@ std::unique_ptr<table> findall_re(
         thrust::make_counting_iterator<size_type>(strings_count),
         indices.begin(),
         findall_fn<RX_STACK_MEDIUM>{*d_strings, *d_prog, column_index, d_find_counts});
-    else
+    else if (regex_insts <= RX_LARGE_INSTS)
       thrust::transform(
         rmm::exec_policy(stream),
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(strings_count),
         indices.begin(),
         findall_fn<RX_STACK_LARGE>{*d_strings, *d_prog, column_index, d_find_counts});
+    else
+      thrust::transform(rmm::exec_policy(stream),
+                        thrust::make_counting_iterator<size_type>(0),
+                        thrust::make_counting_iterator<size_type>(strings_count),
+                        indices.begin(),
+                        findall_fn<RX_STACK_ANY>{*d_strings, *d_prog, column_index, d_find_counts});
+
     //
     results.emplace_back(make_strings_column(indices.begin(), indices.end(), stream, mr));
   }
