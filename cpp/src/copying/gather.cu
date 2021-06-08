@@ -63,33 +63,55 @@ struct bounds_checker {
   __device__ bool operator()(map_type const index) { return ((index >= begin) && (index < end)); }
 };
 
-// template <gather_bitmask_op Op, typename MapIterator>
-// struct gather_bitmask_functor {
-//  table_device_view input;
-//  bitmask_type** masks;
-//  MapIterator gather_map;
+template <gather_bitmask_op Op, typename MapIterator>
+struct gather_bitmask_functor {
+  table_device_view input;
+  bitmask_type** masks;
+  MapIterator gather_map;
 
-//  __device__ bool operator()(size_type mask_idx, size_type bit_idx)
-//  {
-//    auto row_idx = gather_map[bit_idx];
-//    auto col     = input.column(mask_idx);
+  __device__ bool operator()(size_type mask_idx, size_type bit_idx)
+  {
+    auto row_idx = gather_map[bit_idx];
+    auto col     = input.column(mask_idx);
 
-//    if (Op != gather_bitmask_op::DONT_CHECK) {
-//      bool out_of_range = is_signed_iterator<MapIterator>() ? (row_idx < 0 || row_idx >=
-//      col.size())
-//                                                            : row_idx >= col.size();
-//      if (out_of_range) {
-//        if (Op == gather_bitmask_op::PASSTHROUGH) {
-//          return bit_is_set(masks[mask_idx], bit_idx);
-//        } else if (Op == gather_bitmask_op::NULLIFY) {
-//          return false;
-//        }
-//      }
-//    }
+    if (Op != gather_bitmask_op::DONT_CHECK) {
+      bool out_of_range = is_signed_iterator<MapIterator>() ? (row_idx < 0 || row_idx >= col.size())
+                                                            : row_idx >= col.size();
+      if (out_of_range) {
+        if (Op == gather_bitmask_op::PASSTHROUGH) {
+          return bit_is_set(masks[mask_idx], bit_idx);
+        } else if (Op == gather_bitmask_op::NULLIFY) {
+          return false;
+        }
+      }
+    }
 
-//    return col.is_valid(row_idx);
-//  }
-//};
+    return col.is_valid(row_idx);
+  }
+};
+
+template <gather_bitmask_op Op, typename GatherMap>
+void gather_bitmask(table_device_view input,
+                    GatherMap gather_map_begin,
+                    bitmask_type** masks,
+                    size_type mask_count,
+                    size_type mask_size,
+                    size_type* valid_counts,
+                    rmm::cuda_stream_view stream)
+{
+  if (mask_size == 0) { return; }
+
+  constexpr size_type block_size = 256;
+  using Selector                 = gather_bitmask_functor<Op, decltype(gather_map_begin)>;
+  auto selector                  = Selector{input, masks, gather_map_begin};
+  auto counting_it               = thrust::make_counting_iterator(0);
+  auto kernel =
+    valid_if_n_kernel<decltype(counting_it), decltype(counting_it), Selector, block_size>;
+
+  cudf::detail::grid_1d grid{mask_size, block_size, 1};
+  kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
+    counting_it, counting_it, selector, masks, mask_count, mask_size, valid_counts);
+}
 
 // template <gather_bitmask_op Op, typename GatherMap>
 // void gather_bitmask(table_device_view input,
@@ -113,6 +135,74 @@ struct bounds_checker {
 //  kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
 //    counting_it, counting_it, selector, masks, mask_count, mask_size, valid_counts);
 //}
+
+template <typename MapIterator>
+void gather_bitmask(table_view const& source,
+                    MapIterator gather_map,
+                    std::vector<std::unique_ptr<column>>& target,
+                    gather_bitmask_op op,
+                    rmm::cuda_stream_view stream,
+                    rmm::mr::device_memory_resource* mr)
+{
+  if (target.empty()) { return; }
+
+  // Validate that all target columns have the same size
+  auto const target_rows = target.front()->size();
+  CUDF_EXPECTS(std::all_of(target.begin(),
+                           target.end(),
+                           [target_rows](auto const& col) { return target_rows == col->size(); }),
+               "Column size mismatch");
+
+  // Create null mask if source is nullable but target is not
+  for (size_t i = 0; i < target.size(); ++i) {
+    if ((source.column(i).nullable() or op == gather_bitmask_op::NULLIFY) and
+        not target[i]->nullable()) {
+      auto const state =
+        op == gather_bitmask_op::PASSTHROUGH ? mask_state::ALL_VALID : mask_state::UNINITIALIZED;
+      auto mask = detail::create_null_mask(target[i]->size(), state, stream, mr);
+      target[i]->set_null_mask(std::move(mask), 0);
+    }
+  }
+
+  // Make device array of target bitmask pointers
+  std::vector<bitmask_type*> target_masks(target.size());
+  std::transform(target.begin(), target.end(), target_masks.begin(), [](auto const& col) {
+    return col->mutable_view().null_mask();
+  });
+  auto d_target_masks = make_device_uvector_async(target_masks, stream);
+
+  auto const device_source = table_device_view::create(source, stream);
+  auto d_valid_counts      = make_zeroed_device_uvector_async<size_type>(target.size(), stream);
+
+  // Dispatch operation enum to get implementation
+  auto const impl = [op]() {
+    switch (op) {
+      case gather_bitmask_op::DONT_CHECK:
+        return gather_bitmask<gather_bitmask_op::DONT_CHECK, MapIterator>;
+      case gather_bitmask_op::PASSTHROUGH:
+        return gather_bitmask<gather_bitmask_op::PASSTHROUGH, MapIterator>;
+      case gather_bitmask_op::NULLIFY:
+        return gather_bitmask<gather_bitmask_op::NULLIFY, MapIterator>;
+      default: CUDF_FAIL("Invalid gather_bitmask_op");
+    }
+  }();
+  impl(*device_source,
+       gather_map,
+       d_target_masks.data(),
+       target.size(),
+       target_rows,
+       d_valid_counts.data(),
+       stream);
+
+  // Copy the valid counts into each column
+  auto const valid_counts = make_std_vector_sync(d_valid_counts, stream);
+  for (size_t i = 0; i < target.size(); ++i) {
+    if (target[i]->nullable()) {
+      auto const null_count = target_rows - valid_counts[i];
+      target[i]->set_null_count(null_count);
+    }
+  }
+}
 
 /**
  * @brief Function for calling gather using iterators.
@@ -186,8 +276,8 @@ struct column_gatherer {
    */
   template <typename Element, typename MapIterator>
   std::unique_ptr<column> operator()(column_view const& source_column,
-                                     MapIterator& gather_map_begin,
-                                     MapIterator& gather_map_end,
+                                     MapIterator gather_map_begin,
+                                     MapIterator gather_map_end,
                                      bool nullify_out_of_bounds,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
@@ -517,97 +607,6 @@ struct column_gatherer_impl<struct_view> {
   }
 };
 
-// template <gather_bitmask_op Op, typename GatherMap>
-// void gather_bitmask(table_device_view input,
-//                    GatherMap gather_map_begin,
-//                    bitmask_type** masks,
-//                    size_type mask_count,
-//                    size_type mask_size,
-//                    size_type* valid_counts,
-//                    rmm::cuda_stream_view stream)
-//{
-//  if (mask_size == 0) { return; }
-
-//  constexpr size_type block_size = 256;
-//  using Selector                 = gather_bitmask_functor<Op, decltype(gather_map_begin)>;
-//  auto selector                  = Selector{input, masks, gather_map_begin};
-//  auto counting_it               = thrust::make_counting_iterator(0);
-//  auto kernel =
-//    valid_if_n_kernel<decltype(counting_it), decltype(counting_it), Selector, block_size>;
-
-//  cudf::detail::grid_1d grid{mask_size, block_size, 1};
-//  kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
-//    counting_it, counting_it, selector, masks, mask_count, mask_size, valid_counts);
-//}
-
-template <typename MapIterator>
-void gather_bitmask(table_view const& source,
-                    MapIterator& gather_map,
-                    std::vector<std::unique_ptr<column>>& target,
-                    gather_bitmask_op op,
-                    rmm::cuda_stream_view stream,
-                    rmm::mr::device_memory_resource* mr)
-{
-  if (target.empty()) { return; }
-
-  // Validate that all target columns have the same size
-  auto const target_rows = target.front()->size();
-  CUDF_EXPECTS(std::all_of(target.begin(),
-                           target.end(),
-                           [target_rows](auto const& col) { return target_rows == col->size(); }),
-               "Column size mismatch");
-
-  // Create null mask if source is nullable but target is not
-  for (size_t i = 0; i < target.size(); ++i) {
-    if ((source.column(i).nullable() or op == gather_bitmask_op::NULLIFY) and
-        not target[i]->nullable()) {
-      auto const state =
-        op == gather_bitmask_op::PASSTHROUGH ? mask_state::ALL_VALID : mask_state::UNINITIALIZED;
-      auto mask = detail::create_null_mask(target[i]->size(), state, stream, mr);
-      target[i]->set_null_mask(std::move(mask), 0);
-    }
-  }
-
-  // Make device array of target bitmask pointers
-  std::vector<bitmask_type*> target_masks(target.size());
-  std::transform(target.begin(), target.end(), target_masks.begin(), [](auto const& col) {
-    return col->mutable_view().null_mask();
-  });
-  auto d_target_masks = make_device_uvector_async(target_masks, stream);
-
-  auto const device_source = table_device_view::create(source, stream);
-  auto d_valid_counts      = make_zeroed_device_uvector_async<size_type>(target.size(), stream);
-
-  // Dispatch operation enum to get implementation
-  auto const impl = [op]() {
-    switch (op) {
-      case gather_bitmask_op::DONT_CHECK:
-        return gather_bitmask<gather_bitmask_op::DONT_CHECK, MapIterator>;
-      case gather_bitmask_op::PASSTHROUGH:
-        return gather_bitmask<gather_bitmask_op::PASSTHROUGH, MapIterator>;
-      case gather_bitmask_op::NULLIFY:
-        return gather_bitmask<gather_bitmask_op::NULLIFY, MapIterator>;
-      default: CUDF_FAIL("Invalid gather_bitmask_op");
-    }
-  }();
-  impl(*device_source,
-       gather_map,
-       d_target_masks.data(),
-       target.size(),
-       target_rows,
-       d_valid_counts.data(),
-       stream);
-
-  // Copy the valid counts into each column
-  auto const valid_counts = make_std_vector_sync(d_valid_counts, stream);
-  for (size_t i = 0; i < target.size(); ++i) {
-    if (target[i]->nullable()) {
-      auto const null_count = target_rows - valid_counts[i];
-      target[i]->set_null_count(null_count);
-    }
-  }
-}
-
 /**
  * @brief Gathers the specified rows of a set of columns according to a gather map.
  *
@@ -636,13 +635,13 @@ void gather_bitmask(table_view const& source,
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  * @return cudf::table Result of the gather
  */
-// template <typename MapIterator>
-std::unique_ptr<table> gather_iterator(table_view const& source_table,
-                                       iterator_adaper_base& gather_map_begin,
-                                       iterator_adaper_base& gather_map_end,
-                                       out_of_bounds_policy bounds_policy,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+template <typename MapIterator>
+std::unique_ptr<table> gather(table_view const& source_table,
+                              MapIterator gather_map_begin,
+                              MapIterator gather_map_end,
+                              out_of_bounds_policy bounds_policy,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
 {
   std::vector<std::unique_ptr<column>> destination_columns;
 
@@ -691,18 +690,18 @@ std::unique_ptr<table> gather_iterator(table_view const& source_table,
                                std::vector<std::unique_ptr<column>>&, \
                                gather_bitmask_op,                     \
                                rmm::cuda_stream_view,                 \
-                               rmm::mr::device_memory_resource*);
-/*
+                               rmm::mr::device_memory_resource*);     \
   template std::unique_ptr<table> gather(table_view const&,           \
                                          MapIterator,                 \
                                          MapIterator,                 \
                                          out_of_bounds_policy,        \
                                          rmm::cuda_stream_view,       \
                                          rmm::mr::device_memory_resource*);
-*/
+
 INSTANTIATE(int8_t*)
 INSTANTIATE(int16_t*)
 INSTANTIATE(int32_t*)
+INSTANTIATE(int32_t const*)
 INSTANTIATE(int64_t*)
 
 INSTANTIATE(uint8_t*)

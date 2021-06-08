@@ -69,7 +69,7 @@ enum class gather_bitmask_op {
 
 template <typename MapIterator>
 void gather_bitmask(table_view const& source,
-                    MapIterator& gather_map,
+                    MapIterator gather_map,
                     std::vector<std::unique_ptr<column>>& target,
                     gather_bitmask_op op,
                     rmm::cuda_stream_view stream,
@@ -104,56 +104,6 @@ void gather_bitmask(table_view const& source,
  * @return cudf::table Result of the gather
  */
 
-class iterator_adaper_base {
- public:
-  iterator_adaper_base()                                     = default;
-  virtual ~iterator_adaper_base()                            = default;
-  virtual bool operator!=(iterator_adaper_base const&) const = 0;
-  virtual bool operator==(iterator_adaper_base const&) const = 0;
-  virtual int32_t operator*()                                = 0;
-  virtual iterator_adaper_base& operator++()                 = 0;
-};
-
-template <class T>
-class iterator_adaper : public iterator_adaper_base {
- public:
-  iterator_adaper(T const& iter) : _iter(iter) {}
-  iterator_adaper(iterator_adaper const& other) : _iter(other._iter) {}
-  iterator_adaper& operator=(iterator_adaper const& other)
-  {
-    _iter = other._iter;
-    return *this;
-  }
-
-  bool operator!=(iterator_adaper_base const& other) const override
-  {
-    auto const& other_t = static_cast<iterator_adaper const&>(other);
-    return _iter != other_t._iter;
-  }
-  bool operator==(iterator_adaper_base const& other) const override
-  {
-    auto const& other_t = static_cast<iterator_adaper const&>(other);
-    return _iter == other_t._iter;
-  }
-  int32_t operator*() override { return static_cast<int>(*_iter); }
-  iterator_adaper_base& operator++() override
-  {
-    ++_iter;
-    return static_cast<iterator_adaper_base&>(*this);
-  }
-
- private:
-  T _iter;
-};
-
-std::unique_ptr<table> gather_iterator(
-  table_view const& source_table,
-  iterator_adaper_base& gather_map_begin,
-  iterator_adaper_base& gather_map_end,
-  out_of_bounds_policy bounds_policy  = out_of_bounds_policy::DONT_CHECK,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
 template <typename MapIterator>
 std::unique_ptr<table> gather(
   table_view const& source_table,
@@ -161,67 +111,7 @@ std::unique_ptr<table> gather(
   MapIterator gather_map_end,
   out_of_bounds_policy bounds_policy  = out_of_bounds_policy::DONT_CHECK,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-{
-  iterator_adaper<MapIterator> iter_begin(gather_map_begin);
-  iterator_adaper<MapIterator> iter_end(gather_map_begin);
-  gather_iterator(source_table,
-                  static_cast<iterator_adaper_base&>(iter_begin),
-                  static_cast<iterator_adaper_base&>(iter_end),
-                  bounds_policy,
-                  stream,
-                  mr);
-}
-
-template <gather_bitmask_op Op, typename MapIterator>
-struct gather_bitmask_functor {
-  table_device_view input;
-  bitmask_type** masks;
-  MapIterator gather_map;
-
-  __device__ bool operator()(size_type mask_idx, size_type bit_idx)
-  {
-    auto row_idx = gather_map[bit_idx];
-    auto col     = input.column(mask_idx);
-
-    if (Op != gather_bitmask_op::DONT_CHECK) {
-      bool out_of_range = is_signed_iterator<MapIterator>() ? (row_idx < 0 || row_idx >= col.size())
-                                                            : row_idx >= col.size();
-      if (out_of_range) {
-        if (Op == gather_bitmask_op::PASSTHROUGH) {
-          return bit_is_set(masks[mask_idx], bit_idx);
-        } else if (Op == gather_bitmask_op::NULLIFY) {
-          return false;
-        }
-      }
-    }
-
-    return col.is_valid(row_idx);
-  }
-};
-
-template <gather_bitmask_op Op>
-void gather_bitmask(table_device_view input,
-                    iterator_adaper_base& gather_map_begin,
-                    bitmask_type** masks,
-                    size_type mask_count,
-                    size_type mask_size,
-                    size_type* valid_counts,
-                    rmm::cuda_stream_view stream)
-{
-  if (mask_size == 0) { return; }
-
-  constexpr size_type block_size = 256;
-  using Selector                 = gather_bitmask_functor<Op, decltype(gather_map_begin)>;
-  auto selector                  = Selector{input, masks, gather_map_begin};
-  auto counting_it               = thrust::make_counting_iterator(0);
-  auto kernel =
-    valid_if_n_kernel<decltype(counting_it), decltype(counting_it), Selector, block_size>;
-
-  cudf::detail::grid_1d grid{mask_size, block_size, 1};
-  kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
-    counting_it, counting_it, selector, masks, mask_count, mask_size, valid_counts);
-}
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace cudf
