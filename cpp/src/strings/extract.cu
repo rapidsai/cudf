@@ -21,7 +21,9 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/null_mask.hpp>
+#include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -32,7 +34,6 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-using string_index_pair = thrust::pair<const char*, size_type>;
 
 namespace {
 /**
@@ -42,7 +43,8 @@ namespace {
  * @tparam stack_size Correlates to the regex instructions state to maintain for each string.
  *         Each instruction requires a fixed amount of overhead data.
  */
-template <size_t stack_size>
+#if 0
+template <int stack_size>
 struct extract_fn {
   reprog_device prog;
   column_device_view d_strings;
@@ -50,20 +52,48 @@ struct extract_fn {
 
   __device__ string_index_pair operator()(size_type idx)
   {
-    u_char data1[stack_size], data2[stack_size];
-    prog.set_stack_mem(data1, data2);
+    // u_char data1[stack_size], data2[stack_size];
+    // prog.set_stack_mem(data1, data2);
     if (d_strings.is_null(idx)) return string_index_pair{nullptr, 0};
     string_view d_str = d_strings.element<string_view>(idx);
     string_index_pair result{nullptr, 0};
     int32_t begin = 0;
     int32_t end   = -1;  // handles empty strings automatically
-    if ((prog.find(idx, d_str, begin, end) > 0) &&
-        (prog.extract(idx, d_str, begin, end, column_index) > 0)) {
+    if ((prog.find<stack_size>(idx, d_str, begin, end) > 0) &&
+        (prog.extract<stack_size>(idx, d_str, begin, end, column_index) > 0)) {
       auto offset = d_str.byte_offset(begin);
       // build index-pair
       result = string_index_pair{d_str.data() + offset, d_str.byte_offset(end) - offset};
     }
     return result;
+  }
+};
+#endif
+
+template <int stack_size>
+struct extract_fn {
+  reprog_device prog;
+  column_device_view d_strings;
+  string_index_pair* d_results;
+
+  __device__ void operator()(size_type idx)
+  {
+    auto groups   = prog.group_counts();
+    auto d_output = d_results + (idx * groups);
+    if (d_strings.is_valid(idx)) {
+      string_view d_str = d_strings.element<string_view>(idx);
+      int32_t begin     = 0;
+      int32_t end       = -1;  // handles empty strings automatically
+      if (prog.find<stack_size>(idx, d_str, begin, end) > 0) {
+        // printf("%d: (%d,%d)\n", idx, begin, end);
+        if (prog.extract<stack_size>(idx, d_str, begin, end, d_output)) {
+          // printf("%d: [%p,%d]\n", idx, d_output[0].first, d_output[0].second);
+          return;
+        }
+      }
+    }
+    // fill output with null entries
+    for (int i = 0; i < groups; ++i) { d_output[i] = string_index_pair{nullptr, 0}; }
   }
 };
 
@@ -91,10 +121,12 @@ std::unique_ptr<table> extract(
   std::vector<std::unique_ptr<column>> results;
   auto regex_insts = d_prog.insts_counts();
 
+#if 0
   for (int32_t column_index = 0; column_index < groups; ++column_index) {
     rmm::device_uvector<string_index_pair> indices(strings_count, stream);
 
-    if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
+    // if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
+    if (regex_insts <= RX_SMALL_INSTS)
       thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(strings_count),
@@ -106,15 +138,56 @@ std::unique_ptr<table> extract(
                         thrust::make_counting_iterator<size_type>(strings_count),
                         indices.begin(),
                         extract_fn<RX_STACK_MEDIUM>{d_prog, d_strings, column_index});
-    else
+    else if (regex_insts <= RX_LARGE_INSTS)
       thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(strings_count),
                         indices.begin(),
                         extract_fn<RX_STACK_LARGE>{d_prog, d_strings, column_index});
+    else  // supports any number of instructions
+      thrust::transform(rmm::exec_policy(stream),
+                        thrust::make_counting_iterator<size_type>(0),
+                        thrust::make_counting_iterator<size_type>(strings_count),
+                        indices.begin(),
+                        extract_fn<RX_STACK_ANY>{d_prog, d_strings, column_index});
 
     results.emplace_back(make_strings_column(indices, stream, mr));
   }
+#endif
+
+  rmm::device_uvector<string_index_pair> indices(strings_count * groups, stream);
+
+  if (regex_insts <= RX_SMALL_INSTS)
+    thrust::for_each(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     thrust::make_counting_iterator<size_type>(strings_count),
+                     extract_fn<RX_STACK_SMALL>{d_prog, d_strings, indices.data()});
+  else if (regex_insts <= RX_MEDIUM_INSTS)
+    thrust::for_each(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     thrust::make_counting_iterator<size_type>(strings_count),
+                     extract_fn<RX_STACK_MEDIUM>{d_prog, d_strings, indices.data()});
+  else if (regex_insts <= RX_LARGE_INSTS)
+    thrust::for_each(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     thrust::make_counting_iterator<size_type>(strings_count),
+                     extract_fn<RX_STACK_LARGE>{d_prog, d_strings, indices.data()});
+  else  // supports any number of instructions
+    thrust::for_each(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     thrust::make_counting_iterator<size_type>(strings_count),
+                     extract_fn<RX_STACK_ANY>{d_prog, d_strings, indices.data()});
+
+  for (int32_t column_index = 0; column_index < groups; ++column_index) {
+    auto indices_itr = thrust::make_permutation_iterator(
+      indices.begin(),
+      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
+                                      [column_index, groups] __device__(size_type idx) {
+                                        return (idx * groups) + column_index;
+                                      }));
+    results.emplace_back(make_strings_column(indices_itr, indices_itr + strings_count, stream, mr));
+  }
+
   return std::make_unique<table>(std::move(results));
 }
 

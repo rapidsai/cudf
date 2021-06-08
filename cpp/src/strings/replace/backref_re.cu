@@ -112,21 +112,41 @@ std::unique_ptr<column> replace_with_backrefs(
 
   // create child columns
   children_pair children = [&] {
-    // Each invocation is predicated on the stack size
-    // which is dependent on the number of regex instructions
-    if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS)) {
+    rmm::device_uvector<string_index_pair> indices(strings.size() * d_prog->group_counts(), stream);
+
+    if (regex_insts <= RX_SMALL_INSTS) {
       return make_strings_children(
         backrefs_fn<BackRefIterator, RX_STACK_SMALL>{
-          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
+          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end(), indices.data()},
         strings.size(),
         stream,
         mr);
-    } else if (regex_insts <= RX_MEDIUM_INSTS)
-      return replace_with_backrefs_medium(
-        *d_strings, *d_prog, d_repl_template, backrefs, stream, mr);
-    else
-      return replace_with_backrefs_large(
-        *d_strings, *d_prog, d_repl_template, backrefs, stream, mr);
+    } else if (regex_insts <= RX_MEDIUM_INSTS) {
+      // return replace_with_backrefs_medium(
+      //  *d_strings, *d_prog, d_repl_template, backrefs, stream, mr);
+      return make_strings_children(
+        backrefs_fn<BackRefIterator, RX_STACK_MEDIUM>{
+          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end(), indices.data()},
+        strings.size(),
+        stream,
+        mr);
+    } else if (regex_insts <= RX_LARGE_INSTS) {
+      // return replace_with_backrefs_large(
+      //  *d_strings, *d_prog, d_repl_template, backrefs, stream, mr);
+      return make_strings_children(
+        backrefs_fn<BackRefIterator, RX_STACK_LARGE>{
+          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end(), indices.data()},
+        strings.size(),
+        stream,
+        mr);
+    } else {
+      return make_strings_children(
+        backrefs_fn<BackRefIterator, RX_STACK_ANY>{
+          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end(), indices.data()},
+        strings.size(),
+        stream,
+        mr);
+    }
   }();
 
   return make_strings_column(strings.size(),

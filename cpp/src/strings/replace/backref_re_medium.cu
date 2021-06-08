@@ -31,10 +31,12 @@ children_pair replace_with_backrefs_medium(column_device_view const& d_strings,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
+  rmm::device_uvector<string_index_pair> indices(d_strings.size() * d_prog.group_counts(), stream);
+
   using Iterator = decltype(backrefs.begin());
   return make_strings_children(
     backrefs_fn<Iterator, RX_STACK_MEDIUM>{
-      d_strings, d_prog, d_repl_template, backrefs.begin(), backrefs.end()},
+      d_strings, d_prog, d_repl_template, backrefs.begin(), backrefs.end(), indices.data()},
     d_strings.size(),
     stream,
     mr);
