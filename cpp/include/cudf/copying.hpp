@@ -86,8 +86,8 @@ std::unique_ptr<table> gather(
  * Creates a new table that is the reverse of @p source_table.
  * Example:
  * ```
- * source = [4,5,6]
- * return = [6,5,4]
+ * source = [[4,5,6], [7,8,9], [10,11,12]]
+ * return = [[6,5,4], [9,8,7], [12,11,10]]
  * ```
  *
  * @param source_table Table that will be reversed
@@ -97,7 +97,7 @@ std::unique_ptr<table> reverse(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Reverses a single column
+ * @brief Reverses the elements of a column
  * Creates a new column that is the reverse of @p source_column.
  * Example:
  * ```

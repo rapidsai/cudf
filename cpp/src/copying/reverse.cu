@@ -18,7 +18,6 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/reverse.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
@@ -51,11 +50,7 @@ std::unique_ptr<column> reverse(column_view const& source_column,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
-  table_view single_column                     = table_view({source_column});
-  auto reversed_column                         = std::move(cudf::reverse(single_column));
-  std::vector<std::unique_ptr<column>> columns = reversed_column->release();
-
-  return std::move(columns.at(0));
+  return std::move(cudf::reverse(table_view({source_column}))->release().front());
 }
 }  // namespace detail
 
