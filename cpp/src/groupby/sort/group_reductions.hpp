@@ -351,7 +351,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
  * group_offsets = [0,        3,        5,       7, 8]
  * num_groups    = 4
  *
- * group_collect = [[2, 1, 4], [-1, -2], [<NA>, 4], [<NA>]]
+ * group_collect(...) = [[2, 1, 4], [-1, -2], [<NA>, 4], [<NA>]]
  * @endcode
  *
  * @param values Grouped values to collect.
@@ -377,7 +377,7 @@ std::unique_ptr<column> group_collect(column_view const& values,
  * group_offsets = [0,                        3,                  5]
  * num_groups    = 2
  *
- * group_merged_lists = [[2, 1, 4, -1, -2], [<NA>, 4, <NA>]]
+ * group_merge_lists(...) = [[2, 1, 4, -1, -2], [<NA>, 4, <NA>]]
  * @endcode
  *
  * @param values Grouped values (lists column) to collect.
