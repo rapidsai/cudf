@@ -241,18 +241,14 @@ __global__ void __launch_bounds__(block_size, 1)
         auto loc = atomicAdd(&counter, 1);
         cudf_assert(loc < MAX_DICT_SIZE && "Number of filled slots exceeds max dict size");
         chunk.dict_data[loc] = key;
+        // If sorting dict page ever becomes a hard requirement, enable the following statement and
+        // add a dict sorting step before storing into the slot's second field.
         // chunk.dict_data_idx[loc] = t + i;
-        // TODO: I guess we don't need the temporary dict_data_idx. Go remove it from everywhere.
-        // Unless the dictionary being sorted is a requirement. Then we still need it because there
-        // would be a sorting step in between the two statements above and below this comment.
         slot->second.store(loc);
         // TODO: ^ This doesn't need to be atomic. Try casting to value_type ptr and just writing.
       }
     }
   }
-  __syncthreads();
-  // TODO: explore if we can reuse chunk.num_dict_entries
-  if (t == 0) { chunk.dict_data_size = counter; }
 }
 
 template <int block_size>

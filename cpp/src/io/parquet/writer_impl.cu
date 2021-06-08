@@ -842,31 +842,18 @@ auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
 
   // Collect populated entries from hash map
   std::vector<rmm::device_uvector<size_type>> dict_data;
-  std::vector<rmm::device_uvector<size_type>> dict_data_idx;
-  for (auto &chunk : chunks.host_view().flat_view()) {
-    // TODO: Currently allocating for every chunk. Should skip allocating for non-dict types
-    auto &inserted_dict_data     = dict_data.emplace_back(MAX_DICT_SIZE, stream);
-    auto &inserted_dict_data_idx = dict_data_idx.emplace_back(MAX_DICT_SIZE, stream);
-    chunk.dict_data              = inserted_dict_data.data();
-    chunk.dict_data_size         = inserted_dict_data.size();
-    chunk.dict_data_idx          = inserted_dict_data_idx.data();
-  }
-  chunks.host_to_device(stream);
-  gpu::CollectMapEntries(chunks.device_view().flat_view(), stream);
-  chunks.device_to_host(stream);
-  stream.synchronize();
-  // if (chunks.host_view().flat_view()[0].use_dictionary) print(dict_data[0], "dict_data");
-
-  // Time to make the dict index.
   std::vector<rmm::device_uvector<uint16_t>> dict_index;
   for (auto &chunk : chunks.host_view().flat_view()) {
+    // TODO: Currently allocating for every chunk. Should skip allocating for non-dict types
+    auto &inserted_dict_data  = dict_data.emplace_back(MAX_DICT_SIZE, stream);
     auto &inserted_dict_index = dict_index.emplace_back(chunk.num_values, stream);
+    chunk.dict_data           = inserted_dict_data.data();
     chunk.dict_index          = inserted_dict_index.data();
   }
   chunks.host_to_device(stream);
+  gpu::CollectMapEntries(chunks.device_view().flat_view(), stream);
   gpu::GetDictionaryIndices(chunks.device_view(), num_rows, stream);
-  stream.synchronize();
-  // print(dict_index[0], "dict_index");
+
   return std::make_pair(std::move(dict_data), std::move(dict_index));
 }
 

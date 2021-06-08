@@ -333,8 +333,6 @@ struct EncColumnChunk {
   size_type num_non_null_values;
   size_type plain_data_size;
   size_type *dict_data;
-  size_type *dict_data_idx;
-  size_type dict_data_size;
   uint16_t *dict_index;
   uint8_t dict_rle_bits_plus1;  // TODO: we shouldn't have to plus 1
   bool use_dictionary;
