@@ -2,7 +2,7 @@
 import decimal
 import numpy as np
 import pandas as pd
-
+import pyarrow as pa
 from libc.stdint cimport (
     int8_t,
     int16_t,
@@ -81,6 +81,9 @@ cdef class DeviceScalar:
 
         if isinstance(dtype, cudf.Decimal64Dtype):
             _set_decimal64_from_scalar(
+                self.c_value, value, dtype, valid)
+        elif isinstance(dtype, cudf.ListDtype):
+            _set_list_from_pylist(
                 self.c_value, value, dtype, valid)
         elif pd.api.types.is_string_dtype(dtype):
             _set_string_from_np_string(self.c_value, value, valid)
@@ -293,6 +296,18 @@ cdef _set_decimal64_from_scalar(unique_ptr[scalar]& s,
         new fixed_point_scalar[decimal64](
             <int64_t>np.int64(value), scale_type(-dtype.scale), valid
         )
+    )
+
+cdef _set_list_from_pylist(unique_ptr[scalar]& s,
+                          object value,
+                          object dtype,
+                          bool valid=True):
+    cdef Column col = cudf.core.column.as_column(
+        pa.array(value)
+    )
+    cdef column_view col_view = col.view()
+    s.reset(
+        new list_scalar(col_view)
     )
 
 cdef _get_py_list_from_list(unique_ptr[scalar]& s):
