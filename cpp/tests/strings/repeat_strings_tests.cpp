@@ -45,15 +45,15 @@ TEST_F(RepeatJoinStringTest, InvalidStringScalar)
 {
   auto const str    = cudf::string_scalar("", false);
   auto const result = cudf::strings::repeat_strings(str, 3);
-  EXPECT_EQ(result.is_valid(), false);
+  EXPECT_EQ(result->is_valid(), false);
 }
 
 TEST_F(RepeatJoinStringTest, ZeroSizeStringScalar)
 {
   auto const str    = cudf::string_scalar("");
   auto const result = cudf::strings::repeat_strings(str, 3);
-  EXPECT_EQ(result.is_valid(), true);
-  EXPECT_EQ(result.size(), 0);
+  EXPECT_EQ(result->is_valid(), true);
+  EXPECT_EQ(result->size(), 0);
 }
 
 TEST_F(RepeatJoinStringTest, ValidStringScalar)
@@ -63,27 +63,27 @@ TEST_F(RepeatJoinStringTest, ValidStringScalar)
   {
     auto const result   = cudf::strings::repeat_strings(str, 3);
     auto const expected = cudf::string_scalar("abc123xyz-abc123xyz-abc123xyz-");
-    CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.data(), result.data(), expected.size());
+    CUDF_TEST_EXPECT_EQUAL_BUFFERS(expected.data(), result->data(), expected.size());
   }
 
   // Repeat once.
   {
     auto const result = cudf::strings::repeat_strings(str, 1);
-    CUDF_TEST_EXPECT_EQUAL_BUFFERS(str.data(), result.data(), str.size());
+    CUDF_TEST_EXPECT_EQUAL_BUFFERS(str.data(), result->data(), str.size());
   }
 
   // Zero repeat times.
   {
     auto const result = cudf::strings::repeat_strings(str, 0);
-    EXPECT_EQ(result.is_valid(), true);
-    EXPECT_EQ(result.size(), 0);
+    EXPECT_EQ(result->is_valid(), true);
+    EXPECT_EQ(result->size(), 0);
   }
 
   // Negatitve repeat times.
   {
     auto const result = cudf::strings::repeat_strings(str, -10);
-    EXPECT_EQ(result.is_valid(), true);
-    EXPECT_EQ(result.size(), 0);
+    EXPECT_EQ(result->is_valid(), true);
+    EXPECT_EQ(result->size(), 0);
   }
 
   // Repeat too many times.

@@ -39,7 +39,7 @@ namespace strings {
  * Example:
  * s   = '123XYZ-'
  * out = repeat_strings(s, 3)
- * out is '123XYZ-123XYZ-123XYZ'
+ * out is '123XYZ-123XYZ-123XYZ-'
  * @endcode
  *
  * @throw cudf::logic_error if the size of the ouput string scalar exceeds the maximum value that
@@ -51,7 +51,7 @@ namespace strings {
  * @param mr Device memory resource used to allocate the returned string scalar.
  * @return New string scalar in which the string is repeated from the input.
  */
-string_scalar repeat_strings(
+std::unique_ptr<string_scalar> repeat_strings(
   string_scalar const& input,
   size_type repeat_times,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
@@ -70,9 +70,9 @@ string_scalar repeat_strings(
  *
  * @code{.pseudo}
  * Example:
- * strs = ['aa', null, '',  'bbc']
+ * strs = ['aa', null, '', 'bbc']
  * out  = repeat_strings(strs, 3)
- * out is ['aaaaaa', null, '',  'bbcbbcbbc']
+ * out is ['aaaaaa', null, '', 'bbcbbcbbc']
  * @endcode
  *
  * @param input The column containing strings to repeat.

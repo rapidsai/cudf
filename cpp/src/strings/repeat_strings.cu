@@ -32,14 +32,16 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
-string_scalar repeat_strings(string_scalar const& input,
-                             size_type repeat_times,
-                             rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+std::unique_ptr<string_scalar> repeat_strings(string_scalar const& input,
+                                              size_type repeat_times,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr)
 {
-  if (!input.is_valid(stream)) { return string_scalar("", false, stream, mr); }
-  if (input.size() == 0 || repeat_times <= 0) { return string_scalar("", true, stream, mr); }
-  if (repeat_times == 1) { return string_scalar(input, stream, mr); }
+  if (!input.is_valid(stream)) { return std::make_unique<string_scalar>("", false, stream, mr); }
+  if (input.size() == 0 || repeat_times <= 0) {
+    return std::make_unique<string_scalar>("", true, stream, mr);
+  }
+  if (repeat_times == 1) { return std::make_unique<string_scalar>(input, stream, mr); }
 
   CUDF_EXPECTS(input.size() <= std::numeric_limits<size_type>::max() / repeat_times,
                "The output string has size that exceeds the maximum allowed size.");
@@ -57,7 +59,7 @@ string_scalar repeat_strings(string_scalar const& input,
                       return in_ptr[idx % str_size];
                     });
 
-  return string_scalar(std::move(buff));
+  return std::make_unique<string_scalar>(std::move(buff));
 }
 
 namespace {
@@ -73,7 +75,6 @@ auto generate_empty_output(strings_column_view const& input,
 {
   auto chars_column = create_chars_child_column(strings_count, 0, stream, mr);
 
-  static_assert(std::is_same_v<offset_type, int32_t> && std::is_same_v<size_type, int32_t>);
   auto offsets_column = make_numeric_column(
     data_type{type_to_id<offset_type>()}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   CUDA_TRY(cudaMemsetAsync(offsets_column->mutable_view().template data<offset_type>(),
@@ -173,9 +174,9 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
 
 }  // namespace detail
 
-string_scalar repeat_strings(string_scalar const& input,
-                             size_type repeat_times,
-                             rmm::mr::device_memory_resource* mr)
+std::unique_ptr<string_scalar> repeat_strings(string_scalar const& input,
+                                              size_type repeat_times,
+                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::repeat_strings(input, repeat_times, rmm::cuda_stream_default, mr);
