@@ -31,8 +31,8 @@ from cudf.utils.dtypes import (
     to_cudf_compatible_scalar,
 )
 
+from ...api.types import is_integer_dtype, is_number
 from .numerical_base import NumericalBaseColumn
-from ...api.types import is_integer_dtype
 
 
 class NumericalColumn(NumericalBaseColumn):
@@ -393,7 +393,7 @@ class NumericalColumn(NumericalBaseColumn):
         if closest=True.
         """
         value = to_cudf_compatible_scalar(value)
-        if not pd.api.types.is_number(value):
+        if not is_number(value):
             raise ValueError("Expected a numeric value")
         found = 0
         if len(self):
@@ -422,7 +422,7 @@ class NumericalColumn(NumericalBaseColumn):
         if closest=True.
         """
         value = to_cudf_compatible_scalar(value)
-        if not pd.api.types.is_number(value):
+        if not is_number(value):
             raise ValueError("Expected a numeric value")
         found = 0
         if len(self):

@@ -167,6 +167,8 @@ from cudf.utils.dtypes import (
     is_string_dtype,
 )
 
+from ...api.types import is_integer
+
 _str_to_numeric_typecast_functions = {
     np.dtype("int8"): str_cast.stoi8,
     np.dtype("int16"): str_cast.stoi16,
@@ -480,7 +482,7 @@ class StringMethods(ColumnMethodsMixin):
 
         If the elements of a Series are lists themselves, join the content of
         these lists using the delimiter passed to the function.
-        This function is an equivalent to :meth:`str.join`. 
+        This function is an equivalent to :meth:`str.join`.
         In the special case that the lists in the Series contain only ``None``,
         a `<NA>`/`None` value will always be returned.
 
@@ -494,7 +496,7 @@ class StringMethods(ColumnMethodsMixin):
             This character will take the place of null strings
             (not empty strings) in the Series but will be considered
             only if the Series contains list elements and those lists have
-            at least one non-null string. If ``string_na_rep`` is ``None``, 
+            at least one non-null string. If ``string_na_rep`` is ``None``,
             it defaults to empty space "".
         sep_na_rep : str, default None
             This character will take the place of any null strings
@@ -2760,7 +2762,7 @@ class StringMethods(ColumnMethodsMixin):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
 
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -2842,7 +2844,7 @@ class StringMethods(ColumnMethodsMixin):
         3    <NA>
         dtype: object
         """
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -2912,7 +2914,7 @@ class StringMethods(ColumnMethodsMixin):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
 
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -2966,7 +2968,7 @@ class StringMethods(ColumnMethodsMixin):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
 
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -3020,7 +3022,7 @@ class StringMethods(ColumnMethodsMixin):
         if len(fillchar) != 1:
             raise TypeError("fillchar must be a character, not str")
 
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 
@@ -3235,7 +3237,7 @@ class StringMethods(ColumnMethodsMixin):
         1    another line\\nto be\\nwrapped
         dtype: object
         """
-        if not pd.api.types.is_integer(width):
+        if not is_integer(width):
             msg = f"width must be of integer type, not {type(width).__name__}"
             raise TypeError(msg)
 

@@ -30,6 +30,7 @@ from cudf.utils.dtypes import (
     is_categorical_dtype,
     is_column_like,
     is_decimal_dtype,
+    is_integer_dtype,
     is_numerical_dtype,
     is_scalar,
     min_scalar_type,
@@ -642,7 +643,7 @@ class Frame(libcudf.table.Table):
         )
 
     def _gather(self, gather_map, keep_index=True, nullify=False):
-        if not pd.api.types.is_integer_dtype(gather_map.dtype):
+        if not is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self.__class__._from_table(
             libcudf.copying.gather(
