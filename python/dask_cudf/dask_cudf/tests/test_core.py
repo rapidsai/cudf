@@ -9,8 +9,7 @@ import pytest
 
 import dask
 from dask import dataframe as dd
-from dask.dataframe.core import meta_nonempty
-from dask.dataframe.utils import make_meta_util
+from dask.dataframe.core import make_meta as dask_make_meta, meta_nonempty
 from dask.utils import M
 
 import cudf
@@ -639,7 +638,7 @@ def test_make_meta_backends(index):
     df = df.set_index(index)
 
     # Check "empty" metadata types
-    chk_meta = make_meta_util(df)
+    chk_meta = dask_make_meta(df)
     dd.assert_eq(chk_meta.dtypes, df.dtypes)
 
     # Check "non-empty" metadata types
@@ -780,7 +779,52 @@ def test_index_map_partitions():
     dd.assert_eq(mins_pd, mins_gd)
 
 
+def test_merging_categorical_columns():
+    try:
+        from dask.dataframe.dispatch import (  # noqa: F401
+            union_categoricals_dispatch,
+        )
+    except ImportError:
+        pytest.skip(
+            "need a version of dask that has union_categoricals_dispatch"
+        )
+
+    df_1 = cudf.DataFrame(
+        {"id_1": [0, 1, 2, 3], "cat_col": ["a", "b", "f", "f"]}
+    )
+
+    ddf_1 = dgd.from_cudf(df_1, npartitions=2)
+
+    ddf_1 = dd.categorical.categorize(ddf_1, columns=["cat_col"])
+
+    df_2 = cudf.DataFrame(
+        {"id_2": [111, 112, 113], "cat_col": ["g", "h", "f"]}
+    )
+
+    ddf_2 = dgd.from_cudf(df_2, npartitions=2)
+
+    ddf_2 = dd.categorical.categorize(ddf_2, columns=["cat_col"])
+    expected = cudf.DataFrame(
+        {
+            "id_1": [2, 3],
+            "cat_col": cudf.Series(
+                ["f", "f"],
+                dtype=cudf.CategoricalDtype(
+                    categories=["a", "b", "f", "g", "h"], ordered=False
+                ),
+            ),
+            "id_2": [113, 113],
+        }
+    )
+    dd.assert_eq(ddf_1.merge(ddf_2), expected)
+
+
 def test_correct_meta():
+    try:
+        from dask.dataframe.dispatch import make_meta_obj  # noqa: F401
+    except ImportError:
+        pytest.skip("need make_meta_obj to be preset")
+
     # Need these local imports in this specific order.
     # For context: https://github.com/rapidsai/cudf/issues/7946
     import pandas as pd

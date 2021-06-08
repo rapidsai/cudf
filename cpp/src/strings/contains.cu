@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,13 +54,11 @@ struct contains_fn {
   __device__ bool operator()(size_type idx)
   {
     if (d_strings.is_null(idx)) return 0;
-    u_char data1[stack_size], data2[stack_size];
-    prog.set_stack_mem(data1, data2);
     string_view d_str = d_strings.element<string_view>(idx);
     int32_t begin     = 0;
     int32_t end       = bmatch ? 1  // match only the beginning of the string;
                          : -1;      // this handles empty strings too
-    return static_cast<bool>(prog.find(idx, d_str, begin, end));
+    return static_cast<bool>(prog.find<stack_size>(idx, d_str, begin, end));
   }
 };
 
@@ -91,7 +89,7 @@ std::unique_ptr<column> contains_util(
 
   // fill the output column
   int regex_insts = d_prog.insts_counts();
-  if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
+  if (regex_insts <= RX_SMALL_INSTS)
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_count),
@@ -103,12 +101,18 @@ std::unique_ptr<column> contains_util(
                       thrust::make_counting_iterator<size_type>(strings_count),
                       d_results,
                       contains_fn<RX_STACK_MEDIUM>{d_prog, d_column, beginning_only});
-  else
+  else if (regex_insts <= RX_LARGE_INSTS)
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_count),
                       d_results,
                       contains_fn<RX_STACK_LARGE>{d_prog, d_column, beginning_only});
+  else
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(strings_count),
+                      d_results,
+                      contains_fn<RX_STACK_ANY>{d_prog, d_column, beginning_only});
 
   results->set_null_count(strings.null_count());
   return results;
@@ -166,8 +170,6 @@ struct count_fn {
 
   __device__ int32_t operator()(unsigned int idx)
   {
-    u_char data1[stack_size], data2[stack_size];
-    prog.set_stack_mem(data1, data2);
     if (d_strings.is_null(idx)) return 0;
     string_view d_str  = d_strings.element<string_view>(idx);
     auto const nchars  = d_str.length();
@@ -175,7 +177,7 @@ struct count_fn {
     int32_t begin      = 0;
     while (begin < nchars) {
       auto end = static_cast<int32_t>(nchars);
-      if (prog.find(idx, d_str, begin, end) <= 0) break;
+      if (prog.find<stack_size>(idx, d_str, begin, end) <= 0) break;
       ++find_count;
       begin = end > begin ? end : begin + 1;
     }
@@ -210,7 +212,7 @@ std::unique_ptr<column> count_re(
 
   // fill the output column
   int regex_insts = d_prog.insts_counts();
-  if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
+  if (regex_insts <= RX_SMALL_INSTS)
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_count),
@@ -222,12 +224,18 @@ std::unique_ptr<column> count_re(
                       thrust::make_counting_iterator<size_type>(strings_count),
                       d_results,
                       count_fn<RX_STACK_MEDIUM>{d_prog, d_column});
-  else
+  else if (regex_insts <= RX_LARGE_INSTS)
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),
                       thrust::make_counting_iterator<size_type>(strings_count),
                       d_results,
                       count_fn<RX_STACK_LARGE>{d_prog, d_column});
+  else
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(strings_count),
+                      d_results,
+                      count_fn<RX_STACK_ANY>{d_prog, d_column});
 
   results->set_null_count(strings.null_count());
   return results;

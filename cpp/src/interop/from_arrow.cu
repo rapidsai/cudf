@@ -26,7 +26,6 @@
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/null_mask.hpp>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -150,7 +149,7 @@ struct dispatch_to_cudf_column {
 
       // If array is sliced, we have to copy whole mask and then take copy.
       auto out_mask = (num_rows == static_cast<size_type>(data_buffer->size() / sizeof(T)))
-                        ? *tmp_mask
+                        ? std::move(*tmp_mask)
                         : cudf::detail::copy_bitmask(static_cast<bitmask_type*>(tmp_mask->data()),
                                                      array.offset(),
                                                      array.offset() + num_rows,
@@ -166,7 +165,7 @@ struct dispatch_to_cudf_column {
 
 std::unique_ptr<column> get_empty_type_column(size_type size)
 {
-  return std::make_unique<column>(data_type(type_id::EMPTY), size, rmm::device_buffer(0));
+  return std::make_unique<column>(data_type(type_id::EMPTY), size, rmm::device_buffer{});
 }
 
 /**
@@ -215,7 +214,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal64>(
       auto temp_mask = get_mask_buffer(array, stream, mr);
       // If array is sliced, we have to copy whole mask and then take copy.
       return (num_rows == static_cast<size_type>(data_buffer->size() / sizeof(DeviceType)))
-               ? *temp_mask.release()
+               ? std::move(*temp_mask.release())
                : cudf::detail::copy_bitmask(static_cast<bitmask_type*>(temp_mask->data()),
                                             array.offset(),
                                             array.offset() + num_rows,
@@ -272,7 +271,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  if (array.length() == 0) { return cudf::strings::detail::make_empty_strings_column(stream, mr); }
+  if (array.length() == 0) { return make_empty_column(data_type{type_id::STRING}); }
   auto str_array    = static_cast<arrow::StringArray const*>(&array);
   auto offset_array = std::make_unique<arrow::Int32Array>(
     str_array->value_offsets()->size() / sizeof(int32_t), str_array->value_offsets(), nullptr);
@@ -350,7 +349,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::struct_view>(
                    return get_column(*child_array, type, false, stream, mr);
                  });
 
-  auto out_mask = *(get_mask_buffer(array, stream, mr));
+  auto out_mask = std::move(*(get_mask_buffer(array, stream, mr)));
   if (struct_array->null_bitmap_data() != nullptr) {
     out_mask = detail::copy_bitmask(static_cast<bitmask_type*>(out_mask.data()),
                                     array.offset(),
@@ -433,7 +432,7 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
                                     return get_column(*array_chunk, cudf_type, false, stream, mr);
                                   });
                    if (concat_columns.empty()) {
-                     return std::make_unique<column>(cudf_type, 0, rmm::device_buffer(0));
+                     return std::make_unique<column>(cudf_type, 0, rmm::device_buffer{});
                    } else if (concat_columns.size() == 1) {
                      return std::move(concat_columns[0]);
                    }

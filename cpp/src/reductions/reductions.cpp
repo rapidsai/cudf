@@ -113,7 +113,7 @@ std::unique_ptr<scalar> reduce(
   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
 {
   std::unique_ptr<scalar> result = make_default_constructed_scalar(output_dtype, stream, mr);
-  result->set_valid(false, stream);
+  result->set_valid_async(false, stream);
 
   // check if input column is empty
   if (col.size() <= col.null_count()) return result;

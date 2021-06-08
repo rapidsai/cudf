@@ -15,7 +15,6 @@
  */
 
 #include <cudf/copying.hpp>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
@@ -84,7 +83,7 @@ TEST_F(PackUnpackTest, MultiColumnWithStrings)
 TEST_F(PackUnpackTest, EmptyColumns)
 {
   {
-    auto empty_string = cudf::strings::detail::make_empty_strings_column();    
+    auto empty_string = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
     cudf::table_view src_table({static_cast<cudf::column_view>(*empty_string)});
     this->run_test(src_table);
   }
@@ -356,10 +355,10 @@ TEST_F(PackUnpackTest, NestedEmpty)
   // this produces an empty strings column with no children,
   // nested inside a list
   {
-    auto empty_string = cudf::strings::detail::make_empty_strings_column();
+    auto empty_string = cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
     auto offsets      = cudf::test::fixed_width_column_wrapper<int>({0, 0});
     auto list         = cudf::make_lists_column(
-      1, offsets.release(), std::move(empty_string), 0, rmm::device_buffer{0});
+      1, offsets.release(), std::move(empty_string), 0, rmm::device_buffer{});
 
     cudf::table_view src_table({static_cast<cudf::column_view>(*list)});
     this->run_test(src_table);
@@ -372,7 +371,7 @@ TEST_F(PackUnpackTest, NestedEmpty)
     auto empty_string = cudf::empty_like(str);
     auto offsets      = cudf::test::fixed_width_column_wrapper<int>({0, 0});
     auto list         = cudf::make_lists_column(
-      1, offsets.release(), std::move(empty_string), 0, rmm::device_buffer{0});
+      1, offsets.release(), std::move(empty_string), 0, rmm::device_buffer{});
 
     cudf::table_view src_table({static_cast<cudf::column_view>(*list)});
     this->run_test(src_table);
@@ -385,7 +384,7 @@ TEST_F(PackUnpackTest, NestedEmpty)
     auto empty_list = cudf::empty_like(listw);
     auto offsets    = cudf::test::fixed_width_column_wrapper<int>({0, 0});
     auto list       = cudf::make_lists_column(
-      1, offsets.release(), std::move(empty_list), 0, rmm::device_buffer{0});
+      1, offsets.release(), std::move(empty_list), 0, rmm::device_buffer{});
 
     cudf::table_view src_table({static_cast<cudf::column_view>(*list)});
     this->run_test(src_table);
@@ -398,7 +397,7 @@ TEST_F(PackUnpackTest, NestedEmpty)
     auto empty_list = cudf::empty_like(listw);
     auto offsets    = cudf::test::fixed_width_column_wrapper<int>({0, 0});
     auto list       = cudf::make_lists_column(
-      1, offsets.release(), std::move(empty_list), 0, rmm::device_buffer{0});
+      1, offsets.release(), std::move(empty_list), 0, rmm::device_buffer{});
 
     cudf::table_view src_table({static_cast<cudf::column_view>(*list)});
     this->run_test(src_table);
@@ -413,7 +412,7 @@ TEST_F(PackUnpackTest, NestedEmpty)
     auto empty_struct  = cudf::empty_like(struct_column);
     auto offsets       = cudf::test::fixed_width_column_wrapper<int>({0, 0});
     auto list          = cudf::make_lists_column(
-      1, offsets.release(), std::move(empty_struct), 0, rmm::device_buffer{0});
+      1, offsets.release(), std::move(empty_struct), 0, rmm::device_buffer{});
 
     cudf::table_view src_table({static_cast<cudf::column_view>(*list)});
     this->run_test(src_table);

@@ -251,7 +251,8 @@ add_library(cudf
     src/io/parquet/parquet.cpp
     src/io/parquet/reader_impl.cu
     src/io/parquet/writer_impl.cu
-    src/io/statistics/column_stats.cu
+    src/io/statistics/orc_column_statistics.cu
+    src/io/statistics/parquet_column_statistics.cu
     src/io/utilities/column_buffer.cpp
     src/io/utilities/data_sink.cpp
     src/io/utilities/datasource.cpp
@@ -273,6 +274,7 @@ add_library(cudf
     src/lists/copying/copying.cu
     src/lists/copying/gather.cu
     src/lists/copying/segmented_gather.cu
+    src/lists/copying/scatter_helper.cu
     src/lists/count_elements.cu
     src/lists/drop_list_duplicates.cu
     src/lists/explode.cu
