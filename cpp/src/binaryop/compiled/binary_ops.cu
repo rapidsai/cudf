@@ -123,7 +123,8 @@ struct binary_op {
       auto out_view        = out->mutable_view();
       auto out_itr         = out_view.begin<Out>();
       auto lhs_device_view = column_device_view::create(lhs, stream);
-      auto rhs_scalar      = static_cast<cudf::scalar_type_t<Rhs> const&>(rhs);
+      using rhs_type       = cudf::scalar_type_t<Rhs>;
+      auto rhs_scalar      = rhs_type(static_cast<rhs_type const&>(rhs), stream);
       auto rhs_scalar_view = get_scalar_device_view(rhs_scalar);
       if (lhs.has_nulls()) {
         auto lhs_itr = cudf::detail::make_null_replacement_iterator(*lhs_device_view, Lhs{});

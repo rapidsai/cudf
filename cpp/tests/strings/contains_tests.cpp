@@ -372,3 +372,28 @@ TEST_F(StringsContainsTests, LargeRegex)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }
+
+TEST_F(StringsContainsTests, ExtraLargeRegex)
+{
+  // This results in ~950 regex instructions which is above the 'large' range.
+  std::string data(950, '0');
+  cudf::test::strings_column_wrapper strings({data, data, data, data, data, "00"});
+  std::string pattern = data;
+
+  auto strings_view = cudf::strings_column_view(strings);
+  {
+    auto results = cudf::strings::contains_re(strings_view, pattern);
+    cudf::test::fixed_width_column_wrapper<bool> expected({true, true, true, true, true, false});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    auto results = cudf::strings::matches_re(strings_view, pattern);
+    cudf::test::fixed_width_column_wrapper<bool> expected({true, true, true, true, true, false});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    auto results = cudf::strings::count_re(strings_view, pattern);
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({1, 1, 1, 1, 1, 0});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+}

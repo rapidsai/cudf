@@ -198,6 +198,7 @@ std::unique_ptr<table> findall_re(
                         indices.begin(),
                         findall_fn<RX_STACK_ANY>{*d_strings, *d_prog, column_index, d_find_counts});
 
+    //
     results.emplace_back(make_strings_column(indices.begin(), indices.end(), stream, mr));
   }
   return std::make_unique<table>(std::move(results));

@@ -213,7 +213,7 @@ rmm::device_buffer reader::impl::decompress_data(const rmm::device_buffer &comp_
         actual_uncompressed_size += inflate_in[i].dstSize;
       }
       if (actual_uncompressed_size > uncompressed_data_size) {
-        decomp_block_data.resize(actual_uncompressed_size);
+        decomp_block_data.resize(actual_uncompressed_size, stream);
         for (size_t i = 0, dst_pos = 0; i < _metadata->block_list.size(); i++) {
           auto dst_base           = static_cast<uint8_t *>(decomp_block_data.data());
           inflate_in[i].dstDevice = dst_base + dst_pos;
@@ -374,7 +374,7 @@ table_with_metadata reader::impl::read(avro_reader_options const &options,
                                                _metadata->total_data_size,
                                                static_cast<uint8_t *>(block_data.data()),
                                                stream);
-        block_data.resize(read_bytes);
+        block_data.resize(read_bytes, stream);
       } else {
         const auto buffer =
           _source->host_read(_metadata->block_list[0].offset, _metadata->total_data_size);

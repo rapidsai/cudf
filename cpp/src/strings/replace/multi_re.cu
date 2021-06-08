@@ -23,7 +23,6 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -77,8 +76,9 @@ struct replace_multi_regex_fn {
         if (d_ranges[ptn_idx].first >= ch_pos)  // previously matched here
           continue;                             // or later in the string
         reprog_device prog = progs[ptn_idx];
-        auto begin         = static_cast<int32_t>(ch_pos);
-        auto end           = static_cast<int32_t>(nchars);
+
+        auto begin = static_cast<int32_t>(ch_pos);
+        auto end   = static_cast<int32_t>(nchars);
         if (!prog.is_empty() && prog.find<stack_size>(idx, d_str, begin, end) > 0)
           d_ranges[ptn_idx] = found_range{begin, end};  // found a match
         else
@@ -126,7 +126,7 @@ std::unique_ptr<column> replace_re(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
   if (patterns.empty())  // no patterns; just return a copy
     return std::make_unique<column>(strings.parent(), stream, mr);
 
@@ -148,7 +148,7 @@ std::unique_ptr<column> replace_re(
   }
 
   // copy all the reprog_device instances to a device memory array
-  rmm::device_buffer progs_buffer{sizeof(reprog_device) * progs.size()};
+  rmm::device_buffer progs_buffer{sizeof(reprog_device) * progs.size(), stream};
   CUDA_TRY(cudaMemcpyAsync(progs_buffer.data(),
                            progs.data(),
                            progs.size() * sizeof(reprog_device),

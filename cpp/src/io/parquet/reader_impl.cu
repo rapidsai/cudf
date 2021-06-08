@@ -1572,7 +1572,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
   for (size_t i = out_columns.size(); i < _output_columns.size(); ++i) {
     out_metadata.schema_info.push_back(column_name_info{""});
-    out_columns.emplace_back(make_empty_column(_output_columns[i].type));
+    out_columns.emplace_back(cudf::io::detail::empty_like(
+      _output_columns[i], &out_metadata.schema_info.back(), stream, _mr));
   }
 
   // Return column names (must match order of returned columns)

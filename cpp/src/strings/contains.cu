@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -170,8 +170,6 @@ struct count_fn {
 
   __device__ int32_t operator()(unsigned int idx)
   {
-    // u_char data1[stack_size], data2[stack_size];
-    // prog.set_stack_mem(data1, data2);
     if (d_strings.is_null(idx)) return 0;
     string_view d_str  = d_strings.element<string_view>(idx);
     auto const nchars  = d_str.length();
@@ -213,7 +211,7 @@ std::unique_ptr<column> count_re(
   auto d_results = results->mutable_view().data<int32_t>();
 
   // fill the output column
-  auto const regex_insts = d_prog.insts_counts();
+  int regex_insts = d_prog.insts_counts();
   if (regex_insts <= RX_SMALL_INSTS)
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator<size_type>(0),

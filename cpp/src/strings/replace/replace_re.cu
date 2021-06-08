@@ -23,7 +23,6 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -101,7 +100,7 @@ std::unique_ptr<column> replace_re(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   CUDF_EXPECTS(repl.is_valid(), "Parameter repl must be valid");
   string_view d_repl(repl.data(), repl.size());
@@ -118,33 +117,34 @@ std::unique_ptr<column> replace_re(
   auto null_count = strings.null_count();
 
   // create child columns
-  std::pair<std::unique_ptr<column>, std::unique_ptr<column>> children(nullptr, nullptr);
-  // Each invocation is predicated on the stack size which is dependent on the number of regex
-  // instructions
-  if (regex_insts <= RX_SMALL_INSTS)
-    children =
-      make_strings_children(replace_regex_fn<RX_STACK_SMALL>{d_strings, d_prog, d_repl, maxrepl},
-                            strings_count,
-                            stream,
-                            mr);
-  else if (regex_insts <= RX_MEDIUM_INSTS)
-    children =
-      make_strings_children(replace_regex_fn<RX_STACK_MEDIUM>{d_strings, d_prog, d_repl, maxrepl},
-                            strings_count,
-                            stream,
-                            mr);
-  else if (regex_insts <= RX_LARGE_INSTS)
-    children =
-      make_strings_children(replace_regex_fn<RX_STACK_LARGE>{d_strings, d_prog, d_repl, maxrepl},
-                            strings_count,
-                            stream,
-                            mr);
-  else
-    children =
-      make_strings_children(replace_regex_fn<RX_STACK_ANY>{d_strings, d_prog, d_repl, maxrepl},
-                            strings_count,
-                            stream,
-                            mr);
+  auto children = [&] {
+    // Each invocation is predicated on the stack size which is dependent on the number of regex
+    // instructions
+    if (regex_insts <= RX_SMALL_INSTS)
+      return make_strings_children(
+        replace_regex_fn<RX_STACK_SMALL>{d_strings, d_prog, d_repl, maxrepl},
+        strings_count,
+        stream,
+        mr);
+    else if (regex_insts <= RX_MEDIUM_INSTS)
+      return make_strings_children(
+        replace_regex_fn<RX_STACK_MEDIUM>{d_strings, d_prog, d_repl, maxrepl},
+        strings_count,
+        stream,
+        mr);
+    else if (regex_insts <= RX_LARGE_INSTS)
+      return make_strings_children(
+        replace_regex_fn<RX_STACK_LARGE>{d_strings, d_prog, d_repl, maxrepl},
+        strings_count,
+        stream,
+        mr);
+    else
+      return make_strings_children(
+        replace_regex_fn<RX_STACK_ANY>{d_strings, d_prog, d_repl, maxrepl},
+        strings_count,
+        stream,
+        mr);
+  }();
 
   return make_strings_column(strings_count,
                              std::move(children.first),

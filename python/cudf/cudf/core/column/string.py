@@ -12,7 +12,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import cuda
-from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
@@ -260,6 +259,8 @@ class StringMethods(ColumnMethodsMixin):
 
         return self._return_or_inplace(out, inplace=False)
 
+    hex_to_int = htoi
+
     def ip2int(self) -> ParentType:
         """
         This converts ip strings to integers
@@ -290,6 +291,8 @@ class StringMethods(ColumnMethodsMixin):
         out = str_cast.ip2int(self._column)
 
         return self._return_or_inplace(out, inplace=False)
+
+    ip_to_int = ip2int
 
     def __getitem__(self, key):
         if isinstance(key, slice):
@@ -477,7 +480,9 @@ class StringMethods(ColumnMethodsMixin):
 
         If the elements of a Series are lists themselves, join the content of
         these lists using the delimiter passed to the function.
-        This function is an equivalent to :meth:`str.join`.
+        This function is an equivalent to :meth:`str.join`. 
+        In the special case that the lists in the Series contain only ``None``,
+        a `<NA>`/`None` value will always be returned.
 
         Parameters
         ----------
@@ -486,10 +491,11 @@ class StringMethods(ColumnMethodsMixin):
             If array-like, the string at a position is used as a
             delimiter for corresponding row of the list entries.
         string_na_rep : str, default None
-            This character will take the place of any null strings
-            (not empty strings) in the Series.
-            If ``string_na_rep`` is ``None``, it defaults to empty
-            space "".
+            This character will take the place of null strings
+            (not empty strings) in the Series but will be considered
+            only if the Series contains list elements and those lists have
+            at least one non-null string. If ``string_na_rep`` is ``None``, 
+            it defaults to empty space "".
         sep_na_rep : str, default None
             This character will take the place of any null strings
             (not empty strings) in `sep`. This parameter can be used
@@ -553,27 +559,31 @@ class StringMethods(ColumnMethodsMixin):
         dtype: object
 
         We can replace `<NA>`/`None` values present in lists using
-        ``string_na_rep``:
+        ``string_na_rep`` if the lists contain at least one valid string
+        (lists containing all `None` will result in a `<NA>`/`None` value):
 
-        >>> ser = cudf.Series([['a', 'b', None], None, ['c', 'd']])
+        >>> ser = cudf.Series([['a', 'b', None], [None, None, None], None, ['c', 'd']])
         >>> ser
-        0    [a, b, None]
-        1            None
-        2          [c, d]
+        0          [a, b, None]
+        1    [None, None, None]
+        2                  None
+        3                [c, d]
         dtype: list
         >>> ser.str.join(sep='_', string_na_rep='k')
         0    a_b_k
         1     <NA>
-        2      c_d
+        2     <NA>
+        3      c_d
         dtype: object
 
         We can replace `<NA>`/`None` values present in lists of ``sep``
         using ``sep_na_rep``:
 
-        >>> ser.str.join(sep=[None, '.', '-'], sep_na_rep='+')
+        >>> ser.str.join(sep=[None, '^', '.', '-'], sep_na_rep='+')
         0    a+b+
         1    <NA>
-        2     c-d
+        2    <NA>
+        3     c-d
         dtype: object
         """  # noqa E501
         if sep is None:
@@ -5034,7 +5044,7 @@ class StringColumn(column.ColumnBase):
         result_col = self._process_for_reduction(
             skipna=skipna, min_count=min_count
         )
-        if isinstance(result_col, cudf.core.column.ColumnBase):
+        if isinstance(result_col, type(self)):
             return result_col.str().cat()
         else:
             return result_col
@@ -5060,13 +5070,6 @@ class StringColumn(column.ColumnBase):
 
     def str(self, parent: ParentType = None) -> StringMethods:
         return StringMethods(self, parent=parent)
-
-    @property
-    def _nbytes(self) -> int:
-        if self.size == 0:
-            return 0
-        else:
-            return self.children[1].size
 
     def as_numerical_column(
         self, dtype: Dtype
@@ -5184,7 +5187,7 @@ class StringColumn(column.ColumnBase):
         return self.to_arrow().to_pandas().values
 
     def to_pandas(
-        self, index: ColumnLike = None, nullable: bool = False, **kwargs
+        self, index: pd.Index = None, nullable: bool = False, **kwargs
     ) -> "pd.Series":
         if nullable:
             pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
@@ -5197,7 +5200,7 @@ class StringColumn(column.ColumnBase):
         return pd_series
 
     def serialize(self) -> Tuple[dict, list]:
-        header = {"null_count": self.null_count}  # type: Dict[Any, Any]
+        header: Dict[Any, Any] = {"null_count": self.null_count}
         header["type-serialized"] = pickle.dumps(type(self))
         header["size"] = self.size
 
@@ -5359,7 +5362,9 @@ class StringColumn(column.ColumnBase):
             if op == "add":
                 return cast("column.ColumnBase", lhs.str().cat(others=rhs))
             elif op in ("eq", "ne", "gt", "lt", "ge", "le", "NULL_EQUALS"):
-                return _string_column_binop(self, rhs, op=op, out_dtype="bool")
+                return libcudf.binaryop.binaryop(
+                    lhs=self, rhs=rhs, op=op, dtype="bool"
+                )
 
         raise TypeError(
             f"{op} operator not supported between {type(self)} and {type(rhs)}"
@@ -5390,17 +5395,6 @@ class StringColumn(column.ColumnBase):
         )
 
         return to_view.view(dtype)
-
-
-@annotate("BINARY_OP", color="orange", domain="cudf_python")
-def _string_column_binop(
-    lhs: "column.ColumnBase",
-    rhs: "column.ColumnBase",
-    op: str,
-    out_dtype: Dtype,
-) -> "column.ColumnBase":
-    out = libcudf.binaryop.binaryop(lhs=lhs, rhs=rhs, op=op, dtype=out_dtype)
-    return out
 
 
 def _get_cols_list(parent_obj, others):

@@ -31,6 +31,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 struct ReplaceErrorTest : public cudf::test::BaseFixture {
@@ -170,7 +171,7 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplaceScalar)
   std::vector<cudf::valid_type> input_v{0, 0, 0, 0, 0, 0, 0, 0};
   std::unique_ptr<cudf::scalar> repl =
     cudf::make_string_scalar("rep", rmm::cuda_stream_default, mr());
-  repl->set_valid(true, rmm::cuda_stream_default);
+  repl->set_valid_async(true, rmm::cuda_stream_default);
   std::vector<std::string> expected{"rep", "rep", "rep", "rep", "rep", "rep", "rep", "rep"};
 
   cudf::test::strings_column_wrapper input_w{input.begin(), input.end(), input_v.begin()};
@@ -191,7 +192,7 @@ TEST_F(ReplaceNullsPolicyStringTest, PrecedingFill)
                                            {1, 0, 0, 1, 1, 0, 1});
 
   cudf::test::strings_column_wrapper expected({"head", "head", "head", "mid", "mid", "mid", "tail"},
-                                              cudf::test::all_valid());
+                                              cudf::test::iterator_no_null());
 
   auto result = cudf::replace_nulls(input, cudf::replace_policy::PRECEDING);
 
@@ -204,7 +205,7 @@ TEST_F(ReplaceNullsPolicyStringTest, FollowingFill)
                                            {1, 0, 0, 1, 1, 0, 1});
 
   cudf::test::strings_column_wrapper expected({"head", "mid", "mid", "mid", "mid", "tail", "tail"},
-                                              cudf::test::all_valid());
+                                              cudf::test::iterator_no_null());
 
   auto result = cudf::replace_nulls(input, cudf::replace_policy::FOLLOWING);
 
@@ -388,7 +389,7 @@ TYPED_TEST(ReplaceNullsPolicyTest, PrecedingFill)
   TestReplaceNullsWithPolicy(
     cudf::test::fixed_width_column_wrapper<TypeParam>(col.begin(), col.end(), mask.begin()),
     cudf::test::fixed_width_column_wrapper<TypeParam>(
-      expect_col.begin(), expect_col.end(), cudf::test::all_valid()),
+      expect_col.begin(), expect_col.end(), cudf::test::iterator_no_null()),
     cudf::replace_policy::PRECEDING);
 }
 
@@ -402,7 +403,7 @@ TYPED_TEST(ReplaceNullsPolicyTest, FollowingFill)
   TestReplaceNullsWithPolicy(
     cudf::test::fixed_width_column_wrapper<TypeParam>(col.begin(), col.end(), mask.begin()),
     cudf::test::fixed_width_column_wrapper<TypeParam>(
-      expect_col.begin(), expect_col.end(), cudf::test::all_valid()),
+      expect_col.begin(), expect_col.end(), cudf::test::iterator_no_null()),
     cudf::replace_policy::FOLLOWING);
 }
 
@@ -659,7 +660,8 @@ TEST_F(ReplaceNullsPolicyDictionaryTest, PrecedingFill)
   auto input = cudf::dictionary::encode(input_w);
 
   cudf::test::strings_column_wrapper expected_w(
-    {"head", "head", "head", "mid1", "mid2", "tail", "tail", "tail"}, cudf::test::all_valid());
+    {"head", "head", "head", "mid1", "mid2", "tail", "tail", "tail"},
+    cudf::test::iterator_no_null());
   auto expected = cudf::dictionary::encode(expected_w);
 
   auto result = cudf::replace_nulls(*input, cudf::replace_policy::PRECEDING);
@@ -674,7 +676,8 @@ TEST_F(ReplaceNullsPolicyDictionaryTest, FollowingFill)
   auto input = cudf::dictionary::encode(input_w);
 
   cudf::test::strings_column_wrapper expected_w(
-    {"head", "mid1", "mid1", "mid1", "mid2", "tail", "tail", "tail"}, cudf::test::all_valid());
+    {"head", "mid1", "mid1", "mid1", "mid2", "tail", "tail", "tail"},
+    cudf::test::iterator_no_null());
   auto expected = cudf::dictionary::encode(expected_w);
 
   auto result = cudf::replace_nulls(*input, cudf::replace_policy::FOLLOWING);

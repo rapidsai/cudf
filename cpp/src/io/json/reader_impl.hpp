@@ -87,10 +87,11 @@ class reader::impl {
    * @brief Sets the column map data member and makes a device copy to be used as a kernel
    * parameter.
    */
-  void set_column_map(col_map_ptr_type &&map)
+  void set_column_map(col_map_ptr_type &&map, rmm::cuda_stream_view stream)
   {
     key_to_col_idx_map_ = std::move(map);
-    d_key_col_map_      = std::make_unique<rmm::device_scalar<col_map_type>>(*key_to_col_idx_map_);
+    d_key_col_map_ =
+      std::make_unique<rmm::device_scalar<col_map_type>>(*key_to_col_idx_map_, stream);
   }
   /**
    * @brief Gets the pointer to the column hash map in the device memory.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,25 +34,29 @@ class string_view;
 namespace strings {
 namespace detail {
 
-// 10128 ≈ 1000 instructions
-// Formula is based on relist::data_size_for() calculation;
-// Stack ≈ (8+2)*x + (x/8) = 10.125x < 11x  where x is number of instructions
-// constexpr int32_t MAX_STACK_INSTS = 1000;
-
-constexpr int32_t RX_STACK_SMALL  = 112;
-constexpr int32_t RX_STACK_MEDIUM = 1104;
-constexpr int32_t RX_STACK_LARGE  = 10128;
-constexpr int32_t RX_STACK_ANY    = 8;
-
-constexpr int32_t RX_SMALL_INSTS  = (RX_STACK_SMALL / 11);
-constexpr int32_t RX_MEDIUM_INSTS = (RX_STACK_MEDIUM / 11);
-constexpr int32_t RX_LARGE_INSTS  = (RX_STACK_LARGE / 11);
-
 struct reljunk;
 struct reinst;
 class reprog;
 
 using string_index_pair = thrust::pair<const char*, cudf::size_type>;
+
+constexpr int32_t RX_STACK_SMALL  = 112;    ///< fastest stack size
+constexpr int32_t RX_STACK_MEDIUM = 1104;   ///< faster stack size
+constexpr int32_t RX_STACK_LARGE  = 10128;  ///< fast stack size
+constexpr int32_t RX_STACK_ANY    = 8;      ///< slowest: uses global memory
+
+/**
+ * @brief Mapping the number of instructions to device code stack memory size.
+ *
+ * ```
+ * 10128 ≈ 1000 instructions
+ * Formula is based on relist::data_size_for() calculation;
+ * Stack ≈ (8+2)*x + (x/8) = 10.125x < 11x  where x is number of instructions
+ * ```
+ */
+constexpr int32_t RX_SMALL_INSTS  = (RX_STACK_SMALL / 11);
+constexpr int32_t RX_MEDIUM_INSTS = (RX_STACK_MEDIUM / 11);
+constexpr int32_t RX_LARGE_INSTS  = (RX_STACK_LARGE / 11);
 
 /**
  * @brief Regex class stored on the device and executed by reprog_device.
@@ -121,7 +125,7 @@ class reprog_device {
   /**
    * @brief Returns the number of regex groups found in the expression.
    */
-  __host__ __device__ int32_t group_counts() const { return _num_capturing_groups; }
+  __host__ __device__ inline int32_t group_counts() const { return _num_capturing_groups; }
 
   /**
    * @brief Returns the regex instruction object for a given index.
@@ -141,6 +145,7 @@ class reprog_device {
   /**
    * @brief Does a find evaluation using the compiled expression on the given string.
    *
+   * @tparam stack_size One of the `RX_STACK_` values based on the `insts_count`.
    * @param idx The string index used for mapping the state memory for this string in global memory
    * (if necessary).
    * @param d_str The string to search.
@@ -163,6 +168,7 @@ class reprog_device {
    * The find() function should be called first to locate the begin/end bounds of the
    * the matched section.
    *
+   * @tparam stack_size One of the `RX_STACK_` values based on the `insts_count`.
    * @param idx The string index used for mapping the state memory for this string in global memory
    * (if necessary).
    * @param d_str The string to search.
