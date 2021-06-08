@@ -335,8 +335,10 @@ def _union_categoricals(
     sort_categories: bool = False,
     ignore_order: bool = False,
 ):
-    """
-    This is an internal API which combines categorical data.
+    """Combine categorical data.
+
+    This API is currently internal but should be exposed once full support for
+    cudf.Categorical is ready.
     """
     # TODO(s) in the order specified :
     # 1. The return type needs to be changed
