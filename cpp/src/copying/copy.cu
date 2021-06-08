@@ -219,7 +219,8 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
       stream,
       mr);
 
-    return std::make_unique<column>(lhs, stream, mr);
+    // return std::make_unique<column>(lhs, stream, mr);
+    return std::move(result->release()[0]);
   }
 
   // Bail out for Scalars.

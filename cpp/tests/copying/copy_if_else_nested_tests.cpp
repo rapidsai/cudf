@@ -264,7 +264,7 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ReflexiveStructsWithNulls_101)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result_column->view(), lhs_structs_column->view());
 }
 
-TYPED_TEST(TypedCopyIfElseNestedTest, ReflexiveStructsWithNulls_110)
+TYPED_TEST(TypedCopyIfElseNestedTest, ReflexiveStructsWithNulls_110_1)
 {
   using T = TypeParam;
 
@@ -276,19 +276,47 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ReflexiveStructsWithNulls_110)
   using bools   = fixed_width_column_wrapper<bool, int32_t>;
 
   auto lhs_child_0 = ints{{100, 101, 102}, iterator_with_null_at(std::vector<size_type>{0, 1})};
+  auto rhs_child_0 = ints{{100, 11111, 102}, iterator_with_null_at(std::vector<size_type>{0, 1})};
 
   auto lhs_structs_column = structs{{lhs_child_0}}.release();
+  auto rhs_structs_column = structs{{rhs_child_0}}.release();
 
   cudf::test::print(*lhs_structs_column);
+  cudf::test::print(*rhs_structs_column);
 
   auto selector_column = bools{1, 1, 0}.release();
   auto result_column =
-    copy_if_else(lhs_structs_column->view(), lhs_structs_column->view(), selector_column->view());
-
-  std::cout << "result: " << std::endl;
+    copy_if_else(lhs_structs_column->view(), rhs_structs_column->view(), selector_column->view());
   cudf::test::print(*result_column);
-
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result_column->view(), lhs_structs_column->view());
+}
+
+TYPED_TEST(TypedCopyIfElseNestedTest, ReflexiveStructsWithNulls_110_2)
+{
+  using T = TypeParam;
+
+  using namespace cudf;
+  using namespace cudf::test;
+
+  using ints    = fixed_width_column_wrapper<T, int32_t>;
+  using structs = structs_column_wrapper;
+  using bools   = fixed_width_column_wrapper<bool, int32_t>;
+
+  auto lhs_child_0 = ints{{100, 101, 102}, iterator_with_null_at(std::vector<size_type>{0, 1})};
+  auto rhs_child_0 = ints{{100, 111, 102}, iterator_with_null_at(std::vector<size_type>{0, 1})};
+
+  auto lhs_structs_column = structs{{lhs_child_0}}.release();
+  auto rhs_structs_column = structs{{rhs_child_0}}.release();
+
+  cudf::test::print(*lhs_structs_column);
+  cudf::test::print(*rhs_structs_column);
+
+  auto selector_column = bools{1, 1, 0}.release();
+
+  auto result_column1 =
+    copy_if_else(rhs_structs_column->view(), lhs_structs_column->view(), selector_column->view());
+  cudf::test::print(*result_column1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result_column1->view(), lhs_structs_column->view());
 }
 
 TYPED_TEST(TypedCopyIfElseNestedTest, ReflexiveStructsWithNulls_111)
