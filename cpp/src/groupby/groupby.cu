@@ -251,7 +251,7 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls
       auto final_mr       = nullable ? rmm::mr::get_current_device_resource() : mr;
       auto grouped_values = helper().grouped_values(values.column(i), stream, final_mr);
       return nullable ? detail::group_replace_nulls(
-                          *grouped_values, group_labels, replace_policies[i], stream, final_mr)
+                          *grouped_values, group_labels, replace_policies[i], stream, mr)
                       : std::move(grouped_values);
     });
 
