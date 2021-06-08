@@ -77,8 +77,8 @@ conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
 # Install the master version of dask, distributed, and streamz
 logger "pip install git+https://github.com/dask/distributed.git@main --upgrade --no-deps"
 pip install "git+https://github.com/dask/distributed.git@main" --upgrade --no-deps
-logger "pip install git+https://github.com/dask/dask.git@2021.05.1 --upgrade --no-deps"
-pip install "git+https://github.com/dask/dask.git@2021.05.1" --upgrade --no-deps
+logger "pip install git+https://github.com/dask/dask.git@main --upgrade --no-deps"
+pip install "git+https://github.com/dask/dask.git@main" --upgrade --no-deps
 logger "pip install git+https://github.com/python-streamz/streamz.git --upgrade --no-deps"
 pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
 
