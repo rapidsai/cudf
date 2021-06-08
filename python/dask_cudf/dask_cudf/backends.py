@@ -18,13 +18,19 @@ from dask.dataframe.utils import (
     _scalar_from_dtype,
     is_arraylike,
     is_scalar,
-    make_meta,
 )
 
 try:
     from dask.dataframe.utils import make_meta_obj as make_meta_obj
 except ImportError:
     from dask.dataframe.utils import make_meta as make_meta_obj
+
+try:
+    from dask.dataframe.dispatch import (
+        make_meta_dispatch as make_meta_dispatch,
+    )
+except ImportError:
+    from dask.dataframe.utils import make_meta as make_meta_dispatch
 
 import cudf
 from cudf.utils.dtypes import is_string_dtype
@@ -121,12 +127,12 @@ def meta_nonempty_cudf(x):
     return res
 
 
-@make_meta.register((cudf.Series, cudf.DataFrame))
+@make_meta_dispatch.register((cudf.Series, cudf.DataFrame))
 def make_meta_cudf(x, index=None):
     return x.head(0)
 
 
-@make_meta.register(cudf.Index)
+@make_meta_dispatch.register(cudf.Index)
 def make_meta_cudf_index(x, index=None):
     return x[:0]
 
@@ -173,7 +179,7 @@ def make_meta_object_cudf(x, index=None):
         return x[:0]
 
     if index is not None:
-        index = make_meta(index)
+        index = make_meta_dispatch(index)
 
     if isinstance(x, dict):
         return cudf.DataFrame(
@@ -247,6 +253,21 @@ def tolist_cudf(obj):
 def is_categorical_dtype_cudf(obj):
     return cudf.utils.dtypes.is_categorical_dtype(obj)
 
+
+try:
+    from dask.dataframe.dispatch import union_categoricals_dispatch
+
+    @union_categoricals_dispatch.register((cudf.Series, cudf.Index))
+    def union_categoricals_cudf(
+        to_union, sort_categories=False, ignore_order=False
+    ):
+        return cudf.api.types._union_categoricals(
+            to_union, sort_categories=False, ignore_order=False
+        )
+
+
+except ImportError:
+    pass
 
 try:
 

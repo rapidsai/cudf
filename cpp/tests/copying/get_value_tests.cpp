@@ -26,6 +26,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -560,8 +561,8 @@ struct ListGetStructValueTest : public BaseFixture {
     // {int: 1, string: NULL, list: NULL}
     return this->make_test_structs_column({{1}, {1}},
                                           strings_column_wrapper({"aa"}, {false}),
-                                          LCWinner_t({{}}, all_invalid()),
-                                          all_valid());
+                                          LCWinner_t({{}}, iterator_all_nulls()),
+                                          iterator_no_null());
   }
 
   /**
@@ -570,7 +571,7 @@ struct ListGetStructValueTest : public BaseFixture {
   SCW row1()
   {
     // NULL
-    return this->make_test_structs_column({-1}, {""}, LCWinner_t{-1}, all_invalid());
+    return this->make_test_structs_column({-1}, {""}, LCWinner_t{-1}, iterator_all_nulls());
   }
 
   /**
@@ -581,8 +582,8 @@ struct ListGetStructValueTest : public BaseFixture {
     // {int: 3, string: "xyz", list: [3, 8, 4]}
     return this->make_test_structs_column({{3}, {1}},
                                           strings_column_wrapper({"xyz"}, {true}),
-                                          LCWinner_t({{3, 8, 4}}, all_valid()),
-                                          all_valid());
+                                          LCWinner_t({{3, 8, 4}}, iterator_no_null()),
+                                          iterator_no_null());
   }
 
   /**
@@ -596,9 +597,6 @@ struct ListGetStructValueTest : public BaseFixture {
     // {int: 3, string: "xyz", list: [3, 8, 4]}
     return this->concat({row0(), row1(), row2()});
   }
-
-  auto all_valid() { return thrust::make_constant_iterator(true); }
-  auto all_invalid() { return thrust::make_constant_iterator(false); }
 };
 
 TYPED_TEST_CASE(ListGetStructValueTest, FixedWidthTypes);
