@@ -21,7 +21,6 @@
 
 #include "column_buffer.hpp"
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/strings/detail/utilities.hpp>
 
 namespace cudf {
 namespace io {
@@ -190,8 +189,6 @@ std::unique_ptr<column> empty_like(column_buffer& buffer,
                                  stream,
                                  mr);
     } break;
-
-    case type_id::STRING: return cudf::strings::detail::make_empty_strings_column(stream, mr);
 
     default: return cudf::make_empty_column(buffer.type);
   }

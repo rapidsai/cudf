@@ -24,7 +24,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -87,7 +86,7 @@ std::unique_ptr<column> replace_with_backrefs(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  if (strings.is_empty()) return make_empty_strings_column(stream, mr);
+  if (strings.is_empty()) return make_empty_column(data_type{type_id::STRING});
 
   CUDF_EXPECTS(!pattern.empty(), "Parameter pattern must not be empty");
   CUDF_EXPECTS(!repl.empty(), "Parameter repl must not be empty");
