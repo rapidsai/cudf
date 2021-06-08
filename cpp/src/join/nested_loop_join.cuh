@@ -111,17 +111,17 @@ get_conditional_join_indices(table_view const& left,
   // find what the size of the output will be.
   join_kind KernelJoinKind = JoinKind == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : JoinKind;
   if (has_nulls) {
-    compute_conditional_join_output_size<block_size, true>
-      <<<config.num_blocks,
-         config.num_threads_per_block,
-         plan.dev_plan.shmem_per_thread,
-         stream.value()>>>(*left_table, *right_table, KernelJoinKind, plan.dev_plan, size.data());
+    compute_conditional_join_output_size<block_size, true><<<config.num_blocks,
+                                                             config.num_threads_per_block,
+                                                             plan.dev_plan.shmem_per_thread,
+                                                             stream.value()>>>(
+      *left_table, *right_table, KernelJoinKind, compare_nulls, plan.dev_plan, size.data());
   } else {
-    compute_conditional_join_output_size<block_size, false>
-      <<<config.num_blocks,
-         config.num_threads_per_block,
-         plan.dev_plan.shmem_per_thread,
-         stream.value()>>>(*left_table, *right_table, KernelJoinKind, plan.dev_plan, size.data());
+    compute_conditional_join_output_size<block_size, false><<<config.num_blocks,
+                                                              config.num_threads_per_block,
+                                                              plan.dev_plan.shmem_per_thread,
+                                                              stream.value()>>>(
+      *left_table, *right_table, KernelJoinKind, compare_nulls, plan.dev_plan, size.data());
   }
   CHECK_CUDA(stream.value());
 
@@ -148,6 +148,7 @@ get_conditional_join_indices(table_view const& left,
          stream.value()>>>(*left_table,
                            *right_table,
                            KernelJoinKind,
+                           compare_nulls,
                            join_output_l,
                            join_output_r,
                            write_index.data(),
@@ -161,6 +162,7 @@ get_conditional_join_indices(table_view const& left,
          stream.value()>>>(*left_table,
                            *right_table,
                            KernelJoinKind,
+                           compare_nulls,
                            join_output_l,
                            join_output_r,
                            write_index.data(),

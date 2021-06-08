@@ -212,17 +212,20 @@ __global__ void compute_join_output_size(multimap_type multi_map,
  * matches according to a boolean expression.
  *
  * @tparam block_size The number of threads per block for this kernel
+ * @tparam has_nulls Whether or not the inputs may contain nulls.
  *
  * @param[in] left_table The left table
  * @param[in] right_table The right table
  * @param[in] JoinKind The type of join to be performed
- * @param[in] check_row_equality The row equality comparator
+ * @param[in] compare_nulls Controls whether null join-key values should match or not.
+ * @param[in] plan Container of device data required to evaluate the desired expression.
  * @param[out] output_size The resulting output size
  */
 template <int block_size, bool has_nulls>
 __global__ void compute_conditional_join_output_size(table_device_view left_table,
                                                      table_device_view right_table,
                                                      join_kind JoinKind,
+                                                     null_equality compare_nulls,
                                                      ast::detail::dev_ast_plan plan,
                                                      cudf::size_type* output_size)
 {
@@ -242,7 +245,7 @@ __global__ void compute_conditional_join_output_size(table_device_view left_tabl
   const cudf::size_type right_num_rows = right_table.num_rows();
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, plan, thread_intermediate_storage, right_table);
+    left_table, right_table, plan, thread_intermediate_storage, compare_nulls);
 
   for (cudf::size_type left_row_index = left_start_idx; left_row_index < left_num_rows;
        left_row_index += left_stride) {
@@ -464,21 +467,24 @@ __global__ void probe_hash_table(multimap_type multi_map,
  * @tparam block_size The number of threads per block for this kernel
  * @tparam output_cache_size The side of the shared memory buffer to cache join
  * output results
-
+ * @tparam has_nulls Whether or not the inputs may contain nulls.
+ *
  * @param[in] left_table The left table
  * @param[in] right_table The right table
  * @param[in] JoinKind The type of join to be performed
- * @param[in] check_row_equality The row equality comparator
+ * @param compare_nulls Controls whether null join-key values should match or not.
  * @param[out] join_output_l The left result of the join operation
  * @param[out] join_output_r The right result of the join operation
  * @param[in,out] current_idx A global counter used by threads to coordinate
  * writes to the global output
+ * @param plan Container of device data required to evaluate the desired expression.
  * @param[in] max_size The maximum size of the output
  */
 template <cudf::size_type block_size, cudf::size_type output_cache_size, bool has_nulls>
 __global__ void conditional_join(table_device_view left_table,
                                  table_device_view right_table,
                                  join_kind JoinKind,
+                                 null_equality compare_nulls,
                                  cudf::size_type* join_output_l,
                                  cudf::size_type* join_output_r,
                                  cudf::size_type* current_idx,
@@ -513,7 +519,7 @@ __global__ void conditional_join(table_device_view left_table,
   const unsigned int activemask = __ballot_sync(0xffffffff, left_row_index < left_num_rows);
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, plan, thread_intermediate_storage, right_table);
+    left_table, right_table, plan, thread_intermediate_storage, compare_nulls);
 
   if (left_row_index < left_num_rows) {
     bool found_match = false;

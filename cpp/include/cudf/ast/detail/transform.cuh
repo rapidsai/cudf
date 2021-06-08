@@ -336,10 +336,15 @@ struct expression_evaluator {
    * @param left View on the right table view used for evaluation.
    */
   __device__ expression_evaluator(table_device_view const& left,
+                                  table_device_view const& right,
                                   dev_ast_plan const& plan,
                                   IntermediateDataType<has_nulls>* thread_intermediate_storage,
-                                  table_device_view const& right)
-    : left(left), plan(plan), thread_intermediate_storage(thread_intermediate_storage), right(right)
+                                  null_equality compare_nulls = null_equality::EQUAL)
+    : left(left),
+      plan(plan),
+      thread_intermediate_storage(thread_intermediate_storage),
+      right(right),
+      compare_nulls(compare_nulls)
   {
   }
 
@@ -353,8 +358,13 @@ struct expression_evaluator {
    */
   __device__ expression_evaluator(table_device_view const& left,
                                   dev_ast_plan const& plan,
-                                  IntermediateDataType<has_nulls>* thread_intermediate_storage)
-    : left(left), plan(plan), thread_intermediate_storage(thread_intermediate_storage), right(left)
+                                  IntermediateDataType<has_nulls>* thread_intermediate_storage,
+                                  null_equality compare_nulls = null_equality::EQUAL)
+    : left(left),
+      right(left),
+      plan(plan),
+      thread_intermediate_storage(thread_intermediate_storage),
+      compare_nulls(compare_nulls)
   {
   }
 
@@ -644,7 +654,7 @@ struct expression_evaluator {
       cudf_assert(false && "Invalid type in resolve_output.");
     }
 
-   private:
+   protected:
     expression_evaluator<has_nulls> const& evaluator;
   };
 
@@ -745,14 +755,33 @@ struct expression_evaluator {
       using OperatorFunctor = detail::operator_functor<op>;
       using Out             = cuda::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
       if constexpr (has_nulls) {
-        auto result = (lhs.has_value() && rhs.has_value())
-                        ? possibly_null_value_t<Out, has_nulls>(OperatorFunctor{}(*lhs, *rhs))
-                        : possibly_null_value_t<Out, has_nulls>();
-        this->template resolve_output<Out>(output_object, output, output_row_index, result);
+        if constexpr (op == ast_operator::EQUAL) {
+          // Special handling of the equality operator based on what kind
+          // of null handling was requested.
+          possibly_null_value_t<Out, has_nulls> result;
+          if (!lhs.has_value() && !rhs.has_value()) {
+            // Case 1: Both null, so the output is based on compare_nulls.
+            result = possibly_null_value_t<Out, has_nulls>(this->evaluator.compare_nulls ==
+                                                           null_equality::EQUAL);
+          } else if (lhs.has_value() && rhs.has_value()) {
+            // Case 2: Neither is null, so the output is given by the operation.
+            result = possibly_null_value_t<Out, has_nulls>(OperatorFunctor{}(*lhs, *rhs));
+          } else {
+            // Case 3: One value is null, while the other is not, so we simply propagate nulls.
+            result = possibly_null_value_t<Out, has_nulls>();
+          }
+          this->template resolve_output<Out>(output_object, output, output_row_index, result);
+        } else {
+          // Default behavior for all other operators is to propagate nulls.
+          auto result = (lhs.has_value() && rhs.has_value())
+                          ? possibly_null_value_t<Out, has_nulls>(OperatorFunctor{}(*lhs, *rhs))
+                          : possibly_null_value_t<Out, has_nulls>();
+          this->template resolve_output<Out>(output_object, output, output_row_index, result);
+        }  // if constexpr (op == ast_operator::EQUAL) {
       } else {
         this->template resolve_output<Out>(
           output_object, output, output_row_index, OperatorFunctor{}(lhs, rhs));
-      }
+      }  // if constexpr (has_nulls) {
     }
 
     template <ast_operator op,
@@ -776,6 +805,8 @@ struct expression_evaluator {
   IntermediateDataType<has_nulls>*
     thread_intermediate_storage;  ///< The shared memory store of intermediates produced during
                                   ///< evaluation.
+  null_equality
+    compare_nulls;  ///< Whether the equality operators returns true or false for two nulls.
 };
 
 /**
