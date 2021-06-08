@@ -129,8 +129,8 @@ static void BM_join(benchmark::State& state, Join JoinFunc)
 
 CONDITIONAL_INNER_JOIN_BENCHMARK_DEFINE(conditional_inner_join_32bit, int32_t, int32_t, false);
 CONDITIONAL_INNER_JOIN_BENCHMARK_DEFINE(conditional_inner_join_64bit, int64_t, int64_t, false);
-// CONDITIONAL_JOIN_BENCHMARK_DEFINE(join_32bit_nulls, int32_t, int32_t, true);
-// CONDITIONAL_JOIN_BENCHMARK_DEFINE(join_64bit_nulls, int64_t, int64_t, true);
+CONDITIONAL_INNER_JOIN_BENCHMARK_DEFINE(conditional_inner_join_32bit_nulls, int32_t, int32_t, true);
+CONDITIONAL_INNER_JOIN_BENCHMARK_DEFINE(conditional_inner_join_64bit_nulls, int64_t, int64_t, true);
 
 #define CONDITIONAL_LEFT_JOIN_BENCHMARK_DEFINE(name, key_type, payload_type, nullable) \
   BENCHMARK_TEMPLATE_DEFINE_F(ConditionalJoin, name, key_type, payload_type)           \
@@ -147,8 +147,8 @@ CONDITIONAL_INNER_JOIN_BENCHMARK_DEFINE(conditional_inner_join_64bit, int64_t, i
 
 CONDITIONAL_LEFT_JOIN_BENCHMARK_DEFINE(conditional_left_join_32bit, int32_t, int32_t, false);
 CONDITIONAL_LEFT_JOIN_BENCHMARK_DEFINE(conditional_left_join_64bit, int64_t, int64_t, false);
-// CONDITIONAL_JOIN_BENCHMARK_DEFINE(join_32bit_nulls, int32_t, int32_t, true);
-// CONDITIONAL_JOIN_BENCHMARK_DEFINE(join_64bit_nulls, int64_t, int64_t, true);
+CONDITIONAL_LEFT_JOIN_BENCHMARK_DEFINE(conditional_left_join_32bit_nulls, int32_t, int32_t, true);
+CONDITIONAL_LEFT_JOIN_BENCHMARK_DEFINE(conditional_left_join_64bit_nulls, int64_t, int64_t, true);
 
 #define CONDITIONAL_FULL_JOIN_BENCHMARK_DEFINE(name, key_type, payload_type, nullable) \
   BENCHMARK_TEMPLATE_DEFINE_F(ConditionalJoin, name, key_type, payload_type)           \
@@ -165,8 +165,8 @@ CONDITIONAL_LEFT_JOIN_BENCHMARK_DEFINE(conditional_left_join_64bit, int64_t, int
 
 CONDITIONAL_FULL_JOIN_BENCHMARK_DEFINE(conditional_full_join_32bit, int32_t, int32_t, false);
 CONDITIONAL_FULL_JOIN_BENCHMARK_DEFINE(conditional_full_join_64bit, int64_t, int64_t, false);
-// CONDITIONAL_JOIN_BENCHMARK_DEFINE(join_32bit_nulls, int32_t, int32_t, true);
-// CONDITIONAL_JOIN_BENCHMARK_DEFINE(join_64bit_nulls, int64_t, int64_t, true);
+CONDITIONAL_FULL_JOIN_BENCHMARK_DEFINE(conditional_full_join_32bit_nulls, int32_t, int32_t, true);
+CONDITIONAL_FULL_JOIN_BENCHMARK_DEFINE(conditional_full_join_64bit_nulls, int64_t, int64_t, true);
 
 #define CONDITIONAL_LEFT_ANTI_JOIN_BENCHMARK_DEFINE(name, key_type, payload_type, nullable) \
   BENCHMARK_TEMPLATE_DEFINE_F(ConditionalJoin, name, key_type, payload_type)                \
@@ -189,8 +189,14 @@ CONDITIONAL_LEFT_ANTI_JOIN_BENCHMARK_DEFINE(conditional_left_anti_join_64bit,
                                             int64_t,
                                             int64_t,
                                             false);
-// CONDITIONAL_LEFT_ANTI_JOIN_BENCHMARK_DEFINE(left_anti_join_32bit_nulls, int32_t, int32_t, true);
-// CONDITIONAL_LEFT_ANTI_JOIN_BENCHMARK_DEFINE(left_anti_join_64bit_nulls, int64_t, int64_t, true);
+CONDITIONAL_LEFT_ANTI_JOIN_BENCHMARK_DEFINE(conditional_left_anti_join_32bit_nulls,
+                                            int32_t,
+                                            int32_t,
+                                            true);
+CONDITIONAL_LEFT_ANTI_JOIN_BENCHMARK_DEFINE(conditional_left_anti_join_64bit_nulls,
+                                            int64_t,
+                                            int64_t,
+                                            true);
 
 #define CONDITIONAL_LEFT_SEMI_JOIN_BENCHMARK_DEFINE(name, key_type, payload_type, nullable) \
   BENCHMARK_TEMPLATE_DEFINE_F(ConditionalJoin, name, key_type, payload_type)                \
@@ -213,8 +219,14 @@ CONDITIONAL_LEFT_SEMI_JOIN_BENCHMARK_DEFINE(conditional_left_semi_join_64bit,
                                             int64_t,
                                             int64_t,
                                             false);
-// CONDITIONAL_LEFT_SEMI_JOIN_BENCHMARK_DEFINE(left_semi_join_32bit_nulls, int32_t, int32_t, true);
-// CONDITIONAL_LEFT_SEMI_JOIN_BENCHMARK_DEFINE(left_semi_join_64bit_nulls, int64_t, int64_t, true);
+CONDITIONAL_LEFT_SEMI_JOIN_BENCHMARK_DEFINE(conditional_left_semi_join_32bit_nulls,
+                                            int32_t,
+                                            int32_t,
+                                            true);
+CONDITIONAL_LEFT_SEMI_JOIN_BENCHMARK_DEFINE(conditional_left_semi_join_64bit_nulls,
+                                            int64_t,
+                                            int64_t,
+                                            true);
 
 // inner join -----------------------------------------------------------------------
 BENCHMARK_REGISTER_F(ConditionalJoin, conditional_inner_join_32bit)
@@ -225,6 +237,20 @@ BENCHMARK_REGISTER_F(ConditionalJoin, conditional_inner_join_32bit)
   ->UseManualTime();
 
 BENCHMARK_REGISTER_F(ConditionalJoin, conditional_inner_join_64bit)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 100'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
+  ->UseManualTime();
+
+BENCHMARK_REGISTER_F(ConditionalJoin, conditional_inner_join_32bit_nulls)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 100'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
+  ->UseManualTime();
+
+BENCHMARK_REGISTER_F(ConditionalJoin, conditional_inner_join_64bit_nulls)
   ->Unit(benchmark::kMillisecond)
   ->Args({100'000, 100'000})
   ->Args({100'000, 400'000})
@@ -246,6 +272,20 @@ BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_join_64bit)
   ->Args({100'000, 1'000'000})
   ->UseManualTime();
 
+BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_join_32bit_nulls)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 100'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
+  ->UseManualTime();
+
+BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_join_64bit_nulls)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 100'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
+  ->UseManualTime();
+
 // full join -----------------------------------------------------------------------
 BENCHMARK_REGISTER_F(ConditionalJoin, conditional_full_join_32bit)
   ->Unit(benchmark::kMillisecond)
@@ -255,6 +295,20 @@ BENCHMARK_REGISTER_F(ConditionalJoin, conditional_full_join_32bit)
   ->UseManualTime();
 
 BENCHMARK_REGISTER_F(ConditionalJoin, conditional_full_join_64bit)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 100'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
+  ->UseManualTime();
+
+BENCHMARK_REGISTER_F(ConditionalJoin, conditional_full_join_32bit_nulls)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 100'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
+  ->UseManualTime();
+
+BENCHMARK_REGISTER_F(ConditionalJoin, conditional_full_join_64bit_nulls)
   ->Unit(benchmark::kMillisecond)
   ->Args({100'000, 100'000})
   ->Args({100'000, 400'000})
@@ -276,6 +330,20 @@ BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_anti_join_64bit)
   ->Args({100'000, 1'000'000})
   ->UseManualTime();
 
+BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_anti_join_32bit_nulls)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 100'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
+  ->UseManualTime();
+
+BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_anti_join_64bit_nulls)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 100'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
+  ->UseManualTime();
+
 // left semi-join -------------------------------------------------------------
 BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_semi_join_32bit)
   ->Unit(benchmark::kMillisecond)
@@ -285,6 +353,20 @@ BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_semi_join_32bit)
   ->UseManualTime();
 
 BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_semi_join_64bit)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 100'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
+  ->UseManualTime();
+
+BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_semi_join_32bit_nulls)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 100'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
+  ->UseManualTime();
+
+BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_semi_join_64bit_nulls)
   ->Unit(benchmark::kMillisecond)
   ->Args({100'000, 100'000})
   ->Args({100'000, 400'000})
