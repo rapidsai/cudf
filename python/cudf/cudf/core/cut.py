@@ -8,7 +8,8 @@ import cudf
 import numpy as np
 import pandas as pd
 from collections.abc import Sequence
-from cudf._lib.filling import sequence
+
+# from cudf._lib.filling import sequence
 
 
 def cut(
@@ -159,9 +160,9 @@ def cut(
             else:
                 mn = cudf.Scalar(min(x), dtype="float64")
                 mx = cudf.Scalar(max(x), dtype="float64")
-            step = cudf.Scalar((mx - mn) / bins, dtype="float64")
+            # step = cudf.Scalar((mx - mn) / bins, dtype="float64")
             bins = cupy.linspace(mn.value, mx.value, bins + 1, endpoint=True)
-            #this is another possible way to calculate bins
+            # this is another possible way to calculate bins
             # bins = sequence(
             #     size=bins + 1, init=mn.device_value, step=step.device_value
             # ).values
