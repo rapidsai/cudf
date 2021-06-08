@@ -9,9 +9,11 @@
 # Parallelism control
 PARALLEL_LEVEL=${PARALLEL_LEVEL:-4}
 
+EXAMPLES_DIR=${WORKSPACE}/cpp/examples
+
 ################################################################################
 # Basic example
-BASIC_EXAMPLE_DIR=basic
+BASIC_EXAMPLE_DIR=${EXAMPLES_DIR}/basic
 BASIC_EXAMPLE_BUILD_DIR=${BASIC_EXAMPLE_DIR}/build
 
 # Configure
