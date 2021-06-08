@@ -255,7 +255,7 @@ probe_join_hash_table(cudf::table_device_view build_table,
 
     constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
     detail::grid_1d config(probe_table.num_rows(), block_size);
-    write_index.set_value_zero(stream);
+    write_index.set_value_to_zero_async(stream);
 
     row_hash hash_probe{probe_table};
     row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};

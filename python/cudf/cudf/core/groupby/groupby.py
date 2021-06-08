@@ -14,6 +14,21 @@ from cudf.utils.dtypes import is_list_like
 from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
+# The three functions below return the quantiles [25%, 50%, 75%]
+# respectively, which are called in the describe() method to ouput
+# the summary stats of a GroupBy object
+def _quantile_25(x):
+    return x.quantile(0.25)
+
+
+def _quantile_50(x):
+    return x.quantile(0.50)
+
+
+def _quantile_75(x):
+    return x.quantile(0.75)
+
+
 # Note that all valid aggregation methods (e.g. GroupBy.min) are bound to the
 # class after its definition (see below).
 class GroupBy(Serializable):
@@ -600,6 +615,75 @@ class GroupBy(Serializable):
             return getattr(x, "count")(dropna=dropna)
 
         return self.agg(func)
+
+    def describe(self, include=None, exclude=None):
+        """
+        Generate descriptive statistics that summarizes the central tendency,
+        dispersion and shape of a dataset’s distribution, excluding NaN values.
+
+        Analyzes numeric DataFrames only
+
+        Parameters
+        ----------
+        include: ‘all’, list-like of dtypes or None (default), optional
+            list of data types to include in the result.
+            Ignored for Series.
+
+        exclude: list-like of dtypes or None (default), optional,
+            list of data types to omit from the result.
+            Ignored for Series.
+
+        Returns
+        -------
+        Series or DataFrame
+            Summary statistics of the Dataframe provided.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame({"Speed": [380.0, 370.0, 24.0, 26.0],
+                                  "Score": [50, 30, 90, 80]})
+        >>> gdf
+        Speed  Score
+        0  380.0     50
+        1  370.0     30
+        2   24.0     90
+        3   26.0     80
+        >>> gdf.groupby('Score').describe()
+            Speed
+            count   mean   std    min    25%    50%    75%     max
+        Score
+        30        1  370.0  <NA>  370.0  370.0  370.0  370.0  370.0
+        50        1  380.0  <NA>  380.0  380.0  380.0  380.0  380.0
+        80        1   26.0  <NA>   26.0   26.0   26.0   26.0   26.0
+        90        1   24.0  <NA>   24.0   24.0   24.0   24.0   24.0
+
+        """
+        if exclude is not None and include is not None:
+            raise NotImplementedError
+
+        res = self.agg(
+            [
+                "count",
+                "mean",
+                "std",
+                "min",
+                _quantile_25,
+                _quantile_50,
+                _quantile_75,
+                "max",
+            ]
+        )
+        res.rename(
+            columns={
+                "_quantile_25": "25%",
+                "_quantile_50": "50%",
+                "_quantile_75": "75%",
+            },
+            level=1,
+            inplace=True,
+        )
+        return res
 
     def sum(self):
         """Compute the column-wise sum of the values in each group."""

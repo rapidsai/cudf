@@ -300,10 +300,6 @@ public abstract class Aggregation {
         }
     }
 
-    /**
-     * WARNING: For now, NullEquality of UNEQUAL and NaNEquality of ALL_EQUAL doesn't work,
-     * because of incorrect parameter passing in libcudf (https://github.com/rapidsai/cudf/issues/8405).
-     */
     public static final class CollectSetAggregation extends Aggregation
         implements RollingAggregation<CollectSetAggregation> {
         private final NullPolicy nullPolicy;
@@ -722,8 +718,6 @@ public abstract class Aggregation {
 
     /**
      * Collect the values into a set.
-     * WARNING: Due to the bug in libcudf (https://github.com/rapidsai/cudf/issues/8405),
-     * NullEquality of UNEQUAL and NaNEquality of ALL_EQUAL doesn't work properly under rolling window.
      *
      * @param nullPolicy   Indicates whether to include/exclude nulls during collection.
      * @param nullEquality Flag to specify whether null entries within each list should be considered equal.

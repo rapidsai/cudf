@@ -2739,6 +2739,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Segmented sort of the elements within a list in each row of a list column.
+   * NOTICE: list columns with nested child are NOT supported yet.
+   *
+   * @param isDescending   whether sorting each row with descending order (or ascending order)
+   * @param isNullSmallest whether to regard the null value as the min value (or the max value)
+   * @return a List ColumnVector with elements in each list sorted
+   */
+  public final ColumnVector listSortRows(boolean isDescending, boolean isNullSmallest) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    return new ColumnVector(listSortRows(getNativeView(), isDescending, isNullSmallest));
+  }
+
+  /**
    * Get a single item from the column at the specified index as a Scalar.
    *
    * Be careful. This is expensive and may involve running a kernel to copy the data out.
@@ -3054,6 +3067,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return column handle of the resultant
    */
   private static native long listContainsColumn(long nativeView, long keyColumn);
+
+  private static native long listSortRows(long nativeView, boolean isDescending, boolean isNullSmallest);
 
   private static native long getElement(long nativeView, int index);
 

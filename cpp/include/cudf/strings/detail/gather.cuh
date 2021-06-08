@@ -292,7 +292,7 @@ std::unique_ptr<cudf::column> gather(
 {
   auto const output_count  = std::distance(begin, end);
   auto const strings_count = strings.size();
-  if (output_count == 0) return make_empty_strings_column(stream, mr);
+  if (output_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   // allocate offsets column and use memory to compute string size in each output row
   auto out_offsets_column = make_numeric_column(
