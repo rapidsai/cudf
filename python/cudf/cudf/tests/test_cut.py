@@ -157,7 +157,7 @@ def test_cut_right(x, bins, right, precision):
     ],
 )
 @pytest.mark.parametrize(
-    "bins", [[2]],
+    "bins", [[0, 2, 4, 6, 10, 10]],
 )
 @pytest.mark.parametrize("right", [True, False])
 @pytest.mark.parametrize("include_lowest", [True, False])
@@ -190,7 +190,7 @@ def test_cut_drop_duplicates(
         ordered=ordered,
     )
 
-    assert_eq(pindex, gindex, check_categorical=False)
+    assert_eq(pindex, gindex)
 
 
 @pytest.mark.parametrize(

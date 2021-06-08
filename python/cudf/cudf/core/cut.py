@@ -151,18 +151,18 @@ def cut(
                 # because this allows masked arrays from value_counts to
                 # also be able to be handled by cut correctly
                 # pandas by default seems to turn all bins into a float
-                mn = cudf.Scalar(x.min(), dtype="float64")
-                mx = cudf.Scalar(x.max(), dtype="float64")
+                mn = x.min()
+                mx = x.max()
             else:
-                mn = cudf.Scalar(min(x), dtype="float64")
-                mx = cudf.Scalar(max(x), dtype="float64")
+                mn = min(x) 
+                mx = max(x)
             # step = cudf.Scalar((mx - mn) / bins, dtype="float64")
-            bins = np.linspace(mn.value, mx.value, bins + 1, endpoint=True)
+            bins = np.linspace(mn, mx, bins + 1, endpoint=True)
             # this is another possible way to calculate bins
             # bins = sequence(
             #     size=bins + 1, init=mn.device_value, step=step.device_value
             # ).values
-            adj = (mx - mn).value * 0.001
+            adj = (mx - mn) * 0.001
             if right:
                 bins[0] -= adj
             else:
@@ -182,7 +182,7 @@ def cut(
             x[x == right_edge] = right_edge + 1
 
         # adjust bin edges decimal precision
-        int_label_bins = cupy.around(bins, precision)
+        int_label_bins = np.around(bins, precision)
 
     # the inputs is a column of the values in the array x
     input_arr = as_column(x)
@@ -245,10 +245,10 @@ def cut(
         right_edges = as_column(bins.right).astype(input_arr.dtype)
     else:
         # get the left and right edges of the bins as columns
-        left_edges = as_column(bins[:-1:])
-        right_edges = as_column(bins[+1::])
+        left_edges = as_column(bins[:-1:],dtype="float64")
+        right_edges = as_column(bins[+1::],dtype="float64")
         # the input arr must be changed to the same type as the edges
-        input_arr = input_arr.astype(left_edges._dtype)
+        input_arr = input_arr.astype(left_edges.dtype)
     # get the indexes for the appropriate number
     index_labels = label_bins(
         input_arr, left_edges, left_inclusive, right_edges, right_inclusive
