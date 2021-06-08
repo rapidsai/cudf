@@ -19,15 +19,6 @@ from cudf.utils.dtypes import is_decimal_dtype, is_list_dtype, is_struct_dtype
 
 cimport cudf._lib.cpp.types as libcudf_types
 
-from pyarrow.includes.libarrow cimport (
-    InferArrowType, 
-    CResult,
-    CDataType, 
-    GetResultValue
-)
-
-def pa_list_type_from_list(in_list):
-    pass
 
 class TypeId(IntEnum):
     EMPTY = <underlying_type_t_type_id> libcudf_types.type_id.EMPTY
