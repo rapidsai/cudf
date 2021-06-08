@@ -50,15 +50,13 @@ struct extract_fn {
 
   __device__ string_index_pair operator()(size_type idx)
   {
-    u_char data1[stack_size], data2[stack_size];
-    prog.set_stack_mem(data1, data2);
     if (d_strings.is_null(idx)) return string_index_pair{nullptr, 0};
     string_view d_str = d_strings.element<string_view>(idx);
     string_index_pair result{nullptr, 0};
     int32_t begin = 0;
     int32_t end   = -1;  // handles empty strings automatically
-    if ((prog.find(idx, d_str, begin, end) > 0) &&
-        (prog.extract(idx, d_str, begin, end, column_index) > 0)) {
+    if ((prog.find<stack_size>(idx, d_str, begin, end) > 0) &&
+        (prog.extract<stack_size>(idx, d_str, begin, end, column_index) > 0)) {
       auto offset = d_str.byte_offset(begin);
       // build index-pair
       result = string_index_pair{d_str.data() + offset, d_str.byte_offset(end) - offset};
@@ -94,7 +92,7 @@ std::unique_ptr<table> extract(
   for (int32_t column_index = 0; column_index < groups; ++column_index) {
     rmm::device_uvector<string_index_pair> indices(strings_count, stream);
 
-    if ((regex_insts > MAX_STACK_INSTS) || (regex_insts <= RX_SMALL_INSTS))
+    if (regex_insts <= RX_SMALL_INSTS)
       thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(strings_count),
@@ -106,12 +104,18 @@ std::unique_ptr<table> extract(
                         thrust::make_counting_iterator<size_type>(strings_count),
                         indices.begin(),
                         extract_fn<RX_STACK_MEDIUM>{d_prog, d_strings, column_index});
-    else
+    else if (regex_insts <= RX_LARGE_INSTS)
       thrust::transform(rmm::exec_policy(stream),
                         thrust::make_counting_iterator<size_type>(0),
                         thrust::make_counting_iterator<size_type>(strings_count),
                         indices.begin(),
                         extract_fn<RX_STACK_LARGE>{d_prog, d_strings, column_index});
+    else
+      thrust::transform(rmm::exec_policy(stream),
+                        thrust::make_counting_iterator<size_type>(0),
+                        thrust::make_counting_iterator<size_type>(strings_count),
+                        indices.begin(),
+                        extract_fn<RX_STACK_ANY>{d_prog, d_strings, column_index});
 
     results.emplace_back(make_strings_column(indices, stream, mr));
   }

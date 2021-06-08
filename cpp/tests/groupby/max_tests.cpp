@@ -18,6 +18,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
@@ -73,7 +74,7 @@ TYPED_TEST(groupby_max_test, zero_valid_keys)
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, aggregation::MAX>;
 
-  fixed_width_column_wrapper<K> keys({1, 2, 3}, all_null());
+  fixed_width_column_wrapper<K> keys({1, 2, 3}, iterator_all_nulls());
   fixed_width_column_wrapper<V> vals({3, 4, 5});
 
   fixed_width_column_wrapper<K> expect_keys{};
@@ -92,10 +93,10 @@ TYPED_TEST(groupby_max_test, zero_valid_values)
   using R = cudf::detail::target_type_t<V, aggregation::MAX>;
 
   fixed_width_column_wrapper<K> keys{1, 1, 1};
-  fixed_width_column_wrapper<V> vals({3, 4, 5}, all_null());
+  fixed_width_column_wrapper<V> vals({3, 4, 5}, iterator_all_nulls());
 
   fixed_width_column_wrapper<K> expect_keys{1};
-  fixed_width_column_wrapper<R> expect_vals({0}, all_null());
+  fixed_width_column_wrapper<R> expect_vals({0}, iterator_all_nulls());
 
   auto agg = cudf::make_max_aggregation();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -115,7 +116,7 @@ TYPED_TEST(groupby_max_test, null_keys_and_values)
                                      {1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0});
 
   //  { 1, 1,     2, 2, 2,   3, 3,    4}
-  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, all_valid());
+  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, iterator_no_null());
   //  { 0, 3,     1, 4, 5,   2, 8,    -}
   fixed_width_column_wrapper<R> expect_vals({3, 5, 8, 0}, {1, 1, 1, 0});
 
@@ -147,10 +148,10 @@ TEST_F(groupby_max_string_test, basic)
 TEST_F(groupby_max_string_test, zero_valid_values)
 {
   fixed_width_column_wrapper<K> keys{1, 1, 1};
-  strings_column_wrapper vals({"año", "bit", "₹1"}, all_null());
+  strings_column_wrapper vals({"año", "bit", "₹1"}, iterator_all_nulls());
 
   fixed_width_column_wrapper<K> expect_keys{1};
-  strings_column_wrapper expect_vals({""}, all_null());
+  strings_column_wrapper expect_vals({""}, iterator_all_nulls());
 
   auto agg = cudf::make_max_aggregation();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
