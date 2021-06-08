@@ -20,7 +20,6 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/strings/detail/gather.cuh>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -63,7 +62,7 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
 {
   CUDF_FUNC_RANGE();
   size_type strings_count = thrust::distance(begin, end);
-  if (strings_count == 0) return strings::detail::make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   using string_index_pair = thrust::pair<const char*, size_type>;
 
@@ -167,7 +166,7 @@ std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
   CUDF_FUNC_RANGE();
   size_type strings_count = thrust::distance(offsets_begin, offsets_end) - 1;
   size_type bytes         = std::distance(chars_begin, chars_end) * sizeof(char);
-  if (strings_count == 0) return strings::detail::make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   CUDF_EXPECTS(null_count < strings_count, "null strings column not yet supported");
   CUDF_EXPECTS(bytes >= 0, "invalid offsets data");
