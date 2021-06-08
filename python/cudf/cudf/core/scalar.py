@@ -121,7 +121,7 @@ class Scalar(object):
             if dtype is not None:
                 raise TypeError("Lists may not be cast to a different dtype")
             else:
-                dtype = ListDtype.from_arrow(pa.infer_type(value))
+                dtype = ListDtype.from_arrow(pa.infer_type([value]))
                 return value, dtype
 
         if isinstance(dtype, Decimal64Dtype):
