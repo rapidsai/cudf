@@ -85,9 +85,7 @@ auto generate_empty_output(strings_column_view const& input,
                              std::move(offsets_column),
                              std::move(chars_column),
                              input.null_count(),
-                             input.null_count()
-                               ? cudf::detail::copy_bitmask(input.parent(), stream, mr)
-                               : rmm::device_buffer{},
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr),
                              stream,
                              mr);
 }
@@ -168,9 +166,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                              std::move(offsets_column),
                              std::move(chars_column),
                              input.null_count(),
-                             input.null_count()
-                               ? cudf::detail::copy_bitmask(input.parent(), stream, mr)
-                               : rmm::device_buffer{},
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr),
                              stream,
                              mr);
 }

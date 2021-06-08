@@ -244,6 +244,8 @@ TEST_F(RepeatJoinStringTest, StringsColumnWithNulls)
     auto const sliced_strs = cudf::slice(strs, {6, 10})[0];
     auto const results  = cudf::strings::repeat_strings(cudf::strings_column_view(sliced_strs), 2);
     auto const expected = STR_COL{"áááááá", "íííí", "", "Hello WorldHello World"};
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
+
+    // The results strings column may have a bitmask with all valid values.
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *results, print_all);
   }
 }
