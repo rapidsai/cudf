@@ -86,7 +86,6 @@ test:
     - test -f $PREFIX/include/cudf/detail/repeat.hpp
     - test -f $PREFIX/include/cudf/detail/replace.hpp
     - test -f $PREFIX/include/cudf/detail/reshape.hpp
-    - test -f $PREFIX/include/cudf/detail/reverse.hpp
     - test -f $PREFIX/include/cudf/detail/rolling.hpp
     - test -f $PREFIX/include/cudf/detail/round.hpp
     - test -f $PREFIX/include/cudf/detail/scan.hpp
