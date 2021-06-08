@@ -33,14 +33,6 @@ using backref_type = thrust::pair<size_type, size_type>;
  * and inserting the at the backref position indicated in the replacement template.
  *
  * The logic includes computing the size of each string and also writing the output.
- *
- * The stack is used to keep progress on evaluating the regex instructions on each string.
- * So the size of the stack is in proportion to the number of instructions in the given regex
- * pattern.
- *
- * There are three call types based on the number of regex instructions in the given pattern.
- * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
- * Longer patterns require global memory. Shorter patterns are common in data cleaning.
  */
 template <typename Iterator, int stack_size>
 struct backrefs_fn {
@@ -81,9 +73,6 @@ struct backrefs_fn {
       size_type lpos_template = 0;              // last end pos of replace template
       auto const repl_ptr     = d_repl.data();  // replace template pattern
 
-      // int32_t spos_extract = begin;  // these are modified
-      // int32_t epos_extract = end;    // by extract()
-      // prog.extract<stack_size>(idx, d_str, spos_extract, epos_extract, d_extracts);
       prog.extract<stack_size>(idx, d_str, begin, end, d_extracts);
       auto d_section = d_extracts;
 
@@ -94,19 +83,6 @@ struct backrefs_fn {
             out_ptr = copy_and_increment(out_ptr, repl_ptr + lpos_template, copy_length);
             lpos_template += copy_length;
           }
-          // extract the specific group's string for this backref's index
-          // int32_t spos_extract = begin;  // these are modified
-          // int32_t epos_extract = end;    // by extract()
-          // if ((prog.extract<stack_size>(
-          //       idx, d_str, spos_extract, epos_extract, backref.first - 1) <= 0) ||
-          //    (epos_extract <= spos_extract))
-          //  return;  // no value for this backref number; that is ok
-          // spos_extract = d_str.byte_offset(spos_extract);  // convert
-          // epos_extract = d_str.byte_offset(epos_extract);  // to bytes
-          // nbytes += epos_extract - spos_extract;
-          // if (out_ptr)
-          //  out_ptr =
-          //    copy_and_increment(out_ptr, in_ptr + spos_extract, (epos_extract - spos_extract));
           nbytes += d_section->second;
           if (out_ptr) {
             out_ptr = copy_and_increment(out_ptr, d_section->first, d_section->second);
@@ -128,20 +104,6 @@ struct backrefs_fn {
 };
 
 using children_pair = std::pair<std::unique_ptr<column>, std::unique_ptr<column>>;
-
-// children_pair replace_with_backrefs_medium(column_device_view const& d_strings,
-//                                           reprog_device& d_prog,
-//                                           string_view const& d_repl_template,
-//                                           device_span<backref_type> backrefs,
-//                                           rmm::cuda_stream_view stream,
-//                                           rmm::mr::device_memory_resource* mr);
-//
-// children_pair replace_with_backrefs_large(column_device_view const& d_strings,
-//                                          reprog_device& d_prog,
-//                                          string_view const& d_repl_template,
-//                                          device_span<backref_type> backrefs,
-//                                          rmm::cuda_stream_view stream,
-//                                          rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace strings

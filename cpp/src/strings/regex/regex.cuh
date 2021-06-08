@@ -21,7 +21,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/optional.h>
 #include <thrust/pair.h>
 
 #include <functional>

@@ -229,10 +229,8 @@ __device__ inline int32_t reprog_device::regexec(
     }
 
     if (((eos < 0) || (pos < eos)) && match == 0) {
-      // jnk.list1->activate(startinst_id, pos, 0);
       int32_t i = 0;
       auto ids  = startinst_ids();
-      // while (ids[i] >= 0) jnk.list1->activate(ids[i++], (group_id == 0 ? pos : -1), -1);
       while (ids[i] >= 0) jnk.list1->activate(ids[i++], (indices == nullptr ? pos : -1), -1);
     }
 
@@ -258,17 +256,12 @@ __device__ inline int32_t reprog_device::regexec(
           case NCCLASS:
           case END: id_activate = inst_id; break;
           case LBRA:
-            // if (inst->u1.subid == group_id) range.x = pos;
             if (indices && inst->u1.subid == _num_capturing_groups) range.x = pos;
             id_activate = inst->u2.next_id;
             expanded    = true;
-            if (indices) {
-              // printf("  %d< %p (%d/%d)\n", inst->u1.subid, dstr.data(), itr.byte_offset(), pos);
-              indices[inst->u1.subid - 1].first = dstr.data() + itr.byte_offset();
-            }
+            if (indices) { indices[inst->u1.subid - 1].first = dstr.data() + itr.byte_offset(); }
             break;
           case RBRA:
-            // if (inst->u1.subid == group_id) range.y = pos;
             if (indices && inst->u1.subid == _num_capturing_groups) range.y = pos;
             id_activate = inst->u2.next_id;
             expanded    = true;
@@ -276,12 +269,6 @@ __device__ inline int32_t reprog_device::regexec(
               auto const ptr_offset = indices[inst->u1.subid - 1].first - dstr.data();
               indices[inst->u1.subid - 1].second =
                 itr.byte_offset() - static_cast<cudf::size_type>(ptr_offset);
-              // printf("  %d> (%p,%d),(%d/%d)\n",
-              //       inst->u1.subid,
-              //       indices[inst->u1.subid - 1].first,
-              //       indices[inst->u1.subid - 1].second,
-              //       itr.byte_offset(),
-              //       pos);
             }
             break;
           case BOL:
@@ -365,9 +352,8 @@ __device__ inline int32_t reprog_device::regexec(
         case END:
           match = 1;
           begin = range.x;
-          // end   = group_id == 0 ? pos : range.y;
-          end = indices == nullptr ? pos : range.y;
-          // goto BreakFor;
+          end   = indices == nullptr ? pos : range.y;
+
           continue_execute = false;
           break;
       }
@@ -375,18 +361,11 @@ __device__ inline int32_t reprog_device::regexec(
         jnk.list2->activate(id_activate, range.x, range.y);
     }
 
-    // BreakFor:
     ++pos;
     ++itr;
     swaplist(jnk.list1, jnk.list2);
     checkstart = jnk.list1->size > 0 ? 0 : 1;
   } while (c && (jnk.list1->size > 0 || match == 0));
-
-  // if (match && indices) {
-  //  for (int i = 0; i < _num_capturing_groups; ++i) {
-  //    printf("[%d]=%p(%p,%d)\n", i, dstr.data(), indices[i].first, indices[i].second);
-  //  }
-  //}
 
   return match;
 }
@@ -407,7 +386,6 @@ __device__ inline bool reprog_device::extract(
   int32_t idx, string_view const& dstr, int32_t begin, int32_t end, string_index_pair* indices)
 {
   end = begin + 1;
-  // return call_regexec<stack_size>(idx, dstr, begin, end, group_id + 1);
   return call_regexec<stack_size>(idx, dstr, begin, end, indices) > 0;
 }
 
