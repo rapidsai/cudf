@@ -30,9 +30,9 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
-#include <iostream>
 #include <list>
 #include <numeric>
+#include <random>
 #include <vector>
 
 enum class TreeType {
@@ -40,11 +40,11 @@ enum class TreeType {
                    // child column reference
 };
 
-template <typename key_type, TreeType tree_type, bool reuse_columns>
+template <typename key_type, TreeType tree_type, bool reuse_columns, bool Nullable>
 class AST : public cudf::benchmark {
 };
 
-template <typename key_type, TreeType tree_type, bool reuse_columns>
+template <typename key_type, TreeType tree_type, bool reuse_columns, bool Nullable>
 static void BM_ast_transform(benchmark::State& state)
 {
   const cudf::size_type table_size{(cudf::size_type)state.range(0)};
@@ -56,10 +56,24 @@ static void BM_ast_transform(benchmark::State& state)
   auto columns         = std::vector<cudf::column_view>(n_cols);
 
   auto data_iterator = thrust::make_counting_iterator(0);
-  std::generate_n(column_wrappers.begin(), n_cols, [=]() {
-    return cudf::test::fixed_width_column_wrapper<key_type>(data_iterator,
-                                                            data_iterator + table_size);
-  });
+
+  if constexpr (Nullable) {
+    auto validities = std::vector<bool>(table_size);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
+    std::generate(
+      validities.begin(), validities.end(), [&]() { return gen() > (0.5 * gen.max()); });
+    std::generate_n(column_wrappers.begin(), n_cols, [=]() {
+      return cudf::test::fixed_width_column_wrapper<key_type>(
+        data_iterator, data_iterator + table_size, validities.begin());
+    });
+  } else {
+    std::generate_n(column_wrappers.begin(), n_cols, [=]() {
+      return cudf::test::fixed_width_column_wrapper<key_type>(data_iterator,
+                                                              data_iterator + table_size);
+    });
+  }
   std::transform(
     column_wrappers.begin(), column_wrappers.end(), columns.begin(), [](auto const& col) {
       return static_cast<cudf::column_view>(col);
@@ -113,22 +127,23 @@ static void BM_ast_transform(benchmark::State& state)
                           (tree_levels + 1) * sizeof(key_type));
 }
 
-#define AST_TRANSFORM_BENCHMARK_DEFINE(name, key_type, tree_type, reuse_columns) \
-  BENCHMARK_TEMPLATE_DEFINE_F(AST, name, key_type, tree_type, reuse_columns)     \
-  (::benchmark::State & st) { BM_ast_transform<key_type, tree_type, reuse_columns>(st); }
+#define AST_TRANSFORM_BENCHMARK_DEFINE(name, key_type, tree_type, reuse_columns, nullable) \
+  BENCHMARK_TEMPLATE_DEFINE_F(AST, name, key_type, tree_type, reuse_columns, nullable)     \
+  (::benchmark::State & st) { BM_ast_transform<key_type, tree_type, reuse_columns, nullable>(st); }
 
-AST_TRANSFORM_BENCHMARK_DEFINE(ast_int32_imbalanced_unique,
-                               int32_t,
-                               TreeType::IMBALANCED_LEFT,
-                               false);
-AST_TRANSFORM_BENCHMARK_DEFINE(ast_int32_imbalanced_reuse,
-                               int32_t,
-                               TreeType::IMBALANCED_LEFT,
-                               true);
-AST_TRANSFORM_BENCHMARK_DEFINE(ast_double_imbalanced_unique,
-                               double,
-                               TreeType::IMBALANCED_LEFT,
-                               false);
+AST_TRANSFORM_BENCHMARK_DEFINE(
+  ast_int32_imbalanced_unique, int32_t, TreeType::IMBALANCED_LEFT, false, false);
+AST_TRANSFORM_BENCHMARK_DEFINE(
+  ast_int32_imbalanced_reuse, int32_t, TreeType::IMBALANCED_LEFT, true, false);
+AST_TRANSFORM_BENCHMARK_DEFINE(
+  ast_double_imbalanced_unique, double, TreeType::IMBALANCED_LEFT, false, false);
+
+AST_TRANSFORM_BENCHMARK_DEFINE(
+  ast_int32_imbalanced_unique_nulls, int32_t, TreeType::IMBALANCED_LEFT, false, true);
+AST_TRANSFORM_BENCHMARK_DEFINE(
+  ast_int32_imbalanced_reuse_nulls, int32_t, TreeType::IMBALANCED_LEFT, true, true);
+AST_TRANSFORM_BENCHMARK_DEFINE(
+  ast_double_imbalanced_unique_nulls, double, TreeType::IMBALANCED_LEFT, false, true);
 
 static void CustomRanges(benchmark::internal::Benchmark* b)
 {
@@ -150,6 +165,21 @@ BENCHMARK_REGISTER_F(AST, ast_int32_imbalanced_reuse)
   ->UseManualTime();
 
 BENCHMARK_REGISTER_F(AST, ast_double_imbalanced_unique)
+  ->Apply(CustomRanges)
+  ->Unit(benchmark::kMillisecond)
+  ->UseManualTime();
+
+BENCHMARK_REGISTER_F(AST, ast_int32_imbalanced_unique_nulls)
+  ->Apply(CustomRanges)
+  ->Unit(benchmark::kMillisecond)
+  ->UseManualTime();
+
+BENCHMARK_REGISTER_F(AST, ast_int32_imbalanced_reuse_nulls)
+  ->Apply(CustomRanges)
+  ->Unit(benchmark::kMillisecond)
+  ->UseManualTime();
+
+BENCHMARK_REGISTER_F(AST, ast_double_imbalanced_unique_nulls)
   ->Apply(CustomRanges)
   ->Unit(benchmark::kMillisecond)
   ->UseManualTime();

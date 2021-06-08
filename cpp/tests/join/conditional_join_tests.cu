@@ -95,6 +95,43 @@ struct ConditionalJoinTest : public cudf::test::BaseFixture {
                            cudf::table_view(left_columns),
                            cudf::table_view(right_columns));
   }
+
+  std::tuple<std::vector<cudf::test::fixed_width_column_wrapper<T>>,
+             std::vector<cudf::test::fixed_width_column_wrapper<T>>,
+             std::vector<cudf::column_view>,
+             std::vector<cudf::column_view>,
+             cudf::table_view,
+             cudf::table_view>
+  parse_input(std::vector<std::pair<std::vector<T>, std::vector<bool>>> left_data,
+              std::vector<std::pair<std::vector<T>, std::vector<bool>>> right_data)
+  {
+    // Note that we need to maintain the column wrappers otherwise the
+    // resulting column views will be referencing potentially invalid memory.
+    std::vector<cudf::test::fixed_width_column_wrapper<T>> left_wrappers;
+    std::vector<cudf::test::fixed_width_column_wrapper<T>> right_wrappers;
+
+    std::vector<cudf::column_view> left_columns;
+    std::vector<cudf::column_view> right_columns;
+
+    for (auto v : left_data) {
+      left_wrappers.push_back(cudf::test::fixed_width_column_wrapper<T>(
+        v.first.begin(), v.first.end(), v.second.begin()));
+      left_columns.push_back(left_wrappers.back());
+    }
+
+    for (auto v : right_data) {
+      right_wrappers.push_back(cudf::test::fixed_width_column_wrapper<T>(
+        v.first.begin(), v.first.end(), v.second.begin()));
+      right_columns.push_back(right_wrappers.back());
+    }
+
+    return std::make_tuple(std::move(left_wrappers),
+                           std::move(right_wrappers),
+                           std::move(left_columns),
+                           std::move(right_columns),
+                           cudf::table_view(left_columns),
+                           cudf::table_view(right_columns));
+  }
 };
 
 /**
@@ -112,6 +149,31 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
             std::vector<std::vector<T>> right_data,
             cudf::ast::expression predicate,
             std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
+  {
+    // Note that we need to maintain the column wrappers otherwise the
+    // resulting column views will be referencing potentially invalid memory.
+    auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
+      this->parse_input(left_data, right_data);
+    auto result = this->join(left, right, predicate);
+
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
+    for (size_t i = 0; i < result.first->size(); ++i) {
+      // Note: Not trying to be terribly efficient here since these tests are
+      // small, otherwise a batch copy to host before constructing the tuples
+      // would be important.
+      result_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
+                              result.second->element(i, rmm::cuda_stream_default)});
+    }
+    std::sort(result_pairs.begin(), result_pairs.end());
+    std::sort(expected_outputs.begin(), expected_outputs.end());
+
+    EXPECT_TRUE(std::equal(result_pairs.begin(), result_pairs.end(), expected_outputs.begin()));
+  }
+
+  void test_nulls(std::vector<std::pair<std::vector<T>, std::vector<bool>>> left_data,
+                  std::vector<std::pair<std::vector<T>, std::vector<bool>>> right_data,
+                  cudf::ast::expression predicate,
+                  std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
   {
     // Note that we need to maintain the column wrappers otherwise the
     // resulting column views will be referencing potentially invalid memory.
@@ -346,6 +408,17 @@ TYPED_TEST(ConditionalInnerJoinTest, TestCompareRandomToHash)
   std::shuffle(right.begin(), right.end(), gen);
 
   this->compare_to_hash_join({left}, {right});
+};
+
+TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnTwoNullsRowAllEqual)
+{
+  this->test_nulls(
+    {{{0, 1}, {1, 0}}}, {{{0, 0}, {1, 1}}}, left_zero_eq_right_zero, {{0, 0}, {0, 1}});
+};
+
+TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnTwoNullsNoOutputRowAllEqual)
+{
+  this->test_nulls({{{0, 1}, {0, 1}}}, {{{0, 0}, {1, 1}}}, left_zero_eq_right_zero, {{}, {}});
 };
 
 /**
