@@ -44,10 +44,9 @@ string_scalar repeat_strings(string_scalar const& input,
   CUDF_EXPECTS(input.size() <= std::numeric_limits<size_type>::max() / repeat_times,
                "The output string has size that exceeds the maximum allowed size.");
 
-  auto buff =
-    rmm::device_buffer(repeat_times * input.size(), stream, rmm::mr::get_current_device_resource());
-  auto const iter     = thrust::make_counting_iterator(0);
   auto const str_size = input.size();
+  auto const iter     = thrust::make_counting_iterator(0);
+  auto buff           = rmm::device_buffer(repeat_times * input.size(), stream, mr);
 
   // Pull data from the input string into each byte of the output string.
   thrust::transform(rmm::exec_policy(stream),
@@ -58,9 +57,7 @@ string_scalar repeat_strings(string_scalar const& input,
                       return in_ptr[idx % str_size];
                     });
 
-  // TODO: using move constructor when https://github.com/rapidsai/cudf/pull/8428 merged
-  // return string_scalar(std::move(buff));
-  return string_scalar(string_view(static_cast<char*>(buff.data()), buff.size()), true, stream, mr);
+  return string_scalar(std::move(buff));
 }
 
 namespace {
@@ -146,7 +143,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        rmm::mr::device_memory_resource* mr)
 {
   auto const strings_count = input.size();
-  if (strings_count == 0) { return detail::make_empty_strings_column(stream, mr); }
+  if (strings_count == 0) { return make_empty_column(data_type{type_id::STRING}); }
 
   if (repeat_times <= 0) {
     // If the number of repetitions is not positive, each row of the output strings column will be
