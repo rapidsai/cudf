@@ -24,7 +24,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/substring.hpp>
@@ -110,7 +109,7 @@ std::unique_ptr<column> slice_strings(
   rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource())
 {
-  if (strings.is_empty()) return make_empty_strings_column(stream, mr);
+  if (strings.is_empty()) return make_empty_column(data_type{type_id::STRING});
 
   if (step.is_valid()) CUDF_EXPECTS(step.value(stream) != 0, "Step parameter must not be 0");
 
@@ -300,7 +299,7 @@ std::unique_ptr<column> slice_strings(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
   CUDF_EXPECTS(starts_column.size() == strings_count,
                "Parameter starts must have the same number of rows as strings.");
   CUDF_EXPECTS(stops_column.size() == strings_count,

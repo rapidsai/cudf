@@ -988,7 +988,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
   return make_strings_column(col.size(),
                              std::move(offsets),
                              std::move(chars),
-                             col.size() - d_valid_count.value(),
+                             col.size() - d_valid_count.value(stream),
                              std::move(validity),
                              stream,
                              mr);
