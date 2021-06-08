@@ -964,6 +964,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                    col_idx);
             chunk.start_row =
               (level == 0) ? stripe_start_row : child_start_row[stripe_idx * num_columns + col_idx];
+            printf("RGSL : start row is %u \n", chunk.start_row);
             printf("RGSL : After start row \n");
             chunk.num_rows = (level == 0)
                                ? stripe_info->numberOfRows
