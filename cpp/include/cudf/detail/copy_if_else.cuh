@@ -190,7 +190,7 @@ std::unique_ptr<column> copy_if_else(
       <<<grid.num_blocks, block_size, 0, stream.value()>>>(
         lhs_begin, rhs, filter, *out_v, valid_count.data());
 
-    out->set_null_count(size - valid_count.value());
+    out->set_null_count(size - valid_count.value(stream));
   } else {
     // call the kernel
     copy_if_else_kernel<block_size, Element, LeftIter, RightIter, FilterFn, false>

@@ -163,14 +163,14 @@ std::unique_ptr<column> map_contains(column_view const &map_column, string_scala
   children.push_back(lcv.offsets());
   children.push_back(scv.child(0));
 
-  column_view list_of_keys(map_column.type(), map_column.size(),
-    nullptr, map_column.null_mask(), map_column.null_count(), 0, children);
-  auto contains_column  = lists::contains(list_of_keys, lookup_key);
+  column_view list_of_keys(map_column.type(), map_column.size(), nullptr, map_column.null_mask(),
+                           map_column.null_count(), 0, children);
+  auto contains_column = lists::contains(list_of_keys, lookup_key);
   // null will be skipped in all-aggregation when checking if all rows contain the key,
   // so replace all nulls with 0.
   std::unique_ptr<cudf::scalar> replacement =
-        cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::BOOL8));
-  replacement->set_valid(true);
+      cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::BOOL8));
+  replacement->set_valid_async(true);
   using ScalarType = cudf::scalar_type_t<int8_t>;
   static_cast<ScalarType *>(replacement.get())->set_value(0);
   auto result = cudf::replace_nulls(contains_column->view(), *replacement);
@@ -197,9 +197,9 @@ std::unique_ptr<column> map_lookup(column_view const &map_column, string_scalar 
   auto values_column = structs_column.child(1);
   auto table_for_gather = table_view{std::vector<cudf::column_view>{values_column}};
 
-  auto gathered_table = cudf::detail::gather(
-      table_for_gather, gather_map->view(), out_of_bounds_policy::NULLIFY,
-      detail::negative_index_policy::NOT_ALLOWED, stream, mr);
+  auto gathered_table =
+      cudf::detail::gather(table_for_gather, gather_map->view(), out_of_bounds_policy::NULLIFY,
+                           detail::negative_index_policy::NOT_ALLOWED, stream, mr);
 
   return std::make_unique<cudf::column>(std::move(gathered_table->get_column(0)));
 }

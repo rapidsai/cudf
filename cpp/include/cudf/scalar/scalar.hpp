@@ -73,7 +73,7 @@ class scalar {
    * @param is_valid true: set the value to valid. false: set it to null
    * @param stream CUDA stream used for device memory operations.
    */
-  void set_valid(bool is_valid, rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+  void set_valid_async(bool is_valid, rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
   /**
    * @brief Indicates whether the scalar contains a valid value
@@ -97,10 +97,10 @@ class scalar {
   bool const* validity_data() const;
 
  protected:
-  data_type _type{type_id::EMPTY};       ///< Logical type of value in the scalar
-  rmm::device_scalar<bool> _is_valid{};  ///< Device bool signifying validity
+  data_type _type{type_id::EMPTY};     ///< Logical type of value in the scalar
+  rmm::device_scalar<bool> _is_valid;  ///< Device bool signifying validity
 
-  scalar() = default;
+  scalar() = delete;
 
   /**
    * @brief Construct a new scalar object
@@ -175,9 +175,9 @@ class fixed_width_scalar : public scalar {
   T const* data() const;
 
  protected:
-  rmm::device_scalar<T> _data{};  ///< device memory containing the value
+  rmm::device_scalar<T> _data;  ///< device memory containing the value
 
-  fixed_width_scalar();
+  fixed_width_scalar() = delete;
 
   /**
    * @brief Construct a new fixed width scalar object
@@ -218,7 +218,7 @@ class numeric_scalar : public detail::fixed_width_scalar<T> {
   static_assert(is_numeric<T>(), "Unexpected non-numeric type.");
 
  public:
-  numeric_scalar()                       = default;
+  numeric_scalar()                       = delete;
   ~numeric_scalar()                      = default;
   numeric_scalar(numeric_scalar&& other) = default;
 
@@ -276,7 +276,7 @@ class fixed_point_scalar : public scalar {
   using rep_type   = typename T::rep;
   using value_type = T;
 
-  fixed_point_scalar();
+  fixed_point_scalar()                           = delete;
   ~fixed_point_scalar()                          = default;
   fixed_point_scalar(fixed_point_scalar&& other) = default;
 
@@ -375,7 +375,7 @@ class fixed_point_scalar : public scalar {
   rep_type const* data() const;
 
  protected:
-  rmm::device_scalar<rep_type> _data{};  ///< device memory containing the value
+  rmm::device_scalar<rep_type> _data;  ///< device memory containing the value
 };
 
 /**
@@ -385,10 +385,11 @@ class string_scalar : public scalar {
  public:
   using value_type = cudf::string_view;
 
-  string_scalar();
+  string_scalar()                      = delete;
   ~string_scalar()                     = default;
   string_scalar(string_scalar&& other) = default;
 
+  // string_scalar(string_scalar const& other) = delete;
   string_scalar& operator=(string_scalar const& other) = delete;
   string_scalar& operator=(string_scalar&& other) = delete;
 
@@ -488,7 +489,7 @@ class chrono_scalar : public detail::fixed_width_scalar<T> {
   static_assert(is_chrono<T>(), "Unexpected non-chrono type");
 
  public:
-  chrono_scalar()                      = default;
+  chrono_scalar()                      = delete;
   ~chrono_scalar()                     = default;
   chrono_scalar(chrono_scalar&& other) = default;
 
@@ -540,7 +541,7 @@ class timestamp_scalar : public chrono_scalar<T> {
   using chrono_scalar<T>::chrono_scalar;
   using rep_type = typename T::rep;
 
-  timestamp_scalar()                         = default;
+  timestamp_scalar()                         = delete;
   timestamp_scalar(timestamp_scalar&& other) = default;
 
   /**
@@ -583,7 +584,7 @@ class duration_scalar : public chrono_scalar<T> {
   using chrono_scalar<T>::chrono_scalar;
   using rep_type = typename T::rep;
 
-  duration_scalar()                        = default;
+  duration_scalar()                        = delete;
   duration_scalar(duration_scalar&& other) = default;
 
   /**
@@ -621,7 +622,7 @@ class duration_scalar : public chrono_scalar<T> {
  */
 class list_scalar : public scalar {
  public:
-  list_scalar();
+  list_scalar()                    = delete;
   ~list_scalar()                   = default;
   list_scalar(list_scalar&& other) = default;
 
@@ -681,7 +682,7 @@ class list_scalar : public scalar {
  */
 class struct_scalar : public scalar {
  public:
-  struct_scalar();
+  struct_scalar()                           = delete;
   ~struct_scalar()                          = default;
   struct_scalar(struct_scalar&& other)      = default;
   struct_scalar(struct_scalar const& other) = default;

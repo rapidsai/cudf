@@ -46,9 +46,9 @@ scalar::scalar(scalar const& other,
 
 data_type scalar::type() const noexcept { return _type; }
 
-void scalar::set_valid(bool is_valid, rmm::cuda_stream_view stream)
+void scalar::set_valid_async(bool is_valid, rmm::cuda_stream_view stream)
 {
-  _is_valid.set_value(is_valid, stream);
+  _is_valid.set_value_async(is_valid, stream);
 }
 
 bool scalar::is_valid(rmm::cuda_stream_view stream) const { return _is_valid.value(stream); }
@@ -56,8 +56,6 @@ bool scalar::is_valid(rmm::cuda_stream_view stream) const { return _is_valid.val
 bool* scalar::validity_data() { return _is_valid.data(); }
 
 bool const* scalar::validity_data() const { return _is_valid.data(); }
-
-string_scalar::string_scalar() : scalar(data_type(type_id::STRING)) {}
 
 string_scalar::string_scalar(std::string const& string,
                              bool is_valid,
@@ -113,16 +111,13 @@ std::string string_scalar::to_string(rmm::cuda_stream_view stream) const
 }
 
 template <typename T>
-fixed_point_scalar<T>::fixed_point_scalar() : scalar(data_type(type_to_id<T>())){};
-
-template <typename T>
 fixed_point_scalar<T>::fixed_point_scalar(rep_type value,
                                           numeric::scale_type scale,
                                           bool is_valid,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
   : scalar{data_type{type_to_id<T>(), static_cast<int32_t>(scale)}, is_valid, stream, mr},
-    _data{value}
+    _data{value, stream, mr}
 {
 }
 
@@ -131,7 +126,7 @@ fixed_point_scalar<T>::fixed_point_scalar(rep_type value,
                                           bool is_valid,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
-  : scalar{data_type{type_to_id<T>(), 0}, is_valid, stream, mr}, _data{value}
+  : scalar{data_type{type_to_id<T>(), 0}, is_valid, stream, mr}, _data{value, stream, mr}
 {
 }
 
@@ -140,7 +135,8 @@ fixed_point_scalar<T>::fixed_point_scalar(T value,
                                           bool is_valid,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
-  : scalar{data_type{type_to_id<T>(), value.scale()}, is_valid, stream, mr}, _data{value.value()}
+  : scalar{data_type{type_to_id<T>(), value.scale()}, is_valid, stream, mr},
+    _data{value.value(), stream, mr}
 {
 }
 
@@ -203,11 +199,6 @@ template class fixed_point_scalar<numeric::decimal64>;
 namespace detail {
 
 template <typename T>
-fixed_width_scalar<T>::fixed_width_scalar() : scalar(data_type(type_to_id<T>()))
-{
-}
-
-template <typename T>
 fixed_width_scalar<T>::fixed_width_scalar(T value,
                                           bool is_valid,
                                           rmm::cuda_stream_view stream,
@@ -237,8 +228,8 @@ fixed_width_scalar<T>::fixed_width_scalar(fixed_width_scalar<T> const& other,
 template <typename T>
 void fixed_width_scalar<T>::set_value(T value, rmm::cuda_stream_view stream)
 {
-  _data.set_value(value, stream);
-  this->set_valid(true, stream);
+  _data.set_value_async(value, stream);
+  this->set_valid_async(true, stream);
 }
 
 template <typename T>
@@ -491,8 +482,6 @@ TS_CTOR(timestamp_ns, duration_us)
 TS_CTOR(timestamp_ns, duration_ns)
 TS_CTOR(timestamp_ns, int64_t)
 
-list_scalar::list_scalar() : scalar(data_type(type_id::LIST)) {}
-
 list_scalar::list_scalar(cudf::column_view const& data,
                          bool is_valid,
                          rmm::cuda_stream_view stream,
@@ -517,8 +506,6 @@ list_scalar::list_scalar(list_scalar const& other,
 }
 
 column_view list_scalar::view() const { return _data.view(); }
-
-struct_scalar::struct_scalar() : scalar(data_type(type_id::STRUCT)) {}
 
 struct_scalar::struct_scalar(table_view const& data,
                              bool is_valid,
