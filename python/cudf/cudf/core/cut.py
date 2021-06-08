@@ -148,13 +148,13 @@ def cut(
                 # because this allows masked arrays from value_counts to
                 # also be able to be handled by cut correctly
                 # pandas by default seems to turn all bins into a float
-                mn = cudf.Scalar(x.min(), dtype="float64")
-                mx = cudf.Scalar(x.max(), dtype="float64")
+                mn = x.min()
+                mx = x.max()
             else:
-                mn = cudf.Scalar(min(x), dtype="float64")
-                mx = cudf.Scalar(max(x), dtype="float64")
-            bins = cupy.linspace(mn.value, mx.value, bins + 1, endpoint=True)
-            adj = (mx - mn).value * 0.001
+                mn = min(x)
+                mx = max(x)
+            bins = np.linspace(mn, mx, bins + 1, endpoint=True)
+            adj = (mx - mn) * 0.001
             if right:
                 bins[0] -= adj
             else:
@@ -174,7 +174,7 @@ def cut(
             x[x == right_edge] = right_edge + 1
 
         # adjust bin edges decimal precision
-        int_label_bins = cupy.around(bins, precision)
+        int_label_bins = np.around(bins, precision)
 
     # the inputs is a column of the values in the array x
     input_arr = as_column(x)
