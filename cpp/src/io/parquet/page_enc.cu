@@ -68,6 +68,7 @@ struct page_enc_state_s {
   uint32_t rle_lit_count;
   uint32_t rle_rpt_count;
   uint32_t page_start_val;
+  uint32_t chunk_start_val;
   volatile uint32_t rpt_map[4];
   volatile uint32_t scratch_red[32];
   EncPage page;
@@ -448,7 +449,7 @@ __global__ void __launch_bounds__(128)
       pagestats_g.start_chunk = ck_g.first_fragment;
       pagestats_g.num_chunks  = 0;
     }
-    if (ck_g.has_dictionary) {
+    if (ck_g.use_dictionary) {
       if (!t) {
         page_g.page_data       = ck_g.uncompressed_bfr + page_offset;
         page_g.compressed_data = ck_g.compressed_bfr + comp_page_offset;
@@ -459,11 +460,11 @@ __global__ void __launch_bounds__(128)
         page_g.chunk_id        = blockIdx.y * num_columns + blockIdx.x;
         page_g.hdr_size        = 0;
         page_g.max_hdr_size    = 32;
-        page_g.max_data_size   = ck_g.dictionary_size;
+        page_g.max_data_size   = ck_g.uniq_data_size;  // Set by old dict. TODO: take care of it
         page_g.start_row       = cur_row;
-        page_g.num_rows        = ck_g.total_dict_entries;
+        page_g.num_rows        = ck_g.num_dict_entries;
         page_g.num_leaf_values = ck_g.num_dict_entries;
-        page_g.num_values      = ck_g.total_dict_entries;
+        page_g.num_values      = ck_g.num_dict_entries;  // This shouldn't matter for dict page
         page_offset += page_g.max_hdr_size + page_g.max_data_size;
         comp_page_offset += page_g.max_hdr_size + GetMaxCompressedBfrSize(page_g.max_data_size);
       }
@@ -495,7 +496,8 @@ __global__ void __launch_bounds__(128)
         frag_g.num_rows           = 0;
       }
       __syncwarp();
-      if (ck_g.has_dictionary && fragments_in_chunk < ck_g.num_dict_fragments) {
+      // TODO: IILE/ternary this
+      if (ck_g.use_dictionary) {
         fragment_data_size =
           frag_g.num_leaf_values * 2;  // Assume worst-case of 2-bytes per dictionary index
       } else {
@@ -506,39 +508,18 @@ __global__ void __launch_bounds__(128)
                         ? 256 * 1024
                         : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024 : 512 * 1024;
       if (num_rows >= ck_g.num_rows ||
-          (values_in_page > 0 &&
-           (page_size + fragment_data_size > max_page_size ||
-            (ck_g.has_dictionary && fragments_in_chunk == ck_g.num_dict_fragments)))) {
-        uint32_t dict_bits_plus1;
-
-        if (ck_g.has_dictionary && page_start < ck_g.num_dict_fragments) {
-          uint32_t dict_bits;
-          if (num_dict_entries <= 2) {
-            dict_bits = 1;
-          } else if (num_dict_entries <= 4) {
-            dict_bits = 2;
-          } else if (num_dict_entries <= 16) {
-            dict_bits = 4;
-          } else if (num_dict_entries <= 256) {
-            dict_bits = 8;
-          } else if (num_dict_entries <= 4096) {
-            dict_bits = 12;
-          } else {
-            dict_bits = 16;
-          }
-          page_size       = 1 + 5 + ((values_in_page * dict_bits + 7) >> 3) + (values_in_page >> 8);
-          dict_bits_plus1 = dict_bits + 1;
-        } else {
-          dict_bits_plus1 = 0;
+          (values_in_page > 0 && (page_size + fragment_data_size > max_page_size))) {
+        if (ck_g.use_dictionary) {
+          uint32_t dict_bits = ck_g.dict_rle_bits_plus1 - 1;
+          page_size = 1 + 5 + ((values_in_page * dict_bits + 7) >> 3) + (values_in_page >> 8);
         }
         if (!t) {
-          page_g.num_fragments   = fragments_in_chunk - page_start;
-          page_g.chunk           = &chunks[blockIdx.y][blockIdx.x];
-          page_g.chunk_id        = blockIdx.y * num_columns + blockIdx.x;
-          page_g.page_type       = PageType::DATA_PAGE;
-          page_g.dict_bits_plus1 = dict_bits_plus1;
-          page_g.hdr_size        = 0;
-          page_g.max_hdr_size    = 32;  // Max size excluding statistics
+          page_g.num_fragments = fragments_in_chunk - page_start;
+          page_g.chunk         = &chunks[blockIdx.y][blockIdx.x];
+          page_g.chunk_id      = blockIdx.y * num_columns + blockIdx.x;
+          page_g.page_type     = PageType::DATA_PAGE;
+          page_g.hdr_size      = 0;
+          page_g.max_hdr_size  = 32;  // Max size excluding statistics
           if (ck_g.stats) {
             uint32_t stats_hdr_len = 16;
             if (col_g.stats_dtype == dtype_string) {
@@ -610,8 +591,8 @@ __global__ void __launch_bounds__(128)
       ck_g.num_pages          = num_pages;
       ck_g.bfr_size           = page_offset;
       ck_g.compressed_size    = comp_page_offset;
-      pagestats_g.start_chunk = ck_g.first_page + ck_g.has_dictionary;  // Exclude dictionary
-      pagestats_g.num_chunks  = num_pages - ck_g.has_dictionary;
+      pagestats_g.start_chunk = ck_g.first_page + ck_g.use_dictionary;  // Exclude dictionary
+      pagestats_g.num_chunks  = num_pages - ck_g.use_dictionary;
     }
   }
   __syncthreads();
@@ -1066,7 +1047,10 @@ __global__ void __launch_bounds__(128, 8)
   } else {
     dtype_len_in = dtype_len_out;
   }
-  dict_bits = (dtype == BOOLEAN) ? 1 : (s->page.dict_bits_plus1 - 1);
+  dict_bits = (dtype == BOOLEAN) ? 1
+                                 : (s->page.page_type == PageType::DICTIONARY_PAGE)
+                                     ? -1
+                                     : (s->page.chunk->dict_rle_bits_plus1 - 1);
   if (t == 0) {
     uint8_t *dst   = s->cur;
     s->rle_run     = 0;
@@ -1077,21 +1061,27 @@ __global__ void __launch_bounds__(128, 8)
       dst[0]     = dict_bits;
       s->rle_out = dst + 1;
     }
-    s->page_start_val = s->page.start_row;  // Dictionary page's start row is chunk's start row
+    s->page_start_val    = s->page.start_row;  // Dictionary page's start row is chunk's start row
+    auto chunk_start_val = s->ck.start_row;
     if (s->col.parent_column != nullptr) {  // TODO: remove this check. parent is now never nullptr
       auto col                    = *(s->col.parent_column);
       auto current_page_start_val = s->page_start_val;
+      // TODO: We do this so much. Add a global function that converts row idx to val idx
       while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
         if (col.type().id() == type_id::STRUCT) {
           current_page_start_val += col.offset();
+          chunk_start_val += col.offset();
           col = col.child(0);
         } else {
-          current_page_start_val = col.child(lists_column_view::offsets_column_index)
-                                     .element<size_type>(current_page_start_val + col.offset());
-          col = col.child(lists_column_view::child_column_index);
+          auto offset_col = col.child(lists_column_view::offsets_column_index);
+          current_page_start_val =
+            offset_col.element<size_type>(current_page_start_val + col.offset());
+          chunk_start_val = offset_col.element<size_type>(chunk_start_val + col.offset());
+          col             = col.child(lists_column_view::child_column_index);
         }
       }
-      s->page_start_val = current_page_start_val;
+      s->page_start_val  = current_page_start_val;
+      s->chunk_start_val = chunk_start_val;
     }
   }
   __syncthreads();
@@ -1115,7 +1105,8 @@ __global__ void __launch_bounds__(128, 8)
                     val_idx_in_block < s->page.num_leaf_values)
                      ? s->col.leaf_column->is_valid(val_idx_in_leaf_col)
                      : 0;
-        val_idx = (s->ck.use_dictionary) ? val_idx_in_block : val_idx_in_leaf_col;
+        val_idx =
+          (s->ck.use_dictionary) ? val_idx_in_leaf_col - s->chunk_start_val : val_idx_in_leaf_col;
       }
       return std::make_tuple(is_valid, val_idx);
     }();
@@ -1540,13 +1531,14 @@ __global__ void __launch_bounds__(128)
     // data pages (actual encoding is identical).
     Encoding encoding;
     if (enable_bool_rle) {
+      // TODO: reverse the ternary. put == bool first
       encoding = (col_g.physical_type != BOOLEAN)
-                   ? (page_type == PageType::DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0)
+                   ? (page_type == PageType::DICTIONARY_PAGE || page_g.chunk->use_dictionary)
                        ? Encoding::PLAIN_DICTIONARY
                        : Encoding::PLAIN
                    : Encoding::RLE;
     } else {
-      encoding = (page_type == PageType::DICTIONARY_PAGE || page_g.dict_bits_plus1 != 0)
+      encoding = (page_type == PageType::DICTIONARY_PAGE || page_g.chunk->use_dictionary)
                    ? Encoding::PLAIN_DICTIONARY
                    : Encoding::PLAIN;
     }
@@ -1572,7 +1564,7 @@ __global__ void __launch_bounds__(128)
       // DictionaryPageHeader
       encoder.field_struct_begin(7);
       // TODO: update old to new
-      encoder.field_int32(1, ck_g.total_dict_entries);  // number of values in dictionary
+      encoder.field_int32(1, ck_g.num_dict_entries);  // number of values in dictionary
       encoder.field_int32(2, encoding);
       encoder.field_struct_end(7);
     }
@@ -1623,12 +1615,12 @@ __global__ void __launch_bounds__(1024)
     memcpy_block<1024, true>(dst, src, data_len, t);
     dst += data_len;
     __syncthreads();
-    if (!t && page == 0 && ck_g.has_dictionary) { ck_g.dictionary_size = hdr_len + data_len; }
+    if (!t && page == 0 && ck_g.use_dictionary) { ck_g.dictionary_size = hdr_len + data_len; }
   }
   if (t == 0) {
     chunks[blockIdx.x].bfr_size        = uncompressed_size;
     chunks[blockIdx.x].compressed_size = (dst - dst_base);
-    if (ck_g.has_dictionary) { chunks[blockIdx.x].dictionary_size = ck_g.dictionary_size; }
+    if (ck_g.use_dictionary) { chunks[blockIdx.x].dictionary_size = ck_g.dictionary_size; }
   }
 }
 

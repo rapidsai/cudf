@@ -757,7 +757,7 @@ void writer::impl::build_chunk_dictionaries(
     auto dict_scratch        = cudf::detail::make_zeroed_device_uvector_async<uint32_t>(
       dict_scratch_size / sizeof(uint32_t), stream);
 
-    gpu::BuildChunkDictionaries(chunks.device_view().flat_view(), dict_scratch.data(), stream);
+    // gpu::BuildChunkDictionaries(chunks.device_view().flat_view(), dict_scratch.data(), stream);
   }
   gpu::InitEncoderPages(chunks, {}, col_desc, num_columns, nullptr, nullptr, stream);
   chunks.device_to_host(stream, true);
@@ -810,9 +810,9 @@ auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
 
   for (auto &ck : chunks.host_view().flat_view()) {
     if (not ck.use_dictionary) { continue; }
-    ck.use_dictionary = [&]() {
+    std::tie(ck.use_dictionary, ck.dict_rle_bits_plus1) = [&]() {
       // We don't use dictionary if the indices are > 16 bits
-      if (ck.num_dict_entries > MAX_DICT_SIZE) { return false; }
+      if (ck.num_dict_entries > MAX_DICT_SIZE) { return std::make_pair(false, 0); }
 
       // calculate size of chunk if dictionary is used
 
@@ -820,7 +820,7 @@ auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
       // of bits required to encode indices into the dictionary
       auto max_dict_index = (ck.num_dict_entries > 0) ? ck.num_dict_entries - 1 : 0;
       auto nbits          = CompactProtocolReader::NumRequiredBits(max_dict_index);
-      std::cout << "dict size " << ck.num_dict_entries << " nbits " << nbits << std::endl;
+      // std::cout << "dict size " << ck.num_dict_entries << " nbits " << nbits << std::endl;
       CUDF_EXPECTS(nbits <= 16, "Maximum supported bits by dictionary encoder is 16");
 
       // ceil to (1/2/4/8/12/16)
@@ -829,9 +829,12 @@ auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
 
       auto dict_enc_size = ck.uniq_data_size + rle_byte_size;
 
-      return (ck.plain_data_size > dict_enc_size);
+      // TODO: there has to be a better way than to plus 1
+      bool use_dict       = (ck.plain_data_size > dict_enc_size);
+      auto rle_bits_plus1 = (use_dict) ? rle_bits + 1 : 0;
+      return std::make_pair(use_dict, rle_bits_plus1);
     }();
-    std::cout << "use_dict " << std::boolalpha << ck.use_dictionary << std::endl;
+    // std::cout << "use_dict " << std::boolalpha << ck.use_dictionary << std::endl;
 
     // TODO:  Deallocate dictionary storage for chunks that don't use it and clear pointers.
     // If decide to use a kernel for this loop then move this cleanup outside
@@ -852,7 +855,7 @@ auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
   gpu::CollectMapEntries(chunks.device_view().flat_view(), stream);
   chunks.device_to_host(stream);
   stream.synchronize();
-  print(dict_data[0], "dict_data");
+  // if (chunks.host_view().flat_view()[0].use_dictionary) print(dict_data[0], "dict_data");
 
   // Time to make the dict index.
   std::vector<rmm::device_uvector<uint16_t>> dict_index;
@@ -1185,13 +1188,17 @@ void writer::impl::write(table_view const &table)
           num_dictionaries++;
         }
       }
+      // TODO: remove. Written here and read by old dict enc code and encoders. already removed from
+      // encoders
       ck->has_dictionary                                     = dict_enable;
       md.row_groups[global_r].columns[i].meta_data.type      = parquet_columns[i].physical_type();
       md.row_groups[global_r].columns[i].meta_data.encodings = {Encoding::PLAIN, Encoding::RLE};
-      if (dict_enable) {
-        md.row_groups[global_r].columns[i].meta_data.encodings.push_back(
-          Encoding::PLAIN_DICTIONARY);
-      }
+      // TODO: this also needs to change. Currently works because old dict code setting it
+      // if (dict_enable) {
+      //   md.row_groups[global_r].columns[i].meta_data.encodings.push_back(
+      //     Encoding::PLAIN_DICTIONARY);
+      // }
+      // std::cout << "dict_enable " << std::boolalpha << dict_enable << std::endl;
       md.row_groups[global_r].columns[i].meta_data.path_in_schema =
         parquet_columns[i].get_path_in_schema();
       md.row_groups[global_r].columns[i].meta_data.codec      = UNCOMPRESSED;
@@ -1204,6 +1211,17 @@ void writer::impl::write(table_view const &table)
 
   // Yahan banayenge nayi dictionary ka ghar
   auto dict_info_owner = build_chunk_dictionaries2(chunks, col_desc, num_rows, stream);
+  for (uint32_t rg = 0, global_rg = global_rowgroup_base; rg < num_rowgroups; rg++, global_rg++) {
+    for (int col = 0; col < num_columns; col++) {
+      if (chunks.host_view()[rg][col].use_dictionary) {
+        md.row_groups[global_rg].columns[col].meta_data.encodings.push_back(
+          Encoding::PLAIN_DICTIONARY);
+      }
+    }
+  }
+  // for (auto const &chunk : chunks.host_view().flat_view()) {
+  //   std::cout << "dict_enable " << std::boolalpha << chunk.use_dictionary << std::endl;
+  // }
 
   // Free unused dictionaries
   for (auto &col : parquet_columns) { col.check_dictionary_used(stream); }
@@ -1361,9 +1379,9 @@ void writer::impl::write(table_view const &table)
         }
         md.row_groups[global_r].total_byte_size += ck->compressed_size;
         md.row_groups[global_r].columns[i].meta_data.data_page_offset =
-          current_chunk_offset + ((ck->has_dictionary) ? ck->dictionary_size : 0);
+          current_chunk_offset + ((ck->use_dictionary) ? ck->dictionary_size : 0);
         md.row_groups[global_r].columns[i].meta_data.dictionary_page_offset =
-          (ck->has_dictionary) ? current_chunk_offset : 0;
+          (ck->use_dictionary) ? current_chunk_offset : 0;
         md.row_groups[global_r].columns[i].meta_data.total_uncompressed_size = ck->bfr_size;
         md.row_groups[global_r].columns[i].meta_data.total_compressed_size   = ck->compressed_size;
         current_chunk_offset += ck->compressed_size;
