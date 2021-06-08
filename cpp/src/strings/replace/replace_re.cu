@@ -38,6 +38,14 @@ namespace {
  * and inserting the new string within the matched range of characters.
  *
  * The logic includes computing the size of each string and also writing the output.
+ *
+ * The stack is used to keep progress on evaluating the regex instructions on each string.
+ * So the size of the stack is in proportion to the number of instructions in the given regex
+ * pattern.
+ *
+ * There are three call types based on the number of regex instructions in the given pattern.
+ * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
+ * Longer patterns require global memory. Shorter patterns are common in data cleaning.
  */
 template <int stack_size>
 struct replace_regex_fn {
