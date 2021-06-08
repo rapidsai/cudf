@@ -173,8 +173,8 @@ struct dispatch_compute_indices {
                         result_itr,
                         thrust::less<Element>());
 #else
-    // There is a problem with thrust::lower_bound and the output_indexalator
-    // https://github.com/NVIDIA/thrust/issues/1452
+    // There is a problem with thrust::lower_bound and the output_indexalator.
+    // https://github.com/NVIDIA/thrust/issues/1452; thrust team created nvbug 3322776
     // This is a workaround.
     thrust::transform(rmm::exec_policy(stream),
                       all_itr,
