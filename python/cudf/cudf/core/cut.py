@@ -154,7 +154,7 @@ def cut(
                 mn = x.min()
                 mx = x.max()
             else:
-                mn = min(x) 
+                mn = min(x)
                 mx = max(x)
             # step = cudf.Scalar((mx - mn) / bins, dtype="float64")
             bins = np.linspace(mn, mx, bins + 1, endpoint=True)
@@ -245,8 +245,8 @@ def cut(
         right_edges = as_column(bins.right).astype(input_arr.dtype)
     else:
         # get the left and right edges of the bins as columns
-        left_edges = as_column(bins[:-1:],dtype="float64")
-        right_edges = as_column(bins[+1::],dtype="float64")
+        left_edges = as_column(bins[:-1:], dtype="float64")
+        right_edges = as_column(bins[+1::], dtype="float64")
         # the input arr must be changed to the same type as the edges
         input_arr = input_arr.astype(left_edges.dtype)
     # get the indexes for the appropriate number
