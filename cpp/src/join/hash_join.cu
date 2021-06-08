@@ -234,19 +234,12 @@ probe_join_hash_table(cudf::table_device_view build_table,
                       rmm::cuda_stream_view stream,
                       rmm::mr::device_memory_resource *mr)
 {
-  std::size_t join_size;
-  // Use output size directly if provided
-  if (output_size.has_value()) {
-    join_size = output_size.value();
-  }
-  // Otherwise, compute the exact output size
-  else {
-    constexpr cudf::detail::join_kind ProbeJoinKind =
-      (JoinKind == cudf::detail::join_kind::FULL_JOIN) ? cudf::detail::join_kind::LEFT_JOIN
-                                                       : JoinKind;
-    join_size = compute_join_output_size<ProbeJoinKind>(
-      build_table, probe_table, hash_table, compare_nulls, stream);
-  }
+  // Use the output size directly if provided. Otherwise, compute the exact output size
+  constexpr cudf::detail::join_kind ProbeJoinKind = (JoinKind == cudf::detail::join_kind::FULL_JOIN)
+                                                      ? cudf::detail::join_kind::LEFT_JOIN
+                                                      : JoinKind;
+  std::size_t const join_size = output_size.value_or(compute_join_output_size<ProbeJoinKind>(
+    build_table, probe_table, hash_table, compare_nulls, stream));
 
   // If output size is zero, return immediately
   if (join_size == 0) {
