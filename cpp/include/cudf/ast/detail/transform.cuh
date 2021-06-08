@@ -68,22 +68,54 @@ using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
  * @brief A container for capturing the output of an evaluated expression.
  *
  * This class is designed to be passed by reference as the first argument to
- * expression_evaluator::evaluate. The primary implementation is as an owning
- * container of a (possibly nullable) scalar type that can be written to by the
- * expression_evaluator. The data (and its validity) can then be accessed. The
- * API is designed such that template specializations for specific output types
- * will be able to customize setting behavior if necessary.
+ * expression_evaluator::evaluate. The API is designed such that template
+ * specializations for specific output types will be able to customize setting
+ * behavior if necessary. The class leverages CRTP to define a suitable interface
+ * for the `expression_evaluator` at compile-time and enforce this API on its
+ * subclasses to get around the lack of device-side polymorphism.
+ *
+ * @tparam Subclass The subclass to dispatch methods to.
+ * @tparam has_nulls Whether or not the result data is nullable.
+ * @tparam T The underlying data type.
+ */
+template <typename Subclass, typename T, bool has_nulls>
+struct expression_result {
+  /**
+   * Helper function to get the subclass type to dispatch methods to.
+   */
+  Subclass& subclass() { return static_cast<Subclass&>(*this); }
+  Subclass const& subclass() const { return static_cast<Subclass const&>(*this); }
+
+  // TODO: The index is ignored by the value subclass, but is included in this
+  // signature because it is required by the implementation in the template
+  // specialization for column views. It would be nice to clean this up, see
+  // the related TODO below.
+  template <typename Element>
+  __device__ void set_value(cudf::size_type index, possibly_null_value_t<Element, has_nulls> result)
+  {
+    subclass()->set_value();
+  }
+
+  __device__ bool is_valid() const { subclass()->is_valid(); }
+
+  __device__ T value() const { subclass()->value(); }
+};
+
+/**
+ * @brief A container for capturing the output of an evaluated expression in a scalar.
+ *
+ * This subclass of `expression_result` functions as an owning container of a
+ * (possibly nullable) scalar type that can be written to by the
+ * expression_evaluator. The data (and its validity) can then be accessed.
  *
  * @tparam has_nulls Whether or not the result data is nullable.
  * @tparam T The underlying data type.
  */
-template <bool has_nulls, typename T>
-struct expression_result {
-  __device__ expression_result() {}
+template <typename T, bool has_nulls>
+struct value_expression_result
+  : public expression_result<value_expression_result<T, has_nulls>, T, has_nulls> {
+  __device__ value_expression_result() {}
 
-  // TODO: The index is ignored by this function, but is included because it is
-  // required by the implementation in the template specialization for column
-  // views, see below.
   template <typename Element>
   __device__ void set_value(cudf::size_type index, possibly_null_value_t<Element, has_nulls> result)
   {
@@ -128,12 +160,19 @@ struct expression_result {
 /**
  * @brief A container for capturing the output of an evaluated expression in a column.
  *
- * This template specialization differs from the primary implementation in that
- * it is non-owning, instead writing output directly to a column view.
+ * This subclass of `expression_result` functions as a non-owning container
+ * that transparently passes calls through to an underlying mutable view to a
+ * column. Not all methods are implemented
+ *
+ * @tparam has_nulls Whether or not the result data is nullable.
+ * @tparam T The underlying data type.
  */
 template <bool has_nulls>
-struct expression_result<has_nulls, mutable_column_device_view> {
-  __device__ expression_result(mutable_column_device_view& obj) : _obj(obj) {}
+struct mutable_column_expression_result
+  : public expression_result<mutable_column_expression_result<has_nulls>,
+                             mutable_column_device_view,
+                             has_nulls> {
+  __device__ mutable_column_expression_result(mutable_column_device_view& obj) : _obj(obj) {}
 
   template <typename Element>
   __device__ void set_value(cudf::size_type index, possibly_null_value_t<Element, has_nulls> result)
@@ -148,6 +187,26 @@ struct expression_result<has_nulls, mutable_column_device_view> {
     } else {
       _obj.template element<Element>(index) = result;
     }
+  }
+
+  /**
+   * @brief Not implemented for this specialization.
+   */
+  __device__ bool is_valid() const
+  {
+    // Not implemented since it would require modifying the API in the parent class to accept an
+    // index.
+    cudf_assert(false && "This method is not implemented.");
+  }
+
+  /**
+   * @brief Not implemented for this specialization.
+   */
+  __device__ mutable_column_device_view value() const
+  {
+    // Not implemented since it would require modifying the API in the parent class to accept an
+    // index.
+    cudf_assert(false && "This method is not implemented.");
   }
 
   mutable_column_device_view& _obj;  ///< The column to which the data is written.

@@ -251,7 +251,7 @@ __global__ void compute_conditional_join_output_size(table_device_view left_tabl
        left_row_index += left_stride) {
     bool found_match = false;
     for (cudf::size_type right_row_index = 0; right_row_index < right_num_rows; right_row_index++) {
-      auto output_dest = cudf::ast::detail::expression_result<has_nulls, bool>();
+      auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
       evaluator.evaluate(output_dest, left_row_index, right_row_index, 0);
       // TODO: Handle null equality propertly, right now I'm just assuming
       // that null translates to null.
@@ -524,7 +524,7 @@ __global__ void conditional_join(table_device_view left_table,
   if (left_row_index < left_num_rows) {
     bool found_match = false;
     for (size_type right_row_index(0); right_row_index < right_num_rows; right_row_index++) {
-      auto output_dest = cudf::ast::detail::expression_result<has_nulls, bool>();
+      auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
       evaluator.evaluate(output_dest, left_row_index, right_row_index, 0);
 
       // TODO: Handle null equality properly.
