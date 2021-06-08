@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,4 +83,27 @@ TEST_F(DictionarySetKeysTest, Errors)
   EXPECT_THROW(cudf::dictionary::set_keys(dictionary->view(), new_keys), cudf::logic_error);
   cudf::test::fixed_width_column_wrapper<int64_t> null_keys{{1, 2, 3}, {1, 0, 1}};
   EXPECT_THROW(cudf::dictionary::set_keys(dictionary->view(), null_keys), cudf::logic_error);
+}
+
+TEST_F(DictionarySetKeysTest, MatchDictionaries)
+{
+  cudf::test::dictionary_column_wrapper<int32_t> col1{5, 0, 4, 1, 2, 2, 2, 5, 0};
+  cudf::test::dictionary_column_wrapper<int32_t> col2{1, 0, 3, 1, 4, 5, 6, 5, 0};
+
+  auto input = std::vector<cudf::dictionary_column_view>(
+    {cudf::dictionary_column_view(col1), cudf::dictionary_column_view(col2)});
+
+  auto results = cudf::dictionary::match_dictionaries(input);
+  auto keys1   = cudf::dictionary_column_view(results[0]->view()).keys();
+  auto keys2   = cudf::dictionary_column_view(results[1]->view()).keys();
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(keys1, keys2);
+
+  auto result1 = cudf::dictionary::decode(cudf::dictionary_column_view(results[0]->view()));
+  auto result2 = cudf::dictionary::decode(cudf::dictionary_column_view(results[1]->view()));
+
+  auto expected1 = cudf::dictionary::decode(cudf::dictionary_column_view(col1));
+  auto expected2 = cudf::dictionary::decode(cudf::dictionary_column_view(col2));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result1->view(), expected1->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result2->view(), expected2->view());
 }

@@ -18,6 +18,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
@@ -58,7 +59,7 @@ TYPED_TEST(groupby_keys_test, zero_valid_keys)
   using R = cudf::detail::target_type_t<V, aggregation::COUNT_VALID>;
 
   // clang-format off
-  fixed_width_column_wrapper<K> keys      ( { 1, 2, 3}, all_null() );
+  fixed_width_column_wrapper<K> keys      ( { 1, 2, 3}, iterator_all_nulls() );
   fixed_width_column_wrapper<V> vals        { 3, 4, 5};
 
   fixed_width_column_wrapper<K> expect_keys { };
@@ -81,7 +82,7 @@ TYPED_TEST(groupby_keys_test, some_null_keys)
   fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4};
 
                                         //  { 1, 1, 1,  2, 2, 2, 2,  3, 3,  4}
-  fixed_width_column_wrapper<K> expect_keys({ 1,        2,           3,     4}, all_valid());
+  fixed_width_column_wrapper<K> expect_keys({ 1,        2,           3,     4}, iterator_no_null() );
                                         //  { 0, 3, 6,  1, 4, 5, 9,  2, 8,  -}
   fixed_width_column_wrapper<R> expect_vals { 3,        4,           2,     1};
   // clang-format on
@@ -180,7 +181,7 @@ TYPED_TEST(groupby_keys_test, pre_sorted_keys_nullable)
                                             { 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1});
   fixed_width_column_wrapper<V> vals        { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4};
 
-  fixed_width_column_wrapper<K> expect_keys({ 1,       2,          3,       4}, all_valid());
+  fixed_width_column_wrapper<K> expect_keys({ 1,       2,          3,       4}, iterator_no_null() );
   fixed_width_column_wrapper<R> expect_vals { 3,       15,         17,      4};
   // clang-format on
 
