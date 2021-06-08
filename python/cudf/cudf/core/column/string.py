@@ -17,7 +17,10 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast
 from cudf._lib.column import Column
-from cudf._lib.nvtext.edit_distance import edit_distance as cpp_edit_distance
+from cudf._lib.nvtext.edit_distance import (
+    edit_distance as cpp_edit_distance,
+    edit_distance_matrix as cpp_edit_distance_matrix,
+)
 from cudf._lib.nvtext.generate_ngrams import (
     generate_character_ngrams as cpp_generate_character_ngrams,
     generate_ngrams as cpp_generate_ngrams,
@@ -4858,6 +4861,20 @@ class StringMethods(ColumnMethodsMixin):
         return self._return_or_inplace(
             cpp_edit_distance(self._column, targets_column)
         )
+
+    def edit_distance_matrix(self) -> ParentType:
+        """
+        """
+        if self._column.size < 2:
+            raise ValueError(
+                "Require size >= 2 to compute edit distance matrix."
+            )
+        if self._column.has_nulls:
+            raise ValueError(
+                "Cannot compute edit distance between null strings. "
+                "Consider removing them using `dropna` or fill with `fillna`."
+            )
+        return self._return_or_inplace(cpp_edit_distance_matrix(self._column))
 
 
 def _massage_string_arg(value, name, allow_col=False):
