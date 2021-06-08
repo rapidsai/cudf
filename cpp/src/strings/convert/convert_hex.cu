@@ -131,13 +131,13 @@ struct integer_to_hex_fn {
 
   __device__ void byte_to_hex(uint8_t byte, char* hex)
   {
-    hex[0] = '0';
-    if (byte >= 16) {
-      uint8_t const hibyte = byte / 16;
+    hex[0] = [&] {
+      if (byte < 16) { return '0'; }
+      uint8_t const nibble = byte / 16;
 
-      hex[0] = hibyte < 10 ? '0' + hibyte : 'A' + (hibyte - 10);
-      byte   = byte - (hibyte * 16);
-    }
+      byte = byte - (nibble * 16);
+      return static_cast<char>(nibble < 10 ? '0' + nibble : 'A' + (nibble - 10));
+    }();
     hex[1] = byte < 10 ? '0' + byte : 'A' + (byte - 10);
   }
 
