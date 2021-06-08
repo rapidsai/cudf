@@ -34,12 +34,12 @@ from cudf.core.frame import SingleColumnFrame
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    _is_non_decimal_numeric_dtype,
     find_common_type,
     is_categorical_dtype,
     is_interval_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
-    is_numerical_dtype,
     is_scalar,
     numeric_normalize_types,
 )
@@ -2559,7 +2559,7 @@ def interval_range(
         for x in (start, end, freq, periods)
     ]
     if any(
-        not is_numerical_dtype(x.dtype) if x is not None else False
+        not _is_non_decimal_numeric_dtype(x.dtype) if x is not None else False
         for x in args
     ):
         raise ValueError("start, end, periods, freq must be numeric values.")

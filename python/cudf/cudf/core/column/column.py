@@ -47,13 +47,13 @@ from cudf.core.dtypes import (
 )
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
+    _is_non_decimal_numeric_dtype,
     check_cast_unsupported_dtype,
     get_time_unit,
     is_categorical_dtype,
     is_decimal_dtype,
     is_interval_dtype,
     is_list_dtype,
-    is_numerical_dtype,
     is_scalar,
     is_string_dtype,
     is_struct_dtype,
@@ -881,7 +881,7 @@ class ColumnBase(Column, Serializable):
         raise NotImplementedError()
 
     def astype(self, dtype: Dtype, **kwargs) -> ColumnBase:
-        if is_numerical_dtype(dtype):
+        if _is_non_decimal_numeric_dtype(dtype):
             return self.as_numerical_column(dtype)
         elif is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
@@ -1403,7 +1403,7 @@ def build_column(
     """
     dtype = pd.api.types.pandas_dtype(dtype)
 
-    if is_numerical_dtype(dtype):
+    if _is_non_decimal_numeric_dtype(dtype):
         assert data is not None
         return cudf.core.column.NumericalColumn(
             data=data,
@@ -2265,7 +2265,8 @@ def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     # Notice, we can always cast pure null columns
     not_null_col_dtypes = [o.dtype for o in objs if o.valid_count]
     if len(not_null_col_dtypes) and all(
-        is_numerical_dtype(dtyp) and np.issubdtype(dtyp, np.datetime64)
+        _is_non_decimal_numeric_dtype(dtyp)
+        and np.issubdtype(dtyp, np.datetime64)
         for dtyp in not_null_col_dtypes
     ):
         # Use NumPy to find a common dtype

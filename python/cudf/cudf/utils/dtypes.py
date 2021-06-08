@@ -15,6 +15,7 @@ from cudf.core._compat import PANDAS_GE_120
 
 # TODO: Temporary aliasing, should be removed.
 from ..api.types import (  # noqa: F401
+    _is_non_decimal_numeric_dtype,
     is_categorical_dtype,
     is_datetime_dtype as is_datetime_dtype,
     is_decimal_dtype,

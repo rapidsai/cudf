@@ -13,11 +13,11 @@ from cudf._lib.scalar import _is_null_host_scalar
 from cudf._typing import ColumnLike, DataFrameOrSeries, ScalarLike
 from cudf.core.column.column import as_column
 from cudf.utils.dtypes import (
+    _is_non_decimal_numeric_dtype,
     find_common_type,
     is_categorical_dtype,
     is_column_like,
     is_list_like,
-    is_numerical_dtype,
     is_scalar,
     to_cudf_compatible_scalar,
 )
@@ -111,7 +111,7 @@ class _SeriesIlocIndexer(object):
                 (cudf.Decimal64Dtype, cudf.CategoricalDtype),
             )
             and hasattr(value, "dtype")
-            and pd.api.types.is_numeric_dtype(value.dtype)
+            and _is_non_decimal_numeric_dtype(value.dtype)
         ):
             # normalize types if necessary:
             if not pd.api.types.is_integer(key):
@@ -175,7 +175,7 @@ class _SeriesLocIndexer(object):
 
     def _loc_to_iloc(self, arg):
         if is_scalar(arg):
-            if not is_numerical_dtype(self._sr.index.dtype):
+            if not _is_non_decimal_numeric_dtype(self._sr.index.dtype):
                 # TODO: switch to cudf.utils.dtypes.is_integer(arg)
                 if isinstance(
                     arg, cudf.Scalar

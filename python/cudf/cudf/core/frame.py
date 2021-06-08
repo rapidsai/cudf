@@ -25,6 +25,7 @@ from cudf.core.column import (
 )
 from cudf.core.join import merge
 from cudf.utils.dtypes import (
+    _is_non_decimal_numeric_dtype,
     find_common_type,
     is_categorical_dtype,
     is_column_like,
@@ -1519,7 +1520,7 @@ class Frame(libcudf.table.Table):
             numeric_cols = (
                 name
                 for name in self._data.names
-                if is_numerical_dtype(self._data[name])
+                if _is_non_decimal_numeric_dtype(self._data[name])
             )
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:
@@ -1745,7 +1746,7 @@ class Frame(libcudf.table.Table):
                 name: col.round(decimals[name])
                 if (
                     name in decimals.keys()
-                    and pd.api.types.is_numeric_dtype(col.dtype)
+                    and _is_non_decimal_numeric_dtype(col.dtype)
                 )
                 else col.copy(deep=True)
                 for name, col in self._data.items()
@@ -1753,7 +1754,7 @@ class Frame(libcudf.table.Table):
         elif isinstance(decimals, int):
             cols = {
                 name: col.round(decimals)
-                if pd.api.types.is_numeric_dtype(col.dtype)
+                if _is_non_decimal_numeric_dtype(col.dtype)
                 else col.copy(deep=True)
                 for name, col in self._data.items()
             }
@@ -3887,7 +3888,7 @@ def _get_replacement_values_for_columns(
             to_replace_columns = {col: to_replace for col in columns_dtype_map}
             values_columns = {
                 col: [value]
-                if pd.api.types.is_numeric_dtype(columns_dtype_map[col])
+                if _is_non_decimal_numeric_dtype(columns_dtype_map[col])
                 else cudf.utils.utils.scalar_broadcast_to(
                     value, (len(to_replace),), np.dtype(type(value)),
                 )
@@ -4047,10 +4048,7 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
         # default to the first non-null dtype
         dtypes[idx] = cols[0].dtype
         # If all the non-null dtypes are int/float, find a common dtype
-        if all(
-            is_numerical_dtype(col.dtype) or is_decimal_dtype(col.dtype)
-            for col in cols
-        ):
+        if all(is_numerical_dtype(col.dtype) for col in cols):
             dtypes[idx] = find_common_type([col.dtype for col in cols])
         # If all categorical dtypes, combine the categories
         elif all(

@@ -96,9 +96,6 @@ def is_numeric_dtype(obj):
     bool
         Whether or not the array or dtype is of a numeric dtype.
     """
-    # TODO: I've changed this function to return true for decimals because it
-    # seems like the expected behavior, but we depend on it returning false
-    # internally. We need to decide how to handle that.
     if isclass(obj):
         if issubclass(obj, cudf.Decimal64Dtype):
             return True
@@ -114,6 +111,19 @@ def is_numeric_dtype(obj):
         ):
             return False
     return pd_types.is_numeric_dtype(obj)
+
+
+# A version of numerical type check that does not include cudf decimals for
+# places where we need to distinguish fixed and floating point numbers.
+def _is_non_decimal_numeric_dtype(obj):
+    if isinstance(obj, _BaseDtype) or isinstance(
+        getattr(obj, "dtype", None), _BaseDtype
+    ):
+        return False
+    try:
+        return pd_types.is_numeric_dtype(obj)
+    except TypeError:
+        return False
 
 
 """

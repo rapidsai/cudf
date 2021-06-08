@@ -21,7 +21,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.core.dtypes import ListDtype
-from cudf.utils.dtypes import is_list_dtype, is_numerical_dtype
+from cudf.utils.dtypes import _is_non_decimal_numeric_dtype, is_list_dtype
 
 
 class ListColumn(ColumnBase):
@@ -405,7 +405,7 @@ class ListMethods(ColumnMethodsMixin):
             raise ValueError(
                 "lists_indices and list column is of different " "size."
             )
-        if not is_numerical_dtype(
+        if not _is_non_decimal_numeric_dtype(
             lists_indices_col.children[1].dtype
         ) or not np.issubdtype(
             lists_indices_col.children[1].dtype, np.integer

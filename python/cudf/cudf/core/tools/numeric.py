@@ -6,19 +6,18 @@ import numpy as np
 import pandas as pd
 
 import cudf
+from cudf import _lib as libcudf
 from cudf.core.column import as_column
 from cudf.utils.dtypes import (
+    _is_non_decimal_numeric_dtype,
     can_convert_to_column,
-    is_numerical_dtype,
-    is_datetime_dtype,
-    is_timedelta_dtype,
     is_categorical_dtype,
-    is_string_dtype,
+    is_datetime_dtype,
     is_list_dtype,
+    is_string_dtype,
     is_struct_dtype,
+    is_timedelta_dtype,
 )
-
-import cudf._lib as libcudf
 
 
 def to_numeric(arg, errors="raise", downcast=None):
@@ -112,7 +111,7 @@ def to_numeric(arg, errors="raise", downcast=None):
         col = col.as_numerical_column(np.dtype("int64"))
     elif is_categorical_dtype(dtype):
         cat_dtype = col.dtype.type
-        if is_numerical_dtype(cat_dtype):
+        if _is_non_decimal_numeric_dtype(cat_dtype):
             col = col.as_numerical_column(cat_dtype)
         else:
             try:
@@ -134,7 +133,7 @@ def to_numeric(arg, errors="raise", downcast=None):
                 raise e
     elif is_list_dtype(dtype) or is_struct_dtype(dtype):
         raise ValueError("Input does not support nested datatypes")
-    elif is_numerical_dtype(dtype):
+    elif _is_non_decimal_numeric_dtype(dtype):
         pass
     else:
         raise ValueError("Unrecognized datatype")
