@@ -1485,9 +1485,17 @@ def build_categorical_column(
     offset: int = 0,
     null_count: int = None,
     ordered: bool = None,
+    internal_categories: ColumnBase = None
 ) -> "cudf.core.column.CategoricalColumn":
     """
     Build a CategoricalColumn
+
+    When building a `CategoricalColumn` partly from a pre-existing
+    `CategoricalColumn`, notice that libcudf dictionary type columns does
+    not have ordering for categories. Thus `internal_categories` column may
+    have different ordering to `categories`. And because `codes` always map
+    to `internal_categories`, users should make sure such information is passed
+    down properly to the new column.
 
     Parameters
     ----------
@@ -1502,9 +1510,14 @@ def build_categorical_column(
     offset : int, optional
     ordered : bool
         Indicates whether the categories are ordered
+    internal_categories : Column
+        Internally stored categories. Order is dependent on underlying 
+        implementation. `codes` should match to `internal_categories` at all
+        times.
     """
 
-    internal_categories = arange(start=0, stop=categories.size, step=1) if ordered else categories
+    internal_categories = categories if internal_categories is None else categories
+
     dtype = CategoricalDtype(categories=categories, ordered=ordered)
 
     result = build_column(
@@ -1514,7 +1527,7 @@ def build_categorical_column(
         size=size,
         offset=offset,
         null_count=null_count,
-        children=(internal_categories, codes),
+        children=(codes, internal_categories),
     )
     return cast("cudf.core.column.CategoricalColumn", result)
 
@@ -2215,15 +2228,38 @@ def _copy_type_metadata_from_arrow(
     elif pa.types.is_dictionary(arrow_array.type) and isinstance(
         cudf_column, cudf.core.column.CategoricalColumn
     ):
-        if arrow_array.type.ordered:
-            return cudf.core.column.CategoricalColumn(
-                CategoricalDtype(arrow_array.dictionary, ordered=True),
-                cudf_column.mask,
-                cudf_column.size,
-                cudf_column.offset,
-                cudf_column.null_count,
-                cudf_column.base_children
-            )
+        """A conformed libcudf dictionary type column requires keys stored
+        sorted. `from_arrow` does not handle the sorting part, and we need
+        to do it here manually.
+        """
+
+        # After
+        sorted_keys, sorted_indices = cudf_column._internal_categories.sort_by_values()
+        remapped_indices = cudf_column._remap_codes_with_order(sorted_indices)
+        conformed_col = build_column(
+            dtype=CategoricalDtype(categories=arrow_array.dictionary,
+                                   ordered=arrow_array.type.ordered),
+            data=None,
+            size=cudf_column.size,
+            mask=cudf_column.base_mask,
+            offset=cudf_column.offset,
+            null_count=cudf_column.null_count,
+            children=(remapped_indices, sorted_keys)
+        )
+        conformed_col._category_order = sorted_indices
+        return conformed_col
+
+        # Before
+        # if arrow_array.type.ordered:
+        #     return cudf.core.column.CategoricalColumn(
+        #         CategoricalDtype(arrow_array.dictionary, ordered=True),
+        #         cudf_column.mask,
+        #         cudf_column.size,
+        #         cudf_column.offset,
+        #         cudf_column.null_count,
+        #         cudf_column.base_children
+        #     )
+
 
     return cudf_column
 

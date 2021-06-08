@@ -180,7 +180,10 @@ def test_categorical_element_indexing():
     assert_eq(pdsr.cat.codes, sr.cat.codes, check_dtype=False)
 
     for i in range(len(sr)):
-        assert pdsr.iloc[i] == sr.iloc[i]
+        if pdsr.iloc[i] is not np.nan:
+            assert pdsr.iloc[i] == sr.iloc[i]
+        else:
+            assert pdsr.iloc[i] is np.nan and sr.iloc[i] is cudf.NA
 
 
 def test_categorical_masking():
@@ -343,6 +346,11 @@ def test_categorical_set_categories():
     # removing category
     expect = psr.cat.set_categories(["a", "b"])
     got = sr.cat.set_categories(["a", "b"])
+    assert_eq(expect, got)
+
+    # set different category
+    expect = psr.cat.set_categories(["a", "b", "d"])
+    got = sr.cat.set_categories(["a", "b", "d"])
     assert_eq(expect, got)
 
 

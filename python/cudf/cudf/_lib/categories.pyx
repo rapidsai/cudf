@@ -14,7 +14,7 @@ from cudf.core.column.column import arange
 from cudf._lib.column cimport Column
 
 def set_categories(Column category_column, Column categories):
-    cdef column_view keys_view
+    cdef column_view keys_view = categories.view()
 
     cdef shared_ptr[dictionary_column_view] dict_view = (
         make_shared[dictionary_column_view](category_column.view())
@@ -22,5 +22,18 @@ def set_categories(Column category_column, Column categories):
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(set_keys(dict_view.get()[0], keys_view))
+    
+    return Column.from_unique_ptr(move(c_result))
+
+
+def add_categories(Column category_column, Column new_categories):
+    cdef column_view keys_view = new_categories.view()
+
+    cdef shared_ptr[dictionary_column_view] dict_view = (
+        make_shared[dictionary_column_view](category_column.view())
+    )
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(add_keys(dict_view.get()[0], keys_view))
     
     return Column.from_unique_ptr(move(c_result))
