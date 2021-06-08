@@ -594,8 +594,8 @@ class hash_join {
             rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
 
   /**
-   * Returns the exact number of output when performing an inner join with the specified probe
-   * table.
+   * Returns the exact number of matches (rows) when performing an inner join with the specified
+   * probe table.
    *
    * @param probe The probe table, from which the tuples are probed.
    * @param compare_nulls Controls whether null join-key values should match or not.
@@ -609,7 +609,8 @@ class hash_join {
                               rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
-   * Returns the exact number of output when performing a left join with the specified probe table.
+   * Returns the exact number of matches (rows) when performing a left join with the specified probe
+   * table.
    *
    * @param probe The probe table, from which the tuples are probed.
    * @param compare_nulls Controls whether null join-key values should match or not.
@@ -623,7 +624,8 @@ class hash_join {
                              rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
-   * Returns the exact number of output when performing a full join with the specified probe table.
+   * Returns the exact number of matches (rows) when performing a full join with the specified probe
+   * table.
    *
    * @param probe The probe table, from which the tuples are probed.
    * @param compare_nulls Controls whether null join-key values should match or not.
