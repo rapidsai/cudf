@@ -60,30 +60,54 @@ struct possibly_null_value<T, false> {
 template <typename T, bool has_nulls>
 using possibly_null_value_t = typename possibly_null_value<T, has_nulls>::type;
 
+// Type used for intermediate storage in expression evaluation.
+template <bool has_nulls>
+using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
+
+/**
+ * @brief A container for capturing the output of an evaluated expression.
+ *
+ * This class is designed to be passed by reference as the first argument to
+ * expression_evaluator::evaluate. The primary implementation is as an owning
+ * container of a (possibly nullable) scalar type that can be written to by the
+ * expression_evaluator. The data (and its validity) can then be accessed. The
+ * API is designed such that template specializations for specific output types
+ * will be able to customize setting behavior if necessary.
+ *
+ * @tparam has_nulls Whether or not the result data is nullable.
+ * @tparam T The underlying data type.
+ */
 template <bool has_nulls, typename T>
 struct expression_result {
   __device__ expression_result() {}
 
-  // TODO: Index is ignored by this function.
+  // TODO: The index is ignored by this function, but is included because it is
+  // required by the implementation in the template specialization for column
+  // views, see below.
   template <typename Element>
   __device__ void set_value(cudf::size_type index, possibly_null_value_t<Element, has_nulls> result)
   {
     if constexpr (std::is_same_v<Element, T>) {
       _obj = result;
     } else {
-      // We cannot SFINAE away this branch because we need the function to be
-      // defined, so we must provide a runtime error.
       cudf_assert(false && "Output type does not match container type.");
     }
   }
 
+  /**
+   * @brief Returns true if the underlying data is valid and false otherwise.
+   */
   __device__ bool is_valid() const
   {
     if constexpr (has_nulls) { return _obj.has_value(); }
     return true;
   }
 
-  // Note that accessing the value is undefined if the value is not valid.
+  /**
+   * @brief Returns the underlying data.
+   *
+   * @throws thrust::bad_optional_access if the underlying data is not valid.
+   */
   __device__ T value() const
   {
     // Using two separate constexprs silences compiler warnings, whereas an
@@ -93,9 +117,42 @@ struct expression_result {
     if constexpr (!has_nulls) { return _obj; }
   }
 
-  possibly_null_value_t<T, has_nulls> _obj;
+  possibly_null_value_t<T, has_nulls>
+    _obj;  ///< The underlying data value, or a nullable version of it.
 };
 
+// TODO: The below implementation has two problems with respect to inconsistencies with the above:
+// 1. This specialization is non-owning, whereas the base implementation is
+// not. The best option for consistency would be to force the users to create
+// the value type of the base implementation and pass it by reference to the
+// constructor, but it's hard to justify this choice on any other grounds.  The
+// user would have to query the appropriate type from the namespace of the
+// class (e.g. `expression_result<true, int>::ValueType`), and ultimately they
+// would be constructing an object `expression_result<has_bools,
+// T>(expression_result<true, int>::ValueType obj)` solely for the purpose of
+// passing an argument with the necessary API to
+// `expression_evaluator::evaluate`. That seems like a poor reason to require
+// more work from a consumer of the AST API, so I opted for this solution.
+// 2. This implementation makes use of the index in `set_value` to write data
+// to the correct offset. The reason we do this is because there are problems
+// with the obvious alternative choices:
+//     a) We could require the calling code to construct an expression result with
+//        a pointer to the exact data location that we want to write to. However,
+//        to do that the user would need to know the column's data type to compute the
+//        correct offset, and the requisite templating balloons compile time.
+//     b) We could construct the object with a column and an index and remove the index
+//        from `set_value`. This change would be cleaner overall since then we could stop
+//        passing the output index through various stages of the expression_evaluator. However,
+//        This option is much slower (4-6x performance hit), most likely because the output
+//        index ends up somewhere lower in the memory hierarchy with this approach than when
+//        the index is passed as a function argument.
+
+/**
+ * @brief A container for capturing the output of an evaluated expression in a column.
+ *
+ * This template specialization differs from the primary implementation in that
+ * it is non-owning, instead writing output directly to a column view.
+ */
 template <bool has_nulls>
 struct expression_result<has_nulls, mutable_column_device_view> {
   __device__ expression_result(mutable_column_device_view& obj) : _obj(obj) {}
@@ -115,15 +172,15 @@ struct expression_result<has_nulls, mutable_column_device_view> {
     }
   }
 
-  mutable_column_device_view& _obj;
+  mutable_column_device_view& _obj;  ///< The column to which the data is written.
 };
 
 /**
- * @brief The AST plan creates a device buffer of data needed to execute an AST.
+ * @brief A container of all device data required to evaluate an expression on tables.
  *
- * On construction, an AST plan creates a single "packed" host buffer of all necessary data arrays,
- * and copies that to the device with a single host-device memory copy. Because the plan tends to be
- * small, this is the most efficient approach for low latency.
+ * This struct should never be instantiated directly. It is created by the
+ * `ast_plan` on construction, and the resulting member is publicly accessible
+ * for passing to kernels for constructing `expression_evaluators`.
  *
  */
 struct dev_ast_plan {
@@ -135,7 +192,32 @@ struct dev_ast_plan {
   int shmem_per_thread;
 };
 
+/**
+ * @brief Preprocessor for an expression acting on tables to generate data suitable for AST
+ * expression evaluation on the GPU.
+ *
+ * On construction, an AST plan creates a single "packed" host buffer of all
+ * data arrays that will be necessary to evaluate an expression on a pair of
+ * tables. This data is copied to a single contiguous device buffer, and
+ * pointers are generated to the individual components. Because the plan tends
+ * to be small, this is the most efficient approach for low latency. All the
+ * data required on the GPU can be accessed via the convenient `dev_plan`
+ * member struct, which can be used to construct an `expression_evaluator` on
+ * the device.
+ *
+ * Note that the resulting device data cannot be used once this class goes out of scope.
+ */
 struct ast_plan {
+  /**
+   * @brief Construct an AST plan for an expression operating on two tables.
+   *
+   * @param expr The expression for which to construct a plan.
+   * @param left The left table on which the expression acts.
+   * @param right The right table on which the expression acts.
+   * @param has_nulls Boolean indicator of whether or not the data contains nulls.
+   * @param stream Stream view on which to allocate resources and queue execution.
+   * @param mr Device memory resource used to allocate the returned column's device.
+   */
   ast_plan(detail::node const& expr,
            cudf::table_view left,
            cudf::table_view right,
@@ -183,16 +265,20 @@ struct ast_plan {
       reinterpret_cast<const cudf::size_type*>(device_data_buffer_ptr + buffer_offsets[3]),
       _linearizer.operator_source_indices().size());
     dev_plan.num_intermediates = _linearizer.intermediate_count();
-
-    // We cannot pull the required type directly from the evaluator, which
-    // would be ideal, because that would introduce a circular dependency
-    // between them. The separation between host and device code in this case
-    // requires this minor duplication of logic.
-    dev_plan.shmem_per_thread =
-      static_cast<int>((has_nulls ? sizeof(thrust::optional<std::int64_t>) : sizeof(std::int64_t)) *
-                       dev_plan.num_intermediates);
+    dev_plan.shmem_per_thread  = static_cast<int>(
+      (has_nulls ? sizeof(IntermediateDataType<true>) : sizeof(IntermediateDataType<false>)) *
+      dev_plan.num_intermediates);
   }
 
+  /**
+   * @brief Construct an AST plan for an expression operating on one table.
+   *
+   * @param expr The expression for which to construct a plan.
+   * @param left The left table on which the expression acts.
+   * @param has_nulls Boolean indicator of whether or not the data contains nulls.
+   * @param stream Stream view on which to allocate resources and queue execution.
+   * @param mr Device memory resource used to allocate the returned column's device.
+   */
   ast_plan(detail::node const& expr,
            cudf::table_view left,
            bool has_nulls,
@@ -204,7 +290,8 @@ struct ast_plan {
 
   cudf::data_type output_type() const { return _linearizer.root_data_type(); }
 
-  dev_ast_plan dev_plan;
+  dev_ast_plan
+    dev_plan;  ///< The collection of data required to evaluate the expression on the device.
 
  private:
   /**
@@ -223,30 +310,30 @@ struct ast_plan {
     _data_pointers.push_back(v.data());
   }
 
-  rmm::device_buffer _device_data_buffer;
-  linearizer const _linearizer;
+  rmm::device_buffer
+    _device_data_buffer;  ///< The device-side data buffer containing the plan information, which is
+                          ///< owned by this class and persists until it is destroyed.
+  linearizer const _linearizer;  ///< The linearizer created from the provided expression that is
+                                 ///< used to construct device-side operators and references.
 };
 
-// Type used for intermediate storage in expression evaluation.
-template <bool has_nulls>
-using IntermediateDataType = possibly_null_value_t<std::int64_t, has_nulls>;
-
 /**
- * @brief An expression evaluator owned by a single thread operating on rows of two table.
+ * @brief The principal object for evaluating AST expressions on device.
  *
  * This class is designed for n-ary transform evaluation. It operates on two
- * separate tables, and knows the rows of each one.
+ * tables.
  */
 template <bool has_nulls>
 struct expression_evaluator {
  public:
   /**
-   * @brief Construct a row evaluator.
+   * @brief Construct an expression evaluator acting on two tables.
    *
-   * @param table The table device view used for evaluation.
-   * @param literals Array of literal values used for evaluation.
+   * @param left View on the left table view used for evaluation.
+   * @param plan The collection of device references representing the expression to evaluate.
    * @param thread_intermediate_storage Pointer to this thread's portion of shared memory for
    * storing intermediates.
+   * @param left View on the right table view used for evaluation.
    */
   __device__ expression_evaluator(table_device_view const& left,
                                   dev_ast_plan const& plan,
@@ -256,13 +343,21 @@ struct expression_evaluator {
   {
   }
 
-  // Overloaded constructor for single-table case.
+  /**
+   * @brief Construct an expression evaluator acting on one table.
+   *
+   * @param left View on the left table view used for evaluation.
+   * @param plan The collection of device references representing the expression to evaluate.
+   * @param thread_intermediate_storage Pointer to this thread's portion of shared memory for
+   * storing intermediates.
+   */
   __device__ expression_evaluator(table_device_view const& left,
                                   dev_ast_plan const& plan,
                                   IntermediateDataType<has_nulls>* thread_intermediate_storage)
     : left(left), plan(plan), thread_intermediate_storage(thread_intermediate_storage), right(left)
   {
   }
+
   /**
    * @brief Resolves an input data reference into a value.
    *
@@ -271,9 +366,10 @@ struct expression_evaluator {
    * sizeof(std::int64_t). This requirement on intermediates is enforced by the linearizer.
    *
    * @tparam Element Type of element to return.
+   * @tparam has_nulls Whether or not the result data is nullable.
    * @param device_data_reference Data reference to resolve.
    * @param row_index Row index of data column.
-   * @return Element
+   * @return Element The type- and null-resolved data.
    */
   template <typename Element, CUDF_ENABLE_IF(column_device_view::has_element_accessor<Element>())>
   __device__ possibly_null_value_t<Element, has_nulls> resolve_input(
@@ -323,11 +419,15 @@ struct expression_evaluator {
   /**
    * @brief Callable to perform a unary operation.
    *
-   * @tparam OperatorFunctor Functor that performs desired operation when `operator()` is called.
    * @tparam Input Type of input value.
-   * @param row_index Row index of data column(s).
+   * @tparam OutputType The container type that data will be inserted into.
+   *
+   * @param output_object The container that data will be inserted into.
+   * @param input_row_index The row to pull the data from the input table.
    * @param input Input data reference.
    * @param output Output data reference.
+   * @param output_row_index The row in the output to insert the result.
+   * @param op The operator to act with.
    */
   template <typename Input, typename OutputType>
   __device__ void operator()(OutputType& output_object,
@@ -347,15 +447,20 @@ struct expression_evaluator {
   }
 
   /**
-   * @brief Callable to perform a binary operation.
+   * @brief Callable to perform a unary operation.
    *
-   * @tparam OperatorFunctor Functor that performs desired operation when `operator()` is called.
-   * @tparam LHS Type of left input value.
-   * @tparam RHS Type of right input value.
-   * @param row_index Row index of data column(s).
+   * @tparam LHS Type of the left input value.
+   * @tparam RHS Type of the right input value.
+   * @tparam OutputType The container type that data will be inserted into.
+   *
+   * @param output_object The container that data will be inserted into.
+   * @param left_row_index The row to pull the data from the left table.
+   * @param right_row_index The row to pull the data from the right table.
    * @param lhs Left input data reference.
    * @param rhs Right input data reference.
    * @param output Output data reference.
+   * @param output_row_index The row in the output to insert the result.
+   * @param op The operator to act with.
    */
   template <typename LHS, typename RHS, typename OutputType>
   __device__ void operator()(OutputType& output_object,
@@ -400,12 +505,10 @@ struct expression_evaluator {
    *
    * This function performs an n-ary transform for one row on one thread.
    *
-   * @param evaluator The row evaluator used for evaluation.
-   * @param data_references Array of data references.
-   * @param operators Array of operators to perform.
-   * @param operator_source_indices Array of source indices for the operators.
-   * @param num_operators Number of operators.
-   * @param row_index Row index of data column(s).
+   * @tparam OutputType The container type that data will be inserted into.
+   *
+   * @param output_object The container that data will be inserted into.
+   * @param row_index Row index of all input and output data column(s).
    */
   template <typename OutputType>
   __device__ void evaluate(OutputType& output_object, cudf::size_type const row_index)
@@ -418,12 +521,12 @@ struct expression_evaluator {
    *
    * This function performs an n-ary transform for one row on one thread.
    *
-   * @param evaluator The row evaluator used for evaluation.
-   * @param data_references Array of data references.
-   * @param operators Array of operators to perform.
-   * @param operator_source_indices Array of source indices for the operators.
-   * @param num_operators Number of operators.
-   * @param row_index Row index of data column(s).
+   * @tparam OutputType The container type that data will be inserted into.
+   *
+   * @param output_object The container that data will be inserted into.
+   * @param left_row_index The row to pull the data from the left table.
+   * @param right_row_index The row to pull the data from the right table.
+   * @param output_row_index The row in the output to insert the result.
    */
   template <typename OutputType>
   __device__ void evaluate(OutputType& output_object,
@@ -480,6 +583,14 @@ struct expression_evaluator {
   }
 
  private:
+  /**
+   * @brief Helper struct for type dispatch on the result of an expression.
+   *
+   * Evaluating an expression requires multiple levels of type dispatch to
+   * determine the input types, the operation type, and the output type. This
+   * helper class is a functor that handles the operator dispatch, invokes the
+   * operator, and dispatches output writing based on the resulting data type.
+   */
   struct expression_output_handler {
    public:
     __device__ expression_output_handler(expression_evaluator<has_nulls> const& evaluator)
@@ -495,20 +606,13 @@ struct expression_evaluator {
      * sizeof(std::int64_t). This requirement on intermediates is enforced by the linearizer.
      *
      * @tparam Element Type of result element.
+     * @tparam OutputType The container type that data will be inserted into.
+     *
+     * @param output_object The container that data will be inserted into.
      * @param device_data_reference Data reference to resolve.
-     * @param expression_index Row index of data column.
+     * @param row_index Row index of data column.
      * @param result Value to assign to output.
      */
-    // TODO: The row index is now completely ignored... not so great.
-    // Also now I have a separate override for thrust::optional that's
-    // exclusively being used when has_nulls is true, but the override is not
-    // specific to that class. Need a better SFINAE, and a better overall design
-    // for return values. It would be better if the thrust::optional version only
-    // existed when has_nulls=true, but really it would be ideal to not have to
-    // go through a lot of these hoops in general. Also the use of void * is bad
-    // because it makes all the overloads compile but they'll run erroneously.
-    // Currently this isn't an issue only because the conditional join code
-    // exclusively uses the bool path at runtime.
     template <typename Element,
               typename OutputType,
               CUDF_ENABLE_IF(is_rep_layout_compatible<Element>())>
@@ -544,6 +648,12 @@ struct expression_evaluator {
     expression_evaluator<has_nulls> const& evaluator;
   };
 
+  /**
+   * @brief Subclass of the expression output handler for unary operations.
+   *
+   * This functor's call operator is specialized to handle unary operations,
+   * which only require a single operand.
+   */
   template <typename Input>
   struct unary_expression_output_handler : public expression_output_handler {
     __device__ unary_expression_output_handler(expression_evaluator<has_nulls> const& evaluator)
@@ -551,6 +661,17 @@ struct expression_evaluator {
     {
     }
 
+    /**
+     * @brief Callable to perform a unary operation.
+     *
+     * @tparam op The operation to perform.
+     * @tparam OutputType The container type that data will be inserted into.
+     *
+     * @param output_object The container that data will be inserted into.
+     * @param outputrow_index The row in the output object to insert the data.
+     * @param input Input to the operation.
+     * @param output Output data reference.
+     */
     template <
       ast_operator op,
       typename OutputType,
@@ -586,6 +707,12 @@ struct expression_evaluator {
     }
   };
 
+  /**
+   * @brief Subclass of the expression output handler for binary operations.
+   *
+   * This functor's call operator is specialized to handle binary operations,
+   * which require a two operands.
+   */
   template <typename LHS, typename RHS>
   struct binary_expression_output_handler : public expression_output_handler {
     __device__ binary_expression_output_handler(expression_evaluator<has_nulls> const& evaluator)
@@ -593,6 +720,18 @@ struct expression_evaluator {
     {
     }
 
+    /**
+     * @brief Callable to perform a binary operation.
+     *
+     * @tparam op The operation to perform.
+     * @tparam OutputType The container type that data will be inserted into.
+     *
+     * @param output_object The container that data will be inserted into.
+     * @param output_row_index The row in the output to insert the result.
+     * @param lhs Left input to the operation.
+     * @param rhs Right input to the operation.
+     * @param output Output data reference.
+     */
     template <ast_operator op,
               typename OutputType,
               std::enable_if_t<
@@ -630,10 +769,13 @@ struct expression_evaluator {
     }
   };
 
-  table_device_view const& left;
-  table_device_view const& right;
-  dev_ast_plan const& plan;
-  IntermediateDataType<has_nulls>* thread_intermediate_storage;
+  table_device_view const& left;   ///< The left table to operate on.
+  table_device_view const& right;  ///< The right table to operate on.
+  dev_ast_plan const&
+    plan;  ///< The container of device data representing the expression to evaluate.
+  IntermediateDataType<has_nulls>*
+    thread_intermediate_storage;  ///< The shared memory store of intermediates produced during
+                                  ///< evaluation.
 };
 
 /**

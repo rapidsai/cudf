@@ -49,16 +49,13 @@ namespace detail {
  * This evaluates an expression over a table to produce a new column. Also called an n-ary
  * transform.
  *
- * @tparam block_size
+ * @tparam block_size The size of the thread block, used to set launch bounds and minimize register
+ * usage.
+ * @tparam has_nulls whether or not the output column may contain nulls.
+ *
  * @param table The table device view used for evaluation.
- * @param literals Array of literal values used for evaluation.
- * @param output_column The output column where results are stored.
- * @param data_references Array of data references.
- * @param operators Array of operators to perform.
- * @param operator_source_indices Array of source indices for the operators.
- * @param num_operators Number of operators.
- * @param num_intermediates Number of intermediates, used to allocate a portion of shared memory to
- * each thread.
+ * @param plan Container of device data required to evaluate the desired expression.
+ * @param output_column The destination for the results of evaluating the expression.
  */
 template <cudf::size_type max_block_size, bool has_nulls>
 __launch_bounds__(max_block_size) __global__

@@ -241,8 +241,6 @@ __global__ void compute_conditional_join_output_size(table_device_view left_tabl
   const cudf::size_type left_num_rows  = left_table.num_rows();
   const cudf::size_type right_num_rows = right_table.num_rows();
 
-  // TODO: The new setup is forcing me to pass an optional through even when
-  // there are no nulls.  Should see if there's a better way.
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, plan, thread_intermediate_storage, right_table);
 
