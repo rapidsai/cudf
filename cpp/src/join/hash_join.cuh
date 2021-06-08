@@ -122,7 +122,7 @@ std::size_t estimate_join_output_size(table_device_view build_table,
   do {
     sample_probe_num_rows = std::min(sample_probe_num_rows, probe_table_num_rows);
 
-    size_estimate.set_value_zero(stream);
+    size_estimate.set_value_to_zero_async(stream);
 
     row_hash hash_probe{probe_table};
     row_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};

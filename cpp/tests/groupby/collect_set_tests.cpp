@@ -146,6 +146,47 @@ TEST_F(CollectSetTest, StringInput)
   test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
 }
 
+TEST_F(CollectSetTest, FloatsWithNaN)
+{
+  COL_K keys{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  cudf::test::fixed_width_column_wrapper<float> vals{
+    {1.0f, 1.0f, -2.3e-5f, -2.3e-5f, 2.3e5f, 2.3e5f, -NAN, -NAN, NAN, NAN, 0.0f, 0.0f},
+    {true, true, true, true, true, true, true, true, true, true, false, false}};
+  COL_K keys_expected{1};
+  // null equal with nan unequal
+  cudf::test::lists_column_wrapper<float> vals_expected{
+    {{-2.3e-5f, 1.0f, 2.3e5f, -NAN, -NAN, NAN, NAN, 0.0f},
+     VALIDITY{true, true, true, true, true, true, true, false}},
+  };
+  test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
+  // null unequal with nan unequal
+  vals_expected = {{{-2.3e-5f, 1.0f, 2.3e5f, -NAN, -NAN, NAN, NAN, 0.0f, 0.0f},
+                    VALIDITY{true, true, true, true, true, true, true, false, false}}};
+  test_single_agg(
+    keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set_null_unequal());
+  // null exclude with nan unequal
+  vals_expected = {{-2.3e-5f, 1.0f, 2.3e5f, -NAN, -NAN, NAN, NAN}};
+  test_single_agg(
+    keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set_null_exclude());
+  // null equal with nan equal
+  vals_expected = {{{-2.3e-5f, 1.0f, 2.3e5f, NAN, 0.0f}, VALIDITY{true, true, true, true, false}}};
+  test_single_agg(keys,
+                  vals,
+                  keys_expected,
+                  vals_expected,
+                  cudf::make_collect_set_aggregation(
+                    null_policy::INCLUDE, null_equality::EQUAL, nan_equality::ALL_EQUAL));
+  // null unequal with nan equal
+  vals_expected = {
+    {{-2.3e-5f, 1.0f, 2.3e5f, -NAN, 0.0f, 0.0f}, VALIDITY{true, true, true, true, false, false}}};
+  test_single_agg(keys,
+                  vals,
+                  keys_expected,
+                  vals_expected,
+                  cudf::make_collect_set_aggregation(
+                    null_policy::INCLUDE, null_equality::UNEQUAL, nan_equality::ALL_EQUAL));
+}
+
 TYPED_TEST(CollectSetTypedTest, CollectWithNulls)
 {
   // Just use an arbitrary value to store null entries
