@@ -61,7 +61,8 @@ string_scalar::string_scalar(std::string const& string,
                              bool is_valid,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
-  : scalar(data_type(type_id::STRING), is_valid), _data(string.data(), string.size(), stream, mr)
+  : scalar(data_type(type_id::STRING), is_valid, stream, mr),
+    _data(string.data(), string.size(), stream, mr)
 {
 }
 
@@ -84,8 +85,16 @@ string_scalar::string_scalar(value_type const& source,
                              bool is_valid,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
-  : scalar(data_type(type_id::STRING), is_valid),
+  : scalar(data_type(type_id::STRING), is_valid, stream, mr),
     _data(source.data(), source.size_bytes(), stream, mr)
+{
+}
+
+string_scalar::string_scalar(rmm::device_buffer&& data,
+                             bool is_valid,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
+  : scalar(data_type(type_id::STRING), is_valid, stream, mr), _data(std::move(data))
 {
 }
 
@@ -146,8 +155,7 @@ fixed_point_scalar<T>::fixed_point_scalar(rmm::device_scalar<rep_type>&& data,
                                           bool is_valid,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
-  : scalar{data_type{type_to_id<T>(), scale}, is_valid, stream, mr},
-    _data{std::forward<rmm::device_scalar<rep_type>>(data)}
+  : scalar{data_type{type_to_id<T>(), scale}, is_valid, stream, mr}, _data{std::move(data)}
 {
 }
 
@@ -212,8 +220,7 @@ fixed_width_scalar<T>::fixed_width_scalar(rmm::device_scalar<T>&& data,
                                           bool is_valid,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
-  : scalar(data_type(type_to_id<T>()), is_valid, stream, mr),
-    _data{std::forward<rmm::device_scalar<T>>(data)}
+  : scalar(data_type(type_to_id<T>()), is_valid, stream, mr), _data{std::move(data)}
 {
 }
 
@@ -522,6 +529,15 @@ struct_scalar::struct_scalar(host_span<column_view const> data,
                              rmm::mr::device_memory_resource* mr)
   : scalar(data_type(type_id::STRUCT), is_valid, stream, mr),
     _data(table_view{std::vector<column_view>{data.begin(), data.end()}}, stream, mr)
+{
+  init(is_valid, stream, mr);
+}
+
+struct_scalar::struct_scalar(table&& data,
+                             bool is_valid,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
+  : scalar(data_type(type_id::STRUCT), is_valid, stream, mr), _data(std::move(data))
 {
   init(is_valid, stream, mr);
 }
