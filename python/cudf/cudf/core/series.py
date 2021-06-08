@@ -5222,7 +5222,7 @@ class Series(SingleColumnFrame, Serializable):
             res = res / float(res._column.sum())
 
         # we this is how we can get the same index dtype as pandas
-        if bins is not None:
+        if bins is not None and len(res) == len(res.index.categories):
             res.index = res.index.categories
 
         return res
