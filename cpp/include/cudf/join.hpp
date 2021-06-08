@@ -675,6 +675,7 @@ class hash_join {
  *
  * @param[in] left_keys The left table
  * @param[in] right_keys The right table
+ * @param[in] binary_predicate The condition on which to join.
  * @param[in] compare_nulls controls whether null join-key values
  * should match or not.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
@@ -687,7 +688,8 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 conditional_inner_join(
   table_view left,
   table_view right,
-  ast::expression binary_pred,
+  ast::expression binary_predicate,
+  null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -718,6 +720,7 @@ conditional_inner_join(
  *
  * @param[in] left_keys The left table
  * @param[in] right_keys The right table
+ * @param[in] binary_predicate The condition on which to join.
  * @param[in] compare_nulls controls whether null join-key values
  * should match or not.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
@@ -729,7 +732,8 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 conditional_left_join(table_view left,
                       table_view right,
-                      ast::expression binary_pred,
+                      ast::expression binary_predicate,
+                      null_equality compare_nulls         = null_equality::EQUAL,
                       rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -759,6 +763,7 @@ conditional_left_join(table_view left,
  *
  * @param[in] left_keys The left table
  * @param[in] right_keys The right table
+ * @param[in] binary_predicate The condition on which to join.
  * @param[in] compare_nulls controls whether null join-key values
  * should match or not.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
@@ -770,7 +775,8 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 conditional_full_join(table_view left,
                       table_view right,
-                      ast::expression binary_pred,
+                      ast::expression binary_predicate,
+                      null_equality compare_nulls         = null_equality::EQUAL,
                       rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -795,6 +801,7 @@ conditional_full_join(table_view left,
  *
  * @param[in] left_keys The left table
  * @param[in] right_keys The right table
+ * @param[in] binary_predicate The condition on which to join.
  * @param[in] compare_nulls controls whether null join-key values
  * should match or not.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
@@ -806,7 +813,8 @@ conditional_full_join(table_view left,
 std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
   table_view left,
   table_view right,
-  ast::expression binary_pred,
+  ast::expression binary_predicate,
+  null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -831,6 +839,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
  *
  * @param[in] left_keys The left table
  * @param[in] right_keys The right table
+ * @param[in] binary_predicate The condition on which to join.
  * @param[in] compare_nulls controls whether null join-key values
  * should match or not.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
@@ -842,7 +851,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
 std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
   table_view left,
   table_view right,
-  ast::expression binary_pred,
+  ast::expression binary_predicate,
+  null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
