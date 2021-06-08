@@ -37,24 +37,12 @@ def is_categorical_dtype(obj):
     """
     if obj is None:
         return False
-    if isinstance(obj, cudf.CategoricalDtype):
-        return True
-    if obj is cudf.CategoricalDtype:
-        return True
-    if isinstance(obj, np.dtype):
-        return False
-    if isinstance(obj, pd_CategoricalDtype):
-        return True
-    if obj is pd_CategoricalDtype:
-        return True
-    if obj is pd_CategoricalDtypeType:
-        return True
-    if isinstance(obj, str) and obj == "category":
-        return True
+
     if isinstance(
         obj,
         (
             pd_CategoricalDtype,
+            cudf.CategoricalDtype,
             cudf.core.index.CategoricalIndex,
             cudf.core.column.CategoricalColumn,
             pd.Categorical,
@@ -62,8 +50,23 @@ def is_categorical_dtype(obj):
         ),
     ):
         return True
-    if isinstance(obj, np.ndarray):
+    # Note that we cannot directly use `obj in (...)`  because that triggers
+    # equality as well as identity checks and pandas extension dtypes won't
+    # allow converting that equality check to a boolean; `__nonzero__` is
+    # disabled because they treat dtypes as "array-like".
+    if any(
+        obj is t
+        for t in (
+            cudf.CategoricalDtype,
+            pd_CategoricalDtype,
+            pd_CategoricalDtypeType,
+        )
+    ):
+        return True
+    if isinstance(obj, (np.ndarray, np.dtype)):
         return False
+    if isinstance(obj, str) and obj == "category":
+        return True
     if isinstance(
         obj,
         (
