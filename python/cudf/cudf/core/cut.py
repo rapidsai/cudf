@@ -138,12 +138,8 @@ def cut(
                 bins = list(dict.fromkeys(bins))
 
     # if bins is an intervalIndex we ignore the value of right
-    if (
-        right is False
-        and isinstance(bins, pd.IntervalIndex)
-        and bins.closed == "right"
-    ):
-        right = True
+    if isinstance(bins, (pd.IntervalIndex, cudf.IntervalIndex)):
+        right = bins.closed == "right"
 
     # create bins if given an int or single scalar
     if not isinstance(bins, pd.IntervalIndex):
@@ -178,7 +174,7 @@ def cut(
             bins[0] = bins[0] - 10 ** (-precision)
 
         # if right is false the last bin edge is not included
-        if right is False:
+        if not right:
             right_edge = bins[len(bins) - 1]
             x = cupy.asarray(x)
             if isinstance(right_edge, cupy._core.core.ndarray):
