@@ -8,6 +8,7 @@ import pytest
 
 import cudf
 from cudf import NA
+from cudf._lib.copying import get_element
 from cudf.tests.utils import assert_eq
 
 
@@ -350,3 +351,48 @@ def test_list_getitem(indata, expect):
     list_sr = cudf.Series([indata])
     # __getitem__ shall fill None with cudf.NA
     assert list_sr[0] == expect
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3],
+        [[1, 2, 3], [4, 5, 6]],
+        ["a", "b", "c"],
+        [["a", "b", "c"], ["d", "e", "f"]],
+        [1.1, 2.2, 3.3],
+        [[1.1, 2.2, 3.3], [4.4, 5.5, 6.6]],
+        [1, None, 3],
+        [[1, None, 3], [4, 5, None]],
+        ["a", None, "c"],
+        [["a", None, "c"], ["d", "e", None]],
+        [1.1, None, 3.3],
+        [[1.1, None, 3.3], [4.4, 5.5, None]],
+    ],
+)
+def test_list_scalar_host_construction(data):
+    slr = cudf.Scalar(data)
+    assert slr.value == data
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3],
+        [[1, 2, 3], [4, 5, 6]],
+        ["a", "b", "c"],
+        [["a", "b", "c"], ["d", "e", "f"]],
+        [1.1, 2.2, 3.3],
+        [[1.1, 2.2, 3.3], [4.4, 5.5, 6.6]],
+        [1, None, 3],
+        [[1, None, 3], [4, 5, None]],
+        ["a", None, "c"],
+        [["a", None, "c"], ["d", "e", None]],
+        [1.1, None, 3.3],
+        [[1.1, None, 3.3], [4.4, 5.5, None]],
+    ],
+)
+def test_list_scalar_device_construction(data):
+    col = cudf.Series([data])._column
+    slr = get_element(col, 0)
+    assert slr.value == data
