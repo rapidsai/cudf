@@ -68,9 +68,7 @@ reprog_device::reprog_device(reprog& prog)
     _insts_count{prog.insts_count()},
     _starts_count{prog.starts_count()},
     _classes_count{prog.classes_count()},
-    _relists_mem{nullptr},
-    _stack_mem1{nullptr},
-    _stack_mem2{nullptr}
+    _relists_mem{nullptr}
 {
 }
 
@@ -100,7 +98,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   size_t memsize  = insts_size + startids_size + classes_size;
   size_t rlm_size = 0;
   // check memory size needed for executing regex
-  if (insts_count > MAX_STACK_INSTS) {
+  if (insts_count > RX_LARGE_INSTS) {
     auto relist_alloc_size = relist::alloc_size(insts_count);
     rlm_size               = relist_alloc_size * 2L * strings_count;  // reljunk has 2 relist ptrs
   }

@@ -21,7 +21,6 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/traits.hpp>
 
@@ -56,15 +55,6 @@ struct scalar_empty_like_functor_impl {
   std::unique_ptr<column> operator()(scalar const& input)
   {
     return cudf::make_empty_column(input.type());
-  }
-};
-
-template <>
-struct scalar_empty_like_functor_impl<cudf::string_view> {
-  std::unique_ptr<column> operator()(scalar const& input)
-  {
-    return cudf::strings::detail::make_empty_strings_column(rmm::cuda_stream_default,
-                                                            rmm::mr::get_current_device_resource());
   }
 };
 
