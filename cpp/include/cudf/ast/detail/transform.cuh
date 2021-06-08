@@ -121,31 +121,9 @@ struct expression_result {
     _obj;  ///< The underlying data value, or a nullable version of it.
 };
 
-// TODO: The below implementation has two problems with respect to inconsistencies with the above:
-// 1. This specialization is non-owning, whereas the base implementation is
-// not. The best option for consistency would be to force the users to create
-// the value type of the base implementation and pass it by reference to the
-// constructor, but it's hard to justify this choice on any other grounds.  The
-// user would have to query the appropriate type from the namespace of the
-// class (e.g. `expression_result<true, int>::ValueType`), and ultimately they
-// would be constructing an object `expression_result<has_bools,
-// T>(expression_result<true, int>::ValueType obj)` solely for the purpose of
-// passing an argument with the necessary API to
-// `expression_evaluator::evaluate`. That seems like a poor reason to require
-// more work from a consumer of the AST API, so I opted for this solution.
-// 2. This implementation makes use of the index in `set_value` to write data
-// to the correct offset. The reason we do this is because there are problems
-// with the obvious alternative choices:
-//     a) We could require the calling code to construct an expression result with
-//        a pointer to the exact data location that we want to write to. However,
-//        to do that the user would need to know the column's data type to compute the
-//        correct offset, and the requisite templating balloons compile time.
-//     b) We could construct the object with a column and an index and remove the index
-//        from `set_value`. This change would be cleaner overall since then we could stop
-//        passing the output index through various stages of the expression_evaluator. However,
-//        This option is much slower (4-6x performance hit), most likely because the output
-//        index ends up somewhere lower in the memory hierarchy with this approach than when
-//        the index is passed as a function argument.
+// TODO: The below implementation significantly differs from the default
+// implementation above due to the non-owning nature of the container and the
+// usage of the index. It would be ideal to unify these further if possible.
 
 /**
  * @brief A container for capturing the output of an evaluated expression in a column.
