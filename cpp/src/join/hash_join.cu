@@ -272,7 +272,7 @@ probe_join_hash_table(cudf::table_device_view build_table,
         right_indices->data(),
         write_index.data(),
         join_size);
-    auto const actual_size = write_index.value();
+    auto const actual_size = write_index.value(stream);
     left_indices->resize(actual_size, stream);
     right_indices->resize(actual_size, stream);
   } else {
