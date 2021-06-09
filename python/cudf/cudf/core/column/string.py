@@ -4878,7 +4878,7 @@ class StringMethods(ColumnMethodsMixin):
         Series of ListDtype(int64)
             Assume `N` is the length of this series. The return series contains
             `N` lists of size `N`, where the `j`th number in the `i`th row of
-            the series tells the edit distance bwtween the `i`th string and the
+            the series tells the edit distance between the `i`th string and the
             `j`th string of this series.
             The matrix is symmetric. Diagonal elements are 0.
 
