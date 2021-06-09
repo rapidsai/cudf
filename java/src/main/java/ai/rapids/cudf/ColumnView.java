@@ -412,6 +412,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(replaceNullsColumn(getNativeView(), replacements.getNativeView()));
   }
 
+  public final ColumnVector replaceNulls(ReplacePolicy policy) {
+    return new ColumnVector(replaceNullsPolicy(getNativeView(), policy.isPreceding));
+  }
+
   /**
    * For a BOOL8 vector, computes a vector whose rows are selected from two other vectors
    * based on the boolean value of this vector in the corresponding row.
@@ -1357,6 +1361,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector scan(Aggregation aggregation) {
     return scan(aggregation, ScanType.INCLUSIVE, NullPolicy.EXCLUDE);
   }
+
+
 
   /////////////////////////////////////////////////////////////////////////////
   // LOGICAL
@@ -3154,6 +3160,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long replaceNullsScalar(long viewHandle, long scalarHandle) throws CudfException;
 
   private static native long replaceNullsColumn(long viewHandle, long replaceViewHandle) throws CudfException;
+
+  private static native long replaceNullsPolicy(long nativeView, boolean isPreceding) throws CudfException;
 
   private static native long ifElseVV(long predVec, long trueVec, long falseVec) throws CudfException;
 

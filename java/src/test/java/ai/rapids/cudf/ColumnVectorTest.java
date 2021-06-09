@@ -1776,6 +1776,18 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testReplaceNullsPolicy() {
+    try (ColumnVector input = ColumnVector.fromBoxedInts(null, 1, 2, null, 4, null);
+         ColumnVector preceding = input.replaceNulls(ReplacePolicy.PRECEDING);
+         ColumnVector expectedPre = ColumnVector.fromBoxedInts(null, 1, 2, 2, 4, 4);
+         ColumnVector following = input.replaceNulls(ReplacePolicy.FOLLOWING);
+         ColumnVector expectedFol = ColumnVector.fromBoxedInts(1, 1, 2, 4, 4, null)) {
+      assertColumnsAreEqual(expectedPre, preceding);
+      assertColumnsAreEqual(expectedFol, following);
+    }
+  }
+
+  @Test
   void testReplaceNullsColumnEmptyColumn() {
     try (ColumnVector input = ColumnVector.fromBoxedBooleans();
          ColumnVector r = ColumnVector.fromBoxedBooleans();

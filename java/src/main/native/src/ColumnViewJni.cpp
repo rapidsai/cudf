@@ -155,6 +155,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceNullsColumn(JNIEnv
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceNullsPolicy(JNIEnv *env, jclass,
+                                                                          jlong j_col,
+                                                                          jboolean is_preceding) {
+  JNI_NULL_CHECK(env, j_col, "column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view col = *reinterpret_cast<cudf::column_view *>(j_col);
+    std::unique_ptr<cudf::column> result = cudf::replace_nulls(col,
+            is_preceding ? cudf::replace_policy::PRECEDING : cudf::replace_policy::FOLLOWING);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_ifElseVV(JNIEnv *env, jclass,
                                                                 jlong j_pred_vec,
                                                                 jlong j_true_vec,
