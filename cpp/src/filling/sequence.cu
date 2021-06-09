@@ -114,8 +114,6 @@ struct sequence_functor {
   {
     CUDF_FAIL("Unsupported sequence scalar type");
   }
-
-
 };
 
 }  // anonymous namespace
