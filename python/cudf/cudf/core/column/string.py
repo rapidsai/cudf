@@ -4868,13 +4868,10 @@ class StringMethods(ColumnMethodsMixin):
         The series to compute the matrix should have more than 2 strings and
         should not contain nulls.
 
-        Edit distance is measured based on the Levenshtein edit distance
-        algorithm.
-        https://www.cuelogic.com/blog/the-levenshtein-algorithm
+        Edit distance is measured based on the `Levenshtein edit distance
+        algorithm
+        <https://www.cuelogic.com/blog/the-levenshtein-algorithm>`_.
 
-        Parameters
-        ----------
-        None, does not require input parameter.
 
         Returns
         -------
