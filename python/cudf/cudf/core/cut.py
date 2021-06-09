@@ -175,7 +175,7 @@ def cut(
 
         # if right is false the last bin edge is not included
         if not right:
-            right_edge = bins[len(bins) - 1]
+            right_edge = bins[-1]
             x = cupy.asarray(x)
             if isinstance(right_edge, cupy._core.core.ndarray):
                 right_edge = right_edge.item()
