@@ -598,16 +598,6 @@ install(DIRECTORY
             ${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf)
 
-install(DIRECTORY ${Thrust_SOURCE_DIR}/
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust
-  PATTERN "*.py" EXCLUDE
-  PATTERN "benchmark" EXCLUDE
-  PATTERN "build" EXCLUDE
-  PATTERN "doc" EXCLUDE
-  PATTERN "examples" EXCLUDE
-  PATTERN "test" EXCLUDE
-  PATTERN "testing" EXCLUDE)
-
 include(CMakePackageConfigHelpers)
 
 configure_package_config_file(cmake/cudf-config.cmake.in "${CUDF_BINARY_DIR}/cmake/cudf-config.cmake"
