@@ -51,9 +51,8 @@ TEST_F(ArrowIOTest, URIFileSystem)
     std::make_unique<cudf::io::arrow_io_source>(file_uri);
 
   // Populate the JSON Reader Options
-  cudf::io::json_reader_options options = 
-    cudf::io::json_reader_options::builder(cudf::io::source_info(datasource.get()))
-      .lines(true);
+  cudf::io::json_reader_options options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info(datasource.get())).lines(true);
 
   // Read the JSON file from the LocalFileSystem
   cudf::io::table_with_metadata tbl = cudf::io::read_json(options);
