@@ -231,9 +231,6 @@ struct ColumnChunkDesc {
  * @brief Struct describing an encoder column
  */
 struct parquet_column_device_view : stats_column_desc {
-  uint32_t *dict_index;    //!< Dictionary index [row]
-  uint32_t *dict_data;     //!< Dictionary data (unique row indices)
-  bool supports_dict_enc;  //!< Whether this column supports dictionary encoding
   uint8_t physical_type;   //!< physical data type
   uint8_t converted_type;  //!< logical data type
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
@@ -246,9 +243,9 @@ struct parquet_column_device_view : stats_column_desc {
   size_type const *level_offsets;  //!< Offset array for per-row pre-calculated rep/def level values
   uint8_t const *rep_values;       //!< Pre-calculated repetition level values
   uint8_t const *def_values;       //!< Pre-calculated definition level values
-  uint8_t *nullability;  //!< Array of nullability of each nesting level. e.g. nullable[0] is
-                         //!< nullability of parent_column. May be different from col.nullable() in
-                         //!< case of chunked writing.
+  uint8_t const *nullability;  //!< Array of nullability of each nesting level. e.g. nullable[0] is
+                               //!< nullability of parent_column. May be different from
+                               //!< col.nullable() in case of chunked writing.
 };
 
 constexpr int max_page_fragment_size = 5000;  //!< Max number of rows in a page fragment
@@ -263,7 +260,6 @@ struct PageFragment {
   uint32_t start_value_idx;
   uint32_t num_leaf_values;  //!< Number of leaf values in fragment. Does not include nulls at
                              //!< non-leaf level
-  uint32_t non_nulls;        //!< Number of non-null values
   uint16_t num_rows;         //!< Number of rows in fragment
   uint16_t num_dict_vals;    //!< Number of unique dictionary entries
 };
@@ -316,25 +312,19 @@ struct EncColumnChunk {
   EncPage *pages;           //!< Ptr to pages that belong to this chunk
   uint32_t first_page;      //!< First page of chunk
   uint32_t num_pages;       //!< Number of pages in chunk
-  uint32_t dictionary_id;   //!< Dictionary id for this chunk
   uint8_t is_compressed;    //!< Nonzero if the chunk uses compression
-  uint8_t has_dictionary;   //!< Nonzero if the chunk uses dictionary encoding
-
-  // This is being set in old dict_enc. Only needed when chunk is partially dictionary
-  uint16_t num_dict_fragments;  //!< Number of fragments using dictionary
-  uint32_t dictionary_size;     //!< Size of dictionary
-  // TODO: remove
-  uint32_t total_dict_entries;  //!< Total number of entries in dictionary
-  uint32_t ck_stat_size;        //!< Size of chunk-level statistics (included in 1st page header)
-  slot_type *dict_map_slots;
-  size_t dict_map_size;
-  size_type num_dict_entries;
-  size_type uniq_data_size;
-  size_type plain_data_size;
-  size_type *dict_data;
-  uint16_t *dict_index;
-  uint8_t dict_rle_bits;
-  bool use_dictionary;
+  uint32_t dictionary_size;    //!< Size of dictionary page including header
+  uint32_t ck_stat_size;       //!< Size of chunk-level statistics (included in 1st page header)
+  slot_type *dict_map_slots;   //!< Hash map storage for calculating dict encoding for this chunk
+  size_t dict_map_size;        //!< Size of dict_map_slots
+  size_type num_dict_entries;  //!< Total number of entries in dictionary
+  size_type
+    uniq_data_size;  //!< Size of dictionary page (set of all unique values) if dict enc is used
+  size_type plain_data_size;  //!< Size of data in this chunk if plain encoding is used
+  size_type *dict_data;       //!< Dictionary data (unique row indices)
+  uint16_t *dict_index;   //!< Index of value in dictionary page. column[dict_data[dict_index[row]]]
+  uint8_t dict_rle_bits;  //!< Bit size for encoding dictionary indices
+  bool use_dictionary;    //!< True if the chunk uses dictionary encoding
 };
 
 /**
@@ -345,7 +335,6 @@ struct EncPage {
   uint8_t *compressed_data;  //!< Ptr to compressed page
   uint16_t num_fragments;    //!< Number of fragments in page
   PageType page_type;        //!< Page type
-  uint8_t dict_bits_plus1;   //!< 0=plain, nonzero:bits to encoding dictionary indices + 1
   EncColumnChunk *chunk;     //!< Chunk that this page belongs to
   uint32_t chunk_id;         //!< Index in chunk array
   uint32_t hdr_size;         //!< Size of page header

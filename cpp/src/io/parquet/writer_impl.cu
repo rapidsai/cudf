@@ -505,7 +505,7 @@ struct parquet_column_view {
                       rmm::cuda_stream_view stream);
 
   column_view leaf_column_view() const;
-  gpu::parquet_column_device_view get_device_view(rmm::cuda_stream_view stream);
+  gpu::parquet_column_device_view get_device_view(rmm::cuda_stream_view stream) const;
 
   column_view cudf_column_view() const { return cudf_col; }
   parquet::Type physical_type() const { return schema_node.type; }
@@ -516,26 +516,6 @@ struct parquet_column_view {
   uint8_t max_def_level() const noexcept { return _max_def_level; }
   uint8_t max_rep_level() const noexcept { return _max_rep_level; }
   bool is_list() const noexcept { return _is_list; }
-
-  // Dictionary related member functions
-  uint32_t *get_dict_data() { return (_dict_data.size()) ? _dict_data.data() : nullptr; }
-  uint32_t *get_dict_index() { return (_dict_index.size()) ? _dict_index.data() : nullptr; }
-  void use_dictionary(bool use_dict) { _dictionary_used = use_dict; }
-  void alloc_dictionary(size_t max_num_rows, rmm::cuda_stream_view stream)
-  {
-    _dict_data.resize(max_num_rows, stream);
-    _dict_index.resize(max_num_rows, stream);
-  }
-  bool check_dictionary_used(rmm::cuda_stream_view stream)
-  {
-    if (!_dictionary_used) {
-      _dict_data.resize(0, stream);
-      _dict_data.shrink_to_fit(stream);
-      _dict_index.resize(0, stream);
-      _dict_index.shrink_to_fit(stream);
-    }
-    return _dictionary_used;
-  }
 
  private:
   // Schema related members
@@ -556,11 +536,6 @@ struct parquet_column_view {
   rmm::device_uvector<uint8_t> _def_level;
   std::vector<uint8_t> _nullability;
   size_type _data_count = 0;
-
-  // Dictionary related members
-  bool _dictionary_used = false;
-  rmm::device_uvector<uint32_t> _dict_data;
-  rmm::device_uvector<uint32_t> _dict_index;
 };
 
 parquet_column_view::parquet_column_view(schema_tree_node const &schema_node,
@@ -570,9 +545,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const &schema_node,
     _d_nullability(0, stream),
     _dremel_offsets(0, stream),
     _rep_level(0, stream),
-    _def_level(0, stream),
-    _dict_data(0, stream),
-    _dict_index(0, stream)
+    _def_level(0, stream)
 {
   // Construct single inheritance column_view from linked_column_view
   auto curr_col                           = schema_node.leaf_column.get();
@@ -683,20 +656,13 @@ column_view parquet_column_view::leaf_column_view() const
   return col;
 }
 
-gpu::parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_stream_view stream)
+gpu::parquet_column_device_view parquet_column_view::get_device_view(
+  rmm::cuda_stream_view stream) const
 {
   column_view col  = leaf_column_view();
   auto desc        = gpu::parquet_column_device_view{};  // Zero out all fields
   desc.stats_dtype = schema_node.stats_dtype;
   desc.ts_scale    = schema_node.ts_scale;
-
-  // TODO (dm): Enable dictionary for list and struct after refactor
-  if (physical_type() != BOOLEAN && physical_type() != UNDEFINED_TYPE &&
-      !is_nested(cudf_col.type())) {
-    alloc_dictionary(_data_count, stream);
-    desc.dict_index = get_dict_index();
-    desc.dict_data  = get_dict_data();
-  }
 
   if (is_list()) {
     desc.level_offsets = _dremel_offsets.data();
@@ -738,20 +704,11 @@ void writer::impl::gather_fragment_statistics(
   stream.synchronize();
 }
 
-void writer::impl::build_chunk_dictionaries(
-  hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
-  device_span<gpu::parquet_column_device_view const> col_desc,
-  uint32_t num_columns,
-  uint32_t num_dictionaries)
+void writer::impl::init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
+                                   device_span<gpu::parquet_column_device_view const> col_desc,
+                                   uint32_t num_columns)
 {
   chunks.host_to_device(stream);
-  if (num_dictionaries > 0) {
-    size_t dict_scratch_size = (size_t)num_dictionaries * gpu::kDictScratchSize;
-    auto dict_scratch        = cudf::detail::make_zeroed_device_uvector_async<uint32_t>(
-      dict_scratch_size / sizeof(uint32_t), stream);
-
-    // gpu::BuildChunkDictionaries(chunks.device_view().flat_view(), dict_scratch.data(), stream);
-  }
   gpu::InitEncoderPages(chunks, {}, col_desc, num_columns, nullptr, nullptr, stream);
   chunks.device_to_host(stream, true);
 }
@@ -1047,10 +1004,8 @@ void writer::impl::write(table_view const &table)
 
   // Initialize column description
   hostdevice_vector<gpu::parquet_column_device_view> col_desc(parquet_columns.size(), stream);
-  // This should've been `auto const&` but isn't since dictionary space is allocated when calling
-  // get_device_view(). Fix during dictionary refactor.
   std::transform(
-    parquet_columns.begin(), parquet_columns.end(), col_desc.host_ptr(), [&](auto &pcol) {
+    parquet_columns.begin(), parquet_columns.end(), col_desc.host_ptr(), [&](auto const &pcol) {
       return pcol.get_device_view(stream);
     });
 
@@ -1121,7 +1076,6 @@ void writer::impl::write(table_view const &table)
   // Initialize row groups and column chunks
   uint32_t num_chunks = num_rowgroups * num_columns;
   hostdevice_2dvector<gpu::EncColumnChunk> chunks(num_rowgroups, num_columns, stream);
-  uint32_t num_dictionaries = 0;
   for (uint32_t r = 0, global_r = global_rowgroup_base, f = 0, start_row = 0; r < num_rowgroups;
        r++, global_r++) {
     uint32_t fragments_in_chunk =
@@ -1170,13 +1124,8 @@ void writer::impl::write(table_view const &table)
     }
   }
 
-  // Free unused dictionaries
-  for (auto &col : parquet_columns) { col.check_dictionary_used(stream); }
-
   // Build chunk dictionaries and count pages
-  if (num_chunks != 0) {
-    build_chunk_dictionaries(chunks, col_desc, num_columns, num_dictionaries);
-  }
+  if (num_chunks != 0) { init_page_sizes(chunks, col_desc, num_columns); }
 
   // Initialize batches of rowgroups to encode (mainly to limit peak memory usage)
   std::vector<uint32_t> batch_list;

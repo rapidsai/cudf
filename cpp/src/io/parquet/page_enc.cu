@@ -283,7 +283,6 @@ __global__ void __launch_bounds__(128)
         page_g.compressed_data = ck_g.compressed_bfr + comp_page_offset;
         page_g.num_fragments   = 0;
         page_g.page_type       = PageType::DICTIONARY_PAGE;
-        page_g.dict_bits_plus1 = 0;
         page_g.chunk           = &chunks[blockIdx.y][blockIdx.x];
         page_g.chunk_id        = blockIdx.y * num_columns + blockIdx.x;
         page_g.hdr_size        = 0;

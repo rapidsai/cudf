@@ -324,18 +324,15 @@ __global__ void __launch_bounds__(block_size, 1)
   }
 }
 
-void InitializeChunkHashMaps(device_span<EncColumnChunk> chunks,
-                             rmm::device_uvector<gpu::slot_type> &onemap,
-                             rmm::cuda_stream_view stream)
+void InitializeChunkHashMaps(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 1024;
   gpuInitializeChunkHashMaps<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
 }
 
-void BuildChunkDictionaries2(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                             size_type num_rows,
-                             rmm::device_uvector<gpu::slot_type> &onemap,
-                             rmm::cuda_stream_view stream)
+void PopulateChunkHashMaps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                           size_type num_rows,
+                           rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 256;
   auto grid_x              = cudf::detail::grid_1d(num_rows, 5000);
