@@ -45,7 +45,12 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.utils import cached_property, search_range
 
-from ..api.types import _is_scalar_or_zero_d_array
+from ..api.types import (
+    _is_scalar_or_zero_d_array,
+    is_dtype_equal,
+    is_integer,
+    is_string_dtype,
+)
 
 
 class Index(SingleColumnFrame, Serializable):
@@ -237,7 +242,7 @@ class Index(SingleColumnFrame, Serializable):
 
         if level == self.name:
             return self
-        elif pd.api.types.is_integer(level):
+        elif is_integer(level):
             if level != 0:
                 raise IndexError(
                     f"Cannot get level: {level} " f"for index with 1 level"
@@ -1085,7 +1090,7 @@ class Index(SingleColumnFrame, Serializable):
         >>> index.astype('float64')
         Float64Index([1.0, 2.0, 3.0], dtype='float64')
         """
-        if pd.api.types.is_dtype_equal(dtype, self.dtype):
+        if is_dtype_equal(dtype, self.dtype):
             return self.copy(deep=copy)
 
         return as_index(
@@ -2755,7 +2760,7 @@ class StringIndex(GenericIndex):
             values = values._values.copy(deep=copy)
         else:
             values = column.as_column(values, dtype="str")
-            if not pd.api.types.is_string_dtype(values.dtype):
+            if not is_string_dtype(values.dtype):
                 raise ValueError(
                     "Couldn't create StringIndex from passed in object"
                 )

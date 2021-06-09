@@ -54,7 +54,7 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.utils import GetAttrGetItemMixin
 
-from ..api.types import is_dict_like
+from ..api.types import is_bool_dtype, is_dict_like
 
 T = TypeVar("T", bound="DataFrame")
 
@@ -3155,7 +3155,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         2  3.0  c
         """
         positions = as_column(positions)
-        if pd.api.types.is_bool_dtype(positions):
+        if is_bool_dtype(positions):
             return self._apply_boolean_mask(positions)
         out = self._gather(positions, keep_index=keep_index)
         out.columns = self.columns
