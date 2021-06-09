@@ -360,6 +360,7 @@ add_library(cudf
     src/strings/json/json_path.cu
     src/strings/regex/regcomp.cpp
     src/strings/regex/regexec.cu
+    src/strings/repeat_strings.cu
     src/strings/replace/backref_re.cu
     src/strings/replace/backref_re_large.cu
     src/strings/replace/backref_re_medium.cu
