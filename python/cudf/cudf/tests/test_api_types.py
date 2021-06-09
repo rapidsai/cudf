@@ -1005,5 +1005,83 @@ def test_pandas_agreement(obj):
     assert types.is_string_dtype(obj) == ptypes.is_string_dtype(obj)
 
 
+@pytest.mark.parametrize(
+    "obj",
+    (
+        # Base Python objects.
+        bool(),
+        int(),
+        float(),
+        complex(),
+        str(),
+        "",
+        r"",
+        object(),
+        # Base Python types.
+        bool,
+        int,
+        float,
+        complex,
+        str,
+        object,
+        # NumPy types.
+        np.bool_,
+        np.int_,
+        np.float64,
+        np.complex128,
+        np.str_,
+        np.unicode_,
+        np.datetime64,
+        np.timedelta64,
+        # NumPy scalars.
+        np.bool_(),
+        np.int_(),
+        np.float64(),
+        np.complex128(),
+        np.str_(),
+        np.unicode_(),
+        np.datetime64(),
+        np.timedelta64(),
+        # NumPy dtype objects.
+        np.dtype("bool"),
+        np.dtype("int"),
+        np.dtype("float"),
+        np.dtype("complex"),
+        np.dtype("str"),
+        np.dtype("unicode"),
+        np.dtype("datetime64"),
+        np.dtype("timedelta64"),
+        np.dtype("object"),
+        # NumPy arrays.
+        np.array([], dtype=np.bool_),
+        np.array([], dtype=np.int_),
+        np.array([], dtype=np.float64),
+        np.array([], dtype=np.complex128),
+        np.array([], dtype=np.str_),
+        np.array([], dtype=np.unicode_),
+        np.array([], dtype=np.datetime64),
+        np.array([], dtype=np.timedelta64),
+        np.array([], dtype=object),
+        # Pandas dtypes.
+        # TODO: pandas does not consider these to be categoricals.
+        # pd.core.dtypes.dtypes.CategoricalDtypeType,
+        # pd.CategoricalDtype,
+        # Pandas objects.
+        pd.Series(dtype="bool"),
+        pd.Series(dtype="int"),
+        pd.Series(dtype="float"),
+        pd.Series(dtype="complex"),
+        pd.Series(dtype="str"),
+        pd.Series(dtype="unicode"),
+        pd.Series(dtype="datetime64[s]"),
+        pd.Series(dtype="timedelta64[s]"),
+        pd.Series(dtype="category"),
+        pd.Series(dtype="object"),
+    ),
+)
+def test_pandas_agreement_scalar(obj):
+    assert types.is_scalar(obj) == ptypes.is_scalar(obj)
+
+
 # TODO: Add test of interval.
 # TODO: Add test of Scalar.

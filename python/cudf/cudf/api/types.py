@@ -275,22 +275,40 @@ def is_scalar(val):
     Parameters
     ----------
     val : object
-        TODO: List valid objects.
+        Possibly scalar object.
 
     Returns
     -------
     bool
         Return True if given object is scalar.
     """
-    # TODO: This function deviates from pandas in a number of ways, but those
-    # ways may be breaking for us so we'll have to be careful about changing.
     return (
         isinstance(val, DeviceScalar)
         or isinstance(val, cudf.Scalar)
-        # TODO: These two deviate from pandas behavior.
-        or (isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0)
-        or (isinstance(val, pd.Categorical) and len(val) == 1)
         or pd_types.is_scalar(val)
+    )
+
+
+def _is_scalar_or_zero_d_array(val):
+    """Return True if given object is scalar or a 0d array.
+
+    This is an internal function primarily used by indexing applications that
+    need to flatten dimensions that are indexed by 0d arrays.
+
+    Parameters
+    ----------
+    val : object
+        Possibly scalar object.
+
+    Returns
+    -------
+    bool
+        Return True if given object is scalar.
+    """
+    return (
+        (isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0)
+        or (isinstance(val, pd.Categorical) and len(val) == 1)
+        or is_scalar(val)
     )
 
 

@@ -14,6 +14,7 @@ from cudf._typing import ColumnLike, DataFrameOrSeries, ScalarLike
 from cudf.core.column.column import as_column
 from cudf.utils.dtypes import (
     _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
     find_common_type,
     is_categorical_dtype,
     is_column_like,
@@ -94,7 +95,7 @@ class _SeriesIlocIndexer(object):
 
         if (
             isinstance(data, list)
-            or is_scalar(data)
+            or _is_scalar_or_zero_d_array(data)
             or _is_null_host_scalar(data)
         ):
             return data
@@ -181,7 +182,7 @@ class _SeriesLocIndexer(object):
         self._sr.iloc[key] = value
 
     def _loc_to_iloc(self, arg):
-        if is_scalar(arg):
+        if _is_scalar_or_zero_d_array(arg):
             if not _is_non_decimal_numeric_dtype(self._sr.index.dtype):
                 # TODO: switch to cudf.utils.dtypes.is_integer(arg)
                 if isinstance(arg, cudf.Scalar) and is_integer_dtype(

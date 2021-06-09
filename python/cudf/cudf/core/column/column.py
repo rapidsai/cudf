@@ -48,6 +48,7 @@ from cudf.core.dtypes import (
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
     _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
     check_cast_unsupported_dtype,
     get_time_unit,
     is_categorical_dtype,
@@ -518,7 +519,7 @@ class ColumnBase(Column, Serializable):
             return self.take(gather_map)
 
     def __getitem__(self, arg) -> Union[ScalarLike, ColumnBase]:
-        if is_scalar(arg):
+        if _is_scalar_or_zero_d_array(arg):
             return self.element_indexing(int(arg))
         elif isinstance(arg, slice):
             start, stop, stride = arg.indices(len(self))

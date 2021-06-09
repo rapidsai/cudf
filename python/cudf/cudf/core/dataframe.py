@@ -38,6 +38,7 @@ from cudf.core.window import Rolling
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    _is_scalar_or_zero_d_array,
     can_convert_to_column,
     cudf_dtype_from_pydata_dtype,
     find_common_type,
@@ -720,7 +721,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         >>> df[[True, False, True, False]] # mask the entire dataframe,
         # returning the rows specified in the boolean mask
         """
-        if is_scalar(arg) or isinstance(arg, tuple):
+        if _is_scalar_or_zero_d_array(arg) or isinstance(arg, tuple):
             return self._get_columns_by_label(arg, downcast=True)
 
         elif isinstance(arg, slice):
@@ -3186,7 +3187,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 f"{num_cols * (num_cols > 0)}"
             )
 
-        if is_scalar(value):
+        if _is_scalar_or_zero_d_array(value):
             value = utils.scalar_broadcast_to(value, len(self))
 
         if len(self) == 0:

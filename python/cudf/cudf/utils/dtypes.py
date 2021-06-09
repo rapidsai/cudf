@@ -16,6 +16,7 @@ from cudf.core._compat import PANDAS_GE_120
 # TODO: Temporary aliasing, should be removed.
 from ..api.types import (  # noqa: F401
     _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
     is_categorical_dtype,
     is_datetime_dtype as is_datetime_dtype,
     is_decimal_dtype,
@@ -225,7 +226,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
     ):
         return val
 
-    if not is_scalar(val):
+    if not _is_scalar_or_zero_d_array(val):
         raise ValueError(
             f"Cannot convert value of type {type(val).__name__} "
             "to cudf scalar"

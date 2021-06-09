@@ -45,6 +45,8 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.utils import cached_property, search_range
 
+from ..api.types import _is_scalar_or_zero_d_array
+
 
 class Index(SingleColumnFrame, Serializable):
 
@@ -1532,7 +1534,7 @@ class RangeIndex(Index):
             index = self._start + index * self._step
             return index
         else:
-            if is_scalar(index):
+            if _is_scalar_or_zero_d_array(index):
                 index = np.min_scalar_type(index).type(index)
             index = column.as_column(index)
 
