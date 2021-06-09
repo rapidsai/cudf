@@ -101,15 +101,10 @@ __global__ void __launch_bounds__(block_size, 1)
   auto t       = threadIdx.x;
 
   auto start_row =
-    block_x * 5000;  // This is fragment size. all chunks are multiple of these many rows. TODO:
-                     // make it rely on fragment size as a variable or use a better logic that does
-                     // not rely on the chunk being a multiple of 5000. Preferably latter
+    block_x * 5000;  // This is fragment size. all chunks are multiple of these many rows.
   size_type end_row = min(start_row + 5000, num_rows);
 
-  __shared__ EncColumnChunk s_chunk;
-  // TODO: reduce this ptr proliferation by only keeping a ptr to the chunk
-  __shared__ size_type *s_chunk_uniq_data_size_ptr;
-  __shared__ size_type *s_chunk_dict_entries_ptr;
+  __shared__ EncColumnChunk *s_chunk;
   __shared__ parquet_column_device_view s_col;
   __shared__ size_type s_start_value_idx;
   __shared__ size_type s_num_values;
@@ -124,13 +119,11 @@ __global__ void __launch_bounds__(block_size, 1)
       }
       ++rg_idx;
     }
-    s_chunk                    = chunks[rg_idx][col_idx];
-    s_chunk_uniq_data_size_ptr = &chunks[rg_idx][col_idx].uniq_data_size;
-    s_chunk_dict_entries_ptr   = &chunks[rg_idx][col_idx].num_dict_entries;
-    s_col                      = *(s_chunk.col_desc);
+    s_chunk = &chunks[rg_idx][col_idx];
+    s_col   = *(s_chunk->col_desc);
   }
   __syncthreads();
-  if (not s_chunk.use_dictionary) { return; }
+  if (not s_chunk->use_dictionary) { return; }
 
   if (t == 0) {
     // Find the bounds of values in leaf column to be inserted into the map for current chunk
@@ -159,15 +152,14 @@ __global__ void __launch_bounds__(block_size, 1)
   __shared__ typename block_reduce::TempStorage reduce_storage;
 
   // Make a view of the hash map
-  // TODO: try putting a single copy of this in shared memory.
   auto hash_map_mutable = map_type::device_mutable_view(
-    s_chunk.dict_map_slots, s_chunk.dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
+    s_chunk->dict_map_slots, s_chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
   auto hash_map = map_type::device_view(
-    s_chunk.dict_map_slots, s_chunk.dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
+    s_chunk->dict_map_slots, s_chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
 
   for (size_type i = 0; i < s_num_values; i += block_size) {
     // Check if the num unique values in chunk has already exceeded max dict size and early exit
-    if (*s_chunk_dict_entries_ptr > 65535) { return; }
+    if (s_chunk->num_dict_entries > MAX_DICT_SIZE) { return; }
 
     // add the value to hash map
     size_type val_idx = i + t + s_start_value_idx;
@@ -196,10 +188,7 @@ __global__ void __launch_bounds__(block_size, 1)
                 return 4 + data_col.element<string_view>(val_idx).size_bytes();
               }
             case Type::FIXED_LEN_BYTE_ARRAY:
-            default:
-              printf("type %d\n", s_col.physical_type);
-              cudf_assert(false && "Unsupported type for dictionary encoding");
-              return 0;
+            default: cudf_assert(false && "Unsupported type for dictionary encoding"); return 0;
           }
         }();
       }
@@ -210,9 +199,9 @@ __global__ void __launch_bounds__(block_size, 1)
     __syncthreads();
     auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
     if (t == 0) {
-      atomicAdd(s_chunk_dict_entries_ptr, num_unique);
+      atomicAdd(&s_chunk->num_dict_entries, num_unique);
       // TODO: move out of loop. We don't have to update other blocks about this
-      atomicAdd(s_chunk_uniq_data_size_ptr, uniq_data_size);
+      atomicAdd(&s_chunk->uniq_data_size, uniq_data_size);
     }
     __syncthreads();
   }
@@ -335,49 +324,12 @@ __global__ void __launch_bounds__(block_size, 1)
   }
 }
 
-template <typename T>
-void print(rmm::device_vector<T> const &d_vec, std::string label = "")
-{
-  thrust::host_vector<T> h_vec = d_vec;
-  printf("%s \t", label.c_str());
-  for (auto &&i : h_vec) std::cout << i << " ";
-  printf("\n");
-}
-
-struct printer {
-  template <typename T>
-  std::enable_if_t<cudf::is_numeric<T>(), void> operator()(column_view const &col,
-                                                           std::string label = "")
-  {
-    auto d_vec = rmm::device_vector<T>(col.begin<T>(), col.end<T>());
-    print(d_vec, label);
-  }
-  template <typename T>
-  std::enable_if_t<!cudf::is_numeric<T>(), void> operator()(column_view const &col,
-                                                            std::string label = "")
-  {
-    CUDF_FAIL("no strings");
-  }
-};
-void print(column_view const &col, std::string label = "")
-{
-  cudf::type_dispatcher(col.type(), printer{}, col, label);
-}
-
 void InitializeChunkHashMaps(device_span<EncColumnChunk> chunks,
                              rmm::device_uvector<gpu::slot_type> &onemap,
                              rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 1024;
-  // TODO: attempt striding like cuco does for its initialize
   gpuInitializeChunkHashMaps<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
-  // stream.synchronize();
-  // rmm::device_uvector<size_type> temp(1 << 17, stream);
-  // thrust::transform(
-  //   rmm::exec_policy(), onemap.begin(), onemap.end(), temp.begin(), [] __device__(auto &slot) {
-  //     return slot.first.load();
-  //   });
-  // print(temp, "slots");
 }
 
 void BuildChunkDictionaries2(cudf::detail::device_2dspan<EncColumnChunk> chunks,
@@ -392,21 +344,6 @@ void BuildChunkDictionaries2(cudf::detail::device_2dspan<EncColumnChunk> chunks,
 
   gpuBuildChunkDictionariesKernel<block_size>
     <<<dim_grid, block_size, 0, stream.value()>>>(chunks, num_rows);
-
-  // stream.synchronize();
-  // rmm::device_uvector<size_type> dict_sizes(chunks.flat_view().size(), stream);
-  // auto ck_it = cudf::detail::make_counting_transform_iterator(
-  //   0, [cks = chunks.flat_view()] __device__(auto i) { return cks[i].num_dict_entries; });
-  // thrust::copy(
-  //   rmm::exec_policy(stream), ck_it, ck_it + chunks.flat_view().size(), dict_sizes.begin());
-  // print(dict_sizes, "dict sizes");
-
-  // rmm::device_vector<size_type> temp(onemap.size());
-  // thrust::transform(
-  //   rmm::exec_policy(), onemap.begin(), onemap.end(), temp.begin(), [] __device__(auto &slot) {
-  //     return slot.first.load();
-  //   });
-  // print(temp, "slots");
 }
 
 void CollectMapEntries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
