@@ -139,14 +139,14 @@ class NumericalColumn(NumericalBaseColumn):
                     (
                         NumericalColumn,
                         cudf.Scalar,
-                        cudf.core.column.DecimalColumn,
+                        cudf.core.column.Decimal64Column,
                     ),
                 )
                 or np.isscalar(rhs)
             ):
                 msg = "{!r} operator not supported between {} and {}"
                 raise TypeError(msg.format(binop, type(self), type(rhs)))
-            if isinstance(rhs, cudf.core.column.DecimalColumn):
+            if isinstance(rhs, cudf.core.column.Decimal64Column):
                 lhs: Union[ScalarLike, ColumnBase] = self.as_decimal_column(
                     Decimal64Dtype(Decimal64Dtype.MAX_PRECISION, 0)
                 )
@@ -249,7 +249,7 @@ class NumericalColumn(NumericalBaseColumn):
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.DecimalColumn":
+    ) -> "cudf.core.column.Decimal64Column":
         return libcudf.unary.cast(self, dtype)
 
     def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:

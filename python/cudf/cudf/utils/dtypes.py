@@ -280,13 +280,7 @@ def is_interval_dtype(obj):
 
 def is_decimal_dtype(obj):
     return (
-        type(obj) is cudf.core.dtypes.Decimal64Dtype
-        or obj is cudf.core.dtypes.Decimal64Dtype
-        or (
-            isinstance(obj, str)
-            and obj == cudf.core.dtypes.Decimal64Dtype.name
-        )
-        or (hasattr(obj, "dtype") and is_decimal_dtype(obj.dtype))
+        is_decimal32_dtype(obj) or is_decimal64_dtype(obj)   
     )
 
 

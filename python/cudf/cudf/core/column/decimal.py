@@ -24,7 +24,7 @@ from cudf.utils.utils import pa_mask_buffer_to_mask
 from .numerical_base import NumericalBaseColumn
 
 
-class DecimalColumn(NumericalBaseColumn):
+class Decimal64Column(NumericalBaseColumn):
     dtype: Decimal64Dtype
 
     def __truediv__(self, other):
@@ -98,7 +98,7 @@ class DecimalColumn(NumericalBaseColumn):
         elif op in ("eq", "ne", "lt", "gt", "le", "ge"):
             if not isinstance(
                 other,
-                (DecimalColumn, cudf.core.column.NumericalColumn, cudf.Scalar),
+                (Decimal64Dtype, cudf.core.column.NumericalColumn, cudf.Scalar),
             ):
                 raise TypeError(
                     f"Operator {op} not supported between"
@@ -145,7 +145,7 @@ class DecimalColumn(NumericalBaseColumn):
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.DecimalColumn":
+    ) -> "cudf.core.column.Decimal64Column":
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype)
@@ -175,7 +175,7 @@ class DecimalColumn(NumericalBaseColumn):
         if isinstance(value, (int, Decimal)):
             value = cudf.Scalar(value, dtype=self.dtype)
         elif (
-            isinstance(value, DecimalColumn)
+            isinstance(value, Decimal64Column)
             or isinstance(value, NumericalColumn)
             and is_integer_dtype(value.dtype)
         ):
@@ -215,7 +215,7 @@ class DecimalColumn(NumericalBaseColumn):
         In addition to the default behavior, if `other` is also a decimal
         column the precision is copied over.
         """
-        if isinstance(other, DecimalColumn):
+        if isinstance(other, Decimal64Column):
             other.dtype.precision = self.dtype.precision  # type: ignore
         # Have to ignore typing here because it misdiagnoses super().
         return super()._copy_type_metadata(other)  # type: ignore

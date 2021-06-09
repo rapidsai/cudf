@@ -289,7 +289,7 @@ class ColumnBase(Column, Serializable):
         ):
             return cudf.core.column.IntervalColumn.from_arrow(array)
         elif isinstance(array.type, pa.Decimal128Type):
-            return cudf.core.column.DecimalColumn.from_arrow(array)
+            return cudf.core.column.Decimal64Column.from_arrow(array)
 
         result = libcudf.interop.from_arrow(data, data.column_names)._data[
             "None"
@@ -978,7 +978,7 @@ class ColumnBase(Column, Serializable):
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.DecimalColumn":
+    ) -> "cudf.core.column.Decimal64Column":
         raise NotImplementedError
 
     def apply_boolean_mask(self, mask) -> ColumnBase:
@@ -1490,7 +1490,7 @@ def build_column(
     elif is_decimal_dtype(dtype):
         if size is None:
             raise TypeError("Must specify size")
-        return cudf.core.column.DecimalColumn(
+        return cudf.core.column.Decimal64Column(
             data=data,
             size=size,
             offset=offset,
@@ -1963,7 +1963,7 @@ def as_column(
                                 precision=dtype.precision, scale=dtype.scale
                             ),
                         )
-                        return cudf.core.column.DecimalColumn.from_arrow(data)
+                        return cudf.core.column.Decimal64Column.from_arrow(data)
                     dtype = pd.api.types.pandas_dtype(dtype)
                     if is_categorical_dtype(dtype) or is_interval_dtype(dtype):
                         raise TypeError
@@ -2212,7 +2212,7 @@ def _copy_type_metadata_from_arrow(
     Decimal64Dtype, copy precisions.
     """
     if pa.types.is_decimal(arrow_array.type) and isinstance(
-        cudf_column, cudf.core.column.DecimalColumn
+        cudf_column, cudf.core.column.Decimal64Column
     ):
         cudf_column.dtype.precision = arrow_array.type.precision
     elif pa.types.is_struct(arrow_array.type) and isinstance(

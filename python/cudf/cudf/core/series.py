@@ -2406,7 +2406,7 @@ class Series(SingleColumnFrame, Serializable):
 
         col = _concat_columns([o._column for o in objs])
 
-        if isinstance(col, cudf.core.column.DecimalColumn):
+        if isinstance(col, cudf.core.column.Decimal64Column):
             col = objs[0]._column._copy_type_metadata(col)
 
         return cls(data=col, index=index, name=name)

@@ -301,7 +301,7 @@ class Decimal32Dtype(_BaseDtype):
 
     @property
     def itemsize(self):
-        return 8
+        return 4
 
     def __repr__(self):
         return (
