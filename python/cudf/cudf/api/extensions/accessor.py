@@ -152,7 +152,7 @@ def register_dataframe_accessor(name):
 @doc_register_index_accessor()
 def register_index_accessor(name):
     """{docstring}"""
-    return _register_accessor(name, cudf.Index)
+    return _register_accessor(name, cudf.BaseIndex)
 
 
 @doc_register_series_accessor()
