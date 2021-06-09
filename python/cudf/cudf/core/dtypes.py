@@ -71,7 +71,6 @@ class CategoricalDtype(_BaseDtype):
         return pd.CategoricalDtype(categories=categories, ordered=self.ordered)
 
     def _init_categories(self, categories: Any):
-        # breakpoint()
         if categories is None:
             return categories
         if len(categories) == 0 and not is_interval_dtype(categories):
