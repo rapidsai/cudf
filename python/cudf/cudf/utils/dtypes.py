@@ -13,7 +13,6 @@ from pandas.core.dtypes.common import infer_dtype_from_object
 import cudf
 from cudf.core._compat import PANDAS_GE_120
 
-# TODO: Temporary aliasing, should be removed.
 from ..api.types import (  # noqa: F401
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
