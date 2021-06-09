@@ -705,16 +705,9 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_s
   }
   desc.num_rows      = cudf_col.size();
   desc.physical_type = static_cast<uint8_t>(physical_type());
-  // TODO: replace with CompactProtocolReader::NumRequiredBits
-  auto count_bits = [](uint16_t number) {
-    int16_t nbits = 0;
-    while (number > 0) {
-      nbits++;
-      number >>= 1;
-    }
-    return nbits;
-  };
-  desc.level_bits  = count_bits(max_rep_level()) << 4 | count_bits(max_def_level());
+
+  desc.level_bits = CompactProtocolReader::NumRequiredBits(max_rep_level()) << 4 |
+                    CompactProtocolReader::NumRequiredBits(max_def_level());
   desc.nullability = _d_nullability.data();
   return desc;
 }
@@ -1179,17 +1172,10 @@ void writer::impl::write(table_view const &table)
       ck->has_dictionary                                     = dict_enable;
       md.row_groups[global_r].columns[i].meta_data.type      = parquet_columns[i].physical_type();
       md.row_groups[global_r].columns[i].meta_data.encodings = {Encoding::PLAIN, Encoding::RLE};
-      // TODO: this also needs to change. Currently works because old dict code setting it
-      // if (dict_enable) {
-      //   md.row_groups[global_r].columns[i].meta_data.encodings.push_back(
-      //     Encoding::PLAIN_DICTIONARY);
-      // }
-      // std::cout << "dict_enable " << std::boolalpha << dict_enable << std::endl;
       md.row_groups[global_r].columns[i].meta_data.path_in_schema =
         parquet_columns[i].get_path_in_schema();
       md.row_groups[global_r].columns[i].meta_data.codec      = UNCOMPRESSED;
       md.row_groups[global_r].columns[i].meta_data.num_values = ck->num_values;
-      // std::cout << "rg " << r << " col ptr " << ck->col_desc << std::endl;
     }
     f += fragments_in_chunk;
     start_row += (uint32_t)md.row_groups[global_r].num_rows;
@@ -1205,9 +1191,6 @@ void writer::impl::write(table_view const &table)
       }
     }
   }
-  // for (auto const &chunk : chunks.host_view().flat_view()) {
-  //   std::cout << "dict_enable " << std::boolalpha << chunk.use_dictionary << std::endl;
-  // }
 
   // Free unused dictionaries
   for (auto &col : parquet_columns) { col.check_dictionary_used(stream); }

@@ -460,11 +460,11 @@ __global__ void __launch_bounds__(128)
         page_g.chunk_id        = blockIdx.y * num_columns + blockIdx.x;
         page_g.hdr_size        = 0;
         page_g.max_hdr_size    = 32;
-        page_g.max_data_size   = ck_g.uniq_data_size;  // Set by old dict. TODO: take care of it
+        page_g.max_data_size   = ck_g.uniq_data_size;
         page_g.start_row       = cur_row;
         page_g.num_rows        = ck_g.num_dict_entries;
         page_g.num_leaf_values = ck_g.num_dict_entries;
-        page_g.num_values      = ck_g.num_dict_entries;  // This shouldn't matter for dict page
+        page_g.num_values      = ck_g.num_dict_entries;  // TODO: shouldn't matter for dict page
         page_offset += page_g.max_hdr_size + page_g.max_data_size;
         comp_page_offset += page_g.max_hdr_size + GetMaxCompressedBfrSize(page_g.max_data_size);
       }
@@ -483,7 +483,7 @@ __global__ void __launch_bounds__(128)
     // This doesn't actually deal with data. It's agnostic. It only cares about number of rows and
     // page size.
     do {
-      uint32_t fragment_data_size, max_page_size, minmax_len = 0;
+      uint32_t minmax_len = 0;
       __syncwarp();
       if (num_rows < ck_g.num_rows) {
         if (t == 0) { frag_g = ck_g.fragments[fragments_in_chunk]; }
@@ -496,17 +496,15 @@ __global__ void __launch_bounds__(128)
         frag_g.num_rows           = 0;
       }
       __syncwarp();
-      // TODO: IILE/ternary this
-      if (ck_g.use_dictionary) {
-        fragment_data_size =
-          frag_g.num_leaf_values * 2;  // Assume worst-case of 2-bytes per dictionary index
-      } else {
-        fragment_data_size = frag_g.fragment_data_size;
-      }
+      uint32_t fragment_data_size =
+        (ck_g.use_dictionary)
+          ? frag_g.num_leaf_values * 2  // Assume worst-case of 2-bytes per dictionary index
+          : frag_g.fragment_data_size;
       // TODO (dm): this convoluted logic to limit page size needs refactoring
-      max_page_size = (values_in_page * 2 >= ck_g.num_values)
-                        ? 256 * 1024
-                        : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024 : 512 * 1024;
+      uint32_t max_page_size =
+        (values_in_page * 2 >= ck_g.num_values)
+          ? 256 * 1024
+          : (values_in_page * 3 >= ck_g.num_values) ? 384 * 1024 : 512 * 1024;
       if (num_rows >= ck_g.num_rows ||
           (values_in_page > 0 && (page_size + fragment_data_size > max_page_size))) {
         if (ck_g.use_dictionary) {
@@ -1532,12 +1530,11 @@ __global__ void __launch_bounds__(128)
     // data pages (actual encoding is identical).
     Encoding encoding;
     if (enable_bool_rle) {
-      // TODO: reverse the ternary. put == bool first
-      encoding = (col_g.physical_type != BOOLEAN)
-                   ? (page_type == PageType::DICTIONARY_PAGE || page_g.chunk->use_dictionary)
+      encoding = (col_g.physical_type == BOOLEAN)
+                   ? Encoding::RLE
+                   : (page_type == PageType::DICTIONARY_PAGE || page_g.chunk->use_dictionary)
                        ? Encoding::PLAIN_DICTIONARY
-                       : Encoding::PLAIN
-                   : Encoding::RLE;
+                       : Encoding::PLAIN;
     } else {
       encoding = (page_type == PageType::DICTIONARY_PAGE || page_g.chunk->use_dictionary)
                    ? Encoding::PLAIN_DICTIONARY
@@ -1564,7 +1561,6 @@ __global__ void __launch_bounds__(128)
     } else {
       // DictionaryPageHeader
       encoder.field_struct_begin(7);
-      // TODO: update old to new
       encoder.field_int32(1, ck_g.num_dict_entries);  // number of values in dictionary
       encoder.field_int32(2, encoding);
       encoder.field_struct_end(7);
