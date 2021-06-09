@@ -241,7 +241,7 @@ class Decimal32Dtype(_BaseDtype):
 
     name = "decimal"
     _metadata = ("precision", "scale")
-    MAX_PRECISION = np.floor(np.log10(np.iinfo("int64").max))
+    MAX_PRECISION = np.floor(np.log10(np.iinfo("int32").max))
 
     def __init__(self, precision, scale=0):
         """
@@ -250,7 +250,7 @@ class Decimal32Dtype(_BaseDtype):
         precision : int
             The total number of digits in each value of this dtype
         scale : int, optional
-            The scale of the Decimal64Dtype. See Notes below.
+            The scale of the Decimal32Dtype. See Notes below.
 
         Notes
         -----
@@ -313,7 +313,7 @@ class Decimal32Dtype(_BaseDtype):
 
     @classmethod
     def _validate(cls, precision, scale=0):
-        if precision > Decimal64Dtype.MAX_PRECISION:
+        if precision > Decimal32Dtype.MAX_PRECISION:
             raise ValueError(
                 f"Cannot construct a {cls.__name__}"
                 f" with precision > {cls.MAX_PRECISION}"
@@ -336,6 +336,10 @@ class Decimal32Dtype(_BaseDtype):
     @classmethod
     def deserialize(cls, header: dict, frames: list):
         return cls(header["precision"], header["scale"])
+
+    @classmethod
+    def is_decimal32_dtype():
+        pass
 
 
 class Decimal64Dtype(_BaseDtype):
@@ -438,6 +442,9 @@ class Decimal64Dtype(_BaseDtype):
     def deserialize(cls, header: dict, frames: list):
         return cls(header["precision"], header["scale"])
 
+    @classmethod
+    def is_decimal64_dtype():
+        pass
 
 class IntervalDtype(StructDtype):
     name = "interval"
