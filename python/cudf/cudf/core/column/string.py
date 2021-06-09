@@ -4863,7 +4863,37 @@ class StringMethods(ColumnMethodsMixin):
         )
 
     def edit_distance_matrix(self) -> ParentType:
-        """
+        """Computes the edit distance between strings in the series.
+
+        The series to compute the matrix should have more than 2 strings and
+        should not contain nulls.
+
+        Edit distance is measured based on the Levenshtein edit distance
+        algorithm.
+        https://www.cuelogic.com/blog/the-levenshtein-algorithm
+
+        Parameters
+        ----------
+        None, does not require input parameter.
+
+        Returns
+        -------
+        Series of ListDtype(int64)
+            Assume `N` is the length of this series. The return series contains
+            `N` lists of size `N`, where the `j`th number in the `i`th row of
+            the series tells the edit distance bwtween the `i`th string and the
+            `j`th string of this series.
+            The matrix is symmetric. Diagonal elements are 0.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['abc', 'bc', 'cba'])
+        >>> s.str.edit_distance_matrix()
+        0    [0, 1, 2]
+        1    [1, 0, 2]
+        2    [2, 2, 0]
+        dtype: list
         """
         if self._column.size < 2:
             raise ValueError(
