@@ -88,7 +88,7 @@ void BM_merge(benchmark::State& state)
 #define MBM_BENCHMARK_DEFINE(name)                                                 \
   BENCHMARK_DEFINE_F(Merge, name)(::benchmark::State & state) { BM_merge(state); } \
   BENCHMARK_REGISTER_F(Merge, name)                                                \
-    ->Unit(benchmark::kNanosecond)                                                 \
+    ->Unit(benchmark::kMillisecond)                                                \
     ->UseManualTime()                                                              \
     ->RangeMultiplier(2)                                                           \
     ->Ranges({{2, 128}});

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <io/parquet/parquet_gpu.hpp>
 #include <io/utilities/block_utils.cuh>
+#include "parquet_gpu.hpp"
 
 #include <cudf/utilities/error.hpp>
 
@@ -150,7 +150,7 @@ __device__ void GenerateDictionaryIndices(dict_state_s *s, uint32_t t)
 // blockDim(1024, 1, 1)
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
-  gpuBuildChunkDictionaries(EncColumnChunk *chunks, uint32_t *dev_scratch)
+  gpuBuildChunkDictionaries(device_span<EncColumnChunk> chunks, uint32_t *dev_scratch)
 {
   __shared__ __align__(8) dict_state_s state_g;
   using block_reduce = cub::BlockReduce<uint32_t, block_size>;
@@ -321,19 +321,14 @@ __global__ void __launch_bounds__(block_size, 1)
  *
  * @param[in,out] chunks Column chunks
  * @param[in] dev_scratch Device scratch data (kDictScratchSize per dictionary)
- * @param[in] num_chunks Number of column chunks
  * @param[in] stream CUDA stream to use, default 0
  */
-void BuildChunkDictionaries(EncColumnChunk *chunks,
+void BuildChunkDictionaries(device_span<EncColumnChunk> chunks,
                             uint32_t *dev_scratch,
-                            size_t scratch_size,
-                            uint32_t num_chunks,
                             rmm::cuda_stream_view stream)
 {
-  if (num_chunks > 0 && scratch_size > 0) {  // zero scratch size implies no dictionaries
-    CUDA_TRY(cudaMemsetAsync(dev_scratch, 0, scratch_size, stream.value()));
-    gpuBuildChunkDictionaries<1024><<<num_chunks, 1024, 0, stream.value()>>>(chunks, dev_scratch);
-  }
+  auto num_chunks = chunks.size();
+  gpuBuildChunkDictionaries<1024><<<num_chunks, 1024, 0, stream.value()>>>(chunks, dev_scratch);
 }
 
 }  // namespace gpu

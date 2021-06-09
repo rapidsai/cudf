@@ -168,8 +168,9 @@ TEST_F(ReplaceNullsStringsTest, SimpleReplaceScalar)
 {
   std::vector<std::string> input{"", "", "", "", "", "", "", ""};
   std::vector<cudf::valid_type> input_v{0, 0, 0, 0, 0, 0, 0, 0};
-  std::unique_ptr<cudf::scalar> repl = cudf::make_string_scalar("rep", 0, mr());
-  repl->set_valid(true, 0);
+  std::unique_ptr<cudf::scalar> repl =
+    cudf::make_string_scalar("rep", rmm::cuda_stream_default, mr());
+  repl->set_valid(true, rmm::cuda_stream_default);
   std::vector<std::string> expected{"rep", "rep", "rep", "rep", "rep", "rep", "rep", "rep"};
 
   cudf::test::strings_column_wrapper input_w{input.begin(), input.end(), input_v.begin()};
@@ -266,10 +267,11 @@ void ReplaceNullsScalar(cudf::test::fixed_width_column_wrapper<T> input,
 
 TYPED_TEST(ReplaceNullsTest, ReplaceColumn)
 {
-  std::vector<TypeParam> inputColumn =
+  auto const inputColumn =
     cudf::test::make_type_param_vector<TypeParam>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
-  std::vector<cudf::valid_type> inputValid{0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
-  std::vector<TypeParam> replacementColumn =
+  auto const inputValid =
+    cudf::test::make_type_param_vector<cudf::valid_type>({0, 0, 0, 0, 0, 1, 1, 1, 1, 1});
+  auto const replacementColumn =
     cudf::test::make_type_param_vector<TypeParam>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
 
   ReplaceNullsColumn<TypeParam>(cudf::test::fixed_width_column_wrapper<TypeParam>(
@@ -289,10 +291,11 @@ TYPED_TEST(ReplaceNullsTest, ReplaceColumn_Empty)
 
 TYPED_TEST(ReplaceNullsTest, ReplaceScalar)
 {
-  std::vector<TypeParam> inputColumn =
+  auto const inputColumn =
     cudf::test::make_type_param_vector<TypeParam>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
-  std::vector<cudf::valid_type> inputValid{0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
-  std::vector<TypeParam> expectedColumn =
+  auto const inputValid =
+    cudf::test::make_type_param_vector<cudf::valid_type>({0, 0, 0, 0, 0, 1, 1, 1, 1, 1});
+  auto const expectedColumn =
     cudf::test::make_type_param_vector<TypeParam>({1, 1, 1, 1, 1, 5, 6, 7, 8, 9});
   cudf::numeric_scalar<TypeParam> replacement(1);
 
@@ -307,13 +310,16 @@ TYPED_TEST(ReplaceNullsTest, ReplacementHasNulls)
 {
   using T = TypeParam;
 
-  std::vector<T> input_column   = cudf::test::make_type_param_vector<T>({7, 5, 6, 3, 1, 2, 8, 4});
-  std::vector<T> replace_column = cudf::test::make_type_param_vector<T>({4, 5, 6, 7, 8, 9, 0, 1});
-  std::vector<T> result_column  = cudf::test::make_type_param_vector<T>({4, 5, 6, 3, 1, 2, 8, 4});
+  auto const input_column   = cudf::test::make_type_param_vector<T>({7, 5, 6, 3, 1, 2, 8, 4});
+  auto const replace_column = cudf::test::make_type_param_vector<T>({4, 5, 6, 7, 8, 9, 0, 1});
+  auto const result_column  = cudf::test::make_type_param_vector<T>({4, 5, 6, 3, 1, 2, 8, 4});
 
-  std::vector<cudf::valid_type> input_valid{0, 0, 1, 1, 1, 1, 1, 1};
-  std::vector<cudf::valid_type> replace_valid{1, 0, 1, 1, 1, 1, 1, 1};
-  std::vector<cudf::valid_type> result_valid{1, 0, 1, 1, 1, 1, 1, 1};
+  auto const input_valid =
+    cudf::test::make_type_param_vector<cudf::valid_type>({0, 0, 1, 1, 1, 1, 1, 1});
+  auto const replace_valid =
+    cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 1, 1, 1, 1, 1, 1});
+  auto const result_valid =
+    cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 1, 1, 1, 1, 1, 1});
 
   ReplaceNullsColumn<T>(cudf::test::fixed_width_column_wrapper<T>(
                           input_column.begin(), input_column.end(), input_valid.begin()),
@@ -374,11 +380,9 @@ void TestReplaceNullsWithPolicy(cudf::test::fixed_width_column_wrapper<T> input,
 
 TYPED_TEST(ReplaceNullsPolicyTest, PrecedingFill)
 {
-  std::vector<TypeParam> col =
-    cudf::test::make_type_param_vector<TypeParam>({42, 2, 1, -10, 20, -30});
-  std::vector<cudf::valid_type> mask =
-    cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 0, 1, 0, 1});
-  std::vector<TypeParam> expect_col =
+  auto const col  = cudf::test::make_type_param_vector<TypeParam>({42, 2, 1, -10, 20, -30});
+  auto const mask = cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 0, 1, 0, 1});
+  auto const expect_col =
     cudf::test::make_type_param_vector<TypeParam>({42, 42, 42, -10, -10, -30});
 
   TestReplaceNullsWithPolicy(
@@ -390,11 +394,9 @@ TYPED_TEST(ReplaceNullsPolicyTest, PrecedingFill)
 
 TYPED_TEST(ReplaceNullsPolicyTest, FollowingFill)
 {
-  std::vector<TypeParam> col =
-    cudf::test::make_type_param_vector<TypeParam>({42, 2, 1, -10, 20, -30});
-  std::vector<cudf::valid_type> mask =
-    cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 0, 1, 0, 1});
-  std::vector<TypeParam> expect_col =
+  auto const col  = cudf::test::make_type_param_vector<TypeParam>({42, 2, 1, -10, 20, -30});
+  auto const mask = cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 0, 1, 0, 1});
+  auto const expect_col =
     cudf::test::make_type_param_vector<TypeParam>({42, -10, -10, -10, -30, -30});
 
   TestReplaceNullsWithPolicy(
@@ -406,13 +408,10 @@ TYPED_TEST(ReplaceNullsPolicyTest, FollowingFill)
 
 TYPED_TEST(ReplaceNullsPolicyTest, PrecedingFillLeadingNulls)
 {
-  std::vector<TypeParam> col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
-  std::vector<cudf::valid_type> mask =
-    cudf::test::make_type_param_vector<cudf::valid_type>({0, 0, 1, 0, 1});
-  std::vector<TypeParam> expect_col =
-    cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 3, 5});
-  std::vector<cudf::valid_type> expect_mask =
-    cudf::test::make_type_param_vector<cudf::valid_type>({0, 0, 1, 1, 1});
+  auto const col         = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
+  auto const mask        = cudf::test::make_type_param_vector<cudf::valid_type>({0, 0, 1, 0, 1});
+  auto const expect_col  = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 3, 5});
+  auto const expect_mask = cudf::test::make_type_param_vector<cudf::valid_type>({0, 0, 1, 1, 1});
 
   TestReplaceNullsWithPolicy(
     cudf::test::fixed_width_column_wrapper<TypeParam>(col.begin(), col.end(), mask.begin()),
@@ -423,13 +422,10 @@ TYPED_TEST(ReplaceNullsPolicyTest, PrecedingFillLeadingNulls)
 
 TYPED_TEST(ReplaceNullsPolicyTest, FollowingFillTrailingNulls)
 {
-  std::vector<TypeParam> col = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
-  std::vector<cudf::valid_type> mask =
-    cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 1, 0, 0});
-  std::vector<TypeParam> expect_col =
-    cudf::test::make_type_param_vector<TypeParam>({1, 3, 3, 4, 5});
-  std::vector<cudf::valid_type> expect_mask =
-    cudf::test::make_type_param_vector<cudf::valid_type>({1, 1, 1, 0, 0});
+  auto const col         = cudf::test::make_type_param_vector<TypeParam>({1, 2, 3, 4, 5});
+  auto const mask        = cudf::test::make_type_param_vector<cudf::valid_type>({1, 0, 1, 0, 0});
+  auto const expect_col  = cudf::test::make_type_param_vector<TypeParam>({1, 3, 3, 4, 5});
+  auto const expect_mask = cudf::test::make_type_param_vector<cudf::valid_type>({1, 1, 1, 0, 0});
 
   TestReplaceNullsWithPolicy(
     cudf::test::fixed_width_column_wrapper<TypeParam>(col.begin(), col.end(), mask.begin()),

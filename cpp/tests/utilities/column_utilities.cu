@@ -42,6 +42,8 @@
 
 #include <numeric>
 #include <sstream>
+#include "cudf/detail/utilities/vector_factories.hpp"
+#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace test {
@@ -93,8 +95,8 @@ struct column_property_comparator {
     // recurse
     cudf::type_dispatcher(lhs_l.child().type(),
                           column_property_comparator<check_exact_equality>{},
-                          lhs_l.get_sliced_child(0),
-                          rhs_l.get_sliced_child(0));
+                          lhs_l.get_sliced_child(rmm::cuda_stream_default),
+                          rhs_l.get_sliced_child(rmm::cuda_stream_default));
   }
 };
 
@@ -170,7 +172,7 @@ class corresponding_rows_not_equivalent {
 };
 
 // Stringify the inconsistent values resulted from the comparison of two columns element-wise
-std::string stringify_column_differences(thrust::device_vector<int> const& differences,
+std::string stringify_column_differences(cudf::device_span<int const> differences,
                                          column_view const& lhs,
                                          column_view const& rhs,
                                          bool print_all_differences,
@@ -178,13 +180,12 @@ std::string stringify_column_differences(thrust::device_vector<int> const& diffe
 {
   CUDF_EXPECTS(not differences.empty(), "Shouldn't enter this function if `differences` is empty");
   std::string const depth_str = depth > 0 ? "depth " + std::to_string(depth) + '\n' : "";
+  // move the differences to the host.
+  auto h_differences = cudf::detail::make_host_vector_sync(differences);
   if (print_all_differences) {
     std::ostringstream buffer;
     buffer << depth_str << "differences:" << std::endl;
 
-    // thrust may crash if a device_vector is passed to fixed_width_column_wrapper,
-    // thus we construct fixed_width_column_wrapper from a host_vector instead
-    thrust::host_vector<int> h_differences(differences);
     auto source_table = cudf::table_view({lhs, rhs});
     auto diff_column =
       fixed_width_column_wrapper<int32_t>(h_differences.begin(), h_differences.end());
@@ -198,7 +199,7 @@ std::string stringify_column_differences(thrust::device_vector<int> const& diffe
              << h_differences[i] << "] = " << h_right_strings[i] << std::endl;
     return buffer.str();
   } else {
-    int index     = differences[0];  // only stringify first difference
+    int index     = h_differences[0];  // only stringify first difference
     auto diff_lhs = cudf::detail::slice(lhs, index, index + 1);
     auto diff_rhs = cudf::detail::slice(rhs, index, index + 1);
     return depth_str + "first difference: " + "lhs[" + std::to_string(index) +
@@ -222,16 +223,18 @@ struct column_comparator_impl {
                                               corresponding_rows_unequal,
                                               corresponding_rows_not_equivalent>;
 
-    auto differences = thrust::device_vector<int>(lhs.size());  // worst case: everything different
-    auto diff_iter   = thrust::copy_if(thrust::device,
+    auto differences = rmm::device_uvector<int>(
+      lhs.size(), rmm::cuda_stream_default);  // worst case: everything different
+    auto diff_iter = thrust::copy_if(rmm::exec_policy(),
                                      thrust::make_counting_iterator(0),
                                      thrust::make_counting_iterator(lhs.size()),
                                      differences.begin(),
                                      ComparatorType(*d_lhs, *d_rhs));
 
-    differences.resize(thrust::distance(differences.begin(), diff_iter));  // shrink back down
+    differences.resize(thrust::distance(differences.begin(), diff_iter),
+                       rmm::cuda_stream_default);  // shrink back down
 
-    if (not differences.empty())
+    if (not differences.is_empty())
       GTEST_FAIL() << stringify_column_differences(
         differences, lhs, rhs, print_all_differences, depth);
   }
@@ -256,7 +259,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     if (lhs_l.is_empty()) { return; }
 
     // worst case - everything is different
-    thrust::device_vector<int> differences(lhs.size());
+    rmm::device_uvector<int> differences(lhs.size(), rmm::cuda_stream_default);
 
     // TODO : determine how equals/equivalency should work for columns with divergent underlying
     // data, but equivalent null masks. Example:
@@ -283,8 +286,9 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     // compare offsets, taking slicing into account
 
     // left side
-    size_type lhs_shift = cudf::detail::get_value<size_type>(lhs_l.offsets(), lhs_l.offset(), 0);
-    auto lhs_offsets    = thrust::make_transform_iterator(
+    size_type lhs_shift =
+      cudf::detail::get_value<size_type>(lhs_l.offsets(), lhs_l.offset(), rmm::cuda_stream_default);
+    auto lhs_offsets = thrust::make_transform_iterator(
       lhs_l.offsets().begin<size_type>() + lhs_l.offset(),
       [lhs_shift] __device__(size_type offset) { return offset - lhs_shift; });
     auto lhs_valids = thrust::make_transform_iterator(
@@ -294,8 +298,9 @@ struct column_comparator_impl<list_view, check_exact_equality> {
       });
 
     // right side
-    size_type rhs_shift = cudf::detail::get_value<size_type>(rhs_l.offsets(), rhs_l.offset(), 0);
-    auto rhs_offsets    = thrust::make_transform_iterator(
+    size_type rhs_shift =
+      cudf::detail::get_value<size_type>(rhs_l.offsets(), rhs_l.offset(), rmm::cuda_stream_default);
+    auto rhs_offsets = thrust::make_transform_iterator(
       rhs_l.offsets().begin<size_type>() + rhs_l.offset(),
       [rhs_shift] __device__(size_type offset) { return offset - rhs_shift; });
     auto rhs_valids = thrust::make_transform_iterator(
@@ -305,7 +310,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
       });
 
     auto diff_iter = thrust::copy_if(
-      thrust::device,
+      rmm::exec_policy(),
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(lhs_l.size() + 1),
       differences.begin(),
@@ -321,15 +326,16 @@ struct column_comparator_impl<list_view, check_exact_equality> {
         return lhs_offsets[index] == rhs_offsets[index] ? false : true;
       });
 
-    differences.resize(thrust::distance(differences.begin(), diff_iter));  // shrink back down
+    differences.resize(thrust::distance(differences.begin(), diff_iter),
+                       rmm::cuda_stream_default);  // shrink back down
 
-    if (not differences.empty())
+    if (not differences.is_empty())
       GTEST_FAIL() << stringify_column_differences(
         differences, lhs, rhs, print_all_differences, depth);
 
     // recurse
-    auto lhs_child = lhs_l.get_sliced_child(0);
-    auto rhs_child = rhs_l.get_sliced_child(0);
+    auto lhs_child = lhs_l.get_sliced_child(rmm::cuda_stream_default);
+    auto rhs_child = rhs_l.get_sliced_child(rmm::cuda_stream_default);
     cudf::type_dispatcher(lhs_child.type(),
                           column_comparator<check_exact_equality>{},
                           lhs_child,
@@ -518,8 +524,9 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
   size_type output_size = c.size() + 1;
 
   // the first offset value to normalize everything against
-  size_type first = cudf::detail::get_value<size_type>(offsets, c.offset(), 0);
-  rmm::device_vector<size_type> shifted_offsets(output_size);
+  size_type first =
+    cudf::detail::get_value<size_type>(offsets, c.offset(), rmm::cuda_stream_default);
+  rmm::device_uvector<size_type> shifted_offsets(output_size, rmm::cuda_stream_default);
 
   // normalize the offset values for the column offset
   size_type const* d_offsets = offsets.head<size_type>() + c.offset();
@@ -530,7 +537,7 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
     shifted_offsets.begin(),
     [first] __device__(int32_t offset) { return static_cast<size_type>(offset - first); });
 
-  thrust::host_vector<size_type> h_shifted_offsets(shifted_offsets);
+  auto const h_shifted_offsets = cudf::detail::make_host_vector_sync(shifted_offsets);
   std::ostringstream buffer;
   for (size_t idx = 0; idx < h_shifted_offsets.size(); idx++) {
     buffer << h_shifted_offsets[idx];
@@ -687,7 +694,7 @@ struct column_view_printer {
     lists_column_view lcv(col);
 
     // propage slicing to the child if necessary
-    column_view child    = lcv.get_sliced_child(0);
+    column_view child    = lcv.get_sliced_child(rmm::cuda_stream_default);
     bool const is_sliced = lcv.offset() > 0 || child.offset() > 0;
 
     std::string tmp =

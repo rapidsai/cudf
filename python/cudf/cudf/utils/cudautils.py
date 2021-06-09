@@ -2,46 +2,12 @@
 from pickle import dumps
 
 import cachetools
-import cupy
 import numpy as np
 from numba import cuda
 
 import cudf
-from cudf.utils.utils import check_equals_float, check_equals_int
 
-try:
-    # Numba >= 0.49
-    from numba.np import numpy_support
-except ImportError:
-    # Numba <= 0.49
-    from numba import numpy_support
-
-
-# GPU array type casting
-
-
-def as_contiguous(arr):
-    assert arr.ndim == 1
-    cupy_dtype = arr.dtype
-    if np.issubdtype(cupy_dtype, np.datetime64):
-        cupy_dtype = np.dtype("int64")
-        arr = arr.view("int64")
-    out = cupy.ascontiguousarray(cupy.asarray(arr))
-    return cuda.as_cuda_array(out).view(arr.dtype)
-
-
-# Mask utils
-
-
-def full(size, value, dtype):
-    cupy_dtype = dtype
-    if np.issubdtype(cupy_dtype, np.datetime64):
-        time_unit, _ = np.datetime_data(cupy_dtype)
-        cupy_dtype = np.int64
-        value = np.datetime64(value, time_unit).view(cupy_dtype)
-
-    out = cupy.full(size, value, cupy_dtype)
-    return cuda.as_cuda_array(out).view(dtype)
+from numba.np import numpy_support
 
 
 #
@@ -77,7 +43,7 @@ def gpu_diff(in_col, out_col, out_mask, N):
 def gpu_mark_found_int(arr, val, out, not_found):
     i = cuda.grid(1)
     if i < arr.size:
-        if check_equals_int(arr[i], val):
+        if arr[i] == val:
             out[i] = i
         else:
             out[i] = not_found
@@ -92,7 +58,10 @@ def gpu_mark_found_float(arr, val, out, not_found):
         # at 0.51.1, this will have a very slight
         # performance improvement. Related
         # discussion in : https://github.com/rapidsai/cudf/pull/6073
-        if check_equals_float(arr[i], float(val)):
+        val = float(val)
+
+        # NaN-aware equality comparison.
+        if (arr[i] == val) or (arr[i] != arr[i] and val != val):
             out[i] = i
         else:
             out[i] = not_found
