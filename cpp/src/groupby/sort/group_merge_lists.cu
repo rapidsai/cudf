@@ -21,6 +21,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/gather.h>
+
 namespace cudf {
 namespace groupby {
 namespace detail {
@@ -32,7 +34,11 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
 {
   CUDF_EXPECTS(values.type().id() == type_id::LIST,
                "Input to `group_merge_lists` must be a lists column.");
-  CUDF_EXPECTS(!values.nullable(), "Input to `group_merge_lists` must not be nullable.");
+  CUDF_EXPECTS(!values.nullable(),
+               "Input to `group_merge_lists` must be a non-nullable lists column.");
+
+  auto offsets_column = make_numeric_column(
+    data_type(type_to_id<offset_type>()), num_groups + 1, mask_state::UNALLOCATED, stream, mr);
 
   // Generate offsets of the output lists column by gathering from the provided group offsets and
   // the input list offsets.
@@ -44,19 +50,11 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
   //
   //   then, the output offsets_column is [0, 5, 8].
   //
-  auto offsets_column = make_numeric_column(
-    data_type(type_to_id<offset_type>()), num_groups + 1, mask_state::UNALLOCATED, stream, mr);
-
-  auto const it = thrust::make_counting_iterator<offset_type>(0);
-  thrust::transform(
-    rmm::exec_policy(stream),
-    it,
-    it + group_offsets.size(),
-    offsets_column->mutable_view().template begin<offset_type>(),
-    [group_offsets = group_offsets.begin(),
-     list_offsets  = lists_column_view(values).offsets_begin()] __device__(auto const idx) {
-      return list_offsets[group_offsets[idx]];
-    });
+  thrust::gather(rmm::exec_policy(stream),
+                 group_offsets.begin(),
+                 group_offsets.end(),
+                 lists_column_view(values).offsets_begin(),
+                 offsets_column->mutable_view().template begin<offset_type>());
 
   // The child column of the output lists column is just copied from the input column.
   auto child_column =
