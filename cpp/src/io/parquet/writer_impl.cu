@@ -812,7 +812,7 @@ auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
   // Make decision about which chunks have dictionary
   for (auto &ck : h_chunks) {
     if (not ck.use_dictionary) { continue; }
-    std::tie(ck.use_dictionary, ck.dict_rle_bits_plus1) = [&]() {
+    std::tie(ck.use_dictionary, ck.dict_rle_bits) = [&]() {
       // We don't use dictionary if the indices are > 16 bits
       if (ck.num_dict_entries > MAX_DICT_SIZE) { return std::make_pair(false, 0); }
 
@@ -833,10 +833,9 @@ auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
 
       auto dict_enc_size = ck.uniq_data_size + rle_byte_size;
 
-      // TODO: there has to be a better way than to plus 1
-      bool use_dict       = (ck.plain_data_size > dict_enc_size);
-      auto rle_bits_plus1 = (use_dict) ? rle_bits + 1 : 0;
-      return std::make_pair(use_dict, rle_bits_plus1);
+      bool use_dict = (ck.plain_data_size > dict_enc_size);
+      if (not use_dict) { rle_bits = 0; }
+      return std::make_pair(use_dict, rle_bits);
     }();
   }
 

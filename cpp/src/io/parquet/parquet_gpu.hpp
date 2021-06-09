@@ -334,7 +334,7 @@ struct EncColumnChunk {
   size_type plain_data_size;
   size_type *dict_data;
   uint16_t *dict_index;
-  uint8_t dict_rle_bits_plus1;  // TODO: we shouldn't have to plus 1
+  uint8_t dict_rle_bits;
   bool use_dictionary;
 };
 

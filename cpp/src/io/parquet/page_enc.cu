@@ -510,8 +510,8 @@ __global__ void __launch_bounds__(128)
       if (num_rows >= ck_g.num_rows ||
           (values_in_page > 0 && (page_size + fragment_data_size > max_page_size))) {
         if (ck_g.use_dictionary) {
-          uint32_t dict_bits = ck_g.dict_rle_bits_plus1 - 1;
-          page_size = 1 + 5 + ((values_in_page * dict_bits + 7) >> 3) + (values_in_page >> 8);
+          page_size =
+            1 + 5 + ((values_in_page * ck_g.dict_rle_bits + 7) >> 3) + (values_in_page >> 8);
         }
         if (!t) {
           page_g.num_fragments = fragments_in_chunk - page_start;
@@ -1047,10 +1047,11 @@ __global__ void __launch_bounds__(128, 8)
   } else {
     dtype_len_in = dtype_len_out;
   }
-  dict_bits = (dtype == BOOLEAN) ? 1
-                                 : (s->page.page_type == PageType::DICTIONARY_PAGE)
-                                     ? -1
-                                     : (s->page.chunk->dict_rle_bits_plus1 - 1);
+  dict_bits = (dtype == BOOLEAN)
+                ? 1
+                : (s->ck.use_dictionary and s->page.page_type != PageType::DICTIONARY_PAGE)
+                    ? s->ck.dict_rle_bits
+                    : -1;
   if (t == 0) {
     uint8_t *dst   = s->cur;
     s->rle_run     = 0;
