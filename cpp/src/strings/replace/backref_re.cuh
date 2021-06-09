@@ -42,7 +42,7 @@ using backref_type = thrust::pair<size_type, size_type>;
  * Small to medium instruction lengths can use the stack effectively though smaller executes faster.
  * Longer patterns require global memory. Shorter patterns are common in data cleaning.
  */
-template <typename Iterator, size_t stack_size>
+template <typename Iterator, int stack_size>
 struct backrefs_fn {
   column_device_view const d_strings;
   reprog_device prog;
@@ -58,9 +58,6 @@ struct backrefs_fn {
       if (!d_chars) d_offsets[idx] = 0;
       return;
     }
-    u_char data1[stack_size];
-    u_char data2[stack_size];
-    prog.set_stack_mem(data1, data2);
     auto const d_str  = d_strings.element<string_view>(idx);
     auto const nchars = d_str.length();      // number of characters in input string
     auto nbytes       = d_str.size_bytes();  // number of bytes in input string
@@ -70,7 +67,7 @@ struct backrefs_fn {
     size_type begin   = 0;       // first character position matching regex
     size_type end     = nchars;  // last character position (exclusive)
     // copy input to output replacing strings as we go
-    while (prog.find(idx, d_str, begin, end) > 0)  // inits the begin/end vars
+    while (prog.find<stack_size>(idx, d_str, begin, end) > 0)  // inits the begin/end vars
     {
       auto spos = d_str.byte_offset(begin);           // get offset for these
       auto epos = d_str.byte_offset(end);             // character position values
@@ -88,7 +85,8 @@ struct backrefs_fn {
           // extract the specific group's string for this backref's index
           int32_t spos_extract = begin;  // these are modified
           int32_t epos_extract = end;    // by extract()
-          if ((prog.extract(idx, d_str, spos_extract, epos_extract, backref.first - 1) <= 0) ||
+          if ((prog.extract<stack_size>(
+                 idx, d_str, spos_extract, epos_extract, backref.first - 1) <= 0) ||
               (epos_extract <= spos_extract))
             return;  // no value for this backref number; that is ok
           spos_extract = d_str.byte_offset(spos_extract);  // convert

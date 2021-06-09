@@ -26,6 +26,7 @@
 #include <cudf/lists/count_elements.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/extract.hpp>
+#include <cudf/lists/sorting.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/quantiles.hpp>
 #include <cudf/reduction.hpp>
@@ -228,6 +229,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_ifElseSS(JNIEnv *env, jcl
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getElement(JNIEnv *env, jclass,
+                                                                  jlong from,
+                                                                  jint index) {
+  JNI_NULL_CHECK(env, from, "from column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto from_vec = reinterpret_cast<cudf::column_view *>(from);
+    std::unique_ptr<cudf::scalar> result =
+        cudf::get_element(*from_vec, index);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_reduce(JNIEnv *env, jclass,
                                                               jlong j_col_view,
                                                               jlong j_agg,
@@ -382,6 +397,22 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listContainsColumn(JNIEnv
     cudf::column_view *lookup_cv = reinterpret_cast<cudf::column_view *>(lookup_key_cv);
 
     std::unique_ptr<cudf::column> ret = cudf::lists::contains(lcv, *lookup_cv);
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listSortRows(JNIEnv *env, jclass,
+                                                                    jlong column_view,
+                                                                    jboolean is_descending,
+                                                                    jboolean is_null_smallest) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto sort_order = is_descending ? cudf::order::DESCENDING : cudf::order::ASCENDING;
+    auto null_order = is_null_smallest ? cudf::null_order::BEFORE : cudf::null_order::AFTER;
+    auto *cv = reinterpret_cast<cudf::column_view *>(column_view);
+    auto ret = cudf::lists::sort_lists(cudf::lists_column_view(*cv), sort_order, null_order);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
