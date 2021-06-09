@@ -4748,7 +4748,7 @@ class Series(SingleColumnFrame, Serializable):
 
         return Series(val_counts.index.sort_values(), name=self.name)
 
-    def round(self, decimals=0):
+    def round(self, decimals=0, how="half_even"):
         """
         Round each value in a Series to the given number of decimals.
 
@@ -4758,6 +4758,9 @@ class Series(SingleColumnFrame, Serializable):
             Number of decimal places to round to. If decimals is negative,
             it specifies the number of positions to the left of the decimal
             point.
+        how : str, optional
+            Type of rounding. Can be either "half_even" (default)
+            of "half_up" rounding.
 
         Returns
         -------
@@ -4773,9 +4776,10 @@ class Series(SingleColumnFrame, Serializable):
         2    3.0
         dtype: float64
         """
-
+        if how not in {"half_up", "half_even"}:
+            raise ValueError("'how' must be either 'half_even' or 'half_up'")
         return Series(
-            self._column.round(decimals=decimals),
+            self._column.round(decimals=decimals, how=how),
             name=self.name,
             index=self.index,
             dtype=self.dtype,
