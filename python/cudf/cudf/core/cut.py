@@ -147,21 +147,12 @@ def cut(
             if isinstance(
                 x, (pd.Series, cudf.Series, np.ndarray, cupy.ndarray)
             ):
-                # changing to scalars and using sequence to get the bins
-                # because this allows masked arrays from value_counts to
-                # also be able to be handled by cut correctly
-                # pandas by default seems to turn all bins into a float
                 mn = x.min()
                 mx = x.max()
             else:
                 mn = min(x)
                 mx = max(x)
-            # step = cudf.Scalar((mx - mn) / bins, dtype="float64")
             bins = np.linspace(mn, mx, bins + 1, endpoint=True)
-            # this is another possible way to calculate bins
-            # bins = sequence(
-            #     size=bins + 1, init=mn.device_value, step=step.device_value
-            # ).values
             adj = (mx - mn) * 0.001
             if right:
                 bins[0] -= adj

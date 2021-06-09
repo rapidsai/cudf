@@ -144,8 +144,6 @@ def test_cut_right(x, bins, right, precision):
     assert_eq(pindex, gindex)
 
 
-
-
 @pytest.mark.parametrize(
     "x",
     [
@@ -162,9 +160,7 @@ def test_cut_right(x, bins, right, precision):
 @pytest.mark.parametrize("include_lowest", [True, False])
 @pytest.mark.parametrize("ordered", [True])
 @pytest.mark.parametrize("precision", [1, 2, 3])
-@pytest.mark.parametrize(
-    "duplicates", ["drop"]
-)  # raise will return a value error
+@pytest.mark.parametrize("duplicates", ["drop"])
 def test_cut_drop_duplicates(
     x, bins, right, precision, duplicates, ordered, include_lowest
 ):
@@ -190,6 +186,50 @@ def test_cut_drop_duplicates(
     )
 
     assert_eq(pindex, gindex)
+
+
+@pytest.mark.parametrize(
+    "x",
+    [
+        [1, 7, 5, 4, 6, 3],
+        [1, 7],
+        np.array([1, 7, 5, 4, 6, 3]),
+        np.array([2, 4, 6, 8, 10]),
+    ],
+)
+@pytest.mark.parametrize(
+    "bins", [[0, 2, 4, 6, 10, 10], [1, 2, 2, 3, 3]],
+)
+@pytest.mark.parametrize("right", [True, False])
+@pytest.mark.parametrize("include_lowest", [True, False])
+@pytest.mark.parametrize("ordered", [True])
+@pytest.mark.parametrize("precision", [1, 2, 3])
+@pytest.mark.parametrize("duplicates", ["raises"])
+def test_cut_drop_duplicates_raises(
+    x, bins, right, precision, duplicates, ordered, include_lowest
+):
+    with pytest.raises(ValueError) as excgd:
+        cut(
+            x=x,
+            bins=bins,
+            right=right,
+            precision=precision,
+            duplicates=duplicates,
+            include_lowest=include_lowest,
+            ordered=ordered,
+        )
+    with pytest.raises(ValueError) as excpd:
+        pd.cut(
+            x=x,
+            bins=bins,
+            right=right,
+            precision=precision,
+            duplicates=duplicates,
+            include_lowest=include_lowest,
+            ordered=ordered,
+        )
+
+    assert_eq(str(excgd.value), str(excpd.value))
 
 
 @pytest.mark.parametrize(
