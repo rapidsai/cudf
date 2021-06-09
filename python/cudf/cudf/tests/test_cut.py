@@ -144,7 +144,6 @@ def test_cut_right(x, bins, right, precision):
     assert_eq(pindex, gindex)
 
 
-# [1, 2, 2, 3, 3], [0, 2, 4, 6, 10, 10]
 
 
 @pytest.mark.parametrize(
