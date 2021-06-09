@@ -399,6 +399,14 @@ public class RmmTest {
         () -> Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, false, 1024, 2048));
   }
 
+  @Test
+  public void testGetCudaRuntimeInfo() {
+    Rmm.initialize(RmmAllocationMode.POOL, false, 1024);
+    assert Cuda.getDriverVersion() >= Cuda.getRuntimeVersion();
+    assert Cuda.getRuntimeVersion() > 1000;
+    assertEquals(Cuda.getNativeComputeMode(), Cuda.getComputeMode().mode);
+  }
+
   private static class AllocFailException extends RuntimeException {}
   private static class AllocThresholdException extends RuntimeException {}
   private static class DeallocThresholdException extends RuntimeException {}

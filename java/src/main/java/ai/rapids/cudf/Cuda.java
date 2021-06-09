@@ -245,6 +245,27 @@ public class Cuda {
   }
 
   /**
+   * Gets the CUDA compute mode of the current device.
+   *
+   * @return the enum value of CudaComputeMode
+   */
+  public static CudaComputeMode getComputeMode() {
+    int nativeMode = Cuda.getNativeComputeMode();
+    switch (nativeMode) {
+      case 0:
+        return CudaComputeMode.cudaComputeModeDefault;
+      case 1:
+        return CudaComputeMode.cudaComputeModeExclusive;
+      case 2:
+        return CudaComputeMode.cudaComputeModeProhibited;
+      case 3:
+        return CudaComputeMode.cudaComputeModeExclusiveProcess;
+      default:
+        throw new CudaException("Unknown cuaComputeMode: " + nativeMode);
+    }
+  }
+
+  /**
    * Mapping: cudaMemGetInfo(size_t *free, size_t *total)
    */
   public static native CudaMemInfo memGetInfo() throws CudaException;
@@ -346,6 +367,33 @@ public class Cuda {
    * @throws CudaException on any error
    */
   public static native void autoSetDevice() throws CudaException;
+
+  /**
+   * Get the CUDA Driver version, which is the latest version of CUDA supported by the driver.
+   * The version is returned as (1000 major + 10 minor). For example, CUDA 9.2 would be
+   * represented by 9020. If no driver is installed,then 0 is returned as the driver version.
+   *
+   * @return the CUDA driver version
+   * @throws CudaException on any error
+   */
+  public static native int getDriverVersion() throws CudaException;
+
+  /**
+   * Get the CUDA Runtime version of the current CUDA Runtime instance. The version is returned
+   * as (1000 major + 10 minor). For example, CUDA 9.2 would be represented by 9020.
+   *
+   * @return the CUDA Runtime version
+   * @throws CudaException on any error
+   */
+  public static native int getRuntimeVersion() throws CudaException;
+
+  /**
+   * Gets the CUDA device compute mode of the current device.
+   *
+   * @return the value of cudaComputeMode
+   * @throws CudaException on any error
+   */
+  static native int getNativeComputeMode() throws CudaException;
 
   /**
    * Calls cudaFree(0). This can be used to initialize the GPU after a setDevice()
