@@ -34,7 +34,8 @@ std::unique_ptr<column> group_merge_lists(column_view const& values,
                "Input to `group_merge_lists` must be a lists column.");
   CUDF_EXPECTS(!values.nullable(), "Input to `group_merge_lists` must not be nullable.");
 
-  // Generate offsets of the output lists column just by copying from the provided group offsets.
+  // Generate offsets of the output lists column by gathering from the provided group offsets and
+  // the input list offsets.
   //
   // For example:
   //   values        = [[2, 1], [], [4, -1, -2], [], [<NA>, 4, <NA>]]
