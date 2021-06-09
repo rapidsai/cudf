@@ -107,12 +107,16 @@ class CategoricalDtype(_BaseDtype):
 
     def serialize(self):
         header = {}
-        frames = []
+        header["type-serialized"] = pickle.dumps(type(self))
         header["ordered"] = self.ordered
+
+        frames = []
+
         if self.categories is not None:
             categories_header, categories_frames = self.categories.serialize()
         header["categories"] = categories_header
         frames.extend(categories_frames)
+
         return header, frames
 
     @classmethod
@@ -189,26 +193,27 @@ class ListDtype(_BaseDtype):
 
     def serialize(self) -> Tuple[dict, list]:
         header: Dict[str, Dtype] = {}
+        header["type-serialized"] = pickle.dumps(type(self))
+
         frames = []
+
         if isinstance(self.element_type, _BaseDtype):
-            header["element-type-cls"] = self.element_type.__class__
-            (
-                header["element-type-header"],
-                frames,
-            ) = self.element_type.serialize()
+            header["element-type"], frames = self.element_type.serialize()
         else:
             header["element-type"] = self.element_type
+
         return header, frames
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):
-        if "element-type-cls" in header:
-            element_type = header["element-type-cls"].deserialize(
-                header["element-type-header"], frames
-            )
+        if isinstance(header["element-type"], dict):
+            element_type = pickle.loads(
+                header["element-type"]["type-serialized"]
+            ).deserialize(header["element-type"], frames)
         else:
             element_type = header["element-type"]
-        return cls(element_type)
+
+        return cls(element_type=element_type)
 
 
 class StructDtype(_BaseDtype):
@@ -262,31 +267,36 @@ class StructDtype(_BaseDtype):
         return hash(self._typ)
 
     def serialize(self) -> Tuple[dict, list]:
-        header = {}
+        header: Dict[str, Any] = {}
+        header["type-serialized"] = pickle.dumps(type(self))
+
         frames: List[Buffer] = []
+
+        fields = {}
+
         for k, dtype in self.fields.items():
             if isinstance(dtype, _BaseDtype):
                 dtype_header, dtype_frames = dtype.serialize()
-                header[k] = {
-                    "cls": dtype.__class__,
-                    "header": dtype_header,
-                    "frames": (len(frames), len(frames) + len(dtype_frames)),
-                }
+                fields[k] = (
+                    dtype_header,
+                    (len(frames), len(frames) + len(dtype_frames)),
+                )
                 frames.extend(dtype_frames)
             else:
-                header[k] = dtype
+                fields[k] = dtype
+        header["fields"] = fields
 
         return header, frames
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):
         fields = {}
-        for k, dtype in header.items():
-            if isinstance(dtype, dict):
-                fields[k] = dtype["cls"].deserialize(
-                    dtype["header"],
-                    frames[dtype["frames"][0] : dtype["frames"][1]],
-                )
+        for k, dtype in header["fields"].items():
+            if isinstance(dtype, tuple):
+                dtype_header, (start, stop) = dtype
+                fields[k] = pickle.loads(
+                    dtype_header["type-serialized"]
+                ).deserialize(dtype_header, frames[start:stop],)
             else:
                 fields[k] = dtype
         return cls(fields)
@@ -386,7 +396,14 @@ class Decimal64Dtype(_BaseDtype):
         return cls(precision, -metadata.exponent)
 
     def serialize(self) -> Tuple[dict, list]:
-        return {"precision": self.precision, "scale": self.scale}, []
+        return (
+            {
+                "type-serialized": pickle.dumps(type(self)),
+                "precision": self.precision,
+                "scale": self.scale,
+            },
+            [],
+        )
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):
