@@ -200,10 +200,13 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
     auto const gather_lhs = make_counting_transform_iterator(
       size_type{0}, lhs_gather_map_functor<Filter>{is_left, null_map_entry});
 
+    rmm::device_uvector<size_type> gather_map(size, stream);
+    thrust::copy(rmm::exec_policy(stream), gather_lhs, gather_lhs + size, gather_map.begin());
+
     auto const lhs_gathered_columns =
       cudf::detail::gather(table_view{std::vector<cudf::column_view>{lhs}},
-                           gather_lhs,
-                           gather_lhs + size,
+                           gather_map.begin(),
+                           gather_map.end(),
                            out_of_bounds_policy::NULLIFY,
                            stream,
                            mr)

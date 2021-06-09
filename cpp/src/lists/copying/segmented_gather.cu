@@ -61,11 +61,16 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
     return value_offsets[offset_idx] + wrapped_sub_index - value_offsets[0];
   };
   auto child_gather_index_begin = cudf::detail::make_counting_transform_iterator(0, transformer);
+  rmm::device_uvector<size_type> child_gather_map(gather_map_size, stream);
+  thrust::copy(rmm::exec_policy(stream),
+               child_gather_index_begin,
+               child_gather_index_begin + gather_map_size,
+               child_gather_map.begin());
 
   // Call gather on child of value_column
   auto child_table = cudf::detail::gather(table_view({value_column.get_sliced_child(stream)}),
-                                          child_gather_index_begin,
-                                          child_gather_index_begin + gather_map_size,
+                                          child_gather_map.begin(),
+                                          child_gather_map.end(),
                                           out_of_bounds_policy::DONT_CHECK,
                                           stream,
                                           mr);

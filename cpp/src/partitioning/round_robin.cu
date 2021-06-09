@@ -94,9 +94,12 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
     rmm::device_uvector<cudf::size_type> partition_offsets(num_partitions, stream);
     thrust::sequence(rmm::exec_policy(stream), partition_offsets.begin(), partition_offsets.end());
 
+    rmm::device_uvector<cudf::size_type> gather_map(nrows, stream);
+    thrust::copy(
+      rmm::exec_policy(stream), rotated_iter_begin, rotated_iter_begin + nrows, gather_map.begin());
     auto uniq_tbl = cudf::detail::gather(input,
-                                         rotated_iter_begin,
-                                         rotated_iter_begin + nrows,  // map
+                                         gather_map.begin(),
+                                         gather_map.end(),
                                          cudf::out_of_bounds_policy::DONT_CHECK,
                                          stream,
                                          mr);
@@ -225,8 +228,14 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
       return num_partitions * index_within_partition + partition_index;
     });
 
-  auto uniq_tbl = cudf::detail::gather(
-    input, iter_begin, iter_begin + nrows, cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);
+  rmm::device_uvector<size_type> gather_map(nrows, stream);
+  thrust::copy(rmm::exec_policy(stream), iter_begin, iter_begin + nrows, gather_map.begin());
+  auto uniq_tbl = cudf::detail::gather(input,
+                                       gather_map.begin(),
+                                       gather_map.end(),
+                                       cudf::out_of_bounds_policy::DONT_CHECK,
+                                       stream,
+                                       mr);
   auto ret_pair = std::make_pair(std::move(uniq_tbl), std::vector<cudf::size_type>(num_partitions));
 
   // this has the effect of rotating the set of partition sizes

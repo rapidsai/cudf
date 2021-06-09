@@ -53,9 +53,11 @@ std::unique_ptr<table> tile(const table_view &in,
 
   auto out_num_rows = in_num_rows * count;
   auto tiled_it     = cudf::detail::make_counting_transform_iterator(0, tile_functor{in_num_rows});
+  rmm::device_uvector<size_type> gather_map(out_num_rows, stream);
+  thrust::copy(rmm::exec_policy(stream), tiled_it, tiled_it + out_num_rows, gather_map.begin());
 
   return detail::gather(
-    in, tiled_it, tiled_it + out_num_rows, out_of_bounds_policy::DONT_CHECK, stream, mr);
+    in, gather_map.begin(), gather_map.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
 }
 }  // namespace detail
 

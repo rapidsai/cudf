@@ -151,9 +151,16 @@ std::unique_ptr<table> repeat(table_view const& input_table,
   auto output_size = input_table.num_rows() * count;
   auto map_begin   = cudf::detail::make_counting_transform_iterator(
     0, [count] __device__(auto i) { return i / count; });
-  auto map_end = map_begin + output_size;
 
-  return gather(input_table, map_begin, map_end, out_of_bounds_policy::DONT_CHECK, stream, mr);
+  rmm::device_uvector<size_type> gather_map(output_size, stream);
+  thrust::copy(rmm::exec_policy(stream), map_begin, map_begin + output_size, gather_map.begin());
+
+  return gather(input_table,
+                gather_map.begin(),
+                gather_map.end(),
+                out_of_bounds_policy::DONT_CHECK,
+                stream,
+                mr);
 }
 
 }  // namespace detail

@@ -57,8 +57,11 @@ std::unique_ptr<table> sample(table_view const& input,
     };
 
     auto begin = cudf::detail::make_counting_transform_iterator(0, RandomGen);
+    rmm::device_uvector<size_type> gather_map(n, stream);
+    thrust::copy(rmm::exec_policy(stream), begin, begin + n, gather_map.begin());
 
-    return detail::gather(input, begin, begin + n, out_of_bounds_policy::DONT_CHECK, stream, mr);
+    return detail::gather(
+      input, gather_map.begin(), gather_map.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
   } else {
     auto gather_map =
       make_numeric_column(data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED, stream);

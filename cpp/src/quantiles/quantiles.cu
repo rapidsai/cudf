@@ -48,13 +48,12 @@ std::unique_ptr<table> quantiles(table_view const& input,
   auto const q_device = cudf::detail::make_device_uvector_async(q, stream);
 
   auto quantile_idx_iter = thrust::make_transform_iterator(q_device.begin(), quantile_idx_lookup);
+  rmm::device_uvector<size_type> gather_map(q.size(), stream);
+  thrust::copy(
+    rmm::exec_policy(stream), quantile_idx_iter, quantile_idx_iter + q.size(), gather_map.begin());
 
-  return detail::gather(input,
-                        quantile_idx_iter,
-                        quantile_idx_iter + q.size(),
-                        out_of_bounds_policy::DONT_CHECK,
-                        stream,
-                        mr);
+  return detail::gather(
+    input, gather_map.begin(), gather_map.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
 }
 
 }  // namespace detail

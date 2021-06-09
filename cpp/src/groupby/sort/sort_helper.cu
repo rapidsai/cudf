@@ -309,12 +309,12 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view st
   auto gather_map_it = thrust::make_transform_iterator(
     group_offsets(stream).begin(), [idx_data] __device__(size_type i) { return idx_data[i]; });
 
-  return cudf::detail::gather(_keys,
-                              gather_map_it,
-                              gather_map_it + num_groups(stream),
-                              out_of_bounds_policy::DONT_CHECK,
-                              stream,
-                              mr);
+  auto const N = num_groups(stream);
+  rmm::device_uvector<size_type> gather_map(N, stream);
+  thrust::copy(rmm::exec_policy(stream), gather_map_it, gather_map_it + N, gather_map.begin());
+
+  return cudf::detail::gather(
+    _keys, gather_map.begin(), gather_map.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
 }
 
 std::unique_ptr<table> sort_groupby_helper::sorted_keys(rmm::cuda_stream_view stream,

@@ -703,6 +703,8 @@ INSTANTIATE(int16_t*)
 INSTANTIATE(int32_t*)
 INSTANTIATE(int32_t const*)
 INSTANTIATE(int64_t*)
+INSTANTIATE(thrust::constant_iterator<int32_t>)
+INSTANTIATE(thrust::counting_iterator<int32_t>)
 
 INSTANTIATE(uint8_t*)
 INSTANTIATE(uint16_t*)
@@ -710,7 +712,7 @@ INSTANTIATE(uint32_t*)
 INSTANTIATE(uint64_t*)
 
 INSTANTIATE(uint32_t const*)
-
+// INSTANTIATE(thrust::constant_iterator<uint32_t>)
 }  // namespace detail
 }  // namespace cudf
    //

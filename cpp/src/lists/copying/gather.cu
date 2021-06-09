@@ -91,9 +91,14 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
                                          rmm::mr::device_memory_resource* mr)
 {
   // gather map iterator for this level (N)
-  auto gather_map_begin = thrust::make_transform_iterator(
+  auto const gather_map_iter = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0), list_gatherer{gd});
-  size_type gather_map_size = gd.gather_map_size;
+  size_type const gather_map_size = gd.gather_map_size;
+  rmm::device_uvector<size_type> gather_map(gather_map_size, stream);
+  thrust::copy(rmm::exec_policy(stream),
+               gather_map_iter,
+               gather_map_iter + gather_map_size,
+               gather_map.begin());
 
   // call the normal gather
   //  auto leaf_column = cudf::type_dispatcher<dispatch_storage_type>(
@@ -110,8 +115,8 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
 
   auto leaf_column =
     std::move(gather(table_view{{column}},
-                     gather_map_begin,
-                     gather_map_begin + gather_map_size,
+                     gather_map.begin(),
+                     gather_map.end(),
                      // note : we don't need to bother checking for out-of-bounds here since
                      // our inputs at this stage aren't coming from the user.
                      out_of_bounds_policy::DONT_CHECK,
@@ -130,8 +135,8 @@ std::unique_ptr<column> gather_list_leaf(column_view const& column,
   if (null_count > 0) {
     auto list_cdv = column_device_view::create(column);
     auto validity = cudf::detail::valid_if(
-      gather_map_begin,
-      gather_map_begin + gd.gather_map_size,
+      gather_map.begin(),
+      gather_map.end(),
       [cdv = *list_cdv] __device__(int index) { return cdv.is_valid(index) ? true : false; },
       stream,
       mr);
