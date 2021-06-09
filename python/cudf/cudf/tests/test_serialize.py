@@ -272,6 +272,28 @@ def test_serialize_string_check_buffer_sizes():
 @pytest.mark.parametrize(
     "data",
     [
+        {"a": cudf.Series(["a", "b", "c", "a", "c", "b"]).astype("category")},
+        {
+            "a": cudf.Series(["a", "a", "b", "b"]).astype("category"),
+            "b": cudf.Series(["b", "b", "c", "c"]).astype("category"),
+            "c": cudf.Series(["c", "c", "a", "a"]).astype("category"),
+        },
+        {
+            "a": cudf.Series(["a", None, "b", "b"]).astype("category"),
+            "b": cudf.Series(["b", "b", None, "c"]).astype("category"),
+            "c": cudf.Series(["c", "c", "a", None]).astype("category"),
+        },
+    ],
+)
+def test_serialize_categorical_columns(data):
+    df = cudf.DataFrame(data)
+    recreated = df.__class__.deserialize(*df.serialize())
+    assert_eq(recreated, df)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
         {"a": [[]]},
         {"a": [[1, 2, None, 4]]},
         {"a": [["cat", None, "dog"]]},
@@ -325,6 +347,27 @@ def test_serialize_decimal_columns(data):
     df = cudf.DataFrame(data)
     recreated = df.__class__.deserialize(*df.serialize())
     assert_eq(recreated, df)
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"a": np.dtype(np.int64)},
+        {"a": np.dtype(np.int64), "b": None},
+        {
+            "a": cudf.ListDtype(np.dtype(np.int64)),
+            "b": cudf.Decimal64Dtype(1, 0),
+        },
+        {
+            "a": cudf.ListDtype(cudf.StructDtype({"b": np.dtype(np.int64)})),
+            "b": cudf.ListDtype(cudf.ListDtype(np.dtype(np.int64))),
+        },
+    ],
+)
+def test_serialize_struct_dtype(fields):
+    dtype = cudf.StructDtype(fields)
+    recreated = dtype.__class__.deserialize(*dtype.serialize())
+    assert recreated == dtype
 
 
 def test_deserialize_cudf_0_16(datadir):
