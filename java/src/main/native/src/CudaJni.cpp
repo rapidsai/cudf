@@ -188,7 +188,7 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getNativeComputeMode(JNIEnv *env
     JNI_CUDA_TRY(env, -2, cudaGetDevice(&device));
     cudaDeviceProp device_prop;
     JNI_CUDA_TRY(env, -2, cudaGetDeviceProperties(&device_prop, device));
-    return reinterpret_cast<jint>(device_prop.computeMode);
+    return device_prop.computeMode;
   }
   CATCH_STD(env, -2);
 }
