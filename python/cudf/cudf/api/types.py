@@ -129,15 +129,6 @@ def _is_non_decimal_numeric_dtype(obj):
         return False
 
 
-"""
-TODO: There a number of things we need to check:
-    1. The following methods in pd.api.types probably need to be overridden:
-       is_interval, is_number, infer_dtype, pandas_dtype (maybe as cudf_dtype?)
-    2. For datetime/timedelta, do we need to be more general than pandas with
-       respect to the different time resolutions?
-"""
-
-
 def is_integer(obj):
     """Return True if given object is integer.
 
@@ -151,8 +142,7 @@ def is_integer(obj):
 
 
 def is_string_dtype(obj):
-    """
-    Check whether the provided array or dtype is of the string dtype.
+    """Check whether the provided array or dtype is of the string dtype.
 
     Parameters
     ----------
@@ -211,6 +201,11 @@ def is_struct_dtype(obj):
     bool
         Whether or not the array-like or dtype is of the struct dtype.
     """
+    # TODO: This behavior is currently inconsistent for interval types. the
+    # actual class IntervalDtype will return False, but instances (e.g.
+    # IntervalDtype(int)) will return True. For now this is not being changed
+    # since the interval dtype is being modified as part of the array refactor,
+    # but this behavior should be made consistent afterwards.
     return (
         isinstance(obj, cudf.core.dtypes.StructDtype)
         or obj is cudf.core.dtypes.StructDtype
