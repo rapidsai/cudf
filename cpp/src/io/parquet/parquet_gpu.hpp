@@ -330,7 +330,6 @@ struct EncColumnChunk {
   size_t dict_map_size;
   size_type num_dict_entries;
   size_type uniq_data_size;
-  size_type num_non_null_values;
   size_type plain_data_size;
   size_type *dict_data;
   uint16_t *dict_index;

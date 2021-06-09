@@ -48,14 +48,7 @@ constexpr uint32_t rle_buffer_size = (1 << 9);
 struct frag_init_state_s {
   parquet_column_device_view col;
   PageFragment frag;
-  uint32_t total_dupes;
   size_type start_value_idx;
-  volatile uint32_t scratch_red[32];
-  uint32_t dict[max_page_fragment_size];
-  union {
-    uint16_t u16[1 << (init_hash_bits)];
-    uint32_t u32[1 << (init_hash_bits - 1)];
-  } map;
 };
 
 struct page_enc_state_s {
@@ -125,31 +118,22 @@ __global__ void __launch_bounds__(block_size)
   __shared__ __align__(16) frag_init_state_s state_g;
 
   using block_reduce = cub::BlockReduce<uint32_t, block_size>;
-  using block_scan   = cub::BlockScan<uint32_t, block_size>;
-  __shared__ union {
-    typename block_reduce::TempStorage reduce_storage;
-    typename block_scan::TempStorage scan_storage;
-  } temp_storage;
+  __shared__ typename block_reduce::TempStorage reduce_storage;
 
   frag_init_state_s *const s = &state_g;
   uint32_t t                 = threadIdx.x;
-  uint32_t start_row, dtype_len, dtype_len_in, dtype;
+  uint32_t start_row, dtype_len, dtype;
 
   if (t == 0) s->col = col_desc[blockIdx.x];
-  for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += block_size) {
-    if (i + t < sizeof(s->map) / sizeof(uint32_t)) s->map.u32[i + t] = 0;
-  }
   __syncthreads();
   start_row = blockIdx.y * fragment_size;
   if (!t) {
     // frag.num_rows = fragment_size except for the last page fragment which can be smaller.
     // num_rows is fixed but fragment size could be larger if the data is strings or nested.
     s->frag.num_rows           = min(fragment_size, max_num_rows - min(start_row, max_num_rows));
-    s->frag.non_nulls          = 0;
     s->frag.num_dict_vals      = 0;
     s->frag.fragment_data_size = 0;
     s->frag.dict_data_size     = 0;
-    s->total_dupes             = 0;
 
     // To use num_vals instead of num_rows, we need to calculate num_vals on the fly.
     // For list<list<int>>, values between i and i+50 can be calculated by
@@ -194,16 +178,6 @@ __global__ void __launch_bounds__(block_size)
   dtype = s->col.physical_type;
   dtype_len =
     (dtype == INT96) ? 12 : (dtype == INT64 || dtype == DOUBLE) ? 8 : (dtype == BOOLEAN) ? 1 : 4;
-  if (dtype == INT32) {
-    dtype_len_in = GetDtypeLogicalLen(s->col.leaf_column);
-  } else if (dtype == INT96) {
-    // cudf doesn't support INT96 internally and uses INT64, so treat INT96 as an INT64 for
-    // computing dictionary hash values and reading the data, but we do treat it as 12 bytes for
-    // dtype_len, which determines how much memory we need to allocate for the fragment.
-    dtype_len_in = 8;
-  } else {
-    dtype_len_in = dtype_len;
-  }
   __syncthreads();
 
   size_type nvals           = s->frag.num_leaf_values;
@@ -214,168 +188,22 @@ __global__ void __launch_bounds__(block_size)
     uint32_t is_valid = (i + t < nvals && val_idx < s->col.leaf_column->size())
                           ? s->col.leaf_column->is_valid(val_idx)
                           : 0;
-    uint32_t len, nz_pos, hash;
+    uint32_t len;
     if (is_valid) {
       len = dtype_len;
       if (dtype != BOOLEAN) {
         if (dtype == BYTE_ARRAY) {
           auto str = s->col.leaf_column->element<string_view>(val_idx);
           len += str.size_bytes();
-          hash = hash_string(str);
-        } else if (dtype_len_in == 8) {
-          hash = uint64_init_hash(s->col.leaf_column->element<uint64_t>(val_idx));
-        } else {
-          hash = uint32_init_hash((dtype_len_in == 4)
-                                    ? s->col.leaf_column->element<uint32_t>(val_idx)
-                                    : (dtype_len_in == 2)
-                                        ? s->col.leaf_column->element<uint16_t>(val_idx)
-                                        : s->col.leaf_column->element<uint8_t>(val_idx));
         }
       }
     } else {
       len = 0;
     }
 
-    uint32_t non_nulls;
-    block_scan(temp_storage.scan_storage).ExclusiveSum(is_valid, nz_pos, non_nulls);
-    nz_pos += s->frag.non_nulls;
+    len = block_reduce(reduce_storage).Sum(len);
+    if (!t) { s->frag.fragment_data_size += len; }
     __syncthreads();
-    len = block_reduce(temp_storage.reduce_storage).Sum(len);
-    if (!t) {
-      s->frag.non_nulls += non_nulls;
-      s->frag.fragment_data_size += len;
-    }
-    __syncthreads();
-    if (is_valid && dtype != BOOLEAN) {
-      uint32_t *dict_index = s->col.dict_index;
-      if (dict_index) {
-        atomicAdd(&s->map.u32[hash >> 1], (hash & 1) ? 1 << 16 : 1);
-        dict_index[start_value_idx + nz_pos] =
-          ((i + t) << init_hash_bits) |
-          hash;  // Store the hash along with the index, so we don't have to recompute it
-      }
-    }
-    __syncthreads();
-  }
-  __syncthreads();
-  // Reorder the 16-bit local indices according to the hash values
-  if (s->col.dict_index) {
-    static_assert((init_hash_bits == 12), "Hardcoded for init_hash_bits=12");
-    // Cumulative sum of hash map counts
-    uint32_t count01 = s->map.u32[t * 4 + 0];
-    uint32_t count23 = s->map.u32[t * 4 + 1];
-    uint32_t count45 = s->map.u32[t * 4 + 2];
-    uint32_t count67 = s->map.u32[t * 4 + 3];
-    uint32_t sum01   = count01 + (count01 << 16);
-    uint32_t sum23   = count23 + (count23 << 16);
-    uint32_t sum45   = count45 + (count45 << 16);
-    uint32_t sum67   = count67 + (count67 << 16);
-    sum23 += (sum01 >> 16) * 0x10001;
-    sum45 += (sum23 >> 16) * 0x10001;
-    sum67 += (sum45 >> 16) * 0x10001;
-    uint32_t sum_w = sum67 >> 16;
-    block_scan(temp_storage.scan_storage).InclusiveSum(sum_w, sum_w);
-    sum_w                 = (sum_w - (sum67 >> 16)) * 0x10001;
-    s->map.u32[t * 4 + 0] = sum_w + sum01 - count01;
-    s->map.u32[t * 4 + 1] = sum_w + sum23 - count23;
-    s->map.u32[t * 4 + 2] = sum_w + sum45 - count45;
-    s->map.u32[t * 4 + 3] = sum_w + sum67 - count67;
-  }
-  __syncthreads();
-  // Put the indices back in hash order
-  if (s->col.dict_index) {
-    uint32_t *dict_index = s->col.dict_index + start_row;
-    uint32_t nnz         = s->frag.non_nulls;
-    for (uint32_t i = 0; i < nnz; i += block_size) {
-      uint32_t pos = 0, hash = 0, pos_old, pos_new, sh, colliding_row, val = 0;
-      bool collision;
-      if (i + t < nnz) {
-        val     = dict_index[i + t];
-        hash    = val & ((1 << init_hash_bits) - 1);
-        sh      = (hash & 1) ? 16 : 0;
-        pos_old = s->map.u16[hash];
-      }
-      // The isolation of the atomicAdd, along with pos_old/pos_new is to guarantee deterministic
-      // behavior for the first row in the hash map that will be used for early duplicate detection
-      __syncthreads();
-      if (i + t < nnz) {
-        pos          = (atomicAdd(&s->map.u32[hash >> 1], 1 << sh) >> sh) & 0xffff;
-        s->dict[pos] = val;
-      }
-      __syncthreads();
-      collision = false;
-      if (i + t < nnz) {
-        pos_new   = s->map.u16[hash];
-        collision = (pos != pos_old && pos_new > pos_old + 1);
-        if (collision) { colliding_row = s->dict[pos_old]; }
-      }
-      __syncthreads();
-      if (collision) { atomicMin(&s->dict[pos_old], val); }
-      __syncthreads();
-      // Resolve collision
-      if (collision && val == s->dict[pos_old]) { s->dict[pos] = colliding_row; }
-    }
-    __syncthreads();
-    // Now that the values are ordered by hash, compare every entry with the first entry in the hash
-    // map, the position of the first entry can be inferred from the hash map counts
-    uint32_t dupe_data_size = 0;
-    for (uint32_t i = 0; i < nnz; i += block_size) {
-      uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0;
-      if (i + t < nnz) {
-        uint32_t dict_val = s->dict[i + t];
-        uint32_t hash     = dict_val & ((1 << init_hash_bits) - 1);
-        ck_row            = start_row + (dict_val >> init_hash_bits);
-        ck_row_ref = start_row + (s->dict[(hash > 0) ? s->map.u16[hash - 1] : 0] >> init_hash_bits);
-        if (ck_row_ref != ck_row) {
-          if (dtype == BYTE_ARRAY) {
-            auto str1 = s->col.leaf_column->element<string_view>(ck_row);
-            auto str2 = s->col.leaf_column->element<string_view>(ck_row_ref);
-            is_dupe   = (str1 == str2);
-            dupe_data_size += (is_dupe) ? 4 + str1.size_bytes() : 0;
-          } else {
-            if (dtype_len_in == 8) {
-              auto v1 = s->col.leaf_column->element<uint64_t>(ck_row);
-              auto v2 = s->col.leaf_column->element<uint64_t>(ck_row_ref);
-              is_dupe = (v1 == v2);
-              dupe_data_size += (is_dupe) ? 8 : 0;
-            } else {
-              uint32_t v1, v2;
-              if (dtype_len_in == 4) {
-                v1 = s->col.leaf_column->element<uint32_t>(ck_row);
-                v2 = s->col.leaf_column->element<uint32_t>(ck_row_ref);
-              } else if (dtype_len_in == 2) {
-                v1 = s->col.leaf_column->element<uint16_t>(ck_row);
-                v2 = s->col.leaf_column->element<uint16_t>(ck_row_ref);
-              } else {
-                v1 = s->col.leaf_column->element<uint8_t>(ck_row);
-                v2 = s->col.leaf_column->element<uint8_t>(ck_row_ref);
-              }
-              is_dupe = (v1 == v2);
-              dupe_data_size += (is_dupe) ? 4 : 0;
-            }
-          }
-        }
-      }
-      uint32_t dupes_in_block;
-      uint32_t dupes_before;
-      block_scan(temp_storage.scan_storage).InclusiveSum(is_dupe, dupes_before, dupes_in_block);
-      dupes_before += s->total_dupes;
-      __syncthreads();
-      if (t == 0) { s->total_dupes += dupes_in_block; }
-      if (i + t < nnz) {
-        if (!is_dupe) {
-          s->col.dict_data[start_row + i + t - dupes_before] = ck_row;
-        } else {
-          s->col.dict_index[ck_row] = ck_row_ref | (1u << 31);
-        }
-      }
-    }
-    __syncthreads();
-    dupe_data_size = block_reduce(temp_storage.reduce_storage).Sum(dupe_data_size);
-    if (!t) {
-      s->frag.dict_data_size = s->frag.fragment_data_size - dupe_data_size;
-      s->frag.num_dict_vals  = s->frag.non_nulls - s->total_dupes;
-    }
   }
   __syncthreads();
   if (t == 0) frag[blockIdx.x][blockIdx.y] = s->frag;

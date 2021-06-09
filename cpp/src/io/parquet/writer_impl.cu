@@ -783,6 +783,7 @@ auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
 
   // Allocate slots for each chunk
   std::vector<rmm::device_uvector<gpu::slot_type>> hash_maps_storage;
+  hash_maps_storage.reserve(h_chunks.size());
   for (auto &chunk : h_chunks) {
     if (col_desc[chunk.col_desc_id].physical_type == Type::BOOLEAN) {
       chunk.use_dictionary = false;
@@ -834,6 +835,8 @@ auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
 
   // TODO: (enh) Deallocate hash map storage for chunks that don't use dict and clear pointers.
 
+  dict_data.reserve(h_chunks.size());
+  dict_index.reserve(h_chunks.size());
   for (auto &chunk : h_chunks) {
     if (not chunk.use_dictionary) { continue; }
 
@@ -1127,7 +1130,6 @@ void writer::impl::write(table_view const &table)
     md.row_groups[global_r].columns.resize(num_columns);
     for (int i = 0; i < num_columns; i++) {
       gpu::EncColumnChunk *ck = &chunks[r][i];
-      bool dict_enable        = false;
 
       *ck             = {};
       ck->col_desc    = col_desc.device_ptr() + i;
@@ -1142,34 +1144,10 @@ void writer::impl::write(table_view const &table)
         std::accumulate(chunk_fragments.begin(), chunk_fragments.end(), 0, [](uint32_t l, auto r) {
           return l + r.num_values;
         });
-      ck->num_non_null_values = std::accumulate(
-        chunk_fragments.begin(), chunk_fragments.end(), 0, [](int sum, gpu::PageFragment frag) {
-          return sum + frag.non_nulls;
-        });
       ck->plain_data_size = std::accumulate(
         chunk_fragments.begin(), chunk_fragments.end(), 0, [](int sum, gpu::PageFragment frag) {
           return sum + frag.fragment_data_size;
         });
-      ck->dictionary_id = num_dictionaries;
-      if (col_desc[i].dict_data) {
-        size_t plain_size      = 0;
-        size_t dict_size       = 1;
-        uint32_t num_dict_vals = 0;
-        for (uint32_t j = 0; j < fragments_in_chunk && num_dict_vals < 65536; j++) {
-          plain_size += chunk_fragments[j].fragment_data_size;
-          dict_size += chunk_fragments[j].dict_data_size +
-                       ((num_dict_vals > 256) ? 2 : 1) * chunk_fragments[j].non_nulls;
-          num_dict_vals += chunk_fragments[j].num_dict_vals;
-        }
-        if (dict_size < plain_size) {
-          parquet_columns[i].use_dictionary(true);
-          dict_enable = true;
-          num_dictionaries++;
-        }
-      }
-      // TODO: remove. Written here and read by old dict enc code and encoders. already removed from
-      // encoders
-      ck->has_dictionary                                     = dict_enable;
       md.row_groups[global_r].columns[i].meta_data.type      = parquet_columns[i].physical_type();
       md.row_groups[global_r].columns[i].meta_data.encodings = {Encoding::PLAIN, Encoding::RLE};
       md.row_groups[global_r].columns[i].meta_data.path_in_schema =
