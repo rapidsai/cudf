@@ -781,9 +781,16 @@ auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
   // At this point, we know all chunks and their sizes. We want to allocate dictionaries for each
   // chunk that can have dictionary
 
+  auto h_chunks = chunks.host_view().flat_view();
+
+  std::vector<rmm::device_uvector<size_type>> dict_data;
+  std::vector<rmm::device_uvector<uint16_t>> dict_index;
+
+  if (h_chunks.size() == 0) { return std::make_pair(std::move(dict_data), std::move(dict_index)); }
+
   // Allocate slots for each chunk
   std::vector<rmm::device_uvector<gpu::slot_type>> hash_maps_storage;
-  for (auto &chunk : chunks.host_view().flat_view()) {
+  for (auto &chunk : h_chunks) {
     if (col_desc[chunk.col_desc_id].physical_type == Type::BOOLEAN) {
       chunk.use_dictionary = false;
     } else {
@@ -799,16 +806,11 @@ auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
   gpu::InitializeChunkHashMaps(chunks.device_view().flat_view(), hash_maps_storage[0], stream);
   gpu::BuildChunkDictionaries2(chunks, num_rows, hash_maps_storage[0], stream);
 
-  // Make decision about which chunks have dictionary
-  // TODO: We wouldn't have to synchronize if the decision also took place in a kernel.
-  // needs just a thrust::foreach
   chunks.device_to_host(stream);
   stream.synchronize();
 
-  // Only these bit sizes are allowed for RLE encoding because it's compute optimized
-  auto allowed_bitsizes = std::array<size_type, 6>{1, 2, 4, 8, 12, 16};
-
-  for (auto &ck : chunks.host_view().flat_view()) {
+  // Make decision about which chunks have dictionary
+  for (auto &ck : h_chunks) {
     if (not ck.use_dictionary) { continue; }
     std::tie(ck.use_dictionary, ck.dict_rle_bits_plus1) = [&]() {
       // We don't use dictionary if the indices are > 16 bits
@@ -820,8 +822,10 @@ auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
       // of bits required to encode indices into the dictionary
       auto max_dict_index = (ck.num_dict_entries > 0) ? ck.num_dict_entries - 1 : 0;
       auto nbits          = CompactProtocolReader::NumRequiredBits(max_dict_index);
-      // std::cout << "dict size " << ck.num_dict_entries << " nbits " << nbits << std::endl;
       CUDF_EXPECTS(nbits <= 16, "Maximum supported bits by dictionary encoder is 16");
+
+      // Only these bit sizes are allowed for RLE encoding because it's compute optimized
+      constexpr auto allowed_bitsizes = std::array<size_type, 6>{1, 2, 4, 8, 12, 16};
 
       // ceil to (1/2/4/8/12/16)
       auto rle_bits = *std::lower_bound(allowed_bitsizes.begin(), allowed_bitsizes.end(), nbits);
@@ -834,17 +838,13 @@ auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
       auto rle_bits_plus1 = (use_dict) ? rle_bits + 1 : 0;
       return std::make_pair(use_dict, rle_bits_plus1);
     }();
-    // std::cout << "use_dict " << std::boolalpha << ck.use_dictionary << std::endl;
-
-    // TODO:  Deallocate dictionary storage for chunks that don't use it and clear pointers.
-    // If decide to use a kernel for this loop then move this cleanup outside
   }
 
-  // Collect populated entries from hash map
-  std::vector<rmm::device_uvector<size_type>> dict_data;
-  std::vector<rmm::device_uvector<uint16_t>> dict_index;
-  for (auto &chunk : chunks.host_view().flat_view()) {
-    // TODO: Currently allocating for every chunk. Should skip allocating for non-dict types
+  // TODO: (enh) Deallocate hash map storage for chunks that don't use dict and clear pointers.
+
+  for (auto &chunk : h_chunks) {
+    if (not chunk.use_dictionary) { continue; }
+
     auto &inserted_dict_data  = dict_data.emplace_back(MAX_DICT_SIZE, stream);
     auto &inserted_dict_index = dict_index.emplace_back(chunk.num_values, stream);
     chunk.dict_data           = inserted_dict_data.data();
