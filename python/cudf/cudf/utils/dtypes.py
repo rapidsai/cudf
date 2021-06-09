@@ -10,7 +10,7 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pandas.core.dtypes.common import infer_dtype_from_object
+from pandas.core.dtypes.common import infer_dtype_from_object, pandas_dtype
 from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 import cudf
@@ -287,6 +287,30 @@ def is_decimal_dtype(obj):
             and obj == cudf.core.dtypes.Decimal64Dtype.name
         )
         or (hasattr(obj, "dtype") and is_decimal_dtype(obj.dtype))
+    )
+
+
+def is_decimal32_dtype(obj):
+    return (
+        type(obj) is cudf.core.dtypes.Decimal32Dtype
+        or obj is cudf.core.dtypes.Decimal32Dtype
+        or (
+            isinstance(obj, str)
+            and obj == cudf.core.dtypes.Decimal32Dtype.name
+        )
+        or (hasattr(obj, "dtype") and is_decimal32_dtype(obj.dtype))
+    )
+
+
+def is_decimal64_dtype(obj):
+    return (
+        type(obj) is cudf.core.dtypes.Decimal64Dtype
+        or obj is cudf.core.dtypes.Decimal64Dtype
+        or (
+            isinstance(obj, str)
+            and obj == cudf.core.dtypes.Decimal64Dtype.name
+        )
+        or (hasattr(obj, "dtype") and is_decimal64_dtype(obj.dtype))
     )
 
 

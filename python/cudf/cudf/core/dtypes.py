@@ -237,6 +237,7 @@ class StructDtype(_BaseDtype):
     def __hash__(self):
         return hash(self._typ)
 
+
 class Decimal32Dtype(_BaseDtype):
 
     name = "decimal"
@@ -336,10 +337,6 @@ class Decimal32Dtype(_BaseDtype):
     @classmethod
     def deserialize(cls, header: dict, frames: list):
         return cls(header["precision"], header["scale"])
-
-    @classmethod
-    def is_decimal32_dtype():
-        pass
 
 
 class Decimal64Dtype(_BaseDtype):
@@ -442,9 +439,6 @@ class Decimal64Dtype(_BaseDtype):
     def deserialize(cls, header: dict, frames: list):
         return cls(header["precision"], header["scale"])
 
-    @classmethod
-    def is_decimal64_dtype():
-        pass
 
 class IntervalDtype(StructDtype):
     name = "interval"

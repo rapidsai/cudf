@@ -15,7 +15,7 @@ from cudf._lib.types cimport (
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf.core.dtypes import ListDtype, StructDtype, Decimal64Dtype
-from cudf.utils.dtypes import is_decimal_dtype, is_list_dtype, is_struct_dtype
+from cudf.utils.dtypes import is_decimal_dtype, is_list_dtype, is_struct_dtype, is_decimal32_dtype, is_decimal64_dtype
 
 cimport cudf._lib.cpp.types as libcudf_types
 
@@ -196,7 +196,7 @@ cdef dtype_from_column_view(column_view cv):
     if tid == libcudf_types.type_id.LIST:
         return dtype_from_lists_column_view(cv)
     elif tid == libcudf_types.type_id.STRUCT:
-        sreturn dtype_from_structs_column_view(cv)
+        return dtype_from_structs_column_view(cv)
     elif tid ==  libcudf_types.type_id.DECIMAL64:
         Decimal64Dtype(precision=Decimal64Dtype.MAX_PRECISION, scale=-cv.type().scale())
     elif tid ==  libcudf_types.type_id.DECIMAL32:
