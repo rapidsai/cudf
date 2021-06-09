@@ -22,13 +22,13 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <arrow/buffer.h>
+#include <arrow/filesystem/filesystem.h>
+#include <arrow/filesystem/s3fs.h>
 #include <arrow/io/file.h>
 #include <arrow/io/interfaces.h>
 #include <arrow/io/memory.h>
-#include "arrow/filesystem/filesystem.h"
-#include "arrow/filesystem/s3fs.h"
-#include "arrow/result.h"
-#include "arrow/status.h"
+#include <arrow/result.h>
+#include <arrow/status.h>
 
 #include <memory>
 
@@ -311,10 +311,13 @@ class arrow_io_source : public datasource {
    *
    * @param Apache Arrow Filesystem URI
    */
-  explicit arrow_io_source(std::string arrow_uri)
+  explicit arrow_io_source(std::string_view arrow_uri)
   {
+    const std::string uri_start_delimiter = "//";
+    const std::string uri_end_delimiter   = "?";
+
     arrow::Result<std::shared_ptr<arrow::fs::FileSystem>> result =
-      arrow::fs::FileSystemFromUri(arrow_uri);
+      arrow::fs::FileSystemFromUri(static_cast<std::string>(arrow_uri));
     CUDF_EXPECTS(result.ok(), "Failed to generate Arrow Filesystem instance from URI.");
     filesystem = result.ValueOrDie();
 
@@ -322,11 +325,11 @@ class arrow_io_source : public datasource {
     size_t start = arrow_uri.find(uri_start_delimiter) == std::string::npos
                      ? 0
                      : arrow_uri.find(uri_start_delimiter) + uri_start_delimiter.size();
-    size_t end       = arrow_uri.find(uri_end_delimiter) - start;
-    std::string path = arrow_uri.substr(start, end);
+    size_t end            = arrow_uri.find(uri_end_delimiter) - start;
+    std::string_view path = arrow_uri.substr(start, end);
 
     arrow::Result<std::shared_ptr<arrow::io::RandomAccessFile>> in_stream =
-      filesystem->OpenInputFile(path.c_str());
+      filesystem->OpenInputFile(static_cast<std::string>(path).c_str());
     CUDF_EXPECTS(in_stream.ok(), "Failed to open Arrow RandomAccessFile");
     arrow_file = in_stream.ValueOrDie();
   }
@@ -369,8 +372,6 @@ class arrow_io_source : public datasource {
   }
 
  private:
-  const std::string uri_start_delimiter = "//";
-  const std::string uri_end_delimiter   = "?";
   std::shared_ptr<arrow::fs::FileSystem> filesystem;
   std::shared_ptr<arrow::io::RandomAccessFile> arrow_file;
 };
