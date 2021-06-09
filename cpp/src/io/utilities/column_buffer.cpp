@@ -71,9 +71,9 @@ std::unique_ptr<column> make_column(column_buffer& buffer,
 {
   if (schema_info != nullptr) { schema_info->name = buffer.name; }
 
-  printf("RGSL: Coming to make column and type of column is %d and size is %lu\n",
-         static_cast<int>(buffer.type.id()),
-         buffer.data_size());
+  // printf("RGSL: Coming to make column and type of column is %d and size is %lu\n",
+  //       static_cast<int>(buffer.type.id()),
+  //       buffer.data_size());
   switch (buffer.type.id()) {
     case type_id::STRING:
       if (schema_info != nullptr) {

@@ -80,7 +80,7 @@ constexpr type_id to_type_id(const orc::SchemaType &schema,
     default: break;
   }
 
-  printf("RGSL : Returning Empty for kind %d\n", static_cast<int>(schema.kind));
+  // printf("RGSL : Returning Empty for kind %d\n", static_cast<int>(schema.kind));
   return type_id::EMPTY;
 }
 
@@ -456,7 +456,7 @@ class aggregate_orc_metadata {
           num_cols_added +=
             add_column(selection, types, level + 1, id + 1, lvl_cols, has_timestamp_column);
         }
-        printf("RGSL : lvl %lu, col_id %d, lvl_cols %u\n", level, col_id, lvl_cols);
+        // printf("RGSL : lvl %lu, col_id %d, lvl_cols %u\n", level, col_id, lvl_cols);
         selection[level][col_id].num_children = lvl_cols;
         break;
 
@@ -696,7 +696,7 @@ void reader::impl::aggregate_child_meta(hostdevice_vector<gpu::ColumnDesc> &chun
   auto num_child_cols         = _selected_columns[level + 1].size();
   auto number_of_child_chunks = num_child_cols * number_of_stripes;
   chunks.device_to_host(stream, true);
-  printf("RGSL : number of child rows is %d \n", chunks[0].num_child_rows);
+  // printf("RGSL : number of child rows is %d \n", chunks[0].num_child_rows);
   num_child_rows.resize(_selected_columns[level + 1].size());
   child_start_row.resize(number_of_child_chunks);
   num_child_rows_per_stripe.resize(number_of_child_chunks);
@@ -707,11 +707,13 @@ void reader::impl::aggregate_child_meta(hostdevice_vector<gpu::ColumnDesc> &chun
     auto start_row = 0;
     for (size_t i = 0; i < number_of_stripes; i++) {
       auto child_rows = chunks[i * num_cols + col_idx].num_child_rows;
-      printf("RGSL: Child rows is %d p_col.num_children is %d\n", child_rows, p_col.num_children);
+      // printf("RGSL: Child rows is %d p_col.num_children is %d\n", child_rows,
+      // p_col.num_children);
       for (uint32_t j = 0; j < p_col.num_children; j++) {
         num_child_rows_per_stripe[i * num_child_cols + index + j] = child_rows;
         child_start_row[i * num_child_cols + index + j]           = (i == 0) ? 0 : start_row;
-        num_child_rows[j] += child_rows;
+        num_child_rows[index + j] += child_rows;
+        // printf("RGSL : num_child_rows @ %u is %u \n", j, num_child_rows[j]);
       }
       start_row += child_rows;
     }
@@ -726,17 +728,17 @@ column_buffer &&reader::impl::assemble_buffer(int32_t orc_col_id,
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource *mr)
 {
-  printf("RGSL : Assembling buffer \n");
+  // printf("RGSL : Assembling buffer \n");
   auto const col_id = orc_col_map[level][orc_col_id];
   auto &col_buffer  = col_buffers[level][col_id];
 
-  printf("RGSL : get column name \n");
+  // printf("RGSL : get column name \n");
   col_buffer.name = _metadata->get_column_name(0, orc_col_id);
-  printf("RGSL : got column name \n");
+  // printf("RGSL : got column name \n");
   switch (col_buffer.type.id()) {
     case type_id::LIST:
       _metadata->get_col_type(orc_col_id).subtypes[0];
-      printf("RGSL : number of child is %d \n", _metadata->get_col_type(orc_col_id).subtypes[0]);
+      // printf("RGSL : number of child is %d \n", _metadata->get_col_type(orc_col_id).subtypes[0]);
       col_buffer.children.emplace_back(
         assemble_buffer(_metadata->get_col_type(orc_col_id).subtypes[0],
                         col_buffers,
@@ -757,7 +759,7 @@ column_buffer &&reader::impl::assemble_buffer(int32_t orc_col_id,
     default: break;
   }
 
-  printf("RGSL : orc_col_id is %d \n", orc_col_id);
+  // printf("RGSL : orc_col_id is %d \n", orc_col_id);
   return std::move(col_buffer);
 }
 
@@ -772,13 +774,13 @@ void reader::impl::create_columns(std::vector<std::vector<column_buffer>> &col_b
     auto const &col_meta = _selected_columns[0][i];
     schema_info.emplace_back("");
     auto col_buffer = assemble_buffer(col_meta.id, col_buffers, orc_col_map, 0, stream, mr);
-    printf("RGSL : Name saved is %s \n", schema_info[i].name.c_str());
+    // printf("RGSL : Name saved is %s \n", schema_info[i].name.c_str());
     out_columns.emplace_back(make_column(col_buffer, &schema_info.back(), stream, mr));
-    printf("RGSL : Name saved after %s \n", schema_info[i].name.c_str());
+    // printf("RGSL : Name saved after %s \n", schema_info[i].name.c_str());
     i += (col_buffers[0][i].type.id() == type_id::STRUCT) ? col_meta.num_children + 1 : 1;
-    printf("Value for next itr is %lu _selected_columns[0].size() is %lu\n",
-           i,
-           _selected_columns[0].size());
+    // printf("Value for next itr is %lu _selected_columns[0].size() is %lu\n",
+    //       i,
+    //       _selected_columns[0].size());
   }
 }
 reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
@@ -789,10 +791,10 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>> &&sources,
   // Open and parse the source(s) dataset metadata
   _metadata = std::make_unique<aggregate_orc_metadata>(_sources);
 
-  printf("RGSL : Selecting columns \n");
+  // printf("RGSL : Selecting columns \n");
   // Select only columns required by the options
   _selected_columns = _metadata->select_columns(options.get_columns(), _has_timestamp_column);
-  printf("RGSL : Selected columns \n");
+  // printf("RGSL : Selected columns \n");
 
   // Override output timestamp resolution if requested
   if (options.get_timestamp_type().id() != type_id::EMPTY) {
@@ -829,10 +831,11 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   std::vector<int32_t> child_start_row;
   std::vector<int32_t> num_child_rows_per_stripe;
   for (size_t level = 0; level < _selected_columns.size(); level++) {
-    printf("RGSL : Selecting column %lu -------------------------------------------------------\n",
-           _selected_columns.size());
+    // printf("RGSL : Selecting column %lu
+    // -------------------------------------------------------\n",
+    //       _selected_columns.size());
     auto &selected_columns = _selected_columns[level];
-    printf("RGSL : After Selecting column \n");
+    // printf("RGSL : After Selecting column \n");
     // Association between each ORC column and its cudf::column
     orc_col_map.emplace_back(_metadata->get_num_cols(), -1);
     std::vector<column_meta> list_col;
@@ -862,7 +865,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       if (col_type == type_id::LIST) list_col.emplace_back(col);
     }
 
-    printf("RGSL : After forming column types \n");
+    // printf("RGSL : After forming column types \n");
 
     // If no rows or stripes to read, return empty columns
     if (num_rows <= 0 || selected_stripes.empty()) {
@@ -897,7 +900,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       size_t num_dict_entries = 0;
       size_t num_rowgroups    = 0;
       int stripe_idx          = 0;
-      printf("RGSL : Before gathering stream \n");
+      // printf("RGSL : Before gathering stream \n");
 
       for (auto &stripe_source_mapping : selected_stripes) {
         // Iterate through the source files selected stripes
@@ -951,59 +954,63 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             }
           }
 
-          printf("RGSL : After gathering streams num of columns %lu,  number of stripes %lu\n",
+          // printf("RGSL : After gathering streams num of columns %lu,  number of stripes %lu\n",
                  num_columns,
                  selected_stripes.size());
-          // Update chunks to reference streams pointers
-          uint32_t max_num_rows = 0;
-          for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
-            auto &chunk = chunks[stripe_idx * num_columns + col_idx];
-            printf("RGSL : stripe idx %d num columns %lu colidx %lu \n",
+                 // Update chunks to reference streams pointers
+                 uint32_t max_num_rows = 0;
+                 for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
+                   auto &chunk = chunks[stripe_idx * num_columns + col_idx];
+                   // printf("RGSL : stripe idx %d num columns %lu colidx %lu \n",
                    stripe_idx,
                    num_columns,
                    col_idx);
-            chunk.start_row =
-              (level == 0) ? stripe_start_row : child_start_row[stripe_idx * num_columns + col_idx];
-            printf("RGSL : start row is %u \n", chunk.start_row);
-            printf("RGSL : After start row \n");
-            chunk.num_rows = (level == 0)
-                               ? stripe_info->numberOfRows
-                               : num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
-            printf("RGSL : chunk.column_stripe_num_rows %u \n", chunk.num_rows);
-            printf("RGSL : After child row \n");
-            chunk.column_num_rows = (level == 0) ? num_rows : num_child_rows[col_idx];
-            printf("RGSL : chunk.column_num_rows %u \n", chunk.column_num_rows);
-            printf("RGSL : After child rows row \n");
-            chunk.encoding_kind = stripe_footer->columns[selected_columns[col_idx].id].kind;
-            chunk.type_kind     = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
-                                .ff.types[selected_columns[col_idx].id]
-                                .kind;
-            chunk.decimal_scale = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
-                                    .ff.types[selected_columns[col_idx].id]
-                                    .scale;
-            chunk.rowgroup_id = num_rowgroups;
-            chunk.dtype_len   = (column_types[col_idx].id() == type_id::STRING)
-                                ? sizeof(std::pair<const char *, size_t>)
-                                : ((column_types[col_idx].id() == type_id::LIST) or
-                                   (column_types[col_idx].id() == type_id::STRUCT))
-                                    ? sizeof(int32_t)
-                                    : cudf::size_of(column_types[col_idx]);
-            if (chunk.type_kind == orc::TIMESTAMP) {
-              chunk.ts_clock_rate = to_clockrate(_timestamp_type.id());
-            }
-            for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
-              chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
-            }
-            if (level > 0 and max_num_rows > chunk.num_rows) { max_num_rows = chunk.num_rows; }
-          }
-          auto num_rows_per_stripe = (level == 0) ? stripe_info->numberOfRows : max_num_rows;
-          stripe_start_row += num_rows_per_stripe;
-          if (use_index) {
-            num_rowgroups += (num_rows_per_stripe + _metadata->get_row_index_stride() - 1) /
-                             _metadata->get_row_index_stride();
-          }
+                   chunk.start_row = (level == 0)
+                                       ? stripe_start_row
+                                       : child_start_row[stripe_idx * num_columns + col_idx];
+                   // printf("RGSL : start row is %u \n", chunk.start_row);
+                   // printf("RGSL : After start row \n");
+                   chunk.num_rows =
+                     (level == 0) ? stripe_info->numberOfRows
+                                  : num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
+                   // printf("RGSL : chunk.column_stripe_num_rows %u at %lu\n", chunk.num_rows,
+                   // col_idx); printf("RGSL : After child row \n");
+                   chunk.column_num_rows = (level == 0) ? num_rows : num_child_rows[col_idx];
+                   // printf("RGSL : chunk.column_num_rows %u at %lu\n", chunk.column_num_rows,
+                   // col_idx); printf("RGSL : After child rows row \n");
+                   chunk.encoding_kind = stripe_footer->columns[selected_columns[col_idx].id].kind;
+                   chunk.type_kind = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
+                                       .ff.types[selected_columns[col_idx].id]
+                                       .kind;
+                   chunk.decimal_scale =
+                     _metadata->per_file_metadata[stripe_source_mapping.source_idx]
+                       .ff.types[selected_columns[col_idx].id]
+                       .scale;
+                   chunk.rowgroup_id = num_rowgroups;
+                   chunk.dtype_len   = (column_types[col_idx].id() == type_id::STRING)
+                                       ? sizeof(std::pair<const char *, size_t>)
+                                       : ((column_types[col_idx].id() == type_id::LIST) or
+                                          (column_types[col_idx].id() == type_id::STRUCT))
+                                           ? sizeof(int32_t)
+                                           : cudf::size_of(column_types[col_idx]);
+                   if (chunk.type_kind == orc::TIMESTAMP) {
+                     chunk.ts_clock_rate = to_clockrate(_timestamp_type.id());
+                   }
+                   for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
+                     chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
+                   }
+                   if (level > 0 and max_num_rows > chunk.num_rows) {
+                     max_num_rows = chunk.num_rows;
+                   }
+                 }
+                 auto num_rows_per_stripe = (level == 0) ? stripe_info->numberOfRows : max_num_rows;
+                 stripe_start_row += num_rows_per_stripe;
+                 if (use_index) {
+                   num_rowgroups += (num_rows_per_stripe + _metadata->get_row_index_stride() - 1) /
+                                    _metadata->get_row_index_stride();
+                 }
 
-          stripe_idx++;
+                 stripe_idx++;
         }
       }
 
@@ -1013,7 +1020,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         rmm::device_uvector<gpu::RowGroup> row_groups(num_rowgroups * num_columns, stream);
         CUDA_TRY(cudaMemsetAsync(
           row_groups.data(), 0, row_groups.size() * sizeof(gpu::RowGroup), stream.value()));
-        printf("RGSL : stream_info size is %lu \n", stream_info.size());
+        // printf("RGSL : stream_info size is %lu \n", stream_info.size());
         if (_metadata->per_file_metadata[0].ps.compression != orc::NONE) {
           auto decomp_data =
             decompress_stripe_data(chunks,
@@ -1040,7 +1047,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           }
         }
 
-        printf("RGSL : After the Row group index formed %d \n", use_index);
+        // printf("RGSL : After the Row group index formed %d \n", use_index);
 
         // Setup table for converting timestamp columns from local to UTC time
         auto const tz_table =
@@ -1063,7 +1070,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, stream, _mr);
         }
 
-        printf("RGSL: Just before decoding \n");
+        // printf("RGSL: Just before decoding \n");
         decode_stream_data(chunks,
                            num_dict_entries,
                            skip_rows,
@@ -1073,7 +1080,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                            _metadata->get_row_index_stride(),
                            out_buffers[level],
                            stream);
-        printf("RGSL: Just After decoding \n");
+        // printf("RGSL: Just After decoding \n");
 
         // Extract information to process child columns
         if (list_col.size()) {
@@ -1087,39 +1094,39 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                level,
                                stream);
         }
-        printf("RGSL: Just aggreagte buffer \n");
-        printf(
-          "RGSL : sizes of num_child_rows %lu, child_start_row %lu, num_child_rows_per_stripe %lu "
-          "\n",
-          num_child_rows.size(),
-          child_start_row.size(),
-          num_child_rows_per_stripe.size());
+        // printf("RGSL: Just aggreagte buffer \n");
+        // printf(
+        //  "RGSL : sizes of num_child_rows %lu, child_start_row %lu, num_child_rows_per_stripe %lu
+        //  "
+        //  "\n",
+        //  num_child_rows.size(),
+        //  child_start_row.size(),
+        // num_child_rows_per_stripe.size());
       }
 
-      for (auto &out_buffer : out_buffers[level]) {
-        printf("RGSL : Before update \n");
-        if (out_buffer.type.id() == type_id::LIST) {
-          auto data = static_cast<size_type *>(out_buffer.data());
-          thrust::exclusive_scan(rmm::exec_policy(stream), data, data + out_buffer.size, data);
-        }
-        printf("RGSL : After update \n");
-      }
-      printf("RGSL : After for ********************************************\n");
+      // TO-DO: Replace this with exclusive scan that will work on all list columns for that level
+      std::for_each(
+        out_buffers[level].begin(), out_buffers[level].end(), [stream](auto &out_buffer) {
+          if (out_buffer.type.id() == type_id::LIST) {
+            auto data = static_cast<size_type *>(out_buffer.data());
+            thrust::exclusive_scan(rmm::exec_policy(stream), data, data + out_buffer.size, data);
+          }
+        });
     }
   }
 
   std::vector<column_name_info> schema_info;
-  printf("RGSL : create_columns \n");
+  // printf("RGSL : create_columns \n");
   create_columns(out_buffers, out_columns, schema_info, orc_col_map, stream, _mr);
 
   // Return column names (must match order of returned columns)
   out_metadata.column_names.resize(schema_info.size());
   for (size_t i = 0; i < schema_info.size(); i++) {
-    printf("RGSL : name is %s number of children are %lu\n",
-           schema_info[i].name.c_str(),
-           schema_info[i].children.size());
+    // printf("RGSL : name is %s number of children are %lu\n",
+    //       schema_info[i].name.c_str(),
+    //       schema_info[i].children.size());
     for (size_t j = 0; j < schema_info[i].children.size(); j++) {
-      printf("RGSL : child name is %s\n", schema_info[i].children[j].name.c_str());
+      // printf("RGSL : child name is %s\n", schema_info[i].children[j].name.c_str());
     }
     out_metadata.column_names[i] = schema_info[i].name;
   }
