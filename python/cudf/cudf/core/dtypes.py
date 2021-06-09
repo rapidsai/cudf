@@ -12,10 +12,11 @@ from pandas.core.arrays._arrow_utils import ArrowIntervalType
 
 import cudf
 from cudf._typing import Dtype
+from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 
 
-class _BaseDtype(ExtensionDtype):
+class _BaseDtype(ExtensionDtype, Serializable):
     # Base type for all cudf-specific dtypes
     pass
 
