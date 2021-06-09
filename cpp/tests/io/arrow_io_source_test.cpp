@@ -22,10 +22,12 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/json.hpp>
 #include <cudf/io/parquet.hpp>
 
 #include <arrow/io/api.h>
 
+#include <fstream>
 #include <memory>
 #include <string>
 
@@ -37,7 +39,32 @@ auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
 struct ArrowIOTest : public cudf::test::BaseFixture {
 };
 
-TEST_F(ArrowIOTest, S3Filesystem)
+TEST_F(ArrowIOTest, URIFileSystem)
+{
+  const std::string file_name = temp_env->get_temp_dir() + "JsonLinesFileTest.json";
+  std::ofstream outfile(file_name, std::ofstream::out);
+  outfile << "[11, 1.1]\n[22, 2.2]";
+  outfile.close();
+
+  std::string file_uri = "file://" + file_name;
+  std::unique_ptr<cudf::io::arrow_io_source> datasource =
+    std::make_unique<cudf::io::arrow_io_source>(file_uri);
+
+  // Populate the JSON Reader Options
+  cudf::io::json_reader_options options = 
+    cudf::io::json_reader_options::builder(cudf::io::source_info(datasource.get()))
+      .lines(true);
+
+  // Read the JSON file from the LocalFileSystem
+  cudf::io::table_with_metadata tbl = cudf::io::read_json(options);
+
+  ASSERT_EQ(2, tbl.tbl->num_columns());
+  ASSERT_EQ(2, tbl.tbl->num_rows());
+}
+
+/*
+// This S3 object is currently to large to run in CI. This test can be ran locally however
+TEST_F(ArrowIOTest, URIFileSystem)
 {
   std::string s3_uri = "s3://ursa-labs-taxi-data/2010/06/data.parquet?region=us-east-2";
   std::unique_ptr<cudf::io::arrow_io_source> datasource =
@@ -56,5 +83,6 @@ TEST_F(ArrowIOTest, S3Filesystem)
   ASSERT_EQ(1, tbl.tbl->num_columns());      // Only single column specified in reader_options
   ASSERT_EQ(14825128, tbl.tbl->num_rows());  // known number of rows from the S3 file
 }
+*/
 
 CUDF_TEST_PROGRAM_MAIN()
