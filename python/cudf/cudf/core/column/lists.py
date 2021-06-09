@@ -178,12 +178,14 @@ class ListColumn(ColumnBase):
 
     def serialize(self):
         header = {}
+        frames = []
         header["type-serialized"] = pickle.dumps(type(self))
-        header["dtype"] = pickle.dumps(self.dtype)
         header["null_count"] = self.null_count
         header["size"] = self.size
+        header["dtype"], dtype_frames = self.dtype.serialize()
+        header["dtype_frames_count"] = len(dtype_frames)
+        frames.extend(dtype_frames)
 
-        frames = []
         sub_headers = []
 
         for item in self.children:
@@ -208,9 +210,14 @@ class ListColumn(ColumnBase):
         else:
             mask = None
 
+        # Deserialize dtype
+        dtype = pickle.loads(header["dtype"]["type-serialized"]).deserialize(
+            header["dtype"], frames[: header["dtype_frames_count"]]
+        )
+
         # Deserialize child columns
         children = []
-        f = 0
+        f = header["dtype_frames_count"]
         for h in header["subheaders"]:
             fcount = h["frame_count"]
             child_frames = frames[f : f + fcount]
@@ -221,7 +228,7 @@ class ListColumn(ColumnBase):
         # Materialize list column
         return column.build_column(
             data=None,
-            dtype=pickle.loads(header["dtype"]),
+            dtype=dtype,
             mask=mask,
             children=tuple(children),
             size=header["size"],
