@@ -38,12 +38,12 @@ namespace detail {
  * reflected here. The regexec function updates and manages this state data.
  */
 struct alignas(8) relist {
-  int16_t size;
-  int16_t listsize;
+  int16_t size{};
+  int16_t listsize{};
   int32_t reserved;
-  int2* ranges;       // pair per instruction
-  int16_t* inst_ids;  // one per instruction
-  u_char* mask;       // bit per instruction
+  int2* ranges{};       // pair per instruction
+  int16_t* inst_ids{};  // one per instruction
+  u_char* mask{};       // bit per instruction
 
   __host__ __device__ inline static int32_t data_size_for(int32_t insts)
   {
@@ -60,12 +60,10 @@ struct alignas(8) relist {
 
   __host__ __device__ inline relist() {}
 
-  __host__ __device__ inline void set_data(int16_t insts, u_char* data = nullptr)
+  __host__ __device__ inline relist(int16_t insts, u_char* data = nullptr) : listsize(insts)
   {
-    listsize    = insts;
-    u_char* ptr = (u_char*)data;
-    if (ptr == nullptr) ptr = (reinterpret_cast<u_char*>(this)) + sizeof(relist);
-    ranges = reinterpret_cast<int2*>(ptr);
+    auto ptr = data == nullptr ? reinterpret_cast<u_char*>(this) + sizeof(relist) : data;
+    ranges   = reinterpret_cast<int2*>(ptr);
     ptr += listsize * sizeof(ranges[0]);
     inst_ids = reinterpret_cast<int16_t*>(ptr);
     ptr += listsize * sizeof(inst_ids[0]);
@@ -111,8 +109,17 @@ struct alignas(8) relist {
 struct reljunk {
   relist* list1;
   relist* list2;
-  int32_t starttype;
-  char32_t startchar;
+  int32_t starttype{};
+  char32_t startchar{};
+
+  __host__ __device__ reljunk(relist* list1, relist* list2, int32_t stype, char32_t schar)
+    : list1(list1), list2(list2)
+  {
+    if (starttype == CHAR || starttype == BOL) {
+      starttype = stype;
+      startchar = schar;
+    }
+  }
 };
 
 __device__ inline void swaplist(relist*& l1, relist*& l2)
@@ -156,22 +163,6 @@ __device__ inline bool reclass_device::is_match(char32_t ch, const uint8_t* code
     return true;
   //
   return false;
-}
-
-/**
- * @brief Set the device data to be used for holding the state data of a string.
- *
- * With one thread per string, the stack is used to maintain state when evaluating the string.
- * With large regex patterns, the normal stack is not always practical.
- * This mechanism allows an alternate buffer of device memory to be used in place of the stack
- * for the state data.
- *
- * Two distinct buffers are required for the state data.
- */
-__device__ inline void reprog_device::set_stack_mem(u_char* s1, u_char* s2)
-{
-  _stack_mem1 = s1;
-  _stack_mem2 = s2;
 }
 
 __device__ inline reinst* reprog_device::get_inst(int32_t idx) const
@@ -370,52 +361,57 @@ __device__ inline int32_t reprog_device::regexec(
   return match;
 }
 
+template <int stack_size>
 __device__ inline int32_t reprog_device::find(int32_t idx,
                                               string_view const& dstr,
                                               int32_t& begin,
                                               int32_t& end)
 {
-  int32_t rtn = call_regexec(idx, dstr, begin, end);
+  int32_t rtn = call_regexec<stack_size>(idx, dstr, begin, end);
   if (rtn <= 0) begin = end = -1;
   return rtn;
 }
 
+template <int stack_size>
 __device__ inline int32_t reprog_device::extract(
   int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t group_id)
 {
   end = begin + 1;
-  return call_regexec(idx, dstr, begin, end, group_id + 1);
+  return call_regexec<stack_size>(idx, dstr, begin, end, group_id + 1);
 }
 
+template <int stack_size>
 __device__ inline int32_t reprog_device::call_regexec(
   int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t group_id)
 {
-  reljunk jnk;
-  jnk.starttype = 0;
-  jnk.startchar = 0;
-  int type      = get_inst(_startinst_id)->type;
-  if (type == CHAR || type == BOL) {
-    jnk.starttype = type;
-    jnk.startchar = get_inst(_startinst_id)->u1.c;
-  }
+  u_char data1[stack_size], data2[stack_size];
 
-  if (_relists_mem == 0) {
-    relist relist1;
-    relist relist2;
-    jnk.list1 = &relist1;
-    jnk.list2 = &relist2;
-    jnk.list1->set_data(static_cast<int16_t>(_insts_count), _stack_mem1);
-    jnk.list2->set_data(static_cast<int16_t>(_insts_count), _stack_mem2);
-    return regexec(dstr, jnk, begin, end, group_id);
-  }
+  auto const stype = get_inst(_startinst_id)->type;
+  auto const schar = get_inst(_startinst_id)->u1.c;
 
-  auto relists_size = relist::alloc_size(_insts_count);
-  u_char* drel      = reinterpret_cast<u_char*>(_relists_mem);  // beginning of relist buffer;
-  drel += (idx * relists_size * 2);                             // two relist ptrs in reljunk:
-  jnk.list1 = reinterpret_cast<relist*>(drel);                  // - first one
-  jnk.list2 = reinterpret_cast<relist*>(drel + relists_size);   // - second one
-  jnk.list1->set_data(static_cast<int16_t>(_insts_count));      // essentially this is
-  jnk.list2->set_data(static_cast<int16_t>(_insts_count));      // substitute ctor call
+  relist list1(static_cast<int16_t>(_insts_count), data1);
+  relist list2(static_cast<int16_t>(_insts_count), data2);
+
+  reljunk jnk(&list1, &list2, stype, schar);
+  return regexec(dstr, jnk, begin, end, group_id);
+}
+
+template <>
+__device__ inline int32_t reprog_device::call_regexec<RX_STACK_ANY>(
+  int32_t idx, string_view const& dstr, int32_t& begin, int32_t& end, int32_t group_id)
+{
+  auto const stype = get_inst(_startinst_id)->type;
+  auto const schar = get_inst(_startinst_id)->u1.c;
+
+  auto const relists_size = relist::alloc_size(_insts_count);
+  u_char* listmem         = reinterpret_cast<u_char*>(_relists_mem);  // beginning of relist buffer;
+  listmem += (idx * relists_size * 2);                                // two relist ptrs in reljunk:
+
+  // run ctor on assigned memory buffer
+  relist* list1 = new (listmem) relist(static_cast<int16_t>(_insts_count));
+  relist* list2 = new (listmem + relists_size) relist(static_cast<int16_t>(_insts_count));
+
+  reljunk jnk(list1, list2, stype, schar);
   return regexec(dstr, jnk, begin, end, group_id);
 }
 

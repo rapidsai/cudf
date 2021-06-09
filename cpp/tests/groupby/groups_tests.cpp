@@ -18,6 +18,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/types.hpp>
@@ -57,7 +58,7 @@ TEST_F(groupby_group_keys_test, all_null_keys)
 {
   using K = int32_t;
 
-  fixed_width_column_wrapper<K> keys({1, 1, 2, 3, 1, 2}, all_null());
+  fixed_width_column_wrapper<K> keys({1, 1, 2, 3, 1, 2}, iterator_all_nulls());
   fixed_width_column_wrapper<K> expect_grouped_keys{};
   std::vector<size_type> expect_group_offsets = {0};
   test_groups(keys, expect_grouped_keys, expect_group_offsets);
@@ -82,7 +83,7 @@ TYPED_TEST(groupby_group_keys_and_values_test, some_nulls)
   using V = TypeParam;
 
   fixed_width_column_wrapper<K> keys({1, 1, 3, 2, 1, 2}, {1, 0, 1, 0, 0, 1});
-  fixed_width_column_wrapper<K> expect_grouped_keys({1, 2, 3}, all_valid());
+  fixed_width_column_wrapper<K> expect_grouped_keys({1, 2, 3}, iterator_no_null());
   fixed_width_column_wrapper<V> values({1, 2, 3, 4, 5, 6});
   fixed_width_column_wrapper<V> expect_grouped_values({1, 6, 3});
   std::vector<size_type> expect_group_offsets = {0, 1, 2, 3};

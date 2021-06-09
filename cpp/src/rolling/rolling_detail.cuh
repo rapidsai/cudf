@@ -746,11 +746,8 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
                                                      stream,
                                                      rmm::mr::get_current_device_resource());
 
-    result = lists::detail::drop_list_duplicates(lists_column_view(collected_list->view()),
-                                                 null_equality::EQUAL,
-                                                 nan_equality::UNEQUAL,
-                                                 stream,
-                                                 mr);
+    result = lists::detail::drop_list_duplicates(
+      lists_column_view(collected_list->view()), agg._nulls_equal, agg._nans_equal, stream, mr);
   }
 
   std::unique_ptr<column> get_result()
