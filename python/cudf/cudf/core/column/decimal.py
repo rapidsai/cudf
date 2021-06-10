@@ -147,7 +147,11 @@ class DecimalColumn(NumericalBaseColumn):
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DecimalColumn":
-        if dtype.scale < self.dtype.scale:
+        if (
+            isinstance(dtype, Decimal64Dtype)
+            and isinstance(self.dtype, Decimal64Dtype)
+            and dtype.scale < self.dtype.scale
+        ):
             warn(
                 "cuDF truncates when downcasting decimals to a lower scale. "
                 "To round, use Series.round() or DataFrame.round()."
