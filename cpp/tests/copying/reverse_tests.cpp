@@ -130,7 +130,6 @@ TEST_F(ReverseStringTestFixture, ReverseNullable)
 {
   constexpr cudf::size_type num_values{20};
 
-  // generating string column and valid inputs
   std::vector<std::string> input_values(num_values);
   std::vector<bool> input_valids(num_values);
   for (size_t i{0}; i < num_values; i++) {
@@ -138,7 +137,6 @@ TEST_F(ReverseStringTestFixture, ReverseNullable)
     input_valids[i] = (i % 2) == 0 ? true : false;
   }
 
-  // we then generate the expected values
   std::vector<std::string> expected_values;
   std::vector<bool> expected_valids;
   for (int i = 19; i > -1; i--) {
@@ -146,7 +144,6 @@ TEST_F(ReverseStringTestFixture, ReverseNullable)
     expected_valids.push_back(input_valids[i]);
   }
 
-  // we then create the necessary tables
   auto input = cudf::test::strings_column_wrapper(
     input_values.begin(), input_values.end(), input_valids.begin());
 
