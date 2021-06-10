@@ -94,7 +94,7 @@ def cut(
     Passing a Series as an input returns a Series with categorical dtype:
     >>> s = cudf.Series(np.array([2, 4, 6, 8, 10]),
     ...        index=['a', 'b', 'c', 'd', 'e'])
-    >>> pd.cut(s, 3)
+    >>> cudf.cut(s, 3)
     """
     left_inclusive = False
     right_inclusive = True
