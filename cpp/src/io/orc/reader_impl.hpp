@@ -140,15 +140,19 @@ class reader::impl {
                                   std::vector<std::vector<column_buffer>>& col_buffers,
                                   std::vector<std::vector<int32_t>> const& orc_col_map,
                                   int level,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr);
+                                  rmm::cuda_stream_view stream);
 
   void create_columns(std::vector<std::vector<column_buffer>>& col_buffers,
                       std::vector<std::unique_ptr<column>>& out_columns,
                       std::vector<column_name_info>& schema_info,
                       std::vector<std::vector<int32_t>> const& orc_col_map,
-                      rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr);
+                      rmm::cuda_stream_view stream);
+
+  std::unique_ptr<column> create_empty_column(int32_t orc_col_id,
+                                              column_name_info& schema_info,
+                                              rmm::cuda_stream_view stream);
+
+  column_name_info assemble_schema_info(int32_t orc_col_id);
 
  private:
   rmm::mr::device_memory_resource* _mr = nullptr;
