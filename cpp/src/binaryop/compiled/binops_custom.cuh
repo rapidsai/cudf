@@ -19,6 +19,8 @@
 #include "binary_ops.hpp"
 #include "operation.cuh"
 
+#include <cudf/column/column_device_view.cuh>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 

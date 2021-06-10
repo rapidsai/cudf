@@ -18,6 +18,7 @@
 #include "operation.cuh"
 
 #include <cudf/binaryop.hpp>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
