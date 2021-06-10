@@ -299,9 +299,9 @@ cdef _set_decimal64_from_scalar(unique_ptr[scalar]& s,
     )
 
 cdef _set_list_from_pylist(unique_ptr[scalar]& s,
-                          object value,
-                          object dtype,
-                          bool valid=True):
+                           object value,
+                           object dtype,
+                           bool valid=True):
     cdef Column col = cudf.core.column.as_column(
         pa.array(value)
     )
