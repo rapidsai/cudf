@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <algorithm>
 #include <iostream>
 #include <iterator>
 #include <limits>
@@ -347,14 +348,14 @@ struct block_info {
  * @param output_data pointer to output data
  * 
  */
-__global__ void copy_from_columns(const cudf::size_type num_rows,
-                                  const cudf::size_type num_columns,
+__global__ void copy_from_columns(const size_type num_rows,
+                                  const size_type num_columns,
                                   const int8_t **input_data,
-                                  const cudf::bitmask_type **input_nm,
-                                  const cudf::size_type *col_sizes,
-                                  const cudf::size_type *col_offsets,
+                                  const bitmask_type **input_nm,
+                                  const size_type *col_sizes,
+                                  const size_type *col_offsets,
                                   const block_info *block_infos,
-                                  const uint64_t *row_offsets,
+                                  const size_type *row_offsets,
                                   int8_t **output_data)
 {
   // We are going to copy the data in two passes.
@@ -365,47 +366,92 @@ __global__ void copy_from_columns(const cudf::size_type num_rows,
   // This has been broken up for us in the block_info struct, so we don't have
   // any calculation to do here, but it is important to note.
 
+  bool debug_print = false;
+  
+  if (debug_print) {
+    printf("%d %d - %d rows, %d columns\n", threadIdx.x, blockIdx.x, num_rows, num_columns);
+    printf("Column Info:\n");
+    for (int i=0; i<num_columns; ++i) {
+      printf("col %d is at %p with size %d and offset %d\n", i, input_data[i], col_sizes[i], col_offsets[i]);
+    }
+    printf("block infos are at %p and my index is %d\n", block_infos, blockIdx.x);
+/*    printf("Row Offsets:\n");
+    for (int i=0; i<num_rows; ++i) {
+      printf("%d: %d\n", i, row_offsets[i]);
+    }*/
+    printf("output data to %p\n", output_data[block_infos[blockIdx.x].buffer_num]);
+  }
   auto block = block_infos[blockIdx.x];
   extern __shared__ int8_t shared_data[];
   uint64_t const output_start_offset = col_offsets[block.start_col] + row_offsets[block.start_row];
   uint8_t const dest_shim_offset = reinterpret_cast<uint64_t>(&output_data[0][output_start_offset]) & 7; // offset for alignment shim in order to match shared memory with final dest
-
-    printf("copying from column %d to column %d with rows %d to row %d(grid dim %d, blockIdx %d)\n", block.start_col, block.end_col, block.start_row, block.end_row, gridDim.x, blockIdx.x);
-
+  if (debug_print) {
+    printf("outputting to offset %lu\n", output_start_offset);
+    printf("dest shim offset is %d\n", dest_shim_offset);
+    printf("Shared data is %p-%p\n", shared_data, shared_data + (48 * 1024));
+  }
   // each thread is responsible for every threadcount rows of data.
   // the data is copies into shared memory in the final layout.
   auto const shmem_row_size = align_offset(col_offsets[block.end_col] + col_sizes[block.end_col] - col_offsets[block.start_col] + dest_shim_offset, 8); // 8 byte alignment required for shared memory rows
   auto const validity_offset = col_offsets[num_columns];
+  if (debug_print) {
+    printf("col_offsets[%d] = %d, col_sizes[%d] = %d, col_offsets[%d] = %d\n", block.end_col, col_offsets[block.end_col], block.end_col, col_sizes[block.end_col], block.start_col, col_offsets[block.start_col]);
+    printf("shmem row size %d\n", shmem_row_size);
+    printf("validity offset is %d\n", validity_offset);
+    printf("starting at %d,%d and going to %d, %d\n", block.start_col, block.start_row, block.end_col, block.end_row);
+  }
   for (int col=block.start_col; col<=block.end_col; ++col) {
     /*if (!col_is_variable) */{
       uint64_t col_offset = 0;
       cudf::size_type col_size = col_sizes[col];
       auto const dest_col_offset = col_offsets[col] - col_offsets[block.start_col] + dest_shim_offset;
+      if (debug_print) {
+        printf("dest col offset %d\n", dest_col_offset);
+      }
       for (int row=block.start_row + threadIdx.x; row<block.end_row; row+=gridDim.x) {
-        int8_t *shmem_dest = &shared_data[dest_col_offset + shmem_row_size * row];
+        if (debug_print) {
+          printf("shmem row %d at offset %d\n", row - block.start_row, (row - block.start_row) * shmem_row_size);
+        }
+        int8_t *shmem_dest = &shared_data[dest_col_offset + shmem_row_size * (row - block.start_row)];
         switch (col_size) {
           case 1: {
-            *shmem_dest = input_data[col][row];
+            if (debug_print) {
+              printf("%p <- byte %d\n", shmem_dest, input_data[col][row]);
+            }
+              *shmem_dest = input_data[col][row];
             break;
           }
           case 2: {
             const int16_t *short_col_input        = reinterpret_cast<const int16_t *>(input_data[col]);
+            if (debug_print) {
+              printf("%p <- short %d\n", shmem_dest, short_col_input[row]);
+            }
             *reinterpret_cast<int16_t *>(shmem_dest) = short_col_input[row];
             break;
           }
           case 4: {
             const int32_t *int_col_input          = reinterpret_cast<const int32_t *>(input_data[col]);
+            if (debug_print) {
+              printf("shmem[%d][%d] - %p <- int %d\n", row, col, shmem_dest, int_col_input[row]);
+            }
             *reinterpret_cast<int32_t *>(shmem_dest) = int_col_input[row];
             break;
           }
           case 8: {
             const int64_t *long_col_input         = reinterpret_cast<const int64_t *>(input_data[col]);
+            if (debug_print) {
+              printf("%p <- long %lu\n", shmem_dest, long_col_input[row]);
+            }
             *reinterpret_cast<int64_t *>(shmem_dest) = long_col_input[row];
             break;
           }
           default: {
             cudf::size_type input_offset = col_size * row;
-            // TODO this should just not be supported for fixed width columns, but just in case...
+            if (debug_print) {
+                printf("byte for byte copy due to size %d\n", col_size);
+                printf("%p <- input_data[%d] which is %d\n", shmem_dest, input_offset, input_data[col][input_offset]);
+              }
+              // TODO this should just not be supported for fixed width columns, but just in case...
             for (cudf::size_type b = 0; b < col_size; b++) {
               shmem_dest[b] = input_data[col][b + input_offset];
             }
@@ -676,6 +722,12 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows2(cudf::table_view con
   CUDA_TRY(
     cudaDeviceGetAttribute(&shmem_limit_per_block, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
 
+  #if defined(DEBUG)
+  size_t free, total;
+  cudaMemGetInfo( &free, &total );
+  printf("%lu/%lu Memory", free, total);
+  #endif
+
   // break up the work into blocks, which are a starting and ending row/col #.
   // this window size is calculated based on the shared memory size available
   // we want a single block to fill up the entire shared memory space available
@@ -692,7 +744,7 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows2(cudf::table_view con
   // windows so the windows can be properly cut around them.
 
   std::vector<size_type> row_sizes; // size of each row in bytes including any alignment padding
-  std::vector<uint64_t> row_offsets; // offset from the start of the data to this row
+  std::vector<size_type> row_offsets; // offset from the start of the data to this row
   std::vector<size_type> column_sizes;  // byte size of each column
   std::vector<size_type> column_starts; // offset of column inside a row including alignment
   std::vector<column_view> variable_width_columns; // list of the variable width columns in the table
@@ -821,7 +873,7 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows2(cudf::table_view con
       block_infos.emplace_back(
         detail::block_info{start_col,
                    current_window_start_row,
-                   start_col + end_col,
+                   end_col,
                    std::min(current_window_start_row + window_height - 1, num_rows), current_window_row_batch});
 
       i += window_height;
@@ -889,23 +941,20 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows2(cudf::table_view con
   auto dev_block_infos = detail::copy_to_dev_async2(block_infos, stream, mr);
   auto dev_row_offsets   = detail::copy_to_dev_async2(row_offsets, stream, mr);
 
-  std::vector<rmm::device_buffer> output_data;
+  std::vector<rmm::device_buffer> output_buffers;
+  std::vector<int8_t *> output_data;
   output_data.reserve(row_batches.size());
   for (uint i=0; i<row_batches.size(); ++i) {
-    output_data.push_back(rmm::device_buffer(row_batches[i].num_bytes, stream, mr));
+    rmm::device_buffer temp(row_batches[i].num_bytes, stream, mr);
+    output_data.push_back(static_cast<int8_t *>(temp.data()));
+    output_buffers.push_back(std::move(temp));
   }
-  auto dev_output_data   = detail::copy_to_dev_async2(row_offsets, stream, mr);
+  auto dev_output_data   = detail::copy_to_dev_async2(output_data, stream, mr);
 
   // blast through the entire table and convert it
-  dim3 blocks;
-  dim3 threads;
-  blocks.x  = block_infos.size();
-  blocks.y  = 0;
-  blocks.z  = 0;
-  threads.x = 1024;
-  threads.y = 0;
-  threads.z = 0;
-  detail::copy_from_columns<<<blocks, threads, shmem_limit_per_block, stream.value()>>>(num_rows,
+  dim3 blocks(block_infos.size());
+  dim3 threads(1024);
+  copy_from_columns<<<blocks, threads, shmem_limit_per_block, stream.value()>>>(num_rows,
                                                                                 num_columns,
                                                                                 dev_input_data.data(),
                                                                                 dev_input_nm.data(),
@@ -932,14 +981,14 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows2(cudf::table_view con
     }
     offset_offset += row_batches[i].row_count;
 
-    auto dev_offsets   = detail::copy_to_dev_async2(offset_vals, stream, mr);
+    auto dev_offsets   = detail::copy_to_dev_async2(offset_vals, stream, mr);  
     auto offsets =
       std::make_unique<column>(data_type{type_id::INT32}, (size_type)offset_vals.size(), dev_offsets.release());
 
     auto data =
       std::make_unique<column>(data_type{cudf::type_id::INT8},
                                 row_batches[i].num_bytes,
-                                std::move(output_data[i]));
+                                std::move(output_buffers[i]));
 
     ret.push_back(cudf::make_lists_column(row_batches[i].row_count,
       std::move(offsets),
