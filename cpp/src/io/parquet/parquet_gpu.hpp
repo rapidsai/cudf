@@ -461,7 +461,7 @@ dremel_data get_dremel_data(column_view h_col,
  * @param[in] num_columns Number of columns
  * @param[in] fragment_size Number of rows per fragment
  * @param[in] num_rows Number of rows per column
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use
  */
 void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
                        device_span<parquet_column_device_view const> col_desc,
@@ -475,12 +475,56 @@ void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
  * @param[out] groups Statistics groups [num_columns x num_fragments]
  * @param[in] fragments Page fragments [num_columns x num_fragments]
  * @param[in] col_desc Column description [num_columns]
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] stream CUDA stream to use
  */
 void InitFragmentStatistics(cudf::detail::device_2dspan<statistics_group> groups,
                             cudf::detail::device_2dspan<PageFragment const> fragments,
                             device_span<gpu::parquet_column_device_view const> col_desc,
                             rmm::cuda_stream_view stream);
+
+/**
+ * @brief Initialize per-chunk hash maps used for dictionary with sentinel values
+ *
+ * @param chunks Flat span of chunks to intialize hash maps for
+ * @param stream CUDA stream to use
+ */
+void InitializeChunkHashMaps(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
+
+/**
+ * @brief Insert chunk values into their respective hash maps
+ *
+ * @param chunks Column chunks [rowgroup][column]
+ * @param num_rows Number of rows per column
+ * @param stream CUDA stream to use
+ */
+void PopulateChunkHashMaps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                           size_type num_rows,
+                           rmm::cuda_stream_view stream);
+
+/**
+ * @brief Compact dictionary hash map entries into chunk.dict_data
+ *
+ * @param chunks Flat span of chunks to compact hash maps for
+ * @param stream CUDA stream to use
+ */
+void CollectMapEntries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
+
+/**
+ * @brief Get the Dictionary Indices for each row
+ *
+ * For each row of a chunk, gets the indices into chunk.dict_data which contains the value otherwise
+ * stored in input column [row]. Stores these indices into chunk.dict_index.
+ *
+ * Since dict_data itself contains indices into the origical cudf column, this means that
+ * col[row] == col[dict_data[dict_index[row - chunk.start_row]]]
+ *
+ * @param chunks Column chunks [rowgroup][column]
+ * @param num_rows Number of rows per column
+ * @param stream CUDA stream to use
+ */
+void GetDictionaryIndices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                          size_type num_rows,
+                          rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing encoder data pages
@@ -550,28 +594,6 @@ void GatherPages(device_span<EncColumnChunk> chunks,
                  device_span<gpu::EncPage const> pages,
                  rmm::cuda_stream_view stream);
 
-/**
- * @brief Launches kernel for building chunk dictionaries
- *
- * @param[in] chunks Column chunks
- * @param[in] dev_scratch Device scratch data (kDictScratchSize bytes per dictionary)
- * @param[in] stream CUDA stream to use, default 0
- */
-void BuildChunkDictionaries(device_span<EncColumnChunk> chunks,
-                            uint32_t *dev_scratch,
-                            rmm::cuda_stream_view stream);
-
-void InitializeChunkHashMaps(device_span<EncColumnChunk> chunks,
-                             rmm::device_uvector<gpu::slot_type> &,
-                             rmm::cuda_stream_view stream);
-void BuildChunkDictionaries2(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                             size_type num_rows,
-                             rmm::device_uvector<gpu::slot_type> &onemap,
-                             rmm::cuda_stream_view stream);
-void CollectMapEntries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
-void GetDictionaryIndices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                          size_type num_rows,
-                          rmm::cuda_stream_view stream);
 }  // namespace gpu
 }  // namespace parquet
 }  // namespace io

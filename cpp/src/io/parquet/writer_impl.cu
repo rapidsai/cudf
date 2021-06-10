@@ -713,16 +713,6 @@ void writer::impl::init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk> &chu
   chunks.device_to_host(stream, true);
 }
 
-template <typename T>
-void print(rmm::device_uvector<T> const &d_vec, std::string label = "")
-{
-  std::vector<T> h_vec(d_vec.size());
-  cudaMemcpy(h_vec.data(), d_vec.data(), d_vec.size() * sizeof(T), cudaMemcpyDeviceToHost);
-  printf("%s (%lu)\t", label.c_str(), h_vec.size());
-  for (auto &&i : h_vec) std::cout << (int)i << " ";
-  printf("\n");
-}
-
 auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
                                host_span<gpu::parquet_column_device_view const> col_desc,
                                uint32_t num_rows,
@@ -754,8 +744,8 @@ auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
 
   chunks.host_to_device(stream);
 
-  gpu::InitializeChunkHashMaps(chunks.device_view().flat_view(), hash_maps_storage[0], stream);
-  gpu::BuildChunkDictionaries2(chunks, num_rows, hash_maps_storage[0], stream);
+  gpu::InitializeChunkHashMaps(chunks.device_view().flat_view(), stream);
+  gpu::PopulateChunkHashMaps(chunks, num_rows, stream);
 
   chunks.device_to_host(stream);
   stream.synchronize();
