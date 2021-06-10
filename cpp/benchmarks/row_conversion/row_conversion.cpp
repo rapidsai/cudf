@@ -28,7 +28,7 @@ class RowConversion : public cudf::benchmark {
 static void BM_to_row(benchmark::State& state)
 {
   cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
-  auto const table = create_random_table({cudf::type_id::INT8,
+/*  auto const table = create_random_table({cudf::type_id::INT8,
                                           cudf::type_id::INT32,
                                           cudf::type_id::INT16,
                                           cudf::type_id::INT64,
@@ -38,7 +38,10 @@ static void BM_to_row(benchmark::State& state)
                                           cudf::type_id::UINT8,
                                           cudf::type_id::UINT64},
                                          50,
-                                         row_count{n_rows});
+                                         row_count{n_rows});*/
+  auto const table = create_random_table({cudf::type_id::INT32},
+  64,
+  row_count{n_rows});
 
   cudf::size_type total_bytes = 0;
   for (int i = 0; i < table->num_columns(); ++i) {
@@ -98,7 +101,7 @@ static void BM_from_row(benchmark::State& state)
   (::benchmark::State & st) { BM_to_row(st); }   \
   BENCHMARK_REGISTER_F(RowConversion, name)      \
     ->RangeMultiplier(8)                         \
-    ->Ranges({{1 << 16, 1 << 24}})               \
+    ->Ranges({{1 << 6, 1 << 20}})               \
     ->UseManualTime()                            \
     ->Unit(benchmark::kMillisecond);
 
