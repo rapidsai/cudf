@@ -1341,14 +1341,12 @@ class RangeIndex(BaseIndex):
     RangeIndex(start=1, stop=10, step=1, name='a')
     """
 
-    def __new__(
-        cls, start, stop=None, step=1, dtype=None, copy=False, name=None
-    ) -> "RangeIndex":
-
+    def __init__(
+        self, start, stop=None, step=1, dtype=None, copy=False, name=None
+    ):
         if step == 0:
             raise ValueError("Step must not be zero.")
 
-        out = SingleColumnFrame.__new__(cls)
         if isinstance(start, range):
             therange = start
             start = therange.start
@@ -1356,13 +1354,11 @@ class RangeIndex(BaseIndex):
             step = therange.step
         if stop is None:
             start, stop = 0, start
-        out._start = int(start)
-        out._stop = int(stop)
-        out._step = int(step) if step is not None else 1
-        out._index = None
-        out._name = name
-
-        return out
+        self._start = int(start)
+        self._stop = int(stop)
+        self._step = int(step) if step is not None else 1
+        self._index = None
+        self._name = name
 
     @property
     def name(self):
@@ -1679,7 +1675,7 @@ class GenericIndex(BaseIndex):
     name: A string
     """
 
-    def __new__(cls, values, **kwargs):
+    def __init__(self, values, **kwargs):
         """
         Parameters
         ----------
@@ -1690,10 +1686,7 @@ class GenericIndex(BaseIndex):
             Column's name. Otherwise if this name is different from the value
             Column's, the values Column will be cloned to adopt this name.
         """
-        out = SingleColumnFrame.__new__(cls)
-        out._initialize(values, **kwargs)
-
-        return out
+        self._initialize(values, **kwargs)
 
     def _initialize(self, values, **kwargs):
 
