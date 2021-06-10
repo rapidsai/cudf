@@ -18,9 +18,6 @@
 #include "operation.cuh"
 
 #include <cudf/binaryop.hpp>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -33,9 +30,10 @@ namespace compiled {
 /**
  * @brief Converts scalar to column_device_view with single element.
  *
+ * @return pair with column_device_view and column containing any auxilary data to create
+ * column_view from scalar
  */
 struct scalar_as_column_device_view {
-  // column_device_view and column containing any auxilary data to create column_view from scalar
   using return_type = typename std::pair<decltype(column_device_view::create(column_view{})),
                                          std::unique_ptr<column>>;
   template <typename T, std::enable_if_t<(is_fixed_width<T>())>* = nullptr>
@@ -118,6 +116,10 @@ void operator_dispatcher(mutable_column_device_view& out,
     case binary_operator::BITWISE_XOR:          apply_binary_op<ops::BitwiseXor>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
     case binary_operator::LOGICAL_AND:          apply_binary_op<ops::LogicalAnd>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
     case binary_operator::LOGICAL_OR:           apply_binary_op<ops::LogicalOr>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
+    /*
+    case binary_operator::COALESCE:            // Implemented in parent.
+    case binary_operator::GENERIC_BINARY:      // Cannot be compiled, should be called by jit::binary_operation
+    */
     case binary_operator::SHIFT_LEFT:           apply_binary_op<ops::ShiftLeft>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
     case binary_operator::SHIFT_RIGHT:          apply_binary_op<ops::ShiftRight>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
     case binary_operator::SHIFT_RIGHT_UNSIGNED: apply_binary_op<ops::ShiftRightUnsigned>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
@@ -126,9 +128,6 @@ void operator_dispatcher(mutable_column_device_view& out,
     case binary_operator::PMOD:                 apply_binary_op<ops::PMod>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
     case binary_operator::NULL_MAX:             apply_binary_op<ops::NullMax>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
     case binary_operator::NULL_MIN:             apply_binary_op<ops::NullMin>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
-    /*
-    case binary_operator::GENERIC_BINARY:       apply_binary_op<ops::UserDefinedOp>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
-    */
     default:;
   }
   // clang-format on
@@ -153,13 +152,13 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
 {
-  auto [lhsd, misc] = type_dispatcher(lhs.type(),
-                                      scalar_as_column_device_view{},
-                                      lhs,
-                                      stream,
-                                      rmm::mr::get_current_device_resource());
-  auto rhsd         = column_device_view::create(rhs, stream);
-  auto outd         = mutable_column_device_view::create(out, stream);
+  auto [lhsd, aux] = type_dispatcher(lhs.type(),
+                                     scalar_as_column_device_view{},
+                                     lhs,
+                                     stream,
+                                     rmm::mr::get_current_device_resource());
+  auto rhsd        = column_device_view::create(rhs, stream);
+  auto outd        = mutable_column_device_view::create(out, stream);
   operator_dispatcher(*outd, *lhsd, *rhsd, true, false, op, stream);
 }
 // vector_scalar
@@ -169,13 +168,13 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
 {
-  auto lhsd         = column_device_view::create(lhs, stream);
-  auto [rhsd, misc] = type_dispatcher(rhs.type(),
-                                      scalar_as_column_device_view{},
-                                      rhs,
-                                      stream,
-                                      rmm::mr::get_current_device_resource());
-  auto outd         = mutable_column_device_view::create(out, stream);
+  auto lhsd        = column_device_view::create(lhs, stream);
+  auto [rhsd, aux] = type_dispatcher(rhs.type(),
+                                     scalar_as_column_device_view{},
+                                     rhs,
+                                     stream,
+                                     rmm::mr::get_current_device_resource());
+  auto outd        = mutable_column_device_view::create(out, stream);
   operator_dispatcher(*outd, *lhsd, *rhsd, false, true, op, stream);
 }
 }  // namespace compiled

@@ -16,8 +16,7 @@
 
 #pragma once
 
-#include <cudf/column/column_device_view.cuh>
-#include <cudf/types.hpp>
+#include <cudf/utilities/traits.hpp>
 #include "traits.hpp"
 
 #include <cmath>
@@ -25,47 +24,6 @@
 namespace cudf {
 namespace binops {
 namespace compiled {
-
-/**
- * @brief Type casts each element of the column to `CastType`
- *
- */
-template <typename CastType>
-struct type_casted_accessor {
-  template <typename Element>
-  CUDA_DEVICE_CALLABLE CastType operator()(cudf::size_type i,
-                                           column_device_view const& col,
-                                           bool is_scalar) const
-  {
-    if constexpr (column_device_view::has_element_accessor<Element>() and
-                  std::is_convertible_v<Element, CastType>)
-      return static_cast<CastType>(col.element<Element>(is_scalar ? 0 : i));
-    return {};
-  }
-};
-
-/**
- * @brief Type casts value to column type and stores in `i`th row of the column
- *
- */
-template <typename FromType>
-struct typed_casted_writer {
-  template <typename Element>
-  CUDA_DEVICE_CALLABLE void operator()(cudf::size_type i,
-                                       mutable_column_device_view const& col,
-                                       FromType val) const
-  {
-    if constexpr (mutable_column_device_view::has_element_accessor<Element>() and
-                  std::is_constructible_v<Element, FromType>) {
-      col.element<Element>(i) = static_cast<Element>(val);
-    } else if constexpr (is_fixed_point<Element>() and std::is_constructible_v<Element, FromType>) {
-      if constexpr (is_fixed_point<FromType>())
-        col.data<Element::rep>()[i] = val.rescaled(numeric::scale_type{col.type().scale()}).value();
-      else
-        col.data<Element::rep>()[i] = Element{val, numeric::scale_type{col.type().scale()}}.value();
-    }
-  }
-};
 
 // All binary operations
 namespace ops {

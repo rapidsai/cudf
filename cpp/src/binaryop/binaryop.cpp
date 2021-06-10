@@ -760,6 +760,12 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 // Experimental Compiled Binary operation
 namespace experimental {
 namespace detail {
+/**
+ * @copydoc cudf::experimental::binary_operation(scalar const&, column_view const&,
+ * binary_operator, data_type, rmm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
 std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,
@@ -783,6 +789,13 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
   cudf::binops::compiled::binary_operation(out_view, lhs, rhs, op, stream);
   return out;
 }
+
+/**
+ * @copydoc cudf::experimental::binary_operation(column_view const&, scalar const&,
+ * binary_operator, data_type, rmm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
 std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          scalar const& rhs,
                                          binary_operator op,
@@ -806,6 +819,13 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   cudf::binops::compiled::binary_operation(out_view, lhs, rhs, op, stream);
   return out;
 }
+
+/**
+ * @copydoc cudf::experimental::binary_operation(column_view const&, column_view const&,
+ * binary_operator, data_type, rmm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
 std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,

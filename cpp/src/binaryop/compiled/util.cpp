@@ -18,13 +18,16 @@
 #include "traits.hpp"
 
 #include <cudf/binaryop.hpp>
-#include <cudf/types.hpp>
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 namespace cudf::binops::compiled {
 
 namespace {
-// common_type
+/**
+ * @brief Functor that returns optional common type of 2 or 3 given types.
+ *
+ */
 struct common_type_functor {
   template <typename TypeLhs, typename TypeRhs>
   struct nested_common_type_functor {
@@ -47,6 +50,53 @@ struct common_type_functor {
   std::optional<data_type> operator()(data_type out)
   {
     return type_dispatcher(out, nested_common_type_functor<TypeLhs, TypeRhs>{});
+  }
+};
+
+/**
+ * @brief Functor that return true if BinaryOperator supports given input and output types.
+ *
+ * @tparam BinaryOperator binary operator functor
+ */
+template <typename BinaryOperator>
+struct is_binary_operation_supported {
+  // For types where Out type is fixed. (eg. comparison types)
+  template <typename TypeLhs, typename TypeRhs>
+  inline constexpr bool operator()(void)
+  {
+    if constexpr (column_device_view::has_element_accessor<TypeLhs>() and
+                  column_device_view::has_element_accessor<TypeRhs>()) {
+      if constexpr (has_common_type_v<TypeLhs, TypeRhs>) {
+        using common_t = std::common_type_t<TypeLhs, TypeRhs>;
+        return std::is_invocable_v<BinaryOperator, common_t, common_t>;
+      } else
+        return std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>;
+    } else {
+      return false;
+    }
+  }
+
+  template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+  inline constexpr bool operator()(void)
+  {
+    if constexpr (column_device_view::has_element_accessor<TypeLhs>() and
+                  column_device_view::has_element_accessor<TypeRhs>() and
+                  (mutable_column_device_view::has_element_accessor<TypeOut>() or
+                   is_fixed_point<TypeOut>())) {
+      if constexpr (has_common_type_v<TypeLhs, TypeRhs>) {
+        using common_t = std::common_type_t<TypeLhs, TypeRhs>;
+        if constexpr (std::is_invocable_v<BinaryOperator, common_t, common_t>) {
+          using ReturnType = std::invoke_result_t<BinaryOperator, common_t, common_t>;
+          return std::is_constructible_v<TypeOut, ReturnType>;
+        }
+      } else {
+        if constexpr (std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>) {
+          using ReturnType = std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>;
+          return std::is_constructible_v<TypeOut, ReturnType>;
+        }
+      }
+    }
+    return false;
   }
 };
 
@@ -85,7 +135,8 @@ struct is_supported_operation_functor {
         case binary_operator::NULL_MAX:             return call<ops::NullMax, TypeOut>();
         case binary_operator::NULL_MIN:             return call<ops::NullMin, TypeOut>();
         /*
-        case binary_operator::GENERIC_BINARY:       return call<ops::UserDefinedOp, TypeOut>();
+        case binary_operator::COALESCE:             // already defined.
+        case binary_operator::GENERIC_BINARY:       // defined in jit only.
         */
         default:                                    return false;
           // clang-format on

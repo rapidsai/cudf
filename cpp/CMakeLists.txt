@@ -157,13 +157,17 @@ add_library(cudf
     src/binaryop/compiled/BitwiseAnd.cu
     src/binaryop/compiled/BitwiseOr.cu
     src/binaryop/compiled/BitwiseXor.cu
+    src/binaryop/compiled/comparison_ops.cu
     src/binaryop/compiled/Div.cu
+    src/binaryop/compiled/equality_ops.cu
     src/binaryop/compiled/FloorDiv.cu
     src/binaryop/compiled/LogBase.cu
     src/binaryop/compiled/LogicalAnd.cu
     src/binaryop/compiled/LogicalOr.cu
     src/binaryop/compiled/Mod.cu
     src/binaryop/compiled/Mul.cu
+    src/binaryop/compiled/NullMax.cu
+    src/binaryop/compiled/NullMin.cu
     src/binaryop/compiled/PMod.cu
     src/binaryop/compiled/Pow.cu
     src/binaryop/compiled/PyMod.cu
@@ -172,11 +176,6 @@ add_library(cudf
     src/binaryop/compiled/ShiftRightUnsigned.cu
     src/binaryop/compiled/Sub.cu
     src/binaryop/compiled/TrueDiv.cu
-    src/binaryop/compiled/comparison_ops.cu
-    src/binaryop/compiled/equality_ops.cu
-    src/binaryop/compiled/NullMax.cu
-    src/binaryop/compiled/NullMin.cu
-    #src/binaryop/compiled/UserDefinedOp.cu
     src/binaryop/compiled/util.cpp
     src/labeling/label_bins.cu
     src/bitmask/null_mask.cu
