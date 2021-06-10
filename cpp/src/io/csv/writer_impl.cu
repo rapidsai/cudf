@@ -39,7 +39,6 @@
 #include <thrust/logical.h>
 #include <thrust/scan.h>
 
-#include <stdio.h>
 #include <algorithm>
 #include <sstream>
 
@@ -360,8 +359,6 @@ void writer::impl::write(table_view const& table,
                          const table_metadata* metadata,
                          rmm::cuda_stream_view stream)
 {
-  // CUDF_EXPECTS(table.num_columns() > 0, "Empty table.");
-
   // write header: column names separated by delimiter:
   // (even for tables with no rows)
   //
