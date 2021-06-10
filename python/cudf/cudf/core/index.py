@@ -1893,10 +1893,12 @@ class NumericIndex(GenericIndex):
     Index
     """
 
-    def __new__(cls, data=None, dtype=None, copy=False, name=None):
+    def __new__(cls, *args, **kwargs):
+        return BaseIndex.__new__(cls, *args, **kwargs)
 
-        out = SingleColumnFrame.__new__(cls)
-        dtype = _index_to_dtype[cls]
+    def __init__(self, data=None, dtype=None, copy=False, name=None):
+
+        dtype = _index_to_dtype[self.__class__]
         if copy:
             data = column.as_column(data, dtype=dtype).copy()
 
@@ -1904,59 +1906,47 @@ class NumericIndex(GenericIndex):
 
         data = column.as_column(data, dtype=dtype)
 
-        out._initialize(data, **kwargs)
-
-        return out
+        self._initialize(data, **kwargs)
 
 
 class Int8Index(NumericIndex):
-    def __init__(cls, data=None, dtype=None, copy=False, name=None):
-        pass
+    pass
 
 
 class Int16Index(NumericIndex):
-    def __init__(cls, data=None, dtype=None, copy=False, name=None):
-        pass
+    pass
 
 
 class Int32Index(NumericIndex):
-    def __init__(cls, data=None, dtype=None, copy=False, name=None):
-        pass
+    pass
 
 
 class Int64Index(NumericIndex):
-    def __init__(self, data=None, dtype=None, copy=False, name=None):
-        pass
+    pass
 
 
 class UInt8Index(NumericIndex):
-    def __init__(self, data=None, dtype=None, copy=False, name=None):
-        pass
+    pass
 
 
 class UInt16Index(NumericIndex):
-    def __init__(cls, data=None, dtype=None, copy=False, name=None):
-        pass
+    pass
 
 
 class UInt32Index(NumericIndex):
-    def __init__(cls, data=None, dtype=None, copy=False, name=None):
-        pass
+    pass
 
 
 class UInt64Index(NumericIndex):
-    def __init__(cls, data=None, dtype=None, copy=False, name=None):
-        pass
+    pass
 
 
 class Float32Index(NumericIndex):
-    def __init__(cls, data=None, dtype=None, copy=False, name=None):
-        pass
+    pass
 
 
 class Float64Index(NumericIndex):
-    def __init__(cls, data=None, dtype=None, copy=False, name=None):
-        pass
+    pass
 
 
 class DatetimeIndex(GenericIndex):
