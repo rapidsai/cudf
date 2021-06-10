@@ -310,8 +310,7 @@ class MultiIndex(BaseIndex):
 
     @property
     def _source_data(self):
-        out = cudf.DataFrame._from_data(data=self._data)
-        return out
+        return cudf.DataFrame._from_data(data=self._data)
 
     @_source_data.setter
     def _source_data(self, value):

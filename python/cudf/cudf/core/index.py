@@ -743,10 +743,6 @@ class BaseIndex(SingleColumnFrame, Serializable):
                         cls = _dtype_to_index[data.dtype.type]
                     except KeyError:
                         cls = GenericIndex
-                        # TODO: GenericIndex has a different API for __new__
-                        # than other Index types. Refactoring Index types will
-                        # be necessary to clean this up.
-                        kwargs["values"] = kwargs.pop("data")
                 elif isinstance(data, StringColumn):
                     cls = StringIndex
                 elif isinstance(data, DatetimeColumn):
@@ -1794,8 +1790,8 @@ class GenericIndex(BaseIndex):
         lines = output.split("\n")
 
         tmp_meta = lines[-1]
-        dtype_index = lines[-1].rfind(" dtype=")
-        prior_to_dtype = lines[-1][:dtype_index]
+        dtype_index = tmp_meta.rfind(" dtype=")
+        prior_to_dtype = tmp_meta[:dtype_index]
         lines = lines[:-1]
         lines.append(prior_to_dtype + " dtype='%s'" % self.dtype)
         if self.name is not None:
@@ -1816,9 +1812,7 @@ class GenericIndex(BaseIndex):
         if not isinstance(index, int):
             res = as_index(res)
             res.name = self.name
-            return res
-        else:
-            return res
+        return res
 
     @property
     def dtype(self):
