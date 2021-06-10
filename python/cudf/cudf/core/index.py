@@ -1232,7 +1232,7 @@ class BaseIndex(SingleColumnFrame, Serializable):
             - nearest: use the NEAREST index value if no exact match. Tied
                        distances are broken by preferring the larger index
                        value.
-        tolearnce : int or float, optional
+        tolerance : int or float, optional
             Maximum distance from index value for inexact matches. The value
             of the index at the matching location must satisfy the equation
             abs(index[loc] - key) <= tolerance.
