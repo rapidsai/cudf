@@ -81,7 +81,7 @@ BINARYOP_BENCHMARK_DEFINE(int64_t,      int64_t,      POW,                  doub
 BINARYOP_BENCHMARK_DEFINE(int64_t,      int32_t,      BITWISE_AND,          int16_t);
 BINARYOP_BENCHMARK_DEFINE(int16_t,      int32_t,      BITWISE_OR,           int64_t);
 BINARYOP_BENCHMARK_DEFINE(int16_t,      int64_t,      BITWISE_XOR,          int32_t);
-BINARYOP_BENCHMARK_DEFINE(double,       int8_t,       LOGICAL_AND,          int16_t);
+BINARYOP_BENCHMARK_DEFINE(double,       int8_t,       LOGICAL_AND,          bool);
 BINARYOP_BENCHMARK_DEFINE(int16_t,      int64_t,      LOGICAL_OR,           bool);
 BINARYOP_BENCHMARK_DEFINE(duration_ms,  duration_ns,  EQUAL,                bool);
 BINARYOP_BENCHMARK_DEFINE(decimal32,    decimal32,    NOT_EQUAL,            bool);
