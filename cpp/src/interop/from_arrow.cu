@@ -117,11 +117,8 @@ struct dispatch_to_cudf_column {
   }
 
   template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
-  std::unique_ptr<column> operator()(arrow::Array const&,
-                                     data_type,
-                                     bool,
-                                     rmm::cuda_stream_view,
-                                     rmm::mr::device_memory_resource*)
+  std::unique_ptr<column> operator()(
+    arrow::Array const&, data_type, bool, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
   {
     CUDF_FAIL("Unsupported type in from_arrow.");
   }
