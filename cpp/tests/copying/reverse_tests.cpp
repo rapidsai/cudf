@@ -33,12 +33,10 @@ template <typename T>
 class ReverseTypedTestFixture : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ReverseTypedTestFixture, cudf::test::FixedWidthTypes);
+TYPED_TEST_CASE(ReverseTypedTestFixture, cudf::test::AllTypes);
 TYPED_TEST(ReverseTypedTestFixture, ReverseTable)
 {
   using T = TypeParam;
-  // static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
-
   constexpr cudf::size_type num_values{10};
 
   auto input = cudf::test::fixed_width_column_wrapper<T, int32_t>(
@@ -61,8 +59,6 @@ TYPED_TEST(ReverseTypedTestFixture, ReverseTable)
 TYPED_TEST(ReverseTypedTestFixture, ReverseColumn)
 {
   using T = TypeParam;
-  // static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
-
   constexpr cudf::size_type num_values{10};
 
   auto input = cudf::test::fixed_width_column_wrapper<T, int32_t>(
@@ -83,8 +79,6 @@ TYPED_TEST(ReverseTypedTestFixture, ReverseColumn)
 TYPED_TEST(ReverseTypedTestFixture, ReverseNullable)
 {
   using T = TypeParam;
-  // static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
-
   constexpr cudf::size_type num_values{20};
 
   std::vector<int64_t> input_values(num_values);
@@ -116,8 +110,6 @@ TYPED_TEST(ReverseTypedTestFixture, ReverseNullable)
 TYPED_TEST(ReverseTypedTestFixture, ZeroSizeInput)
 {
   using T = TypeParam;
-  // static_assert(cudf::is_fixed_width<T>() == true, "this code assumes fixed-width types.");
-
   cudf::test::fixed_width_column_wrapper<T, int32_t> input(thrust::make_counting_iterator(0),
                                                            thrust::make_counting_iterator(0));
 
