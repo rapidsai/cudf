@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -397,14 +397,6 @@ public class RmmTest {
   public void testPoolLimitNonPoolMode() {
     assertThrows(IllegalArgumentException.class,
         () -> Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, false, 1024, 2048));
-  }
-
-  @Test
-  public void testGetCudaRuntimeInfo() {
-    Rmm.initialize(RmmAllocationMode.POOL, false, 1024);
-    assert Cuda.getDriverVersion() >= Cuda.getRuntimeVersion();
-    assert Cuda.getRuntimeVersion() > 1000;
-    assertEquals(Cuda.getNativeComputeMode(), Cuda.getComputeMode().mode);
   }
 
   private static class AllocFailException extends RuntimeException {}

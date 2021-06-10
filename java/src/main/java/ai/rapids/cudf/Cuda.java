@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -250,19 +250,7 @@ public class Cuda {
    * @return the enum value of CudaComputeMode
    */
   public static CudaComputeMode getComputeMode() {
-    int nativeMode = Cuda.getNativeComputeMode();
-    switch (nativeMode) {
-      case 0:
-        return CudaComputeMode.cudaComputeModeDefault;
-      case 1:
-        return CudaComputeMode.cudaComputeModeExclusive;
-      case 2:
-        return CudaComputeMode.cudaComputeModeProhibited;
-      case 3:
-        return CudaComputeMode.cudaComputeModeExclusiveProcess;
-      default:
-        throw new CudaException("Unknown cuaComputeMode: " + nativeMode);
-    }
+    return CudaComputeMode.fromNative(Cuda.getNativeComputeMode());
   }
 
   /**
