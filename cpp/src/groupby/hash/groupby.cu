@@ -106,7 +106,7 @@ class groupby_simple_aggregations_collector final
   using cudf::detail::simple_aggregations_collector::visit;
 
   std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                  cudf::detail::min_aggregation const& agg) override
+                                                  cudf::detail::min_aggregation const&) override
   {
     std::vector<std::unique_ptr<aggregation>> aggs;
     aggs.push_back(col_type.id() == type_id::STRING ? make_argmin_aggregation()
@@ -115,7 +115,7 @@ class groupby_simple_aggregations_collector final
   }
 
   std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                  cudf::detail::max_aggregation const& agg) override
+                                                  cudf::detail::max_aggregation const&) override
   {
     std::vector<std::unique_ptr<aggregation>> aggs;
     aggs.push_back(col_type.id() == type_id::STRING ? make_argmax_aggregation()
@@ -123,9 +123,10 @@ class groupby_simple_aggregations_collector final
     return aggs;
   }
 
-  std::vector<std::unique_ptr<aggregation>> visit(
-    data_type col_type, cudf::detail::mean_aggregation const& agg) override
+  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                  cudf::detail::mean_aggregation const&) override
   {
+    (void)col_type;
     CUDF_EXPECTS(is_fixed_width(col_type), "MEAN aggregation expects fixed width type");
     std::vector<std::unique_ptr<aggregation>> aggs;
     aggs.push_back(make_sum_aggregation());
@@ -135,8 +136,8 @@ class groupby_simple_aggregations_collector final
     return aggs;
   }
 
-  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                  cudf::detail::var_aggregation const& agg) override
+  std::vector<std::unique_ptr<aggregation>> visit(data_type,
+                                                  cudf::detail::var_aggregation const&) override
   {
     std::vector<std::unique_ptr<aggregation>> aggs;
     aggs.push_back(make_sum_aggregation());
@@ -146,8 +147,8 @@ class groupby_simple_aggregations_collector final
     return aggs;
   }
 
-  std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                  cudf::detail::std_aggregation const& agg) override
+  std::vector<std::unique_ptr<aggregation>> visit(data_type,
+                                                  cudf::detail::std_aggregation const&) override
   {
     std::vector<std::unique_ptr<aggregation>> aggs;
     aggs.push_back(make_sum_aggregation());
@@ -203,7 +204,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   auto to_dense_agg_result(cudf::aggregation const& agg)
   {
     auto s                  = sparse_results->get_result(col_idx, agg);
-    auto dense_result_table = cudf::detail::gather(table_view({s}),
+    auto dense_result_table = cudf::detail::gather(table_view({std::move(s)}),
                                                    gather_map.begin(),
                                                    gather_map.begin() + map_size,
                                                    out_of_bounds_policy::DONT_CHECK,

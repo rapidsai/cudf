@@ -7,7 +7,7 @@ import pyarrow as pa
 from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
 from cudf.core.column.column import ColumnBase
 from cudf.core.dtypes import Decimal64Dtype
-from cudf.core.index import Index
+from cudf.core.index import BaseIndex
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
@@ -302,7 +302,7 @@ class Scalar(object):
         return np.dtype(out_dtype)
 
     def _scalar_binop(self, other, op):
-        if isinstance(other, (ColumnBase, Series, Index, np.ndarray)):
+        if isinstance(other, (ColumnBase, Series, BaseIndex, np.ndarray)):
             # dispatch to column implementation
             return NotImplemented
         other = to_cudf_compatible_scalar(other)
