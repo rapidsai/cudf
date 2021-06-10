@@ -2210,7 +2210,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector repeatStrings(int repeatTimes) {
     assert type.equals(DType.STRING) : "column type must be a String";
 
-    return new ColumnVector(repeatStrings(getNativeView(), repeatTimes);
+    return new ColumnVector(repeatStrings(getNativeView(), repeatTimes));
   }
 
    /**

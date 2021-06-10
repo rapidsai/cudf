@@ -876,6 +876,9 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return sb.toString();
   }
 
+  public Scalar repeatString(int repeatTimes) {
+    return new Scalar(DType.STRING, repeatString(getScalarHandle(), repeatTimes));
+  }
   /**
    * Holds the off-heap state of the scalar so it can be cleaned up, even if it is leaked.
    */
