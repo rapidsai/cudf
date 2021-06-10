@@ -25,6 +25,7 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/lists/list_view.cuh>
 #include <cudf/null_mask.hpp>
+#include <cudf/strings/detail/convert/fixed_point.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -413,26 +414,6 @@ __inline__ __device__ cudf::list_view decode_value(char const *begin,
 // The purpose of this is merely to allow compilation ONLY
 // TODO : make this work for csv
 template <>
-__inline__ __device__ numeric::decimal32 decode_value(char const *begin,
-                                                      char const *end,
-                                                      parse_options_view const &opts)
-{
-  return numeric::decimal32{};
-}
-
-// The purpose of this is merely to allow compilation ONLY
-// TODO : make this work for csv
-template <>
-__inline__ __device__ numeric::decimal64 decode_value(char const *begin,
-                                                      char const *end,
-                                                      parse_options_view const &opts)
-{
-  return numeric::decimal64{};
-}
-
-// The purpose of this is merely to allow compilation ONLY
-// TODO : make this work for csv
-template <>
 __inline__ __device__ cudf::struct_view decode_value(char const *begin,
                                                      char const *end,
                                                      parse_options_view const &opts)
@@ -451,11 +432,13 @@ struct decode_op {
    *
    * @return bool Whether the parsed value is valid.
    */
-  template <typename T,
-            typename std::enable_if_t<std::is_integral<T>::value and !std::is_same<T, bool>::value>
-              * = nullptr>
+  template <
+    typename T,
+    typename std::enable_if_t<std::is_integral<T>::value and !std::is_same<T, bool>::value and
+                              !cudf::is_fixed_point<T>()> * = nullptr>
   __host__ __device__ __forceinline__ bool operator()(void *out_buffer,
                                                       size_t row,
+                                                      const data_type output_type,
                                                       char const *begin,
                                                       char const *end,
                                                       parse_options_view const &opts,
@@ -474,11 +457,36 @@ struct decode_op {
   }
 
   /**
+   * @brief Dispatch for fixed point types.
+   *
+   * @return bool Whether the parsed value is valid.
+   */
+  template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()> * = nullptr>
+  __host__ __device__ __forceinline__ bool operator()(void *out_buffer,
+                                                      size_t row,
+                                                      const data_type output_type,
+                                                      char const *begin,
+                                                      char const *end,
+                                                      parse_options_view const &opts,
+                                                      column_parse::flags flags)
+  {
+    static_cast<device_storage_type_t<T> *>(out_buffer)[row] =
+      [&flags, &opts, output_type, begin, end]() -> device_storage_type_t<T> {
+      auto const field_len = static_cast<size_t>(end - begin);
+      return strings::detail::parse_decimal<device_storage_type_t<T>>(
+        begin, end, output_type.scale());
+    }();
+
+    return true;
+  }
+
+  /**
    * @brief Dispatch for boolean type types.
    */
   template <typename T, typename std::enable_if_t<std::is_same<T, bool>::value> * = nullptr>
   __host__ __device__ __forceinline__ bool operator()(void *out_buffer,
                                                       size_t row,
+                                                      const data_type output_type,
                                                       char const *begin,
                                                       char const *end,
                                                       parse_options_view const &opts,
@@ -502,6 +510,7 @@ struct decode_op {
   template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ bool operator()(void *out_buffer,
                                                       size_t row,
+                                                      const data_type output_type,
                                                       char const *begin,
                                                       char const *end,
                                                       parse_options_view const &opts,
@@ -516,11 +525,13 @@ struct decode_op {
   /**
    * @brief Dispatch for all other types.
    */
-  template <typename T,
-            typename std::enable_if_t<!std::is_integral<T>::value and
-                                      !std::is_floating_point<T>::value> * = nullptr>
+  template <
+    typename T,
+    typename std::enable_if_t<!std::is_integral<T>::value and !std::is_floating_point<T>::value and
+                              !cudf::is_fixed_point<T>()> * = nullptr>
   __host__ __device__ __forceinline__ bool operator()(void *out_buffer,
                                                       size_t row,
+                                                      const data_type output_type,
                                                       char const *begin,
                                                       char const *end,
                                                       parse_options_view const &opts,
@@ -605,6 +616,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
                                     decode_op{},
                                     columns[actual_col],
                                     rec_id,
+                                    dtypes[actual_col],
                                     field_start,
                                     field_end,
                                     options,
