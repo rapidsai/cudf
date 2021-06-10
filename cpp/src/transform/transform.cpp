@@ -77,8 +77,9 @@ std::vector<std::string> make_template_types(column_view outcol_view, table_view
 
   template_types.push_back(cudf::jit::get_type_name(outcol_view.type()));
   for (auto const& col : data_view) {
-    auto these_types = {cudf::jit::get_type_name(col.type()) + "*", mskptr_type, offset_type};
-    template_types.insert(template_types.end(), these_types);
+    template_types.push_back(cudf::jit::get_type_name(col.type()) + "*");
+    template_types.push_back(mskptr_type);
+    template_types.push_back(offset_type);
   }
   return template_types;
 }
@@ -120,9 +121,9 @@ void generalized_operation(table_view data_view,
   for (int col_idx = 0; col_idx < data_view.num_columns(); col_idx++) {
     col = data_view.column(col_idx);
 
-    data_ptrs[col_idx] = cudf::jit::get_data_ptr(col);
-    mask_ptrs[col_idx] = col.null_mask();
-    offsets[col_idx]   = col.offset();
+    data_ptrs.push_back(cudf::jit::get_data_ptr(col));
+    mask_ptrs.push_back(col.null_mask());
+    offsets.push_back(col.offset());
 
     kernel_args.insert(kernel_args.begin() + 3 * (col_idx + 1),
                        {&data_ptrs[col_idx], &mask_ptrs[col_idx], &offsets[col_idx]});
