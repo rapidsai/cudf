@@ -335,16 +335,15 @@ struct column_scatterer_impl<struct_view> {
     // The bitmask from the source column will be gathered at the top level `scatter()` call.
     if (target.nullable()) {
       std::cout << "GERA_DEBUG target_nullable=true" << std::endl;
-      //   auto const gather_map =
-      //     scatter_to_gather_complement(scatter_map_begin, scatter_map_end, target.size(),
-      //     stream);
+      auto const gather_map =
+        scatter_to_gather_complement(scatter_map_begin, scatter_map_end, target.size(), stream);
 
-      //   gather_bitmask(table_view{std::vector<cudf::column_view>{target}},
-      //                  gather_map.begin(),
-      //                  result,
-      //                  gather_bitmask_op::PASSTHROUGH,
-      //                  stream,
-      //                  mr);
+      gather_bitmask(table_view{std::vector<cudf::column_view>{target}},
+                     gather_map.begin(),
+                     result,
+                     gather_bitmask_op::PASSTHROUGH,
+                     stream,
+                     mr);
     }
 
     return std::move(result.front());
