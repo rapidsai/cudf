@@ -1869,9 +1869,12 @@ class NumericIndex(GenericIndex):
     Index
     """
 
+    # Subclasses must define the dtype they are associated with.
+    _dtype = None
+
     def __init__(self, data=None, dtype=None, copy=False, name=None):
 
-        dtype = _index_to_dtype[self.__class__]
+        dtype = type(self)._dtype
         if copy:
             data = column.as_column(data, dtype=dtype).copy()
 
@@ -1883,43 +1886,43 @@ class NumericIndex(GenericIndex):
 
 
 class Int8Index(NumericIndex):
-    pass
+    _dtype = np.int8
 
 
 class Int16Index(NumericIndex):
-    pass
+    _dtype = np.int16
 
 
 class Int32Index(NumericIndex):
-    pass
+    _dtype = np.int32
 
 
 class Int64Index(NumericIndex):
-    pass
+    _dtype = np.int64
 
 
 class UInt8Index(NumericIndex):
-    pass
+    _dtype = np.uint8
 
 
 class UInt16Index(NumericIndex):
-    pass
+    _dtype = np.uint16
 
 
 class UInt32Index(NumericIndex):
-    pass
+    _dtype = np.uint32
 
 
 class UInt64Index(NumericIndex):
-    pass
+    _dtype = np.uint64
 
 
 class Float32Index(NumericIndex):
-    pass
+    _dtype = np.float32
 
 
 class Float64Index(NumericIndex):
-    pass
+    _dtype = np.float64
 
 
 class DatetimeIndex(GenericIndex):
@@ -2772,19 +2775,6 @@ _dtype_to_index: Dict[Any, Type[BaseIndex]] = {
     np.uint64: UInt64Index,
     np.float32: Float32Index,
     np.float64: Float64Index,
-}
-
-_index_to_dtype = {
-    Int8Index: np.int8,
-    Int16Index: np.int16,
-    Int32Index: np.int32,
-    Int64Index: np.int64,
-    UInt8Index: np.uint8,
-    UInt16Index: np.uint16,
-    UInt32Index: np.uint32,
-    UInt64Index: np.uint64,
-    Float32Index: np.float32,
-    Float64Index: np.float64,
 }
 
 
