@@ -1662,35 +1662,35 @@ class GenericIndex(BaseIndex):
     name: A string
     """
 
-    def __init__(self, values, **kwargs):
+    def __init__(self, data, **kwargs):
         """
         Parameters
         ----------
-        values : Column
-            The Column of values for this index
+        data : Column
+            The Column of data for this index
         name : str optional
             The name of the Index. If not provided, the Index adopts the value
             Column's name. Otherwise if this name is different from the value
-            Column's, the values Column will be cloned to adopt this name.
+            Column's, the data Column will be cloned to adopt this name.
         """
-        kwargs = _setdefault_name(values, **kwargs)
+        kwargs = _setdefault_name(data, **kwargs)
 
         # normalize the input
-        if isinstance(values, cudf.Series):
-            values = values._column
-        elif isinstance(values, column.ColumnBase):
-            values = values
+        if isinstance(data, cudf.Series):
+            data = data._column
+        elif isinstance(data, column.ColumnBase):
+            data = data
         else:
-            if isinstance(values, (list, tuple)):
-                if len(values) == 0:
-                    values = np.asarray([], dtype="int64")
+            if isinstance(data, (list, tuple)):
+                if len(data) == 0:
+                    data = np.asarray([], dtype="int64")
                 else:
-                    values = np.asarray(values)
-            values = column.as_column(values)
-            assert isinstance(values, (NumericalColumn, StringColumn))
+                    data = np.asarray(data)
+            data = column.as_column(data)
+            assert isinstance(data, (NumericalColumn, StringColumn))
 
         name = kwargs.get("name")
-        super().__init__({name: values})
+        super().__init__({name: data})
 
     @property
     def _values(self):
