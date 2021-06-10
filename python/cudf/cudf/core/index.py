@@ -1686,10 +1686,6 @@ class GenericIndex(BaseIndex):
             Column's name. Otherwise if this name is different from the value
             Column's, the values Column will be cloned to adopt this name.
         """
-        self._initialize(values, **kwargs)
-
-    def _initialize(self, values, **kwargs):
-
         kwargs = _setdefault_name(values, **kwargs)
 
         # normalize the input
@@ -1886,9 +1882,6 @@ class NumericIndex(GenericIndex):
     Index
     """
 
-    def __new__(cls, *args, **kwargs):
-        return BaseIndex.__new__(cls, *args, **kwargs)
-
     def __init__(self, data=None, dtype=None, copy=False, name=None):
 
         dtype = _index_to_dtype[self.__class__]
@@ -1899,7 +1892,7 @@ class NumericIndex(GenericIndex):
 
         data = column.as_column(data, dtype=dtype)
 
-        self._initialize(data, **kwargs)
+        super().__init__(data, **kwargs)
 
 
 class Int8Index(NumericIndex):
@@ -1981,9 +1974,6 @@ class DatetimeIndex(GenericIndex):
                   dtype='datetime64[ms]', name='a')
     """
 
-    def __new__(cls, *args, **kwargs):
-        return BaseIndex.__new__(cls, *args, **kwargs)
-
     def __init__(
         self,
         data=None,
@@ -2027,7 +2017,7 @@ class DatetimeIndex(GenericIndex):
             data = column.as_column(data.values)
         elif isinstance(data, (list, tuple)):
             data = column.as_column(np.array(data, dtype="datetime64[ms]"))
-        self._initialize(data, **kwargs)
+        super().__init__(data, **kwargs)
 
     @property
     def year(self):
@@ -2244,9 +2234,6 @@ class TimedeltaIndex(GenericIndex):
                 dtype='timedelta64[s]', name='delta-index')
     """
 
-    def __new__(cls, *args, **kwargs):
-        return BaseIndex.__new__(cls, *args, **kwargs)
-
     def __init__(
         self,
         data=None,
@@ -2276,7 +2263,7 @@ class TimedeltaIndex(GenericIndex):
             data = column.as_column(data.values)
         elif isinstance(data, (list, tuple)):
             data = column.as_column(np.array(data, dtype=dtype))
-        self._initialize(data, **kwargs)
+        super().__init__(data, **kwargs)
 
     def to_pandas(self):
         return pd.TimedeltaIndex(
@@ -2370,9 +2357,6 @@ class CategoricalIndex(GenericIndex):
     CategoricalIndex([1, 2, 3, <NA>], categories=[1, 2, 3], ordered=False, name='a', dtype='category', name='a')
     """  # noqa: E501
 
-    def __new__(cls, *args, **kwargs):
-        return BaseIndex.__new__(cls, *args, **kwargs)
-
     def __init__(
         self,
         data=None,
@@ -2429,7 +2413,7 @@ class CategoricalIndex(GenericIndex):
         elif ordered is False and data.ordered is True:
             data.cat().as_unordered(inplace=True)
 
-        self._initialize(data, **kwargs)
+        super().__init__(data, **kwargs)
 
     @property
     def codes(self):
@@ -2608,9 +2592,6 @@ class IntervalIndex(GenericIndex):
     IntervalIndex
     """
 
-    def __new__(cls, *args, **kwargs):
-        return BaseIndex.__new__(cls, *args, **kwargs)
-
     def __init__(
         self, data, closed=None, dtype=None, copy=False, name=None,
     ):
@@ -2632,7 +2613,7 @@ class IntervalIndex(GenericIndex):
             data = column.as_column(data)
             data.dtype.closed = closed
 
-        self._initialize(data, **kwargs)
+        super().__init__(data, **kwargs)
 
     def from_breaks(breaks, closed="right", name=None, copy=False, dtype=None):
         """
@@ -2686,9 +2667,6 @@ class StringIndex(GenericIndex):
     name: A string
     """
 
-    def __new__(cls, *args, **kwargs):
-        return BaseIndex.__new__(cls, *args, **kwargs)
-
     def __init__(self, values, copy=False, **kwargs):
         kwargs = _setdefault_name(values, **kwargs)
         if isinstance(values, StringColumn):
@@ -2702,7 +2680,7 @@ class StringIndex(GenericIndex):
                     "Couldn't create StringIndex from passed in object"
                 )
 
-        self._initialize(values, **kwargs)
+        super().__init__(values, **kwargs)
 
     def to_pandas(self):
         return pd.Index(self.to_array(), name=self.name, dtype="object")
