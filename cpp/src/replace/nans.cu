@@ -104,8 +104,7 @@ struct replace_nans_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_floating_point<T>::value, std::unique_ptr<column>> operator()(
-    Args&&...)
+  std::enable_if_t<!std::is_floating_point<T>::value, std::unique_ptr<column>> operator()(Args&&...)
   {
     CUDF_FAIL("NAN is not supported in a Non-floating point type column");
   }
