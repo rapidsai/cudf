@@ -92,7 +92,7 @@ def cut(
     >>> cudf.cut([0, 1, 1, 2], bins=4, labels=False)
     array([0, 1, 1, 3], dtype=int32)
     Passing a Series as an input returns a Series with categorical dtype:
-    >>> s = pd.Series(np.array([2, 4, 6, 8, 10]),
+    >>> s = cudf.Series(np.array([2, 4, 6, 8, 10]),
     ...        index=['a', 'b', 'c', 'd', 'e'])
     >>> pd.cut(s, 3)
     """
