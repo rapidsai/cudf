@@ -17,14 +17,16 @@
 
 #include <tests/groupby/groupby_test_util.hpp>
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/table_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
 namespace cudf {
 namespace test {
 
@@ -56,7 +58,7 @@ TYPED_TEST(GroupbyReplaceNullsFixedWidthTest, PrecedingFill)
   fixed_width_column_wrapper<TypeParam> val({42, 7, 24, 10, 1, 1000}, {1, 1, 1, 0, 0, 0});
 
   fixed_width_column_wrapper<K> expect_key{0, 0, 0, 1, 1, 1};
-  fixed_width_column_wrapper<TypeParam> expect_val({42, 24, 24, 7, 7, 7}, all_valid());
+  fixed_width_column_wrapper<TypeParam> expect_val({42, 24, 24, 7, 7, 7}, iterator_no_null());
 
   TestReplaceNullsGroupbySingle(key, val, expect_key, expect_val, replace_policy::PRECEDING);
 }
@@ -70,7 +72,8 @@ TYPED_TEST(GroupbyReplaceNullsFixedWidthTest, FollowingFill)
                                             {1, 0, 1, 0, 1, 0, 1, 1});
 
   fixed_width_column_wrapper<K> expect_key{0, 0, 0, 1, 1, 1, 1, 1};
-  fixed_width_column_wrapper<TypeParam> expect_val({2, 32, 32, 8, 128, 128, 128, 256}, all_valid());
+  fixed_width_column_wrapper<TypeParam> expect_val({2, 32, 32, 8, 128, 128, 128, 256},
+                                                   iterator_no_null());
 
   TestReplaceNullsGroupbySingle(key, val, expect_key, expect_val, replace_policy::FOLLOWING);
 }
@@ -115,7 +118,8 @@ TEST_F(GroupbyReplaceNullsStringsTest, PrecedingFill)
                              {true, false, true, true, true, false, true});
 
   fixed_width_column_wrapper<K> expect_key{0, 0, 1, 1, 1, 1, 1};
-  strings_column_wrapper expect_val({"y", "42", "xx", "xx", "zzz", "zzz", "one"}, all_valid());
+  strings_column_wrapper expect_val({"y", "42", "xx", "xx", "zzz", "zzz", "one"},
+                                    iterator_no_null());
 
   TestReplaceNullsGroupbySingle(key, val, expect_key, expect_val, replace_policy::PRECEDING);
 }
@@ -129,7 +133,8 @@ TEST_F(GroupbyReplaceNullsStringsTest, FollowingFill)
                              {true, false, false, true, true, false, true});
 
   fixed_width_column_wrapper<K> expect_key{0, 0, 1, 1, 1, 1, 1};
-  strings_column_wrapper expect_val({"42", "42", "xx", "zzz", "zzz", "one", "one"}, all_valid());
+  strings_column_wrapper expect_val({"42", "42", "xx", "zzz", "zzz", "one", "one"},
+                                    iterator_no_null());
 
   TestReplaceNullsGroupbySingle(key, val, expect_key, expect_val, replace_policy::FOLLOWING);
 }
