@@ -92,9 +92,9 @@ def cut(
     >>> cudf.cut([0, 1, 1, 2], bins=4, labels=False)
     array([0, 1, 1, 3], dtype=int32)
     Passing a Series as an input returns a Series with categorical dtype:
-    >>> s = pd.Series(np.array([2, 4, 6, 8, 10]),
+    >>> s = cudf.Series(np.array([2, 4, 6, 8, 10]),
     ...        index=['a', 'b', 'c', 'd', 'e'])
-    >>> pd.cut(s, 3)
+    >>> cudf.cut(s, 3)
     """
     left_inclusive = False
     right_inclusive = True
@@ -138,7 +138,7 @@ def cut(
                 bins = list(dict.fromkeys(bins))
 
     # if bins is an intervalIndex we ignore the value of right
-    if isinstance(bins, (pd.IntervalIndex, cudf.IntervalIndex)):
+    eliif isinstance(bins, (pd.IntervalIndex, cudf.IntervalIndex)):
         right = bins.closed == "right"
 
     # create bins if given an int or single scalar
