@@ -327,7 +327,10 @@ __global__ void __launch_bounds__(block_size, 1)
 void InitializeChunkHashMaps(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 1024;
+  std::cout << "before init maps" << std::endl;
   gpuInitializeChunkHashMaps<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
+  stream.synchronize();
+  std::cout << "after init maps" << std::endl;
 }
 
 void PopulateChunkHashMaps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
@@ -339,14 +342,20 @@ void PopulateChunkHashMaps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
   auto num_columns         = chunks.size().second;
   dim3 dim_grid(grid_x.num_blocks, num_columns);
 
+  std::cout << "before build maps" << std::endl;
   gpuBuildChunkDictionariesKernel<block_size>
     <<<dim_grid, block_size, 0, stream.value()>>>(chunks, num_rows);
+  stream.synchronize();
+  std::cout << "after build maps" << std::endl;
 }
 
 void CollectMapEntries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 1024;
+  std::cout << "before collect maps" << std::endl;
   gpuCollectMapEntries<block_size><<<chunks.size(), block_size, 0, stream.value()>>>(chunks);
+  stream.synchronize();
+  std::cout << "after collect maps" << std::endl;
 }
 
 void GetDictionaryIndices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
@@ -358,8 +367,11 @@ void GetDictionaryIndices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
   auto num_columns         = chunks.size().second;
   dim3 dim_grid(grid_x.num_blocks, num_columns);
 
+  std::cout << "before get dict ind" << std::endl;
   gpuGetDictionaryIndices<block_size>
     <<<dim_grid, block_size, 0, stream.value()>>>(chunks, num_rows);
+  stream.synchronize();
+  std::cout << "after get dict ind" << std::endl;
 }
 }  // namespace gpu
 }  // namespace parquet
