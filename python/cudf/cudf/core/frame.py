@@ -1626,9 +1626,6 @@ class Frame(libcudf.table.Table):
         result = self.__class__._from_table(libcudf.copying.reverse(self))
         return result
 
-    def reverse(self):
-        return self._reverse()
-
     def _fill(self, fill_values, begin, end, inplace):
         col_and_fill = zip(self._columns, fill_values)
 
