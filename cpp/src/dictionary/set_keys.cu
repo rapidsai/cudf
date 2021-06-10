@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -150,9 +150,10 @@ std::unique_ptr<column> set_keys(
                                 new_nulls.second);
 }
 
-std::vector<std::unique_ptr<column>> match_dictionaries(std::vector<dictionary_column_view> input,
-                                                        rmm::cuda_stream_view stream,
-                                                        rmm::mr::device_memory_resource* mr)
+std::vector<std::unique_ptr<column>> match_dictionaries(
+  cudf::host_span<dictionary_column_view const> input,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   std::vector<column_view> keys(input.size());
   std::transform(input.begin(), input.end(), keys.begin(), [](auto& col) { return col.keys(); });
@@ -219,6 +220,13 @@ std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column
 {
   CUDF_FUNC_RANGE();
   return detail::set_keys(dictionary_column, keys, rmm::cuda_stream_default, mr);
+}
+
+std::vector<std::unique_ptr<column>> match_dictionaries(
+  cudf::host_span<dictionary_column_view const> input, rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::match_dictionaries(input, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace dictionary

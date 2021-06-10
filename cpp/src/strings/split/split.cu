@@ -23,7 +23,6 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/split/split.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -432,7 +431,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
   std::vector<std::unique_ptr<column>> results;
   auto const strings_count = strings_column.size();
   if (strings_count == 0) {
-    results.push_back(make_empty_strings_column(stream, mr));
+    results.push_back(make_empty_column(data_type{type_id::STRING}));
     return std::make_unique<table>(std::move(results));
   }
 
