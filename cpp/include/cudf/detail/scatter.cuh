@@ -268,6 +268,8 @@ struct column_scatterer_impl<struct_view> {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
+    std::cout << "GERA_DEBUG column_scatterer_impl<struct_view>" << std::endl;
+
     CUDF_EXPECTS(source.num_children() == target.num_children(),
                  "Scatter source and target are not of the same type.");
 
@@ -304,6 +306,8 @@ struct column_scatterer_impl<struct_view> {
                                             structs_target.child_end(),
                                             [](auto const& col) { return col.nullable(); });
     if (child_nullable) {
+      std::cout << "GERA_DEBUG child_nullable=true" << std::endl;
+
       auto const gather_map =
         scatter_to_gather(scatter_map_begin, scatter_map_end, source.size(), stream);
       gather_bitmask(cudf::table_view{std::vector<cudf::column_view>{structs_src.child_begin(),
@@ -313,6 +317,9 @@ struct column_scatterer_impl<struct_view> {
                      gather_bitmask_op::PASSTHROUGH,
                      stream,
                      mr);
+
+      auto debug_map = gather_map.front_element(stream);
+      std::cout << "GERA_DEBUG gather map: " << debug_map << std::endl;
     }
 
     // Need to put the result column in a vector to call `gather_bitmask`.
@@ -327,14 +334,17 @@ struct column_scatterer_impl<struct_view> {
     // Only gather bitmask from the target column for the rows that have not been scattered onto
     // The bitmask from the source column will be gathered at the top level `scatter()` call.
     if (target.nullable()) {
-      auto const gather_map =
-        scatter_to_gather_complement(scatter_map_begin, scatter_map_end, target.size(), stream);
-      gather_bitmask(table_view{std::vector<cudf::column_view>{target}},
-                     gather_map.begin(),
-                     result,
-                     gather_bitmask_op::PASSTHROUGH,
-                     stream,
-                     mr);
+      std::cout << "GERA_DEBUG target_nullable=true" << std::endl;
+      //   auto const gather_map =
+      //     scatter_to_gather_complement(scatter_map_begin, scatter_map_end, target.size(),
+      //     stream);
+
+      //   gather_bitmask(table_view{std::vector<cudf::column_view>{target}},
+      //                  gather_map.begin(),
+      //                  result,
+      //                  gather_bitmask_op::PASSTHROUGH,
+      //                  stream,
+      //                  mr);
     }
 
     return std::move(result.front());

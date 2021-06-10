@@ -49,6 +49,11 @@ auto no_null() { return cudf::test::iterator_no_null(); }
 
 auto null_at(cudf::size_type idx) { return cudf::test::iterator_with_null_at(idx); }
 
+auto null_at(std::vector<cudf::size_type> indices)
+{
+  return cudf::test::iterator_with_null_at(indices);
+}
+
 auto scatter_structs(std::unique_ptr<cudf::column> const& structs_src,
                      std::unique_ptr<cudf::column> const& structs_tgt,
                      std::unique_ptr<cudf::column> const& scatter_map)
@@ -240,4 +245,24 @@ TYPED_TEST(TypedStructScatterTest, SourceSmallerThanTargetScatterTest)
   auto const scatter_map = int32s_col{2, 5}.release();
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *structs_expected, scatter_structs(structs_src, structs_tgt, scatter_map), print_all);
+}
+
+TYPED_TEST(TypedStructScatterTest, IntStructNullMaskRegression)
+{
+  auto child_0      = int32s_col({-1, 2}, null_at(std::vector<cudf::size_type>{0}));
+  auto struct_col_0 = structs_col({child_0}).release();
+  std::cout << "struct 0: ";
+  cudf::test::print(*struct_col_0);
+
+  auto child_1      = int32s_col({-10, 20}, null_at(std::vector<cudf::size_type>{0}));
+  auto struct_col_1 = structs_col({child_1}).release();
+  std::cout << "struct 1: ";
+  cudf::test::print(*struct_col_1);
+
+  auto scatter_map = int32s_col{1}.release();
+
+  auto result_col_ptr = scatter_structs(struct_col_1, struct_col_0, scatter_map);
+  cudf::test::print(result_col_ptr);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*struct_col_1, result_col_ptr);
 }
