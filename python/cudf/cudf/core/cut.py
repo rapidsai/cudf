@@ -168,8 +168,6 @@ def cut(
         if not right:
             right_edge = bins[-1]
             x = cupy.asarray(x)
-            if isinstance(right_edge, np.ndarray):
-                right_edge = right_edge.item()
             x[x == right_edge] = right_edge + 1
 
         # adjust bin edges decimal precision
