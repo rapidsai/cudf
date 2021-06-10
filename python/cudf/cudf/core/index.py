@@ -1369,7 +1369,7 @@ class Index(SingleColumnFrame, Serializable):
     def _lexsorted_equal_range(
         self, key_as_table: Table, is_sorted: bool
     ) -> Tuple[int, int, Optional[ColumnBase]]:
-        """Get equal range for key in lexigraphically sorted index. If index
+        """Get equal range for key in lexicographically sorted index. If index
         is not sorted when called, a sort will take place and `sort_inds` is
         returned. Otherwise `None` is returned in that position.
         """
