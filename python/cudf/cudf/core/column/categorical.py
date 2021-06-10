@@ -114,7 +114,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         super().__init__(column=column, parent=parent)
 
     @property
-    def categories(self) -> "cudf.Index":
+    def categories(self) -> "cudf.core.index.BaseIndex":
         """
         The categories of this categorical.
         """

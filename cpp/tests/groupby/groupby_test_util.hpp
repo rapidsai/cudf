@@ -125,17 +125,5 @@ inline void test_single_scan(column_view const& keys,
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, *result.second[0].results[0], true);
 }
 
-inline auto all_valid()
-{
-  auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-  return all_valid;
-}
-
-inline auto all_null()
-{
-  auto all_null = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return false; });
-  return all_null;
-}
-
 }  // namespace test
 }  // namespace cudf
