@@ -28,7 +28,9 @@ using cudf::io::io_type;
   benchmark(name##_file_input, type_or_group, static_cast<uint32_t>(io_type::FILEPATH)); \
   benchmark(name##_buffer_input, type_or_group, static_cast<uint32_t>(io_type::HOST_BUFFER));
 
-#define WR_BENCHMARK_DEFINE_ALL_SINKS(benchmark, name, type_or_group) \
+#define WR_BENCHMARK_DEFINE_ALL_SINKS(benchmark, name, type_or_group)                          \
+  benchmark(name##_file_output, type_or_group, static_cast<uint32_t>(io_type::FILEPATH));      \
+  benchmark(name##_buffer_output, type_or_group, static_cast<uint32_t>(io_type::HOST_BUFFER)); \
   benchmark(name##_void_output, type_or_group, static_cast<uint32_t>(io_type::VOID));
 
 /**

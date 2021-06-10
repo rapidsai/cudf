@@ -713,10 +713,10 @@ void writer::impl::init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk> &chu
   chunks.device_to_host(stream, true);
 }
 
-auto build_chunk_dictionaries2(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
-                               host_span<gpu::parquet_column_device_view const> col_desc,
-                               uint32_t num_rows,
-                               rmm::cuda_stream_view stream)
+auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk> &chunks,
+                              host_span<gpu::parquet_column_device_view const> col_desc,
+                              uint32_t num_rows,
+                              rmm::cuda_stream_view stream)
 {
   // At this point, we know all chunks and their sizes. We want to allocate dictionaries for each
   // chunk that can have dictionary
@@ -1104,7 +1104,7 @@ void writer::impl::write(table_view const &table)
   }
 
   // Yahan banayenge nayi dictionary ka ghar
-  auto dict_info_owner = build_chunk_dictionaries2(chunks, col_desc, num_rows, stream);
+  auto dict_info_owner = build_chunk_dictionaries(chunks, col_desc, num_rows, stream);
   for (uint32_t rg = 0, global_rg = global_rowgroup_base; rg < num_rowgroups; rg++, global_rg++) {
     for (int col = 0; col < num_columns; col++) {
       if (chunks.host_view()[rg][col].use_dictionary) {

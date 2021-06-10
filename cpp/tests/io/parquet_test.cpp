@@ -278,7 +278,7 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn)
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
-  constexpr auto num_rows = 100 << 10;
+  constexpr auto num_rows = 100;
   column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
 
   std::vector<std::unique_ptr<column>> cols;
@@ -298,32 +298,31 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
 }
 
-// TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
-// {
-//   auto sequence =
-//     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
-//   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2);
-//   });
+TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumnWithNulls)
+{
+  auto sequence =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i); });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2); });
 
-//   constexpr auto num_rows = 100;
-//   column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
+  constexpr auto num_rows = 100;
+  column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
 
-//   std::vector<std::unique_ptr<column>> cols;
-//   cols.push_back(col.release());
-//   auto expected = std::make_unique<table>(std::move(cols));
-//   EXPECT_EQ(1, expected->num_columns());
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(1, expected->num_columns());
 
-//   auto filepath = temp_env->get_temp_filepath("SingleColumnWithNulls.parquet");
-//   cudf_io::parquet_writer_options out_opts =
-//     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view());
-//   cudf_io::write_parquet(out_opts);
+  auto filepath = temp_env->get_temp_filepath("SingleColumnWithNulls.parquet");
+  cudf_io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view());
+  cudf_io::write_parquet(out_opts);
 
-//   cudf_io::parquet_reader_options in_opts =
-//     cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath});
-//   auto result = cudf_io::read_parquet(in_opts);
+  cudf_io::parquet_reader_options in_opts =
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+  auto result = cudf_io::read_parquet(in_opts);
 
-//   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
-// }
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
+}
 
 TYPED_TEST(ParquetWriterChronoTypeTest, Chronos)
 {
