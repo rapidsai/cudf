@@ -138,7 +138,7 @@ def cut(
                 bins = list(dict.fromkeys(bins))
 
     # if bins is an intervalIndex we ignore the value of right
-    eliif isinstance(bins, (pd.IntervalIndex, cudf.IntervalIndex)):
+    elif isinstance(bins, (pd.IntervalIndex, cudf.IntervalIndex)):
         right = bins.closed == "right"
 
     # create bins if given an int or single scalar
