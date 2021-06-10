@@ -4776,8 +4776,6 @@ class Series(SingleColumnFrame, Serializable):
         2    3.0
         dtype: float64
         """
-        if how not in {"half_up", "half_even"}:
-            raise ValueError("'how' must be either 'half_even' or 'half_up'")
         return Series(
             self._column.round(decimals=decimals, how=how),
             name=self.name,

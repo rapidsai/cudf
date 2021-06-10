@@ -26,6 +26,8 @@ def round(Column input_col, int decimal_places=0, how="half_even"):
     -------
     A Column with values rounded to the given number of decimal places
     """
+    if how not in {"half_even", "half_up"}:
+        raise ValueError("'how' must be either 'half_even' or 'half_up'")
 
     cdef column_view input_col_view = input_col.view()
     cdef unique_ptr[column] c_result
