@@ -1998,8 +1998,11 @@ class DatetimeIndex(GenericIndex):
                   dtype='datetime64[ms]', name='a')
     """
 
-    def __new__(
-        cls,
+    def __new__(cls, *args, **kwargs):
+        return BaseIndex.__new__(cls, *args, **kwargs)
+
+    def __init__(
+        self,
         data=None,
         freq=None,
         tz=None,
@@ -2011,14 +2014,12 @@ class DatetimeIndex(GenericIndex):
         dtype=None,
         copy=False,
         name=None,
-    ) -> "DatetimeIndex":
+    ):
         # we should be more strict on what we accept here but
         # we'd have to go and figure out all the semantics around
         # pandas dtindex creation first which.  For now
         # just make sure we handle np.datetime64 arrays
         # and then just dispatch upstream
-        out = SingleColumnFrame.__new__(cls)
-
         if freq is not None:
             raise NotImplementedError("Freq is not yet supported")
         if tz is not None:
@@ -2043,8 +2044,7 @@ class DatetimeIndex(GenericIndex):
             data = column.as_column(data.values)
         elif isinstance(data, (list, tuple)):
             data = column.as_column(np.array(data, dtype="datetime64[ms]"))
-        out._initialize(data, **kwargs)
-        return out
+        self._initialize(data, **kwargs)
 
     @property
     def year(self):
@@ -2261,8 +2261,11 @@ class TimedeltaIndex(GenericIndex):
                 dtype='timedelta64[s]', name='delta-index')
     """
 
-    def __new__(
-        cls,
+    def __new__(cls, *args, **kwargs):
+        return BaseIndex.__new__(cls, *args, **kwargs)
+
+    def __init__(
+        self,
         data=None,
         unit=None,
         freq=None,
@@ -2270,9 +2273,7 @@ class TimedeltaIndex(GenericIndex):
         dtype="timedelta64[ns]",
         copy=False,
         name=None,
-    ) -> "TimedeltaIndex":
-
-        out = SingleColumnFrame.__new__(cls)
+    ):
 
         if freq is not None:
             raise NotImplementedError("freq is not yet supported")
@@ -2292,8 +2293,7 @@ class TimedeltaIndex(GenericIndex):
             data = column.as_column(data.values)
         elif isinstance(data, (list, tuple)):
             data = column.as_column(np.array(data, dtype=dtype))
-        out._initialize(data, **kwargs)
-        return out
+        self._initialize(data, **kwargs)
 
     def to_pandas(self):
         return pd.TimedeltaIndex(
@@ -2387,15 +2387,18 @@ class CategoricalIndex(GenericIndex):
     CategoricalIndex([1, 2, 3, <NA>], categories=[1, 2, 3], ordered=False, name='a', dtype='category', name='a')
     """  # noqa: E501
 
-    def __new__(
-        cls,
+    def __new__(cls, *args, **kwargs):
+        return BaseIndex.__new__(cls, *args, **kwargs)
+
+    def __init__(
+        self,
         data=None,
         categories=None,
         ordered=None,
         dtype=None,
         copy=False,
         name=None,
-    ) -> "CategoricalIndex":
+    ):
         if isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
             if categories is not None or ordered is not None:
                 raise ValueError(
@@ -2404,7 +2407,6 @@ class CategoricalIndex(GenericIndex):
                 )
         if copy:
             data = column.as_column(data, dtype=dtype).copy(deep=True)
-        out = SingleColumnFrame.__new__(cls)
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, CategoricalColumn):
             data = data
@@ -2444,9 +2446,7 @@ class CategoricalIndex(GenericIndex):
         elif ordered is False and data.ordered is True:
             data.cat().as_unordered(inplace=True)
 
-        out._initialize(data, **kwargs)
-
-        return out
+        self._initialize(data, **kwargs)
 
     @property
     def codes(self):
@@ -2625,12 +2625,14 @@ class IntervalIndex(GenericIndex):
     IntervalIndex
     """
 
-    def __new__(
-        cls, data, closed=None, dtype=None, copy=False, name=None,
-    ) -> "IntervalIndex":
+    def __new__(cls, *args, **kwargs):
+        return BaseIndex.__new__(cls, *args, **kwargs)
+
+    def __init__(
+        self, data, closed=None, dtype=None, copy=False, name=None,
+    ):
         if copy:
             data = column.as_column(data, dtype=dtype).copy()
-        out = SingleColumnFrame.__new__(cls)
         kwargs = _setdefault_name(data, name=name)
         if isinstance(data, IntervalColumn):
             data = data
@@ -2647,8 +2649,7 @@ class IntervalIndex(GenericIndex):
             data = column.as_column(data)
             data.dtype.closed = closed
 
-        out._initialize(data, **kwargs)
-        return out
+        self._initialize(data, **kwargs)
 
     def from_breaks(breaks, closed="right", name=None, copy=False, dtype=None):
         """
@@ -2702,8 +2703,10 @@ class StringIndex(GenericIndex):
     name: A string
     """
 
-    def __new__(cls, values, copy=False, **kwargs):
-        out = SingleColumnFrame.__new__(cls)
+    def __new__(cls, *args, **kwargs):
+        return BaseIndex.__new__(cls, *args, **kwargs)
+
+    def __init__(self, values, copy=False, **kwargs):
         kwargs = _setdefault_name(values, **kwargs)
         if isinstance(values, StringColumn):
             values = values.copy(deep=copy)
@@ -2716,8 +2719,7 @@ class StringIndex(GenericIndex):
                     "Couldn't create StringIndex from passed in object"
                 )
 
-        out._initialize(values, **kwargs)
-        return out
+        self._initialize(values, **kwargs)
 
     def to_pandas(self):
         return pd.Index(self.to_array(), name=self.name, dtype="object")
