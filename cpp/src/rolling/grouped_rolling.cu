@@ -864,7 +864,7 @@ struct to_duration_bounds {
   }
 
   template <typename OrderBy, std::enable_if_t<!cudf::is_timestamp<OrderBy>(), void>* = nullptr>
-  range_window_bounds operator()(size_type num_days) const
+  range_window_bounds operator()(size_type) const
   {
     CUDF_FAIL("Expected timestamp orderby column.");
   }
