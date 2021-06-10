@@ -42,37 +42,36 @@ enum class binary_operator : int32_t {
   FLOOR_DIV,             ///< operator / after promoting to 64 bit floating point and then
                          ///< flooring the result
   MOD,                   ///< operator %
+  PMOD,                  ///< positive modulo operator
+                         ///< If remainder is negative, this returns (remainder + divisor) % divisor
+                         ///< else, it returns (dividend % divisor)
   PYMOD,                 ///< operator % but following python's sign rules for negatives
   POW,                   ///< lhs ^ rhs
+  LOG_BASE,              ///< logarithm to the base
+  ATAN2,                 ///< 2-argument arctangent
+  SHIFT_LEFT,            ///< operator <<
+  SHIFT_RIGHT,           ///< operator >>
+  SHIFT_RIGHT_UNSIGNED,  ///< operator >>> (from Java)
+                         ///< Logical right shift. Casts to an unsigned value before shifting.
+  BITWISE_AND,           ///< operator &
+  BITWISE_OR,            ///< operator |
+  BITWISE_XOR,           ///< operator ^
+  LOGICAL_AND,           ///< operator &&
+  LOGICAL_OR,            ///< operator ||
   EQUAL,                 ///< operator ==
   NOT_EQUAL,             ///< operator !=
   LESS,                  ///< operator <
   GREATER,               ///< operator >
   LESS_EQUAL,            ///< operator <=
   GREATER_EQUAL,         ///< operator >=
-  BITWISE_AND,           ///< operator &
-  BITWISE_OR,            ///< operator |
-  BITWISE_XOR,           ///< operator ^
-  LOGICAL_AND,           ///< operator &&
-  LOGICAL_OR,            ///< operator ||
-  COALESCE,              ///< operator x,y  x is null ? y : x
-  GENERIC_BINARY,        ///< generic binary operator to be generated with input
-                         ///< ptx code
-  SHIFT_LEFT,            ///< operator <<
-  SHIFT_RIGHT,           ///< operator >>
-  SHIFT_RIGHT_UNSIGNED,  ///< operator >>> (from Java)
-                         ///< Logical right shift. Casts to an unsigned value before shifting.
-  LOG_BASE,              ///< logarithm to the base
-  ATAN2,                 ///< 2-argument arctangent
-  PMOD,                  ///< positive modulo operator
-                         ///< If remainder is negative, this returns (remainder + divisor) % divisor
-                         ///< else, it returns (dividend % divisor)
   NULL_EQUALS,           ///< Returns true when both operands are null; false when one is null; the
                          ///< result of equality when both are non-null
   NULL_MAX,              ///< Returns max of operands when both are non-null; returns the non-null
                          ///< operand when one is null; or invalid when both are null
   NULL_MIN,              ///< Returns min of operands when both are non-null; returns the non-null
                          ///< operand when one is null; or invalid when both are null
+  GENERIC_BINARY,        ///< generic binary operator to be generated with input
+                         ///< ptx code
   INVALID_BINARY         ///< invalid operation
 };
 /**

@@ -87,9 +87,6 @@ class BinaryOperation(IntEnum):
     L_OR = (
         <underlying_type_t_binary_operator> binary_operator.LOGICAL_OR
     )
-    COALESCE = (
-        <underlying_type_t_binary_operator> binary_operator.COALESCE
-    )
     GENERIC_BINARY = (
         <underlying_type_t_binary_operator> binary_operator.GENERIC_BINARY
     )

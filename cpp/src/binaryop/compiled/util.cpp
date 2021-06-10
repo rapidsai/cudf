@@ -135,7 +135,6 @@ struct is_supported_operation_functor {
         case binary_operator::NULL_MAX:             return call<ops::NullMax, TypeOut>();
         case binary_operator::NULL_MIN:             return call<ops::NullMin, TypeOut>();
         /*
-        case binary_operator::COALESCE:             // already defined.
         case binary_operator::GENERIC_BINARY:       // defined in jit only.
         */
         default:                                    return false;
