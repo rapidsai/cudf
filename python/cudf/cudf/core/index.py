@@ -59,17 +59,6 @@ class BaseIndex(SingleColumnFrame, Serializable):
         else:
             return NotImplemented
 
-    def __init__(
-        self,
-        data=None,
-        dtype=None,
-        copy=False,
-        name=None,
-        tupleize_cols=True,
-        **kwargs,
-    ):
-        pass
-
     @cached_property
     def _values(self) -> ColumnBase:
         raise NotImplementedError
@@ -147,9 +136,7 @@ class BaseIndex(SingleColumnFrame, Serializable):
             check_types = True
 
         try:
-            return super(BaseIndex, self).equals(
-                other, check_types=check_types
-            )
+            return super().equals(other, check_types=check_types)
         except TypeError:
             return False
 
@@ -1703,7 +1690,7 @@ class GenericIndex(BaseIndex):
             assert isinstance(values, (NumericalColumn, StringColumn))
 
         name = kwargs.get("name")
-        super(BaseIndex, self).__init__({name: values})
+        super().__init__({name: values})
 
     @property
     def _values(self):

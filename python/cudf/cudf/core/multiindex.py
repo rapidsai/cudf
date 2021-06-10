@@ -83,7 +83,7 @@ class MultiIndex(BaseIndex):
                 "Use `names`, `name` is not yet supported"
             )
 
-        super(BaseIndex, self).__init__()
+        super().__init__()
 
         if copy:
             if isinstance(codes, cudf.DataFrame):
