@@ -2645,9 +2645,8 @@ public class ColumnVectorTest extends CudfTestBase {
 
     // Strings column containing both null and empty, output is copied exactly from input.
     try (ColumnVector sv = ColumnVector.fromStrings("abc", "", null, "123", null);
-         ColumnVector result = sv.repeatStrings(1);
-         ColumnVector expected = ColumnVector.fromStrings("abc", "", null, "123", null)) {
-      assertColumnsAreEqual(expected, result);
+         ColumnVector result = sv.repeatStrings(1)) {
+      assertColumnsAreEqual(sv, result);
     }
 
     // Strings column containing both null and empty.
