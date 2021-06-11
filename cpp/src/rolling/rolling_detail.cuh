@@ -114,6 +114,7 @@ struct DeviceRolling {
   template <typename OutputType, bool has_nulls>
   bool __device__ operator()(column_device_view const& input,
                              column_device_view const& ignored_default_outputs,
+                             table_device_view const& ignored_order_by,
                              mutable_column_device_view& output,
                              size_type start_index,
                              size_type end_index,
@@ -167,6 +168,7 @@ struct DeviceRollingArgMinMax {
   template <typename OutputType, bool has_nulls>
   bool __device__ operator()(column_device_view const& input,
                              column_device_view const& ignored_default_outputs,
+                             table_device_view const& ignored_order_by,
                              mutable_column_device_view& output,
                              size_type start_index,
                              size_type end_index,
@@ -220,6 +222,7 @@ struct DeviceRollingCountValid {
   template <typename OutputType, bool has_nulls>
   bool __device__ operator()(column_device_view const& input,
                              column_device_view const& ignored_default_outputs,
+                             table_device_view const& ignored_order_by,
                              mutable_column_device_view& output,
                              size_type start_index,
                              size_type end_index,
@@ -266,6 +269,7 @@ struct DeviceRollingCountAll {
   template <typename OutputType, bool has_nulls>
   bool __device__ operator()(column_device_view const& input,
                              column_device_view const& ignored_default_outputs,
+                             table_device_view const& ignored_order_by,
                              mutable_column_device_view& output,
                              size_type start_index,
                              size_type end_index,
@@ -299,6 +303,7 @@ struct DeviceRollingRowNumber {
   template <typename OutputType, bool has_nulls>
   bool __device__ operator()(column_device_view const& input,
                              column_device_view const& ignored_default_outputs,
+                             table_device_view const& ignored_order_by,
                              mutable_column_device_view& output,
                              size_type start_index,
                              size_type end_index,
@@ -306,6 +311,86 @@ struct DeviceRollingRowNumber {
   {
     bool output_is_valid                      = end_index - start_index >= min_periods;
     output.element<OutputType>(current_index) = current_index - start_index + 1;
+
+    return output_is_valid;
+  }
+};
+
+/**
+ * @brief Operator for applying a RANK rolling aggregation on a single window.
+ */
+template <typename InputType>
+struct DeviceRollingRank {
+  size_type min_periods;
+
+  // what operations do we support
+  template <typename T = InputType, aggregation::Kind O = aggregation::ROW_NUMBER>
+  static constexpr bool is_supported()
+  {
+    return true;
+  }
+
+  DeviceRollingRank(size_type _min_periods) : min_periods(_min_periods) {}
+
+  template <typename OutputType, bool has_nulls>
+  bool __device__ operator()(column_device_view const& input,
+                             column_device_view const& ignored_default_outputs,
+                             table_device_view const& order_by,
+                             mutable_column_device_view& output,
+                             size_type start_index,
+                             size_type end_index,
+                             size_type current_index)
+  {
+    bool output_is_valid               = end_index - start_index >= min_periods;
+    column_device_view row_comparisons = order_by.column(0);
+    size_type search_index             = current_index;
+
+    while (search_index > start_index && row_comparisons.element<uint32_t>(search_index) == 1) {
+      search_index--;
+    }
+    output.element<OutputType>(current_index) = search_index - start_index + 1;
+    // // output.element<OutputType>(current_index) = order_by.num_rows();
+    // output.element<OutputType>(current_index) = row_comparisons.element<uint32_t>(current_index);
+
+    return output_is_valid;
+  }
+};
+
+/**
+ * @brief Operator for applying a DENSE_RANK rolling aggregation on a single window.
+ */
+template <typename InputType>
+struct DeviceRollingDenseRank {
+  size_type min_periods;
+
+  // what operations do we support
+  template <typename T = InputType, aggregation::Kind O = aggregation::ROW_NUMBER>
+  static constexpr bool is_supported()
+  {
+    return true;
+  }
+
+  DeviceRollingDenseRank(size_type _min_periods) : min_periods(_min_periods) {}
+
+  template <typename OutputType, bool has_nulls>
+  bool __device__ operator()(column_device_view const& input,
+                             column_device_view const& ignored_default_outputs,
+                             table_device_view const& order_by,
+                             mutable_column_device_view& output,
+                             size_type start_index,
+                             size_type end_index,
+                             size_type current_index)
+  {
+    bool output_is_valid               = end_index - start_index >= min_periods;
+    column_device_view row_comparisons = order_by.column(0);
+    size_type search_index             = current_index;
+    uint32_t duplicate_count           = 0;
+
+    while (search_index > start_index) {
+      duplicate_count += row_comparisons.element<uint32_t>(search_index);
+      search_index--;
+    }
+    output.element<OutputType>(current_index) = current_index - start_index + 1 - duplicate_count;
 
     return output_is_valid;
   }
@@ -381,6 +466,7 @@ struct DeviceRollingLead {
   template <typename OutputType, bool has_nulls>
   bool __device__ operator()(column_device_view const& input,
                              column_device_view const& default_outputs,
+                             table_device_view const& ignored_order_by,
                              mutable_column_device_view& output,
                              size_type start_index,
                              size_type end_index,
@@ -437,6 +523,7 @@ struct DeviceRollingLag {
   template <typename OutputType, bool has_nulls>
   bool __device__ operator()(column_device_view const& input,
                              column_device_view const& default_outputs,
+                             table_device_view const& ignored_order_by,
                              mutable_column_device_view& output,
                              size_type start_index,
                              size_type end_index,
@@ -510,6 +597,16 @@ struct corresponding_rolling_operator<InputType, aggregation::Kind::LEAD> {
 template <typename InputType>
 struct corresponding_rolling_operator<InputType, aggregation::Kind::LAG> {
   using type = DeviceRollingLag<InputType>;
+};
+
+template <typename InputType>
+struct corresponding_rolling_operator<InputType, aggregation::RANK> {
+  using type = DeviceRollingRank<InputType>;
+};
+
+template <typename InputType>
+struct corresponding_rolling_operator<InputType, aggregation::DENSE_RANK> {
+  using type = DeviceRollingDenseRank<InputType>;
 };
 
 /**
@@ -661,7 +758,6 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
 
   rolling_aggregation_postprocessor(column_view const& _input,
                                     column_view const& _default_outputs,
-                                    table_view const& _order_by,
                                     data_type _result_type,
                                     PrecedingWindowIterator _preceding_window_begin,
                                     FollowingWindowIterator _following_window_begin,
@@ -673,7 +769,6 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
 
       input(_input),
       default_outputs(_default_outputs),
-      order_by(_order_by),
       result_type(_result_type),
       preceding_window_begin(_preceding_window_begin),
       following_window_begin(_following_window_begin),
@@ -1155,6 +1250,50 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                  "Only LEAD/LAG window functions support default values.");
   }
 
+  cudf::table_view* mutated_order_by = nullptr;
+  auto d_order_by                    = table_device_view::create(order_by);
+  if (agg.kind == aggregation::RANK || agg.kind == aggregation::DENSE_RANK) {
+    CUDF_EXPECTS(!order_by.is_empty(), "RANK/DENSE_RANK expect order_by data, but table was empty");
+
+    auto comparisons        = make_fixed_width_column(cudf::data_type{cudf::type_to_id<uint32_t>()},
+                                               order_by.num_rows(),
+                                               mask_state::ALL_VALID,
+                                               stream,
+                                               mr);
+    auto mutable_comparison = comparisons->mutable_view();
+    if (has_nulls(order_by)) {
+      row_equality_comparator<true> row_comparator(*d_order_by, *d_order_by, true);
+      thrust::tabulate(rmm::exec_policy(stream),
+                       mutable_comparison.begin<uint32_t>(),
+                       mutable_comparison.end<uint32_t>(),
+                       [comparator = row_comparator] __device__(auto row_index) {
+                         if (row_index == 0 || !comparator(row_index, row_index - 1)) {
+                           return 0;
+                         } else {
+                           return 1;
+                         }
+                       });
+    } else {
+      row_equality_comparator<false> row_comparator(*d_order_by, *d_order_by, true);
+      thrust::tabulate(rmm::exec_policy(stream),
+                       mutable_comparison.begin<uint32_t>(),
+                       mutable_comparison.end<uint32_t>(),
+                       [comparator = row_comparator] __device__(auto row_index) {
+                         if (row_index == 0 || !comparator(row_index, row_index - 1)) {
+                           return 0;
+                         } else {
+                           return 1;
+                         }
+                       });
+    }
+
+    std::vector<cudf::column_view> column_views;
+    column_views.emplace_back(comparisons->view());
+    mutated_order_by = new cudf::table_view(column_views);
+  } else {
+    mutated_order_by = const_cast<table_view*>(&order_by);
+  }
+
   min_periods = std::max(min_periods, 0);
 
   auto input_col = cudf::is_dictionary(input.type())
@@ -1165,7 +1304,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                       dispatch_rolling{},
                                       input_col,
                                       default_outputs,
-                                      order_by,
+                                      *mutated_order_by,
                                       preceding_window_begin,
                                       following_window_begin,
                                       min_periods,
@@ -1178,7 +1317,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   // dictionary column post processing
   if (agg.kind == aggregation::COUNT_ALL || agg.kind == aggregation::COUNT_VALID ||
       agg.kind == aggregation::ROW_NUMBER || agg.kind == aggregation::RANK ||
-      agg.kind == aggregation::DENSE_RANK)
+      agg.kind == aggregation::DENSE_RANK) {
     return output;
   }
 

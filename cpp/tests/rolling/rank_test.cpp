@@ -103,7 +103,7 @@ TYPED_TEST(TypedRankWindowTest, RankBasics)
     *rank_output_col,
     fixed_width_column_wrapper<size_type>{{1, 1, 3, 3, 4, 3, 1, 1, 1, 4, 3, 2}}.release()->view());
 
-  auto dense_rank_outpput_col =
+  auto dense_rank_output_col =
     cudf::grouped_rolling_window(grouping_keys,
                                  input_col1->view(),
                                  order_by_cols,
@@ -112,7 +112,7 @@ TYPED_TEST(TypedRankWindowTest, RankBasics)
                                  min_periods,
                                  *cudf::make_dense_rank_aggregation<cudf::rolling_aggregation>());
 
-  auto dense_rank_outpput_col2 =
+  auto dense_rank_output_col2 =
     cudf::rolling_window(input_col1->view(),
                          order_by_cols,
                          preceding_col,
@@ -121,11 +121,11 @@ TYPED_TEST(TypedRankWindowTest, RankBasics)
                          *cudf::make_dense_rank_aggregation<cudf::rolling_aggregation>());
 
   expect_columns_equivalent(
-    *dense_rank_outpput_col,
+    *dense_rank_output_col,
     fixed_width_column_wrapper<size_type>{{1, 1, 2, 2, 3, 2, 1, 1, 1, 2, 2, 2}}.release()->view());
 
   expect_columns_equivalent(
-    *dense_rank_outpput_col2,
+    *dense_rank_output_col2,
     fixed_width_column_wrapper<size_type>{{1, 1, 2, 2, 3, 2, 1, 1, 1, 2, 2, 2}}.release()->view());
 }
 
