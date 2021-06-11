@@ -468,7 +468,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
   auto following_column = expand_to_column(following_calculator, input.size(), stream, mr);
   auto const order_by   = table_view({orderby_column});
 
-  return cudf::detail::rollling_window(input,
+  return cudf::detail::rolling_window(input,
                                        order_by,
                                        preceding_column->view(),
                                        following_column->view(),
@@ -656,7 +656,7 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
   auto following_column = expand_to_column(following_calculator, input.size(), stream, mr);
   auto const order_by   = table_view({orderby_column});
 
-  return cudf::detail::rollling_window(input,
+  return cudf::detail::rolling_window(input,
                                        order_by,
                                        preceding_column->view(),
                                        following_column->view(),
@@ -755,7 +755,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
   auto following_column = expand_to_column(following_calculator, input.size(), stream, mr);
   auto const order_by   = table_view({orderby_column});
 
-  return cudf::detail::rollling_window(input,
+  return cudf::detail::rolling_window(input,
                                        order_by,
                                        preceding_column->view(),
                                        following_column->view(),
@@ -872,7 +872,7 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
     CUDF_FAIL("Ranged rolling window does NOT (yet) support UDF.");
   } else {
     auto const order_by = table_view({orderby_column});
-    return cudf::detail::rollling_window(input,
+    return cudf::detail::rolling_window(input,
                                          order_by,
                                          preceding_column->view(),
                                          following_column->view(),
