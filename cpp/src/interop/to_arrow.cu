@@ -127,7 +127,7 @@ struct dispatch_to_arrow {
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   std::shared_ptr<arrow::Array> operator()(column_view input_view,
                                            cudf::type_id id,
-                                           column_metadata const& metadata,
+                                           column_metadata const&,
                                            arrow::MemoryPool* ar_mr,
                                            rmm::cuda_stream_view stream)
   {
@@ -142,8 +142,8 @@ struct dispatch_to_arrow {
 template <>
 std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
   column_view input,
-  cudf::type_id id,
-  column_metadata const& metadata,
+  cudf::type_id,
+  column_metadata const&,
   arrow::MemoryPool* ar_mr,
   rmm::cuda_stream_view stream)
 {
@@ -185,7 +185,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<numeric::decimal64>(
 template <>
 std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<bool>(column_view input,
                                                                   cudf::type_id id,
-                                                                  column_metadata const& metadata,
+                                                                  column_metadata const&,
                                                                   arrow::MemoryPool* ar_mr,
                                                                   rmm::cuda_stream_view stream)
 {
@@ -211,8 +211,8 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<bool>(column_view in
 template <>
 std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
   column_view input,
-  cudf::type_id id,
-  column_metadata const& metadata,
+  cudf::type_id,
+  column_metadata const&,
   arrow::MemoryPool* ar_mr,
   rmm::cuda_stream_view stream)
 {
@@ -251,7 +251,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
 template <>
 std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::struct_view>(
   column_view input,
-  cudf::type_id id,
+  cudf::type_id,
   column_metadata const& metadata,
   arrow::MemoryPool* ar_mr,
   rmm::cuda_stream_view stream)
@@ -287,7 +287,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::struct_view>(
 template <>
 std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::list_view>(
   column_view input,
-  cudf::type_id id,
+  cudf::type_id,
   column_metadata const& metadata,
   arrow::MemoryPool* ar_mr,
   rmm::cuda_stream_view stream)
@@ -319,7 +319,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::list_view>(
 template <>
 std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::dictionary32>(
   column_view input,
-  cudf::type_id id,
+  cudf::type_id,
   column_metadata const& metadata,
   arrow::MemoryPool* ar_mr,
   rmm::cuda_stream_view stream)
