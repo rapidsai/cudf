@@ -337,20 +337,19 @@ def test_concatenate_list_with_nonlist():
 
 
 @pytest.mark.parametrize(
-    "indata,expect",
+    "data",
     [
-        ([1], [1]),
-        ([1, 2, 3], [1, 2, 3]),
-        ([[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]),
-        ([None], [NA]),
-        ([1, None, 3], [1, NA, 3]),
-        ([[1, None, 3], [None, 5, 6]], [[1, NA, 3], [NA, 5, 6]]),
+        [1],
+        [1, 2, 3],
+        [[1, 2, 3], [4, 5, 6]],
+        [NA],
+        [1, NA, 3],
+        [[1, NA, 3], [NA, 5, 6]],
     ],
 )
-def test_list_getitem(indata, expect):
-    list_sr = cudf.Series([indata])
-    # __getitem__ shall fill None with cudf.NA
-    assert list_sr[0] == expect
+def test_list_getitem(data):
+    list_sr = cudf.Series([data])
+    assert list_sr[0] == data
 
 
 @pytest.mark.parametrize(
@@ -362,12 +361,12 @@ def test_list_getitem(indata, expect):
         [["a", "b", "c"], ["d", "e", "f"]],
         [1.1, 2.2, 3.3],
         [[1.1, 2.2, 3.3], [4.4, 5.5, 6.6]],
-        [1, cudf.NA, 3],
-        [[1, cudf.NA, 3], [4, 5, cudf.NA]],
-        ["a", cudf.NA, "c"],
-        [["a", cudf.NA, "c"], ["d", "e", cudf.NA]],
-        [1.1, cudf.NA, 3.3],
-        [[1.1, cudf.NA, 3.3], [4.4, 5.5, cudf.NA]],
+        [1, NA, 3],
+        [[1, NA, 3], [4, 5, NA]],
+        ["a", NA, "c"],
+        [["a", NA, "c"], ["d", "e", NA]],
+        [1.1, NA, 3.3],
+        [[1.1, NA, 3.3], [4.4, 5.5, NA]],
     ],
 )
 def test_list_scalar_host_construction(data):
@@ -384,12 +383,12 @@ def test_list_scalar_host_construction(data):
         [["a", "b", "c"], ["d", "e", "f"]],
         [1.1, 2.2, 3.3],
         [[1.1, 2.2, 3.3], [4.4, 5.5, 6.6]],
-        [1, cudf.NA, 3],
-        [[1, cudf.NA, 3], [4, 5, cudf.NA]],
-        ["a", cudf.NA, "c"],
-        [["a", cudf.NA, "c"], ["d", "e", cudf.NA]],
-        [1.1, cudf.NA, 3.3],
-        [[1.1, cudf.NA, 3.3], [4.4, 5.5, cudf.NA]],
+        [1, NA, 3],
+        [[1, NA, 3], [4, 5, NA]],
+        ["a", NA, "c"],
+        [["a", NA, "c"], ["d", "e", NA]],
+        [1.1, NA, 3.3],
+        [[1.1, NA, 3.3], [4.4, 5.5, NA]],
     ],
 )
 def test_list_scalar_device_construction(data):
@@ -398,7 +397,7 @@ def test_list_scalar_device_construction(data):
     assert slr.value == data
 
 @pytest.mark.parametrize(
-    "input_obj", [[[1, cudf.NA, 3]], [[1, cudf.NA, 3], [4, 5, cudf.NA]]]
+    "input_obj", [[[1, NA, 3]], [[1, NA, 3], [4, 5, NA]]]
 )
 def test_construction_series_with_nulls(input_obj):
     expect = pa.array(input_obj, from_pandas=True)
