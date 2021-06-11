@@ -414,7 +414,7 @@ struct NullMin {
             typename TypeRhs,
             typename common_t = std::common_type_t<TypeLhs, TypeRhs>>
   CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y)
-    -> decltype(static_cast<common_t>(static_cast<common_t>(x) > static_cast<common_t>(y) ? x : y));
+    -> decltype(static_cast<common_t>(static_cast<common_t>(x) < static_cast<common_t>(y) ? x : y));
 };
 
 }  // namespace ops
