@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 from collections.abc import Sequence
 
+# from cudf._lib.filling import sequence
+
 
 def cut(
     x,
@@ -31,7 +33,7 @@ def cut(
     ----------
     x : array-like
         The input array to be binned. Must be 1-dimensional.
-    bins : int, of scalars, or IntervalIndex
+    bins : int, sequence of scalars, or IntervalIndex
         The criteria to bin by.
         * int : Defines the number of equal-width bins in the
         range of x. The range of x is extended by .1% on each
@@ -90,9 +92,9 @@ def cut(
     >>> cudf.cut([0, 1, 1, 2], bins=4, labels=False)
     array([0, 1, 1, 3], dtype=int32)
     Passing a Series as an input returns a Series with categorical dtype:
-    >>> s = pd.Series(np.array([2, 4, 6, 8, 10]),
+    >>> s = cudf.Series(np.array([2, 4, 6, 8, 10]),
     ...        index=['a', 'b', 'c', 'd', 'e'])
-    >>> pd.cut(s, 3)
+    >>> cudf.cut(s, 3)
     """
     left_inclusive = False
     right_inclusive = True
@@ -132,10 +134,11 @@ def cut(
                     "kwarg"
                 )
             elif duplicates == "drop":
+                # get unique values but maintain list dtype
                 bins = list(dict.fromkeys(bins))
 
     # if bins is an intervalIndex we ignore the value of right
-    if isinstance(bins, (pd.IntervalIndex, cudf.IntervalIndex)):
+    elif isinstance(bins, (pd.IntervalIndex, cudf.IntervalIndex)):
         right = bins.closed == "right"
 
     # create bins if given an int or single scalar
@@ -144,10 +147,6 @@ def cut(
             if isinstance(
                 x, (pd.Series, cudf.Series, np.ndarray, cupy.ndarray)
             ):
-                # changing to scalars and using sequence to get the bins
-                # because this allows masked arrays from value_counts to
-                # also be able to be handled by cut correctly
-                # pandas by default seems to turn all bins into a float
                 mn = x.min()
                 mx = x.max()
             else:
@@ -167,10 +166,8 @@ def cut(
 
         # if right is false the last bin edge is not included
         if not right:
-            right_edge = bins[len(bins) - 1]
+            right_edge = bins[-1]
             x = cupy.asarray(x)
-            if isinstance(right_edge, cupy._core.core.ndarray):
-                right_edge = right_edge.item()
             x[x == right_edge] = right_edge + 1
 
         # adjust bin edges decimal precision
@@ -237,10 +234,10 @@ def cut(
         right_edges = as_column(bins.right).astype(input_arr.dtype)
     else:
         # get the left and right edges of the bins as columns
-        left_edges = as_column(bins[:-1:])
-        right_edges = as_column(bins[+1::])
+        left_edges = as_column(bins[:-1:], dtype="float64")
+        right_edges = as_column(bins[+1::], dtype="float64")
         # the input arr must be changed to the same type as the edges
-        input_arr = input_arr.astype(left_edges._dtype)
+        input_arr = input_arr.astype(left_edges.dtype)
     # get the indexes for the appropriate number
     index_labels = label_bins(
         input_arr, left_edges, left_inclusive, right_edges, right_inclusive

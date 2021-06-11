@@ -115,7 +115,7 @@ class CategoricalAccessor(ColumnMethodsMixin):
         super().__init__(column=column, parent=parent)
 
     @property
-    def categories(self) -> "cudf.Index":
+    def categories(self) -> "cudf.core.index.BaseIndex":
         """
         The categories of this categorical.
         """
@@ -1094,7 +1094,7 @@ class CategoricalColumn(column.ColumnBase):
         signed_dtype = min_signed_type(len(col.categories))
         codes = col.cat().codes.astype(signed_dtype).fillna(-1).to_array()
         if is_interval_dtype(col.categories.dtype):
-            # leaving out dropna because it termporarily changes an interval
+            # leaving out dropna because it temporarily changes an interval
             # index into a struct and throws off results.
             # TODO: work on interval index dropna
             categories = col.categories.to_pandas()

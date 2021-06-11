@@ -35,7 +35,7 @@ def assert_groupby_results_equal(
     expect, got, sort=True, as_index=True, by=None, **kwargs
 ):
     # Because we don't sort by index by default in groupby,
-    # sort expect and got by index before comparing
+    # sort expect and got by index before comparing.
     if sort:
         if as_index:
             expect = expect.sort_index()
@@ -1901,3 +1901,187 @@ def test_groupby_shift_row_zero_shift(nelem, fill_value):
     assert_groupby_results_equal(
         expected[["1", "2", "3", "4"]], got[["1", "2", "3", "4"]]
     )
+
+
+# TODO: test for category columns when cudf.Scalar supports category type
+@pytest.mark.parametrize("nelem", [10, 100, 1000])
+def test_groupby_fillna_multi_value(nelem):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "float32", "null_frequency": 0.4, "cardinality": 10},
+            {
+                "dtype": "datetime64[ms]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "timedelta64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {"dtype": "decimal64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "str", "null_frequency": 0.4, "cardinality": 10},
+        ],
+        rows=nelem,
+        use_threads=False,
+        seed=0,
+    )
+    key_col = "0"
+    value_cols = ["1", "2", "3", "4", "5", "6"]
+    pdf = t.to_pandas()
+    gdf = cudf.from_pandas(pdf)
+
+    # fill the dataframe with the first non-null item in the column
+    fill_values = {
+        name: pdf[name].loc[pdf[name].first_valid_index()]
+        for name in value_cols
+    }
+    # cudf can't fillna with a pandas.Timedelta type
+    fill_values["4"] = fill_values["4"].to_numpy()
+
+    expect = pdf.groupby(key_col).fillna(value=fill_values)
+
+    got = gdf.groupby(key_col).fillna(value=fill_values)
+
+    # In this specific case, Pandas returns the rows in grouped order.
+    # Cudf returns columns in orginal order.
+    expect.index = expect.index.get_level_values(1)
+    assert_groupby_results_equal(expect[value_cols], got[value_cols])
+
+
+# TODO: test for category columns when cudf.Scalar supports category type
+# TODO: cudf.fillna does not support decimal column to column fill yet
+@pytest.mark.parametrize("nelem", [10, 100, 1000])
+def test_groupby_fillna_multi_value_df(nelem):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "float32", "null_frequency": 0.4, "cardinality": 10},
+            {
+                "dtype": "datetime64[ms]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "timedelta64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {"dtype": "str", "null_frequency": 0.4, "cardinality": 10},
+        ],
+        rows=nelem,
+        use_threads=False,
+        seed=0,
+    )
+    key_col = "0"
+    value_cols = ["1", "2", "3", "4", "5"]
+    pdf = t.to_pandas()
+    gdf = cudf.from_pandas(pdf)
+
+    # fill the dataframe with the first non-null item in the column
+    fill_values = {
+        name: pdf[name].loc[pdf[name].first_valid_index()]
+        for name in value_cols
+    }
+    # cudf can't fillna with a pandas.Timedelta type
+    fill_values["4"] = fill_values["4"].to_numpy()
+    fill_values = pd.DataFrame(fill_values, index=pdf.index)
+
+    expect = pdf.groupby(key_col).fillna(value=fill_values)
+
+    fill_values = cudf.from_pandas(fill_values)
+    got = gdf.groupby(key_col).fillna(value=fill_values)
+
+    assert_groupby_results_equal(expect[value_cols], got[value_cols])
+
+
+@pytest.mark.parametrize(
+    "by",
+    [pd.Series([1, 1, 2, 2, 3, 4]), lambda x: x % 2 == 0, pd.Grouper(level=0)],
+)
+@pytest.mark.parametrize(
+    "data", [[1, None, 2, None, 3, None], [1, 2, 3, 4, 5, 6]]
+)
+@pytest.mark.parametrize("args", [{"value": 42}, {"method": "ffill"}])
+def test_groupby_various_by_fillna(by, data, args):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.groupby(by).fillna(**args)
+    if isinstance(by, pd.Grouper):
+        by = cudf.Grouper(level=by.level)
+    got = gs.groupby(by).fillna(**args)
+
+    assert_groupby_results_equal(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize("nelem", [10, 100, 1000])
+@pytest.mark.parametrize("method", ["pad", "ffill", "backfill", "bfill"])
+def test_groupby_fillna_method(nelem, method):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "float32", "null_frequency": 0.4, "cardinality": 10},
+            {
+                "dtype": "datetime64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "timedelta64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "list",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+                "lists_max_length": 10,
+                "nesting_max_depth": 3,
+                "value_type": "int64",
+            },
+            {"dtype": "category", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "decimal64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "str", "null_frequency": 0.4, "cardinality": 10},
+        ],
+        rows=nelem,
+        use_threads=False,
+        seed=0,
+    )
+    key_col = "0"
+    value_cols = ["1", "2", "3", "4", "5", "6", "7", "8"]
+    pdf = t.to_pandas()
+    gdf = cudf.from_pandas(pdf)
+
+    expect = pdf.groupby(key_col).fillna(method=method)
+    got = gdf.groupby(key_col).fillna(method=method)
+
+    assert_groupby_results_equal(
+        expect[value_cols], got[value_cols], sort=False
+    )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"Speed": [380.0, 370.0, 24.0, 26.0], "Score": [50, 30, 90, 80]},
+        {
+            "Speed": [380.0, 370.0, 24.0, 26.0],
+            "Score": [50, 30, 90, 80],
+            "Other": [10, 20, 30, 40],
+        },
+    ],
+)
+@pytest.mark.parametrize("group", ["Score", "Speed"])
+def test_groupby_describe(data, group):
+    pdf = pd.DataFrame(data)
+    gdf = cudf.from_pandas(pdf)
+
+    got = gdf.groupby(group).describe()
+    expect = pdf.groupby(group).describe()
+
+    assert_groupby_results_equal(expect, got, check_dtype=False)

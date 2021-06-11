@@ -241,14 +241,19 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls
 
   auto const& group_labels = helper().group_labels(stream);
   std::vector<std::unique_ptr<column>> results;
-  std::transform(thrust::make_counting_iterator(0),
-                 thrust::make_counting_iterator(values.num_columns()),
-                 std::back_inserter(results),
-                 [&](auto i) {
-                   auto grouped_values = helper().grouped_values(values.column(i), stream);
-                   return detail::group_replace_nulls(
-                     grouped_values->view(), group_labels, replace_policies[i], stream, mr);
-                 });
+  results.reserve(values.num_columns());
+  std::transform(
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(values.num_columns()),
+    std::back_inserter(results),
+    [&](auto i) {
+      bool nullable       = values.column(i).nullable();
+      auto final_mr       = nullable ? rmm::mr::get_current_device_resource() : mr;
+      auto grouped_values = helper().grouped_values(values.column(i), stream, final_mr);
+      return nullable ? detail::group_replace_nulls(
+                          *grouped_values, group_labels, replace_policies[i], stream, mr)
+                      : std::move(grouped_values);
+    });
 
   return std::make_pair(std::move(helper().sorted_keys(stream, mr)),
                         std::make_unique<table>(std::move(results)));
