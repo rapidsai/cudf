@@ -39,7 +39,7 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> rolling_window2(
+std::unique_ptr<column> rollling_window(
   column_view const& input,
   table_view const& order_by,
   column_view const& preceding_window,
