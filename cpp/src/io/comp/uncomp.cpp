@@ -210,6 +210,9 @@ bool OpenZipArchive(zip_archive_s *dst, const uint8_t *raw, size_t len)
         // Start of central directory
         if (cdfh->sig == 0x02014b50) { dst->cdfh = cdfh; }
       }
+      // ensure we don't read further than the beginning of the file and we don't underflow
+      if(i == 0)
+        break;
     }
   }
   return (dst->eocd && dst->cdfh);
