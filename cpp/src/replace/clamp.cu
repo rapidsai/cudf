@@ -42,7 +42,7 @@ namespace {
 template <typename Transformer>
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_char_column(
   cudf::column_device_view input,
-  size_type null_count,
+  size_type,
   Transformer offsets_transformer,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
@@ -64,7 +64,6 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> form_offsets_and_cha
       offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   }
 
-  auto d_offsets = offsets_column->view().template data<size_type>();
   // build chars column
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
