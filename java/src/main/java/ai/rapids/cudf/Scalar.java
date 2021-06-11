@@ -495,17 +495,6 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   private static native long makeDecimal64Scalar(long value, int scale, boolean isValid);
   private static native long makeListScalar(long viewHandle, boolean isValid);
   private static native long makeStructScalar(long[] viewHandles, boolean isValid);
-
-  /**
-   * Native method to repeat the given string scalar by a given number of times
-   * given by the @p `repeat_times` parameter. If `repeat_times` is not a positive value, an
-   * empty (valid) string scalar will be returned. An invalid input scalar will always
-   * result in an invalid output scalar regardless of the value of `repeat_times` parameter.
-   *
-   * @param scalarHandle long holding the native handle of the scalar containing strings to repeat.
-   * @param repeatTimes The number of times the input string is copied to the output.
-   * @return native handle of the resulting cudf string_scalar containing repeated input string.
-   */
   private static native long repeatString(long scalarHandle, int repeatTimes);
 
   Scalar(DType type, long scalarHandle) {
@@ -876,9 +865,20 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
     return sb.toString();
   }
 
+
+  /**
+   * Repeat the given string scalar a number of times specified by the <code>repeatTimes</code>
+   * parameter. If that parameter has a non-positive value, an empty (valid) string scalar will be
+   * returned. An invalid input scalar will always result in an invalid output scalar regardless
+   * of the value of <code>repeatTimes</code>.
+   *
+   * @param repeatTimes The number of times the input string is copied to the output.
+   * @return The resulting scalar containing repeated result of the current string.
+   */
   public Scalar repeatString(int repeatTimes) {
     return new Scalar(DType.STRING, repeatString(getScalarHandle(), repeatTimes));
   }
+
   /**
    * Holds the off-heap state of the scalar so it can be cleaned up, even if it is leaked.
    */
