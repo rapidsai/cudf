@@ -28,14 +28,7 @@ import java.io.File;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
+import java.util.*;
 
 /**
  * Class to represent a collection of ColumnVectors and operations that can be performed on them
@@ -466,6 +459,12 @@ public final class Table implements AutoCloseable {
 
   private static native long[] groupByScan(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
       long[] aggInstances, boolean ignoreNullKeys,
+      boolean keySorted, boolean[] keysDescending,
+      boolean[] keysNullSmallest) throws CudfException;
+
+  private static native long[] groupByReplaceNulls(long inputTable, int[] keyIndices,
+      int[] replaceColumnsIndices,
+      boolean[] isPreceding, boolean ignoreNullKeys,
       boolean keySorted, boolean[] keysDescending,
       boolean[] keysNullSmallest) throws CudfException;
 
@@ -2691,6 +2690,31 @@ public final class Table implements AutoCloseable {
       } finally {
         Aggregation.close(aggOperationInstances);
       }
+    }
+
+    public Table replaceNulls(ReplacePolicyWithColumn... replacements) {
+      assert replacements != null;
+
+      // TODO in the future perhaps to improve performance and memory we want to
+      //  remove duplicate operations.
+
+      boolean[] isPreceding = new boolean[replacements.length];
+      int [] columnIndexes = new int[replacements.length];
+
+      for (int index = 0; index < replacements.length; index++) {
+        isPreceding[index] = replacements[index].policy.isPreceding;
+        columnIndexes[index] = replacements[index].column;
+      }
+
+      return new Table(groupByReplaceNulls(
+          operation.table.nativeHandle,
+          operation.indices,
+          columnIndexes,
+          isPreceding,
+          groupByOptions.getIgnoreNullKeys(),
+          groupByOptions.getKeySorted(),
+          groupByOptions.getKeysDescending(),
+          groupByOptions.getKeysNullSmallest()));
     }
 
     /**

@@ -18,23 +18,29 @@
 
 package ai.rapids.cudf;
 
-/*
- * This is analogous to the native 'replace_policy'.
+/**
+ * A replacement policy for a specific column
  */
-public enum ReplacePolicy {
-  PRECEDING(true),
-  FOLLOWING(false);
+public class ReplacePolicyWithColumn {
+  final int column;
+  final ReplacePolicy policy;
 
-  ReplacePolicy(boolean isPreceding) {
-    this.isPreceding = isPreceding;
+  ReplacePolicyWithColumn(int column, ReplacePolicy policy) {
+    this.column = column;
+    this.policy = policy;
   }
 
-  final boolean isPreceding;
+  @Override
+  public boolean equals(Object other) {
+    if (!(other instanceof ReplacePolicyWithColumn)) {
+      return false;
+    }
+    ReplacePolicyWithColumn ro = (ReplacePolicyWithColumn)other;
+    return this.column == ro.column && this.policy.equals(ro.policy);
+  }
 
-  /**
-   * Indicate which column the replacement should happen on.
-   */
-  public ReplacePolicyWithColumn onColumn(int columnNumber) {
-    return new ReplacePolicyWithColumn(columnNumber, this);
+  @Override
+  public int hashCode() {
+    return 31 * column + policy.hashCode();
   }
 }
