@@ -28,6 +28,8 @@ public enum CudaComputeMode {
   /**
    * Compute-exclusive-thread mode
    * Only one thread in one process will be able to use cudaSetDevice() with this device.
+   *
+   * WARNING: This mode was deprecated! Using EXCLUSIVE_PROCESS instead.
    */
   EXCLUSIVE(1),
   /**
