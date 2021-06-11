@@ -14,9 +14,19 @@ from cudf._lib.types cimport (
 )
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
-from cudf.core.dtypes import ListDtype, StructDtype, Decimal64Dtype, Decimal32Dtype
-from cudf.utils.dtypes import is_decimal_dtype, is_list_dtype, is_struct_dtype, is_decimal64_dtype, is_decimal32_dtype
-
+from cudf.core.dtypes import (
+    ListDtype,
+    StructDtype,
+    Decimal64Dtype,
+    Decimal32Dtype
+)
+from cudf.utils.dtypes import (
+    is_decimal_dtype,
+    is_list_dtype,
+    is_struct_dtype,
+    is_decimal64_dtype,
+    is_decimal32_dtype
+)
 cimport cudf._lib.cpp.types as libcudf_types
 
 
@@ -197,10 +207,16 @@ cdef dtype_from_column_view(column_view cv):
         return dtype_from_lists_column_view(cv)
     elif tid == libcudf_types.type_id.STRUCT:
         return dtype_from_structs_column_view(cv)
-    elif tid ==  libcudf_types.type_id.DECIMAL64:
-        Decimal64Dtype(precision=Decimal64Dtype.MAX_PRECISION, scale=-cv.type().scale())
-    elif tid ==  libcudf_types.type_id.DECIMAL32:
-        Decimal32Dtype(precision=Decimal32Dtype.MAX_PRECISION, scale=-cv.type().scale())
+    elif tid == libcudf_types.type_id.DECIMAL64:
+        return Decimal64Dtype(
+            precision=Decimal64Dtype.MAX_PRECISION,
+            scale=-cv.type().scale()
+        )
+    elif tid == libcudf_types.type_id.DECIMAL32:
+        return Decimal32Dtype(
+            precision=Decimal32Dtype.MAX_PRECISION,
+            scale=-cv.type().scale()
+        )
     else:
         return cudf_to_np_types[<underlying_type_t_type_id>(tid)]
 
@@ -218,7 +234,10 @@ cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
             <underlying_type_t_type_id> (
                 np_to_cudf_types[np.dtype(dtype)]))
 
-    if tid in (libcudf_types.type_id.DECIMAL64, libcudf_types.type_id.DECIMAL32):
+    if tid in (
+        libcudf_types.type_id.DECIMAL64,
+        libcudf_types.type_id.DECIMAL32
+    ):
         return libcudf_types.data_type(tid, -dtype.scale)
     else:
         return libcudf_types.data_type(tid)

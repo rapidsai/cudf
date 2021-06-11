@@ -240,7 +240,7 @@ class StructDtype(_BaseDtype):
 
 class Decimal32Dtype(_BaseDtype):
 
-    name = "decimal"
+    name = "decimal32"
     _metadata = ("precision", "scale")
     MAX_PRECISION = np.floor(np.log10(np.iinfo("int32").max))
 
@@ -341,7 +341,7 @@ class Decimal32Dtype(_BaseDtype):
 
 class Decimal64Dtype(_BaseDtype):
 
-    name = "decimal"
+    name = "decimal64"
     _metadata = ("precision", "scale")
     MAX_PRECISION = np.floor(np.log10(np.iinfo("int64").max))
 
