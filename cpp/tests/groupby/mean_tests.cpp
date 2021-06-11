@@ -19,6 +19,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -88,7 +89,7 @@ TYPED_TEST(groupby_mean_test, zero_valid_keys)
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, aggregation::MEAN>;
 
-  fixed_width_column_wrapper<K> keys({1, 2, 3}, all_null());
+  fixed_width_column_wrapper<K> keys({1, 2, 3}, iterator_all_nulls());
   fixed_width_column_wrapper<V> vals{3, 4, 5};
 
   fixed_width_column_wrapper<K> expect_keys{};
@@ -104,10 +105,10 @@ TYPED_TEST(groupby_mean_test, zero_valid_values)
   using R = cudf::detail::target_type_t<V, aggregation::MEAN>;
 
   fixed_width_column_wrapper<K> keys{1, 1, 1};
-  fixed_width_column_wrapper<V> vals({3, 4, 5}, all_null());
+  fixed_width_column_wrapper<V> vals({3, 4, 5}, iterator_all_nulls());
 
   fixed_width_column_wrapper<K> expect_keys{1};
-  fixed_width_column_wrapper<R> expect_vals({0}, all_null());
+  fixed_width_column_wrapper<R> expect_vals({0}, iterator_all_nulls());
 
   auto agg = cudf::make_mean_aggregation();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -126,7 +127,7 @@ TYPED_TEST(groupby_mean_test, null_keys_and_values)
 
   // clang-format off
   //                                        {1, 1,     2, 2, 2,   3, 3,    4}
-  fixed_width_column_wrapper<K> expect_keys({1,        2,         3,       4}, all_valid());
+  fixed_width_column_wrapper<K> expect_keys({1,        2,         3,       4}, iterator_no_null());
   //                                        {3, 6,     1, 4, 9,   2, 8,    -}
   std::vector<RT> expect_v = convert<RT>(   {4.5,      14. / 3,   5.,      0.});
   fixed_width_column_wrapper<R, RT> expect_vals(expect_v.cbegin(), expect_v.cend(), {1, 1, 1, 0});

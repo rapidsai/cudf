@@ -96,7 +96,7 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
                                       rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = booleans.size();
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   CUDF_EXPECTS(booleans.type().id() == type_id::BOOL8, "Input column must be boolean type");
   CUDF_EXPECTS(true_string.is_valid() && true_string.size() > 0,
