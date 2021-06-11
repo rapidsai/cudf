@@ -396,3 +396,12 @@ def test_list_scalar_device_construction(data):
     col = cudf.Series([data])._column
     slr = get_element(col, 0)
     assert slr.value == data
+
+@pytest.mark.parametrize(
+    "input_obj", [[[1, cudf.NA, 3]], [[1, cudf.NA, 3], [4, 5, cudf.NA]]]
+)
+def test_construction_series_with_nulls(input_obj):
+    expect = pa.array(input_obj, from_pandas=True)
+    got = cudf.Series(input_obj).to_arrow()
+
+    assert expect == got

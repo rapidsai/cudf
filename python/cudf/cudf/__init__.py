@@ -41,6 +41,7 @@ from cudf.core import (
     from_pandas,
     interval_range,
     merge,
+    cut,
 )
 from cudf.core.algorithms import factorize
 from cudf.core.dtypes import (
