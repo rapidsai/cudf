@@ -324,7 +324,7 @@ struct DeviceRollingRank {
   size_type min_periods;
 
   // what operations do we support
-  template <typename T = InputType, aggregation::Kind O = aggregation::ROW_NUMBER>
+  template <typename T = InputType, aggregation::Kind O = aggregation::RANK>
   static constexpr bool is_supported()
   {
     return true;
@@ -333,7 +333,7 @@ struct DeviceRollingRank {
   DeviceRollingRank(size_type _min_periods) : min_periods(_min_periods) {}
 
   template <typename OutputType, bool has_nulls>
-  bool __device__ operator()(column_device_view const& input,
+  bool __device__ operator()(column_device_view const&,
                              column_device_view const&,
                              table_device_view const& order_by,
                              mutable_column_device_view& output,
@@ -349,8 +349,6 @@ struct DeviceRollingRank {
       search_index--;
     }
     output.element<OutputType>(current_index) = search_index - start_index + 1;
-    // // output.element<OutputType>(current_index) = order_by.num_rows();
-    // output.element<OutputType>(current_index) = row_comparisons.element<uint32_t>(current_index);
 
     return output_is_valid;
   }
@@ -364,7 +362,7 @@ struct DeviceRollingDenseRank {
   size_type min_periods;
 
   // what operations do we support
-  template <typename T = InputType, aggregation::Kind O = aggregation::ROW_NUMBER>
+  template <typename T = InputType, aggregation::Kind O = aggregation::DENSE_RANK>
   static constexpr bool is_supported()
   {
     return true;
@@ -373,7 +371,7 @@ struct DeviceRollingDenseRank {
   DeviceRollingDenseRank(size_type _min_periods) : min_periods(_min_periods) {}
 
   template <typename OutputType, bool has_nulls>
-  bool __device__ operator()(column_device_view const& input,
+  bool __device__ operator()(column_device_view const&,
                              column_device_view const&,
                              table_device_view const& order_by,
                              mutable_column_device_view& output,
@@ -1254,6 +1252,8 @@ std::unique_ptr<column> rolling_window(column_view const& input,
   auto d_order_by                    = table_device_view::create(order_by);
   if (agg.kind == aggregation::RANK || agg.kind == aggregation::DENSE_RANK) {
     CUDF_EXPECTS(!order_by.is_empty(), "RANK/DENSE_RANK expect order_by data, but table was empty");
+    CUDF_EXPECTS(order_by.num_rows() == input.size(),
+                 "Order by table length does not match the input column length");
 
     auto comparisons        = make_fixed_width_column(cudf::data_type{cudf::type_to_id<uint32_t>()},
                                                order_by.num_rows(),

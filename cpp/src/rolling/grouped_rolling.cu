@@ -469,13 +469,13 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
   auto const order_by   = table_view({orderby_column});
 
   return cudf::detail::rolling_window(input,
-                                       order_by,
-                                       preceding_column->view(),
-                                       following_column->view(),
-                                       min_periods,
-                                       aggr,
-                                       stream,
-                                       mr);
+                                      order_by,
+                                      preceding_column->view(),
+                                      following_column->view(),
+                                      min_periods,
+                                      aggr,
+                                      stream,
+                                      mr);
 }
 
 // Given an orderby column grouped as specified in group_offsets,
@@ -657,13 +657,13 @@ std::unique_ptr<column> range_window_ASC(column_view const& input,
   auto const order_by   = table_view({orderby_column});
 
   return cudf::detail::rolling_window(input,
-                                       order_by,
-                                       preceding_column->view(),
-                                       following_column->view(),
-                                       min_periods,
-                                       aggr,
-                                       stream,
-                                       mr);
+                                      order_by,
+                                      preceding_column->view(),
+                                      following_column->view(),
+                                      min_periods,
+                                      aggr,
+                                      stream,
+                                      mr);
 }
 
 /// Range window computation, with
@@ -756,13 +756,13 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
   auto const order_by   = table_view({orderby_column});
 
   return cudf::detail::rolling_window(input,
-                                       order_by,
-                                       preceding_column->view(),
-                                       following_column->view(),
-                                       min_periods,
-                                       aggr,
-                                       stream,
-                                       mr);
+                                      order_by,
+                                      preceding_column->view(),
+                                      following_column->view(),
+                                      min_periods,
+                                      aggr,
+                                      stream,
+                                      mr);
 }
 
 // Range window computation, for rows in DESCENDING order.
@@ -873,13 +873,13 @@ std::unique_ptr<column> range_window_DESC(column_view const& input,
   } else {
     auto const order_by = table_view({orderby_column});
     return cudf::detail::rolling_window(input,
-                                         order_by,
-                                         preceding_column->view(),
-                                         following_column->view(),
-                                         min_periods,
-                                         aggr,
-                                         stream,
-                                         mr);
+                                        order_by,
+                                        preceding_column->view(),
+                                        following_column->view(),
+                                        min_periods,
+                                        aggr,
+                                        stream,
+                                        mr);
   }
 }
 

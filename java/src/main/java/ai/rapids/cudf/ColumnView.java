@@ -1297,6 +1297,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
           + options.getFrameType());
     }
 
+    if (agg.kind == Aggregation.Kind.RANK || agg.kind == Aggregation.Kind.DENSE_RANK) {
+      if (options.getOrderByColArray() == null || options.getOrderByColArray().length == 0) {
+        throw new IllegalArgumentException(
+          "Rank and dense rank aggregations require order by information");
+      }
+    }
+
     long nativePtr = agg.createNativeInstance();
     try {
       Scalar p = options.getPrecedingScalar();

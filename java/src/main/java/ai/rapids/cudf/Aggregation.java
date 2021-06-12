@@ -54,12 +54,14 @@ public abstract class Aggregation {
         NUNIQUE(15),
         NTH_ELEMENT(16),
         ROW_NUMBER(17),
-        COLLECT_LIST(18),
-        COLLECT_SET(19),
-        LEAD(20),
-        LAG(21),
-        PTX(22),
-        CUDA(23);
+        RANK(18),
+        DENSE_RANK(19),
+        COLLECT_LIST(20),
+        COLLECT_SET(21),
+        LEAD(22),
+        LAG(23),
+        PTX(24),
+        CUDA(25);
 
         final int nativeId;
 
@@ -686,10 +688,37 @@ public abstract class Aggregation {
     }
 
     /**
-     * Get the row number, only makes since for a window operations.
+     * Get the row number, only makes sense for a window operations.
      */
     public static RowNumberAggregation rowNumber() {
         return new RowNumberAggregation();
+    }
+
+    public static class RankAggregation extends NoParamAggregation
+        implements RollingAggregation<RankAggregation>{
+        private RankAggregation() {
+            super(Kind.RANK);
+        }
+    }
+
+    /**
+     * Get the row's ranking.
+     */
+    public static RankAggregation rank() {
+        return new RankAggregation();
+    }
+    public static class DenseRankAggregation extends NoParamAggregation
+        implements RollingAggregation<DenseRankAggregation>{
+        private DenseRankAggregation() {
+            super(Kind.DENSE_RANK);
+        }
+    }
+
+    /**
+     * Get the row's dense ranking.
+     */
+    public static DenseRankAggregation denseRank() {
+        return new DenseRankAggregation();
     }
 
     /**

@@ -75,8 +75,10 @@ public class WindowOptions implements AutoCloseable {
               this.orderByOrderAscending == o.orderByOrderAscending &&
               this.frameType == o.frameType &&
               this.isUnboundedPreceding == o.isUnboundedPreceding &&
-              this.isUnboundedFollowing == o.isUnboundedFollowing &&
-              orderBy.equals(o.orderBy);
+              this.isUnboundedFollowing == o.isUnboundedFollowing;
+      if (orderBy != null) {
+        ret = ret && orderBy.equals(o.orderBy);
+      }
       if (precedingCol != null) {
         ret = ret && precedingCol.equals(o.precedingCol);
       }

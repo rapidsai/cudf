@@ -91,13 +91,13 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 
 // Applies a variable-size rolling window function to the values in a column.
 std::unique_ptr<column> rolling_window(column_view const& input,
-                                        table_view const& order_by,
-                                        column_view const& preceding_window,
-                                        column_view const& following_window,
-                                        size_type min_periods,
-                                        rolling_aggregation const& agg,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                       table_view const& order_by,
+                                       column_view const& preceding_window,
+                                       column_view const& following_window,
+                                       size_type min_periods,
+                                       rolling_aggregation const& agg,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -213,13 +213,13 @@ std::unique_ptr<column> rolling_window(column_view const& input,
 {
   auto const empty_order_by = table_view();
   return detail::rolling_window(input,
-                                 empty_order_by,
-                                 preceding_window,
-                                 following_window,
-                                 min_periods,
-                                 agg,
-                                 rmm::cuda_stream_default,
-                                 mr);
+                                empty_order_by,
+                                preceding_window,
+                                following_window,
+                                min_periods,
+                                agg,
+                                rmm::cuda_stream_default,
+                                mr);
 }
 
 // Applies a variable-size rolling window function to the values in a column.
@@ -232,13 +232,13 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        rmm::mr::device_memory_resource* mr)
 {
   return detail::rolling_window(input,
-                                 order_by,
-                                 preceding_window,
-                                 following_window,
-                                 min_periods,
-                                 agg,
-                                 rmm::cuda_stream_default,
-                                 mr);
+                                order_by,
+                                preceding_window,
+                                following_window,
+                                min_periods,
+                                agg,
+                                rmm::cuda_stream_default,
+                                mr);
 }
 
 }  // namespace cudf

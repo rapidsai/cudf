@@ -2903,6 +2903,23 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testWindowRank() {
+    try (ColumnVector precedingCol = ColumnVector.fromInts(1, 2, 3, 1, 2);
+         ColumnVector followingCol = ColumnVector.fromInts(2, 2, 2, 2, 2);
+         ColumnVector orderBy = ColumnVector.fromInts(1, 2, 2, 3, 3)) {
+      try (WindowOptions window = WindowOptions.builder().minPeriods(2)
+          .window(precedingCol, followingCol)
+          .orderBy(new ColumnView[]{orderBy}).build()) {
+        try (ColumnVector v1 = ColumnVector.fromInts(5, 4, 7, 6, 8);
+             ColumnVector expected = ColumnVector.fromInts(1, 2, 2, 1, 1);
+             ColumnVector result = v1.rollingWindow(Aggregation.rank(), window)) {
+          assertColumnsAreEqual(expected, result);
+        }
+      }
+    }
+  }
+
+  @Test
   void testWindowThrowsException() {
     try (Scalar one = Scalar.fromInt(1);
          Scalar two = Scalar.fromInt(2);
@@ -2922,6 +2939,15 @@ public class ColumnVectorTest extends CudfTestBase {
             .orderByColumnIndex(0)
             .build()) {
           arraywindowCol.rollingWindow(Aggregation.sum(), options);
+        }
+      });
+
+      assertThrows(IllegalArgumentException.class, () -> {
+        try (WindowOptions options = WindowOptions.builder()
+            .window(two, one)
+            .minPeriods(1)
+            .build()) {
+          arraywindowCol.rollingWindow(Aggregation.rank(), options);
         }
       });
     }

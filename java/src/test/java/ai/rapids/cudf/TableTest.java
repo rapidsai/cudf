@@ -3927,6 +3927,96 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testRangeWindowingRank() {
+    try (Table unsorted = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+        .column(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2) // GBY Key
+        .column(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8) // Agg Column
+        .column(1L, 1L, 2L, 3L, 3L, 3L, 4L, 4L, 5L, 5L, 6L, 6L, 7L) // orderBy Key
+        .column((short) 1, (short)1, (short)2, (short)3, (short)3, (short)3, (short)4, (short)4, (short)5, (short)5, (short)6, (short)6, (short)7) // orderBy Key
+        .column(1, 1, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7) // orderBy Key
+        .column((byte) 1, (byte)1, (byte)2, (byte)3, (byte)3, (byte)3, (byte)4, (byte)4, (byte)5, (byte)5, (byte)6, (byte)6, (byte)7) // orderBy Key
+        .timestampDayColumn(1, 1, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7) // Timestamp orderBy Key
+        .timestampSecondsColumn(1L, 1L, 2L, 3L, 3L, 3L, 4L, 4L, 5L, 5L, 6L, 6L, 7L)
+        .timestampMicrosecondsColumn(1L, 1L, 2L, 3L, 3L, 3L, 4L, 4L, 5L, 5L, 6L, 6L, 7L)
+        .timestampMillisecondsColumn(1L, 1L, 2L, 3L, 3L, 3L, 4L, 4L, 5L, 5L, 6L, 6L, 7L)
+        .timestampNanosecondsColumn(1L, 1L, 2L, 3L, 3L, 3L, 4L, 4L, 5L, 5L, 6L, 6L, 7L)
+        .build()) {
+
+      for (int orderIndex = 3; orderIndex < unsorted.getNumberOfColumns(); orderIndex++) {
+        try (Table sorted = unsorted.orderBy(OrderByArg.asc(0), OrderByArg.asc(1), OrderByArg.asc(orderIndex));
+             ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
+          ColumnVector sortedAggColumn = sorted.getColumn(2);
+          assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+          DType type = unsorted.getColumn(orderIndex).getType();
+          try (Scalar preceding = getScalar(type, 2L);
+               Scalar following = getScalar(type, 0L)) {
+            try (WindowOptions window = WindowOptions.builder()
+                .minPeriods(1)
+                .window(preceding, following)
+                .orderByColumnIndex(orderIndex)
+                .orderBy(new ColumnView[]{sorted.getColumn(orderIndex)})
+                .build()) {
+
+              try (Table windowAggResults = sorted.groupBy(0, 1)
+                  .aggregateWindowsOverRanges(Aggregation.rank().onColumn(2).overWindow(window));
+                   ColumnVector expect = ColumnVector.fromBoxedInts(1, 1, 3, 4, 1, 1, 3, 3, 1, 1, 3, 3, 5)) {
+                assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  @Test
+  void testRangeWindowingDenseRank() {
+    try (Table unsorted = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1) // GBY Key
+        .column(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2) // GBY Key
+        .column(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8) // Agg Column
+        .column(1L, 1L, 2L, 3L, 3L, 3L, 4L, 4L, 5L, 5L, 6L, 6L, 7L) // orderBy Key
+        .column((short) 1, (short)1, (short)2, (short)3, (short)3, (short)3, (short)4, (short)4, (short)5, (short)5, (short)6, (short)6, (short)7) // orderBy Key
+        .column(1, 1, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7) // orderBy Key
+        .column((byte) 1, (byte)1, (byte)2, (byte)3, (byte)3, (byte)3, (byte)4, (byte)4, (byte)5, (byte)5, (byte)6, (byte)6, (byte)7) // orderBy Key
+        .timestampDayColumn(1, 1, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 7) // Timestamp orderBy Key
+        .timestampSecondsColumn(1L, 1L, 2L, 3L, 3L, 3L, 4L, 4L, 5L, 5L, 6L, 6L, 7L)
+        .timestampMicrosecondsColumn(1L, 1L, 2L, 3L, 3L, 3L, 4L, 4L, 5L, 5L, 6L, 6L, 7L)
+        .timestampMillisecondsColumn(1L, 1L, 2L, 3L, 3L, 3L, 4L, 4L, 5L, 5L, 6L, 6L, 7L)
+        .timestampNanosecondsColumn(1L, 1L, 2L, 3L, 3L, 3L, 4L, 4L, 5L, 5L, 6L, 6L, 7L)
+        .build()) {
+
+      for (int orderIndex = 3; orderIndex < unsorted.getNumberOfColumns(); orderIndex++) {
+        try (Table sorted = unsorted.orderBy(OrderByArg.asc(0), OrderByArg.asc(1), OrderByArg.asc(orderIndex));
+             ColumnVector expectSortedAggColumn = ColumnVector.fromBoxedInts(7, 5, 1, 9, 7, 9, 8, 2, 8, 0, 6, 6, 8)) {
+          ColumnVector sortedAggColumn = sorted.getColumn(2);
+          assertColumnsAreEqual(expectSortedAggColumn, sortedAggColumn);
+
+          DType type = unsorted.getColumn(orderIndex).getType();
+          try (Scalar preceding = getScalar(type, 2L);
+               Scalar following = getScalar(type, 0L)) {
+            try (WindowOptions window = WindowOptions.builder()
+                .minPeriods(1)
+                .window(preceding, following)
+                .orderByColumnIndex(orderIndex)
+                .orderBy(new ColumnView[]{sorted.getColumn(orderIndex)})
+                .build()) {
+
+              try (Table windowAggResults = sorted.groupBy(0, 1)
+                  .aggregateWindowsOverRanges(Aggregation.denseRank().onColumn(2).overWindow(window));
+                   ColumnVector expect = ColumnVector.fromBoxedInts(1, 1, 2, 3, 1, 1, 2, 2, 1, 1, 2, 2, 3)) {
+                assertColumnsAreEqual(expect, windowAggResults.getColumn(0));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  @Test
   void testRangeWindowingCountDescendingTimestamps() {
     try (Table unsorted = new Table.TestBuilder()
         .column(1, 1, 1, 1,  1, 1, 1, 1,  1, 1, 1, 1, 1) // GBY Key
