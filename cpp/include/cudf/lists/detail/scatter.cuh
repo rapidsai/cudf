@@ -25,11 +25,13 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cinttypes>
+#include "cudf/utilities/error.hpp"
 
 namespace cudf {
 namespace lists {
@@ -89,7 +91,7 @@ std::unique_ptr<column> scatter_impl(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  assert_same_data_type(source, target);
+  CUDF_EXPECTS(column_types_equal(source, target), "Mismatched column types.");
 
   auto const child_column_type = lists_column_view(target).child().type();
 
