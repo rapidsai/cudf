@@ -317,18 +317,20 @@ table_with_metadata reader::impl::read(rmm::cuda_stream_view stream)
 
   // User can specify which columns should be parsed
   if (!opts_.get_use_cols_indexes().empty() || !opts_.get_use_cols_names().empty()) {
-    std::fill(column_flags_.begin(), column_flags_.end(), column_parse::disabled);
+    std::fill(h_column_flags_.begin(), h_column_flags_.end(), column_parse::disabled);
 
     for (const auto index : opts_.get_use_cols_indexes()) {
-      column_flags_[index] = column_parse::enabled;
+      h_column_flags_[index] = column_parse::enabled;
     }
     num_active_cols_ = opts_.get_use_cols_indexes().size();
 
     for (const auto &name : opts_.get_use_cols_names()) {
       const auto it = std::find(col_names_.begin(), col_names_.end(), name);
       if (it != col_names_.end()) {
-        column_flags_[it - col_names_.begin()] = column_parse::enabled;
-        num_active_cols_++;
+        if (h_column_flags_[it - col_names_.begin()] == column_parse::disabled) {
+          h_column_flags_[it - col_names_.begin()] = column_parse::enabled;
+          num_active_cols_++;
+        }
       }
     }
   }
