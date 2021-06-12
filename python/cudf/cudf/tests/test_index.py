@@ -2065,9 +2065,7 @@ def test_index_set_names_error(idx, level, names):
     [pd.Index([1, 3, 6]), pd.Index([6, 1, 3])],  # monotonic  # non-monotonic
 )
 @pytest.mark.parametrize("key", list(range(0, 8)))
-@pytest.mark.parametrize(
-    "method", [None, "ffill", "pad", "bfill", "backfill", "nearest"]
-)
+@pytest.mark.parametrize("method", [None, "ffill", "bfill", "nearest"])
 def test_get_loc_single_unique_numeric(idx, key, method):
     pi = idx
     gi = cudf.from_pandas(pi)
@@ -2077,9 +2075,9 @@ def test_get_loc_single_unique_numeric(idx, key, method):
         # `method` only applicable to monotonic index
         or (not pi.is_monotonic and method is not None)
         # Get key before the first element is KeyError
-        or (key == 0 and method in {"ffill", "pad"})
+        or (key == 0 and method in "ffill")
         # Get key after the last element is KeyError
-        or (key == 7 and method in {"bfill", "backfill"})
+        or (key == 7 and method in "bfill")
     ):
         assert_exceptions_equal(
             lfunc=pi.get_loc,
@@ -2125,7 +2123,7 @@ def test_get_loc_single_duplicate_numeric(idx, key, method):
     "idx", [pd.Index(["b", "f", "m", "q"]), pd.Index(["m", "f", "b", "q"])]
 )
 @pytest.mark.parametrize("key", ["a", "f", "n", "z"])
-@pytest.mark.parametrize("method", [None, "ffill", "pad", "bfill", "backfill"])
+@pytest.mark.parametrize("method", [None, "ffill", "bfill"])
 def test_get_loc_single_unique_string(idx, key, method):
     pi = idx
     gi = cudf.from_pandas(pi)
@@ -2135,9 +2133,9 @@ def test_get_loc_single_unique_string(idx, key, method):
         # `method` only applicable to monotonic index
         or (not pi.is_monotonic and method is not None)
         # Get key before the first element is KeyError
-        or (key == "a" and method in {"ffill", "pad"})
+        or (key == "a" and method == "ffill")
         # Get key after the last element is KeyError
-        or (key == "z" and method in {"bfill", "backfill"})
+        or (key == "z" and method == "bfill")
     ):
         assert_exceptions_equal(
             lfunc=pi.get_loc,

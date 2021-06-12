@@ -1268,7 +1268,8 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
         if not is_sorted and method is not None:
             raise ValueError(
-                "index must be monotonic increasing or decreasing"
+                "index must be monotonic increasing or decreasing if `method`"
+                "is specified."
             )
 
         key_as_table = Table({"None": as_column(key, length=1)})
