@@ -519,22 +519,19 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
                      });
 
   // get the positions for every token using the delimiter positions
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     delimiter_count,
-                     [tokenizer,
-                      d_token_counts,
-                      d_positions,
-                      delimiter_count,
-                      d_string_indices,
-                      d_tokens] __device__(size_type idx) {
-                       tokenizer.process_tokens(idx,
-                                                d_token_counts,
-                                                d_positions,
-                                                delimiter_count,
-                                                d_string_indices,
-                                                d_tokens);
-                     });
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator<size_type>(0),
+    delimiter_count,
+    [tokenizer,
+     d_token_counts,
+     d_positions,
+     delimiter_count,
+     d_string_indices,
+     d_tokens] __device__(size_type idx) {
+      tokenizer.process_tokens(
+        idx, d_token_counts, d_positions, delimiter_count, d_string_indices, d_tokens);
+    });
 
   // Create each column.
   // - Each pair points to the strings for that column for each row.
@@ -776,13 +773,12 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
                d_tokens,
                d_tokens + (columns_count * strings_count),
                string_index_pair{nullptr, 0});
-  thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    strings_count,
-    [tokenizer, d_token_counts, d_tokens] __device__(size_type idx) {
-      tokenizer.process_tokens(idx, d_token_counts, d_tokens);
-    });
+  thrust::for_each_n(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     strings_count,
+                     [tokenizer, d_token_counts, d_tokens] __device__(size_type idx) {
+                       tokenizer.process_tokens(idx, d_token_counts, d_tokens);
+                     });
 
   // Create each column.
   // - Each pair points to a string for that column for each row.
