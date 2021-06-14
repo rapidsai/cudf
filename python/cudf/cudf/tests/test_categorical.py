@@ -9,7 +9,7 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_110
-from cudf.testing._utils import NUMERIC_TYPES, assert_eq, assert_exceptions_equal
+from cudf.testing._utils import NUMERIC_TYPES, assert_exceptions_equal, assert_eq
 
 
 @pytest.fixture
