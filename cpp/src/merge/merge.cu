@@ -106,12 +106,12 @@ __global__ void materialize_merged_bitmask_kernel(
 void materialize_bitmask(column_view const& left_col,
                          column_view const& right_col,
                          bitmask_type* out_validity,
-                         size_type out_validity_size,
+                         size_type num_elements,
                          index_type const* merged_indices,
                          rmm::cuda_stream_view stream)
 {
   constexpr size_type BLOCK_SIZE{256};
-  detail::grid_1d grid_config{out_validity_size, BLOCK_SIZE};
+  detail::grid_1d grid_config{num_elements, BLOCK_SIZE};
 
   auto p_left_dcol  = column_device_view::create(left_col);
   auto p_right_dcol = column_device_view::create(right_col);
@@ -123,17 +123,17 @@ void materialize_bitmask(column_view const& left_col,
     if (right_col.has_nulls()) {
       materialize_merged_bitmask_kernel<true, true>
         <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream.value()>>>(
-          left_valid, right_valid, out_validity, out_validity_size, merged_indices);
+          left_valid, right_valid, out_validity, num_elements, merged_indices);
     } else {
       materialize_merged_bitmask_kernel<true, false>
         <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream.value()>>>(
-          left_valid, right_valid, out_validity, out_validity_size, merged_indices);
+          left_valid, right_valid, out_validity, num_elements, merged_indices);
     }
   } else {
     if (right_col.has_nulls()) {
       materialize_merged_bitmask_kernel<false, true>
         <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream.value()>>>(
-          left_valid, right_valid, out_validity, out_validity_size, merged_indices);
+          left_valid, right_valid, out_validity, num_elements, merged_indices);
     } else {
       CUDF_FAIL("materialize_merged_bitmask_kernel<false, false>() should never be called.");
     }
