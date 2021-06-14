@@ -1641,6 +1641,10 @@ class MultiIndex(BaseIndex):
         slice(1, 3, None)
         >>> mi.get_loc(('b', 'e'))
         1
+        >>> non_monotonic_non_unique_idx = cudf.MultiIndex.from_tuples(
+            [('c', 'd'), ('b', 'e'), ('a', 'f'), ('b', 'e')])
+        >>> non_monotonic_non_unique_idx.get_loc('b') # differ from pandas
+        slice(1, 4, 2)
         """
         if tolerance is not None:
             raise NotImplementedError(

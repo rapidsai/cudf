@@ -1228,14 +1228,14 @@ class BaseIndex(SingleColumnFrame, Serializable):
         method : {None, 'pad'/'fill', 'backfill'/'bfill', 'nearest'}, optional
             - default: exact matches only.
             - pad / ffill: find the PREVIOUS index value if no exact match.
-            - backfill / bfill: use NEXT index value if no exact match
+            - backfill / bfill: use NEXT index value if no exact match.
             - nearest: use the NEAREST index value if no exact match. Tied
-                       distances are broken by preferring the larger index
-                       value.
+              distances are broken by preferring the larger index
+              value.
         tolerance : int or float, optional
             Maximum distance from index value for inexact matches. The value
             of the index at the matching location must satisfy the equation
-            abs(index[loc] - key) <= tolerance.
+            ``abs(index[loc] - key) <= tolerance``.
 
         Returns
         -------
@@ -1244,6 +1244,20 @@ class BaseIndex(SingleColumnFrame, Serializable):
             - If index is monotonic, loc is returned as a slice object
             - Otherwise, a boolean mask is returned
 
+        Examples
+        --------
+        >>> unique_index = cudf.Index(list('abc'))
+        >>> unique_index.get_loc('b')
+        1
+        >>> monotonic_index = cudf.Index(list('abbc'))
+        >>> monotonic_index.get_loc('b')
+        slice(1, 3, None)
+        >>> non_monotonic_index = cudf.Index(list('abcb'))
+        >>> non_monotonic_index.get_loc('b')
+        array([False,  True, False,  True])
+        >>> numeric_unique_index = cudf.Index([1, 2, 3])
+        >>> numeric_unique_index.get_loc(3)
+        2
         """
         if tolerance is not None:
             raise NotImplementedError(
