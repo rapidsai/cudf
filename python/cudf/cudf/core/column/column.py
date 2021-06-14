@@ -50,6 +50,8 @@ from cudf.utils.dtypes import (
     check_cast_unsupported_dtype,
     get_time_unit,
     is_categorical_dtype,
+    is_decimal32_dtype,
+    is_decimal64_dtype,
     is_decimal_dtype,
     is_interval_dtype,
     is_list_dtype,
@@ -1487,10 +1489,22 @@ def build_column(
             null_count=null_count,
             children=children,
         )
-    elif is_decimal_dtype(dtype):
+    elif is_decimal64_dtype(dtype):
         if size is None:
             raise TypeError("Must specify size")
         return cudf.core.column.Decimal64Column(
+            data=data,
+            size=size,
+            offset=offset,
+            dtype=dtype,
+            mask=mask,
+            null_count=null_count,
+            children=children,
+        )
+    elif is_decimal32_dtype(dtype):
+        if size is None:
+            raise TypeError("Must specify size")
+        return cudf.core.column.Decimal32Column(
             data=data,
             size=size,
             offset=offset,
@@ -1965,6 +1979,16 @@ def as_column(
                             ),
                         )
                         return cudf.core.column.Decimal64Column.from_arrow(
+                            data
+                        )
+                    if isinstance(dtype, cudf.core.dtypes.Decimal32Dtype):
+                        data = pa.array(
+                            arbitrary,
+                            type=pa.decimal128(
+                                precision=dtype.precision, scale=dtype.scale
+                            ),
+                        )
+                        return cudf.core.column.Decimal32Column.from_arrow(
                             data
                         )
                     dtype = pd.api.types.pandas_dtype(dtype)
