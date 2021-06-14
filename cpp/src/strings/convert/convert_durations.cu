@@ -271,7 +271,7 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
     return str;
   }
 
-  __device__ char* int_to_2digitstr(char* str, int, int8_t value)
+  __device__ char* int_to_2digitstr(char* str, int8_t value)
   {
     assert(value >= -99 && value <= 99);
     value  = std::abs(value);
@@ -287,11 +287,11 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
 
   inline __device__ char* hour_12(char* ptr, duration_component const* timeparts)
   {
-    return int_to_2digitstr(ptr, 2, timeparts->hour % 12);
+    return int_to_2digitstr(ptr, timeparts->hour % 12);
   }
   inline __device__ char* hour_24(char* ptr, duration_component const* timeparts)
   {
-    return int_to_2digitstr(ptr, 2, timeparts->hour);
+    return int_to_2digitstr(ptr, timeparts->hour);
   }
   inline __device__ char* am_or_pm(char* ptr, duration_component const* timeparts)
   {
@@ -301,11 +301,11 @@ struct duration_to_string_fn : public duration_to_string_size_fn<T> {
   }
   inline __device__ char* minute(char* ptr, duration_component const* timeparts)
   {
-    return int_to_2digitstr(ptr, 2, timeparts->minute);
+    return int_to_2digitstr(ptr, timeparts->minute);
   }
   inline __device__ char* second(char* ptr, duration_component const* timeparts)
   {
-    return int_to_2digitstr(ptr, 2, timeparts->second);
+    return int_to_2digitstr(ptr, timeparts->second);
   }
 
   inline __device__ char* subsecond(char* ptr, duration_component const* timeparts)
@@ -447,7 +447,7 @@ struct dispatch_from_durations_fn {
 
   // non-duration types throw an exception
   template <typename T, typename... Args>
-  std::enable_if_t<not  cudf::is_duration<T>(), std::unique_ptr<column>> operator()(Args&&...) const
+  std::enable_if_t<not cudf::is_duration<T>(), std::unique_ptr<column>> operator()(Args&&...) const
   {
     CUDF_FAIL("Values for from_durations function must be a duration type.");
   }
