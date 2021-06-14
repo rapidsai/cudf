@@ -25,9 +25,12 @@ function(find_and_configure_cuco)
   endif()
   CPMFindPackage(NAME cuco
     GITHUB_REPOSITORY PointKernel/cuCollections
-    GIT_TAG static-multi-map
-    GIT_SHALLOW     TRUE
-    DOWNLOAD_ONLY   TRUE)
+    GIT_TAG           static-multi-map
+    GIT_SHALLOW       TRUE
+    DOWNLOAD_ONLY     TRUE
+    OPTIONS           "BUILD_BENCHMARKS OFF"
+                      "BUILD_EXAMPLES OFF"
+                      "BUILD_TESTS OFF")
     set(CUCO_INCLUDE_DIR "${cuco_SOURCE_DIR}/include" PARENT_SCOPE)
 endfunction()
 
