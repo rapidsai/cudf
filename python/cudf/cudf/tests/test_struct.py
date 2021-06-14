@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -44,3 +45,24 @@ def test_struct_for_field(key, expect):
     expect = cudf.Series(expect)
     got = sr.struct.field(key)
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"a": np.dtype(np.int64)},
+        {"a": np.dtype(np.int64), "b": None},
+        {
+            "a": cudf.ListDtype(np.dtype(np.int64)),
+            "b": cudf.Decimal64Dtype(1, 0),
+        },
+        {
+            "a": cudf.ListDtype(cudf.StructDtype({"b": np.dtype(np.int64)})),
+            "b": cudf.ListDtype(cudf.ListDtype(np.dtype(np.int64))),
+        },
+    ],
+)
+def test_serialize_struct_dtype(fields):
+    dtype = cudf.StructDtype(fields)
+    recreated = dtype.__class__.deserialize(*dtype.serialize())
+    assert recreated == dtype

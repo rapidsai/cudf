@@ -349,27 +349,6 @@ def test_serialize_decimal_columns(data):
     assert_eq(recreated, df)
 
 
-@pytest.mark.parametrize(
-    "fields",
-    [
-        {"a": np.dtype(np.int64)},
-        {"a": np.dtype(np.int64), "b": None},
-        {
-            "a": cudf.ListDtype(np.dtype(np.int64)),
-            "b": cudf.Decimal64Dtype(1, 0),
-        },
-        {
-            "a": cudf.ListDtype(cudf.StructDtype({"b": np.dtype(np.int64)})),
-            "b": cudf.ListDtype(cudf.ListDtype(np.dtype(np.int64))),
-        },
-    ],
-)
-def test_serialize_struct_dtype(fields):
-    dtype = cudf.StructDtype(fields)
-    recreated = dtype.__class__.deserialize(*dtype.serialize())
-    assert recreated == dtype
-
-
 def test_deserialize_cudf_0_16(datadir):
     fname = datadir / "pkl" / "stringColumnWithRangeIndex_cudf_0.16.pkl"
 
