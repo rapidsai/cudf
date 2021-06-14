@@ -1429,11 +1429,9 @@ class RangeIndex(BaseIndex):
 
         name = self.name if name is None else name
 
-        _idx_new = RangeIndex(
+        return RangeIndex(
             start=self._start, stop=self._stop, step=self._step, name=name
         )
-
-        return _idx_new
 
     def __repr__(self):
         return (
@@ -1716,13 +1714,7 @@ class GenericIndex(BaseIndex):
         dtype = self.dtype if dtype is None else dtype
         name = self.name if name is None else name
 
-        if isinstance(self, (StringIndex, CategoricalIndex)):
-            result = as_index(self._values.astype(dtype), name=name, copy=deep)
-        else:
-            result = as_index(
-                self._values.copy(deep=deep).astype(dtype), name=name
-            )
-        return result
+        return as_index(self._values.astype(dtype), name=name, copy=deep)
 
     def __sizeof__(self):
         return self._values.__sizeof__()
