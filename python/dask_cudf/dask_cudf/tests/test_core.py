@@ -9,13 +9,7 @@ import pytest
 
 import dask
 from dask import dataframe as dd
-from dask.dataframe.core import meta_nonempty
-
-try:
-    from dask.dataframe.utils import make_meta_util as dask_make_meta
-except ImportError:
-    from dask.dataframe.core import make_meta as dask_make_meta
-
+from dask.dataframe.core import make_meta as dask_make_meta, meta_nonempty
 from dask.utils import M
 
 import cudf
@@ -827,9 +821,9 @@ def test_merging_categorical_columns():
 
 def test_correct_meta():
     try:
-        from dask.dataframe.utils import make_meta_util  # noqa: F401
+        from dask.dataframe.dispatch import make_meta_obj  # noqa: F401
     except ImportError:
-        pytest.skip("need make_meta_util to be preset")
+        pytest.skip("need make_meta_obj to be preset")
 
     # Need these local imports in this specific order.
     # For context: https://github.com/rapidsai/cudf/issues/7946

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/utilities/span.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -137,6 +138,20 @@ std::unique_ptr<column> remove_unused_keys(
 std::unique_ptr<column> set_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& keys,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Create new dictionaries that have keys merged from the input dictionaries.
+ *
+ * This will concatenate the keys for each dictionary and then call `set_keys` on each.
+ * The result is a vector of new dictionaries with a common set of keys.
+ *
+ * @param input Dictionary columns to match keys.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New dictionary columns.
+ */
+std::vector<std::unique_ptr<column>> match_dictionaries(
+  cudf::host_span<dictionary_column_view const> input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

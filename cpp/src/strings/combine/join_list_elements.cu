@@ -22,7 +22,6 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -160,7 +159,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
   CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be a valid string_scalar");
 
   auto const num_rows = lists_strings_column.size();
-  if (num_rows == 0) { return detail::make_empty_strings_column(stream, mr); }
+  if (num_rows == 0) { return make_empty_column(data_type{type_id::STRING}); }
 
   // Accessing the child strings column of the lists column must be done by calling `child()` on the
   // lists column, not `get_sliced_child()`. This is because calling to `offsets_begin()` on the
@@ -233,7 +232,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                "Separators column should be the same size as the lists columns");
 
   auto const num_rows = lists_strings_column.size();
-  if (num_rows == 0) { return detail::make_empty_strings_column(stream, mr); }
+  if (num_rows == 0) { return make_empty_column(data_type{type_id::STRING}); }
 
   // Accessing the child strings column of the lists column must be done by calling `child()` on the
   // lists column, not `get_sliced_child()`. This is because calling to `offsets_begin()` on the

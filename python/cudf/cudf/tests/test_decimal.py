@@ -1,5 +1,6 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
+import decimal
 from decimal import Decimal
 
 import numpy as np
@@ -286,3 +287,13 @@ def test_series_setitem_decimal(args):
         expect = _decimal_series(expect, dtype)
         data[to] = item
         assert_eq(data, expect)
+
+
+@pytest.mark.parametrize(
+    "input_obj", [[decimal.Decimal(1), cudf.NA, decimal.Decimal(3)]]
+)
+def test_series_construction_with_nulls(input_obj):
+    expect = pa.array(input_obj, from_pandas=True)
+    got = cudf.Series(input_obj).to_arrow()
+
+    assert expect == got
