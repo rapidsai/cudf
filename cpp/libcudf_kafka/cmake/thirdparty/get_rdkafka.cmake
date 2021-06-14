@@ -14,12 +14,28 @@
 # limitations under the License.
 #=============================================================================
 
-find_path(RDKAFKA_INCLUDE "librdkafka" HINTS "$ENV{RDKAFKA_ROOT}/include")
-find_library(RDKAFKA++_LIBRARY "rdkafka++" HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
 
-if(RDKAFKA_INCLUDE AND RDKAFKA++_LIBRARY)
-  add_library(rdkafka INTERFACE)
-  target_link_libraries(rdkafka INTERFACE "${RDKAFKA++_LIBRARY}")
-  target_include_directories(rdkafka INTERFACE "${RDKAFKA_INCLUDE}")
-  add_library(RDKAFKA::RDKAFKA ALIAS rdkafka)
-endif()
+function( get_RDKafka )
+  rapids_find_generate_module(RDKAFKA
+    HEADER_NAMES rdkafkacpp.h
+    INCLUDE_SUFFIXES librdkafka
+    LIBRARY_NAMES rdkafka++
+    BUILD_EXPORT_SET cudf_kafka-exports
+    INSTALL_EXPORT_SET cudf_kafka-exports
+    )
+
+  if(DEFINED ENV{RDKAFKA_ROOT})
+    # Since this is inside a function the modification of
+    # CMAKE_PREFIX_PATH won't leak to other callers/users
+    list(APPEND CMAKE_PREFIX_PATH "$ENV{RDKAFKA_ROOT}")
+    list(APPEND CMAKE_PREFIX_PATH "$ENV{RDKAFKA_ROOT}/build")
+  endif()
+
+
+  rapids_find_package(RDKAFKA REQUIRED
+    BUILD_EXPORT_SET cudf_kafka-exports
+    INSTALL_EXPORT_SET cudf_kafka-exports)
+
+endfunction()
+
+get_RDKafka()
