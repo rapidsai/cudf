@@ -180,7 +180,7 @@ ConfigureTest(INTEROP_TEST
 
 ###################################################################################################
 # - io tests --------------------------------------------------------------------------------------
-ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cu)
+ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cpp)
 
 ConfigureTest(CSV_TEST io/csv_test.cpp)
 ConfigureTest(ORC_TEST io/orc_test.cpp)
@@ -280,13 +280,13 @@ ConfigureTest(STREAM_COMPACTION_TEST
 ###################################################################################################
 # - rolling tests ---------------------------------------------------------------------------------
 ConfigureTest(ROLLING_TEST
-    rolling/rolling_test.cpp
+    rolling/collect_ops_test.cpp
+    rolling/empty_input_test.cpp
     rolling/grouped_rolling_test.cpp
     rolling/lead_lag_test.cpp
-    rolling/range_window_bounds_test.cpp
     rolling/range_rolling_window_test.cpp
-    rolling/collect_ops_test.cpp
-    )
+    rolling/range_window_bounds_test.cpp
+    rolling/rolling_test.cpp)
 
 ###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
@@ -351,6 +351,7 @@ ConfigureTest(STRINGS_TEST
     strings/ipv4_tests.cpp
     strings/json_tests.cpp
     strings/pad_tests.cpp
+    strings/repeat_strings_tests.cpp
     strings/replace_regex_tests.cpp
     strings/replace_tests.cpp
     strings/split_tests.cpp
