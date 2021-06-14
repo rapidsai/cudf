@@ -1642,11 +1642,6 @@ class RangeIndex(BaseIndex):
         return self
 
 
-def index_from_range(start, stop=None, step=None):
-    vals = column.arange(start, stop, step, dtype=np.int64)
-    return as_index(vals)
-
-
 class GenericIndex(BaseIndex):
     """An array of orderable values that represent the indices of another Column
 
