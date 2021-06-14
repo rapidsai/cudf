@@ -89,7 +89,7 @@ TYPED_TEST(ReverseTypedTestFixture, ReverseNullable)
 
   std::vector<T> expected_values;
   std::vector<bool> expected_valids;
-  for (int i = 19; i > -1; i--) {
+  for (int i = num_values - 1; i > -1; i--) {
     expected_values.push_back(cudf::test::make_type_param_scalar<T>(input_values[i]));
     expected_valids.push_back(input_valids[i]);
   }
@@ -139,7 +139,7 @@ TEST_F(ReverseStringTestFixture, ReverseNullable)
 
   std::vector<std::string> expected_values;
   std::vector<bool> expected_valids;
-  for (int i = 19; i > -1; i--) {
+  for (int i = num_values - 1; i > -1; i--) {
     expected_values.push_back(input_values[i]);
     expected_valids.push_back(input_valids[i]);
   }
