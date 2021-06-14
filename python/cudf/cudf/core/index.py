@@ -4,7 +4,7 @@ from __future__ import annotations, division, print_function
 
 import pickle
 from numbers import Number
-from typing import Any, Dict, Type
+from typing import Any, Dict, Type, Union
 
 import cupy
 import numpy as np
@@ -1851,7 +1851,7 @@ class NumericIndex(GenericIndex):
     """
 
     # Subclasses must define the dtype they are associated with.
-    _dtype = None
+    _dtype: Union[None, Type[np.number]] = None
 
     def __init__(self, data=None, dtype=None, copy=False, name=None):
 
