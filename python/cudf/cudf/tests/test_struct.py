@@ -2,6 +2,7 @@
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -45,6 +46,14 @@ def test_struct_for_field(key, expect):
     expect = cudf.Series(expect)
     got = sr.struct.field(key)
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("input_obj", [[{"a": 1, "b": cudf.NA, "c": 3}]])
+def test_series_construction_with_nulls(input_obj):
+    expect = pa.array(input_obj, from_pandas=True)
+    got = cudf.Series(input_obj).to_arrow()
+
+    assert expect == got
 
 
 @pytest.mark.parametrize(

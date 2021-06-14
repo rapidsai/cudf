@@ -1225,8 +1225,13 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
     Table t0(std::move(cols0));
 
-    auto result = hash_join.full_join(t0);
+    auto output_size                         = hash_join.full_join_size(t0);
+    std::optional<std::size_t> optional_size = output_size;
 
+    std::size_t const size_gold = 9;
+    EXPECT_EQ(output_size, size_gold);
+
+    auto result = hash_join.full_join(t0, cudf::null_equality::EQUAL, optional_size);
     auto result_table =
       cudf::table_view({cudf::column_view{cudf::data_type{cudf::type_id::INT32},
                                           static_cast<cudf::size_type>(result.first->size()),
@@ -1258,7 +1263,13 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
     Table t0(std::move(cols0));
 
-    auto result = hash_join.left_join(t0);
+    auto output_size                         = hash_join.left_join_size(t0);
+    std::optional<std::size_t> optional_size = output_size;
+
+    std::size_t const size_gold = 5;
+    EXPECT_EQ(output_size, size_gold);
+
+    auto result = hash_join.left_join(t0, cudf::null_equality::EQUAL, optional_size);
     auto result_table =
       cudf::table_view({cudf::column_view{cudf::data_type{cudf::type_id::INT32},
                                           static_cast<cudf::size_type>(result.first->size()),
@@ -1290,7 +1301,13 @@ TEST_F(JoinTest, HashJoinSequentialProbes)
 
     Table t0(std::move(cols0));
 
-    auto result = hash_join.inner_join(t0);
+    auto output_size                         = hash_join.inner_join_size(t0);
+    std::optional<std::size_t> optional_size = output_size;
+
+    std::size_t const size_gold = 3;
+    EXPECT_EQ(output_size, size_gold);
+
+    auto result = hash_join.inner_join(t0, cudf::null_equality::EQUAL, optional_size);
     auto result_table =
       cudf::table_view({cudf::column_view{cudf::data_type{cudf::type_id::INT32},
                                           static_cast<cudf::size_type>(result.first->size()),
