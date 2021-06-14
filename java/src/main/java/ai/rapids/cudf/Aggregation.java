@@ -300,12 +300,13 @@ public abstract class Aggregation {
         }
     }
 
-    private static final class CollectSetAggregation extends Aggregation {
+    public static final class CollectSetAggregation extends Aggregation
+        implements RollingAggregation<CollectSetAggregation> {
         private final NullPolicy nullPolicy;
         private final NullEquality nullEquality;
         private final NaNEquality nanEquality;
 
-        public CollectSetAggregation(NullPolicy nullPolicy, NullEquality nullEquality, NaNEquality nanEquality) {
+        private CollectSetAggregation(NullPolicy nullPolicy, NullEquality nullEquality, NaNEquality nanEquality) {
             super(Kind.COLLECT_SET);
             this.nullPolicy = nullPolicy;
             this.nullEquality = nullEquality;

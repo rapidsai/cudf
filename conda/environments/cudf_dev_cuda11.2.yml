@@ -41,8 +41,8 @@ dependencies:
   - mypy=0.782
   - typing_extensions
   - pre_commit
-  - dask>=2021.4.0,<=2021.5.1
-  - distributed>=2.22.0,<=2021.5.1
+  - dask>=2021.6.0
+  - distributed>=2021.6.0
   - streamz
   - dlpack>=0.5,<0.6.0a0
   - arrow-cpp=1.0.1
@@ -60,7 +60,7 @@ dependencies:
   - cachetools
   - transformers
   - pip:
-      - git+https://github.com/dask/dask.git@2021.05.1
-      - git+https://github.com/dask/distributed.git@2021.05.1
+      - git+https://github.com/dask/dask.git@main
+      - git+https://github.com/dask/distributed.git@main
       - git+https://github.com/python-streamz/streamz.git
       - pyorc

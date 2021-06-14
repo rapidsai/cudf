@@ -886,13 +886,15 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
       size_type* offset_stack  = &d_offset_stack[stack_pos];
       int parent_offsets_index = src_info.parent_offsets_index;
       int stack_size           = 0;
+      int root_column_offset   = src_info.column_offset;
       while (parent_offsets_index >= 0) {
         offset_stack[stack_size++] = parent_offsets_index;
+        root_column_offset         = d_src_buf_info[parent_offsets_index].column_offset;
         parent_offsets_index       = d_src_buf_info[parent_offsets_index].parent_offsets_index;
       }
-      // make sure to include the -column- offset in our calculations
-      int row_start = d_indices[split_index] + src_info.column_offset;
-      int row_end   = d_indices[split_index + 1] + src_info.column_offset;
+      // make sure to include the -column- offset on the root column in our calculation.
+      int row_start = d_indices[split_index] + root_column_offset;
+      int row_end   = d_indices[split_index + 1] + root_column_offset;
       while (stack_size > 0) {
         stack_size--;
         auto const offsets = d_src_buf_info[offset_stack[stack_size]].offsets;
@@ -923,6 +925,7 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
       int const element_size = cudf::type_dispatcher(data_type{src_info.type}, size_of_helper{});
       std::size_t const bytes =
         static_cast<std::size_t>(num_elements) * static_cast<std::size_t>(element_size);
+
       return dst_buf_info{_round_up_safe(bytes, 64),
                           num_elements,
                           element_size,
