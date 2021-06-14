@@ -103,8 +103,8 @@ struct dispatch_hex_to_integers_fn {
                       hex_to_integer_fn<IntegerType>{strings_column});
   }
   // non-integral types throw an exception
-  template <typename T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
-  void operator()(column_device_view const&, mutable_column_view&, rmm::cuda_stream_view) const
+  template <typename T, typename... Args>
+  std::enable_if_t<not std::is_integral<T>::value, void> operator()(Args&&...) const
   {
     CUDF_FAIL("Output for hex_to_integers must be an integral type.");
   }
