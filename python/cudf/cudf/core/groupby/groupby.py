@@ -9,9 +9,26 @@ from nvtx import annotate
 import cudf
 from cudf._lib import groupby as libgroupby
 from cudf._lib.table import Table
+from cudf._typing import DataFrameOrSeries
 from cudf.core.abc import Serializable
+from cudf.core.column.column import arange
 from cudf.utils.dtypes import is_list_like
 from cudf.utils.utils import GetAttrGetItemMixin, cached_property
+
+
+# The three functions below return the quantiles [25%, 50%, 75%]
+# respectively, which are called in the describe() method to ouput
+# the summary stats of a GroupBy object
+def _quantile_25(x):
+    return x.quantile(0.25)
+
+
+def _quantile_50(x):
+    return x.quantile(0.50)
+
+
+def _quantile_75(x):
+    return x.quantile(0.75)
 
 
 # Note that all valid aggregation methods (e.g. GroupBy.min) are bound to the
@@ -63,7 +80,7 @@ class GroupBy(Serializable):
 
     def __iter__(self):
         group_names, offsets, _, grouped_values = self._grouped()
-        if isinstance(group_names, cudf.Index):
+        if isinstance(group_names, cudf.BaseIndex):
             group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):
             yield name, grouped_values[offsets[i] : offsets[i + 1]]
@@ -139,10 +156,10 @@ class GroupBy(Serializable):
         >>> a = cudf.DataFrame(
             {'a': [1, 1, 2], 'b': [1, 2, 3], 'c': [2, 2, 1]})
         >>> a.groupby('a').agg('sum')
-           b
+           b  c
         a
-        2  3
-        1  3
+        2  3  1
+        1  3  4
 
         Specifying a list of aggregations to perform on each column.
 
@@ -347,7 +364,7 @@ class GroupBy(Serializable):
         >>> import cudf
         >>> df = cudf.DataFrame({'A': ['a', 'b', 'a', 'b'], 'B': [1, 2, 3, 4]})
         >>> df
-        A  B
+           A  B
         0  a  1
         1  b  2
         2  a  3
@@ -357,7 +374,7 @@ class GroupBy(Serializable):
         in one pass, you can do
 
         >>> df.groupby('A').pipe(lambda x: x.max() - x.min())
-        B
+           B
         A
         a  2
         b  2
@@ -601,6 +618,75 @@ class GroupBy(Serializable):
 
         return self.agg(func)
 
+    def describe(self, include=None, exclude=None):
+        """
+        Generate descriptive statistics that summarizes the central tendency,
+        dispersion and shape of a dataset’s distribution, excluding NaN values.
+
+        Analyzes numeric DataFrames only
+
+        Parameters
+        ----------
+        include: ‘all’, list-like of dtypes or None (default), optional
+            list of data types to include in the result.
+            Ignored for Series.
+
+        exclude: list-like of dtypes or None (default), optional,
+            list of data types to omit from the result.
+            Ignored for Series.
+
+        Returns
+        -------
+        Series or DataFrame
+            Summary statistics of the Dataframe provided.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame({"Speed": [380.0, 370.0, 24.0, 26.0],
+                                  "Score": [50, 30, 90, 80]})
+        >>> gdf
+        Speed  Score
+        0  380.0     50
+        1  370.0     30
+        2   24.0     90
+        3   26.0     80
+        >>> gdf.groupby('Score').describe()
+            Speed
+            count   mean   std    min    25%    50%    75%     max
+        Score
+        30        1  370.0  <NA>  370.0  370.0  370.0  370.0  370.0
+        50        1  380.0  <NA>  380.0  380.0  380.0  380.0  380.0
+        80        1   26.0  <NA>   26.0   26.0   26.0   26.0   26.0
+        90        1   24.0  <NA>   24.0   24.0   24.0   24.0   24.0
+
+        """
+        if exclude is not None and include is not None:
+            raise NotImplementedError
+
+        res = self.agg(
+            [
+                "count",
+                "mean",
+                "std",
+                "min",
+                _quantile_25,
+                _quantile_50,
+                _quantile_75,
+                "max",
+            ]
+        )
+        res.rename(
+            columns={
+                "_quantile_25": "25%",
+                "_quantile_50": "50%",
+                "_quantile_75": "75%",
+            },
+            level=1,
+            inplace=True,
+        )
+        return res
+
     def sum(self):
         """Compute the column-wise sum of the values in each group."""
         return self.agg("sum")
@@ -705,6 +791,114 @@ class GroupBy(Serializable):
         """Get the column-wise cumulative maximum value in each group."""
         return self.agg("cummax")
 
+    def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
+        """Internal implementation for `ffill` and `bfill`
+        """
+        value_columns = self.grouping.values
+        result = self._groupby.replace_nulls(
+            Table(value_columns._data), method
+        )
+        result = self.obj.__class__._from_table(result)
+        result = self._mimic_pandas_order(result)
+        return result._copy_type_metadata(value_columns)
+
+    def pad(self, limit=None):
+        """Forward fill NA values.
+
+        Parameters
+        ----------
+        limit : int, default None
+            Unsupported
+        """
+
+        if limit is not None:
+            raise NotImplementedError("Does not support limit param yet.")
+
+        return self._scan_fill("ffill", limit)
+
+    ffill = pad
+
+    def backfill(self, limit=None):
+        """Backward fill NA values.
+
+        Parameters
+        ----------
+        limit : int, default None
+            Unsupported
+        """
+        if limit is not None:
+            raise NotImplementedError("Does not support limit param yet.")
+
+        return self._scan_fill("bfill", limit)
+
+    bfill = backfill
+
+    def fillna(
+        self,
+        value=None,
+        method=None,
+        axis=0,
+        inplace=False,
+        limit=None,
+        downcast=None,
+    ):
+        """Fill NA values using the specified method.
+
+        Parameters
+        ----------
+        value : scalar, dict
+            Value to use to fill the holes. Cannot be specified with method.
+        method : {'backfill', 'bfill', 'pad', 'ffill', None}, default None
+            Method to use for filling holes in reindexed Series
+
+            - pad/ffill: propagate last valid observation forward to next valid
+            - backfill/bfill: use next valid observation to fill gap
+        axis : {0 or 'index', 1 or 'columns'}
+            Unsupported
+        inplace : bool, default False
+            If `True`, fill inplace. Note: this will modify other views on this
+            object.
+        limit : int, default None
+            Unsupported
+        downcast : dict, default None
+            Unsupported
+
+        Returns
+        -------
+        DataFrame or Series
+        """
+        if inplace:
+            raise NotImplementedError("Does not support inplace yet.")
+        if limit is not None:
+            raise NotImplementedError("Does not support limit param yet.")
+        if downcast is not None:
+            raise NotImplementedError("Does not support downcast yet.")
+        if not axis == 0:
+            raise NotImplementedError("Only support axis == 0.")
+
+        if value is None and method is None:
+            raise ValueError("Must specify a fill 'value' or 'method'.")
+        if value is not None and method is not None:
+            raise ValueError("Cannot specify both 'value' and 'method'.")
+
+        if method is not None:
+            if method not in {"pad", "ffill", "backfill", "bfill"}:
+                raise ValueError(
+                    "Method can only be of 'pad', 'ffill',"
+                    "'backfill', 'bfill'."
+                )
+            return getattr(self, method, limit)()
+
+        value_columns = self.grouping.values
+        _, grouped_values, _ = self._groupby.groups(Table(value_columns._data))
+
+        grouped = self.obj.__class__._from_data(grouped_values._data)
+        result = grouped.fillna(
+            value=value, inplace=inplace, axis=axis, limit=limit
+        )
+        result = self._mimic_pandas_order(result)
+        return result._copy_type_metadata(value_columns)
+
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """
         Shift each group by ``periods`` positions.
@@ -759,6 +953,22 @@ class GroupBy(Serializable):
         value_columns = self.obj._data.select_by_label(value_column_names)
         result = self._groupby.shift(Table(value_columns), periods, fill_value)
         return self.obj.__class__._from_table(result)
+
+    def _mimic_pandas_order(
+        self, result: DataFrameOrSeries
+    ) -> DataFrameOrSeries:
+        """Given a groupby result from libcudf, reconstruct the row orders
+        matching that of pandas. This also adds appropriate indices.
+        """
+        sorted_order_column = arange(0, result._data.nrows)
+        _, order, _ = self._groupby.groups(
+            Table({"sorted_order_column": sorted_order_column})
+        )
+        order = order._data["sorted_order_column"]
+        gather_map = order.argsort()
+        result = result.take(gather_map)
+        result.index = self.obj.index
+        return result
 
 
 class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
@@ -975,6 +1185,14 @@ class _Grouping(Serializable):
         self._obj = obj
         self._key_columns = []
         self.names = []
+        # For transform operations, we want to filter out only the value
+        # columns that will be used. When part of the key columns are composed
+        # from columns in `obj`, these columns are not included in the value
+        # columns. This only happens when `by` is specified with
+        # column labels or `Grouper` object with `key` param. To avoid that
+        # external objects overlaps in names to `obj`, these column
+        # names are recorded separately in this list.
+        self._key_column_names_from_obj = []
 
         # Need to keep track of named key columns
         # to support `as_index=False` correctly
@@ -999,7 +1217,7 @@ class _Grouping(Serializable):
                     self._handle_callable(by)
                 elif isinstance(by, cudf.Series):
                     self._handle_series(by)
-                elif isinstance(by, cudf.Index):
+                elif isinstance(by, cudf.BaseIndex):
                     self._handle_index(by)
                 elif isinstance(by, collections.abc.Mapping):
                     self._handle_mapping(by)
@@ -1013,6 +1231,8 @@ class _Grouping(Serializable):
 
     @property
     def keys(self):
+        """Return grouping key columns as index
+        """
         nkeys = len(self._key_columns)
 
         if nkeys == 0:
@@ -1028,6 +1248,25 @@ class _Grouping(Serializable):
             return cudf.core.index.as_index(
                 self._key_columns[0], name=self.names[0]
             )
+
+    @property
+    def values(self):
+        """Return value columns as a frame.
+
+        Note that in aggregation, value columns can be arbitrarily
+        specified. While this method returns all non-key columns from `obj` as
+        a frame.
+
+        This is mainly used in transform-like operations.
+        """
+        # If the key columns are in `obj`, filter them out
+        value_column_names = [
+            x
+            for x in self._obj._data.names
+            if x not in self._key_column_names_from_obj
+        ]
+        value_columns = self._obj._data.select_by_label(value_column_names)
+        return self._obj.__class__._from_data(value_columns)
 
     def _handle_callable(self, by):
         by = by(self._obj.index)
@@ -1050,6 +1289,7 @@ class _Grouping(Serializable):
         self._key_columns.append(self._obj._data[by])
         self.names.append(by)
         self._named_columns.append(by)
+        self._key_column_names_from_obj.append(by)
 
     def _handle_grouper(self, by):
         if by.key:

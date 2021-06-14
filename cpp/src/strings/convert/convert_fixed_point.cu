@@ -427,7 +427,7 @@ std::unique_ptr<column> from_fixed_point(column_view const& input,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) return detail::make_empty_strings_column(stream, mr);
+  if (input.is_empty()) return make_empty_column(data_type{type_id::STRING});
   return type_dispatcher(input.type(), dispatch_from_fixed_point_fn{}, input, stream, mr);
 }
 

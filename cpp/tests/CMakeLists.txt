@@ -180,7 +180,7 @@ ConfigureTest(INTEROP_TEST
 
 ###################################################################################################
 # - io tests --------------------------------------------------------------------------------------
-ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cu)
+ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cpp)
 
 ConfigureTest(CSV_TEST io/csv_test.cpp)
 ConfigureTest(ORC_TEST io/orc_test.cpp)
@@ -351,6 +351,7 @@ ConfigureTest(STRINGS_TEST
     strings/ipv4_tests.cpp
     strings/json_tests.cpp
     strings/pad_tests.cpp
+    strings/repeat_strings_tests.cpp
     strings/replace_regex_tests.cpp
     strings/replace_tests.cpp
     strings/split_tests.cpp

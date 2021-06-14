@@ -26,6 +26,7 @@
 
 #include <thrust/sequence.h>
 #include <random>
+#include <rmm/cuda_stream_view.hpp>
 
 template <typename T>
 struct TypedScalarTest : public cudf::test::BaseFixture {
@@ -58,8 +59,9 @@ TYPED_TEST(TypedScalarTest, ConstructNull)
 
 TYPED_TEST(TypedScalarTestWithoutFixedPoint, SetValue)
 {
+  TypeParam init  = cudf::test::make_type_param_scalar<TypeParam>(0);
   TypeParam value = cudf::test::make_type_param_scalar<TypeParam>(9);
-  cudf::scalar_type_t<TypeParam> s;
+  cudf::scalar_type_t<TypeParam> s(init, true);
   s.set_value(value);
 
   EXPECT_TRUE(s.is_valid());
@@ -69,9 +71,8 @@ TYPED_TEST(TypedScalarTestWithoutFixedPoint, SetValue)
 TYPED_TEST(TypedScalarTestWithoutFixedPoint, SetNull)
 {
   TypeParam value = cudf::test::make_type_param_scalar<TypeParam>(6);
-  cudf::scalar_type_t<TypeParam> s;
-  s.set_value(value);
-  s.set_valid(false);
+  cudf::scalar_type_t<TypeParam> s(value, true);
+  s.set_valid_async(false);
 
   EXPECT_FALSE(s.is_valid());
 }
@@ -109,13 +110,6 @@ TEST_F(StringScalarTest, DefaultValidity)
 
   EXPECT_TRUE(s.is_valid());
   EXPECT_EQ(value, s.to_string());
-}
-
-TEST_F(StringScalarTest, ConstructNull)
-{
-  auto s = cudf::string_scalar();
-
-  EXPECT_FALSE(s.is_valid());
 }
 
 TEST_F(StringScalarTest, CopyConstructor)
@@ -159,13 +153,6 @@ TEST_F(ListScalarTest, DefaultValidityNested)
 
   EXPECT_TRUE(s.is_valid());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(data, s.view());
-}
-
-TEST_F(ListScalarTest, ConstructNull)
-{
-  auto s = cudf::list_scalar();
-
-  EXPECT_FALSE(s.is_valid());
 }
 
 TEST_F(ListScalarTest, MoveColumnConstructor)

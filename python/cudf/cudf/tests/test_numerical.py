@@ -6,7 +6,8 @@ import pytest
 
 import cudf
 from cudf.core._compat import PANDAS_GE_100
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import NUMERIC_TYPES, assert_eq
+from cudf.utils.dtypes import cudf_dtypes_to_pandas_dtypes
 
 
 def test_can_cast_safely_same_kind():
@@ -384,3 +385,24 @@ def test_to_numeric_error(data, errors):
         got = cudf.to_numeric(data, errors=errors)
 
         assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("dtype", NUMERIC_TYPES)
+@pytest.mark.parametrize("input_obj", [[1, cudf.NA, 3]])
+def test_series_construction_with_nulls(dtype, input_obj):
+    dtype = np.dtype(dtype)
+    # numpy case
+
+    expect = pd.Series(input_obj, dtype=cudf_dtypes_to_pandas_dtypes[dtype])
+    got = cudf.Series(input_obj, dtype=dtype).to_pandas(nullable=True)
+
+    assert_eq(expect, got)
+
+    # Test numpy array of objects case
+    np_data = [
+        dtype.type(v) if v is not cudf.NA else cudf.NA for v in input_obj
+    ]
+
+    expect = pd.Series(np_data, dtype=cudf_dtypes_to_pandas_dtypes[dtype])
+    got = cudf.Series(np_data, dtype=dtype).to_pandas(nullable=True)
+    assert_eq(expect, got)

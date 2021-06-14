@@ -109,17 +109,6 @@ std::unique_ptr<column> create_chars_child_column(cudf::size_type strings_count,
     data_type{type_id::INT8}, total_bytes, mask_state::UNALLOCATED, stream, mr);
 }
 
-//
-std::unique_ptr<column> make_empty_strings_column(rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
-{
-  return std::make_unique<column>(data_type{type_id::STRING},
-                                  0,
-                                  rmm::device_buffer{0, stream, mr},  // data
-                                  rmm::device_buffer{0, stream, mr},
-                                  0);  // nulls
-}
-
 namespace {
 // The device variables are created here to avoid using a singleton that may cause issues
 // with RMM initialize/finalize. See PR #3159 for details on this approach.

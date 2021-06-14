@@ -42,17 +42,6 @@ std::unique_ptr<column> create_chars_child_column(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Create a strings column with no strings.
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return Empty strings column
- */
-std::unique_ptr<column> make_empty_strings_column(
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
  * @brief Creates a string_view vector from a strings column.
  *
  * @param strings Strings column instance.
