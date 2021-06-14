@@ -20,10 +20,10 @@ from cudf.core._compat import PANDAS_GE_120
 from cudf.core.column import column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, SingleColumnFrame
-from cudf.core.index import Index, as_index
+from cudf.core.index import BaseIndex, as_index
 
 
-class MultiIndex(Index):
+class MultiIndex(BaseIndex):
     """A multi-level or hierarchical index.
 
     Provides N-Dimensional indexing into Series and DataFrame objects.
@@ -84,7 +84,7 @@ class MultiIndex(Index):
             )
 
         out = Frame.__new__(cls)
-        super(Index, out).__init__()
+        super(BaseIndex, out).__init__()
 
         if copy:
             if isinstance(codes, cudf.DataFrame):

@@ -66,7 +66,7 @@ int16_t __device__ generic_sign(T value)
 
 // this is needed to suppress warning: pointless comparison of unsigned integer with zero
 template <typename T, typename std::enable_if_t<not std::is_signed<T>::value>* = nullptr>
-int16_t __device__ generic_sign(T value)
+int16_t __device__ generic_sign(T)
 {
   return 1;
 }
@@ -87,7 +87,7 @@ struct half_up_zero {
   }
 
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ U operator()(U e)
+  __device__ U operator()(U)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
@@ -106,7 +106,7 @@ struct half_up_positive {
   }
 
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ U operator()(U e)
+  __device__ U operator()(U)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
@@ -140,7 +140,7 @@ struct half_even_zero {
   }
 
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ U operator()(U e)
+  __device__ U operator()(U)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
@@ -159,7 +159,7 @@ struct half_even_positive {
   }
 
   template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
-  __device__ U operator()(U e)
+  __device__ U operator()(U)
   {
     assert(false);  // Should never get here. Just for compilation
     return U{};
@@ -264,8 +264,7 @@ std::unique_ptr<column> round_with(column_view const& input,
 
 struct round_type_dispatcher {
   template <typename T, typename... Args>
-  std::enable_if_t<not is_supported_round_type<T>(), std::unique_ptr<column>> operator()(
-    Args&&... args)
+  std::enable_if_t<not is_supported_round_type<T>(), std::unique_ptr<column>> operator()(Args&&...)
   {
     CUDF_FAIL("Type not support for cudf::round");
   }

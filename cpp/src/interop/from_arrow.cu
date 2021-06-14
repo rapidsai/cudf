@@ -26,7 +26,6 @@
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/null_mask.hpp>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -118,11 +117,8 @@ struct dispatch_to_cudf_column {
   }
 
   template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
-  std::unique_ptr<column> operator()(arrow::Array const& array,
-                                     data_type type,
-                                     bool skip_mask,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+  std::unique_ptr<column> operator()(
+    arrow::Array const&, data_type, bool, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
   {
     CUDF_FAIL("Unsupported type in from_arrow.");
   }
@@ -231,7 +227,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal64>(
 template <>
 std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
   arrow::Array const& array,
-  data_type type,
+  data_type,
   bool skip_mask,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
@@ -267,12 +263,12 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
 template <>
 std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
   arrow::Array const& array,
-  data_type type,
-  bool skip_mask,
+  data_type,
+  bool,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  if (array.length() == 0) { return cudf::strings::detail::make_empty_strings_column(stream, mr); }
+  if (array.length() == 0) { return make_empty_column(data_type{type_id::STRING}); }
   auto str_array    = static_cast<arrow::StringArray const*>(&array);
   auto offset_array = std::make_unique<arrow::Int32Array>(
     str_array->value_offsets()->size() / sizeof(int32_t), str_array->value_offsets(), nullptr);
@@ -303,8 +299,8 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
 template <>
 std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::dictionary32>(
   arrow::Array const& array,
-  data_type type,
-  bool skip_mask,
+  data_type,
+  bool,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -333,8 +329,8 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::dictionary32>(
 template <>
 std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::struct_view>(
   arrow::Array const& array,
-  data_type type,
-  bool skip_mask,
+  data_type,
+  bool,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -366,8 +362,8 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::struct_view>(
 template <>
 std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::list_view>(
   arrow::Array const& array,
-  data_type type,
-  bool skip_mask,
+  data_type,
+  bool,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
