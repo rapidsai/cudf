@@ -329,11 +329,7 @@ def test_scalar_invalid_implicit_conversion(cls, dtype):
     try:
         cls(pd.NA)
     except TypeError as e:
-
-        error = (
-            str(e).replace("NAType", "_NAType").replace(" NA ", " cudf.NA ")
-        )
-        with pytest.raises(TypeError, match=re.escape(str(error))):
+        with pytest.raises(TypeError, match=re.escape(str(e))):
             slr = pycudf_scalar(None, dtype=dtype)
             cls(slr)
 

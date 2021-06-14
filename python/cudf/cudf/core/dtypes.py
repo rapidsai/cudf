@@ -9,6 +9,7 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.extensions import ExtensionDtype
 from pandas.core.arrays._arrow_utils import ArrowIntervalType
+from cudf.utils.dtypes import is_interval_dtype
 
 import cudf
 from cudf._typing import Dtype
@@ -32,7 +33,7 @@ class CategoricalDtype(_BaseDtype):
         self.ordered = ordered
 
     @property
-    def categories(self) -> "cudf.core.index.Index":
+    def categories(self) -> "cudf.core.index.BaseIndex":
         if self._categories is None:
             return cudf.core.index.as_index(
                 cudf.core.column.column_empty(0, dtype="object", masked=False)
@@ -72,7 +73,7 @@ class CategoricalDtype(_BaseDtype):
     def _init_categories(self, categories: Any):
         if categories is None:
             return categories
-        if len(categories) == 0:
+        if len(categories) == 0 and not is_interval_dtype(categories):
             dtype = "object"  # type: Any
         else:
             dtype = None
@@ -143,6 +144,8 @@ class ListDtype(_BaseDtype):
     def element_type(self) -> Dtype:
         if isinstance(self._typ.value_type, pa.ListType):
             return ListDtype.from_arrow(self._typ.value_type)
+        elif isinstance(self._typ.value_type, pa.StructType):
+            return StructDtype.from_arrow(self._typ.value_type)
         else:
             return np.dtype(self._typ.value_type.to_pandas_dtype()).name
 
@@ -176,10 +179,10 @@ class ListDtype(_BaseDtype):
         return self._typ.equals(other._typ)
 
     def __repr__(self):
-        if isinstance(self.element_type, ListDtype):
-            return f"ListDtype({self.element_type.__repr__()})"
+        if isinstance(self.element_type, (ListDtype, StructDtype)):
+            return f"{type(self).__name__}({self.element_type.__repr__()})"
         else:
-            return f"ListDtype({self.element_type})"
+            return f"{type(self).__name__}({self.element_type})"
 
     def __hash__(self):
         return hash(self._typ)

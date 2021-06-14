@@ -21,7 +21,6 @@ from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
 from cudf.core.abc import Serializable
 from cudf.core.column import (
-    ColumnBase,
     DatetimeColumn,
     TimeDeltaColumn,
     arange,
@@ -33,27 +32,30 @@ from cudf.core.column import (
 from cudf.core.column.categorical import (
     CategoricalAccessor as CategoricalAccessor,
 )
+from cudf.core.column.column import _concat_columns
 from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import SingleColumnFrame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy
-from cudf.core.index import Index, RangeIndex, as_index
+from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
 from cudf.utils import cudautils, docutils, ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    _decimal_normalize_types,
     can_convert_to_column,
+    find_common_type,
     is_decimal_dtype,
+    is_struct_dtype,
+    is_categorical_dtype,
+    is_interval_dtype,
     is_list_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
     is_scalar,
     min_scalar_type,
-    numeric_normalize_types,
 )
 from cudf.utils.utils import (
     get_appropriate_dispatched_func,
@@ -220,7 +222,7 @@ class Series(SingleColumnFrame, Serializable):
         elif isinstance(data, pd.Index):
             name = data.name
             data = data.values
-        elif isinstance(data, Index):
+        elif isinstance(data, BaseIndex):
             name = data.name
             data = data._values
             if dtype is not None:
@@ -256,7 +258,7 @@ class Series(SingleColumnFrame, Serializable):
             if dtype is not None:
                 data = data.astype(dtype)
 
-        if index is not None and not isinstance(index, Index):
+        if index is not None and not isinstance(index, BaseIndex):
             index = as_index(index)
 
         assert isinstance(data, column.ColumnBase)
@@ -740,7 +742,7 @@ class Series(SingleColumnFrame, Serializable):
         e    14
         dtype: int64
         """
-        index = index if isinstance(index, Index) else as_index(index)
+        index = index if isinstance(index, BaseIndex) else as_index(index)
         return self._copy_construct(index=index)
 
     def as_index(self):
@@ -1223,15 +1225,12 @@ class Series(SingleColumnFrame, Serializable):
             if get_option("display.max_rows") == 0
             else get_option("display.max_rows")
         )
-
         if len(self) > max_rows and max_rows != 0:
             top = self.head(int(max_rows / 2 + 1))
             bottom = self.tail(int(max_rows / 2 + 1))
-
             preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self.copy()
-
         preprocess.index = preprocess.index._clean_nulls_from_index()
         if (
             preprocess.nullable
@@ -1272,6 +1271,14 @@ class Series(SingleColumnFrame, Serializable):
                     )
                 )
             else:
+                if is_categorical_dtype(self):
+                    if is_interval_dtype(
+                        self.dtype.categories
+                    ) and is_struct_dtype(preprocess._column.categories):
+                        # with a series input the IntervalIndex's are turn
+                        # into a struct dtype this line will change the
+                        # categories back to an intervalIndex.
+                        preprocess.dtype._categories = self.dtype.categories
                 pd_series = preprocess.to_pandas()
             output = pd_series.to_string(
                 name=self.name,
@@ -2402,12 +2409,10 @@ class Series(SingleColumnFrame, Serializable):
                     )
 
             if dtype_mismatch:
-                if isinstance(objs[0]._column, cudf.core.column.DecimalColumn):
-                    objs = _decimal_normalize_types(*objs)
-                else:
-                    objs = numeric_normalize_types(*objs)
+                common_dtype = find_common_type([obj.dtype for obj in objs])
+                objs = [obj.astype(common_dtype) for obj in objs]
 
-        col = ColumnBase._concat([o._column for o in objs])
+        col = _concat_columns([o._column for o in objs])
 
         if isinstance(col, cudf.core.column.DecimalColumn):
             col = objs[0]._column._copy_type_metadata(col)
@@ -2868,7 +2873,6 @@ class Series(SingleColumnFrame, Serializable):
         3    30.0
         dtype: float64
         """
-
         if index is True:
             index = self.index.to_pandas()
         s = self._column.to_pandas(index=index, nullable=nullable)
@@ -3860,32 +3864,6 @@ class Series(SingleColumnFrame, Serializable):
 
         return codes._copy_construct(name=None, index=self.index)
 
-    def factorize(self, na_sentinel=-1):
-        """Encode the input values as integer labels
-
-        Parameters
-        ----------
-        na_sentinel : number
-            Value to indicate missing category.
-
-        Returns
-        --------
-        (labels, cats) : (cupy.ndarray, cupy.ndarray or Index)
-            - *labels* contains the encoded values
-            - *cats* contains the categories in order that the N-th
-              item corresponds to the (N-1) code.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series(['a', 'a', 'c'])
-        >>> codes
-        array([0, 0, 1], dtype=int8)
-        >>> uniques
-        StringIndex(['a' 'c'], dtype='object')
-        """
-        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
-
     # UDF related
 
     def applymap(self, udf, out_dtype=None):
@@ -3996,11 +3974,9 @@ class Series(SingleColumnFrame, Serializable):
         4    105
         dtype: int64
         """
-        if callable(udf):
-            res_col = self._unaryop(udf)
-        else:
-            res_col = self._column.applymap(udf, out_dtype=out_dtype)
-        return self._copy_construct(data=res_col)
+        if not callable(udf):
+            raise ValueError("Input UDF must be a callable object.")
+        return self._copy_construct(data=self._unaryop(udf))
 
     #
     # Stats
@@ -4253,60 +4229,7 @@ class Series(SingleColumnFrame, Serializable):
             skipna=skipna, dtype=dtype, min_count=min_count
         )
 
-    def prod(
-        self,
-        axis=None,
-        skipna=None,
-        dtype=None,
-        level=None,
-        numeric_only=None,
-        min_count=0,
-        **kwargs,
-    ):
-        """
-        Return product of the values in the series
-
-        Parameters
-        ----------
-
-        skipna : bool, default True
-            Exclude NA/null values when computing the result.
-
-        dtype : data type
-            Data type to cast the result to.
-
-        min_count : int, default 0
-            The required number of valid values to perform the operation.
-            If fewer than min_count non-NA values are present the result
-            will be NA.
-
-            The default being 0. This means the sum of an all-NA or empty
-            Series is 0, and the product of an all-NA or empty Series is 1.
-
-        Returns
-        -------
-        scalar
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level`, `numeric_only`.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, 5, 2, 4, 3])
-        >>> ser.prod()
-        120
-        """
-        return self.product(
-            axis=axis,
-            skipna=skipna,
-            dtype=dtype,
-            level=level,
-            numeric_only=numeric_only,
-            min_count=min_count,
-            **kwargs,
-        )
+    prod = product
 
     def cummin(self, axis=None, skipna=True, *args, **kwargs):
         """
@@ -4832,7 +4755,7 @@ class Series(SingleColumnFrame, Serializable):
 
         return Series(val_counts.index.sort_values(), name=self.name)
 
-    def round(self, decimals=0):
+    def round(self, decimals=0, how="half_even"):
         """
         Round each value in a Series to the given number of decimals.
 
@@ -4842,6 +4765,9 @@ class Series(SingleColumnFrame, Serializable):
             Number of decimal places to round to. If decimals is negative,
             it specifies the number of positions to the left of the decimal
             point.
+        how : str, optional
+            Type of rounding. Can be either "half_even" (default)
+            of "half_up" rounding.
 
         Returns
         -------
@@ -4857,9 +4783,8 @@ class Series(SingleColumnFrame, Serializable):
         2    3.0
         dtype: float64
         """
-
         return Series(
-            self._column.round(decimals=decimals),
+            self._column.round(decimals=decimals, how=how),
             name=self.name,
             index=self.index,
             dtype=self.dtype,
@@ -5264,7 +5189,6 @@ class Series(SingleColumnFrame, Serializable):
         1.0     1
         dtype: int32
         """
-
         if bins is not None:
             raise NotImplementedError("bins is not yet supported")
 
@@ -5933,54 +5857,6 @@ class Series(SingleColumnFrame, Serializable):
             out.name = index
 
         return out.copy(deep=copy)
-
-    @property
-    def is_unique(self):
-        """
-        Return boolean if values in the object are unique.
-
-        Returns
-        -------
-        out : bool
-        """
-        return self._column.is_unique
-
-    @property
-    def is_monotonic(self):
-        """
-        Return boolean if values in the object are monotonic_increasing.
-
-        Returns
-        -------
-        out : bool
-        """
-        return self._column.is_monotonic_increasing
-
-    @property
-    def is_monotonic_increasing(self):
-        """
-        Return boolean if values in the object are monotonic_increasing.
-
-        Returns
-        -------
-        out : bool
-        """
-        return self._column.is_monotonic_increasing
-
-    @property
-    def is_monotonic_decreasing(self):
-        """
-        Return boolean if values in the object are monotonic_decreasing.
-
-        Returns
-        -------
-        out : bool
-        """
-        return self._column.is_monotonic_decreasing
-
-    @property
-    def __cuda_array_interface__(self):
-        return self._column.__cuda_array_interface__
 
     def _align_to_index(
         self, index, how="outer", sort=True, allow_non_unique=False

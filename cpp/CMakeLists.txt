@@ -28,7 +28,7 @@ elseif(CMAKE_CUDA_ARCHITECTURES STREQUAL "")
   set(CUDF_BUILD_FOR_DETECTED_ARCHS TRUE)
 endif()
 
-project(CUDF VERSION 21.06.00 LANGUAGES C CXX)
+project(CUDF VERSION 21.08.00 LANGUAGES C CXX)
 
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake,
 # causing subsequent runs to have different values for the `Threads::Threads` target.
@@ -157,6 +157,7 @@ add_library(cudf
     src/column/column.cu
     src/column/column_device_view.cu
     src/column/column_factories.cpp
+    src/column/column_factories.cu
     src/column/column_view.cpp
     src/comms/ipc/ipc.cpp
     src/copying/concatenate.cu
@@ -208,6 +209,7 @@ add_library(cudf
     src/groupby/sort/group_max_scan.cu
     src/groupby/sort/group_min_scan.cu
     src/groupby/sort/group_sum_scan.cu
+    src/groupby/sort/group_replace_nulls.cu
     src/groupby/sort/sort_helper.cu
     src/hash/hashing.cu
     src/hash/md5_hash.cu
@@ -249,7 +251,8 @@ add_library(cudf
     src/io/parquet/parquet.cpp
     src/io/parquet/reader_impl.cu
     src/io/parquet/writer_impl.cu
-    src/io/statistics/column_stats.cu
+    src/io/statistics/orc_column_statistics.cu
+    src/io/statistics/parquet_column_statistics.cu
     src/io/utilities/column_buffer.cpp
     src/io/utilities/data_sink.cpp
     src/io/utilities/datasource.cpp
@@ -265,11 +268,13 @@ add_library(cudf
     src/join/join.cu
     src/join/semi_join.cu
     src/lists/contains.cu
-    src/lists/concatenate_rows.cu
+    src/lists/combine/concatenate_list_elements.cu		
+    src/lists/combine/concatenate_rows.cu
     src/lists/copying/concatenate.cu
     src/lists/copying/copying.cu
     src/lists/copying/gather.cu
     src/lists/copying/segmented_gather.cu
+    src/lists/copying/scatter_helper.cu
     src/lists/count_elements.cu
     src/lists/drop_list_duplicates.cu
     src/lists/explode.cu
@@ -331,8 +336,8 @@ add_library(cudf
     src/strings/char_types/char_cases.cu
     src/strings/char_types/char_types.cu
     src/strings/combine/concatenate.cu
-    src/strings/combine/concatenate_list_elements.cu
     src/strings/combine/join.cu
+    src/strings/combine/join_list_elements.cu
     src/strings/contains.cu
     src/strings/convert/convert_booleans.cu
     src/strings/convert/convert_datetime.cu
@@ -355,6 +360,7 @@ add_library(cudf
     src/strings/json/json_path.cu
     src/strings/regex/regcomp.cpp
     src/strings/regex/regexec.cu
+    src/strings/repeat_strings.cu
     src/strings/replace/backref_re.cu
     src/strings/replace/backref_re_large.cu
     src/strings/replace/backref_re_medium.cu
@@ -375,7 +381,7 @@ add_library(cudf
     src/structs/copying/concatenate.cu
     src/structs/structs_column_factories.cu
     src/structs/structs_column_view.cpp
-    src/structs/utilities.cu
+    src/structs/utilities.cpp
     src/table/table.cpp
     src/table/table_device_view.cu
     src/table/table_view.cpp
@@ -592,16 +598,6 @@ install(DIRECTORY
             ${CUDF_GENERATED_INCLUDE_DIR}/include/libcxx
             ${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf)
-
-install(DIRECTORY ${Thrust_SOURCE_DIR}/
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust
-  PATTERN "*.py" EXCLUDE
-  PATTERN "benchmark" EXCLUDE
-  PATTERN "build" EXCLUDE
-  PATTERN "doc" EXCLUDE
-  PATTERN "examples" EXCLUDE
-  PATTERN "test" EXCLUDE
-  PATTERN "testing" EXCLUDE)
 
 include(CMakePackageConfigHelpers)
 

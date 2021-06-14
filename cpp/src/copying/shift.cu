@@ -46,8 +46,7 @@ inline bool __device__ out_of_bounds(size_type size, size_type idx)
 
 struct shift_functor {
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_fixed_width<T>(), std::unique_ptr<column>> operator()(
-    Args&&... args)
+  std::enable_if_t<not cudf::is_fixed_width<T>(), std::unique_ptr<column>> operator()(Args&&...)
   {
     CUDF_FAIL("shift does not support non-fixed-width types.");
   }

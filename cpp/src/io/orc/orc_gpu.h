@@ -19,10 +19,10 @@
 #include "timezone.cuh"
 
 #include <io/comp/gpuinflate.h>
-#include <io/statistics/column_stats.h>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
+#include <io/statistics/statistics.cuh>
 #include <io/utilities/column_buffer.hpp>
 #include "orc_common.h"
 
@@ -99,8 +99,7 @@ struct ColumnDesc {
   uint8_t encoding_kind;                   // column encoding kind (orc::ColumnEncodingKind)
   uint8_t type_kind;                       // column data type (orc::TypeKind)
   uint8_t dtype_len;      // data type length (for types that can be mapped to different sizes)
-  uint8_t decimal_scale;  // number of fractional decimal digits for decimal type (bit 7 set if
-                          // converting to float64)
+  int32_t decimal_scale;  // number of fractional decimal digits for decimal type
   int32_t ts_clock_rate;  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 };
 
@@ -122,9 +121,10 @@ struct EncChunk {
   uint8_t encoding_kind;  // column encoding kind (orc::ColumnEncodingKind)
   uint8_t type_kind;      // column data type (orc::TypeKind)
   uint8_t dtype_len;      // data type length
-  uint8_t scale;          // scale for decimals or timestamps
+  int32_t scale;          // scale for decimals or timestamps
 
   uint32_t *dict_index;  // dictionary index from row index
+  device_span<uint32_t> decimal_offsets;
   column_device_view *leaf_column;
 };
 

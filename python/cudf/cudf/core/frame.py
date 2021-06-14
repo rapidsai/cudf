@@ -26,10 +26,11 @@ from cudf.core.column import (
 )
 from cudf.core.join import merge
 from cudf.utils.dtypes import (
+    find_common_type,
     is_categorical_dtype,
     is_column_like,
-    is_numerical_dtype,
     is_decimal_dtype,
+    is_numerical_dtype,
     is_scalar,
     min_scalar_type,
 )
@@ -155,6 +156,15 @@ class Frame(libcudf.table.Table):
         5
         """
         return self._num_columns * self._num_rows
+
+    @property
+    def _is_homogeneous(self):
+        # make sure that the dataframe has columns
+        if not self._data.columns:
+            return True
+
+        first_type = self._data.columns[0].dtype.name
+        return all(x.dtype.name == first_type for x in self._data.columns)
 
     @property
     def empty(self):
@@ -1460,7 +1470,7 @@ class Frame(libcudf.table.Table):
 
         Parameters
         ----------
-        axis : {0 or 'index', 1 or 'columns'}, default 0
+        axis : {0 or 'index'}, default 0
             Index to direct ranking.
         method : {'average', 'min', 'max', 'first', 'dense'}, default 'average'
             How to rank the group of records that have the same value
@@ -1490,10 +1500,17 @@ class Frame(libcudf.table.Table):
         """
         if method not in {"average", "min", "max", "first", "dense"}:
             raise KeyError(method)
+
         method_enum = libcudf.sort.RankMethod[method.upper()]
         if na_option not in {"keep", "top", "bottom"}:
             raise ValueError(
                 "na_option must be one of 'keep', 'top', or 'bottom'"
+            )
+
+        if axis not in (0, "index"):
+            raise NotImplementedError(
+                f"axis must be `0`/`index`, "
+                f"axis={axis} is not yet supported in rank"
             )
 
         source = self
@@ -1644,7 +1661,7 @@ class Frame(libcudf.table.Table):
             "consider using .to_arrow()"
         )
 
-    def round(self, decimals=0):
+    def round(self, decimals=0, how="half_even"):
         """
         Round a DataFrame to a variable number of decimal places.
 
@@ -1659,6 +1676,9 @@ class Frame(libcudf.table.Table):
             columns not included in `decimals` will be left as is. Elements
             of `decimals` which are not columns of the input will be
             ignored.
+        how : str, optional
+            Type of rounding. Can be either "half_even" (default)
+            of "half_up" rounding.
 
         Returns
         -------
@@ -1724,7 +1744,7 @@ class Frame(libcudf.table.Table):
                 raise ValueError("Index of decimals must be unique")
 
             cols = {
-                name: col.round(decimals[name])
+                name: col.round(decimals[name], how=how)
                 if (
                     name in decimals.keys()
                     and pd.api.types.is_numeric_dtype(col.dtype)
@@ -1734,7 +1754,7 @@ class Frame(libcudf.table.Table):
             }
         elif isinstance(decimals, int):
             cols = {
-                name: col.round(decimals)
+                name: col.round(decimals, how=how)
                 if pd.api.types.is_numeric_dtype(col.dtype)
                 else col.copy(deep=True)
                 for name, col in self._data.items()
@@ -3365,6 +3385,10 @@ class SingleColumnFrame(Frame):
         )
 
     @property
+    def _num_columns(self):
+        return 1
+
+    @property
     def _column(self):
         return self._data[self.name]
 
@@ -3528,6 +3552,79 @@ class SingleColumnFrame(Frame):
         ]
         """
         return self._column.to_arrow()
+
+    @property
+    def is_unique(self):
+        """Return boolean if values in the object are unique.
+
+        Returns
+        -------
+        bool
+        """
+        return self._column.is_unique
+
+    @property
+    def is_monotonic(self):
+        """Return boolean if values in the object are monotonic_increasing.
+
+        This property is an alias for :attr:`is_monotonic_increasing`.
+
+        Returns
+        -------
+        bool
+        """
+        return self.is_monotonic_increasing
+
+    @property
+    def is_monotonic_increasing(self):
+        """Return boolean if values in the object are monotonic_increasing.
+
+        Returns
+        -------
+        bool
+        """
+        return self._column.is_monotonic_increasing
+
+    @property
+    def is_monotonic_decreasing(self):
+        """Return boolean if values in the object are monotonic_decreasing.
+
+        Returns
+        -------
+        bool
+        """
+        return self._column.is_monotonic_decreasing
+
+    @property
+    def __cuda_array_interface__(self):
+        return self._column.__cuda_array_interface__
+
+    def factorize(self, na_sentinel=-1):
+        """Encode the input values as integer labels
+
+        Parameters
+        ----------
+        na_sentinel : number
+            Value to indicate missing category.
+
+        Returns
+        --------
+        (labels, cats) : (cupy.ndarray, cupy.ndarray or Index)
+            - *labels* contains the encoded values
+            - *cats* contains the categories in order that the N-th
+              item corresponds to the (N-1) code.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series(['a', 'a', 'c'])
+        >>> codes, uniques = s.factorize()
+        >>> codes
+        array([0, 0, 1], dtype=int8)
+        >>> uniques
+        StringIndex(['a' 'c'], dtype='object')
+        """
+        return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
 
     @property
     def _copy_construct_defaults(self):
@@ -3952,8 +4049,11 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
         # default to the first non-null dtype
         dtypes[idx] = cols[0].dtype
         # If all the non-null dtypes are int/float, find a common dtype
-        if all(is_numerical_dtype(col.dtype) for col in cols):
-            dtypes[idx] = np.find_common_type([col.dtype for col in cols], [])
+        if all(
+            is_numerical_dtype(col.dtype) or is_decimal_dtype(col.dtype)
+            for col in cols
+        ):
+            dtypes[idx] = find_common_type([col.dtype for col in cols])
         # If all categorical dtypes, combine the categories
         elif all(
             isinstance(col, cudf.core.column.CategoricalColumn) for col in cols
@@ -3968,17 +4068,6 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
             # Set the column dtype to the codes' dtype. The categories
             # will be re-assigned at the end
             dtypes[idx] = min_scalar_type(len(categories[idx]))
-        elif all(
-            isinstance(col, cudf.core.column.DecimalColumn) for col in cols
-        ):
-            # Find the largest scale and the largest difference between
-            # precision and scale of the columns to be concatenated
-            s = max([col.dtype.scale for col in cols])
-            lhs = max([col.dtype.precision - col.dtype.scale for col in cols])
-            # Combine to get the necessary precision and clip at the maximum
-            # precision
-            p = min(cudf.Decimal64Dtype.MAX_PRECISION, s + lhs)
-            dtypes[idx] = cudf.Decimal64Dtype(p, s)
         # Otherwise raise an error if columns have different dtypes
         elif not all(is_dtype_equal(c.dtype, dtypes[idx]) for c in cols):
             raise ValueError("All columns must be the same type")
@@ -4047,7 +4136,7 @@ def _drop_rows_by_labels(
     if isinstance(level, int) and level >= obj.index.nlevels:
         raise ValueError("Param level out of bounds.")
 
-    if not isinstance(labels, (cudf.Series, cudf.Index)):
+    if not isinstance(labels, SingleColumnFrame):
         labels = as_column(labels)
 
     if isinstance(obj._index, cudf.MultiIndex):

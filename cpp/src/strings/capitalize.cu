@@ -24,7 +24,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/capitalize.hpp>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 
@@ -172,7 +171,7 @@ std::unique_ptr<column> capitalize(strings_column_view const& input,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) return detail::make_empty_strings_column(stream, mr);
+  if (input.is_empty()) return make_empty_column(data_type{type_id::STRING});
   auto d_column = column_device_view::create(input.parent(), stream);
   return capitalize_utility(capitalize_fn{*d_column}, input, stream, mr);
 }
@@ -181,7 +180,7 @@ std::unique_ptr<column> title(strings_column_view const& input,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) return detail::make_empty_strings_column(stream, mr);
+  if (input.is_empty()) return make_empty_column(data_type{type_id::STRING});
   auto d_column = column_device_view::create(input.parent(), stream);
   return capitalize_utility(title_fn{*d_column}, input, stream, mr);
 }

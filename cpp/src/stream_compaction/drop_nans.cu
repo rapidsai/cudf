@@ -37,7 +37,7 @@ struct dispatch_is_not_nan {
 
   template <typename T>
   std::enable_if_t<not std::is_floating_point<T>::value, bool> __device__
-  operator()(cudf::column_device_view col_device_view, cudf::size_type i)
+  operator()(cudf::column_device_view, cudf::size_type)
   {
     return true;
   }

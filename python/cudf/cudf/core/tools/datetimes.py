@@ -208,7 +208,7 @@ def to_datetime(
                     dtype=col.dtype
                 )
             return cudf.Series(col, index=arg.index)
-        elif isinstance(arg, cudf.Index):
+        elif isinstance(arg, cudf.BaseIndex):
             col = arg._values
             col = _process_col(
                 col=col,

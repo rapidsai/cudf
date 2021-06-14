@@ -237,76 +237,23 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 
 column_statistics::column_statistics(cudf::io::orc::column_statistics&& cs)
 {
-  _number_of_values = std::move(cs.number_of_values);
-  if (cs.int_stats.get()) {
-    _type                = statistics_type::INT;
-    _type_specific_stats = cs.int_stats.release();
-  } else if (cs.double_stats.get()) {
-    _type                = statistics_type::DOUBLE;
-    _type_specific_stats = cs.double_stats.release();
-  } else if (cs.string_stats.get()) {
-    _type                = statistics_type::STRING;
-    _type_specific_stats = cs.string_stats.release();
-  } else if (cs.bucket_stats.get()) {
-    _type                = statistics_type::BUCKET;
-    _type_specific_stats = cs.bucket_stats.release();
-  } else if (cs.decimal_stats.get()) {
-    _type                = statistics_type::DECIMAL;
-    _type_specific_stats = cs.decimal_stats.release();
-  } else if (cs.date_stats.get()) {
-    _type                = statistics_type::DATE;
-    _type_specific_stats = cs.date_stats.release();
-  } else if (cs.binary_stats.get()) {
-    _type                = statistics_type::BINARY;
-    _type_specific_stats = cs.binary_stats.release();
-  } else if (cs.timestamp_stats.get()) {
-    _type                = statistics_type::TIMESTAMP;
-    _type_specific_stats = cs.timestamp_stats.release();
-  }
-}
-
-column_statistics& column_statistics::operator=(column_statistics&& other) noexcept
-{
-  _number_of_values    = std::move(other._number_of_values);
-  _type                = other._type;
-  _type_specific_stats = other._type_specific_stats;
-
-  other._type                = statistics_type::NONE;
-  other._type_specific_stats = nullptr;
-
-  return *this;
-}
-
-column_statistics::column_statistics(column_statistics&& other) noexcept
-{
-  *this = std::move(other);
-}
-
-column_statistics::~column_statistics()
-{
-  switch (_type) {
-    case statistics_type::NONE:  // error state, but can't throw from a destructor.
-      break;
-    case statistics_type::INT: delete static_cast<integer_statistics*>(_type_specific_stats); break;
-    case statistics_type::DOUBLE:
-      delete static_cast<double_statistics*>(_type_specific_stats);
-      break;
-    case statistics_type::STRING:
-      delete static_cast<string_statistics*>(_type_specific_stats);
-      break;
-    case statistics_type::BUCKET:
-      delete static_cast<bucket_statistics*>(_type_specific_stats);
-      break;
-    case statistics_type::DECIMAL:
-      delete static_cast<decimal_statistics*>(_type_specific_stats);
-      break;
-    case statistics_type::DATE: delete static_cast<date_statistics*>(_type_specific_stats); break;
-    case statistics_type::BINARY:
-      delete static_cast<binary_statistics*>(_type_specific_stats);
-      break;
-    case statistics_type::TIMESTAMP:
-      delete static_cast<timestamp_statistics*>(_type_specific_stats);
-      break;
+  number_of_values = cs.number_of_values;
+  if (cs.int_stats) {
+    type_specific_stats = *cs.int_stats;
+  } else if (cs.double_stats) {
+    type_specific_stats = *cs.double_stats;
+  } else if (cs.string_stats) {
+    type_specific_stats = *cs.string_stats;
+  } else if (cs.bucket_stats) {
+    type_specific_stats = *cs.bucket_stats;
+  } else if (cs.decimal_stats) {
+    type_specific_stats = *cs.decimal_stats;
+  } else if (cs.date_stats) {
+    type_specific_stats = *cs.date_stats;
+  } else if (cs.binary_stats) {
+    type_specific_stats = *cs.binary_stats;
+  } else if (cs.timestamp_stats) {
+    type_specific_stats = *cs.timestamp_stats;
   }
 }
 

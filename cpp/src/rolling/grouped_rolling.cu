@@ -94,7 +94,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
 {
   CUDF_FUNC_RANGE();
 
-  if (input.is_empty()) return empty_like(input);
+  if (input.is_empty()) { return cudf::detail::empty_output_for_rolling_aggregation(input, aggr); }
 
   CUDF_EXPECTS((group_keys.num_columns() == 0 || group_keys.num_rows() == input.size()),
                "Size mismatch between group_keys and input vector.");
@@ -864,7 +864,7 @@ struct to_duration_bounds {
   }
 
   template <typename OrderBy, std::enable_if_t<!cudf::is_timestamp<OrderBy>(), void>* = nullptr>
-  range_window_bounds operator()(size_type num_days) const
+  range_window_bounds operator()(size_type) const
   {
     CUDF_FAIL("Expected timestamp orderby column.");
   }
@@ -949,7 +949,7 @@ std::unique_ptr<column> grouped_range_rolling_window(table_view const& group_key
 {
   CUDF_FUNC_RANGE();
 
-  if (input.is_empty()) return empty_like(input);
+  if (input.is_empty()) { return cudf::detail::empty_output_for_rolling_aggregation(input, aggr); }
 
   CUDF_EXPECTS((group_keys.num_columns() == 0 || group_keys.num_rows() == input.size()),
                "Size mismatch between group_keys and input vector.");

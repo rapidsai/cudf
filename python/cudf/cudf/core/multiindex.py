@@ -20,10 +20,10 @@ from cudf.core._compat import PANDAS_GE_120
 from cudf.core.column import column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, SingleColumnFrame
-from cudf.core.index import Index, as_index
+from cudf.core.index import BaseIndex, as_index
 
 
-class MultiIndex(Index):
+class MultiIndex(BaseIndex):
     """A multi-level or hierarchical index.
 
     Provides N-Dimensional indexing into Series and DataFrame objects.
@@ -84,7 +84,7 @@ class MultiIndex(Index):
             )
 
         out = Frame.__new__(cls)
-        super(Index, out).__init__()
+        super(BaseIndex, out).__init__()
 
         if copy:
             if isinstance(codes, cudf.DataFrame):
@@ -203,6 +203,11 @@ class MultiIndex(Index):
                 level_names=self._data.level_names,
             )
         self._names = pd.core.indexes.frozen.FrozenList(value)
+
+    @property
+    def _num_columns(self):
+        # MultiIndex is not a single-columned frame.
+        return super(SingleColumnFrame, self)._num_columns
 
     def rename(self, names, inplace=False):
         """
@@ -1386,11 +1391,7 @@ class MultiIndex(Index):
         Return if the index is monotonic increasing
         (only equal or increasing) values.
         """
-        if not hasattr(self, "_is_monotonic_increasing"):
-            self._is_monotonic_increasing = self._is_sorted(
-                ascending=None, null_position=None
-            )
-        return self._is_monotonic_increasing
+        return self._is_sorted(ascending=None, null_position=None)
 
     @property
     def is_monotonic_decreasing(self):
@@ -1398,11 +1399,9 @@ class MultiIndex(Index):
         Return if the index is monotonic decreasing
         (only equal or decreasing) values.
         """
-        if not hasattr(self, "_is_monotonic_decreasing"):
-            self._is_monotonic_decreasing = self._is_sorted(
-                ascending=[False] * len(self.levels), null_position=None
-            )
-        return self._is_monotonic_decreasing
+        return self._is_sorted(
+            ascending=[False] * len(self.levels), null_position=None
+        )
 
     def argsort(self, ascending=True, **kwargs):
         indices = self._source_data.argsort(ascending=ascending, **kwargs)

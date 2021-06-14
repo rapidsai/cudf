@@ -307,7 +307,7 @@ def assert_index_equal(
     """
 
     # instance validation
-    _check_isinstance(left, right, cudf.Index)
+    _check_isinstance(left, right, cudf.BaseIndex)
 
     _check_types(
         left, right, exact=exact, check_categorical=check_categorical, obj=obj

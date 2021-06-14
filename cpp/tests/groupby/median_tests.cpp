@@ -18,6 +18,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
@@ -45,7 +46,7 @@ TYPED_TEST(groupby_median_test, basic)
   //                                       {1, 1, 1, 2, 2, 2, 2, 3, 3, 3}
   fixed_width_column_wrapper<K> expect_keys{1,       2,          3};
   //                                        {0, 3, 6, 1, 4, 5, 9, 2, 7, 8}
-  fixed_width_column_wrapper<R> expect_vals({3.,     4.5,        7.}, all_valid());
+  fixed_width_column_wrapper<R> expect_vals({3.,     4.5,        7.}, iterator_no_null());
   // clang-format on
 
   auto agg = cudf::make_median_aggregation();
@@ -72,7 +73,7 @@ TYPED_TEST(groupby_median_test, zero_valid_keys)
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, aggregation::MEDIAN>;
 
-  fixed_width_column_wrapper<K> keys({1, 2, 3}, all_null());
+  fixed_width_column_wrapper<K> keys({1, 2, 3}, iterator_all_nulls());
   fixed_width_column_wrapper<V> vals{3, 4, 5};
 
   fixed_width_column_wrapper<K> expect_keys{};
@@ -88,10 +89,10 @@ TYPED_TEST(groupby_median_test, zero_valid_values)
   using R = cudf::detail::target_type_t<V, aggregation::MEDIAN>;
 
   fixed_width_column_wrapper<K> keys{1, 1, 1};
-  fixed_width_column_wrapper<V> vals({3, 4, 5}, all_null());
+  fixed_width_column_wrapper<V> vals({3, 4, 5}, iterator_all_nulls());
 
   fixed_width_column_wrapper<K> expect_keys{1};
-  fixed_width_column_wrapper<R> expect_vals({0}, all_null());
+  fixed_width_column_wrapper<R> expect_vals({0}, iterator_all_nulls());
 
   auto agg = cudf::make_median_aggregation();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
@@ -108,7 +109,7 @@ TYPED_TEST(groupby_median_test, null_keys_and_values)
                                      {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
   //  { 1, 1,     2, 2, 2,   3, 3,    4}
-  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, all_valid());
+  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, iterator_no_null());
   //  { 3, 6,     1, 4, 9,   2, 8,    -}
   fixed_width_column_wrapper<R> expect_vals({4.5, 4., 5., 0.}, {1, 1, 1, 0});
 
@@ -128,7 +129,7 @@ TYPED_TEST(groupby_median_test, dictionary)
   //                                        {1, 1, 1, 2, 2, 2, 2, 3, 3, 3}
   fixed_width_column_wrapper<K> expect_keys({1,       2,          3      });
   //                                        {0, 3, 6, 1, 4, 5, 9, 2, 7, 8}
-  fixed_width_column_wrapper<R> expect_vals({3.,       4.5,       7.     }, all_valid());
+  fixed_width_column_wrapper<R> expect_vals({3.,       4.5,       7.     }, iterator_no_null());
   // clang-format on
 
   test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_median_aggregation());
