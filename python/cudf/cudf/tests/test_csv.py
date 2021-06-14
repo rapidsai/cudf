@@ -1583,10 +1583,8 @@ def test_csv_writer_column_and_header_options(
 
 def test_csv_writer_empty_columns_parameter(cudf_mixed_dataframe):
     df = cudf_mixed_dataframe
-
-    buffer = BytesIO()
-    with pytest.raises(RuntimeError):
-        df.to_csv(buffer, columns=[], index=False)
+    write_str = df.to_csv(columns=[], index=False)
+    assert_eq(write_str, "\n")
 
 
 def test_csv_writer_multiindex(tmpdir):
@@ -1979,3 +1977,13 @@ def test_to_csv_compression_error():
     error_message = "Writing compressed csv is not currently supported in cudf"
     with pytest.raises(NotImplementedError, match=re.escape(error_message)):
         df.to_csv("test.csv", compression=compression)
+
+
+def test_empty_df_no_index():
+    actual = cudf.DataFrame({})
+    buffer = BytesIO()
+    actual.to_csv(buffer, index=False)
+
+    result = cudf.read_csv(buffer)
+
+    assert_eq(actual, result)

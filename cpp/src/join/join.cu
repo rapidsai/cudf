@@ -50,11 +50,11 @@ inner_join(table_view const& left_input,
   // build the hash map from the smaller table.
   if (right.num_rows() > left.num_rows()) {
     cudf::hash_join hj_obj(left, compare_nulls, stream);
-    auto result = hj_obj.inner_join(right, compare_nulls, stream, mr);
+    auto result = hj_obj.inner_join(right, compare_nulls, std::nullopt, stream, mr);
     return std::make_pair(std::move(result.second), std::move(result.first));
   } else {
     cudf::hash_join hj_obj(right, compare_nulls, stream);
-    return hj_obj.inner_join(left, compare_nulls, stream, mr);
+    return hj_obj.inner_join(left, compare_nulls, std::nullopt, stream, mr);
   }
 }
 
@@ -112,7 +112,7 @@ left_join(table_view const& left_input,
   table_view const right = matched.second.back();
 
   cudf::hash_join hj_obj(right, compare_nulls, stream);
-  return hj_obj.left_join(left, compare_nulls, stream, mr);
+  return hj_obj.left_join(left, compare_nulls, std::nullopt, stream, mr);
 }
 
 std::unique_ptr<table> left_join(table_view const& left_input,
@@ -175,7 +175,7 @@ full_join(table_view const& left_input,
   table_view const right = matched.second.back();
 
   cudf::hash_join hj_obj(right, compare_nulls, stream);
-  return hj_obj.full_join(left, compare_nulls, stream, mr);
+  return hj_obj.full_join(left, compare_nulls, std::nullopt, stream, mr);
 }
 
 std::unique_ptr<table> full_join(table_view const& left_input,
@@ -234,30 +234,55 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 hash_join::inner_join(cudf::table_view const& probe,
                       null_equality compare_nulls,
+                      std::optional<std::size_t> output_size,
                       rmm::cuda_stream_view stream,
                       rmm::mr::device_memory_resource* mr) const
 {
-  return impl->inner_join(probe, compare_nulls, stream, mr);
+  return impl->inner_join(probe, compare_nulls, output_size, stream, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 hash_join::left_join(cudf::table_view const& probe,
                      null_equality compare_nulls,
+                     std::optional<std::size_t> output_size,
                      rmm::cuda_stream_view stream,
                      rmm::mr::device_memory_resource* mr) const
 {
-  return impl->left_join(probe, compare_nulls, stream, mr);
+  return impl->left_join(probe, compare_nulls, output_size, stream, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 hash_join::full_join(cudf::table_view const& probe,
                      null_equality compare_nulls,
+                     std::optional<std::size_t> output_size,
                      rmm::cuda_stream_view stream,
                      rmm::mr::device_memory_resource* mr) const
 {
-  return impl->full_join(probe, compare_nulls, stream, mr);
+  return impl->full_join(probe, compare_nulls, output_size, stream, mr);
+}
+
+std::size_t hash_join::inner_join_size(cudf::table_view const& probe,
+                                       null_equality compare_nulls,
+                                       rmm::cuda_stream_view stream) const
+{
+  return impl->inner_join_size(probe, compare_nulls, stream);
+}
+
+std::size_t hash_join::left_join_size(cudf::table_view const& probe,
+                                      null_equality compare_nulls,
+                                      rmm::cuda_stream_view stream) const
+{
+  return impl->left_join_size(probe, compare_nulls, stream);
+}
+
+std::size_t hash_join::full_join_size(cudf::table_view const& probe,
+                                      null_equality compare_nulls,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr) const
+{
+  return impl->full_join_size(probe, compare_nulls, stream, mr);
 }
 
 // external APIs
