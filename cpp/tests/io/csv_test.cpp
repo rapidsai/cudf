@@ -87,6 +87,38 @@ struct CsvReaderNumericTypeTest : public CsvReaderTest {
 using SupportedNumericTypes = cudf::test::Types<int64_t, double>;
 TYPED_TEST_CASE(CsvReaderNumericTypeTest, SupportedNumericTypes);
 
+// Typed test to be instantiated for numeric::decimal32 and numeric::decimal64
+template <typename DecimalType>
+struct CsvFixedPointReaderTest : public CsvReaderTest {
+  void run_tests(const std::vector<std::string>& reference_strings, numeric::scale_type scale)
+  {
+    cudf::test::strings_column_wrapper strings(reference_strings.begin(), reference_strings.end());
+    auto input_column = cudf::strings::to_fixed_point(
+      cudf::strings_column_view(strings), cudf::data_type{cudf::type_to_id<DecimalType>(), scale});
+
+    std::string buffer = std::accumulate(reference_strings.begin(),
+                                         reference_strings.end(),
+                                         std::string{},
+                                         [](const std::string& acc, const std::string& rhs) {
+                                           return acc.empty() ? rhs : (acc + "\n" + rhs);
+                                         });
+
+    cudf_io::csv_reader_options in_opts =
+      cudf_io::csv_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+        .data_types({cudf::data_type{cudf::type_to_id<DecimalType>(), scale}})
+        .header(-1);
+
+    const auto result      = cudf_io::read_csv(in_opts);
+    const auto result_view = result.tbl->view();
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*input_column, result_view.column(0));
+    EXPECT_EQ(result_view.num_columns(), 1);
+    EXPECT_EQ(result_view.column(0).type().id(), cudf::type_to_id<DecimalType>());
+  }
+};
+
+TYPED_TEST_CASE(CsvFixedPointReaderTest, cudf::test::FixedPointTypes);
+
 namespace {
 // Generates a vector of uniform random values of type T
 template <typename T>
@@ -317,6 +349,19 @@ TYPED_TEST(CsvReaderNumericTypeTest, SingleColumn)
 
   const auto view = result.tbl->view();
   expect_column_data_equal(std::vector<TypeParam>(sequence, sequence + num_rows), view.column(0));
+}
+
+TYPED_TEST(CsvFixedPointReaderTest, SingleColumnNegativeScale)
+{
+  this->run_tests({"1.23", "8.76", "5.43", "-0.12", "0.25", "-0.23", "-0.27", "0.00", "0.00"},
+                  numeric::scale_type{-2});
+}
+
+TYPED_TEST(CsvFixedPointReaderTest, SingleColumnPositiveScale)
+{
+  this->run_tests(
+    {"123000", "-876000", "543000", "-12000", "25000", "-23000", "-27000", "0000", "0000"},
+    numeric::scale_type{3});
 }
 
 TYPED_TEST(CsvFixedPointWriterTest, SingleColumnNegativeScale)
