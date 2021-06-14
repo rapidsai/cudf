@@ -2773,11 +2773,8 @@ _dtype_to_index: Dict[Any, Type[BaseIndex]] = {
 
 
 def _setdefault_name(values, **kwargs):
-    if "name" not in kwargs or kwargs["name"] is None:
-        if not hasattr(values, "name"):
-            kwargs.update({"name": None})
-        else:
-            kwargs.update({"name": values.name})
+    if kwargs.get("name") is None:
+        kwargs["name"] = getattr(values, "name", None)
     return kwargs
 
 
