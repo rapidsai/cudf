@@ -1664,7 +1664,7 @@ class Frame(libcudf.table.Table):
             "consider using .to_arrow()"
         )
 
-    def round(self, decimals=0):
+    def round(self, decimals=0, how="half_even"):
         """
         Round a DataFrame to a variable number of decimal places.
 
@@ -1679,6 +1679,9 @@ class Frame(libcudf.table.Table):
             columns not included in `decimals` will be left as is. Elements
             of `decimals` which are not columns of the input will be
             ignored.
+        how : str, optional
+            Type of rounding. Can be either "half_even" (default)
+            of "half_up" rounding.
 
         Returns
         -------
@@ -1744,7 +1747,7 @@ class Frame(libcudf.table.Table):
                 raise ValueError("Index of decimals must be unique")
 
             cols = {
-                name: col.round(decimals[name])
+                name: col.round(decimals[name], how=how)
                 if (
                     name in decimals.keys()
                     and _is_non_decimal_numeric_dtype(col.dtype)
@@ -1754,7 +1757,7 @@ class Frame(libcudf.table.Table):
             }
         elif isinstance(decimals, int):
             cols = {
-                name: col.round(decimals)
+                name: col.round(decimals, how=how)
                 if _is_non_decimal_numeric_dtype(col.dtype)
                 else col.copy(deep=True)
                 for name, col in self._data.items()
@@ -4133,7 +4136,7 @@ def _drop_rows_by_labels(
     if isinstance(level, int) and level >= obj.index.nlevels:
         raise ValueError("Param level out of bounds.")
 
-    if not isinstance(labels, (cudf.Series, cudf.Index)):
+    if not isinstance(labels, SingleColumnFrame):
         labels = as_column(labels)
 
     if isinstance(obj._index, cudf.MultiIndex):

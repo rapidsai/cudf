@@ -79,6 +79,7 @@ namespace {
 template <typename T>
 void assert_non_negative(T const& value)
 {
+  (void)value;
   if constexpr (std::numeric_limits<T>::is_signed) {
     CUDF_EXPECTS(value >= T{0}, "Range scalar must be >= 0.");
   }
