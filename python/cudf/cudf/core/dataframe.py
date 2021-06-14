@@ -32,7 +32,7 @@ from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import DataFrameGroupBy
-from cudf.core.index import Index, RangeIndex, as_index
+from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
 from cudf.core.window import Rolling
@@ -207,7 +207,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         """
         super().__init__()
 
-        if isinstance(columns, (Series, cudf.Index)):
+        if isinstance(columns, (Series, cudf.BaseIndex)):
             columns = columns.to_pandas()
 
         if isinstance(data, (DataFrame, pd.DataFrame)):
@@ -2690,7 +2690,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
     @columns.setter  # type: ignore
     @annotate("DATAFRAME_COLUMNS_SETTER", color="yellow", domain="cudf_python")
     def columns(self, columns):
-        if isinstance(columns, (cudf.MultiIndex, cudf.Index)):
+        if isinstance(columns, cudf.BaseIndex):
             columns = columns.to_pandas()
         if columns is None:
             columns = pd.Index(range(len(self._data.columns)))
@@ -2844,7 +2844,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         verify_integrity : boolean, default False
             Check for duplicates in the new index.
         """
-        if not isinstance(index, Index):
+        if not isinstance(index, BaseIndex):
             raise ValueError("Parameter index should be type `Index`.")
 
         df = self if inplace else self.copy(deep=True)
@@ -5466,7 +5466,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 index=out_index, nullable=nullable
             )
 
-        if isinstance(self.columns, Index):
+        if isinstance(self.columns, BaseIndex):
             out_columns = self.columns.to_pandas()
             if isinstance(self.columns, cudf.core.multiindex.MultiIndex):
                 if self.columns.names is not None:

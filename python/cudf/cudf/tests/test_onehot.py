@@ -223,7 +223,7 @@ def test_get_dummies_array_like(data, prefix_sep, prefix, dtype):
     expected = cudf.get_dummies(
         data, prefix=prefix, prefix_sep=prefix_sep, dtype=dtype
     )
-    if isinstance(data, (cudf.Series, cudf.Index)):
+    if isinstance(data, (cudf.Series, cudf.BaseIndex)):
         pd_data = data.to_pandas()
     else:
         pd_data = data

@@ -360,6 +360,7 @@ add_library(cudf
     src/strings/json/json_path.cu
     src/strings/regex/regcomp.cpp
     src/strings/regex/regexec.cu
+    src/strings/repeat_strings.cu
     src/strings/replace/backref_re.cu
     src/strings/replace/multi_re.cu
     src/strings/replace/replace.cu
@@ -595,16 +596,6 @@ install(DIRECTORY
             ${CUDF_GENERATED_INCLUDE_DIR}/include/libcxx
             ${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf)
-
-install(DIRECTORY ${Thrust_SOURCE_DIR}/
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust
-  PATTERN "*.py" EXCLUDE
-  PATTERN "benchmark" EXCLUDE
-  PATTERN "build" EXCLUDE
-  PATTERN "doc" EXCLUDE
-  PATTERN "examples" EXCLUDE
-  PATTERN "test" EXCLUDE
-  PATTERN "testing" EXCLUDE)
 
 include(CMakePackageConfigHelpers)
 

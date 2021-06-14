@@ -87,7 +87,7 @@ and then check the syntax of your Python and Cython code by running:
 
 ```bash
 flake8 python
-flake8 --config=python/cudf/.flake8.cython
+flake8 --config=python/.flake8.cython
 ```
 
 Additionally, many editors have plugins that will apply `isort` and `Black` as

@@ -4,9 +4,8 @@ from cudf.core import _internals, buffer, column, column_accessor, common
 from cudf.core.buffer import Buffer
 from cudf.core.dataframe import DataFrame, from_pandas, merge
 from cudf.core.index import (
+    BaseIndex,
     CategoricalIndex,
-    interval_range,
-    IntervalIndex,
     DatetimeIndex,
     Float32Index,
     Float64Index,
@@ -16,13 +15,16 @@ from cudf.core.index import (
     Int16Index,
     Int32Index,
     Int64Index,
+    IntervalIndex,
     RangeIndex,
     TimedeltaIndex,
     UInt8Index,
     UInt16Index,
     UInt32Index,
     UInt64Index,
+    interval_range,
 )
 from cudf.core.multiindex import MultiIndex
 from cudf.core.scalar import NA, Scalar
 from cudf.core.series import Series
+from cudf.core.cut import cut
