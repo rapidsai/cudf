@@ -73,8 +73,8 @@ struct backrefs_fn {
       size_type lpos_template = 0;              // last end pos of replace template
       auto const repl_ptr     = d_repl.data();  // replace template pattern
 
+      // extracts all groups for this string into d_extracts
       prog.extract<stack_size>(idx, d_str, begin, end, d_extracts);
-      auto d_section = d_extracts;
 
       thrust::for_each(
         thrust::seq, backrefs_begin, backrefs_end, [&] __device__(backref_type backref) {
@@ -83,11 +83,11 @@ struct backrefs_fn {
             out_ptr = copy_and_increment(out_ptr, repl_ptr + lpos_template, copy_length);
             lpos_template += copy_length;
           }
-          nbytes += d_section->second;
+          auto const extracted_string = d_extracts[backref.first - 1];
+          nbytes += extracted_string.second;
           if (out_ptr) {
-            out_ptr = copy_and_increment(out_ptr, d_section->first, d_section->second);
+            out_ptr = copy_and_increment(out_ptr, extracted_string.first, extracted_string.second);
           }
-          ++d_section;
         });
       if (out_ptr && (lpos_template < d_repl.size_bytes()))  // copy remainder of template
         out_ptr = copy_and_increment(
