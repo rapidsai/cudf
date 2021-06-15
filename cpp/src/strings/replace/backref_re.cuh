@@ -66,9 +66,11 @@ struct backrefs_fn {
     // copy input to output replacing strings as we go
     while (prog.find<stack_size>(idx, d_str, begin, end) > 0)  // inits the begin/end vars
     {
-      auto spos = d_str.byte_offset(begin);           // get offset for these
-      auto epos = d_str.byte_offset(end);             // character position values
-      nbytes += d_repl.size_bytes() - (epos - spos);  // compute new size
+      auto spos = d_str.byte_offset(begin);           // get offset for the
+      auto epos = d_str.byte_offset(end);             // character position values;
+      nbytes += d_repl.size_bytes() - (epos - spos);  // compute the output size
+
+      // copy the string data before the matched section
       if (out_ptr) out_ptr = copy_and_increment(out_ptr, in_ptr + lpos, spos - lpos);
       size_type lpos_template = 0;              // last end pos of replace template
       auto const repl_ptr     = d_repl.data();  // replace template pattern
@@ -78,32 +80,38 @@ struct backrefs_fn {
 
       thrust::for_each(
         thrust::seq, backrefs_begin, backrefs_end, [&] __device__(backref_type backref) {
+          // copy the static data at the beginning of the template
           if (out_ptr) {
             auto const copy_length = backref.second - lpos_template;
             out_ptr = copy_and_increment(out_ptr, repl_ptr + lpos_template, copy_length);
             lpos_template += copy_length;
           }
+          // retrieve the string for this backref
           auto const extracted_string = d_extracts[backref.first - 1];
           nbytes += extracted_string.second;
           if (out_ptr) {
             out_ptr = copy_and_increment(out_ptr, extracted_string.first, extracted_string.second);
           }
         });
-      if (out_ptr && (lpos_template < d_repl.size_bytes()))  // copy remainder of template
+
+      // copy remainder of template
+      if (out_ptr && (lpos_template < d_repl.size_bytes()))
         out_ptr = copy_and_increment(
           out_ptr, repl_ptr + lpos_template, d_repl.size_bytes() - lpos_template);
+
+      // setup to match the next section
       lpos  = epos;
       begin = end;
       end   = nchars;
     }
-    if (out_ptr && (lpos < d_str.size_bytes()))  // copy remainder of input string
+
+    // finally, copy remainder of input string
+    if (out_ptr && (lpos < d_str.size_bytes()))
       memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);
     else if (!out_ptr)
       d_offsets[idx] = static_cast<int32_t>(nbytes);
   }
 };
-
-using children_pair = std::pair<std::unique_ptr<column>, std::unique_ptr<column>>;
 
 }  // namespace detail
 }  // namespace strings

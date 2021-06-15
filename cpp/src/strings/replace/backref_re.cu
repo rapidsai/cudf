@@ -110,7 +110,7 @@ std::unique_ptr<column> replace_with_backrefs(
   using BackRefIterator = decltype(backrefs.begin());
 
   // create child columns
-  children_pair children = [&] {
+  auto [offsets, chars] = [&] {
     rmm::device_uvector<string_index_pair> indices(strings.size() * d_prog->group_counts(), stream);
 
     if (regex_insts <= RX_SMALL_INSTS) {
@@ -149,8 +149,8 @@ std::unique_ptr<column> replace_with_backrefs(
   }();
 
   return make_strings_column(strings.size(),
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets),
+                             std::move(chars),
                              strings.null_count(),
                              cudf::detail::copy_bitmask(strings.parent(), stream, mr),
                              stream,
