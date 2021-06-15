@@ -125,11 +125,11 @@ std::vector<std::unique_ptr<column>> generate_lists(bool include_validity)
 
     cudf::test::lists_column_wrapper<int> list1{{{{1, 2, 3}, valids}, {4, 5}},
                                           {{LCW{}, LCW{}, {7, 8}, LCW{}}, valids},
-                                          {{LCW{6}}},                                                                                    
+                                          {LCW{6}},
                                           {{{7, 8}, {{9, 10, 11}, valids}, LCW{}}, valids},
                                           {{LCW{}, {-1, -2, -3, -4, -5}}, valids},
-                                          {{LCW{}}},
-                                          {{-10}, {-100, -200}},
+                                          {LCW{}},
+                                          {LCW{-10}, {-100, -200}},
                                           {{-10, -200}, LCW{}, {8, 9}},
                                           {LCW{8}, LCW{}, LCW{9}, {5, 6}}};
 
@@ -151,17 +151,17 @@ std::vector<std::unique_ptr<column>> generate_lists(bool include_validity)
 
   cudf::test::lists_column_wrapper<int> list1{{{1, 2, 3}, {4, 5}},
                                         {LCW{}, LCW{}, {7, 8}, LCW{}},
-                                        {{LCW{6}}},                                                                                    
+                                        {LCW{6}},                                                                                    
                                         {{7, 8}, {9, 10, 11}, LCW{}},
                                         {LCW{}, {-1, -2, -3, -4, -5}},
-                                        {{LCW{}}},
+                                        {LCW{}},
                                         {{-10}, {-100, -200}},
                                         {{-10, -200}, LCW{}, {8, 9}},
                                         {LCW{8}, LCW{}, LCW{9}, {5, 6}}};
 
   std::vector<std::unique_ptr<column>> out;
   out.push_back(list0.release());
-  out.push_back(list1.release());
+  //out.push_back(list1.release());
   return out;
 }
 
@@ -217,15 +217,17 @@ std::vector<std::unique_ptr<column>> generate_struct_of_list()
   // 3. List column
   using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
   std::vector<bool> list_validity{1, 1, 1, 1, 1, 0, 1, 0, 1};
-  lists_column_wrapper<cudf::string_view> list({{{"abc", "d", "edf"}, {"jjj"}},
+  lists_column_wrapper<cudf::string_view> list({
+                                                {{"abc", "d", "edf"}, {"jjj"}},
                                                 {{"dgaer", "-7"}, LCW{}},
-                                                {{LCW{}}},
+                                                {LCW{}},
                                                 {{"qwerty"}, {"ral", "ort", "tal"}, {"five", "six"}},
                                                 {LCW{}, LCW{}, {"eight", "nine"}},
-                                                {{LCW{}}},
+                                                {LCW{}},
                                                 {{"fun"}, {"a", "bc", "def", "ghij", "klmno", "pqrstu"}},
                                                 {{"seven", "zz"}, LCW{}, {"xyzzy"}},
-                                                {{LCW{"negative 3", "  ", "cleveland"}}} },
+                                                {LCW{"negative 3", "  ", "cleveland"}}
+                                                 },
                                             list_validity.begin());
 
   // Assemble struct column.
