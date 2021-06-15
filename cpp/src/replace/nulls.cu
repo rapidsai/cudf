@@ -366,7 +366,7 @@ std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<
 std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const& input,
                                                         cudf::replace_policy const& replace_policy,
                                                         rmm::cuda_stream_view stream,
-                                                        rmm::mr::device_memory_resource*)
+                                                        rmm::mr::device_memory_resource* mr)
 {
   auto device_in = cudf::column_device_view::create(input);
   auto index     = thrust::make_counting_iterator<cudf::size_type>(0);
@@ -392,7 +392,8 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
                                      gather_map.begin(),
                                      gather_map.end(),
                                      cudf::out_of_bounds_policy::DONT_CHECK,
-                                     stream);
+                                     stream,
+                                     mr);
 
   return std::move(output->release()[0]);
 }

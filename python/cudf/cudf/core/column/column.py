@@ -48,6 +48,7 @@ from cudf.core.dtypes import (
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
     check_cast_unsupported_dtype,
+    cudf_dtype_from_pa_type,
     get_time_unit,
     is_categorical_dtype,
     is_decimal_dtype,
@@ -295,7 +296,9 @@ class ColumnBase(Column, Serializable):
             "None"
         ]
 
-        result = _copy_type_metadata_from_arrow(array, result)
+        result = result._with_type_metadata(
+            cudf_dtype_from_pa_type(array.type)
+        )
         return result
 
     def _get_mask_as_column(self) -> ColumnBase:
@@ -408,7 +411,7 @@ class ColumnBase(Column, Serializable):
         """
         if deep:
             result = libcudf.copying.copy_column(self)
-            return cast(T, self._copy_type_metadata(result))
+            return cast(T, result._with_type_metadata(self.dtype))
         else:
             return cast(
                 T,
@@ -1267,28 +1270,14 @@ class ColumnBase(Column, Serializable):
             }
         )
 
-    def _copy_type_metadata(self: ColumnBase, other: ColumnBase) -> ColumnBase:
+    def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
         """
         Copies type metadata from self onto other, returning a new column.
 
-        * when `self` and `other` are nested columns of the same type,
-          recursively apply this function on the children of `self` to the
-          and the children of `other`.
-        * if none of the above, return `other` without any changes
+        When ``self`` is a nested column, recursively apply this function on
+        the children of ``self``.
         """
-        # TODO: This logic should probably be moved to a common nested column
-        # class.
-        if isinstance(other, type(self)):
-            if self.base_children and other.base_children:
-                base_children = tuple(
-                    self.base_children[i]._copy_type_metadata(
-                        other.base_children[i]
-                    )
-                    for i in range(len(self.base_children))
-                )
-                other.set_base_children(base_children)
-
-        return other
+        return self
 
 
 def column_empty_like(
@@ -1601,6 +1590,84 @@ def build_interval_column(
         null_count=null_count,
         children=(left, right),
     )
+
+
+def build_list_column(
+    indices: ColumnBase,
+    elements: ColumnBase,
+    mask: Buffer = None,
+    size: int = None,
+    offset: int = 0,
+    null_count: int = None,
+) -> "cudf.core.column.ListColumn":
+    """
+    Build a ListColumn
+
+    Parameters
+    ----------
+    indices : ColumnBase
+        Column of list indices
+    elements : ColumnBase
+        Column of list elements
+    mask: Buffer
+        Null mask
+    size: int, optional
+    offset: int, optional
+    """
+    dtype = ListDtype(element_type=elements.dtype)
+
+    result = build_column(
+        data=None,
+        dtype=dtype,
+        mask=mask,
+        size=size,
+        offset=offset,
+        null_count=null_count,
+        children=(indices, elements),
+    )
+
+    return cast("cudf.core.column.ListColumn", result)
+
+
+def build_struct_column(
+    names: Sequence[str],
+    children: Tuple[ColumnBase, ...],
+    dtype: Optional[Dtype] = None,
+    mask: Buffer = None,
+    size: int = None,
+    offset: int = 0,
+    null_count: int = None,
+) -> "cudf.core.column.StructColumn":
+    """
+    Build a StructColumn
+
+    Parameters
+    ----------
+    names : list-like
+        Field names to map to children dtypes
+    children : tuple
+
+    mask: Buffer
+        Null mask
+    size: int, optional
+    offset: int, optional
+    """
+    if dtype is None:
+        dtype = StructDtype(
+            fields={name: col.dtype for name, col in zip(names, children)}
+        )
+
+    result = build_column(
+        data=None,
+        dtype=dtype,
+        mask=mask,
+        size=size,
+        offset=offset,
+        null_count=null_count,
+        children=children,
+    )
+
+    return cast("cudf.core.column.StructColumn", result)
 
 
 def as_column(
@@ -2198,60 +2265,6 @@ def full(size: int, fill_value: ScalarLike, dtype: Dtype = None) -> ColumnBase:
     dtype: int8
     """
     return ColumnBase.from_scalar(cudf.Scalar(fill_value, dtype), size)
-
-
-def _copy_type_metadata_from_arrow(
-    arrow_array: pa.array, cudf_column: ColumnBase
-) -> ColumnBase:
-    """
-    Similar to `Column._copy_type_metadata`, except copies type metadata
-    from arrow array into a cudf column. Recursive for every level.
-    * When `arrow_array` is struct type and `cudf_column` is StructDtype, copy
-    field names.
-    * When `arrow_array` is decimal type and `cudf_column` is
-    Decimal64Dtype, copy precisions.
-    """
-    if pa.types.is_decimal(arrow_array.type) and isinstance(
-        cudf_column, cudf.core.column.DecimalColumn
-    ):
-        cudf_column.dtype.precision = arrow_array.type.precision
-    elif pa.types.is_struct(arrow_array.type) and isinstance(
-        cudf_column, cudf.core.column.StructColumn
-    ):
-        base_children = tuple(
-            _copy_type_metadata_from_arrow(arrow_array.field(i), col_child)
-            for i, col_child in enumerate(cudf_column.base_children)
-        )
-        cudf_column.set_base_children(base_children)
-        return cudf.core.column.StructColumn(
-            data=None,
-            size=cudf_column.base_size,
-            dtype=StructDtype.from_arrow(arrow_array.type),
-            mask=cudf_column.base_mask,
-            offset=cudf_column.offset,
-            null_count=cudf_column.null_count,
-            children=base_children,
-        )
-    elif pa.types.is_list(arrow_array.type) and isinstance(
-        cudf_column, cudf.core.column.ListColumn
-    ):
-        if arrow_array.values and cudf_column.base_children:
-            base_children = (
-                cudf_column.base_children[0],
-                _copy_type_metadata_from_arrow(
-                    arrow_array.values, cudf_column.base_children[1]
-                ),
-            )
-            return cudf.core.column.ListColumn(
-                size=cudf_column.base_size,
-                dtype=ListDtype.from_arrow(arrow_array.type),
-                mask=cudf_column.base_mask,
-                offset=cudf_column.offset,
-                null_count=cudf_column.null_count,
-                children=base_children,
-            )
-
-    return cudf_column
 
 
 def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
