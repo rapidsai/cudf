@@ -1403,70 +1403,66 @@ class CategoricalColumn(column.ColumnBase):
             "Categorical column views are not currently supported"
         )
 
-    # @staticmethod
-    # def _concat(objs: MutableSequence[CategoricalColumn]) -> CategoricalColumn:
-    #     # TODO: This function currently assumes it is being called from
-    #     # column._concat_columns, at least to the extent that all the
-    #     # preprocessing in that function has already been done. That should be
-    #     # improved as the concatenation API is solidified.
+    @staticmethod
+    def _concat(objs: MutableSequence[CategoricalColumn]) -> CategoricalColumn:
+        # TODO: This function currently assumes it is being called from
+        # column._concat_columns, at least to the extent that all the
+        # preprocessing in that function has already been done. That should be
+        # improved as the concatenation API is solidified.
 
-    #     # Find the first non-null column:
-    #     head = next((obj for obj in objs if obj.valid_count), objs[0])
+        # Find the first non-null column:
+        head = next((obj for obj in objs if obj.valid_count), objs[0])
 
-    #     # Combine and de-dupe the categories
-    #     cats = (
-    #         cudf.concat([o.cat().categories for o in objs])
-    #         .drop_duplicates()
-    #         ._column
-    #     )
-    #     objs = [
-    #         o.cat()._set_categories(o.cat().categories, cats, is_unique=True)
-    #         for o in objs
-    #     ]
-    #     codes = [o.codes for o in objs]
+        # Combine and de-dupe the categories
+        cats = (
+            cudf.concat([o.cat().categories for o in objs])
+            .drop_duplicates()
+            ._column
+        )
+        objs = [
+            o.cat()._set_categories(o.cat().categories, cats, is_unique=True)
+            for o in objs
+        ]
+        codes = [o.codes for o in objs]
 
-    #     newsize = sum(map(len, codes))
-    #     if newsize > libcudf.MAX_COLUMN_SIZE:
-    #         raise MemoryError(
-    #             f"Result of concat cannot have "
-    #             f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
-    #         )
-    #     elif newsize == 0:
-    #         codes_col = column.column_empty(0, head.codes.dtype, masked=True)
-    #     else:
-    #         # Filter out inputs that have 0 length, then concatenate.
-    #         codes = [o for o in codes if len(o)]
-    #         codes_col = libcudf.concat.concat_columns(objs)
+        newsize = sum(map(len, codes))
+        if newsize > libcudf.MAX_COLUMN_SIZE:
+            raise MemoryError(
+                f"Result of concat cannot have "
+                f"size > {libcudf.MAX_COLUMN_SIZE_STR}"
+            )
+        elif newsize == 0:
+            codes_col = column.column_empty(0, head.codes.dtype, masked=True)
+        else:
+            # Filter out inputs that have 0 length, then concatenate.
+            codes = [o for o in codes if len(o)]
+            codes_col = libcudf.concat.concat_columns(objs)
 
-    #     return column.build_categorical_column(
-    #         categories=column.as_column(cats),
-    #         codes=column.as_column(codes_col.base_data, dtype=codes_col.dtype),
-    #         mask=codes_col.base_mask,
-    #         size=codes_col.size,
-    #         offset=codes_col.offset,
-    #     )
+        return column.build_categorical_column(
+            categories=column.as_column(cats),
+            codes=column.as_column(codes_col.base_data, dtype=codes_col.dtype),
+            mask=codes_col.base_mask,
+            size=codes_col.size,
+            offset=codes_col.offset,
+        )
 
-    # def _copy_type_metadata(
-    #     self: CategoricalColumn, other: ColumnBase
-    # ) -> ColumnBase:
-    #     """Copies type metadata from self onto other, returning a new column.
+    def _with_type_metadata(
+        self: CategoricalColumn, dtype: Dtype
+    ) -> CategoricalColumn:
+        if isinstance(dtype, CategoricalDtype):
+            return column.build_categorical_column(
+                categories=dtype.categories._values,
+                codes=column.as_column(
+                    self.codes.base_data, dtype=self.codes.dtype
+                ),
+                mask=self.codes.base_mask,
+                ordered=dtype.ordered,
+                size=self.codes.size,
+                offset=self.codes.offset,
+                null_count=self.codes.null_count,
+            )
 
-    #     In addition to the default behavior, if `other` is not a
-    #     CategoricalColumn, we assume other is a column of codes, and return a
-    #     CategoricalColumn composed of `other`  and the categories of `self`.
-    #     """
-    #     if not isinstance(other, cudf.core.column.CategoricalColumn):
-    #         other = column.build_categorical_column(
-    #             categories=self.categories,
-    #             codes=column.as_column(other.base_data, dtype=other.dtype),
-    #             mask=other.base_mask,
-    #             ordered=self.ordered,
-    #             size=other.size,
-    #             offset=other.offset,
-    #             null_count=other.null_count,
-    #         )
-    #     # Have to ignore typing here because it misdiagnoses super().
-    #     return super()._copy_type_metadata(other)  # type: ignore
+        return self
 
     @property
     def _internal_categories(self) -> ColumnBase:
