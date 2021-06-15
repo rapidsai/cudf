@@ -28,6 +28,7 @@
 #include <cudf/table/table_view.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/tabulate.h>
 
 template <typename T>
 class ReverseTypedTestFixture : public cudf::test::BaseFixture {
@@ -84,15 +85,18 @@ TYPED_TEST(ReverseTypedTestFixture, ReverseNullable)
   std::vector<int64_t> input_values(num_values);
   std::iota(input_values.begin(), input_values.end(), 1);
 
-  std::vector<bool> input_valids(num_values);
-  for (size_t i{0}; i < input_valids.size(); i++) { input_valids[i] = (i % 2) == 0 ? true : false; }
+  thrust::host_vector<bool> input_valids(num_values);
+  thrust::tabulate(
+    thrust::seq, input_valids.begin(), input_valids.end(), [](auto i) { return not(i % 2); });
 
-  std::vector<T> expected_values;
-  std::vector<bool> expected_valids;
-  for (int i = num_values - 1; i > -1; i--) {
-    expected_values.push_back(cudf::test::make_type_param_scalar<T>(input_values[i]));
-    expected_valids.push_back(input_valids[i]);
-  }
+  std::vector<T> expected_values(input_values.size());
+  thrust::host_vector<bool> expected_valids(input_valids.size());
+
+  std::transform(std::make_reverse_iterator(input_values.end()),
+                 std::make_reverse_iterator(input_values.begin()),
+                 expected_values.begin(),
+                 [](auto i) { return cudf::test::make_type_param_scalar<T>(i); });
+  std::reverse_copy(input_valids.begin(), input_valids.end(), expected_valids.begin());
 
   cudf::test::fixed_width_column_wrapper<T, int64_t> input(
     input_values.begin(), input_values.end(), input_valids.begin());
@@ -131,18 +135,19 @@ TEST_F(ReverseStringTestFixture, ReverseNullable)
   constexpr cudf::size_type num_values{20};
 
   std::vector<std::string> input_values(num_values);
-  std::vector<bool> input_valids(num_values);
-  for (size_t i{0}; i < num_values; i++) {
-    input_values[i] = "#" + std::to_string(i);
-    input_valids[i] = (i % 2) == 0 ? true : false;
-  }
+  thrust::host_vector<bool> input_valids(num_values);
 
-  std::vector<std::string> expected_values;
-  std::vector<bool> expected_valids;
-  for (int i = num_values - 1; i > -1; i--) {
-    expected_values.push_back(input_values[i]);
-    expected_valids.push_back(input_valids[i]);
-  }
+  thrust::tabulate(thrust::seq, input_values.begin(), input_values.end(), [](auto i) {
+    return "#" + std::to_string(i);
+  });
+  thrust::tabulate(
+    thrust::seq, input_valids.begin(), input_valids.end(), [](auto i) { return not(i % 2); });
+
+  std::vector<std::string> expected_values(input_values.size());
+  thrust::host_vector<bool> expected_valids(input_valids.size());
+
+  std::reverse_copy(input_values.begin(), input_values.end(), expected_values.begin());
+  std::reverse_copy(input_valids.begin(), input_valids.end(), expected_valids.begin());
 
   auto input = cudf::test::strings_column_wrapper(
     input_values.begin(), input_values.end(), input_valids.begin());
