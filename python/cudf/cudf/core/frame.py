@@ -505,7 +505,7 @@ class Frame(libcudf.table.Table):
         # Reassign precision for any decimal cols
         for name, col in out._data.items():
             if isinstance(col, cudf.core.column.DecimalColumn):
-                col = tables[0]._data[name]._copy_type_metadata(col)
+                col = col._with_type_metadata(tables[0]._data[name].dtype)
 
         # Reassign index and column names
         if isinstance(objs[0].columns, pd.MultiIndex):
@@ -1665,7 +1665,7 @@ class Frame(libcudf.table.Table):
             "consider using .to_arrow()"
         )
 
-    def round(self, decimals=0):
+    def round(self, decimals=0, how="half_even"):
         """
         Round a DataFrame to a variable number of decimal places.
 
@@ -1680,6 +1680,9 @@ class Frame(libcudf.table.Table):
             columns not included in `decimals` will be left as is. Elements
             of `decimals` which are not columns of the input will be
             ignored.
+        how : str, optional
+            Type of rounding. Can be either "half_even" (default)
+            of "half_up" rounding.
 
         Returns
         -------
@@ -1745,7 +1748,7 @@ class Frame(libcudf.table.Table):
                 raise ValueError("Index of decimals must be unique")
 
             cols = {
-                name: col.round(decimals[name])
+                name: col.round(decimals[name], how=how)
                 if (
                     name in decimals.keys()
                     and pd.api.types.is_numeric_dtype(col.dtype)
@@ -1755,7 +1758,7 @@ class Frame(libcudf.table.Table):
             }
         elif isinstance(decimals, int):
             cols = {
-                name: col.round(decimals)
+                name: col.round(decimals, how=how)
                 if pd.api.types.is_numeric_dtype(col.dtype)
                 else col.copy(deep=True)
                 for name, col in self._data.items()
@@ -2241,13 +2244,13 @@ class Frame(libcudf.table.Table):
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.
-        See `ColumnBase._copy_type_metadata` for more information.
+        See `ColumnBase._with_type_metadata` for more information.
         """
         for name, col, other_col in zip(
             self._data.keys(), self._data.values(), other._data.values()
         ):
             self._data.set_by_label(
-                name, other_col._copy_type_metadata(col), validate=False
+                name, col._with_type_metadata(other_col.dtype), validate=False
             )
 
         if include_index:
@@ -4137,7 +4140,7 @@ def _drop_rows_by_labels(
     if isinstance(level, int) and level >= obj.index.nlevels:
         raise ValueError("Param level out of bounds.")
 
-    if not isinstance(labels, (cudf.Series, cudf.Index)):
+    if not isinstance(labels, SingleColumnFrame):
         labels = as_column(labels)
 
     if isinstance(obj._index, cudf.MultiIndex):
