@@ -149,7 +149,6 @@ class DecimalColumn(NumericalBaseColumn):
     ) -> "cudf.core.column.DecimalColumn":
         if (
             isinstance(dtype, Decimal64Dtype)
-            and isinstance(self.dtype, Decimal64Dtype)
             and dtype.scale < self.dtype.scale
         ):
             warn(
