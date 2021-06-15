@@ -817,9 +817,9 @@ cdef class PackedColumns:
     @staticmethod
     cdef PackedColumns from_py_table(Table input_table, keep_index=True):
         """
-        Construct a PackedColumns object from a ``cudf.DataFrame``.
+        Construct a ``PackedColumns`` object from a ``cudf.DataFrame``.
         """
-        from cudf.core import RangeIndex
+        from cudf.core import RangeIndex, dtypes
 
         cdef PackedColumns p = PackedColumns.__new__(PackedColumns)
 
@@ -831,9 +831,13 @@ cdef class PackedColumns:
         else:
             input_table_view = input_table.data_view()
 
-        p.c_obj = move(cpp_copying.pack(input_table_view))
         p.column_names = input_table._column_names
-        p.column_dtypes = [c.dtype for c in input_table._columns]
+        p.column_dtypes = {}
+        for name, col in input_table._data.items():
+            if isinstance(col.dtype, dtypes._BaseDtype):
+                p.column_dtypes[name] = col.dtype
+
+        p.c_obj = move(cpp_copying.pack(input_table_view))
 
         return p
 
@@ -845,7 +849,10 @@ cdef class PackedColumns:
             self.index_names
         )
 
-        # we need to do something with dtypes here
+        for name, dtype in self.column_dtypes.items():
+            output_table._data[name] = (
+                output_table._data[name]._with_type_metadata(dtype)
+            )
 
         return output_table
 
