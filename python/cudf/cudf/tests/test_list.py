@@ -350,3 +350,13 @@ def test_list_getitem(indata, expect):
     list_sr = cudf.Series([indata])
     # __getitem__ shall fill None with cudf.NA
     assert list_sr[0] == expect
+
+
+@pytest.mark.parametrize(
+    "input_obj", [[[1, cudf.NA, 3]], [[1, cudf.NA, 3], [4, 5, cudf.NA]]]
+)
+def test_construction_series_with_nulls(input_obj):
+    expect = pa.array(input_obj, from_pandas=True)
+    got = cudf.Series(input_obj).to_arrow()
+
+    assert expect == got
