@@ -1496,6 +1496,27 @@ def test_groupby_list_of_lists(list_agg):
 
 
 @pytest.mark.parametrize("list_agg", [list, "collect"])
+def test_groupby_list_of_structs(list_agg):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 1, 2, 2, 2],
+            "b": [
+                {"c": "1", "d": 1},
+                {"c": "2", "d": 2},
+                {"c": "3", "d": 3},
+                {"c": "4", "d": 4},
+                {"c": "5", "d": 5},
+                {"c": "6", "d": 6},
+            ],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    with pytest.raises(pd.core.base.DataError):
+        gdf.groupby("a").agg({"b": list_agg}),
+
+
+@pytest.mark.parametrize("list_agg", [list, "collect"])
 def test_groupby_list_single_element(list_agg):
     pdf = pd.DataFrame({"a": [1, 2], "b": [3, None]})
     gdf = cudf.from_pandas(pdf)

@@ -238,7 +238,7 @@ void compute_substring_indices(column_device_view const& d_column,
                                size_type* start_char_pos,
                                size_type* end_char_pos,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::mr::device_memory_resource*)
 {
   auto strings_count = d_column.size();
 
