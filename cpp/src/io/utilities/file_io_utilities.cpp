@@ -174,9 +174,31 @@ std::unique_ptr<datasource::buffer> cufile_input_impl::read(size_t offset,
                                                             size_t size,
                                                             rmm::cuda_stream_view stream)
 {
+  // std::cout << "cufile read" << std::endl;
   rmm::device_buffer out_data(size, stream);
-  CUDF_EXPECTS(shim->read(cf_file.handle(), out_data.data(), size, offset, 0) != -1,
-               "cuFile error reading from a file");
+  stream.synchronize();
+  auto read_slice =
+    [](decltype(cuFileRead) *fn, CUfileHandle_t cfd, void *dst, size_t size, size_t offset) {
+      auto func = *fn;
+      func(cfd, dst, size, offset, 0);
+    };
+  // std::vector<std::thread> threads;
+  // constexpr size_t n_threads = 1;
+  // for (size_t t = 0; t < n_threads; ++t) {
+  //   size_t slice_size   = size / n_threads;
+  //   size_t slice_offset = slice_size * t;
+  //   void *dst_slice     = reinterpret_cast<char *>(out_data.data()) + slice_offset;
+
+  //   if (t == n_threads - 1) { slice_size += size % n_threads; }
+  //   threads.emplace_back(read_slice, shim->read, dst_slice, slice_size, offset + slice_offset);
+  // }
+  // for (auto &thread : threads) { thread.join(); }
+
+  std::thread(read_slice, shim->read, cf_file.handle(), out_data.data(), size, offset).join();
+  // read_slice(shim->read, cf_file.handle(), out_data.data(), size, offset);
+
+  // CUDF_EXPECTS(shim->read(cf_file.handle(), out_data.data(), size, offset, 0) != -1,
+  //              "cuFile error reading from a file");
 
   return datasource::buffer::create(std::move(out_data));
 }
@@ -186,6 +208,7 @@ size_t cufile_input_impl::read(size_t offset,
                                uint8_t *dst,
                                rmm::cuda_stream_view stream)
 {
+  // std::cout << "cufile read" << std::endl;
   CUDF_EXPECTS(shim->read(cf_file.handle(), dst, size, offset, 0) != -1,
                "cuFile error reading from a file");
   // always read the requested size for now
@@ -207,6 +230,7 @@ void cufile_output_impl::write(void const *data, size_t offset, size_t size)
 std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const &filepath)
 {
 #ifdef CUFILE_FOUND
+  std::cout << "using GDS" << std::endl;
   if (cufile_config::instance()->is_enabled()) {
     try {
       return std::make_unique<cufile_input_impl>(filepath);
