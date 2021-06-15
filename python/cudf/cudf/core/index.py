@@ -4,7 +4,7 @@ from __future__ import annotations, division, print_function
 
 import pickle
 from numbers import Number
-from typing import Any, Dict, Type, Union
+from typing import Any, Dict, Optional, Tuple, Type, Union
 
 import cupy
 import numpy as np
@@ -14,6 +14,8 @@ from pandas._config import get_option
 
 import cudf
 from cudf._lib.filling import sequence
+from cudf._lib.search import search_sorted
+from cudf._lib.table import Table
 from cudf._typing import DtypeObj
 from cudf.core.abc import Serializable
 from cudf.core.column import (
@@ -27,7 +29,7 @@ from cudf.core.column import (
     arange,
     column,
 )
-from cudf.core.column.column import _concat_columns
+from cudf.core.column.column import _concat_columns, as_column
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import SingleColumnFrame
@@ -467,7 +469,6 @@ class BaseIndex(SingleColumnFrame, Serializable):
             col_name = 0
         else:
             col_name = self.name
-
         return cudf.DataFrame(
             {col_name: self._values}, index=self if index else None
         )
@@ -1063,7 +1064,6 @@ class BaseIndex(SingleColumnFrame, Serializable):
         Series
             The dtype will be based on the type of the Index values.
         """
-
         return cudf.Series(
             self._values,
             index=self.copy(deep=False) if index is None else index,
@@ -1199,6 +1199,144 @@ class BaseIndex(SingleColumnFrame, Serializable):
             bytes used
         """
         return self._values._memory_usage(deep=deep)
+
+    def get_loc(self, key, method=None, tolerance=None):
+        """Get integer location, slice or boolean mask for requested label.
+
+        Parameters
+        ----------
+        key : label
+        method : {None, 'pad'/'fill', 'backfill'/'bfill', 'nearest'}, optional
+            - default: exact matches only.
+            - pad / ffill: find the PREVIOUS index value if no exact match.
+            - backfill / bfill: use NEXT index value if no exact match.
+            - nearest: use the NEAREST index value if no exact match. Tied
+              distances are broken by preferring the larger index
+              value.
+        tolerance : int or float, optional
+            Maximum distance from index value for inexact matches. The value
+            of the index at the matching location must satisfy the equation
+            ``abs(index[loc] - key) <= tolerance``.
+
+        Returns
+        -------
+        int or slice or boolean mask
+            - If result is unique, return integer index
+            - If index is monotonic, loc is returned as a slice object
+            - Otherwise, a boolean mask is returned
+
+        Examples
+        --------
+        >>> unique_index = cudf.Index(list('abc'))
+        >>> unique_index.get_loc('b')
+        1
+        >>> monotonic_index = cudf.Index(list('abbc'))
+        >>> monotonic_index.get_loc('b')
+        slice(1, 3, None)
+        >>> non_monotonic_index = cudf.Index(list('abcb'))
+        >>> non_monotonic_index.get_loc('b')
+        array([False,  True, False,  True])
+        >>> numeric_unique_index = cudf.Index([1, 2, 3])
+        >>> numeric_unique_index.get_loc(3)
+        2
+        """
+        if tolerance is not None:
+            raise NotImplementedError(
+                "Parameter tolerance is unsupported yet."
+            )
+        if method not in {
+            None,
+            "ffill",
+            "bfill",
+            "pad",
+            "backfill",
+            "nearest",
+        }:
+            raise ValueError(
+                f"Invalid fill method. Expecting pad (ffill), backfill (bfill)"
+                f" or nearest. Got {method}"
+            )
+
+        is_sorted = (
+            self.is_monotonic_increasing or self.is_monotonic_decreasing
+        )
+
+        if not is_sorted and method is not None:
+            raise ValueError(
+                "index must be monotonic increasing or decreasing if `method`"
+                "is specified."
+            )
+
+        key_as_table = Table({"None": as_column(key, length=1)})
+        lower_bound, upper_bound, sort_inds = self._lexsorted_equal_range(
+            key_as_table, is_sorted
+        )
+
+        if lower_bound == upper_bound:
+            # Key not found, apply method
+            if method in ("pad", "ffill"):
+                if lower_bound == 0:
+                    raise KeyError(key)
+                return lower_bound - 1
+            elif method in ("backfill", "bfill"):
+                if lower_bound == self._data.nrows:
+                    raise KeyError(key)
+                return lower_bound
+            elif method == "nearest":
+                if lower_bound == self._data.nrows:
+                    return lower_bound - 1
+                elif lower_bound == 0:
+                    return 0
+                lower_val = self._column.element_indexing(lower_bound - 1)
+                upper_val = self._column.element_indexing(lower_bound)
+                return (
+                    lower_bound - 1
+                    if abs(lower_val - key) < abs(upper_val - key)
+                    else lower_bound
+                )
+            else:
+                raise KeyError(key)
+
+        if lower_bound + 1 == upper_bound:
+            # Search result is unique, return int.
+            return (
+                lower_bound
+                if is_sorted
+                else sort_inds.element_indexing(lower_bound)
+            )
+
+        if is_sorted:
+            # In monotonic index, lex search result is continuous. A slice for
+            # the range is returned.
+            return slice(lower_bound, upper_bound)
+
+        # Not sorted and not unique. Return a boolean mask
+        mask = cupy.full(self._data.nrows, False)
+        true_inds = sort_inds.slice(lower_bound, upper_bound).to_gpu_array()
+        mask[cupy.array(true_inds)] = True
+        return mask
+
+    def _lexsorted_equal_range(
+        self, key_as_table: Table, is_sorted: bool
+    ) -> Tuple[int, int, Optional[ColumnBase]]:
+        """Get equal range for key in lexicographically sorted index. If index
+        is not sorted when called, a sort will take place and `sort_inds` is
+        returned. Otherwise `None` is returned in that position.
+        """
+        if not is_sorted:
+            sort_inds = self._get_sorted_inds()
+            sort_vals = self._gather(sort_inds)
+        else:
+            sort_inds = None
+            sort_vals = self
+        lower_bound = search_sorted(
+            sort_vals, key_as_table, side="left"
+        ).element_indexing(0)
+        upper_bound = search_sorted(
+            sort_vals, key_as_table, side="right"
+        ).element_indexing(0)
+
+        return lower_bound, upper_bound, sort_inds
 
     @classmethod
     def from_pandas(cls, index, nan_as_null=None):
@@ -2730,6 +2868,8 @@ def as_index(arbitrary, **kwargs) -> BaseIndex:
         return TimedeltaIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, **kwargs)
+    elif isinstance(arbitrary, IntervalColumn):
+        return IntervalIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, cudf.Series):
         return as_index(arbitrary._column, **kwargs)
     elif isinstance(arbitrary, pd.RangeIndex):

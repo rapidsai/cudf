@@ -3,6 +3,7 @@ import decimal
 
 import numpy as np
 import pyarrow as pa
+from pandas._libs.missing import NAType as pd_NAType
 
 from cudf._lib.scalar import DeviceScalar, _is_null_host_scalar
 from cudf.core.column.column import ColumnBase
@@ -354,15 +355,11 @@ class Scalar(object):
         return Scalar(self.value, dtype)
 
 
-class _NAType(object):
-    def __init__(self):
-        pass
-
-    def __repr__(self):
-        return "<NA>"
-
-    def __bool__(self):
-        raise TypeError("boolean value of cudf.NA is ambiguous")
+class _NAType(pd_NAType):
+    # Pandas NAType enforces a single instance exists at a time
+    # instantiating this class will yield the existing instance
+    # of pandas._libs.missing.NAType, id(cudf.NA) == id(pd.NA).
+    pass
 
 
 NA = _NAType()
