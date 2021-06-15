@@ -141,7 +141,7 @@ class DecimalColumn(NumericalBaseColumn):
             self, quant, interpolation, sorted_indices, exact
         )
 
-        return self._copy_type_metadata(result)
+        return result._with_type_metadata(self.dtype)
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
@@ -189,7 +189,7 @@ class DecimalColumn(NumericalBaseColumn):
         result = libcudf.replace.replace_nulls(
             input_col=self, replacement=value, method=method, dtype=dtype
         )
-        return self._copy_type_metadata(result)
+        return result._with_type_metadata(self.dtype)
 
     def serialize(self) -> Tuple[dict, list]:
         header, frames = super().serialize()
@@ -209,16 +209,13 @@ class DecimalColumn(NumericalBaseColumn):
             "Decimals are not yet supported via `__cuda_array_interface__`"
         )
 
-    def _copy_type_metadata(self: ColumnBase, other: ColumnBase) -> ColumnBase:
-        """Copies type metadata from self onto other, returning a new column.
+    def _with_type_metadata(
+        self: "cudf.core.column.DecimalColumn", dtype: Dtype
+    ) -> "cudf.core.column.DecimalColumn":
+        if isinstance(dtype, Decimal64Dtype):
+            self.dtype.precision = dtype.precision
 
-        In addition to the default behavior, if `other` is also a decimal
-        column the precision is copied over.
-        """
-        if isinstance(other, DecimalColumn):
-            other.dtype.precision = self.dtype.precision  # type: ignore
-        # Have to ignore typing here because it misdiagnoses super().
-        return super()._copy_type_metadata(other)  # type: ignore
+        return self
 
 
 def _binop_scale(l_dtype, r_dtype, op):
