@@ -4719,7 +4719,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         defined function row wise over a dataframe, with true null
         handling. Works with UDFs using `core.udf.pipeline.nulludf`
         and returns a single series. Uses numba to jit compile the
-        function to PTX via LLVM. 
+        function to PTX via LLVM.
 
         Parameters
         ----------
