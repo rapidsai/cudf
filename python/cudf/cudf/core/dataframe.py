@@ -1453,11 +1453,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             elif isinstance(labels, tuple):
                 nlevels = len(labels)
             if self._data.multiindex is False or nlevels == self._data.nlevels:
-                out = self._constructor_sliced()._from_data(
+                out = self._constructor_sliced._from_data(
                     new_data, index=self.index, name=labels
                 )
                 return out
-        out = self.__class__()._from_data(
+        out = self.__class__._from_data(
             new_data, index=self.index, columns=new_data.to_pandas_index()
         )
         return out
