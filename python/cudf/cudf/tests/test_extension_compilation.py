@@ -1,13 +1,12 @@
 import operator
-import pytest
 
+import pytest
 from numba import cuda, types
 from numba.cuda import compile_ptx
 
 from cudf import NA
-from cudf.core.udf.typing import MaskedType
 from cudf.core.udf.classes import Masked
-
+from cudf.core.udf.typing import MaskedType
 
 arith_ops = (
     operator.add,
@@ -25,12 +24,10 @@ comparison_ops = (
     operator.eq,
     operator.ne,
     operator.ge,
-    operator.gt
+    operator.gt,
 )
 
-unary_ops = (
-    operator.truth,
-)
+unary_ops = (operator.truth,)
 
 ops = arith_ops + comparison_ops
 
@@ -57,10 +54,9 @@ if QUICK:
 number_ids = tuple(str(t) for t in number_types)
 
 
-@pytest.mark.parametrize('op', unary_ops)
-@pytest.mark.parametrize('ty', number_types, ids=number_ids)
+@pytest.mark.parametrize("op", unary_ops)
+@pytest.mark.parametrize("ty", number_types, ids=number_ids)
 def test_compile_masked_unary(op, ty):
-
     def func(x):
         return op(x)
 
@@ -68,10 +64,9 @@ def test_compile_masked_unary(op, ty):
     ptx, resty = compile_ptx(func, (MaskedType(ty),), cc=cc, device=True)
 
 
-@pytest.mark.parametrize('op', arith_ops)
-@pytest.mark.parametrize('ty', number_types, ids=number_ids)
+@pytest.mark.parametrize("op", arith_ops)
+@pytest.mark.parametrize("ty", number_types, ids=number_ids)
 def test_execute_masked_binary(op, ty):
-
     @cuda.jit(device=True)
     def func(x, y):
         return op(x, y)
@@ -92,21 +87,20 @@ def test_execute_masked_binary(op, ty):
         # Check masks are as expected, and unmasked result matches masked
         # result
         if r0.valid:
-            raise RuntimeError('Expected r0 to be invalid')
+            raise RuntimeError("Expected r0 to be invalid")
         if not r1.valid:
-            raise RuntimeError('Expected r1 to be valid')
+            raise RuntimeError("Expected r1 to be valid")
         if u != r1.value:
-            print('Values: ', u, r1.value)
-            raise RuntimeError('u != r1.value')
+            print("Values: ", u, r1.value)
+            raise RuntimeError("u != r1.value")
 
     test_kernel[1, 1](1, 2)
 
 
-@pytest.mark.parametrize('op', ops)
-@pytest.mark.parametrize('ty', number_types, ids=number_ids)
-@pytest.mark.parametrize('constant', [1, 1.5])
+@pytest.mark.parametrize("op", ops)
+@pytest.mark.parametrize("ty", number_types, ids=number_ids)
+@pytest.mark.parametrize("constant", [1, 1.5])
 def test_compile_arith_masked_vs_constant(op, ty, constant):
-
     def func(x):
         return op(x, constant)
 
@@ -120,11 +114,10 @@ def test_compile_arith_masked_vs_constant(op, ty, constant):
     assert resty.value_type == um_resty
 
 
-@pytest.mark.parametrize('op', ops)
-@pytest.mark.parametrize('ty', number_types, ids=number_ids)
-@pytest.mark.parametrize('constant', [1, 1.5])
+@pytest.mark.parametrize("op", ops)
+@pytest.mark.parametrize("ty", number_types, ids=number_ids)
+@pytest.mark.parametrize("constant", [1, 1.5])
 def test_compile_arith_constant_vs_masked(op, ty, constant):
-
     def func(x):
         return op(constant, x)
 
@@ -134,10 +127,9 @@ def test_compile_arith_constant_vs_masked(op, ty, constant):
     assert isinstance(resty, MaskedType)
 
 
-@pytest.mark.parametrize('op', ops)
-@pytest.mark.parametrize('ty', number_types, ids=number_ids)
+@pytest.mark.parametrize("op", ops)
+@pytest.mark.parametrize("ty", number_types, ids=number_ids)
 def test_compile_arith_masked_vs_na(op, ty):
-
     def func(x):
         return op(x, NA)
 
@@ -147,10 +139,9 @@ def test_compile_arith_masked_vs_na(op, ty):
     assert isinstance(resty, MaskedType)
 
 
-@pytest.mark.parametrize('op', ops)
-@pytest.mark.parametrize('ty', number_types, ids=number_ids)
+@pytest.mark.parametrize("op", ops)
+@pytest.mark.parametrize("ty", number_types, ids=number_ids)
 def test_compile_arith_na_vs_masked(op, ty):
-
     def func(x):
         return op(NA, x)
 
@@ -158,14 +149,15 @@ def test_compile_arith_na_vs_masked(op, ty):
     ptx, resty = compile_ptx(func, (MaskedType(ty),), cc=cc, device=True)
 
 
-@pytest.mark.parametrize('op', ops)
-@pytest.mark.parametrize('ty1', number_types, ids=number_ids)
-@pytest.mark.parametrize('ty2', number_types, ids=number_ids)
-@pytest.mark.parametrize('masked', ((False, True), (True, False),
-                                    (True, True)),
-                         ids=('um', 'mu', 'mm'))
+@pytest.mark.parametrize("op", ops)
+@pytest.mark.parametrize("ty1", number_types, ids=number_ids)
+@pytest.mark.parametrize("ty2", number_types, ids=number_ids)
+@pytest.mark.parametrize(
+    "masked",
+    ((False, True), (True, False), (True, True)),
+    ids=("um", "mu", "mm"),
+)
 def test_compile_arith_masked_ops(op, ty1, ty2, masked):
-
     def func(x, y):
         return op(x, y)
 
@@ -187,7 +179,7 @@ def func_na_is_x(x):
     return NA is x
 
 
-@pytest.mark.parametrize('fn', (func_x_is_na, func_na_is_x))
+@pytest.mark.parametrize("fn", (func_x_is_na, func_na_is_x))
 def test_is_na(fn):
 
     valid = Masked(1, True)
@@ -201,10 +193,10 @@ def test_is_na(fn):
         invalid_is_na = device_fn(invalid)
 
         if valid_is_na:
-            raise RuntimeError('Valid masked value is NA and should not be')
+            raise RuntimeError("Valid masked value is NA and should not be")
 
         if not invalid_is_na:
-            raise RuntimeError('Invalid masked value is not NA and should be')
+            raise RuntimeError("Invalid masked value is not NA and should be")
 
     test_kernel[1, 1]()
 
@@ -273,8 +265,8 @@ na_comparison_funcs = (
 )
 
 
-@pytest.mark.parametrize('fn', na_comparison_funcs)
-@pytest.mark.parametrize('ty', number_types, ids=number_ids)
+@pytest.mark.parametrize("fn", na_comparison_funcs)
+@pytest.mark.parametrize("ty", number_types, ids=number_ids)
 def test_na_masked_comparisons(fn, ty):
 
     device_fn = cuda.jit(device=True)(fn)
@@ -289,18 +281,18 @@ def test_na_masked_comparisons(fn, ty):
         invalid_cmp_na = device_fn(invalid_masked)
 
         if valid_cmp_na:
-            raise RuntimeError('Valid masked value compared True with NA')
+            raise RuntimeError("Valid masked value compared True with NA")
 
         if invalid_cmp_na:
-            raise RuntimeError('Invalid masked value compared True with NA')
+            raise RuntimeError("Invalid masked value compared True with NA")
 
     test_kernel[1, 1]()
 
 
 # xfail because scalars do not yet cast for a comparison to NA
 @pytest.mark.xfail
-@pytest.mark.parametrize('fn', na_comparison_funcs)
-@pytest.mark.parametrize('ty', number_types, ids=number_ids)
+@pytest.mark.parametrize("fn", na_comparison_funcs)
+@pytest.mark.parametrize("ty", number_types, ids=number_ids)
 def test_na_scalar_comparisons(fn, ty):
 
     device_fn = cuda.jit(device=True)(fn)
@@ -312,6 +304,6 @@ def test_na_scalar_comparisons(fn, ty):
         unmasked_cmp_na = device_fn(unmasked)
 
         if unmasked_cmp_na:
-            raise RuntimeError('Unmasked value compared True with NA')
+            raise RuntimeError("Unmasked value compared True with NA")
 
     test_kernel[1, 1]()

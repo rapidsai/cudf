@@ -7,8 +7,7 @@ arith_ops = [
     operator.truediv,
     operator.floordiv,
     operator.mod,
-    operator.pow
-
+    operator.pow,
 ]
 
 comparison_ops = [
@@ -17,5 +16,5 @@ comparison_ops = [
     operator.lt,
     operator.le,
     operator.gt,
-    operator.ge
+    operator.ge,
 ]
