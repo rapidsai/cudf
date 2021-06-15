@@ -1101,7 +1101,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_ScalarInvalid_B8_SI
   auto int_col    = fixed_width_column_wrapper<TypeLhs>{{-INT32_MAX, -37, 0, 499, 44, INT32_MAX},
                                                      {false, true, false, true, true, false}};
   auto int_scalar = cudf::scalar_type_t<TypeRhs>(999);
-  int_scalar.set_valid(false);
+  int_scalar.set_valid_async(false);
 
   auto op_col = cudf::binary_operation(
     int_col, int_scalar, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
@@ -1217,7 +1217,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
                                                     {true, true, true, true, true, true, true});
   // Matching a scalar that is invalid
   cudf::string_scalar str_scalar("foo");
-  str_scalar.set_valid(false);
+  str_scalar.set_valid_async(false);
 
   auto op_col = cudf::binary_operation(
     str_scalar, str_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
@@ -1262,7 +1262,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Scalar_Vector_B8_string_st
                                        {false, false, false, false, false, false, false});
   // Matching a scalar that is invalid
   cudf::string_scalar str_scalar("foo");
-  str_scalar.set_valid(false);
+  str_scalar.set_valid_async(false);
 
   auto op_col = cudf::binary_operation(
     str_scalar, str_col, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
@@ -1303,7 +1303,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareEqual_Vector_InvalidScalar_B8_st
                                                     {true, false, true, true, true, false, true});
   // Valid string invalidated
   cudf::string_scalar str_scalar("bb");
-  str_scalar.set_valid(false);
+  str_scalar.set_valid_async(false);
 
   auto op_col = cudf::binary_operation(
     str_col, str_scalar, cudf::binary_operator::NULL_EQUALS, data_type(type_to_id<TypeOut>()));
@@ -1553,7 +1553,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMin_Vector_Scalar_SI64_SI32_FP32
     fixed_width_column_wrapper<TypeLhs>{{999, -37, 0, INT32_MAX, -INT32_MAX, -4379, 55},
                                         {false, true, false, true, false, true, false}};
   auto float_scalar = cudf::scalar_type_t<TypeRhs>(-3.14f);
-  float_scalar.set_valid(false);
+  float_scalar.set_valid_async(false);
 
   auto op_col = cudf::binary_operation(
     int_col, float_scalar, cudf::binary_operator::NULL_MIN, data_type(type_to_id<TypeOut>()));
@@ -1575,7 +1575,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Scalar_Vector_SI8_SI8_FP32)
   auto int_col = fixed_width_column_wrapper<TypeLhs>{
     {9, -37, 0, 32, -47, -4, 55}, {false, false, false, false, false, false, false}};
   auto float_scalar = cudf::scalar_type_t<TypeRhs>(-3.14f);
-  float_scalar.set_valid(false);
+  float_scalar.set_valid_async(false);
 
   auto op_col = cudf::binary_operation(
     float_scalar, int_col, cudf::binary_operator::NULL_MAX, data_type(type_to_id<TypeOut>()));
@@ -1728,7 +1728,7 @@ TEST_F(BinaryOperationIntegrationTest, NullAwareMax_Scalar_Vector_string_string_
     {"eee", "invalid", "<null>", "", "", "", "ééé", "foo", "bar", "abc", "foo"},
     {false, true, true, false, true, true, true, false, false, true, true});
   cudf::string_scalar str_scalar("foo");
-  str_scalar.set_valid(false);
+  str_scalar.set_valid_async(false);
 
   // Returns the lhs_col
   auto op_col = cudf::binary_operation(

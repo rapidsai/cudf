@@ -81,7 +81,7 @@ class ColumnMethodsMixin:
                 # is a Table
                 table = new_col
 
-                if isinstance(self._parent, cudf.Index):
+                if isinstance(self._parent, cudf.BaseIndex):
                     idx = self._parent._constructor_expanddim._from_table(
                         table=table
                     )
@@ -100,7 +100,7 @@ class ColumnMethodsMixin:
                     )
                 else:
                     return cudf.Series(new_col, name=self._parent.name)
-            elif isinstance(self._parent, cudf.Index):
+            elif isinstance(self._parent, cudf.BaseIndex):
                 return cudf.core.index.as_index(
                     new_col, name=self._parent.name
                 )

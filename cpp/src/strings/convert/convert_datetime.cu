@@ -911,14 +911,9 @@ struct dispatch_from_timestamps_fn {
                        d_timestamps.size(),
                        pfn);
   }
-  template <typename T, std::enable_if_t<not cudf::is_timestamp<T>()>* = nullptr>
-  void operator()(column_device_view const&,
-                  format_item const*,
-                  size_type,
-                  timestamp_units,
-                  const int32_t*,
-                  char* d_chars,
-                  rmm::cuda_stream_view stream) const
+
+  template <typename T, typename... Args>
+  std::enable_if_t<not cudf::is_timestamp<T>(), void> operator()(Args&&...) const
   {
     CUDF_FAIL("Only timestamps type are expected");
   }
@@ -933,7 +928,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                                         rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = timestamps.size();
-  if (strings_count == 0) return make_empty_strings_column(stream, mr);
+  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
 
   CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
   timestamp_units units =

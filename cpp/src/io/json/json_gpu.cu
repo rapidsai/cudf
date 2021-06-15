@@ -223,12 +223,12 @@ __inline__ __device__ cudf::timestamp_ns decode_value(const char *begin,
 }
 
 #ifndef DURATION_DECODE_VALUE
-#define DURATION_DECODE_VALUE(Type)                                     \
-  template <>                                                           \
-  __inline__ __device__ Type decode_value(                              \
-    const char *begin, const char *end, parse_options_view const &opts) \
-  {                                                                     \
-    return Type{to_time_delta<Type>(begin, end)};                       \
+#define DURATION_DECODE_VALUE(Type)                                 \
+  template <>                                                       \
+  __inline__ __device__ Type decode_value(                          \
+    const char *begin, const char *end, parse_options_view const &) \
+  {                                                                 \
+    return Type{to_time_delta<Type>(begin, end)};                   \
   }
 #endif
 DURATION_DECODE_VALUE(duration_D)
@@ -239,48 +239,48 @@ DURATION_DECODE_VALUE(duration_ns)
 
 // The purpose of these is merely to allow compilation ONLY
 template <>
-__inline__ __device__ cudf::string_view decode_value(const char *begin,
-                                                     const char *end,
-                                                     parse_options_view const &opts)
+__inline__ __device__ cudf::string_view decode_value(const char *,
+                                                     const char *,
+                                                     parse_options_view const &)
 {
   return cudf::string_view{};
 }
 
 template <>
-__inline__ __device__ cudf::dictionary32 decode_value(const char *begin,
-                                                      const char *end,
-                                                      parse_options_view const &opts)
+__inline__ __device__ cudf::dictionary32 decode_value(const char *,
+                                                      const char *,
+                                                      parse_options_view const &)
 {
   return cudf::dictionary32{};
 }
 
 template <>
-__inline__ __device__ cudf::list_view decode_value(const char *begin,
-                                                   const char *end,
-                                                   parse_options_view const &opts)
+__inline__ __device__ cudf::list_view decode_value(const char *,
+                                                   const char *,
+                                                   parse_options_view const &)
 {
   return cudf::list_view{};
 }
 template <>
-__inline__ __device__ cudf::struct_view decode_value(const char *begin,
-                                                     const char *end,
-                                                     parse_options_view const &opts)
+__inline__ __device__ cudf::struct_view decode_value(const char *,
+                                                     const char *,
+                                                     parse_options_view const &)
 {
   return cudf::struct_view{};
 }
 
 template <>
-__inline__ __device__ numeric::decimal32 decode_value(const char *begin,
-                                                      const char *end,
-                                                      parse_options_view const &opts)
+__inline__ __device__ numeric::decimal32 decode_value(const char *,
+                                                      const char *,
+                                                      parse_options_view const &)
 {
   return numeric::decimal32{};
 }
 
 template <>
-__inline__ __device__ numeric::decimal64 decode_value(const char *begin,
-                                                      const char *end,
-                                                      parse_options_view const &opts)
+__inline__ __device__ numeric::decimal64 decode_value(const char *,
+                                                      const char *,
+                                                      parse_options_view const &)
 {
   return numeric::decimal64{};
 }
