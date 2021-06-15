@@ -57,7 +57,9 @@ def test_packed_dataframe_equality_categorical():
     np.random.seed(0)
 
     df = DataFrame()
-    df["keys"] = pd.Categorical("aaabababac")
+    df["keys"] = pd.Categorical(
+        ["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"]
+    )
     df["vals"] = np.random.random(len(df))
 
     check_packed_equality(df)
