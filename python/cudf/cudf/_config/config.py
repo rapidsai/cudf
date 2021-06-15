@@ -2,7 +2,7 @@ from contextlib import contextmanager
 
 _OPTIONS = {
     # nulls compare like NaN/NaT in numeric/datetime comparisons
-    "_nulls_compare_like_nans": False
+    "nulls_compare_like_nans": False
 }
 
 

@@ -3713,7 +3713,7 @@ class SingleColumnFrame(Frame):
 
         if output_mask is not None:
             output._column = output._column.set_mask(output_mask)
-            if cudf._config.get_option("_nulls_compare_like_nans") and fn in {
+            if cudf._config.get_option("nulls_compare_like_nans") and fn in {
                 "lt",
                 "gt",
                 "le",

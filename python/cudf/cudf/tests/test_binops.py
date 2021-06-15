@@ -2886,7 +2886,7 @@ def test_series_compare_nulls_nan_comparison(cmpop, dtypes):
     expect = cmpop(lser, rser)
     got = cmpop(lser, rser)
 
-    with cudf._config.option_context("_nulls_compare_like_nans", True):
+    with cudf._config.option_context("nulls_compare_like_nans", True):
         utils.assert_eq(expect, got)
 
 
@@ -2901,6 +2901,6 @@ def test_decimal_compare_nan_comparison(op):
 
     expect = op(lser.to_pandas(), rser.to_pandas())
 
-    with cudf._config.option_context("_nulls_compare_like_nans", True):
+    with cudf._config.option_context("nulls_compare_like_nans", True):
         got = op(lser, rser)
     utils.assert_eq(expect, got)

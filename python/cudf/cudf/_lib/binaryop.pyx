@@ -201,7 +201,7 @@ def binaryop(lhs, rhs, op, dtype):
 
     if (
         op.name.lower() in {"lt", "gt", "le", "ge", "eq", "ne", "null_equals"}
-        and get_option("_nulls_compare_like_nans")
+        and get_option("nulls_compare_like_nans")
     ):
         result = result.fillna(op.name.lower() == "ne")
     return result
