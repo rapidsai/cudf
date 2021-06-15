@@ -53,6 +53,7 @@ def test_categorical_integer():
     cat = pd.Categorical(["a", "_", "_", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
     sr = cudf.Series(cat)
+    breakpoint()
     np.testing.assert_array_equal(
         cat.codes, sr.cat.codes.astype(cat.codes.dtype).fillna(-1).to_array()
     )
@@ -60,7 +61,7 @@ def test_categorical_integer():
 
     np.testing.assert_array_equal(
         pdsr.cat.codes.values,
-        sr.cat.codes.astype(pdsr.cat.codes.dtype).fillna(-1).to_array(),
+        sr.cat.codes.to_array()
     )
 
     string = str(sr)

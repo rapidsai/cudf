@@ -145,10 +145,10 @@ def gather(
 
     if len(gather_map) > 0 and not nullify:
         gm_min, gm_max = minmax(gather_map)
-        if gm_min < -len(source_table) or gm_max >= len(source_table):
+        if gm_min < -source_table._num_rows or gm_max >= source_table._num_rows:
             raise IndexError(f"Gather map index with min {gm_min},"
                              f" max {gm_max} is out of bounds in"
-                             f" {type(source_table)} with {len(source_table)}"
+                             f" {type(source_table)} with {source_table._num_rows}"
                              f" rows.")
 
     cdef unique_ptr[table] c_result

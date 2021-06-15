@@ -261,6 +261,8 @@ class ColumnBase(Column, Serializable):
             return cudf.core.column.IntervalColumn.from_arrow(array)
         elif isinstance(array.type, pa.Decimal128Type):
             return cudf.core.column.DecimalColumn.from_arrow(array)
+        elif isinstance(array.type, pa.DictionaryType):
+            return cudf.core.column.CategoricalColumn.from_arrow(array)
 
         result = libcudf.interop.from_arrow(data, data.column_names)._data[
             "None"
@@ -1474,18 +1476,9 @@ def build_categorical_column(
     offset: int = 0,
     null_count: int = None,
     ordered: bool = None,
-    internal_categories: ColumnBase = None
 ) -> "cudf.core.column.CategoricalColumn":
     """
     Build a CategoricalColumn
-
-    When building a `CategoricalColumn` partly from a pre-existing
-    `CategoricalColumn`, notice that libcudf dictionary type columns does
-    not have ordering for categories. Thus `internal_categories` column may
-    have different ordering to `categories`. And because `codes` always map
-    to `internal_categories`, users should make sure such information is passed
-    down properly to the new column.
-
     Parameters
     ----------
     categories : Column
@@ -1499,13 +1492,11 @@ def build_categorical_column(
     offset : int, optional
     ordered : bool
         Indicates whether the categories are ordered
-    internal_categories : Column
-        Internally stored categories. Order is dependent on underlying 
-        implementation. `codes` should match to `internal_categories` at all
-        times.
     """
-
-    internal_categories = categories if internal_categories is None else categories
+    codes_dtype = min_unsigned_type(len(categories))
+    codes = as_column(codes)
+    if codes.dtype != codes_dtype:
+        codes = codes.astype(codes_dtype)
 
     dtype = CategoricalDtype(categories=categories, ordered=ordered)
 
@@ -1516,7 +1507,7 @@ def build_categorical_column(
         size=size,
         offset=offset,
         null_count=null_count,
-        children=(codes, internal_categories),
+        children=(codes,),
     )
     return cast("cudf.core.column.CategoricalColumn", result)
 

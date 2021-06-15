@@ -5,7 +5,7 @@ from cudf.core.column.column import (
     ColumnBase,
     arange,
     as_column,
-    # build_categorical_column,
+    build_categorical_column,
     build_column,
     build_list_column,
     build_struct_column,
