@@ -75,9 +75,9 @@ struct scan_dispatcher {
   }
 
   // for arithmetic types
-  template <typename T, std::enable_if_t<std::is_arithmetic<T>::value, T>* = nullptr>
+  template <typename T, std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
   auto inclusive_scan(const column_view& input_view,
-                      null_policy null_handling,
+                      null_policy,
                       rmm::cuda_stream_view stream,
                       rmm::mr::device_memory_resource* mr)
   {
@@ -96,9 +96,9 @@ struct scan_dispatcher {
   }
 
   // for string type: only MIN and MAX are supported
-  template <typename T, std::enable_if_t<is_string_supported<T>(), T>* = nullptr>
+  template <typename T, std::enable_if_t<is_string_supported<T>()>* = nullptr>
   std::unique_ptr<column> inclusive_scan(const column_view& input_view,
-                                         null_policy null_handling,
+                                         null_policy,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
   {
@@ -126,7 +126,7 @@ struct scan_dispatcher {
    *
    * @tparam T type of input column
    */
-  template <typename T, typename std::enable_if_t<is_supported<T>(), T>* = nullptr>
+  template <typename T, typename std::enable_if_t<is_supported<T>()>* = nullptr>
   std::unique_ptr<column> operator()(const column_view& input,
                                      null_policy null_handling,
                                      rmm::cuda_stream_view stream,
@@ -135,11 +135,8 @@ struct scan_dispatcher {
     return inclusive_scan<T>(input, null_handling, stream, mr);
   }
 
-  template <typename T, typename std::enable_if_t<!is_supported<T>(), T>* = nullptr>
-  std::unique_ptr<column> operator()(const column_view& input,
-                                     null_policy null_handling,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+  template <typename T, typename... Args>
+  std::enable_if_t<!is_supported<T>(), std::unique_ptr<column>> operator()(Args&&...)
   {
     CUDF_FAIL("Non-arithmetic types not supported for inclusive scan");
   }
