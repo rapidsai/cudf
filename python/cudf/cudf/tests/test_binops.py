@@ -2870,3 +2870,37 @@ def generate_test_null_equals_columnops_data():
 )
 def test_null_equals_columnops(lcol, rcol, ans, case):
     assert lcol._null_equals(rcol).all() == ans
+
+
+@pytest.mark.parametrize("cmpop", _cmpops)
+@pytest.mark.parametrize("dtypes", _series_compare_nulls_typegen())
+def test_series_compare_nulls_nan_comparison(cmpop, dtypes):
+    ltype, rtype = dtypes
+
+    ldata = [1, 2, None, None, 5]
+    rdata = [2, 1, None, 4, None]
+
+    lser = Series(ldata, dtype=ltype)
+    rser = Series(rdata, dtype=rtype)
+
+    expect = cmpop(lser, rser)
+    got = cmpop(lser, rser)
+
+    with cudf._config.option_context("_nulls_compare_like_nans", True):
+        utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("op", _cmpops)
+def test_decimal_compare_nan_comparison(op):
+    lser = cudf.Series(
+        [1, 2, None, 3], dtype=cudf.Decimal64Dtype(scale=2, precision=2)
+    )
+    rser = cudf.Series(
+        [1, 4, None, None], dtype=cudf.Decimal64Dtype(scale=2, precision=2)
+    )
+
+    expect = op(lser.to_pandas(), rser.to_pandas())
+
+    with cudf._config.option_context("_nulls_compare_like_nans", True):
+        got = op(lser, rser)
+    utils.assert_eq(expect, got)
