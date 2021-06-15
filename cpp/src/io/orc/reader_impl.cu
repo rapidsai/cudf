@@ -231,7 +231,6 @@ class aggregate_orc_metadata {
 
  public:
   mutable std::vector<cudf::io::orc::metadata> per_file_metadata;
-  mutable std::vector<cudf::io::orc::metadata::stripe_source_mapping> stripe_source_mappings;
   size_type const num_rows;
   size_type const num_columns;
   size_type const num_stripes;
@@ -312,9 +311,9 @@ class aggregate_orc_metadata {
 
   auto get_col_type(int col_idx) const { return per_file_metadata[0].ff.types[col_idx]; }
 
-  auto get_num_rows() const { return num_rows; }
+  size_type get_num_rows() const { return num_rows; }
 
-  auto get_num_cols() const { return num_columns; }
+  size_type get_num_cols() const { return per_file_metadata[0].get_num_columns(); }
 
   auto get_num_stripes() const { return num_stripes; }
 
@@ -323,16 +322,6 @@ class aggregate_orc_metadata {
   auto get_types() const { return per_file_metadata[0].ff.types; }
 
   int get_row_index_stride() const { return per_file_metadata[0].ff.rowIndexStride; }
-
-  auto get_post_script_for_metadata(int metadata_idx) const
-  {
-    return per_file_metadata[metadata_idx].ps;
-  }
-
-  auto get_file_footer_for_metadata(int metadata_idx) const
-  {
-    return per_file_metadata[metadata_idx].ff;
-  }
 
   auto get_column_name(const int source_idx, const int column_idx) const
   {
@@ -371,7 +360,6 @@ class aggregate_orc_metadata {
             std::make_pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
           row_count += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
         }
-
         selected_stripes_mapping.push_back(
           {static_cast<int>(src_file_idx), stripe_idxs, stripe_infos});
       }
@@ -393,7 +381,7 @@ class aggregate_orc_metadata {
 
         for (size_t stripe_idx = 0; stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size();
              ++stripe_idx) {
-          count += per_file_metadata[src_file_idx].ff.numberOfRows;
+          count += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
           if (count > row_start || count == 0) {
             stripe_idxs.push_back(stripe_idx);
             stripe_infos.push_back(
@@ -411,9 +399,17 @@ class aggregate_orc_metadata {
     if (not selected_stripes_mapping.empty()) {
       for (auto &mapping : selected_stripes_mapping) {
         // Resize to all stripe_info for the source level
-        per_file_metadata[mapping.source_idx].stripefooters.resize(mapping.stripe_info.size());
-        for (auto &stripe_idx : mapping.stripe_idx_in_source) {
-          const auto stripe         = mapping.stripe_info[stripe_idx].first;
+
+        // Get the number of unique stripes since the same stripes could be specified more than once
+        // by the user
+        // size_t uniqueCount = std::unique(mapping.stripe_idx_in_source.begin(),
+        // mapping.stripe_idx_in_source.end()) - mapping.stripe_idx_in_source.begin();
+        per_file_metadata[mapping.source_idx].stripefooters.resize(
+          mapping.stripe_idx_in_source.size());
+
+        for (size_t i = 0; i < mapping.stripe_idx_in_source.size(); i++) {
+          // int stripe_idx            = mapping.stripe_idx_in_source[i];
+          const auto stripe         = mapping.stripe_info[i].first;
           const auto sf_comp_offset = stripe->offset + stripe->indexLength + stripe->dataLength;
           const auto sf_comp_length = stripe->footerLength;
           CUDF_EXPECTS(
@@ -425,9 +421,8 @@ class aggregate_orc_metadata {
           auto sf_data     = per_file_metadata[mapping.source_idx].decompressor->Decompress(
             buffer->data(), sf_comp_length, &sf_length);
           ProtobufReader(sf_data, sf_length)
-            .read(per_file_metadata[mapping.source_idx].stripefooters[stripe_idx]);
-          mapping.stripe_info[stripe_idx].second =
-            &per_file_metadata[mapping.source_idx].stripefooters[stripe_idx];
+            .read(per_file_metadata[mapping.source_idx].stripefooters[i]);
+          mapping.stripe_info[i].second = &per_file_metadata[mapping.source_idx].stripefooters[i];
         }
       }
     }

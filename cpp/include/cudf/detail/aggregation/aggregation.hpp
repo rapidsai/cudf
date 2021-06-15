@@ -581,7 +581,7 @@ class collect_list_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived aggregation class for specifying COLLECT_SET aggregation
  */
-class collect_set_aggregation final : public aggregation {
+class collect_set_aggregation final : public rolling_aggregation {
  public:
   explicit collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE,
                                    null_equality nulls_equal = null_equality::EQUAL,
@@ -784,9 +784,10 @@ struct target_type_impl<Source, aggregation::ALL> {
 // Except for chrono types where result is chrono. (Use FloorDiv)
 // TODO: MEAN should be only be enabled for duration types - not for timestamps
 template <typename Source, aggregation::Kind k>
-struct target_type_impl<Source,
-                        k,
-                        std::enable_if_t<!is_chrono<Source>() && (k == aggregation::MEAN)>> {
+struct target_type_impl<
+  Source,
+  k,
+  std::enable_if_t<is_fixed_width<Source>() && !is_chrono<Source>() && (k == aggregation::MEAN)>> {
   using type = double;
 };
 
@@ -1032,7 +1033,7 @@ template <typename Element>
 struct dispatch_aggregation {
 #pragma nv_exec_check_disable
   template <aggregation::Kind k, typename F, typename... Ts>
-  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(F&& f, Ts&&... args) const noexcept
+  CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(F&& f, Ts&&... args) const
   {
     return f.template operator()<Element, k>(std::forward<Ts>(args)...);
   }
@@ -1043,7 +1044,7 @@ struct dispatch_source {
   template <typename Element, typename F, typename... Ts>
   CUDA_HOST_DEVICE_CALLABLE decltype(auto) operator()(aggregation::Kind k,
                                                       F&& f,
-                                                      Ts&&... args) const noexcept
+                                                      Ts&&... args) const
   {
     return aggregation_dispatcher(
       k, dispatch_aggregation<Element>{}, std::forward<F>(f), std::forward<Ts>(args)...);

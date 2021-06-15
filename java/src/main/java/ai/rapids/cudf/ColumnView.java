@@ -1299,13 +1299,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
     long nativePtr = agg.createNativeInstance();
     try {
+      Scalar p = options.getPrecedingScalar();
+      Scalar f = options.getFollowingScalar();
       return new ColumnVector(
           rollingWindow(this.getNativeView(),
               agg.getDefaultOutput(),
               options.getMinPeriods(),
               nativePtr,
-              options.getPreceding(),
-              options.getFollowing(),
+              p == null || !p.isValid() ? 0 : p.getInt(),
+              f == null || !f.isValid() ? 0 : f.getInt(),
               options.getPrecedingCol() == null ? 0 : options.getPrecedingCol().getNativeView(),
               options.getFollowingCol() == null ? 0 : options.getFollowingCol().getNativeView()));
     } finally {
@@ -2114,6 +2116,84 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(substringColumn(getNativeView(), start.getNativeView(), end.getNativeView()));
   }
 
+  /**
+   * Given a lists column of strings (each row is a list of strings), concatenates the strings
+   * within each row and returns a single strings column result. Each new string is created by
+   * concatenating the strings from the same row (same list element) delimited by the separator
+   * provided. This version of the function relaces nulls with empty string and returns null
+   * for empty list.
+   * @param sepCol strings column that provides separators for concatenation.
+   * @return A new java column vector containing the concatenated strings with separator between.
+   */
+  public final ColumnVector stringConcatenateListElements(ColumnView sepCol) {
+    try (Scalar nullString = Scalar.fromString(null);
+         Scalar emptyString = Scalar.fromString("")) {
+      return stringConcatenateListElements(sepCol, nullString, emptyString,
+          false, false);
+    }
+  }
+
+  /**
+   * Given a lists column of strings (each row is a list of strings), concatenates the strings
+   * within each row and returns a single strings column result.
+   * Each new string is created by concatenating the strings from the same row (same list element)
+   * delimited by the row separator provided in the sepCol strings column.
+   * @param sepCol strings column that provides separators for concatenation.
+   * @param separatorNarep string scalar indicating null behavior when a separator is null.
+   *                        If set to null and the separator is null the resulting string will
+   *                        be null. If not null, this string will be used in place of a null
+   *                        separator.
+   * @param stringNarep string that should be used to replace null strings in any non-null list
+   *                     row. If set to null and the string is null the resulting string will
+   *                     be null. If not null, this string will be used in place of a null value.
+   * @param separateNulls if true, then the separator is included for null rows if
+   *                       `stringNarep` is valid.
+   * @param emptyStringOutputIfEmptyList if set to true, any input row that is an empty list
+   *                          will result in an empty string. Otherwise, it will result in a null.
+   * @return A new java column vector containing the concatenated strings with separator between.
+   */
+  public final ColumnVector stringConcatenateListElements(ColumnView sepCol,
+      Scalar separatorNarep, Scalar stringNarep, boolean separateNulls,
+      boolean emptyStringOutputIfEmptyList) {
+    assert type.equals(DType.LIST) : "column type must be a list";
+    assert separatorNarep != null : "separator narep scalar provided may not be null";
+    assert stringNarep != null : "string narep scalar provided may not be null";
+    assert separatorNarep.getType().equals(DType.STRING) : "separator naprep scalar must be a string scalar";
+    assert stringNarep.getType().equals(DType.STRING) : "string narep scalar must be a string scalar";
+
+    return new ColumnVector(stringConcatenationListElementsSepCol(getNativeView(),
+      sepCol.getNativeView(), separatorNarep.getScalarHandle(), stringNarep.getScalarHandle(),
+      separateNulls, emptyStringOutputIfEmptyList));
+  }
+
+  /**
+   * Given a lists column of strings (each row is a list of strings), concatenates the strings
+   * within each row and returns a single strings column result. Each new string is created by
+   * concatenating the strings from the same row (same list element) delimited by the
+   * separator provided.
+   * @param separator string scalar inserted between each string being merged.
+   * @param narep string scalar indicating null behavior. If set to null and any string in the row
+   *              is null the resulting string will be null. If not null, null values in any
+   *              column will be replaced by the specified string. The underlying value in the
+   *              string scalar may be null, but the object passed in may not.
+   * @param separateNulls if true, then the separator is included for null rows if
+   *                       `narep` is valid.
+   * @param emptyStringOutputIfEmptyList if set to true, any input row that is an empty list
+   *                          will result in an empty string. Otherwise, it will result in a null.
+   * @return A new java column vector containing the concatenated strings with separator between.
+   */
+  public final ColumnVector stringConcatenateListElements(Scalar separator,
+      Scalar narep, boolean separateNulls, boolean emptyStringOutputIfEmptyList) {
+    assert type.equals(DType.LIST) : "column type must be a list";
+    assert separator != null : "separator scalar provided may not be null";
+    assert narep != null : "column narep scalar provided may not be null";
+    assert narep.getType().equals(DType.STRING) : "narep scalar must be a string scalar";
+
+    return new ColumnVector(stringConcatenationListElements(getNativeView(),
+        separator.getScalarHandle(), narep.getScalarHandle(), separateNulls,
+        emptyStringOutputIfEmptyList));
+  }
+
    /**
    * Apply a JSONPath string to all rows in an input strings column.
    *
@@ -2535,6 +2615,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(mapLookup(getNativeView(), key.getScalarHandle()));
   }
 
+  /** For a column of type List<Struct<String, String>> and a passed in String key, return a boolean
+   * column for all keys in the structs, It is true if the key exists in the corresponding map for
+   * that row, false otherwise. It will never return null for a row.
+   * @param key the String scalar to lookup in the column
+   * @return a boolean column based on the lookup result
+   */
+  public final ColumnVector getMapKeyExistence(Scalar key) {
+    assert type.equals(DType.LIST) : "column type must be a LIST";
+    assert key != null : "target string may not be null";
+    assert key.getType().equals(DType.STRING) : "target must be a string scalar";
+
+    return new ColumnVector(mapContains(getNativeView(), key.getScalarHandle()));
+  }
 
   /**
    * Create a new struct column view of existing column views. Note that this will NOT copy
@@ -2645,6 +2738,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(listContainsColumn(getNativeView(), key.getNativeView()));
   }
 
+  /**
+   * Get a single item from the column at the specified index as a Scalar.
+   *
+   * Be careful. This is expensive and may involve running a kernel to copy the data out.
+   *
+   * @param index the index to look at
+   * @return the value at that index as a scalar.
+   * @throws CudfException if the index is out of bounds.
+   */
+  public final Scalar getScalarElement(int index) {
+    return new Scalar(getType(), getElement(getNativeView(), index));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -2696,6 +2802,60 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *         by the timestampToLong method.
    */
   private static native long stringTimestampToTimestamp(long viewHandle, int unit, String format);
+
+  /**
+   * Native method to concatenate a list column of strings (each row is a list of strings),
+   * concatenates the strings within each row and returns a single strings column result.
+   * Each new string is created by concatenating the strings from the same row (same list element)
+   * delimited by the row separator provided in the `separators` strings column.
+   * @param listColumnHandle long holding the native handle of the column containing lists of strings
+   *                         to concatenate.
+   * @param sepColumn long holding the native handle of the strings column that provides separators
+   *                  for concatenation.
+   * @param separatorNarep string scalar indicating null behavior when a separator is null.
+   *                       If set to null and the separator is null the resulting string will
+   *                       be null. If not null, this string will be used in place of a null
+   *                       separator.
+   * @param colNarep string String scalar that should be used in place of any null strings
+   *                 found in any column.
+   * @param separateNulls boolean if true, then the separator is included for null rows if
+   *                     `colNarep` is valid.
+   * @param emptyStringOutputIfEmptyList boolean if true, any input row that is an empty list
+   *                                     will result in an empty string. Otherwise, it will
+   *                                     result in a null.
+   * @return native handle of the resulting cudf column, used to construct the Java column.
+   */
+  private static native long stringConcatenationListElementsSepCol(long listColumnHandle,
+                                                                   long sepColumn,
+                                                                   long separatorNarep,
+                                                                   long colNarep,
+                                                                   boolean separateNulls,
+                                                                   boolean emptyStringOutputIfEmptyList);
+
+  /**
+   * Native method to concatenate a list column of strings (each row is a list of strings),
+   * concatenates the strings within each row and returns a single strings column result.
+   * Each new string is created by concatenating the strings from the same row (same list element)
+   * delimited by the separator provided.
+   * @param listColumnHandle long holding the native handle of the column containing lists of strings
+   *                     to concatenate.
+   * @param separator string scalar inserted between each string being merged, may not be null.
+   * @param narep string scalar indicating null behavior. If set to null and any string in the row
+   *              is null the resulting string will be null. If not null, null values in any
+   *              column will be replaced by the specified string. The underlying value in the
+   *              string scalar may be null, but the object passed in may not.
+   * @param separateNulls boolean if true, then the separator is included for null rows if
+   *                      `narep` is valid.
+   * @param emptyStringOutputIfEmptyList boolean if true, any input row that is an empty list
+   *                                     will result in an empty string. Otherwise, it will
+   *                                     result in a null.
+   * @return native handle of the resulting cudf column, used to construct the Java column.
+   */
+  private static native long stringConcatenationListElements(long listColumnHandle,
+                                                             long separator,
+                                                             long narep,
+                                                             boolean separateNulls,
+                                                             boolean emptyStringOutputIfEmptyList);
 
   private static native long getJSONObject(long viewHandle, long scalarHandle) throws CudfException;
 
@@ -2853,6 +3013,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @throws CudfException
    */
   private static native long mapLookup(long columnView, long key) throws CudfException;
+
+  /**
+   * Native method for check the existence of a key over a column of List<Struct<String,String>>
+   * @param columnView the column view handle of the map
+   * @param key the string scalar that is the key for lookup
+   * @return boolean column handle of the result
+   * @throws CudfException
+   */
+  private static native long mapContains(long columnView, long key) throws CudfException;
   /**
    * Native method to add zeros as padding to the left of each string.
    */
@@ -2885,6 +3054,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return column handle of the resultant
    */
   private static native long listContainsColumn(long nativeView, long keyColumn);
+
+  private static native long getElement(long nativeView, int index);
 
   private static native long castTo(long nativeHandle, int type, int scale);
 
