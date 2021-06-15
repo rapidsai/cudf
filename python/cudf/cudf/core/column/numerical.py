@@ -114,6 +114,17 @@ class NumericalColumn(NumericalBaseColumn):
 
         return output
 
+    def __invert__(self):
+        """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
+        if np.issubdtype(self.dtype, np.integer):
+            return self.unary_operator("invert")
+        elif np.issubdtype(self.dtype, np.bool_):
+            return self.unary_operator("not")
+        else:
+            raise TypeError(
+                f"Operation `~` not supported on {self.dtype.type.__name__}"
+            )
+
     def unary_operator(self, unaryop: str) -> ColumnBase:
         return _numeric_column_unaryop(self, op=unaryop)
 

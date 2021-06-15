@@ -1,5 +1,5 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
 
+# Copyright (c) 2021, NVIDIA CORPORATION.
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr, shared_ptr, make_shared
 from libcpp.utility cimport move
@@ -35,5 +35,17 @@ def add_categories(Column category_column, Column new_categories):
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(add_keys(dict_view.get()[0], keys_view))
+    
+    return Column.from_unique_ptr(move(c_result))
+
+def remove_categories(Column category_column, Column categories_to_remove):
+    cdef column_view keys_view = categories_to_remove.view()
+
+    cdef shared_ptr[dictionary_column_view] dict_view = (
+        make_shared[dictionary_column_view](category_column.view())
+    )
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(remove_keys(dict_view.get()[0], keys_view))
     
     return Column.from_unique_ptr(move(c_result))

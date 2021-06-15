@@ -261,8 +261,6 @@ class ColumnBase(Column, Serializable):
             return cudf.core.column.IntervalColumn.from_arrow(array)
         elif isinstance(array.type, pa.Decimal128Type):
             return cudf.core.column.DecimalColumn.from_arrow(array)
-        elif isinstance(array.type, pa.DictionaryType):
-            return cudf.core.column.CategoricalColumn.from_arrow(array)
 
         result = libcudf.interop.from_arrow(data, data.column_names)._data[
             "None"
@@ -884,48 +882,47 @@ class ColumnBase(Column, Serializable):
             return self.as_numerical_column(dtype)
 
     def as_categorical_column(self, dtype, **kwargs) -> ColumnBase:
-        pass
-        # if "ordered" in kwargs:
-        #     ordered = kwargs["ordered"]
-        # else:
-        #     ordered = False
+        if "ordered" in kwargs:
+            ordered = kwargs["ordered"]
+        else:
+            ordered = False
 
-        # sr = cudf.Series(self)
+        sr = cudf.Series(self)
 
-        # # Re-label self w.r.t. the provided categories
-        # if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
-        #     labels = sr.label_encoding(cats=dtype.categories)
-        #     if "ordered" in kwargs:
-        #         warnings.warn(
-        #             "Ignoring the `ordered` parameter passed in `**kwargs`, "
-        #             "will be using `ordered` parameter of CategoricalDtype"
-        #         )
+        # Re-label self w.r.t. the provided categories
+        if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
+            labels = sr.label_encoding(cats=dtype.categories)
+            if "ordered" in kwargs:
+                warnings.warn(
+                    "Ignoring the `ordered` parameter passed in `**kwargs`, "
+                    "will be using `ordered` parameter of CategoricalDtype"
+                )
+            
+            return build_categorical_column(
+                categories=as_column(dtype.categories),
+                codes=labels._column,
+                mask=self.mask,
+                ordered=dtype.ordered,
+            )
 
-        #     return build_categorical_column(
-        #         categories=dtype.categories,
-        #         codes=labels._column,
-        #         mask=self.mask,
-        #         ordered=dtype.ordered,
-        #     )
+        cats = sr.unique().astype(sr.dtype)
+        label_dtype = min_unsigned_type(len(cats))
+        labels = sr.label_encoding(cats=cats, dtype=label_dtype, na_sentinel=1)
 
-        # cats = sr.unique().astype(sr.dtype)
-        # label_dtype = min_unsigned_type(len(cats))
-        # labels = sr.label_encoding(cats=cats, dtype=label_dtype, na_sentinel=1)
+        # columns include null index in factorization; remove:
+        if self.has_nulls:
+            cats = cats._column.dropna(drop_nan=False)
+            min_type = min_unsigned_type(len(cats), 8)
+            labels = labels - 1
+            if np.dtype(min_type).itemsize < labels.dtype.itemsize:
+                labels = labels.astype(min_type)
 
-        # # columns include null index in factorization; remove:
-        # if self.has_nulls:
-        #     cats = cats._column.dropna(drop_nan=False)
-        #     min_type = min_unsigned_type(len(cats), 8)
-        #     labels = labels - 1
-        #     if np.dtype(min_type).itemsize < labels.dtype.itemsize:
-        #         labels = labels.astype(min_type)
-
-        # return build_categorical_column(
-        #     categories=cats,
-        #     codes=labels._column,
-        #     mask=self.mask,
-        #     ordered=ordered,
-        # )
+        return build_categorical_column(
+            categories=cats,
+            codes=labels._column,
+            mask=self.mask,
+            ordered=ordered,
+        )
 
     def as_numerical_column(
         self, dtype: Dtype
@@ -1493,11 +1490,8 @@ def build_categorical_column(
     ordered : bool
         Indicates whether the categories are ordered
     """
-    codes_dtype = min_unsigned_type(len(categories))
-    codes = as_column(codes)
-    if codes.dtype != codes_dtype:
-        codes = codes.astype(codes_dtype)
 
+    codes = as_column(codes, dtype="uint32")
     dtype = CategoricalDtype(categories=categories, ordered=ordered)
 
     result = build_column(
@@ -1507,7 +1501,7 @@ def build_categorical_column(
         size=size,
         offset=offset,
         null_count=null_count,
-        children=(codes,),
+        children=(codes, categories),
     )
     return cast("cudf.core.column.CategoricalColumn", result)
 

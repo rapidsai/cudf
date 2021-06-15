@@ -53,6 +53,12 @@ class CategoricalDtype(_BaseDtype):
         return "|O08"
 
     @classmethod
+    def from_arrow(cls, typ: pa.DictionaryType) -> "CategoricalDtype":
+        # pyarrow `DictionaryType` has no category information, return a
+        # placeholder here, where real categories are updated later
+        return CategoricalDtype(categories=None, ordered=typ.ordered)
+
+    @classmethod
     def from_pandas(cls, dtype: pd.CategoricalDtype) -> "CategoricalDtype":
         return CategoricalDtype(
             categories=dtype.categories, ordered=dtype.ordered
