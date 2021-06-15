@@ -1,17 +1,20 @@
-from . import classes
+import operator
+
+from llvmlite import ir
+from numba.core import cgutils
+from numba.core.typing import signature as nb_signature
 from numba.cuda.cudaimpl import (
     lower as cuda_lower,
+    registry as cuda_impl_registry,
     registry as cuda_lowering_registry,
 )
-from numba.core.typing import signature as nb_signature
-from cudf.core.udf.typing import MaskedType, NAType
-from numba.core import cgutils
-from numba.cuda.cudaimpl import registry as cuda_impl_registry
-import operator
 from numba.extending import lower_builtin, types
-from llvmlite import ir
 
+from cudf.core.udf.typing import MaskedType, NAType
+
+from . import classes
 from ._ops import arith_ops, comparison_ops
+
 
 @cuda_lowering_registry.lower_constant(NAType)
 def constant_na(context, builder, ty, pyval):
@@ -25,15 +28,17 @@ def constant_na(context, builder, ty, pyval):
 # the implementation details of how to do that. This is where
 # we can involve both validities in constructing the answer
 
+
 def make_arithmetic_op(op):
-    '''
+    """
     Make closures that implement arithmetic operations. See
     register_arithmetic_op for details.
-    '''
+    """
+
     def masked_scalar_op_impl(context, builder, sig, args):
-        '''
+        """
         Implement `MaskedType` + `MaskedType`
-        '''
+        """
         # MaskedType(...), MaskedType(...)
         masked_type_1, masked_type_2 = sig.args
         # MaskedType(...)
@@ -49,8 +54,9 @@ def make_arithmetic_op(op):
         )
 
         # we will return an output struct
-        result = cgutils.create_struct_proxy(masked_return_type)(context,
-                                                                 builder)
+        result = cgutils.create_struct_proxy(masked_return_type)(
+            context, builder
+        )
 
         # compute output validity
         valid = builder.and_(m1.valid, m2.valid)
@@ -65,16 +71,17 @@ def make_arithmetic_op(op):
                 nb_signature(
                     masked_return_type.value_type,
                     masked_type_1.value_type,
-                    masked_type_2.value_type
+                    masked_type_2.value_type,
                 ),
-                (m1.value, m2.value)
+                (m1.value, m2.value),
             )
         return result._getvalue()
+
     return masked_scalar_op_impl
 
 
 def register_arithmetic_op(op):
-    '''
+    """
     Register a lowering implementation for the
     arithmetic op `op`.
 
@@ -85,17 +92,17 @@ def register_arithmetic_op(op):
 
     This function makes and lowers a closure for one op.
 
-    '''
+    """
     to_lower_op = make_arithmetic_op(op)
     cuda_lower(op, MaskedType, MaskedType)(to_lower_op)
 
 
 def masked_scalar_null_op_impl(context, builder, sig, args):
-    '''
+    """
     Implement `MaskedType` + `NAType`
     The answer to this is known up front so no actual addition
     needs to take place
-    '''
+    """
 
     return_type = sig.return_type  # MaskedType(...)
     result = cgutils.create_struct_proxy(MaskedType(return_type.value_type))(
@@ -109,9 +116,9 @@ def masked_scalar_null_op_impl(context, builder, sig, args):
 
 def make_const_op(op):
     def masked_scalar_const_op_impl(context, builder, sig, args):
-        '''
+        """
         Implement `MaskedType` + constant
-        '''
+        """
         masked_type, const_type = sig.args
         masked_value, numeric_value = args
 
@@ -130,16 +137,16 @@ def make_const_op(op):
                 builder,
                 lambda x, y: op(x, y),
                 nb_signature(
-                    return_type.value_type,
-                    masked_type.value_type,
-                    const_type
+                    return_type.value_type, masked_type.value_type, const_type
                 ),
-                (indata.value, numeric_value)
+                (indata.value, numeric_value),
             )
             result.valid = context.get_constant(types.boolean, 1)
 
         return result._getvalue()
+
     return masked_scalar_const_op_impl
+
 
 def make_reflected_const_op(op):
     def masked_scalar_reflected_const_op_impl(context, builder, sig, args):
@@ -161,17 +168,16 @@ def make_reflected_const_op(op):
                 builder,
                 lambda x, y: op(x, y),
                 nb_signature(
-                    return_type.value_type,
-                    const_type,
-                    masked_type.value_type
+                    return_type.value_type, const_type, masked_type.value_type
                 ),
-                (numeric_value, indata.value)
+                (numeric_value, indata.value),
             )
             result.valid = context.get_constant(types.boolean, 1)
 
         return result._getvalue()
+
     return masked_scalar_reflected_const_op_impl
-        
+
 
 def register_const_op(op):
     to_lower_op = make_const_op(op)
@@ -193,9 +199,9 @@ for op in arith_ops + comparison_ops:
 @cuda_lower(operator.is_, MaskedType, NAType)
 @cuda_lower(operator.is_, NAType, MaskedType)
 def masked_scalar_is_null_impl(context, builder, sig, args):
-    '''
+    """
     Implement `MaskedType` is `NA`
-    '''
+    """
     if isinstance(sig.args[1], NAType):
         masked_type, na = sig.args
         value = args[0]
@@ -255,8 +261,9 @@ def cast_na_to_masked(context, builder, fromty, toty, val):
 @cuda_impl_registry.lower_cast(MaskedType, MaskedType)
 def cast_masked_to_masked(context, builder, fromty, toty, val):
     operand = cgutils.create_struct_proxy(fromty)(context, builder, value=val)
-    casted = context.cast(builder, operand.value, fromty.value_type,
-                          toty.value_type)
+    casted = context.cast(
+        builder, operand.value, fromty.value_type, toty.value_type
+    )
     ext = cgutils.create_struct_proxy(toty)(context, builder)
     ext.value = casted
     ext.valid = operand.valid

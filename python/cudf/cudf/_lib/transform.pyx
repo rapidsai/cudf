@@ -122,6 +122,7 @@ def transform(Column input, op):
 
     return Column.from_unique_ptr(move(c_output))
 
+
 def masked_udf(Table incols, op, output_type):
     cdef table_view data_view = incols.data_view()
     cdef string c_str = op.encode("UTF-8")

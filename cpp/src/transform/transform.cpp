@@ -128,7 +128,6 @@ void generalized_operation(table_view data_view,
     kernel_args.push_back(&data_ptrs[col_idx]);
     kernel_args.push_back(&mask_ptrs[col_idx]);
     kernel_args.push_back(&offsets[col_idx]);
-
   }
 
   rmm::cuda_stream_view generic_stream;

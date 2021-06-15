@@ -4740,7 +4740,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         return func(self)
 
-
     @applyutils.doc_apply()
     def apply_rows(
         self,

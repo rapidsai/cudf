@@ -1,23 +1,33 @@
-from . import classes
-from numba import types
-from cudf.core.scalar import _NAType
-from numba.core.extending import (typeof_impl, register_model, models,
-                                  make_attribute_wrapper)
-from numba.cuda.cudadecl import registry as cuda_decl_registry
-from numba.core.typing.templates import (AbstractTemplate, AttributeTemplate,
-                                         ConcreteTemplate)
-from numba.core.typing import signature as nb_signature
-from numba.core.typing.typeof import typeof
-
-
 import operator
+
+from numba import types
+from numba.core.extending import (
+    make_attribute_wrapper,
+    models,
+    register_model,
+    typeof_impl,
+)
+from numba.core.typing import signature as nb_signature
+from numba.core.typing.templates import (
+    AbstractTemplate,
+    AttributeTemplate,
+    ConcreteTemplate,
+)
+from numba.core.typing.typeof import typeof
+from numba.cuda.cudadecl import registry as cuda_decl_registry
+
+from cudf.core.scalar import _NAType
+
+from . import classes
 from ._ops import arith_ops, comparison_ops
 
+
 class MaskedType(types.Type):
-    '''
+    """
     A Numba type consisting of a value of some primitive type
     and a validity boolean, over which we can define math ops
-    '''
+    """
+
     def __init__(self, value):
         # MaskedType in Numba shall be parameterized
         # with a value type
@@ -30,14 +40,14 @@ class MaskedType(types.Type):
         return f"MaskedType({self.value_type})"
 
     def __hash__(self):
-        '''
+        """
         Needed so that numba caches type instances with different
         `value_type` separately.
-        '''
+        """
         return self.__repr__().__hash__()
 
     def unify(self, context, other):
-        '''
+        """
         Logic for sorting out what to do when the UDF conditionally
         returns a `MaskedType`, an `NAType`, or a literal based off
         the data at runtime.
@@ -65,14 +75,16 @@ class MaskedType(types.Type):
         numba now sees this as
         f(x: MaskedType(dtype_1), y: MaskedType(dtype_2))
           -> MaskedType(dtype_unified)
-        '''
+        """
 
         # If we have Masked and NA, the output should be a
         # MaskedType with the original type as its value_type
         if isinstance(other, NAType):
             return self
         elif isinstance(other, MaskedType):
-            return MaskedType(context.unify_pairs(self.value_type, other.value_type))
+            return MaskedType(
+                context.unify_pairs(self.value_type, other.value_type)
+            )
 
         # if we have MaskedType and something that results in a
         # scalar, unify between the MaskedType's value_type
@@ -108,13 +120,15 @@ def typeof_masked(val, c):
 class MaskedConstructor(ConcreteTemplate):
     key = classes.Masked
 
-    cases = [nb_signature(MaskedType(t), t, types.boolean)
-             for t in (types.integer_domain | types.real_domain)]
+    cases = [
+        nb_signature(MaskedType(t), t, types.boolean)
+        for t in (types.integer_domain | types.real_domain)
+    ]
 
 
 # Provide access to `m.value` and `m.valid` in a kernel for a Masked `m`.
-make_attribute_wrapper(MaskedType, 'value', 'value')
-make_attribute_wrapper(MaskedType, 'valid', 'valid')
+make_attribute_wrapper(MaskedType, "value", "value")
+make_attribute_wrapper(MaskedType, "valid", "valid")
 
 
 # Typing for `classes.Masked`
@@ -129,8 +143,9 @@ class ClassesTemplate(AttributeTemplate):
 # Registration of the global is also needed for Numba to type classes.Masked
 cuda_decl_registry.register_global(classes, types.Module(classes))
 # For typing bare Masked (as in `from .classes import Masked`
-cuda_decl_registry.register_global(classes.Masked,
-                                   types.Function(MaskedConstructor))
+cuda_decl_registry.register_global(
+    classes.Masked, types.Function(MaskedConstructor)
+)
 
 
 # Tell numba how `MaskedType` is constructed on the backend in terms
@@ -146,22 +161,23 @@ class MaskedModel(models.StructModel):
 
 
 class NAType(types.Type):
-    '''
+    """
     A type for handling ops against nulls
     Exists so we can:
     1. Teach numba that all occurances of `cudf.NA` are
        to be read as instances of this type instead
     2. Define ops like `if x is cudf.NA` where `x` is of
        type `Masked` to mean `if x.valid is False`
-    '''
+    """
+
     def __init__(self):
         super().__init__(name="NA")
 
     def unify(self, context, other):
-        '''
+        """
         Masked  <-> NA works from above
         Literal <-> NA -> Masked
-        '''
+        """
         if isinstance(other, MaskedType):
             # bounce to MaskedType.unify
             return None
@@ -177,11 +193,11 @@ na_type = NAType()
 
 @typeof_impl.register(_NAType)
 def typeof_na(val, c):
-    '''
+    """
     Tie instances of _NAType (cudf.NA) to our NAType.
     Effectively make it so numba sees `cudf.NA` as an
     instance of this NAType -> handle it accordingly.
-    '''
+    """
     return na_type
 
 
@@ -199,11 +215,11 @@ register_model(NAType)(models.OpaqueModel)
 # are parameterized with `value_type` and what flavor of `Masked` to return.
 class MaskedScalarArithOp(AbstractTemplate):
     def generic(self, args, kws):
-        '''
+        """
         Typing for `Masked` + `Masked`
         Numba expects a valid numba type to be returned if typing is successful
         else `None` signifies the error state (this is common across numba)
-        '''
+        """
         if isinstance(args[0], MaskedType) and isinstance(args[1], MaskedType):
             # In the case of op(Masked, Masked), the return type is a Masked
             # such that Masked.value is the primitive type that would have
@@ -211,41 +227,29 @@ class MaskedScalarArithOp(AbstractTemplate):
             return_type = self.context.resolve_function_type(
                 self.key, (args[0].value_type, args[1].value_type), kws
             ).return_type
-            return nb_signature(
-                MaskedType(return_type),
-                args[0],
-                args[1],
-            )
+            return nb_signature(MaskedType(return_type), args[0], args[1],)
 
 
 class MaskedScalarNullOp(AbstractTemplate):
     def generic(self, args, kws):
-        '''
+        """
         Typing for `Masked` + `NA`
         Handles situations like `x + cudf.NA`
-        '''
+        """
         if isinstance(args[0], MaskedType) and isinstance(args[1], NAType):
             # In the case of op(Masked, NA), the result has the same
             # dtype as the original regardless of what it is
-            return nb_signature(
-                args[0],
-                args[0],
-                na_type,
-            )
+            return nb_signature(args[0], args[0], na_type,)
         elif isinstance(args[0], NAType) and isinstance(args[1], MaskedType):
-            return nb_signature(
-                args[1],
-                na_type,
-                args[1]
-            )
+            return nb_signature(args[1], na_type, args[1])
 
 
 class MaskedScalarScalarOp(AbstractTemplate):
     def generic(self, args, kws):
-        '''
+        """
         Typing for `Masked` + a scalar.
         handles situations like `x + 1`
-        '''
+        """
         if isinstance(args[0], MaskedType) and isinstance(
             args[1], types.Number
         ):
@@ -254,56 +258,41 @@ class MaskedScalarScalarOp(AbstractTemplate):
             return_type = self.context.resolve_function_type(
                 self.key, (args[0].value_type, args[1]), kws
             ).return_type
-            return nb_signature(
-                MaskedType(return_type),
-                args[0],
-                args[1],
-            )
+            return nb_signature(MaskedType(return_type), args[0], args[1],)
         elif isinstance(args[0], types.Number) and isinstance(
             args[1], MaskedType
         ):
             return_type = self.context.resolve_function_type(
                 self.key, (args[1].value_type, args[0]), kws
             ).return_type
-            return nb_signature(
-                MaskedType(return_type),
-                args[0],
-                args[1],
-            )
+            return nb_signature(MaskedType(return_type), args[0], args[1],)
 
 
 @cuda_decl_registry.register_global(operator.is_)
 class MaskedScalarIsNull(AbstractTemplate):
-    '''
+    """
     Typing for `Masked is cudf.NA`
-    '''
+    """
+
     def generic(self, args, kws):
         if isinstance(args[0], MaskedType) and isinstance(args[1], NAType):
-            return nb_signature(
-                types.boolean,
-                args[0],
-                na_type)
+            return nb_signature(types.boolean, args[0], na_type)
         elif isinstance(args[1], MaskedType) and isinstance(args[0], NAType):
-            return nb_signature(
-                types.boolean,
-                na_type,
-                args[1])
+            return nb_signature(types.boolean, na_type, args[1])
 
 
 @cuda_decl_registry.register_global(operator.truth)
 class MaskedScalarTruth(AbstractTemplate):
-    '''
+    """
     Typing for `if Masked`
     Used for `if x > y`
     The truthiness of a MaskedType shall be the truthiness
     of the `value` stored therein
-    '''
+    """
+
     def generic(self, args, kws):
         if isinstance(args[0], MaskedType):
-            return nb_signature(
-                types.boolean,
-                MaskedType(types.boolean)
-            )
+            return nb_signature(types.boolean, MaskedType(types.boolean))
 
 
 for op in arith_ops + comparison_ops:
