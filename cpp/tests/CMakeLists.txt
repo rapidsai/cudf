@@ -202,10 +202,10 @@ ConfigureTest(COPYING_TEST
     copying/copy_range_tests.cpp
     copying/copy_tests.cu
     copying/detail_gather_tests.cu
+    copying/gather_list_tests.cpp
+    copying/gather_str_tests.cpp
     copying/gather_struct_tests.cpp
     copying/gather_tests.cpp
-    copying/gather_str_tests.cpp
-    copying/gather_list_tests.cpp
     copying/get_value_tests.cpp
     copying/pack_tests.cpp
     copying/sample_tests.cpp
