@@ -5107,6 +5107,54 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByMergeLists() {
+    ListType listOfInts = new ListType(false, new BasicType(false, DType.INT32));
+    ListType listOfStructs = new ListType(false, new StructType(false,
+        new BasicType(false, DType.INT32), new BasicType(false, DType.STRING)));
+    try (Table input = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 4)
+        .column(listOfInts,
+            Arrays.asList(1, 2), Arrays.asList(3), Arrays.asList(7, 8), Arrays.asList(4, 5, 6),
+            Arrays.asList(8, 9), Arrays.asList(8, 9, 10), Arrays.asList(10, 11), Arrays.asList(11, 12),
+            Arrays.asList(13, 13), Arrays.asList(14, 15, 15))
+        .column(listOfStructs,
+            Arrays.asList(new StructData(1, "s1"), new StructData(2, "s2")),
+            Arrays.asList(new StructData(2, "s3"), new StructData(3, "s4")),
+            Arrays.asList(new StructData(2, "s2")),
+            Arrays.asList(),
+            Arrays.asList(new StructData(11, "s11")),
+            Arrays.asList(new StructData(22, "s22"), new StructData(33, "s33")),
+            Arrays.asList(),
+            Arrays.asList(new StructData(22, "s22"), new StructData(33, "s33"), new StructData(44, "s44")),
+            Arrays.asList(new StructData(333, "s333"), new StructData(222, "s222"), new StructData(111, "s111")),
+            Arrays.asList(new StructData(222, "s222"), new StructData(444, "s444")))
+        .build();
+         Table expectedListOfInts = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(listOfInts,
+                 Arrays.asList(1, 2, 3, 7 ,8, 4, 5, 6),
+                 Arrays.asList(8, 9, 8, 9, 10, 10, 11, 11, 12),
+                 Arrays.asList(13, 13),
+                 Arrays.asList(14, 15, 15))
+             .build();
+         Table expectedListOfStructs = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(listOfStructs,
+                 Arrays.asList(new StructData(1, "s1"), new StructData(2, "s2"),
+                     new StructData(2, "s3"), new StructData(3, "s4"), new StructData(2, "s2")),
+                 Arrays.asList(new StructData(11, "s11"), new StructData(22, "s22"), new StructData(33, "s33"),
+                     new StructData(22, "s22"), new StructData(33, "s33"), new StructData(44, "s44")),
+                 Arrays.asList(new StructData(333, "s333"), new StructData(222, "s222"), new StructData(111, "s111")),
+                 Arrays.asList(new StructData(222, "s222"), new StructData(444, "s444")))
+             .build();
+         Table retListOfInts = input.groupBy(0).aggregate(Aggregation.mergeLists().onColumn(1));
+         Table retListOfStructs = input.groupBy(0).aggregate(Aggregation.mergeLists().onColumn(2))) {
+      assertTablesAreEqual(expectedListOfInts, retListOfInts);
+      assertTablesAreEqual(expectedListOfStructs, retListOfStructs);
+    }
+  }
+
+  @Test
   void testGroupByCollectSetIncludeNulls() {
     // test with null unequal and nan unequal
     Aggregation collectSet = Aggregation.collectSet(NullPolicy.INCLUDE,
@@ -5165,6 +5213,55 @@ public class TableTest extends CudfTestBase {
              .build();
          Table found = input.groupBy(0).aggregate(collectSet.onColumn(1))) {
       assertTablesAreEqual(expected, found);
+    }
+  }
+
+  @Test
+  void testGroupByMergeSets() {
+    ListType listOfInts = new ListType(false, new BasicType(false, DType.INT32));
+    ListType listOfDoubles = new ListType(false, new BasicType(false, DType.FLOAT64));
+    try (Table input = new Table.TestBuilder()
+        .column(1, 1, 1, 1, 2, 2, 2, 2, 3, 4)
+        .column(listOfInts,
+            Arrays.asList(1, 2), Arrays.asList(3), Arrays.asList(7, 8), Arrays.asList(4, 5, 6),
+            Arrays.asList(8, 9), Arrays.asList(8, 9, 10), Arrays.asList(10, 11), Arrays.asList(11, 12),
+            Arrays.asList(13, 13), Arrays.asList(14, 15, 15))
+        .column(listOfDoubles,
+            Arrays.asList(Double.NaN, 1.2), Arrays.asList(), Arrays.asList(Double.NaN), Arrays.asList(-3e10),
+            Arrays.asList(1.1, 2.2, 3.3), Arrays.asList(3.3, 2.2), Arrays.asList(), Arrays.asList(),
+            Arrays.asList(1e3, Double.NaN, 1e-3, Double.NaN), Arrays.asList())
+        .build();
+         Table expectedListOfInts = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(listOfInts,
+                 Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8),
+                 Arrays.asList(8, 9, 10, 11, 12),
+                 Arrays.asList(13),
+                 Arrays.asList(14, 15))
+             .build();
+         Table expectedListOfDoubles = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(listOfDoubles,
+                 Arrays.asList(-3e10, 1.2, Double.NaN, Double.NaN),
+                 Arrays.asList(1.1, 2.2, 3.3),
+                 Arrays.asList(1e-3, 1e3, Double.NaN, Double.NaN),
+                 Arrays.asList())
+             .build();
+         Table expectedListOfDoublesNaNEq = new Table.TestBuilder()
+             .column(1, 2, 3, 4)
+             .column(listOfDoubles,
+                 Arrays.asList(-3e10, 1.2, Double.NaN),
+                 Arrays.asList(1.1, 2.2, 3.3),
+                 Arrays.asList(1e-3, 1e3, Double.NaN),
+                 Arrays.asList())
+             .build();
+         Table retListOfInts = input.groupBy(0).aggregate(Aggregation.mergeSets().onColumn(1));
+         Table retListOfDoubles = input.groupBy(0).aggregate(Aggregation.mergeSets().onColumn(2));
+         Table retListOfDoublesNaNEq = input.groupBy(0).aggregate(
+             Aggregation.mergeSets(NullEquality.UNEQUAL, NaNEquality.ALL_EQUAL).onColumn(2))) {
+      assertTablesAreEqual(expectedListOfInts, retListOfInts);
+      assertTablesAreEqual(expectedListOfDoubles, retListOfDoubles);
+      assertTablesAreEqual(expectedListOfDoublesNaNEq, retListOfDoublesNaNEq);
     }
   }
 
