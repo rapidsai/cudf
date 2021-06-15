@@ -27,7 +27,6 @@ def read_json(
         raise ValueError("cudf engine only supports JSON Lines format")
     if engine == "auto":
         engine = "cudf" if lines else "pandas"
-
     if engine == "cudf":
         # Multiple sources are passed as a list. If a single source is passed,
         # wrap it in a list for unified processing downstream.
@@ -57,6 +56,22 @@ def read_json(
             "Using CPU via Pandas to read JSON dataset, this may "
             "be GPU accelerated in the future"
         )
+
+        if not ioutils.ensure_single_filepath_or_buffer(
+            path_or_data=path_or_buf, **kwargs,
+        ):
+            raise NotImplementedError(
+                "`read_json` does not yet support reading "
+                "multiple files via pandas"
+            )
+
+        path_or_buf, compression = ioutils.get_filepath_or_buffer(
+            path_or_data=path_or_buf,
+            compression=compression,
+            iotypes=(BytesIO, StringIO),
+            **kwargs,
+        )
+
         if kwargs.get("orient") == "table":
             pd_value = pd.read_json(
                 path_or_buf,
