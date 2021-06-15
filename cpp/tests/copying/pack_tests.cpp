@@ -161,7 +161,7 @@ std::vector<std::unique_ptr<column>> generate_lists(bool include_validity)
 
   std::vector<std::unique_ptr<column>> out;
   out.push_back(list0.release());
-  //out.push_back(list1.release());
+  out.push_back(list1.release());
   return out;
 }
 
