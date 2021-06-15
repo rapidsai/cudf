@@ -681,6 +681,10 @@ encoded_data writer::impl::encode_columns(const table_device_view &view,
                     : (((stripe_dict->num_strings + 0x1ff) >> 9) * (512 * 4 + 2));
                 if (stripe.id == 0) {
                   strm.data_ptrs[strm_type] = encoded_data.data() + stream_offsets.offsets[strm_id];
+                  // Dictionary lenghts are encoded as RLE, which are all stored after non-RLE data:
+                  // include non-RLE data size in the offset only in that case
+                  if (strm_type == gpu::CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)
+                    strm.data_ptrs[strm_type] += stream_offsets.non_rle_data_size;
                 } else {
                   auto const &strm_up = col_streams[stripe_dict[-dict_stride].start_chunk];
                   strm.data_ptrs[strm_type] =
