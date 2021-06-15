@@ -370,7 +370,7 @@ std::unique_ptr<column> group_collect(column_view const& values,
                                       rmm::mr::device_memory_resource* mr);
 
 /**
- * @brief Internal API to merge groupped lists into one list.
+ * @brief Internal API to merge grouped lists into one list.
  *
  * @code{.pseudo}
  * values        = [[2, 1], [], [4, -1, -2], [], [<NA>, 4, <NA>]]
