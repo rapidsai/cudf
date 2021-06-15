@@ -57,46 +57,36 @@ from cudf.utils.utils import GetAttrGetItemMixin
 T = TypeVar("T", bound="DataFrame")
 
 
-def _unique_name(existing_names, suffix="_unique_name"):
-    ret = suffix
-    i = 1
-    while ret in existing_names:
-        ret = "%s_%d" % (suffix, i)
-        i += 1
-    return ret
-
-
-def _reverse_op(fn):
-    return {
-        "add": "radd",
-        "radd": "add",
-        "sub": "rsub",
-        "rsub": "sub",
-        "mul": "rmul",
-        "rmul": "mul",
-        "mod": "rmod",
-        "rmod": "mod",
-        "pow": "rpow",
-        "rpow": "pow",
-        "floordiv": "rfloordiv",
-        "rfloordiv": "floordiv",
-        "truediv": "rtruediv",
-        "rtruediv": "truediv",
-        "__add__": "__radd__",
-        "__radd__": "__add__",
-        "__sub__": "__rsub__",
-        "__rsub__": "__sub__",
-        "__mul__": "__rmul__",
-        "__rmul__": "__mul__",
-        "__mod__": "__rmod__",
-        "__rmod__": "__mod__",
-        "__pow__": "__rpow__",
-        "__rpow__": "__pow__",
-        "__floordiv__": "__rfloordiv__",
-        "__rfloordiv__": "__floordiv__",
-        "__truediv__": "__rtruediv__",
-        "__rtruediv__": "__truediv__",
-    }[fn]
+_reverse_op = {
+    "add": "radd",
+    "radd": "add",
+    "sub": "rsub",
+    "rsub": "sub",
+    "mul": "rmul",
+    "rmul": "mul",
+    "mod": "rmod",
+    "rmod": "mod",
+    "pow": "rpow",
+    "rpow": "pow",
+    "floordiv": "rfloordiv",
+    "rfloordiv": "floordiv",
+    "truediv": "rtruediv",
+    "rtruediv": "truediv",
+    "__add__": "__radd__",
+    "__radd__": "__add__",
+    "__sub__": "__rsub__",
+    "__rsub__": "__sub__",
+    "__mul__": "__rmul__",
+    "__rmul__": "__mul__",
+    "__mod__": "__rmod__",
+    "__rmod__": "__mod__",
+    "__pow__": "__rpow__",
+    "__rpow__": "__pow__",
+    "__floordiv__": "__rfloordiv__",
+    "__rfloordiv__": "__floordiv__",
+    "__truediv__": "__rtruediv__",
+    "__rtruediv__": "__truediv__",
+}
 
 
 _cupy_nan_methods_map = {
@@ -1512,7 +1502,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     result[col] = op(lhs[col], rhs[col])
             for col in rhs._data:
                 if col not in lhs._data:
-                    result[col] = fallback(rhs[col], _reverse_op(fn))
+                    result[col] = fallback(rhs[col], _reverse_op[fn])
         elif isinstance(other, Series):
             other_cols = other.to_pandas().to_dict()
             df_cols = self._column_names
