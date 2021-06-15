@@ -107,7 +107,7 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
     return bytes;
   };
 
-  auto [offsets_column, chars_column]  =
+  auto [offsets_column, chars_column] =
     form_offsets_and_char_column(d_input, null_count, offsets_transformer, stream, mr);
 
   auto d_offsets = offsets_column->view().template data<size_type>();
