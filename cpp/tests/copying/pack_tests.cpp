@@ -472,5 +472,7 @@ TEST_F(PackUnpackTest, NestedSliced)
   this->run_test(t);
 }
 
+// clang-format on
+
 }  // namespace test
 }  // namespace cudf
