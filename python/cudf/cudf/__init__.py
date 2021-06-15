@@ -8,7 +8,7 @@ from numba import cuda
 
 import rmm
 
-from cudf import core, datasets, testing
+from cudf import _config, core, datasets, testing
 from cudf._version import get_versions
 from cudf.api.extensions import (
     register_dataframe_accessor,

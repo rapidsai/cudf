@@ -161,6 +161,7 @@ def binaryop(lhs, rhs, op, dtype):
     """
     Dispatches a binary op call to the appropriate libcudf function:
     """
+    from cudf._config import get_option
 
     op = BinaryOperation[op.upper()]
     cdef binary_operator c_op = <binary_operator> (
@@ -197,6 +198,12 @@ def binaryop(lhs, rhs, op, dtype):
             c_op,
             c_dtype
         )
+
+    if (
+        op.name.lower() in {"lt", "gt", "le", "ge", "eq", "ne", "null_equals"}
+        and get_option("_nulls_compare_like_nans")
+    ):
+        result = result.fillna(op.name.lower() == "ne")
     return result
 
 
