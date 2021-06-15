@@ -78,34 +78,14 @@ class ColumnBase(Column, Serializable):
         """
         View the data as a device array object
         """
-        result = cuda.as_cuda_array(self.data)
-        # Workaround until `.view(...)` can change itemsize
-        # xref: https://github.com/numba/numba/issues/4829
-        result = cuda.devicearray.DeviceNDArray(
-            shape=(result.nbytes // self.dtype.itemsize,),
-            strides=(self.dtype.itemsize,),
-            dtype=self.dtype,
-            gpu_data=result.gpu_data,
-        )
-        return result
+        return cuda.as_cuda_array(self.data).view(self.dtype)
 
     @property
     def mask_array_view(self) -> "cuda.devicearray.DeviceNDArray":
         """
         View the mask as a device array
         """
-        result = cuda.as_cuda_array(self.mask)
-        dtype = mask_dtype
-
-        # Workaround until `.view(...)` can change itemsize
-        # xref: https://github.com/numba/numba/issues/4829
-        result = cuda.devicearray.DeviceNDArray(
-            shape=(result.nbytes // dtype.itemsize,),
-            strides=(dtype.itemsize,),
-            dtype=dtype,
-            gpu_data=result.gpu_data,
-        )
-        return result
+        return cuda.as_cuda_array(self.mask).view(mask_dtype)
 
     def __len__(self) -> int:
         return self.size
