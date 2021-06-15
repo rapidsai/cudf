@@ -124,7 +124,7 @@ struct token_row_offsets_fn {
 
   // non-integral types throw an exception
   template <typename T, typename... Args, std::enable_if_t<not cudf::is_index_type<T>()>* = nullptr>
-  std::unique_ptr<rmm::device_uvector<cudf::size_type>> operator()(Args&&...) const
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> operator()(Args&&... args) const
   {
     CUDF_FAIL("The detokenize indices parameter must be an integer type.");
   }

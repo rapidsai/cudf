@@ -191,14 +191,10 @@ class NumericalBaseColumn(ColumnBase):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
         return cov / lhs_std / rhs_std
 
-    def round(
-        self, decimals: int = 0, how: str = "half_even"
-    ) -> NumericalBaseColumn:
+    def round(self, decimals: int = 0) -> NumericalBaseColumn:
         """Round the values in the Column to the given number of decimals.
         """
-        return libcudf.round.round(self, decimal_places=decimals, how=how)
+        return libcudf.round.round(self, decimal_places=decimals)
 
     def _apply_scan_op(self, op: str) -> ColumnBase:
-        return libcudf.reduce.scan(op, self, True)._with_type_metadata(
-            self.dtype
-        )
+        return self._copy_type_metadata(libcudf.reduce.scan(op, self, True))

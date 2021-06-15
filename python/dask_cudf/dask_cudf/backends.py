@@ -39,10 +39,10 @@ from .core import DataFrame, Index, Series
 
 get_parallel_type.register(cudf.DataFrame, lambda _: DataFrame)
 get_parallel_type.register(cudf.Series, lambda _: Series)
-get_parallel_type.register(cudf.BaseIndex, lambda _: Index)
+get_parallel_type.register(cudf.Index, lambda _: Index)
 
 
-@meta_nonempty.register(cudf.BaseIndex)
+@meta_nonempty.register(cudf.Index)
 def _nonempty_index(idx):
     if isinstance(idx, cudf.core.index.RangeIndex):
         return cudf.core.index.RangeIndex(2, name=idx.name)
@@ -132,7 +132,7 @@ def make_meta_cudf(x, index=None):
     return x.head(0)
 
 
-@make_meta_dispatch.register(cudf.BaseIndex)
+@make_meta_dispatch.register(cudf.Index)
 def make_meta_cudf_index(x, index=None):
     return x[:0]
 
@@ -215,7 +215,7 @@ def make_meta_object_cudf(x, index=None):
     raise TypeError(f"Don't know how to create metadata from {x}")
 
 
-@concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.BaseIndex))
+@concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
 def concat_cudf(
     dfs,
     axis=0,
@@ -237,20 +237,18 @@ def concat_cudf(
     return cudf.concat(dfs, axis=axis, ignore_index=ignore_index)
 
 
-@categorical_dtype_dispatch.register(
-    (cudf.DataFrame, cudf.Series, cudf.BaseIndex)
-)
+@categorical_dtype_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
 def categorical_dtype_cudf(categories=None, ordered=None):
     return cudf.CategoricalDtype(categories=categories, ordered=ordered)
 
 
-@tolist_dispatch.register((cudf.Series, cudf.BaseIndex))
+@tolist_dispatch.register((cudf.Series, cudf.Index))
 def tolist_cudf(obj):
     return obj.to_arrow().to_pylist()
 
 
 @is_categorical_dtype_dispatch.register(
-    (cudf.Series, cudf.BaseIndex, cudf.CategoricalDtype, Series)
+    (cudf.Series, cudf.Index, cudf.CategoricalDtype, Series)
 )
 def is_categorical_dtype_cudf(obj):
     return cudf.utils.dtypes.is_categorical_dtype(obj)
@@ -259,7 +257,7 @@ def is_categorical_dtype_cudf(obj):
 try:
     from dask.dataframe.dispatch import union_categoricals_dispatch
 
-    @union_categoricals_dispatch.register((cudf.Series, cudf.BaseIndex))
+    @union_categoricals_dispatch.register((cudf.Series, cudf.Index))
     def union_categoricals_cudf(
         to_union, sort_categories=False, ignore_order=False
     ):
@@ -288,7 +286,7 @@ try:
             return safe_hash(frame.reset_index())
         return safe_hash(frame)
 
-    @hash_object_dispatch.register(cudf.BaseIndex)
+    @hash_object_dispatch.register(cudf.Index)
     def hash_object_cudf_index(ind, index=None):
 
         if isinstance(ind, cudf.MultiIndex):

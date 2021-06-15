@@ -124,6 +124,7 @@ struct split_tokenizer_fn : base_split_tokenizer {
    * for string at `string_index`.
    *
    * @param idx Index of the delimiter in the chars column
+   * @param column_count Number of output columns
    * @param d_token_counts Token counts for each string
    * @param d_positions The beginning byte position of each delimiter
    * @param positions_count Number of delimiters
@@ -131,6 +132,7 @@ struct split_tokenizer_fn : base_split_tokenizer {
    * @param d_all_tokens All output tokens for the strings column
    */
   __device__ void process_tokens(size_type idx,
+                                 size_type column_count,
                                  size_type const* d_token_counts,
                                  size_type const* d_positions,
                                  size_type positions_count,
@@ -251,6 +253,7 @@ struct rsplit_tokenizer_fn : base_split_tokenizer {
    * for string at `string_index`.
    *
    * @param idx Index of the delimiter in the chars column
+   * @param column_count Number of output columns
    * @param d_token_counts Token counts for each string
    * @param d_positions The ending byte position of each delimiter
    * @param positions_count Number of delimiters
@@ -258,6 +261,7 @@ struct rsplit_tokenizer_fn : base_split_tokenizer {
    * @param d_all_tokens All output tokens for the strings column
    */
   __device__ void process_tokens(size_type idx,                    // delimiter position index
+                                 size_type column_count,           // number of output columns
                                  size_type const* d_token_counts,  // token counts for each string
                                  size_type const* d_positions,     // end of each delimiter
                                  size_type positions_count,        // total number of delimiters
@@ -297,9 +301,10 @@ struct rsplit_tokenizer_fn : base_split_tokenizer {
    *
    * @param idx Index of a byte in the chars column.
    * @param d_offsets Offsets values to locate the chars ranges.
+   * @param chars_bytes Total number of characters to process.
    * @return true if delimiter is found ending at position `idx`
    */
-  __device__ bool is_delimiter(size_type idx, int32_t const* d_offsets, size_type) const
+  __device__ bool is_delimiter(size_type idx, int32_t const* d_offsets, size_type chars_bytes) const
   {
     auto delim_length = d_delimiter.size_bytes();
     if (idx < delim_length - 1) return false;
@@ -519,19 +524,24 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
                      });
 
   // get the positions for every token using the delimiter positions
-  thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    delimiter_count,
-    [tokenizer,
-     d_token_counts,
-     d_positions,
-     delimiter_count,
-     d_string_indices,
-     d_tokens] __device__(size_type idx) {
-      tokenizer.process_tokens(
-        idx, d_token_counts, d_positions, delimiter_count, d_string_indices, d_tokens);
-    });
+  thrust::for_each_n(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     delimiter_count,
+                     [tokenizer,
+                      columns_count,
+                      d_token_counts,
+                      d_positions,
+                      delimiter_count,
+                      d_string_indices,
+                      d_tokens] __device__(size_type idx) {
+                       tokenizer.process_tokens(idx,
+                                                columns_count,
+                                                d_token_counts,
+                                                d_positions,
+                                                delimiter_count,
+                                                d_string_indices,
+                                                d_tokens);
+                     });
 
   // Create each column.
   // - Each pair points to the strings for that column for each row.
@@ -599,10 +609,12 @@ struct whitespace_split_tokenizer_fn : base_whitespace_split_tokenizer {
    * for string at `string_index`.
    *
    * @param idx Index of the string to process
+   * @param column_count Number of output columns
    * @param d_token_counts Token counts for each string
    * @param d_all_tokens All output tokens for the strings column
    */
   __device__ void process_tokens(size_type idx,
+                                 size_type column_count,
                                  size_type const* d_token_counts,
                                  string_index_pair* d_all_tokens) const
   {
@@ -648,10 +660,12 @@ struct whitespace_rsplit_tokenizer_fn : base_whitespace_split_tokenizer {
    * for string at `string_index`.
    *
    * @param idx Index of the string to process
+   * @param column_count Number of output columns
    * @param d_token_counts Token counts for each string
    * @param d_all_tokens All output tokens for the strings column
    */
   __device__ void process_tokens(size_type idx,  // string position index
+                                 size_type column_count,
                                  size_type const* d_token_counts,
                                  string_index_pair* d_all_tokens) const
   {
@@ -773,12 +787,13 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
                d_tokens,
                d_tokens + (columns_count * strings_count),
                string_index_pair{nullptr, 0});
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     strings_count,
-                     [tokenizer, d_token_counts, d_tokens] __device__(size_type idx) {
-                       tokenizer.process_tokens(idx, d_token_counts, d_tokens);
-                     });
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator<size_type>(0),
+    strings_count,
+    [tokenizer, columns_count, d_token_counts, d_tokens] __device__(size_type idx) {
+      tokenizer.process_tokens(idx, columns_count, d_token_counts, d_tokens);
+    });
 
   // Create each column.
   // - Each pair points to a string for that column for each row.

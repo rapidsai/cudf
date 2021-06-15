@@ -110,9 +110,10 @@ struct var_functor {
     auto values_view = column_device_view::create(values, stream);
     auto d_values    = *values_view;
 
-    auto d_means       = group_means.data<ResultType>();
-    auto d_group_sizes = group_sizes.data<size_type>();
-    auto d_result      = result->mutable_view().data<ResultType>();
+    auto d_group_labels = group_labels.data();
+    auto d_means        = group_means.data<ResultType>();
+    auto d_group_sizes  = group_sizes.data<size_type>();
+    auto d_result       = result->mutable_view().data<ResultType>();
 
     if (!cudf::is_dictionary(values.type())) {
       auto values_iter = d_values.begin<T>();
@@ -144,7 +145,8 @@ struct var_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(Args&&...)
+  std::enable_if_t<!std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
+    Args&&... args)
   {
     CUDF_FAIL("Only numeric types are supported in std/variance");
   }

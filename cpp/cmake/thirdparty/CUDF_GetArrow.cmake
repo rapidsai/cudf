@@ -50,7 +50,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC)
                         "ARROW_WITH_BACKTRACE ON"
                         "ARROW_CXXFLAGS -w"
                         "ARROW_JEMALLOC OFF"
-                        "ARROW_S3 ON"
                         # Arrow modifies CMake's GLOBAL RULE_LAUNCH_COMPILE unless this is off
                         "ARROW_USE_CCACHE OFF"
                         "ARROW_ARMV8_ARCH ${ARROW_ARMV8_ARCH}"

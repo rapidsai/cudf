@@ -122,7 +122,6 @@
  *   @defgroup strings_combine Combining
  *   @defgroup strings_contains Searching
  *   @defgroup strings_convert Converting
- *   @defgroup strings_copy Copying
  *   @defgroup strings_substring Substring
  *   @defgroup strings_find Finding
  *   @defgroup strings_modify Modifying

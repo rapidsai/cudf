@@ -72,7 +72,10 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
 
 template <>
 std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::dictionary32>(
-  scalar const&, size_type, rmm::cuda_stream_view, rmm::mr::device_memory_resource*) const
+  scalar const& value,
+  size_type size,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr) const
 {
   CUDF_FAIL("dictionary not supported when creating from scalar");
 }

@@ -135,7 +135,8 @@ struct quantiles_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(Args&&...)
+  std::enable_if_t<!std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
+    Args&&... args)
   {
     CUDF_FAIL("Only arithmetic types are supported in quantiles");
   }

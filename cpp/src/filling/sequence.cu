@@ -85,6 +85,18 @@ struct sequence_functor {
 
   template <
     typename T,
+    typename std::enable_if_t<not cudf::is_numeric<T>() or cudf::is_boolean<T>()>* = nullptr>
+  std::unique_ptr<column> operator()(size_type size,
+                                     scalar const& init,
+                                     scalar const& step,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    CUDF_FAIL("Unsupported sequence scalar type");
+  }
+
+  template <
+    typename T,
     typename std::enable_if_t<cudf::is_numeric<T>() and not cudf::is_boolean<T>()>* = nullptr>
   std::unique_ptr<column> operator()(size_type size,
                                      scalar const& init,
@@ -108,9 +120,13 @@ struct sequence_functor {
     return result;
   }
 
-  template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_numeric<T>() or cudf::is_boolean<T>(), std::unique_ptr<column>>
-  operator()(Args&&...)
+  template <
+    typename T,
+    typename std::enable_if_t<not cudf::is_numeric<T>() or cudf::is_boolean<T>()>* = nullptr>
+  std::unique_ptr<column> operator()(size_type size,
+                                     scalar const& init,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     CUDF_FAIL("Unsupported sequence scalar type");
   }

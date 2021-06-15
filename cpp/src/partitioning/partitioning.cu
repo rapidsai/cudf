@@ -699,10 +699,14 @@ struct dispatch_map_type {
     return std::make_pair(std::move(scattered), std::move(partition_offsets));
   }
 
-  template <typename MapType, typename... Args>
+  template <typename MapType>
   std::enable_if_t<not is_index_type<MapType>(),
                    std::pair<std::unique_ptr<table>, std::vector<size_type>>>
-  operator()(Args&&...) const
+  operator()(table_view const& t,
+             column_view const& partition_map,
+             size_type num_partitions,
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr) const
   {
     CUDF_FAIL("Unexpected, non-integral partition map.");
   }

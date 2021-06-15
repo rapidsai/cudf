@@ -160,7 +160,7 @@ class Merge(object):
             self.rhs, cudf.MultiIndex
         ):
             out_class = cudf.MultiIndex
-        elif isinstance(self.lhs, cudf.BaseIndex):
+        elif isinstance(self.lhs, cudf.Index):
             out_class = self.lhs.__class__
         return out_class
 
@@ -348,7 +348,7 @@ class Merge(object):
         # keys, the index will be sorted. If one index is specified,
         # the key columns on the other side will be used to sort.
         if self.on:
-            if isinstance(result, cudf.BaseIndex):
+            if isinstance(result, cudf.Index):
                 sort_order = result._get_sorted_inds()
             else:
                 # need a list instead of a tuple here because

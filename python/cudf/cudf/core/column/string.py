@@ -17,10 +17,7 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast
 from cudf._lib.column import Column
-from cudf._lib.nvtext.edit_distance import (
-    edit_distance as cpp_edit_distance,
-    edit_distance_matrix as cpp_edit_distance_matrix,
-)
+from cudf._lib.nvtext.edit_distance import edit_distance as cpp_edit_distance
 from cudf._lib.nvtext.generate_ngrams import (
     generate_character_ngrams as cpp_generate_character_ngrams,
     generate_ngrams as cpp_generate_ngrams,
@@ -215,7 +212,7 @@ _timedelta_to_str_typecast_functions = {
 }
 
 
-ParentType = Union["cudf.Series", "cudf.core.index.BaseIndex"]
+ParentType = Union["cudf.Series", "cudf.Index"]
 
 
 class StringMethods(ColumnMethodsMixin):
@@ -3983,7 +3980,7 @@ class StringMethods(ColumnMethodsMixin):
         new_col = cpp_code_points(self._column)
         if isinstance(self._parent, cudf.Series):
             return cudf.Series(new_col, name=self._parent.name)
-        elif isinstance(self._parent, cudf.BaseIndex):
+        elif isinstance(self._parent, cudf.Index):
             return cudf.core.index.as_index(new_col, name=self._parent.name)
         else:
             return new_col
@@ -4287,7 +4284,7 @@ class StringMethods(ColumnMethodsMixin):
         result_col = cpp_character_tokenize(self._column)
         if isinstance(self._parent, cudf.Series):
             return cudf.Series(result_col, name=self._parent.name)
-        elif isinstance(self._parent, cudf.BaseIndex):
+        elif isinstance(self._parent, cudf.Index):
             return cudf.core.index.as_index(result_col, name=self._parent.name)
         else:
             return result_col
@@ -4861,47 +4858,6 @@ class StringMethods(ColumnMethodsMixin):
         return self._return_or_inplace(
             cpp_edit_distance(self._column, targets_column)
         )
-
-    def edit_distance_matrix(self) -> ParentType:
-        """Computes the edit distance between strings in the series.
-
-        The series to compute the matrix should have more than 2 strings and
-        should not contain nulls.
-
-        Edit distance is measured based on the `Levenshtein edit distance
-        algorithm
-        <https://www.cuelogic.com/blog/the-levenshtein-algorithm>`_.
-
-
-        Returns
-        -------
-        Series of ListDtype(int64)
-            Assume `N` is the length of this series. The return series contains
-            `N` lists of size `N`, where the `j`th number in the `i`th row of
-            the series tells the edit distance between the `i`th string and the
-            `j`th string of this series.
-            The matrix is symmetric. Diagonal elements are 0.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series(['abc', 'bc', 'cba'])
-        >>> s.str.edit_distance_matrix()
-        0    [0, 1, 2]
-        1    [1, 0, 2]
-        2    [2, 2, 0]
-        dtype: list
-        """
-        if self._column.size < 2:
-            raise ValueError(
-                "Require size >= 2 to compute edit distance matrix."
-            )
-        if self._column.has_nulls:
-            raise ValueError(
-                "Cannot compute edit distance between null strings. "
-                "Consider removing them using `dropna` or fill with `fillna`."
-            )
-        return self._return_or_inplace(cpp_edit_distance_matrix(self._column))
 
 
 def _massage_string_arg(value, name, allow_col=False):

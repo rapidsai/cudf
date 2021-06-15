@@ -2194,25 +2194,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         emptyStringOutputIfEmptyList));
   }
 
-  /**
-   * Given a strings column, each string in the given column is repeated a number of times
-   * specified by the <code>repeatTimes</code> parameter. If the parameter has a non-positive value,
-   * all the rows of the output strings column will be an empty string. Any null row will result
-   * in a null row regardless of the value of <code>repeatTimes</code>.
-   *
-   * Note that this function cannot handle the cases when the size of the output column exceeds
-   * the maximum value that can be indexed by int type (i.e., {@link Integer#MAX_VALUE}).
-   * In such situations, the output result is undefined.
-   *
-   * @param repeatTimes The number of times each input string is copied to the output.
-   * @return A new java column vector containing repeated strings.
-   */
-  public final ColumnVector repeatStrings(int repeatTimes) {
-    assert type.equals(DType.STRING) : "column type must be a String";
-
-    return new ColumnVector(repeatStrings(getNativeView(), repeatTimes));
-  }
-
    /**
    * Apply a JSONPath string to all rows in an input strings column.
    *
@@ -2888,23 +2869,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
                                                              long narep,
                                                              boolean separateNulls,
                                                              boolean emptyStringOutputIfEmptyList);
-
-  /**
-   * Native method to repeat each string in the given strings column a number of times
-   * specified by the <code>repeatTimes</code> parameter. If the parameter has a non-positive value,
-   * all the rows of the output strings column will be an empty string. Any null row will result
-   * in a null row regardless of the value of <code>repeatTimes</code>.
-   *
-   * Note that this function cannot handle the cases when the size of the output column exceeds
-   * the maximum value that can be indexed by int type (i.e., {@link Integer#MAX_VALUE}).
-   * In such situations, the output result is undefined.
-   *
-   * @param viewHandle long holding the native handle of the column containing strings to repeat.
-   * @param repeatTimes The number of times each input string is copied to the output.
-   * @return native handle of the resulting cudf column containing repeated strings.
-   */
-  private static native long repeatStrings(long viewHandle, int repeatTimes);
-
 
   private static native long getJSONObject(long viewHandle, long scalarHandle) throws CudfException;
 

@@ -12,7 +12,3 @@ cdef extern from "nvtext/edit_distance.hpp" namespace "nvtext" nogil:
         const column_view & strings,
         const column_view & targets
     ) except +
-
-    cdef unique_ptr[column] edit_distance_matrix(
-        const column_view & strings
-    ) except +

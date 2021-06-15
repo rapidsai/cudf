@@ -340,8 +340,6 @@ def cudf_dtype_from_pa_type(typ):
         return cudf.core.dtypes.ListDtype.from_arrow(typ)
     elif pa.types.is_struct(typ):
         return cudf.core.dtypes.StructDtype.from_arrow(typ)
-    elif pa.types.is_decimal(typ):
-        return cudf.core.dtypes.Decimal64Dtype.from_arrow(typ)
     else:
         return pd.api.types.pandas_dtype(typ.to_pandas_dtype())
 

@@ -241,22 +241,3 @@ TYPED_TEST(TypedStructScatterTest, SourceSmallerThanTargetScatterTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *structs_expected, scatter_structs(structs_src, structs_tgt, scatter_map), print_all);
 }
-
-TYPED_TEST(TypedStructScatterTest, IntStructNullMaskRegression)
-{
-  using col_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-
-  auto child_tgt      = col_wrapper({0, null, 2}, null_at(1));
-  auto struct_col_tgt = structs_col({child_tgt}).release();
-
-  auto child_src      = col_wrapper{20};
-  auto struct_col_src = structs_col({child_src}).release();
-
-  auto scatter_map = int32s_col{2}.release();
-
-  auto expected_child  = col_wrapper({0, null, 20}, null_at(1));
-  auto expected_struct = structs_col({expected_child}).release();
-
-  auto const result = scatter_structs(struct_col_src, struct_col_tgt, scatter_map);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_struct, result, print_all);
-}

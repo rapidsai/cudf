@@ -21,7 +21,7 @@ from cudf.core.column import (
     column,
     string,
 )
-from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype
+from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     NUMERIC_TYPES,
@@ -543,20 +543,6 @@ class NumericalColumn(NumericalBaseColumn):
                 return False
 
         return False
-
-    def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
-        if isinstance(dtype, CategoricalDtype):
-            return column.build_categorical_column(
-                categories=dtype.categories._values,
-                codes=as_column(self.base_data, dtype=self.dtype),
-                mask=self.base_mask,
-                ordered=dtype.ordered,
-                size=self.size,
-                offset=self.offset,
-                null_count=self.null_count,
-            )
-
-        return self
 
     def to_pandas(
         self, index: pd.Index = None, nullable: bool = False, **kwargs

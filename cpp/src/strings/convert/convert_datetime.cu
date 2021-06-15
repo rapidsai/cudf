@@ -911,9 +911,14 @@ struct dispatch_from_timestamps_fn {
                        d_timestamps.size(),
                        pfn);
   }
-
-  template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_timestamp<T>(), void> operator()(Args&&...) const
+  template <typename T, std::enable_if_t<not cudf::is_timestamp<T>()>* = nullptr>
+  void operator()(column_device_view const&,
+                  format_item const*,
+                  size_type,
+                  timestamp_units,
+                  const int32_t*,
+                  char* d_chars,
+                  rmm::cuda_stream_view stream) const
   {
     CUDF_FAIL("Only timestamps type are expected");
   }
