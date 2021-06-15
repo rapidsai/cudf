@@ -18,18 +18,18 @@
 
 package ai.rapids.cudf;
 
-import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
-import static org.junit.jupiter.api.Assertions.*;
-
 import ai.rapids.cudf.HostColumnVector.BasicType;
-import ai.rapids.cudf.HostColumnVector.DataType;
 import ai.rapids.cudf.HostColumnVector.ListType;
-import ai.rapids.cudf.HostColumnVector.StructData;
 import ai.rapids.cudf.HostColumnVector.StructType;
+
+import org.junit.jupiter.api.Test;
+
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import org.junit.jupiter.api.Test;
+
+import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class ScalarTest extends CudfTestBase {
   @Test
@@ -403,6 +403,50 @@ public class ScalarTest extends CudfTestBase {
       } finally {
         for (ColumnView child : children) child.close();
       }
+    }
+  }
+
+  @Test
+  public void testRepeatString() {
+    // Invalid scalar.
+    try (Scalar nullString = Scalar.fromString(null)) {
+      Scalar result = nullString.repeatString(5);
+      assertFalse(result.isValid());
+    }
+
+    // Empty string.
+    try (Scalar emptyString = Scalar.fromString("")) {
+      Scalar result = emptyString.repeatString(5);
+      assertTrue(result.isValid());
+      assertEquals("", result.getJavaString());
+    }
+
+    // Negative repeatTimes.
+    try (Scalar s = Scalar.fromString("Hello World");
+         Scalar result = s.repeatString(-100)) {
+      assertTrue(result.isValid());
+      assertEquals("", result.getJavaString());
+    }
+
+    // Zero repeatTimes.
+    try (Scalar s = Scalar.fromString("Hello World");
+         Scalar result = s.repeatString(0)) {
+      assertTrue(result.isValid());
+      assertEquals("", result.getJavaString());
+    }
+
+    // Trivial input, output is copied exactly from input.
+    try (Scalar s = Scalar.fromString("Hello World");
+         Scalar result = s.repeatString(1)) {
+      assertTrue(result.isValid());
+      assertEquals(s.getJavaString(), result.getJavaString());
+    }
+
+    // Trivial input.
+    try (Scalar s = Scalar.fromString("abcxyz-");
+         Scalar result = s.repeatString(3)) {
+      assertTrue(result.isValid());
+      assertEquals("abcxyz-abcxyz-abcxyz-", result.getJavaString());
     }
   }
 }

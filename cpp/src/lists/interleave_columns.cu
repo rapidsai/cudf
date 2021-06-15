@@ -210,7 +210,6 @@ struct interleave_list_entries_fn {
     rmm::mr::device_memory_resource* mr) const noexcept
   {
     auto const num_cols     = input.num_columns();
-    auto const num_rows     = input.num_rows();
     auto const table_dv_ptr = table_device_view::create(input);
 
     // The output child column.
