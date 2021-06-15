@@ -1,7 +1,7 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
-dask>=2021.4.0,<=2021.5.1
-distributed>=2.22.0,<=2021.5.1
+dask>=2021.6.0
+distributed>=2021.6.0
 fsspec>=0.6.0
 numba>=0.53.1
 numpy
