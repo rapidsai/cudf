@@ -61,7 +61,7 @@ TEST_F(ArrowIOTest, URIFileSystem)
   ASSERT_EQ(2, tbl.tbl->num_rows());
 }
 
-#if defined(S3_ENABLED)
+#ifdef S3_ENABLED
 
 TEST_F(ArrowIOTest, S3FileSystem)
 {
@@ -92,6 +92,6 @@ TEST_F(ArrowIOTest, S3URIWhenNotEnabled)
                cudf::logic_error);
 }
 
-#ifndef S3_ENABLED
+#endif
 
 CUDF_TEST_PROGRAM_MAIN()
