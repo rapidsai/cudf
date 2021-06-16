@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
 import datetime
+import decimal
 import os
 from io import BytesIO
 
@@ -809,3 +810,17 @@ def test_orc_reader_multiple_files(datadir, src):
         print(col)
 
     assert_eq(expect, got)
+
+
+def test_orc_string_stream_offset_issue():
+    size = 30000
+    vals = {
+        str(x): [decimal.Decimal(1)] * size if x != 0 else ["XYZ"] * size
+        for x in range(0, 5)
+    }
+    df = cudf.DataFrame(vals)
+
+    buffer = BytesIO()
+    df.to_orc(buffer)
+
+    assert_eq(df, cudf.read_orc(buffer))
