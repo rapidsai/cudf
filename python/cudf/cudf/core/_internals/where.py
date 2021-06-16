@@ -299,20 +299,20 @@ def where(
                     input_col, other_column, cond._data[column_name]
                 )
 
-                # if isinstance(
-                #     frame._data[column_name],
-                #     cudf.core.column.CategoricalColumn,
-                # ):
-                #     result = cudf.core.column.build_categorical_column(
-                #         categories=frame._data[column_name].categories,
-                #         codes=cudf.core.column.as_column(
-                #             result.base_data, dtype=result.dtype
-                #         ),
-                #         mask=result.base_mask,
-                #         size=result.size,
-                #         offset=result.offset,
-                #         ordered=frame._data[column_name].ordered,
-                #     )
+                if isinstance(
+                    frame._data[column_name],
+                    cudf.core.column.CategoricalColumn,
+                ):
+                    result = cudf.core.column.build_categorical_column(
+                        categories=frame._data[column_name].categories,
+                        codes=cudf.core.column.as_column(
+                            result.base_data, dtype=result.dtype
+                        ),
+                        mask=result.base_mask,
+                        size=result.size,
+                        offset=result.offset,
+                        ordered=frame._data[column_name].ordered,
+                    )
             else:
                 out_mask = cudf._lib.null_mask.create_null_mask(
                     len(input_col),
