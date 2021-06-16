@@ -6,7 +6,6 @@ from typing import Any, Sequence, Tuple, Union, cast
 import cupy as cp
 import numpy as np
 import pyarrow as pa
-from pandas.api.types import is_integer_dtype
 
 import cudf
 from cudf import _lib as libcudf
@@ -22,6 +21,7 @@ from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
 from .numerical_base import NumericalBaseColumn
+from ...api.types import is_integer_dtype
 
 
 class Decimal32Column(NumericalBaseColumn):

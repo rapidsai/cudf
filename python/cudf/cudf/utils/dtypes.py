@@ -1,21 +1,40 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import datetime as dt
-import numbers
 from collections import namedtuple
-from collections.abc import Sequence
 from decimal import Decimal
 
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+<<<<<<< HEAD
 from pandas.core.dtypes.common import infer_dtype_from_object, pandas_dtype
 from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
+=======
+from pandas.core.dtypes.common import infer_dtype_from_object
+>>>>>>> 716dc12437a7b3bb33e8a2ccfa6ecb2c592568c7
 
 import cudf
-from cudf._lib.scalar import DeviceScalar
 from cudf.core._compat import PANDAS_GE_120
+
+from ..api.types import (  # noqa: F401
+    _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
+    is_categorical_dtype,
+    is_datetime_dtype as is_datetime_dtype,
+    is_decimal_dtype,
+    is_integer,
+    is_integer_dtype,
+    is_interval_dtype,
+    is_list_dtype,
+    is_list_like,
+    is_numeric_dtype as is_numerical_dtype,
+    is_scalar,
+    is_string_dtype,
+    is_struct_dtype,
+    is_timedelta_dtype,
+)
 
 _NA_REP = "<NA>"
 _np_pa_dtypes = {
@@ -364,24 +383,6 @@ def cudf_dtype_from_pa_type(typ):
         return pd.api.types.pandas_dtype(typ.to_pandas_dtype())
 
 
-def is_scalar(val):
-    return (
-        val is None
-        or isinstance(val, DeviceScalar)
-        or isinstance(val, cudf.Scalar)
-        or isinstance(val, str)
-        or isinstance(val, numbers.Number)
-        or np.isscalar(val)
-        or (isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0)
-        or isinstance(val, pd.Timestamp)
-        or (isinstance(val, pd.Categorical) and len(val) == 1)
-        or (isinstance(val, pd.Timedelta))
-        or (isinstance(val, pd.Timestamp))
-        or (isinstance(val, dt.datetime))
-        or (isinstance(val, dt.timedelta))
-    )
-
-
 def to_cudf_compatible_scalar(val, dtype=None):
     """
     Converts the value `val` to a numpy/Pandas scalar,
@@ -395,7 +396,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
     ):
         return val
 
-    if not is_scalar(val):
+    if not _is_scalar_or_zero_d_array(val):
         raise ValueError(
             f"Cannot convert value of type {type(val).__name__} "
             "to cudf scalar"
@@ -434,27 +435,6 @@ def to_cudf_compatible_scalar(val, dtype=None):
             val = val.astype("timedelta64[ns]")
 
     return val
-
-
-def is_list_like(obj):
-    """
-    This function checks if the given `obj`
-    is a list-like (list, tuple, Series...)
-    type or not.
-
-    Parameters
-    ----------
-    obj : object of any type which needs to be validated.
-
-    Returns
-    -------
-    Boolean: True or False depending on whether the
-    input `obj` is like-like or not.
-    """
-
-    return isinstance(obj, (Sequence, np.ndarray)) and not isinstance(
-        obj, (str, bytes)
-    )
 
 
 def is_column_like(obj):
