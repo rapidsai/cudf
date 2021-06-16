@@ -47,6 +47,8 @@ from cudf.core.dtypes import (
 )
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
+    _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
     check_cast_unsupported_dtype,
     cudf_dtype_from_pa_type,
     get_time_unit,
@@ -54,7 +56,6 @@ from cudf.utils.dtypes import (
     is_decimal_dtype,
     is_interval_dtype,
     is_list_dtype,
-    is_numerical_dtype,
     is_scalar,
     is_string_dtype,
     is_struct_dtype,
@@ -62,6 +63,14 @@ from cudf.utils.dtypes import (
     np_to_pa_dtype,
 )
 from cudf.utils.utils import mask_dtype
+
+from ...api.types import (
+    infer_dtype,
+    is_bool_dtype,
+    is_dtype_equal,
+    is_integer_dtype,
+    pandas_dtype,
+)
 
 T = TypeVar("T", bound="ColumnBase")
 
@@ -350,6 +359,9 @@ class ColumnBase(Column, Serializable):
 
         return self.to_gpu_array(fillna=fillna).copy_to_host()
 
+    def _reverse(self):
+        return libcudf.copying.reverse(self)
+
     def _fill(
         self,
         fill_value: ScalarLike,
@@ -513,7 +525,7 @@ class ColumnBase(Column, Serializable):
             return self.take(gather_map)
 
     def __getitem__(self, arg) -> Union[ScalarLike, ColumnBase]:
-        if is_scalar(arg):
+        if _is_scalar_or_zero_d_array(arg):
             return self.element_indexing(int(arg))
         elif isinstance(arg, slice):
             start, stop, stride = arg.indices(len(self))
@@ -522,9 +534,9 @@ class ColumnBase(Column, Serializable):
             arg = as_column(arg)
             if len(arg) == 0:
                 arg = as_column([], dtype="int32")
-            if pd.api.types.is_integer_dtype(arg.dtype):
+            if is_integer_dtype(arg.dtype):
                 return self.take(arg)
-            if pd.api.types.is_bool_dtype(arg.dtype):
+            if is_bool_dtype(arg.dtype):
                 return self.apply_boolean_mask(arg)
             raise NotImplementedError(type(arg))
 
@@ -558,7 +570,7 @@ class ColumnBase(Column, Serializable):
                 nelem = abs(key_stop - key_start)
         else:
             key = as_column(key)
-            if pd.api.types.is_bool_dtype(key.dtype):
+            if is_bool_dtype(key.dtype):
                 if not len(key) == len(self):
                     raise ValueError(
                         "Boolean mask must be of same length as column"
@@ -884,11 +896,11 @@ class ColumnBase(Column, Serializable):
         raise NotImplementedError()
 
     def astype(self, dtype: Dtype, **kwargs) -> ColumnBase:
-        if is_numerical_dtype(dtype):
+        if _is_non_decimal_numeric_dtype(dtype):
             return self.as_numerical_column(dtype)
         elif is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
-        elif pd.api.types.pandas_dtype(dtype).type in {
+        elif pandas_dtype(dtype).type in {
             np.str_,
             np.object_,
             str,
@@ -1331,7 +1343,7 @@ def column_empty(
 ) -> ColumnBase:
     """Allocate a new column like the given row_count and dtype.
     """
-    dtype = pd.api.types.pandas_dtype(dtype)
+    dtype = pandas_dtype(dtype)
     children = ()  # type: Tuple[ColumnBase, ...]
 
     if is_categorical_dtype(dtype):
@@ -1390,9 +1402,9 @@ def build_column(
     offset : int, optional
     children : tuple, optional
     """
-    dtype = pd.api.types.pandas_dtype(dtype)
+    dtype = pandas_dtype(dtype)
 
-    if is_numerical_dtype(dtype):
+    if _is_non_decimal_numeric_dtype(dtype):
         assert data is not None
         return cudf.core.column.NumericalColumn(
             data=data,
@@ -1782,11 +1794,9 @@ def as_column(
         col = ColumnBase.from_arrow(arbitrary)
         if isinstance(arbitrary, pa.NullArray):
             if type(dtype) == str and dtype == "empty":
-                new_dtype = pd.api.types.pandas_dtype(
-                    arbitrary.type.to_pandas_dtype()
-                )
+                new_dtype = pandas_dtype(arbitrary.type.to_pandas_dtype())
             else:
-                new_dtype = pd.api.types.pandas_dtype(dtype)
+                new_dtype = pandas_dtype(dtype)
             col = col.astype(new_dtype)
 
         return col
@@ -2031,7 +2041,7 @@ def as_column(
                             ),
                         )
                         return cudf.core.column.DecimalColumn.from_arrow(data)
-                    dtype = pd.api.types.pandas_dtype(dtype)
+                    dtype = pandas_dtype(dtype)
                     if is_categorical_dtype(dtype) or is_interval_dtype(dtype):
                         raise TypeError
                     else:
@@ -2084,8 +2094,7 @@ def _construct_array(
         if (
             dtype is None
             and not cudf._lib.scalar._is_null_host_scalar(arbitrary)
-            and pd.api.types.infer_dtype(arbitrary)
-            in ("mixed", "mixed-integer",)
+            and infer_dtype(arbitrary) in ("mixed", "mixed-integer",)
         ):
             native_dtype = "object"
         arbitrary = np.asarray(
@@ -2270,7 +2279,7 @@ def full(size: int, fill_value: ScalarLike, dtype: Dtype = None) -> ColumnBase:
 def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     """Concatenate a sequence of columns."""
     if len(objs) == 0:
-        dtype = pd.api.types.pandas_dtype(None)
+        dtype = pandas_dtype(None)
         return column_empty(0, dtype=dtype, masked=True)
 
     # If all columns are `NumericalColumn` with different dtypes,
@@ -2278,7 +2287,8 @@ def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     # Notice, we can always cast pure null columns
     not_null_col_dtypes = [o.dtype for o in objs if o.valid_count]
     if len(not_null_col_dtypes) and all(
-        is_numerical_dtype(dtyp) and np.issubdtype(dtyp, np.datetime64)
+        _is_non_decimal_numeric_dtype(dtyp)
+        and np.issubdtype(dtyp, np.datetime64)
         for dtyp in not_null_col_dtypes
     ):
         # Use NumPy to find a common dtype
@@ -2291,7 +2301,7 @@ def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
 
     for i, obj in enumerate(objs):
         # Check that all columns are the same type:
-        if not pd.api.types.is_dtype_equal(obj.dtype, head.dtype):
+        if not is_dtype_equal(obj.dtype, head.dtype):
             # if all null, cast to appropriate dtype
             if obj.valid_count == 0:
                 objs[i] = column_empty_like(

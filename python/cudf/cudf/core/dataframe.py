@@ -19,7 +19,6 @@ import pyarrow as pa
 from numba import cuda
 from nvtx import annotate
 from pandas._config import get_option
-from pandas.api.types import is_dict_like
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 
@@ -39,6 +38,7 @@ from cudf.core.window import Rolling
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    _is_scalar_or_zero_d_array,
     can_convert_to_column,
     cudf_dtype_from_pydata_dtype,
     find_common_type,
@@ -53,6 +53,8 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import GetAttrGetItemMixin
+
+from ..api.types import is_bool_dtype, is_dict_like
 
 T = TypeVar("T", bound="DataFrame")
 
@@ -719,7 +721,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         >>> df[[True, False, True, False]] # mask the entire dataframe,
         # returning the rows specified in the boolean mask
         """
-        if is_scalar(arg) or isinstance(arg, tuple):
+        if _is_scalar_or_zero_d_array(arg) or isinstance(arg, tuple):
             return self._get_columns_by_label(arg, downcast=True)
 
         elif isinstance(arg, slice):
@@ -3153,7 +3155,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         2  3.0  c
         """
         positions = as_column(positions)
-        if pd.api.types.is_bool_dtype(positions):
+        if is_bool_dtype(positions):
             return self._apply_boolean_mask(positions)
         out = self._gather(positions, keep_index=keep_index)
         out.columns = self.columns
@@ -3185,7 +3187,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 f"{num_cols * (num_cols > 0)}"
             )
 
-        if is_scalar(value):
+        if _is_scalar_or_zero_d_array(value):
             value = utils.scalar_broadcast_to(value, len(self))
 
         if len(self) == 0:
