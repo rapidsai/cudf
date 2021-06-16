@@ -25,10 +25,10 @@
 class RowConversion : public cudf::benchmark {
 };
 
-static void BM_to_row(benchmark::State& state)
+static void BM_old_to_row(benchmark::State& state)
 {
   cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
-/*  auto const table = create_random_table({cudf::type_id::INT8,
+  auto const table = create_random_table({cudf::type_id::INT8,
                                           cudf::type_id::INT32,
                                           cudf::type_id::INT16,
                                           cudf::type_id::INT64,
@@ -37,11 +37,11 @@ static void BM_to_row(benchmark::State& state)
                                           cudf::type_id::UINT16,
                                           cudf::type_id::UINT8,
                                           cudf::type_id::UINT64},
-                                         50,
-                                         row_count{n_rows});*/
-  auto const table = create_random_table({cudf::type_id::INT32},
-  64,
-  row_count{n_rows});
+                                         212,
+                                         row_count{n_rows});
+  /*  auto const table = create_random_table({cudf::type_id::INT32},
+    64,
+    row_count{n_rows});*/
 
   cudf::size_type total_bytes = 0;
   for (int i = 0; i < table->num_columns(); ++i) {
@@ -52,14 +52,46 @@ static void BM_to_row(benchmark::State& state)
   for (auto _ : state) {
     cuda_event_timer raii(state, true, rmm::cuda_stream_default);
 
-//    auto rows = cudf::convert_to_rows(table->view());
+    auto rows = cudf::convert_to_rows(table->view());
+  }
+
+  state.SetBytesProcessed(state.iterations() * total_bytes * 2 * table->num_rows());
+}
+
+static void BM_new_to_row(benchmark::State& state)
+{
+  cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
+  auto const table = create_random_table({cudf::type_id::INT8,
+                                          cudf::type_id::INT32,
+                                          cudf::type_id::INT16,
+                                          cudf::type_id::INT64,
+                                          cudf::type_id::INT32,
+                                          cudf::type_id::BOOL8,
+                                          cudf::type_id::UINT16,
+                                          cudf::type_id::UINT8,
+                                          cudf::type_id::UINT64},
+                                         212,
+                                         row_count{n_rows});
+  /*  auto const table = create_random_table({cudf::type_id::INT32},
+    64,
+    row_count{n_rows});*/
+
+  cudf::size_type total_bytes = 0;
+  for (int i = 0; i < table->num_columns(); ++i) {
+    auto t = table->get_column(i).type();
+    total_bytes += cudf::size_of(t);
+  }
+
+  for (auto _ : state) {
+    cuda_event_timer raii(state, true, rmm::cuda_stream_default);
+
     auto new_rows = cudf::convert_to_rows2(table->view());
   }
 
   state.SetBytesProcessed(state.iterations() * total_bytes * 2 * table->num_rows());
 }
 
-static void BM_from_row(benchmark::State& state)
+/*static void BM_from_row(benchmark::State& state)
 {
   cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
   auto const table = create_random_table({cudf::type_id::INT8,
@@ -73,9 +105,6 @@ static void BM_from_row(benchmark::State& state)
                                           cudf::type_id::UINT64},
                                          256,
                                          row_count{n_rows});
-  /*  auto const table = create_random_table({cudf::type_id::INT32},
-                                           4,
-                                           row_count{n_rows});*/
 
   std::vector<cudf::data_type> schema;
   cudf::size_type total_bytes = 0;
@@ -94,18 +123,19 @@ static void BM_from_row(benchmark::State& state)
   }
 
   state.SetBytesProcessed(state.iterations() * total_bytes * 2 * table->num_rows());
-}
+}*/
 
-#define TO_ROW_CONVERSION_BENCHMARK_DEFINE(name) \
-  BENCHMARK_DEFINE_F(RowConversion, name)        \
-  (::benchmark::State & st) { BM_to_row(st); }   \
-  BENCHMARK_REGISTER_F(RowConversion, name)      \
-    ->RangeMultiplier(8)                         \
-    ->Ranges({{1 << 6, 1 << 20}})               \
-    ->UseManualTime()                            \
+#define TO_ROW_CONVERSION_BENCHMARK_DEFINE(name, f) \
+  BENCHMARK_DEFINE_F(RowConversion, name)           \
+  (::benchmark::State & st) { f(st); }              \
+  BENCHMARK_REGISTER_F(RowConversion, name)         \
+    ->RangeMultiplier(8)                            \
+    ->Ranges({{1 << 6, 1 << 20}})                   \
+    ->UseManualTime()                               \
     ->Unit(benchmark::kMillisecond);
 
-TO_ROW_CONVERSION_BENCHMARK_DEFINE(to_row_conversion)
+TO_ROW_CONVERSION_BENCHMARK_DEFINE(old_to_row_conversion, BM_old_to_row)
+TO_ROW_CONVERSION_BENCHMARK_DEFINE(new_to_row_conversion, BM_new_to_row)
 
 #define FROM_ROW_CONVERSION_BENCHMARK_DEFINE(name) \
   BENCHMARK_DEFINE_F(RowConversion, name)          \
@@ -116,4 +146,4 @@ TO_ROW_CONVERSION_BENCHMARK_DEFINE(to_row_conversion)
     ->UseManualTime()                              \
     ->Unit(benchmark::kMillisecond);
 
-FROM_ROW_CONVERSION_BENCHMARK_DEFINE(from_row_conversion)
+//FROM_ROW_CONVERSION_BENCHMARK_DEFINE(from_row_conversion)
