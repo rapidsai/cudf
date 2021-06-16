@@ -9,7 +9,7 @@ import pytest
 import cudf
 from cudf import NA
 from cudf._lib.copying import get_element
-from cudf.tests.utils import assert_eq
+from cudf.tests.utils import assert_eq, NUMERIC_TYPES, DATETIME_TYPES, TIMEDELTA_TYPES
 
 
 @pytest.mark.parametrize(
@@ -372,6 +372,19 @@ def test_list_getitem(data):
 def test_list_scalar_host_construction(data):
     slr = cudf.Scalar(data)
     assert slr.value == data
+
+
+@pytest.mark.parametrize('elem_type', 
+    NUMERIC_TYPES+DATETIME_TYPES+TIMEDELTA_TYPES+['str']
+)
+@pytest.mark.parametrize('nesting_level', [1,2,3])
+def test_list_scalar_host_construction_null(elem_type, nesting_level):
+    dtype = cudf.ListDtype(elem_type)
+    for level in range(nesting_level - 1):
+        dtype = cudf.ListDtype(dtype)
+    
+    slr = cudf.Scalar(None, dtype=dtype)
+    assert slr.value is cudf.NA
 
 
 @pytest.mark.parametrize(

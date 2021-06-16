@@ -302,8 +302,9 @@ cdef _set_list_from_pylist(unique_ptr[scalar]& s,
                            object value,
                            object dtype,
                            bool valid=True):
+    value = value if valid else [cudf.NA]
     cdef Column col = cudf.core.column.as_column(
-        pa.array(value)
+        pa.array(value, from_pandas=True, type=dtype.to_arrow())
     )
     cdef column_view col_view = col.view()
     s.reset(
