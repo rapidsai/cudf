@@ -40,20 +40,6 @@ using cudf::column_view;
 using cudf::null_policy;
 using cudf::scan_type;
 
-void print_view(column_view const& view, const char* msg = nullptr)
-{
-  std::cout << msg << " {";
-  cudf::test::print(view);
-  std::cout << "}\n";
-}
-
-template <typename T>
-struct value_or {
-  T _or;
-  explicit value_or(T value) : _or{value} {}
-  T operator()(T const& value, bool mask) { return mask ? value : _or; }
-};
-
 template <typename T>
 struct TypeParam_to_host_type {
   using type = T;
@@ -63,24 +49,6 @@ template <>
 struct TypeParam_to_host_type<cudf::string_view> {
   using type = std::string;
 };
-
-template <typename I, typename I2, typename O, typename ZipOp, typename BinOp>
-void zip_inclusive_scan(I first, I last, I2 first2, O output, ZipOp zipop, BinOp binop)
-{
-  // this could be implemented with a call to std::transform and then a
-  // subsequent call to std::partial_sum but that you be less memory efficient
-  if (first == last) return;
-  auto acc = zipop(*first, *first2);
-  *output  = acc;
-  std::transform(std::next(first),
-                 last,
-                 std::next(first2),
-                 std::next(output),
-                 [&](auto const& e, auto const& mask) mutable {
-                   acc = binop(acc, zipop(e, mask));
-                   return acc;
-                 });
-}
 
 template <typename TypeParam, typename T>
 typename std::enable_if<std::is_same_v<TypeParam, cudf::string_view>,
@@ -207,6 +175,10 @@ struct ScanTest : public cudf::test::BaseFixture {
 
     bool const nullable = (b.size() > 0);
 
+    auto masked_value = [identity](auto const& z) {
+      return thrust::get<1>(z) ? thrust::get<0>(z) : identity;
+    };
+
     if (inclusive == cudf::scan_type::INCLUSIVE) {
       if (nullable) {
         std::transform_inclusive_scan(
@@ -214,9 +186,7 @@ struct ScanTest : public cudf::test::BaseFixture {
           thrust::make_zip_iterator(thrust::make_tuple(v.end(), b.end())),
           expected.begin(),
           op,
-          [id = identity](auto const& z) {
-            return value_or<HostType>{id}(thrust::get<0>(z), thrust::get<1>(z));
-          });
+          masked_value);
 
         if (null_handling == null_policy::INCLUDE) {
           std::inclusive_scan(b.begin(), b.end(), b_out.begin(), std::logical_and<bool>{});
@@ -232,9 +202,7 @@ struct ScanTest : public cudf::test::BaseFixture {
           expected.begin(),
           identity,
           op,
-          [id = identity](auto const& z) {
-            return value_or<HostType>{id}(thrust::get<0>(z), thrust::get<1>(z));
-          });
+          masked_value);
 
         if (null_handling == null_policy::INCLUDE) {
           std::exclusive_scan(b.begin(), b.end(), b_out.begin(), true, std::logical_and<bool>{});
