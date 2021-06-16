@@ -8,7 +8,6 @@ from typing import Any, Mapping, Sequence, Tuple, Union, cast
 import cupy
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_integer_dtype
 
 import cudf
 from cudf import _lib as libcudf
@@ -32,6 +31,7 @@ from cudf.utils.dtypes import (
     to_cudf_compatible_scalar,
 )
 
+from ...api.types import is_integer_dtype, is_number
 from .numerical_base import NumericalBaseColumn
 
 
@@ -393,7 +393,7 @@ class NumericalColumn(NumericalBaseColumn):
         if closest=True.
         """
         value = to_cudf_compatible_scalar(value)
-        if not pd.api.types.is_number(value):
+        if not is_number(value):
             raise ValueError("Expected a numeric value")
         found = 0
         if len(self):
@@ -422,7 +422,7 @@ class NumericalColumn(NumericalBaseColumn):
         if closest=True.
         """
         value = to_cudf_compatible_scalar(value)
-        if not pd.api.types.is_number(value):
+        if not is_number(value):
             raise ValueError("Expected a numeric value")
         found = 0
         if len(self):
