@@ -991,14 +991,6 @@ def test_small_zip(tmpdir):
     fname = tmpdir.join("small_zip_file.zip")
     df.to_csv(fname, index=False)
 
-    df = pd.DataFrame(
-        {
-            "a": [1997] * 2,
-            "b": ["Ford"] * 2,
-            "c": ["Superd, luxurious truck"] * 2,
-        }
-    )
-
     got = cudf.read_csv(fname)
     assert_eq(df, got)
 
@@ -1607,8 +1599,10 @@ def test_csv_writer_column_and_header_options(
 
 def test_csv_writer_empty_columns_parameter(cudf_mixed_dataframe):
     df = cudf_mixed_dataframe
-    write_str = df.to_csv(columns=[], index=False)
-    assert_eq(write_str, "\n")
+
+    buffer = BytesIO()
+    with pytest.raises(RuntimeError):
+        df.to_csv(buffer, columns=[], index=False)
 
 
 def test_csv_writer_multiindex(tmpdir):
@@ -2001,13 +1995,3 @@ def test_to_csv_compression_error():
     error_message = "Writing compressed csv is not currently supported in cudf"
     with pytest.raises(NotImplementedError, match=re.escape(error_message)):
         df.to_csv("test.csv", compression=compression)
-
-
-def test_empty_df_no_index():
-    actual = cudf.DataFrame({})
-    buffer = BytesIO()
-    actual.to_csv(buffer, index=False)
-
-    result = cudf.read_csv(buffer)
-
-    assert_eq(actual, result)
