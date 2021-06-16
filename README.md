@@ -65,7 +65,6 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 
 cuDF can be installed with conda ([miniconda](https://conda.io/miniconda.html), or the full [Anaconda distribution](https://www.anaconda.com/download)) from the `rapidsai` channel:
 
-<<<<<<< HEAD
 For `cudf version == 21.06` :
 ```bash
 # for CUDA 11.0
