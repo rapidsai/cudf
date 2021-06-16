@@ -72,7 +72,7 @@ constexpr auto types_to_ids()
 }  // namespace detail
 
 /**
- * @brief Convert numeric values type T to numeric vector of type TypeParam.
+ * @brief Convert numeric values of type T to numeric vector of type TypeParam.
  *
  * This will also convert negative values to positive values if the output type is unsigned.
  *
@@ -95,6 +95,12 @@ make_type_param_vector(std::initializer_list<T> const& init_list)
   return vec;
 }
 
+/**
+ * @brief Convert numeric values of type T to timestamp vector
+ *
+ * @param init_list Values used to create the output vector
+ * @return Vector of TypeParam with the values specified
+ */
 template <typename TypeParam, typename T>
 typename std::enable_if<cudf::is_timestamp_t<TypeParam>::value,
                         thrust::host_vector<TypeParam>>::type
@@ -106,6 +112,13 @@ make_type_param_vector(std::initializer_list<T> const& init_list)
   });
   return vec;
 }
+
+/**
+ * @brief Convert numeric values of type T to vector of std::string
+ *
+ * @param init_list Values used to create the output vector
+ * @return Vector of TypeParam with the values specified
+ */
 
 template <typename TypeParam, typename T>
 typename std::enable_if<std::is_same_v<TypeParam, std::string>,
