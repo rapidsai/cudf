@@ -36,16 +36,23 @@ from cudf.core.frame import SingleColumnFrame
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    _is_non_decimal_numeric_dtype,
     find_common_type,
     is_categorical_dtype,
     is_interval_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
-    is_numerical_dtype,
     is_scalar,
     numeric_normalize_types,
 )
 from cudf.utils.utils import cached_property, search_range
+
+from ..api.types import (
+    _is_scalar_or_zero_d_array,
+    is_dtype_equal,
+    is_integer,
+    is_string_dtype,
+)
 
 
 class BaseIndex(SingleColumnFrame, Serializable):
@@ -191,7 +198,7 @@ class BaseIndex(SingleColumnFrame, Serializable):
 
         if level == self.name:
             return self
-        elif pd.api.types.is_integer(level):
+        elif is_integer(level):
             if level != 0:
                 raise IndexError(
                     f"Cannot get level: {level} " f"for index with 1 level"
@@ -1038,7 +1045,7 @@ class BaseIndex(SingleColumnFrame, Serializable):
         >>> index.astype('float64')
         Float64Index([1.0, 2.0, 3.0], dtype='float64')
         """
-        if pd.api.types.is_dtype_equal(dtype, self.dtype):
+        if is_dtype_equal(dtype, self.dtype):
             return self.copy(deep=copy)
 
         return as_index(
@@ -1628,7 +1635,7 @@ class RangeIndex(BaseIndex):
             index = self._start + index * self._step
             return index
         else:
-            if is_scalar(index):
+            if _is_scalar_or_zero_d_array(index):
                 index = np.min_scalar_type(index).type(index)
             index = column.as_column(index)
 
@@ -2655,7 +2662,7 @@ def interval_range(
         for x in (start, end, freq, periods)
     ]
     if any(
-        not is_numerical_dtype(x.dtype) if x is not None else False
+        not _is_non_decimal_numeric_dtype(x.dtype) if x is not None else False
         for x in args
     ):
         raise ValueError("start, end, periods, freq must be numeric values.")
@@ -2849,7 +2856,7 @@ class StringIndex(GenericIndex):
             values = values._values.copy(deep=copy)
         else:
             values = column.as_column(values, dtype="str")
-            if not pd.api.types.is_string_dtype(values.dtype):
+            if not is_string_dtype(values.dtype):
                 raise ValueError(
                     "Couldn't create StringIndex from passed in object"
                 )
