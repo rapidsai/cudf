@@ -219,8 +219,6 @@ cdef dtype_from_column_view(column_view cv):
                                   "Use decimal64 instead")
     elif tid == libcudf_types.type_id.DICTIONARY32:
         return dtype_from_dictionary_column_view(cv)
-    elif tid == libcudf_types.type_id.EMPTY:
-        return None
     else:
         return cudf_to_np_types[<underlying_type_t_type_id>(tid)]
 

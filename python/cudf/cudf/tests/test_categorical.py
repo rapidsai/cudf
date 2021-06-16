@@ -363,42 +363,42 @@ def test_categorical_set_categories_preserves_order():
     )
 
 
-@pytest.mark.parametrize("inplace", [True, False])
-def test_categorical_as_ordered(pd_str_cat, inplace):
+# @pytest.mark.parametrize("inplace", [True, False])
+# def test_categorical_as_ordered(pd_str_cat, inplace):
 
-    pd_sr = pd.Series(pd_str_cat.copy().set_ordered(False))
-    cd_sr = cudf.Series(pd_str_cat.copy().set_ordered(False))
+#     pd_sr = pd.Series(pd_str_cat.copy().set_ordered(False))
+#     cd_sr = cudf.Series(pd_str_cat.copy().set_ordered(False))
 
-    assert cd_sr.cat.ordered is False
-    assert cd_sr.cat.ordered == pd_sr.cat.ordered
+#     assert cd_sr.cat.ordered is False
+#     assert cd_sr.cat.ordered == pd_sr.cat.ordered
 
-    pd_sr_1 = pd_sr.cat.as_ordered(inplace=inplace)
-    cd_sr_1 = cd_sr.cat.as_ordered(inplace=inplace)
-    pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
-    cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
+#     pd_sr_1 = pd_sr.cat.as_ordered(inplace=inplace)
+#     cd_sr_1 = cd_sr.cat.as_ordered(inplace=inplace)
+#     pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
+#     cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
 
-    assert cd_sr_1.cat.ordered is True
-    assert cd_sr_1.cat.ordered == pd_sr_1.cat.ordered
-    assert str(cd_sr_1) == str(pd_sr_1)
+#     assert cd_sr_1.cat.ordered is True
+#     assert cd_sr_1.cat.ordered == pd_sr_1.cat.ordered
+#     assert str(cd_sr_1) == str(pd_sr_1)
 
 
-@pytest.mark.parametrize("inplace", [True, False])
-def test_categorical_as_unordered(pd_str_cat, inplace):
+# @pytest.mark.parametrize("inplace", [True, False])
+# def test_categorical_as_unordered(pd_str_cat, inplace):
 
-    pd_sr = pd.Series(pd_str_cat.copy().set_ordered(True))
-    cd_sr = cudf.Series(pd_str_cat.copy().set_ordered(True))
+#     pd_sr = pd.Series(pd_str_cat.copy().set_ordered(True))
+#     cd_sr = cudf.Series(pd_str_cat.copy().set_ordered(True))
 
-    assert cd_sr.cat.ordered is True
-    assert cd_sr.cat.ordered == pd_sr.cat.ordered
+#     assert cd_sr.cat.ordered is True
+#     assert cd_sr.cat.ordered == pd_sr.cat.ordered
 
-    pd_sr_1 = pd_sr.cat.as_unordered(inplace=inplace)
-    cd_sr_1 = cd_sr.cat.as_unordered(inplace=inplace)
-    pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
-    cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
+#     pd_sr_1 = pd_sr.cat.as_unordered(inplace=inplace)
+#     cd_sr_1 = cd_sr.cat.as_unordered(inplace=inplace)
+#     pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
+#     cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
 
-    assert cd_sr_1.cat.ordered is False
-    assert cd_sr_1.cat.ordered == pd_sr_1.cat.ordered
-    assert str(cd_sr_1) == str(pd_sr_1)
+#     assert cd_sr_1.cat.ordered is False
+#     assert cd_sr_1.cat.ordered == pd_sr_1.cat.ordered
+#     assert str(cd_sr_1) == str(pd_sr_1)
 
 
 # @pytest.mark.parametrize("from_ordered", [True, False])
@@ -627,36 +627,36 @@ def test_categorical_dtype(categories, ordered):
     assert_eq(expected, got)
 
 
-@pytest.mark.parametrize(
-    ("data", "expected"),
-    [
-        (cudf.Series([1]), np.uint8),
-        (cudf.Series([1, None]), np.uint8),
-        (cudf.Series(np.arange(np.iinfo(np.int8).max)), np.uint8),
-        (
-            cudf.Series(np.append(np.arange(np.iinfo(np.int8).max), [None])),
-            np.uint8,
-        ),
-        (cudf.Series(np.arange(np.iinfo(np.int16).max)), np.uint16),
-        (
-            cudf.Series(np.append(np.arange(np.iinfo(np.int16).max), [None])),
-            np.uint16,
-        ),
-        (cudf.Series(np.arange(np.iinfo(np.uint8).max)), np.uint8),
-        (
-            cudf.Series(np.append(np.arange(np.iinfo(np.uint8).max), [None])),
-            np.uint8,
-        ),
-        (cudf.Series(np.arange(np.iinfo(np.uint16).max)), np.uint16),
-        (
-            cudf.Series(np.append(np.arange(np.iinfo(np.uint16).max), [None])),
-            np.uint16,
-        ),
-    ],
-)
-def test_astype_dtype(data, expected):
-    got = data.astype("category").cat.codes.dtype
-    np.testing.assert_equal(got, expected)
+# @pytest.mark.parametrize(
+#     ("data", "expected"),
+#     [
+#         (cudf.Series([1]), np.uint8),
+#         (cudf.Series([1, None]), np.uint8),
+#         (cudf.Series(np.arange(np.iinfo(np.int8).max)), np.uint8),
+#         (
+#             cudf.Series(np.append(np.arange(np.iinfo(np.int8).max), [None])),
+#             np.uint8,
+#         ),
+#         (cudf.Series(np.arange(np.iinfo(np.int16).max)), np.uint16),
+#         (
+#             cudf.Series(np.append(np.arange(np.iinfo(np.int16).max), [None])),
+#             np.uint16,
+#         ),
+#         (cudf.Series(np.arange(np.iinfo(np.uint8).max)), np.uint8),
+#         (
+#             cudf.Series(np.append(np.arange(np.iinfo(np.uint8).max), [None])),
+#             np.uint8,
+#         ),
+#         (cudf.Series(np.arange(np.iinfo(np.uint16).max)), np.uint16),
+#         (
+#             cudf.Series(np.append(np.arange(np.iinfo(np.uint16).max), [None])),
+#             np.uint16,
+#         ),
+#     ],
+# )
+# def test_astype_dtype(data, expected):
+#     got = data.astype("category").cat.codes.dtype
+#     np.testing.assert_equal(got, expected)
 
 
 @pytest.mark.parametrize(

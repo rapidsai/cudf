@@ -251,8 +251,6 @@ class ColumnBase(Column, Serializable):
         if not isinstance(array, (pa.Array, pa.ChunkedArray)):
             raise TypeError("array should be PyArrow array or chunked array")
 
-        data = pa.table([array], [None])
-
         if isinstance(array.type, pa.StructType):
             return cudf.core.column.StructColumn.from_arrow(array)
         elif isinstance(
@@ -261,14 +259,18 @@ class ColumnBase(Column, Serializable):
             return cudf.core.column.IntervalColumn.from_arrow(array)
         elif isinstance(array.type, pa.Decimal128Type):
             return cudf.core.column.DecimalColumn.from_arrow(array)
+        elif isinstance(array, pa.DictionaryArray) and isinstance(array.dictionary, pa.NullArray):
+            array = pa.DictionaryArray.from_arrays(array.indices, pa.array([], type=pa.string()))
 
+        data = pa.table([array], [None])
         result = libcudf.interop.from_arrow(data, data.column_names)._data[
             "None"
         ]
 
-        result = result._with_type_metadata(
-            cudf_dtype_from_pa_type(array.type)
-        )
+        dtype = cudf_dtype_from_pa_type(array.type)
+        if isinstance(dtype, CategoricalDtype):
+            dtype._categories = as_column(array.dictionary)
+        result = result._with_type_metadata(dtype)
         return result
 
     def _get_mask_as_column(self) -> ColumnBase:
@@ -918,7 +920,7 @@ class ColumnBase(Column, Serializable):
                 labels = labels.astype(min_type)
 
         return build_categorical_column(
-            categories=cats,
+            categories=as_column(cats),
             codes=labels._column,
             mask=self.mask,
             ordered=ordered,

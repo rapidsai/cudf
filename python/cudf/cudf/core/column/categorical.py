@@ -1,6 +1,7 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 from __future__ import annotations
+from mimetypes import common_types
 
 import pickle
 from collections.abc import MutableSequence
@@ -42,6 +43,7 @@ from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import (
+    find_common_type,
     is_categorical_dtype,
     is_mixed_with_object_dtype,
     min_signed_type,
@@ -571,17 +573,23 @@ class CategoricalAccessor(ColumnMethodsMixin):
                 ordered=self.ordered
             )
 
-        breakpoint()
-        if type(self._column.categories) is not type(new_categories):
+
+        out_col = self._column
+        if not type(self._column.children[1]) == type(new_categories):
             # Return a new categorical column of same size, but null-filled
-            return _null_filled_categorical_column_like(self._column, 
+            out_col = _null_filled_categorical_column_like(self._column, 
                                                         dtype=CategoricalDtype(
                                                             new_categories,
                                                             ordered=self.ordered
                                                         )
                                                         )
-        else:
-            out_col = self._set_categories(new_categories, ordered=ordered)
+        elif (
+                not self._categories_equal(new_categories, ordered=ordered)
+                or not self.ordered == ordered
+             ):
+                out_col = self._set_categories(
+                    new_categories, ordered=ordered,
+                )
         return self._return_or_inplace(out_col, inplace=inplace)
 
     def reorder_categories(
@@ -700,7 +708,9 @@ class CategoricalAccessor(ColumnMethodsMixin):
 
         Notes
         -----
-        Assumes ``new_categories`` is the same dtype as the current categories
+        Assumes ``new_categories`` is the same type as the current categories,
+        when both are Numerical type but dtype is different, ``new_categories``
+        dtype will direct the output's dtype.
         """
         new_categories = column.as_column(new_categories)
 
@@ -708,7 +718,24 @@ class CategoricalAccessor(ColumnMethodsMixin):
         if should_drop_duplicates:
             new_categories = drop_duplicates(Table({None: new_categories}))._columns[0]
 
-        new_col = cpp_set_categories(self._column, new_categories)
+        col = self._column
+
+        new_categories_as_common_type = new_categories
+        if isinstance(new_categories, cudf.core.column.NumericalColumn) and not new_categories.dtype == col.children[1].dtype:
+            common_type = find_common_type([col.children[1].dtype, new_categories.dtype])
+            converted_categories = col.children[1].astype(common_type)
+            col = column.build_categorical_column(
+                categories=converted_categories,
+                codes=col.children[0],
+                mask=col.base_mask,
+                size=col.base_size,
+                offset=col.offset,
+                null_count=col.null_count,
+                ordered=col.ordered
+            )
+            new_categories_as_common_type = new_categories.astype(common_type)
+            
+        new_col = cpp_set_categories(col, new_categories_as_common_type)
         new_col = column.build_column(
             dtype=CategoricalDtype(new_categories, ordered=ordered),
             data=None,
@@ -718,7 +745,6 @@ class CategoricalAccessor(ColumnMethodsMixin):
             null_count=new_col.null_count,
             children=new_col.base_children
         )
-        new_col._category_order = new_categories.argsort()
 
         return new_col
 
@@ -1393,16 +1419,16 @@ class CategoricalColumn(column.ColumnBase):
     def _with_type_metadata(
         self: CategoricalColumn, dtype: Dtype
     ) -> CategoricalColumn:
-        if isinstance(dtype, CategoricalDtype):
-            return column.build_categorical_column(
-                categories=self.base_children[1],
-                codes=self.base_children[0],
-                mask=self.base_mask,
-                ordered=dtype.ordered,
-                size=self.size,
-                offset=self.offset,
-                null_count=self.null_count,
-            )
+        # if isinstance(dtype, CategoricalDtype):
+        #     return column.build_categorical_column(
+        #         categories=self.base_children[1],
+        #         codes=self.base_children[0],
+        #         mask=self.base_mask,
+        #         ordered=dtype.ordered,
+        #         size=self.size,
+        #         offset=self.offset,
+        #         null_count=self.null_count,
+        #     )
 
         return self
 
