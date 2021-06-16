@@ -186,10 +186,9 @@ ConfigureTest(CSV_TEST io/csv_test.cpp)
 ConfigureTest(ORC_TEST io/orc_test.cpp)
 ConfigureTest(PARQUET_TEST io/parquet_test.cpp)
 ConfigureTest(JSON_TEST io/json_test.cpp)
-
-# ARROW_IO_TEST requires Arrow being built with S3 support
+ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
 if(CUDF_ENABLE_ARROW_S3)
-    ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
+  target_compile_definitions(ARROW_IO_SOURCE_TEST PRIVATE "S3_ENABLED")
 endif()
 
 ###################################################################################################
