@@ -18,8 +18,8 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3)
 
     set(ARROW_BUILD_SHARED ON)
     set(ARROW_BUILD_STATIC OFF)
-    set(CPMAddOrFindPackage CPMFindPackage)
     set(ARROW_BUILD_S3 OFF)
+    set(CPMAddOrFindPackage CPMFindPackage)
 
     if(NOT ARROW_ARMV8_ARCH)
         set(ARROW_ARMV8_ARCH "armv8-a")
