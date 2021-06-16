@@ -12,6 +12,8 @@ from cudf.core.column.column import as_column
 from cudf.utils import cudautils
 from cudf.utils.utils import GetAttrGetItemMixin
 
+from ...api.types import is_integer, is_number
+
 
 class Rolling(GetAttrGetItemMixin):
     """
@@ -295,9 +297,9 @@ class Rolling(GetAttrGetItemMixin):
           Only valid for datetime index.
         """
         window, min_periods = self.window, self.min_periods
-        if pd.api.types.is_number(window):
+        if is_number(window):
             # only allow integers
-            if not pd.api.types.is_integer(window):
+            if not is_integer(window):
                 raise ValueError("window must be an integer")
             if window <= 0:
                 raise ValueError("window cannot be zero or negative")
@@ -338,7 +340,7 @@ class Rolling(GetAttrGetItemMixin):
         For non-fixed width windows,
         convert the window argument into window sizes.
         """
-        if pd.api.types.is_integer(window):
+        if is_integer(window):
             return window
         else:
             return cudautils.window_sizes_from_offset(
@@ -376,7 +378,7 @@ class RollingGroupby(Rolling):
         super().__init__(obj, window, min_periods=min_periods, center=center)
 
     def _window_to_window_sizes(self, window):
-        if pd.api.types.is_integer(window):
+        if is_integer(window):
             return cudautils.grouped_window_sizes_from_offset(
                 column.arange(len(self.obj)).data_array_view,
                 self._group_starts,

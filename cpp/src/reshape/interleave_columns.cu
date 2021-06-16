@@ -34,7 +34,7 @@ struct interleave_columns_functor {
                      not std::is_same<T, cudf::string_view>::value and
                      not std::is_same<T, cudf::list_view>::value,
                    std::unique_ptr<cudf::column>>
-  operator()(Args&&... args)
+  operator()(Args&&...)
   {
     CUDF_FAIL("Called `interleave_columns` on none-supported data type.");
   }
