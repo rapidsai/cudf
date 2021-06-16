@@ -2058,3 +2058,264 @@ def test_index_set_names_error(idx, level, names):
         lfunc_args_and_kwargs=([], {"names": names, "level": level}),
         rfunc_args_and_kwargs=([], {"names": names, "level": level}),
     )
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [pd.Index([1, 3, 6]), pd.Index([6, 1, 3])],  # monotonic  # non-monotonic
+)
+@pytest.mark.parametrize("key", list(range(0, 8)))
+@pytest.mark.parametrize("method", [None, "ffill", "bfill", "nearest"])
+def test_get_loc_single_unique_numeric(idx, key, method):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if (
+        (key not in pi and method is None)
+        # `method` only applicable to monotonic index
+        or (not pi.is_monotonic and method is not None)
+        # Get key before the first element is KeyError
+        or (key == 0 and method in "ffill")
+        # Get key after the last element is KeyError
+        or (key == 7 and method in "bfill")
+    ):
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = pi.get_loc(key, method=method)
+        got = gi.get_loc(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.Index([1, 3, 3, 6]),  # monotonic
+        pd.Index([6, 1, 3, 3]),  # non-monotonic
+    ],
+)
+@pytest.mark.parametrize("key", [0, 3, 6, 7])
+@pytest.mark.parametrize("method", [None])
+def test_get_loc_single_duplicate_numeric(idx, key, method):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if key not in pi:
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = pi.get_loc(key, method=method)
+        got = gi.get_loc(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx", [pd.Index(["b", "f", "m", "q"]), pd.Index(["m", "f", "b", "q"])]
+)
+@pytest.mark.parametrize("key", ["a", "f", "n", "z"])
+@pytest.mark.parametrize("method", [None, "ffill", "bfill"])
+def test_get_loc_single_unique_string(idx, key, method):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if (
+        (key not in pi and method is None)
+        # `method` only applicable to monotonic index
+        or (not pi.is_monotonic and method is not None)
+        # Get key before the first element is KeyError
+        or (key == "a" and method == "ffill")
+        # Get key after the last element is KeyError
+        or (key == "z" and method == "bfill")
+    ):
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = pi.get_loc(key, method=method)
+        got = gi.get_loc(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx", [pd.Index(["b", "m", "m", "q"]), pd.Index(["m", "f", "m", "q"])]
+)
+@pytest.mark.parametrize("key", ["a", "f", "n", "z"])
+@pytest.mark.parametrize("method", [None])
+def test_get_loc_single_duplicate_string(idx, key, method):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if key not in pi:
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = pi.get_loc(key, method=method)
+        got = gi.get_loc(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.MultiIndex.from_tuples(
+            [(1, 1, 1), (1, 1, 2), (1, 2, 1), (1, 2, 3), (2, 1, 1), (2, 2, 1)]
+        ),
+        pd.MultiIndex.from_tuples(
+            [(2, 1, 1), (1, 2, 3), (1, 2, 1), (1, 1, 2), (2, 2, 1), (1, 1, 1)]
+        ),
+        pd.MultiIndex.from_tuples(
+            [(1, 1, 1), (1, 1, 2), (1, 1, 2), (1, 2, 3), (2, 1, 1), (2, 2, 1)]
+        ),
+    ],
+)
+@pytest.mark.parametrize("key", [1, (1, 2), (1, 2, 3), (2, 1, 1), (9, 9, 9)])
+@pytest.mark.parametrize("method", [None])
+def test_get_loc_multi_numeric(idx, key, method):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if key not in pi:
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = pi.get_loc(key, method=method)
+        got = gi.get_loc(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.MultiIndex.from_tuples(
+            [(2, 1, 1), (1, 2, 3), (1, 2, 1), (1, 1, 1), (1, 1, 1), (2, 2, 1)]
+        )
+    ],
+)
+@pytest.mark.parametrize(
+    "key, result",
+    [
+        (1, slice(1, 5, 1)),  # deviates
+        ((1, 2), slice(1, 3, 1)),
+        ((1, 2, 3), slice(1, 2, None)),
+        ((2, 1, 1), slice(0, 1, None)),
+        ((9, 9, 9), None),
+    ],
+)
+@pytest.mark.parametrize("method", [None])
+def test_get_loc_multi_numeric_deviate(idx, key, result, method):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if key not in pi:
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = result
+        got = gi.get_loc(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.MultiIndex.from_tuples(
+            [
+                ("a", "a", "a"),
+                ("a", "a", "b"),
+                ("a", "b", "a"),
+                ("a", "b", "c"),
+                ("b", "a", "a"),
+                ("b", "c", "a"),
+            ]
+        ),
+        pd.MultiIndex.from_tuples(
+            [
+                ("a", "a", "b"),
+                ("a", "b", "c"),
+                ("b", "a", "a"),
+                ("a", "a", "a"),
+                ("a", "b", "a"),
+                ("b", "c", "a"),
+            ]
+        ),
+        pd.MultiIndex.from_tuples(
+            [
+                ("a", "a", "a"),
+                ("a", "b", "c"),
+                ("b", "a", "a"),
+                ("a", "a", "b"),
+                ("a", "b", "a"),
+                ("b", "c", "a"),
+            ]
+        ),
+        pd.MultiIndex.from_tuples(
+            [
+                ("a", "a", "a"),
+                ("a", "a", "b"),
+                ("a", "a", "b"),
+                ("a", "b", "c"),
+                ("b", "a", "a"),
+                ("b", "c", "a"),
+            ]
+        ),
+        pd.MultiIndex.from_tuples(
+            [
+                ("a", "a", "b"),
+                ("b", "a", "a"),
+                ("b", "a", "a"),
+                ("a", "a", "a"),
+                ("a", "b", "a"),
+                ("b", "c", "a"),
+            ]
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "key", ["a", ("a", "a"), ("a", "b", "c"), ("b", "c", "a"), ("z", "z", "z")]
+)
+@pytest.mark.parametrize("method", [None])
+def test_get_loc_multi_string(idx, key, method):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if key not in pi:
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = pi.get_loc(key, method=method)
+        got = gi.get_loc(key, method=method)
+
+        assert_eq(expected, got)
