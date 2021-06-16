@@ -4011,15 +4011,6 @@ def _get_replacement_values_for_columns(
     return all_na_columns, to_replace_columns, values_columns
 
 
-# If the dictionary array is a string array and of length `0`
-# it should be a null array
-def _get_dictionary_array(array):
-    if isinstance(array, pa.StringArray) and len(array) == 0:
-        return pa.array([], type=pa.null())
-    else:
-        return array
-
-
 # Create a dictionary of the common, non-null columns
 def _get_non_null_cols_and_dtypes(col_idxs, list_of_columns):
     # A mapping of {idx: np.dtype}
