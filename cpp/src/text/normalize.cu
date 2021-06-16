@@ -129,7 +129,6 @@ struct codepoint_to_utf8_fn {
       if (!d_chars) d_offsets[idx] = 0;
       return;
     }
-    auto const d_str  = d_strings.element<cudf::string_view>(idx);
     auto const offset = d_cp_offsets[idx];
     auto const count  = d_cp_offsets[idx + 1] - offset;  // number of code-points
     auto str_cps      = cp_data + offset;                // code-points for this string

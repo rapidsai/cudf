@@ -410,3 +410,50 @@ TEST_F(StringsConvertTest, IsHex)
   auto results = cudf::strings::is_hex(cudf::strings_column_view(strings));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
+
+TYPED_TEST(StringsIntegerConvertTest, IntegerToHex)
+{
+  std::vector<TypeParam> h_integers(255);
+  std::generate(h_integers.begin(), h_integers.end(), []() {
+    static TypeParam data = 0;
+    return data++ << (sizeof(TypeParam) - 1) * 8;
+  });
+
+  cudf::test::fixed_width_column_wrapper<TypeParam> integers(h_integers.begin(), h_integers.end());
+
+  std::vector<std::string> h_expected(255);
+  std::transform(h_integers.begin(), h_integers.end(), h_expected.begin(), [](auto v) {
+    if (v == 0) { return std::string("00"); }
+    // special handling for single-byte types
+    if constexpr (std::is_same_v<TypeParam, int8_t> || std::is_same_v<TypeParam, uint8_t>) {
+      char const hex_digits[16] = {
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+      std::string str;
+      str += hex_digits[(v & 0xF0) >> 4];
+      str += hex_digits[(v & 0x0F)];
+      return str;
+    }
+    // all other types work with this
+    std::stringstream str;
+    str << std::setfill('0') << std::setw(sizeof(TypeParam) * 2) << std::hex << std::uppercase << v;
+    return str.str();
+  });
+
+  cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end());
+
+  auto results = cudf::strings::integers_to_hex(integers);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsConvertTest, IntegerToHexWithNull)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> integers(
+    {123456, -1, 0, 0, 12, 12345, 123456789, -123456789}, {1, 1, 1, 0, 1, 1, 1, 1});
+
+  cudf::test::strings_column_wrapper expected(
+    {"01E240", "FFFFFFFF", "00", "", "0C", "3039", "075BCD15", "F8A432EB"},
+    {1, 1, 1, 0, 1, 1, 1, 1});
+
+  auto results = cudf::strings::integers_to_hex(integers);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
