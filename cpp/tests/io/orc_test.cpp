@@ -216,7 +216,6 @@ struct SkipRowTest {
 
 }  // namespace
 
-/*
 TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn)
 {
   auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
@@ -1121,7 +1120,6 @@ TEST_F(OrcReaderTest, MultipleInputs)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
-*/
 
 struct OrcWriterTestDecimal : public OrcWriterTest,
                               public ::testing::WithParamInterface<std::tuple<int, int>> {
@@ -1154,30 +1152,14 @@ TEST_P(OrcWriterTestDecimal, Decimal64)
     cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath});
   auto result = cudf_io::read_orc(in_opts);
 
-  printf("\bOriginal:\n");
-  cudf::test::print(tbl->view().column(0), std::cout, ",\t");
-
-  printf("\nResult:\n");
-  cudf::test::print(result.tbl->view().column(0), std::cout, ",\t");
-
-  printf("Original num_columns: %d, Result num_columns: %d\n",
-         tbl->num_columns(),
-         result.tbl->num_columns());
-
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(tbl->view().column(0), result.tbl->view().column(0));
 }
 
 INSTANTIATE_TEST_CASE_P(OrcWriterTest,
                         OrcWriterTestDecimal,
-                        ::testing::Combine(::testing::Values(10000), ::testing::Values(0)));
-
-/*
-INSTANTIATE_TEST_CASE_P(OrcWriterTest,
-                        OrcWriterTestDecimal,
                         ::testing::Combine(::testing::Values(1, 10000, 10001, 34567),
                                            ::testing::Values(-2, 0, 2)));
-*/
-/*
+
 TEST_F(OrcWriterTest, Decimal32)
 {
   constexpr auto num_rows = 12000;
@@ -1212,6 +1194,5 @@ TEST_F(OrcWriterTest, Decimal32)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(col64, result.tbl->view().column(0));
 }
-*/
 
 CUDF_TEST_PROGRAM_MAIN()

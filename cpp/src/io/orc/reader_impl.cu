@@ -168,19 +168,6 @@ size_t gather_stream_info(const size_t stripe_index,
     auto const column_id = *stream.column_id;
     auto col             = orc2gdf[column_id];
 
-    printf("num_columns: %lu - stream_info.size(): %lu\n", num_columns, stream_info.size());
-    printf("col: %d - column_id: %d\n", col, column_id);
-    printf(
-      "src_offset: %lu - stripeinfo->offset: %lu - dst_offset: %lu - stripe_index: %lu - "
-      "stripeinfo->indexLength: %lu\n",
-      src_offset,
-      stripeinfo->offset,
-      dst_offset,
-      stripe_index,
-      stripeinfo->indexLength);
-    printf("chunk index: %d\n", static_cast<int>(stripe_index * num_columns + col));
-    printf("stream.length: %lu\n", stream.length);
-
     if (col == -1) {
       // A struct-type column has no data itself, but rather child columns
       // for each of its fields. There is only a PRESENT stream, which
@@ -206,7 +193,6 @@ size_t gather_stream_info(const size_t stripe_index,
         auto &chunk = chunks[stripe_index * num_columns + col];
         const auto idx =
           get_index_type_and_pos(stream.kind, chunk.skip_count, col == orc2gdf[column_id]);
-        printf("idx.first: %d - idx.second: %d\n", idx.first, idx.second);
         if (idx.first < gpu::CI_NUM_STREAMS) {
           chunk.strm_id[idx.first]  = stream_info.size();
           chunk.strm_len[idx.first] = stream.length;
@@ -219,12 +205,6 @@ size_t gather_stream_info(const size_t stripe_index,
           }
         }
       }
-      printf("start: %lu length: %lu | dst_offset: %lu - col: %d - stripe_index: %lu\n\n",
-             (stripeinfo->offset + src_offset),
-             stream.length,
-             dst_offset,
-             col,
-             stripe_index);
       stream_info.emplace_back(
         stripeinfo->offset + src_offset, dst_offset, stream.length, col, stripe_index);
       dst_offset += stream.length;
