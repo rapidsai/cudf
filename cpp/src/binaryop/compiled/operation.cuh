@@ -131,35 +131,6 @@ struct Mod {
   }
 };
 
-struct PyMod {
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(((x % y) + y) % y)
-  {
-    return ((x % y) + y) % y;
-  }
-
-  template <
-    typename TypeLhs,
-    typename TypeRhs,
-    std::enable_if_t<(std::is_floating_point_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
-  {
-    double x1 = static_cast<double>(x);
-    double y1 = static_cast<double>(y);
-    return fmod(fmod(x1, y1) + y1, y1);
-  }
-
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<(is_duration<TypeLhs>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(((x % y) + y) % y)
-  {
-    return ((x % y) + y) % y;
-  }
-};
-
 struct PMod {
   // Ideally, these two specializations - one for integral types and one for non integral
   // types shouldn't be required, as std::fmod should promote integral types automatically
@@ -194,6 +165,35 @@ struct PMod {
   }
 };
 
+struct PyMod {
+  template <typename TypeLhs,
+            typename TypeRhs,
+            std::enable_if_t<(std::is_integral_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(((x % y) + y) % y)
+  {
+    return ((x % y) + y) % y;
+  }
+
+  template <
+    typename TypeLhs,
+    typename TypeRhs,
+    std::enable_if_t<(std::is_floating_point_v<std::common_type_t<TypeLhs, TypeRhs>>)>* = nullptr>
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
+  {
+    double x1 = static_cast<double>(x);
+    double y1 = static_cast<double>(y);
+    return fmod(fmod(x1, y1) + y1, y1);
+  }
+
+  template <typename TypeLhs,
+            typename TypeRhs,
+            std::enable_if_t<(is_duration<TypeLhs>())>* = nullptr>
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(((x % y) + y) % y)
+  {
+    return ((x % y) + y) % y;
+  }
+};
+
 struct Pow {
   template <typename TypeLhs,
             typename TypeRhs,
@@ -202,6 +202,96 @@ struct Pow {
   CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
   {
     return pow(static_cast<double>(x), static_cast<double>(y));
+  }
+};
+
+struct LogBase {
+  template <typename TypeLhs,
+            typename TypeRhs,
+            std::enable_if_t<(std::is_convertible_v<TypeLhs, double> and
+                              std::is_convertible_v<TypeRhs, double>)>* = nullptr>
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
+  {
+    return (std::log(static_cast<double>(x)) / std::log(static_cast<double>(y)));
+  }
+};
+
+struct ATan2 {
+  template <typename TypeLhs,
+            typename TypeRhs,
+            std::enable_if_t<(std::is_convertible_v<TypeLhs, double> and
+                              std::is_convertible_v<TypeRhs, double>)>* = nullptr>
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
+  {
+    return std::atan2(static_cast<double>(x), static_cast<double>(y));
+  }
+};
+
+struct ShiftLeft {
+  template <typename TypeLhs, typename TypeRhs>
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x << y)
+  {
+    return (x << y);
+  }
+};
+
+struct ShiftRight {
+  template <typename TypeLhs, typename TypeRhs>
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x >> y)
+  {
+    return (x >> y);
+  }
+};
+
+struct ShiftRightUnsigned {
+  template <
+    typename TypeLhs,
+    typename TypeRhs,
+    std::enable_if_t<(std::is_integral_v<TypeLhs> and not is_boolean<TypeLhs>())>* = nullptr>
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y)
+    -> decltype(static_cast<std::make_unsigned_t<TypeLhs>>(x) >> y)
+  {
+    return (static_cast<std::make_unsigned_t<TypeLhs>>(x) >> y);
+  }
+};
+
+struct BitwiseAnd {
+  template <typename TypeLhs, typename TypeRhs>
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x & y)
+  {
+    return (x & y);
+  }
+};
+
+struct BitwiseOr {
+  template <typename TypeLhs, typename TypeRhs>
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x | y)
+  {
+    return (x | y);
+  }
+};
+
+struct BitwiseXor {
+  template <typename TypeLhs, typename TypeRhs>
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x ^ y)
+  {
+    return (x ^ y);
+  }
+};
+
+struct LogicalAnd {
+  template <typename TypeLhs, typename TypeRhs>
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x && y)
+  {
+    return (x && y);
+  }
+};
+
+struct LogicalOr {
+  template <typename TypeLhs, typename TypeRhs>
+  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x || y)
+  {
+    return (x || y);
   }
 };
 
@@ -250,97 +340,6 @@ struct GreaterEqual {
   CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x >= y)
   {
     return (x >= y);
-  }
-};
-
-struct LogicalAnd {
-  template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x && y)
-  {
-    return (x && y);
-  }
-};
-
-struct LogicalOr {
-  template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x || y)
-  {
-    return (x || y);
-  }
-};
-
-struct BitwiseAnd {
-  template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x & y)
-  {
-    return (x & y);
-  }
-};
-
-struct BitwiseOr {
-  template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x | y)
-  {
-    return (x | y);
-  }
-};
-
-struct BitwiseXor {
-  template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x ^ y)
-  {
-    return (x ^ y);
-  }
-};
-
-struct ShiftLeft {
-  template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x << y)
-  {
-    return (x << y);
-  }
-};
-
-struct ShiftRight {
-  template <typename TypeLhs, typename TypeRhs>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> decltype(x >> y)
-  {
-    return (x >> y);
-  }
-};
-
-struct ShiftRightUnsigned {
-  template <
-    typename TypeLhs,
-    typename TypeRhs,
-    std::enable_if_t<(std::is_integral_v<TypeLhs> and not is_boolean<TypeLhs>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y)
-    -> decltype(static_cast<std::make_unsigned_t<TypeLhs>>(x) >> y)
-  {
-    return (static_cast<std::make_unsigned_t<TypeLhs>>(x) >> y);
-  }
-};
-
-// TODO Pow and LogBase should go together and with double return types.
-struct LogBase {
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<(std::is_convertible_v<TypeLhs, double> and
-                              std::is_convertible_v<TypeRhs, double>)>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
-  {
-    return (std::log(static_cast<double>(x)) / std::log(static_cast<double>(y)));
-  }
-};
-
-struct ATan2 {
-  template <typename TypeLhs,
-            typename TypeRhs,
-            std::enable_if_t<(std::is_convertible_v<TypeLhs, double> and
-                              std::is_convertible_v<TypeRhs, double>)>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(TypeLhs x, TypeRhs y) -> double
-  {
-    return std::atan2(static_cast<double>(x), static_cast<double>(y));
   }
 };
 
