@@ -103,6 +103,8 @@ function install_dask {
     set -x
     pip install "git+https://github.com/dask/distributed.git@main" --upgrade --no-deps
     pip install "git+https://github.com/dask/dask.git@main" --upgrade --no-deps
+    # Need to uninstall streamz that is already in the env.
+    pip uninstall -y streamz
     pip install "git+https://github.com/python-streamz/streamz.git@master" --upgrade --no-deps
     set +x
 }
