@@ -312,7 +312,7 @@ struct DeviceRollingRowNumber {
 
 struct agg_specific_empty_output {
   template <typename InputType, aggregation::Kind op>
-  std::unique_ptr<column> operator()(column_view const& input, rolling_aggregation const& agg) const
+  std::unique_ptr<column> operator()(column_view const& input, rolling_aggregation const&) const
   {
     using target_type = cudf::detail::target_type_t<InputType, op>;
 
@@ -627,7 +627,7 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
   // COLLECT_SET aggregations do not peform a rolling operation at all. They get processed
   // entirely in the finalize() step.
   std::vector<std::unique_ptr<aggregation>> visit(
-    data_type col_type, cudf::detail::collect_set_aggregation const& agg) override
+    data_type, cudf::detail::collect_set_aggregation const&) override
   {
     return {};
   }
