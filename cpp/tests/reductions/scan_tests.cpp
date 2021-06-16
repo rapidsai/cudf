@@ -27,11 +27,13 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <initializer_list>
 #include <iostream>
 #include <iterator>
 #include <numeric>
 #include <type_traits>
 #include <vector>
+#include "cudf/strings/string_view.hpp"
 
 using aggregation = cudf::aggregation;
 using cudf::column_view;
@@ -52,6 +54,16 @@ struct value_or {
   T operator()(T const& value, bool mask) { return mask ? value : _or; }
 };
 
+template <typename T>
+struct TypeParam_to_host_type {
+  using type = T;
+};
+
+template <>
+struct TypeParam_to_host_type<cudf::string_view> {
+  using type = std::string;
+};
+
 template <typename I, typename I2, typename O, typename ZipOp, typename BinOp>
 void zip_inclusive_scan(I first, I last, I2 first2, O output, ZipOp zipop, BinOp binop)
 {
@@ -70,10 +82,28 @@ void zip_inclusive_scan(I first, I last, I2 first2, O output, ZipOp zipop, BinOp
                  });
 }
 
+template <typename TypeParam, typename T>
+typename std::enable_if<std::is_same_v<TypeParam, cudf::string_view>,
+                        thrust::host_vector<std::string>>::type
+make_vector(std::initializer_list<T> const& init)
+{
+  return cudf::test::make_type_param_vector<std::string, T>(init);
+}
+
+template <typename TypeParam, typename T>
+typename std::enable_if<not std::is_same_v<TypeParam, cudf::string_view>,
+                        thrust::host_vector<TypeParam>>::type
+make_vector(std::initializer_list<T> const& init)
+{
+  return cudf::test::make_type_param_vector<TypeParam, T>(init);
+}
+
 // This is the main test feature
 template <typename T>
 struct ScanTest : public cudf::test::BaseFixture {
-  void scan_test(cudf::host_span<T const> v,
+  typedef typename TypeParam_to_host_type<T>::type HostType;
+
+  void scan_test(cudf::host_span<HostType const> v,
                  cudf::host_span<bool const> b,
                  std::unique_ptr<aggregation> const& agg,
                  scan_type inclusive,
@@ -81,17 +111,14 @@ struct ScanTest : public cudf::test::BaseFixture {
   {
     bool const do_print = false;
 
-    auto col_in = (b.size() > 0)
-                    ? cudf::test::fixed_width_column_wrapper<T>(v.begin(), v.end(), b.begin())
-                    : cudf::test::fixed_width_column_wrapper<T>(v.begin(), v.end());
-
-    auto expected_col_out = this->get_expected(v, b, agg, inclusive, null_handling);
-    auto col_out          = cudf::scan(col_in, agg, inclusive, null_handling);
+    auto col_in           = this->make_column(v, b);
+    auto expected_col_out = this->make_expected(v, b, agg, inclusive, null_handling);
+    auto col_out          = cudf::scan(*col_in, agg, inclusive, null_handling);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_col_out, *col_out);
 
     if constexpr (do_print) {
-      auto int_values      = cudf::test::to_host<T>(col_in);
+      auto int_values      = cudf::test::to_host<T>(*col_in);
       auto expected_values = cudf::test::to_host<T>(*expected_col_out);
       auto host_result     = cudf::test::to_host<T>(*col_out);
       this->print(std::get<0>(int_values), "input = ");
@@ -100,37 +127,85 @@ struct ScanTest : public cudf::test::BaseFixture {
     }
   }
 
-  std::unique_ptr<cudf::column> get_expected(cudf::host_span<T const> v,
-                                             cudf::host_span<bool const> b,
-                                             std::unique_ptr<aggregation> const& agg,
-                                             scan_type inclusive,
-                                             null_policy null_handling)
+  std::unique_ptr<cudf::column> make_column(cudf::host_span<HostType const> v,
+                                            cudf::host_span<bool const> b = {})
   {
-    auto op = [&agg]() -> std::function<T(T, T)> {
+    if constexpr (std::is_same_v<T, cudf::string_view>) {
+      auto col_in = (b.size() > 0)
+                      ? cudf::test::strings_column_wrapper(v.begin(), v.end(), b.begin())
+                      : cudf::test::strings_column_wrapper(v.begin(), v.end());
+      return col_in.release();
+    } else {
+      auto col_in = (b.size() > 0)
+                      ? cudf::test::fixed_width_column_wrapper<T>(v.begin(), v.end(), b.begin())
+                      : cudf::test::fixed_width_column_wrapper<T>(v.begin(), v.end());
+      return col_in.release();
+    }
+  }
+
+  std::function<HostType(HostType, HostType)> make_agg(std::unique_ptr<aggregation> const& agg)
+  {
+    if constexpr (std::is_same_v<T, cudf::string_view>) {
+      switch (agg->kind) {
+        case cudf::aggregation::MIN: return [](HostType a, HostType b) { return std::min(a, b); };
+        case cudf::aggregation::MAX: return [](HostType a, HostType b) { return std::max(a, b); };
+        default: {
+          CUDF_FAIL("Unsupported aggregation");
+          return [](HostType a, HostType b) { return std::min(a, b); };
+        }
+      }
+    } else {
       switch (agg->kind) {
         case cudf::aggregation::SUM: return std::plus<T>{};
         case cudf::aggregation::PRODUCT: return std::multiplies<T>{};
         case cudf::aggregation::MIN: return [](T a, T b) { return std::min(a, b); };
         case cudf::aggregation::MAX: return [](T a, T b) { return std::max(a, b); };
-        default: CUDF_FAIL("Unsupported aggregation");
+        default: {
+          CUDF_FAIL("Unsupported aggregation");
+          return [](HostType a, HostType b) { return std::min(a, b); };
+        }
       }
-    }();
+    }
+  }
 
-    auto identity = [&agg] {
+  HostType make_identity(std::unique_ptr<aggregation> const& agg)
+  {
+    if constexpr (std::is_same_v<T, cudf::string_view>) {
       switch (agg->kind) {
-        case cudf::aggregation::SUM: return T{0};
-        case cudf::aggregation::PRODUCT: return T{1};
-        case cudf::aggregation::MIN: return std::numeric_limits<T>::max();
-        case cudf::aggregation::MAX: return std::numeric_limits<T>::lowest();
-        default: CUDF_FAIL("Unsupported aggregation");
+        case cudf::aggregation::MIN: return std::string{"\xF7\xBF\xBF\xBF"};
+        case cudf::aggregation::MAX: return std::string{};
+        default: {
+          CUDF_FAIL("Unsupported aggregation");
+          return HostType{};
+        }
       }
-    }();
+    } else {
+      switch (agg->kind) {
+        case cudf::aggregation::SUM: return HostType{0};
+        case cudf::aggregation::PRODUCT: return HostType{1};
+        case cudf::aggregation::MIN: return std::numeric_limits<HostType>::max();
+        case cudf::aggregation::MAX: return std::numeric_limits<HostType>::lowest();
+        default: {
+          CUDF_FAIL("Unsupported aggregation");
+          return HostType{};
+        }
+      }
+    }
+  }
 
-    std::vector<T> expected(v.size());
+  std::unique_ptr<cudf::column> make_expected(cudf::host_span<HostType const> v,
+                                              cudf::host_span<bool const> b,
+                                              std::unique_ptr<aggregation> const& agg,
+                                              scan_type inclusive,
+                                              null_policy null_handling)
+  {
+    auto op       = this->make_agg(agg);
+    auto identity = this->make_identity(agg);
+
+    thrust::host_vector<HostType> expected(v.size());
+    thrust::host_vector<bool> b_out(b.begin(), b.end());
 
     bool const nullable = (b.size() > 0);
-
-    thrust::host_vector<bool> b_out(b.begin(), b.end());
 
     if (inclusive == cudf::scan_type::INCLUSIVE) {
       if (nullable) {
@@ -140,7 +215,7 @@ struct ScanTest : public cudf::test::BaseFixture {
           expected.begin(),
           op,
           [id = identity](auto const& z) {
-            return value_or<T>{id}(thrust::get<0>(z), thrust::get<1>(z));
+            return value_or<HostType>{id}(thrust::get<0>(z), thrust::get<1>(z));
           });
 
         if (null_handling == null_policy::INCLUDE) {
@@ -158,7 +233,7 @@ struct ScanTest : public cudf::test::BaseFixture {
           identity,
           op,
           [id = identity](auto const& z) {
-            return value_or<T>{id}(thrust::get<0>(z), thrust::get<1>(z));
+            return value_or<HostType>{id}(thrust::get<0>(z), thrust::get<1>(z));
           });
 
         if (null_handling == null_policy::INCLUDE) {
@@ -169,12 +244,7 @@ struct ScanTest : public cudf::test::BaseFixture {
       }
     }
 
-    auto ret =
-      nullable
-        ? cudf::test::fixed_width_column_wrapper<T>(expected.begin(), expected.end(), b_out.begin())
-        : cudf::test::fixed_width_column_wrapper<T>(expected.begin(), expected.end());
-
-    return ret.release();
+    return nullable ? this->make_column(expected, b_out) : this->make_column(expected);
   }
 
   template <typename Ti>
@@ -186,111 +256,140 @@ struct ScanTest : public cudf::test::BaseFixture {
   }
 };
 
-using Types = cudf::test::NumericTypes;
+using Types = cudf::test::Concat<cudf::test::NumericTypes, cudf::test::Types<cudf::string_view>>;
 
 TYPED_TEST_CASE(ScanTest, Types);
 
 TYPED_TEST(ScanTest, Min)
 {
-  auto const v =
-    cudf::test::make_type_param_vector<TypeParam>({123, 64, 63, 99, -5, 123, -16, -120, -111});
+  auto const v = make_vector<TypeParam>({123, 64, 63, 99, -5, 123, -16, -120, -111});
   auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 0, 1, 1, 1, 1, 0, 0, 1});
 
   // no nulls
   this->scan_test(v, {}, cudf::make_min_aggregation(), scan_type::INCLUSIVE);
-  this->scan_test(v, {}, cudf::make_min_aggregation(), scan_type::EXCLUSIVE);
   // skipna = true (default)
   this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::INCLUSIVE, null_policy::EXCLUDE);
-  this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::EXCLUSIVE, null_policy::EXCLUDE);
   // skipna = false
   this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
-  // this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::EXCLUSIVE,
-  // null_policy::INCLUDE);
+
+  // strings only support inclusive scan
+  if constexpr (not std::is_same_v<TypeParam, cudf::string_view>) {
+    // no nulls
+    this->scan_test(v, {}, cudf::make_min_aggregation(), scan_type::EXCLUSIVE);
+    // skipna = true (default)
+    this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::EXCLUSIVE, null_policy::EXCLUDE);
+    // skipna = false
+    this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE);
+  }
 }
 
 TYPED_TEST(ScanTest, Max)
 {
-  auto const v =
-    cudf::test::make_type_param_vector<TypeParam>({-120, 5, 0, -120, -111, 64, 63, 99, 123, -16});
+  auto const v = make_vector<TypeParam>({-120, 5, 0, -120, -111, 64, 63, 99, 123, -16});
   auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 0, 1, 1, 1, 1, 0, 1, 0, 1});
 
   // no nulls
   this->scan_test(v, {}, cudf::make_max_aggregation(), scan_type::INCLUSIVE);
-  this->scan_test(v, {}, cudf::make_max_aggregation(), scan_type::EXCLUSIVE);
   // skipna = true (default)
   this->scan_test(v, b, cudf::make_max_aggregation(), scan_type::INCLUSIVE, null_policy::EXCLUDE);
-  this->scan_test(v, b, cudf::make_max_aggregation(), scan_type::EXCLUSIVE, null_policy::EXCLUDE);
   // skipna = false
   this->scan_test(v, b, cudf::make_max_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
-  this->scan_test(v, b, cudf::make_max_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE);
+
+  // strings only support inclusive scan
+  if constexpr (not std::is_same_v<TypeParam, cudf::string_view>) {
+    // no nulls
+    this->scan_test(v, {}, cudf::make_max_aggregation(), scan_type::EXCLUSIVE);
+    // skipna = true (default)
+    this->scan_test(v, b, cudf::make_max_aggregation(), scan_type::EXCLUSIVE, null_policy::EXCLUDE);
+    // skipna = false
+    this->scan_test(v, b, cudf::make_max_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE);
+  }
 }
 
 TYPED_TEST(ScanTest, Product)
 {
-  auto const v = cudf::test::make_type_param_vector<TypeParam>({5, -1, 1, 3, -2, 4});
-  auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 1, 1, 0, 1, 1});
+  if constexpr (not std::is_same_v<cudf::string_view, TypeParam>) {
+    auto const v = make_vector<TypeParam>({5, -1, 1, 3, -2, 4});
+    auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 1, 1, 0, 1, 1});
 
-  // no nulls
-  this->scan_test(v, {}, cudf::make_product_aggregation(), scan_type::INCLUSIVE);
-  this->scan_test(v, {}, cudf::make_product_aggregation(), scan_type::EXCLUSIVE);
-  // skipna = true (default)
-  this->scan_test(
-    v, b, cudf::make_product_aggregation(), scan_type::INCLUSIVE, null_policy::EXCLUDE);
-  this->scan_test(
-    v, b, cudf::make_product_aggregation(), scan_type::EXCLUSIVE, null_policy::EXCLUDE);
-  // skipna = false
-  this->scan_test(
-    v, b, cudf::make_product_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
-  this->scan_test(
-    v, b, cudf::make_product_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE);
+    // no nulls
+    this->scan_test(v, {}, cudf::make_product_aggregation(), scan_type::INCLUSIVE);
+    this->scan_test(v, {}, cudf::make_product_aggregation(), scan_type::EXCLUSIVE);
+    // skipna = true (default)
+    this->scan_test(
+      v, b, cudf::make_product_aggregation(), scan_type::INCLUSIVE, null_policy::EXCLUDE);
+    this->scan_test(
+      v, b, cudf::make_product_aggregation(), scan_type::EXCLUSIVE, null_policy::EXCLUDE);
+    // skipna = false
+    this->scan_test(
+      v, b, cudf::make_product_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+    this->scan_test(
+      v, b, cudf::make_product_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE);
+  }
 }
 
 TYPED_TEST(ScanTest, Sum)
 {
-  auto const v = [] {
-    if (std::is_signed<TypeParam>::value)
-      return cudf::test::make_type_param_vector<TypeParam>(
-        {-120, 5, 6, 113, -111, 64, -63, 9, 34, -16});
-    return cudf::test::make_type_param_vector<TypeParam>({12, 5, 6, 13, 11, 14, 3, 9, 34, 16});
-  }();
-  auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 0, 1, 1, 0, 0, 1, 1, 1, 1});
+  if constexpr (not std::is_same_v<cudf::string_view, TypeParam>) {
+    auto const v = [] {
+      if (std::is_signed<TypeParam>::value)
+        return make_vector<TypeParam>({-120, 5, 6, 113, -111, 64, -63, 9, 34, -16});
+      return make_vector<TypeParam>({12, 5, 6, 13, 11, 14, 3, 9, 34, 16});
+    }();
+    auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 0, 1, 1, 0, 0, 1, 1, 1, 1});
 
-  // no nulls
-  this->scan_test(v, {}, cudf::make_sum_aggregation(), scan_type::INCLUSIVE);
-  this->scan_test(v, {}, cudf::make_sum_aggregation(), scan_type::EXCLUSIVE);
-  // skipna = true (default)
-  this->scan_test(v, b, cudf::make_sum_aggregation(), scan_type::INCLUSIVE, null_policy::EXCLUDE);
-  this->scan_test(v, b, cudf::make_sum_aggregation(), scan_type::EXCLUSIVE, null_policy::EXCLUDE);
-  // skipna = false
-  this->scan_test(v, b, cudf::make_sum_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
-  this->scan_test(v, b, cudf::make_sum_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE);
+    // no nulls
+    this->scan_test(v, {}, cudf::make_sum_aggregation(), scan_type::INCLUSIVE);
+    // skipna = true (default)
+    this->scan_test(v, b, cudf::make_sum_aggregation(), scan_type::INCLUSIVE, null_policy::EXCLUDE);
+    // skipna = false
+    this->scan_test(v, b, cudf::make_sum_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+
+    // no nulls
+    this->scan_test(v, {}, cudf::make_sum_aggregation(), scan_type::EXCLUSIVE);
+    // skipna = true (default)
+    this->scan_test(v, b, cudf::make_sum_aggregation(), scan_type::EXCLUSIVE, null_policy::EXCLUDE);
+    // skipna = false
+    this->scan_test(v, b, cudf::make_sum_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE);
+  }
 }
 
 TYPED_TEST(ScanTest, EmptyColumn)
 {
-  auto const v = thrust::host_vector<TypeParam>{};
+  auto const v = thrust::host_vector<typename TypeParam_to_host_type<TypeParam>::type>{};
   auto const b = thrust::host_vector<bool>{};
 
   // skipna = true (default)
-  this->scan_test(v, b, cudf::make_sum_aggregation(), scan_type::INCLUSIVE, null_policy::EXCLUDE);
-  this->scan_test(v, b, cudf::make_sum_aggregation(), scan_type::EXCLUSIVE, null_policy::EXCLUDE);
+  this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::INCLUSIVE, null_policy::EXCLUDE);
   // skipna = false
-  this->scan_test(v, b, cudf::make_sum_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
-  this->scan_test(v, b, cudf::make_sum_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE);
+  this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+
+  if constexpr (not std::is_same_v<cudf::string_view, TypeParam>) {
+    // skipna = true (default)
+    this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::EXCLUSIVE, null_policy::EXCLUDE);
+    // skipna = false
+    this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE);
+  }
 }
 
 TYPED_TEST(ScanTest, LeadingNulls)
 {
-  auto const v = cudf::test::make_type_param_vector<TypeParam>({100, 200, 300});
+  auto const v = make_vector<TypeParam>({100, 200, 300});
   auto const b = thrust::host_vector<bool>(std::vector<bool>{0, 1, 1});
 
   // skipna = true (default)
-  this->scan_test(v, b, cudf::make_sum_aggregation(), scan_type::INCLUSIVE, null_policy::EXCLUDE);
-  this->scan_test(v, b, cudf::make_sum_aggregation(), scan_type::EXCLUSIVE, null_policy::EXCLUDE);
+  this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::INCLUSIVE, null_policy::EXCLUDE);
   // skipna = false
-  this->scan_test(v, b, cudf::make_sum_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
-  this->scan_test(v, b, cudf::make_sum_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE);
+  this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+
+  if constexpr (not std::is_same_v<cudf::string_view, TypeParam>) {
+    // skipna = true (default)
+    this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::EXCLUSIVE, null_policy::EXCLUDE);
+    // skipna = false
+    this->scan_test(v, b, cudf::make_min_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE);
+  }
 }
+
 struct ScanStringTest : public cudf::test::BaseFixture {
   void scan_test(cudf::test::strings_column_wrapper const& col_in,
                  cudf::test::strings_column_wrapper const& expected_col_out,
@@ -323,116 +422,6 @@ struct ScanStringTest : public cudf::test::BaseFixture {
     }
   }
 };
-
-TEST_F(ScanStringTest, Min)
-{
-  std::vector<std::string> v = {
-    "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"};
-  std::vector<bool> b = {1, 0, 1, 1, 0, 0, 1, 0, 1};
-  std::vector<std::string> expected(v.size());
-
-  std::partial_sum(v.cbegin(), v.cend(), expected.begin(), [](auto const& a, auto const& b) {
-    return std::min(a, b);
-  });
-
-  // string column without nulls
-  cudf::test::strings_column_wrapper col_nonulls(v.begin(), v.end());
-  cudf::test::strings_column_wrapper expected1(expected.begin(), expected.end());
-  this->scan_test(col_nonulls, expected1, cudf::make_min_aggregation(), scan_type::INCLUSIVE);
-
-  auto const STRING_MAX = std::string("\xF7\xBF\xBF\xBF");
-
-  zip_inclusive_scan(v.cbegin(),
-                     v.cend(),
-                     b.cbegin(),
-                     expected.begin(),
-                     value_or<std::string>{STRING_MAX},
-                     [](auto const& a, auto const& b) { return std::min(a, b); });
-
-  // string column with nulls
-  cudf::test::strings_column_wrapper col_nulls(v.begin(), v.end(), b.begin());
-  cudf::test::strings_column_wrapper expected2(expected.begin(), expected.end(), b.begin());
-  this->scan_test(col_nulls, expected2, cudf::make_min_aggregation(), scan_type::INCLUSIVE);
-}
-
-TEST_F(ScanStringTest, Max)
-{
-  std::vector<std::string> v = {
-    "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"};
-  std::vector<bool> b = {1, 0, 1, 1, 0, 0, 1, 1, 1};
-  std::vector<std::string> expected(v.size());
-
-  std::partial_sum(v.cbegin(), v.cend(), expected.begin(), [](auto const& a, auto const& b) {
-    return std::max(a, b);
-  });
-
-  // string column without nulls
-  cudf::test::strings_column_wrapper col_nonulls(v.begin(), v.end());
-  cudf::test::strings_column_wrapper expected1(expected.begin(), expected.end());
-  this->scan_test(col_nonulls, expected1, cudf::make_max_aggregation(), scan_type::INCLUSIVE);
-
-  auto const STRING_MIN = std::string{};
-
-  zip_inclusive_scan(v.cbegin(),
-                     v.cend(),
-                     b.cbegin(),
-                     expected.begin(),
-                     value_or<std::string>{STRING_MIN},
-                     [](auto const& a, auto const& b) { return std::max(a, b); });
-
-  // string column with nulls
-  cudf::test::strings_column_wrapper col_nulls(v.begin(), v.end(), b.begin());
-  cudf::test::strings_column_wrapper expected2(expected.begin(), expected.end(), b.begin());
-  this->scan_test(col_nulls, expected2, cudf::make_max_aggregation(), scan_type::INCLUSIVE);
-}
-
-TEST_F(ScanStringTest, skip_nulls)
-{
-  bool do_print = false;
-  // data and valid arrays
-  std::vector<std::string> v(
-    {"one", "two", "three", "four", "five", "six", "seven", "eight", "nine"});
-  std::vector<bool> b({1, 1, 1, 0, 0, 0, 1, 1, 1});
-  std::vector<std::string> expected(v.size());
-  std::vector<bool> out_b(v.size());
-
-  auto const STRING_MIN = std::string(1, char(0));
-
-  zip_inclusive_scan(v.cbegin(),
-                     v.cend(),
-                     b.cbegin(),
-                     expected.begin(),
-                     value_or<std::string>{STRING_MIN},
-                     [](auto const& a, auto const& b) { return std::max(a, b); });
-
-  std::partial_sum(b.cbegin(), b.cend(), out_b.begin(), std::logical_and<bool>{});
-
-  // string column with nulls
-  cudf::test::strings_column_wrapper col_nulls(v.begin(), v.end(), b.begin());
-  cudf::test::strings_column_wrapper expected2(expected.begin(), expected.end(), out_b.begin());
-  std::unique_ptr<cudf::column> col_out;
-  // skipna=false
-  CUDF_EXPECT_NO_THROW(
-    col_out = cudf::scan(
-      col_nulls, cudf::make_max_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE));
-  if (do_print) {
-    print_view(expected2, "expect = ");
-    print_view(col_out->view(), "result = ");
-  }
-  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(expected2, col_out->view());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, col_out->view());
-
-  // Exclusive scan string not supported.
-  CUDF_EXPECT_THROW_MESSAGE(
-    (cudf::scan(
-      col_nulls, cudf::make_min_aggregation(), scan_type::EXCLUSIVE, null_policy::EXCLUDE)),
-    "Non-arithmetic types not supported for exclusive scan");
-
-  CUDF_EXPECT_THROW_MESSAGE(
-    (cudf::scan(
-      col_nulls, cudf::make_min_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE)),
-    "Non-arithmetic types not supported for exclusive scan");
-}
 
 template <typename T>
 struct FixedPointTestBothReps : public cudf::test::BaseFixture {

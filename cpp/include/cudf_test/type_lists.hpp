@@ -29,6 +29,7 @@
 
 #include <array>
 #include <tuple>
+#include <type_traits>
 
 /**
  * @filename type_lists.hpp
@@ -85,8 +86,8 @@ typename std::enable_if<cudf::is_fixed_width<TypeParam>() &&
 make_type_param_vector(std::initializer_list<T> const& init_list)
 {
   thrust::host_vector<TypeParam> vec(init_list.size());
-  std::transform(std::cbegin(init_list), std::cend(init_list), std::begin(vec), [](auto const& e) {
-    if (std::is_unsigned<TypeParam>::value)
+  std::transform(std::cbegin(init_list), std::cend(init_list), std::begin(vec), [](T const& e) {
+    if constexpr (std::is_unsigned<TypeParam>::value)
       return static_cast<TypeParam>(std::abs(e));
     else
       return static_cast<TypeParam>(e);
@@ -102,6 +103,18 @@ make_type_param_vector(std::initializer_list<T> const& init_list)
   thrust::host_vector<TypeParam> vec(init_list.size());
   std::transform(std::cbegin(init_list), std::cend(init_list), std::begin(vec), [](auto const& e) {
     return TypeParam{typename TypeParam::duration{e}};
+  });
+  return vec;
+}
+
+template <typename TypeParam, typename T>
+typename std::enable_if<std::is_same_v<TypeParam, std::string>,
+                        thrust::host_vector<std::string>>::type
+make_type_param_vector(std::initializer_list<T> const& init_list)
+{
+  thrust::host_vector<std::string> vec(init_list.size());
+  std::transform(std::cbegin(init_list), std::cend(init_list), std::begin(vec), [](auto const& e) {
+    return std::to_string(e);
   });
   return vec;
 }
