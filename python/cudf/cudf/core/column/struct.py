@@ -99,7 +99,7 @@ class StructColumn(ColumnBase):
         )
         return StructColumn(
             data=None,
-            size=self.base_size,
+            size=self.size,
             dtype=dtype,
             mask=self.base_mask,
             offset=self.offset,
