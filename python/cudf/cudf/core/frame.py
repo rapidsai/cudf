@@ -1625,6 +1625,10 @@ class Frame(libcudf.table.Table):
         result._copy_type_metadata(self)
         return result
 
+    def _reverse(self):
+        result = self.__class__._from_table(libcudf.copying.reverse(self))
+        return result
+
     def _fill(self, fill_values, begin, end, inplace):
         col_and_fill = zip(self._columns, fill_values)
 
