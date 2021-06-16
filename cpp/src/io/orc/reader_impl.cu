@@ -1138,13 +1138,15 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       }
 
       // TO-DO: Replace this with exclusive scan that will work on all list columns for that level
-      std::for_each(
-        out_buffers[level].begin(), out_buffers[level].end(), [stream](auto &out_buffer) {
-          if (out_buffer.type.id() == type_id::LIST) {
-            auto data = static_cast<size_type *>(out_buffer.data());
-            thrust::exclusive_scan(rmm::exec_policy(stream), data, data + out_buffer.size, data);
-          }
-        });
+      if (list_col.size()) {
+        std::for_each(
+          out_buffers[level].begin(), out_buffers[level].end(), [stream](auto &out_buffer) {
+            if (out_buffer.type.id() == type_id::LIST) {
+              auto data = static_cast<size_type *>(out_buffer.data());
+              thrust::exclusive_scan(rmm::exec_policy(stream), data, data + out_buffer.size, data);
+            }
+          });
+      }
     }
   }
 
