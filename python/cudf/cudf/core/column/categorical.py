@@ -1419,11 +1419,13 @@ class CategoricalColumn(column.ColumnBase):
         if deep:
 
             copied_col = libcudf.copying.copy_column(self)
-            copied_cat = libcudf.copying.copy_column(
-                self.dtype._categories
-            )
-            if not is_interval_dtype(self.dtype._categories):
-                copied_cat = cudf.core.column.IntervalColumn.from_struct_column(
+            copied_cat = libcudf.copying.copy_column(self.dtype._categories)
+            if is_interval_dtype(self.dtype._categories):
+                # avoiding circular import since IntervalColumn
+                # inherits from StructColumn.
+                from cudf.core.column import IntervalColumn
+
+                copied_cat = IntervalColumn.from_struct_column(
                     copied_cat, closed=self.dtype._categories.closed
                 )
 

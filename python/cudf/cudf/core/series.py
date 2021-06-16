@@ -1277,6 +1277,7 @@ class Series(SingleColumnFrame, Serializable):
                 length=show_dimensions,
                 na_rep=cudf._NA_REP,
             )
+        else:
             output = preprocess.to_pandas().__repr__()
 
         lines = output.split("\n")
