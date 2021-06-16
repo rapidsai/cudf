@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,19 +32,7 @@ template <class Duration>
 using time_point = cuda::std::chrono::sys_time<Duration>;
 
 template <class Duration>
-struct timestamp : time_point<Duration> {
-  // Bring over base class constructors and make them visible here
-  using time_point<Duration>::time_point;
-
-  // This is needed as __shared__ objects of this type can't be assigned in device code
-  // when the initializer list constructs subobjects with values, which is what std::time_point
-  // does.
-  constexpr timestamp() : time_point<Duration>(Duration()){};
-
-  // The inherited copy constructor will hide the auto generated copy constructor;
-  // hence, explicitly define and delegate
-  constexpr timestamp(const time_point<Duration>& other) : time_point<Duration>(other) {}
-};
+using timestamp = time_point<Duration>;
 }  // namespace detail
 
 /**

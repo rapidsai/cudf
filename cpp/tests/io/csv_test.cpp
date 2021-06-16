@@ -1796,9 +1796,12 @@ TEST_F(CsvReaderTest, EmptyFileWithWriter)
   auto filepath = temp_env->get_temp_dir() + "EmptyFileWithWriter.csv";
 
   cudf::table_view empty_table;
+  write_csv_helper(filepath, empty_table, false);
+  cudf_io::csv_reader_options in_opts =
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath});
+  auto result = cudf_io::read_csv(in_opts);
 
-  // TODO is it ok for write_csv to throw instead of just writing an empty file?
-  EXPECT_THROW(write_csv_helper(filepath, empty_table, false), cudf::logic_error);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(empty_table, result.tbl->view());
 }
 
 class TestSource : public cudf::io::datasource {

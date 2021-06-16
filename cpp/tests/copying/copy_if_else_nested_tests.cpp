@@ -102,6 +102,35 @@ TYPED_TEST(TypedCopyIfElseNestedTest, StructsWithNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result_column->view(), expected_result->view());
 }
 
+TYPED_TEST(TypedCopyIfElseNestedTest, LongerStructsWithNulls)
+{
+  using T = TypeParam;
+
+  using namespace cudf;
+  using namespace cudf::test;
+
+  using ints    = fixed_width_column_wrapper<T, int32_t>;
+  using structs = structs_column_wrapper;
+  using bools   = fixed_width_column_wrapper<bool, int32_t>;
+
+  auto selector_column = bools{1, 1, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0,
+                               0, 0, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0,
+                               0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0}
+                           .release();
+  auto lhs_child_1 =
+    ints{{27, -80, -24, 76,  -56, 42,  5,   13,  -69, -77, 61,   -77,  72,  0,   31,  118, -30,
+          86, 125, 0,   0,   0,   75,  -49, 125, 60,  116, 118,  64,   20,  -70, -18, 0,   -25,
+          22, -46, -89, -9,  27,  -56, -77, 123, 0,   -90, 87,   -113, -37, 22,  -22, -53, 73,
+          99, 113, -2,  -24, 113, 75,  6,   82,  -58, 122, -123, -127, 19,  -62, -24},
+         iterator_with_null_at(std::vector<size_type>{13, 19, 20, 21, 32, 42})};
+
+  auto lhs_structs_column = structs{{lhs_child_1}}.release();
+  auto result_column =
+    copy_if_else(lhs_structs_column->view(), lhs_structs_column->view(), selector_column->view());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result_column->view(), lhs_structs_column->view());
+}
+
 TYPED_TEST(TypedCopyIfElseNestedTest, Lists)
 {
   using T = TypeParam;
