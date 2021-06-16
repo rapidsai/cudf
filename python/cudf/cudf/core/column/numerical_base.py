@@ -199,4 +199,6 @@ class NumericalBaseColumn(ColumnBase):
         return libcudf.round.round(self, decimal_places=decimals, how=how)
 
     def _apply_scan_op(self, op: str) -> ColumnBase:
-        return self._copy_type_metadata(libcudf.reduce.scan(op, self, True))
+        return libcudf.reduce.scan(op, self, True)._with_type_metadata(
+            self.dtype
+        )
