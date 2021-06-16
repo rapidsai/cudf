@@ -28,10 +28,9 @@ void dispatch_comparison_op(mutable_column_device_view& outd,
   auto common_dtype = get_common_type(outd.type(), lhsd.type(), rhsd.type());
 
   // Execute it on every element
-  thrust::for_each(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(outd.size()),
+  for_each(
+    stream,
+    outd.size(),
     [op, outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, common_dtype] __device__(size_type i) {
       // clang-format off
       switch (op) {

@@ -20,6 +20,7 @@
 #include "operation.cuh"
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -200,6 +201,47 @@ struct device_type_dispatcher {
   }
 };
 
+/**
+ * @brief Simplified for_each kernel
+ *
+ * @param size number of elements to process.
+ * @param f Functor object to call for each element.
+ */
+template <typename Functor>
+__global__ void for_each_kernel(cudf::size_type size, Functor f)
+{
+  int tid    = threadIdx.x;
+  int blkid  = blockIdx.x;
+  int blksz  = blockDim.x;
+  int gridsz = gridDim.x;
+
+  int start = tid + blkid * blksz;
+  int step  = blksz * gridsz;
+
+#pragma unroll
+  for (cudf::size_type i = start; i < size; i += step) { f(i); }
+}
+
+/**
+ * @brief Launches Simplified for_each kernel with maximum occupancy grid dimensions.
+ *
+ * @tparam Functor
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param size number of elements to process.
+ * @param f Functor object to call for each element.
+ */
+template <typename Functor>
+void for_each(rmm::cuda_stream_view stream, cudf::size_type size, Functor f)
+{
+  int block_size;
+  int min_grid_size;
+  CUDA_TRY(
+    cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, for_each_kernel<decltype(f)>));
+  // 2 elements per thread.
+  const int grid_size = util::div_rounding_up_safe(size, 2 * block_size);
+  for_each_kernel<<<grid_size, block_size, 0, stream.value()>>>(size, std::forward<Functor&&>(f));
+}
+
 template <class BinaryOperator>
 void apply_binary_op(mutable_column_device_view& outd,
                      column_device_view const& lhsd,
@@ -214,10 +256,7 @@ void apply_binary_op(mutable_column_device_view& outd,
   auto binop_func = device_type_dispatcher<BinaryOperator>{
     outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, common_dtype};
   // Execute it on every element
-  thrust::for_each(rmm::exec_policy(stream),
-                   thrust::make_counting_iterator<size_type>(0),
-                   thrust::make_counting_iterator<size_type>(outd.size()),
-                   binop_func);
+  for_each(stream, outd.size(), binop_func);
 }
 
 }  // namespace compiled
