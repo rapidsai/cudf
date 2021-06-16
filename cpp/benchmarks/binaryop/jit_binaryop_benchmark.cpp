@@ -58,7 +58,7 @@ void BM_binaryop(benchmark::State& state, cudf::binary_operator binop)
     BM_binaryop<TypeLhs, TypeRhs, TypeOut>(st, cudf::binary_operator::binop);     \
   }                                                                               \
   BENCHMARK_REGISTER_F(JIT_BINARYOP, binop)                                       \
-    ->Unit(benchmark::kMillisecond)                                               \
+    ->Unit(benchmark::kMicrosecond)                                               \
     ->UseManualTime()                                                             \
     ->Arg(10000)      /* 10k */                                                   \
     ->Arg(100000)     /* 100k */                                                  \
@@ -77,7 +77,14 @@ BINARYOP_BENCHMARK_DEFINE(int64_t,      int64_t,      DIV,                  int6
 BINARYOP_BENCHMARK_DEFINE(int64_t,      int64_t,      TRUE_DIV,             int64_t);
 BINARYOP_BENCHMARK_DEFINE(int64_t,      int64_t,      FLOOR_DIV,            int64_t);
 BINARYOP_BENCHMARK_DEFINE(double,       double,       MOD,                  double);
+BINARYOP_BENCHMARK_DEFINE(int32_t,      int64_t,      PMOD,                 double);
+BINARYOP_BENCHMARK_DEFINE(int32_t,      uint8_t,      PYMOD,                int64_t);
 BINARYOP_BENCHMARK_DEFINE(int64_t,      int64_t,      POW,                  double);
+BINARYOP_BENCHMARK_DEFINE(float,        double,       LOG_BASE,             double);
+BINARYOP_BENCHMARK_DEFINE(float,        double,       ATAN2,                double);
+BINARYOP_BENCHMARK_DEFINE(int,          int,          SHIFT_LEFT,           int);
+BINARYOP_BENCHMARK_DEFINE(int16_t,      int64_t,      SHIFT_RIGHT,          int);
+BINARYOP_BENCHMARK_DEFINE(int64_t,      int32_t,      SHIFT_RIGHT_UNSIGNED, int64_t);
 BINARYOP_BENCHMARK_DEFINE(int64_t,      int32_t,      BITWISE_AND,          int16_t);
 BINARYOP_BENCHMARK_DEFINE(int16_t,      int32_t,      BITWISE_OR,           int64_t);
 BINARYOP_BENCHMARK_DEFINE(int16_t,      int64_t,      BITWISE_XOR,          int32_t);
@@ -87,8 +94,6 @@ BINARYOP_BENCHMARK_DEFINE(duration_ms,  duration_ns,  EQUAL,                bool
 BINARYOP_BENCHMARK_DEFINE(decimal32,    decimal32,    NOT_EQUAL,            bool);
 BINARYOP_BENCHMARK_DEFINE(timestamp_s,  timestamp_s,  LESS,                 bool);
 BINARYOP_BENCHMARK_DEFINE(timestamp_ms, timestamp_s,  GREATER,              bool);
-BINARYOP_BENCHMARK_DEFINE(int,          int,          SHIFT_LEFT,           int);
-BINARYOP_BENCHMARK_DEFINE(int16_t,      int64_t,      SHIFT_RIGHT,          int);
-BINARYOP_BENCHMARK_DEFINE(int64_t,      int32_t,      SHIFT_RIGHT_UNSIGNED, int64_t);
-BINARYOP_BENCHMARK_DEFINE(int32_t,      int64_t,      PMOD,                 double);
-BINARYOP_BENCHMARK_DEFINE(float,        double,       ATAN2,                double);
+BINARYOP_BENCHMARK_DEFINE(duration_ms,  duration_ns,  NULL_EQUALS,          bool);
+BINARYOP_BENCHMARK_DEFINE(decimal32,    decimal32,    NULL_MAX,             decimal32);
+BINARYOP_BENCHMARK_DEFINE(timestamp_D, timestamp_s,   NULL_MIN,             timestamp_s);
