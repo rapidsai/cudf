@@ -798,6 +798,14 @@ def test_orc_reader_multiple_files(datadir, src):
     pdf_1 = orcfile_1.read().to_pandas()
     expect = pd.concat([pdf_0, pdf_1])
 
+    print("\nExpected Columns:")
+    for col in expect.columns:
+        print(col)
+
     got = cudf.read_orc([path, path], engine="cudf").to_pandas()
+
+    print("\nGot Columns:")
+    for col in got.columns:
+        print(col)
 
     assert_eq(expect, got)
