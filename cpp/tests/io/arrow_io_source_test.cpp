@@ -88,8 +88,7 @@ TEST_F(ArrowIOTest, S3FileSystem)
 TEST_F(ArrowIOTest, S3URIWhenNotEnabled)
 {
   std::string s3_uri = "s3://rapidsai-data/cudf/test/tips.parquet?region=us-east-2";
-  EXPECT_THROW(std::make_unique<cudf::io::arrow_io_source>(s3_uri),
-               cudf::logic_error);
+  EXPECT_THROW(std::make_unique<cudf::io::arrow_io_source>(s3_uri), cudf::logic_error);
 }
 
 #endif
