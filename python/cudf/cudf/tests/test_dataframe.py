@@ -8144,7 +8144,7 @@ def test_dataframe_constructor_columns(df, columns, index):
 
     gdf = cudf.from_pandas(df)
     host_columns = (
-        columns.to_pandas() if isinstance(columns, cudf.Index) else columns
+        columns.to_pandas() if isinstance(columns, cudf.BaseIndex) else columns
     )
 
     expected = pd.DataFrame(df, columns=host_columns, index=index)

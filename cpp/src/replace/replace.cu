@@ -87,7 +87,7 @@ __device__ auto get_new_value(cudf::size_type idx,
 __device__ int get_new_string_value(cudf::size_type idx,
                                     cudf::column_device_view& input,
                                     cudf::column_device_view& values_to_replace,
-                                    cudf::column_device_view& replacement_values)
+                                    cudf::column_device_view&)
 {
   cudf::string_view input_string = input.element<cudf::string_view>(idx);
   int match                      = -1;
@@ -342,11 +342,11 @@ struct replace_kernel_forwarder {
   }
 
   template <typename col_type, std::enable_if_t<not cudf::is_fixed_width<col_type>()>* = nullptr>
-  std::unique_ptr<cudf::column> operator()(cudf::column_view const& input_col,
-                                           cudf::column_view const& values_to_replace,
-                                           cudf::column_view const& replacement_values,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+  std::unique_ptr<cudf::column> operator()(cudf::column_view const&,
+                                           cudf::column_view const&,
+                                           cudf::column_view const&,
+                                           rmm::cuda_stream_view,
+                                           rmm::mr::device_memory_resource*)
   {
     CUDF_FAIL("No specialization exists for this type");
   }

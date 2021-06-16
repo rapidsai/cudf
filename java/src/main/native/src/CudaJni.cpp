@@ -161,6 +161,38 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_autoSetDevice(JNIEnv *env, jclas
   CATCH_STD(env, );
 }
 
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getDriverVersion(JNIEnv *env, jclass) {
+  try {
+    cudf::jni::auto_set_device(env);
+    jint driver_version;
+    JNI_CUDA_TRY(env, -2, cudaDriverGetVersion(&driver_version));
+    return driver_version;
+  }
+  CATCH_STD(env, -2);
+}
+
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getRuntimeVersion(JNIEnv *env, jclass) {
+  try {
+    cudf::jni::auto_set_device(env);
+    jint runtime_version;
+    JNI_CUDA_TRY(env, -2, cudaRuntimeGetVersion(&runtime_version));
+    return runtime_version;
+  }
+  CATCH_STD(env, -2);
+}
+
+JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getNativeComputeMode(JNIEnv *env, jclass) {
+  try {
+    cudf::jni::auto_set_device(env);
+    int device;
+    JNI_CUDA_TRY(env, -2, cudaGetDevice(&device));
+    cudaDeviceProp device_prop;
+    JNI_CUDA_TRY(env, -2, cudaGetDeviceProperties(&device_prop, device));
+    return device_prop.computeMode;
+  }
+  CATCH_STD(env, -2);
+}
+
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_freeZero(JNIEnv *env, jclass) {
   try {
     cudf::jni::auto_set_device(env);
