@@ -112,36 +112,34 @@ std::unique_ptr<column> replace_with_backrefs(
   // create child columns
   auto [offsets, chars] = [&] {
     rmm::device_uvector<string_index_pair> indices(strings.size() * d_prog->group_counts(), stream);
+    cudf::detail::device_2dspan<string_index_pair> d_indices(
+      indices.data(), strings.size(), d_prog->group_counts());
 
     if (regex_insts <= RX_SMALL_INSTS) {
       return make_strings_children(
         backrefs_fn<BackRefIterator, RX_STACK_SMALL>{
-          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end(), indices.data()},
+          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end(), d_indices},
         strings.size(),
         stream,
         mr);
     } else if (regex_insts <= RX_MEDIUM_INSTS) {
-      // return replace_with_backrefs_medium(
-      //  *d_strings, *d_prog, d_repl_template, backrefs, stream, mr);
       return make_strings_children(
         backrefs_fn<BackRefIterator, RX_STACK_MEDIUM>{
-          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end(), indices.data()},
+          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end(), d_indices},
         strings.size(),
         stream,
         mr);
     } else if (regex_insts <= RX_LARGE_INSTS) {
-      // return replace_with_backrefs_large(
-      //  *d_strings, *d_prog, d_repl_template, backrefs, stream, mr);
       return make_strings_children(
         backrefs_fn<BackRefIterator, RX_STACK_LARGE>{
-          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end(), indices.data()},
+          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end(), d_indices},
         strings.size(),
         stream,
         mr);
     } else {
       return make_strings_children(
         backrefs_fn<BackRefIterator, RX_STACK_ANY>{
-          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end(), indices.data()},
+          *d_strings, *d_prog, d_repl_template, backrefs.begin(), backrefs.end(), d_indices},
         strings.size(),
         stream,
         mr);

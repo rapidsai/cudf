@@ -382,11 +382,14 @@ __device__ inline int32_t reprog_device::find(int32_t idx,
 }
 
 template <int stack_size>
-__device__ inline bool reprog_device::extract(
-  int32_t idx, string_view const& dstr, int32_t begin, int32_t end, string_index_pair* indices)
+__device__ inline bool reprog_device::extract(int32_t idx,
+                                              string_view const& dstr,
+                                              int32_t begin,
+                                              int32_t end,
+                                              device_span<string_index_pair> indices)
 {
   end = begin + 1;
-  return call_regexec<stack_size>(idx, dstr, begin, end, indices) > 0;
+  return call_regexec<stack_size>(idx, dstr, begin, end, indices.data()) > 0;
 }
 
 template <int stack_size>

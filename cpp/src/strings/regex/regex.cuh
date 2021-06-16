@@ -18,6 +18,7 @@
 #include <strings/regex/regcomp.h>
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -179,8 +180,11 @@ class reprog_device {
    * @return Returns true if successful.
    */
   template <int stack_size>
-  __device__ inline bool extract(
-    int32_t idx, string_view const& d_str, int32_t begin, int32_t end, string_index_pair* indices);
+  __device__ inline bool extract(int32_t idx,
+                                 string_view const& d_str,
+                                 int32_t begin,
+                                 int32_t end,
+                                 device_span<string_index_pair> indices);
 
  private:
   int32_t _startinst_id, _num_capturing_groups;

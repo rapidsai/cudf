@@ -18,6 +18,8 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/utilities/span.hpp>
+
 #include <strings/regex/regex.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -41,7 +43,7 @@ struct backrefs_fn {
   string_view const d_repl;  // string replacement template
   Iterator backrefs_begin;
   Iterator backrefs_end;
-  string_index_pair* d_indices;
+  cudf::detail::device_2dspan<string_index_pair> d_indices;
   int32_t* d_offsets{};
   char* d_chars{};
 
@@ -61,7 +63,7 @@ struct backrefs_fn {
     size_type end     = nchars;  // last character position (exclusive)
 
     // working memory for extract on this string
-    auto d_extracts = d_indices + idx * prog.group_counts();
+    auto d_extracts = d_indices[idx];
 
     // copy input to output replacing strings as we go
     while (prog.find<stack_size>(idx, d_str, begin, end) > 0)  // inits the begin/end vars
