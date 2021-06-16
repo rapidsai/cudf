@@ -9,7 +9,9 @@ from nvtx import annotate
 import cudf
 from cudf._lib import groupby as libgroupby
 from cudf._lib.table import Table
+from cudf._typing import DataFrameOrSeries
 from cudf.core.abc import Serializable
+from cudf.core.column.column import arange
 from cudf.utils.dtypes import is_list_like
 from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
@@ -318,7 +320,7 @@ class GroupBy(Serializable):
 
         # Convert all values to list-like:
         for col, agg in out.items():
-            if not pd.api.types.is_list_like(agg):
+            if not is_list_like(agg):
                 out[col] = [agg]
             else:
                 out[col] = list(agg)
@@ -789,6 +791,114 @@ class GroupBy(Serializable):
         """Get the column-wise cumulative maximum value in each group."""
         return self.agg("cummax")
 
+    def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
+        """Internal implementation for `ffill` and `bfill`
+        """
+        value_columns = self.grouping.values
+        result = self._groupby.replace_nulls(
+            Table(value_columns._data), method
+        )
+        result = self.obj.__class__._from_table(result)
+        result = self._mimic_pandas_order(result)
+        return result._copy_type_metadata(value_columns)
+
+    def pad(self, limit=None):
+        """Forward fill NA values.
+
+        Parameters
+        ----------
+        limit : int, default None
+            Unsupported
+        """
+
+        if limit is not None:
+            raise NotImplementedError("Does not support limit param yet.")
+
+        return self._scan_fill("ffill", limit)
+
+    ffill = pad
+
+    def backfill(self, limit=None):
+        """Backward fill NA values.
+
+        Parameters
+        ----------
+        limit : int, default None
+            Unsupported
+        """
+        if limit is not None:
+            raise NotImplementedError("Does not support limit param yet.")
+
+        return self._scan_fill("bfill", limit)
+
+    bfill = backfill
+
+    def fillna(
+        self,
+        value=None,
+        method=None,
+        axis=0,
+        inplace=False,
+        limit=None,
+        downcast=None,
+    ):
+        """Fill NA values using the specified method.
+
+        Parameters
+        ----------
+        value : scalar, dict
+            Value to use to fill the holes. Cannot be specified with method.
+        method : {'backfill', 'bfill', 'pad', 'ffill', None}, default None
+            Method to use for filling holes in reindexed Series
+
+            - pad/ffill: propagate last valid observation forward to next valid
+            - backfill/bfill: use next valid observation to fill gap
+        axis : {0 or 'index', 1 or 'columns'}
+            Unsupported
+        inplace : bool, default False
+            If `True`, fill inplace. Note: this will modify other views on this
+            object.
+        limit : int, default None
+            Unsupported
+        downcast : dict, default None
+            Unsupported
+
+        Returns
+        -------
+        DataFrame or Series
+        """
+        if inplace:
+            raise NotImplementedError("Does not support inplace yet.")
+        if limit is not None:
+            raise NotImplementedError("Does not support limit param yet.")
+        if downcast is not None:
+            raise NotImplementedError("Does not support downcast yet.")
+        if not axis == 0:
+            raise NotImplementedError("Only support axis == 0.")
+
+        if value is None and method is None:
+            raise ValueError("Must specify a fill 'value' or 'method'.")
+        if value is not None and method is not None:
+            raise ValueError("Cannot specify both 'value' and 'method'.")
+
+        if method is not None:
+            if method not in {"pad", "ffill", "backfill", "bfill"}:
+                raise ValueError(
+                    "Method can only be of 'pad', 'ffill',"
+                    "'backfill', 'bfill'."
+                )
+            return getattr(self, method, limit)()
+
+        value_columns = self.grouping.values
+        _, grouped_values, _ = self._groupby.groups(Table(value_columns._data))
+
+        grouped = self.obj.__class__._from_data(grouped_values._data)
+        result = grouped.fillna(
+            value=value, inplace=inplace, axis=axis, limit=limit
+        )
+        result = self._mimic_pandas_order(result)
+        return result._copy_type_metadata(value_columns)
+
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """
         Shift each group by ``periods`` positions.
@@ -843,6 +953,22 @@ class GroupBy(Serializable):
         value_columns = self.obj._data.select_by_label(value_column_names)
         result = self._groupby.shift(Table(value_columns), periods, fill_value)
         return self.obj.__class__._from_table(result)
+
+    def _mimic_pandas_order(
+        self, result: DataFrameOrSeries
+    ) -> DataFrameOrSeries:
+        """Given a groupby result from libcudf, reconstruct the row orders
+        matching that of pandas. This also adds appropriate indices.
+        """
+        sorted_order_column = arange(0, result._data.nrows)
+        _, order, _ = self._groupby.groups(
+            Table({"sorted_order_column": sorted_order_column})
+        )
+        order = order._data["sorted_order_column"]
+        gather_map = order.argsort()
+        result = result.take(gather_map)
+        result.index = self.obj.index
+        return result
 
 
 class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
@@ -1031,7 +1157,7 @@ class SeriesGroupBy(GroupBy):
 
         # downcast the result to a Series:
         if len(result._data):
-            if result.shape[1] == 1 and not pd.api.types.is_list_like(func):
+            if result.shape[1] == 1 and not is_list_like(func):
                 return result.iloc[:, 0]
 
         # drop the first level if we have a multiindex
@@ -1059,6 +1185,14 @@ class _Grouping(Serializable):
         self._obj = obj
         self._key_columns = []
         self.names = []
+        # For transform operations, we want to filter out only the value
+        # columns that will be used. When part of the key columns are composed
+        # from columns in `obj`, these columns are not included in the value
+        # columns. This only happens when `by` is specified with
+        # column labels or `Grouper` object with `key` param. To avoid that
+        # external objects overlaps in names to `obj`, these column
+        # names are recorded separately in this list.
+        self._key_column_names_from_obj = []
 
         # Need to keep track of named key columns
         # to support `as_index=False` correctly
@@ -1097,6 +1231,8 @@ class _Grouping(Serializable):
 
     @property
     def keys(self):
+        """Return grouping key columns as index
+        """
         nkeys = len(self._key_columns)
 
         if nkeys == 0:
@@ -1112,6 +1248,25 @@ class _Grouping(Serializable):
             return cudf.core.index.as_index(
                 self._key_columns[0], name=self.names[0]
             )
+
+    @property
+    def values(self):
+        """Return value columns as a frame.
+
+        Note that in aggregation, value columns can be arbitrarily
+        specified. While this method returns all non-key columns from `obj` as
+        a frame.
+
+        This is mainly used in transform-like operations.
+        """
+        # If the key columns are in `obj`, filter them out
+        value_column_names = [
+            x
+            for x in self._obj._data.names
+            if x not in self._key_column_names_from_obj
+        ]
+        value_columns = self._obj._data.select_by_label(value_column_names)
+        return self._obj.__class__._from_data(value_columns)
 
     def _handle_callable(self, by):
         by = by(self._obj.index)
@@ -1134,6 +1289,7 @@ class _Grouping(Serializable):
         self._key_columns.append(self._obj._data[by])
         self.names.append(by)
         self._named_columns.append(by)
+        self._key_column_names_from_obj.append(by)
 
     def _handle_grouper(self, by):
         if by.key:
@@ -1185,7 +1341,7 @@ def _is_multi_agg(aggs):
     on any of the columns as specified in `aggs`.
     """
     if isinstance(aggs, collections.abc.Mapping):
-        return any(pd.api.types.is_list_like(agg) for agg in aggs.values())
-    if pd.api.types.is_list_like(aggs):
+        return any(is_list_like(agg) for agg in aggs.values())
+    if is_list_like(aggs):
         return True
     return False

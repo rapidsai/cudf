@@ -117,11 +117,8 @@ struct dispatch_to_cudf_column {
   }
 
   template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
-  std::unique_ptr<column> operator()(arrow::Array const& array,
-                                     data_type type,
-                                     bool skip_mask,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+  std::unique_ptr<column> operator()(
+    arrow::Array const&, data_type, bool, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
   {
     CUDF_FAIL("Unsupported type in from_arrow.");
   }
@@ -230,7 +227,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal64>(
 template <>
 std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
   arrow::Array const& array,
-  data_type type,
+  data_type,
   bool skip_mask,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
@@ -266,8 +263,8 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
 template <>
 std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
   arrow::Array const& array,
-  data_type type,
-  bool skip_mask,
+  data_type,
+  bool,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -302,8 +299,8 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
 template <>
 std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::dictionary32>(
   arrow::Array const& array,
-  data_type type,
-  bool skip_mask,
+  data_type,
+  bool,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -332,8 +329,8 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::dictionary32>(
 template <>
 std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::struct_view>(
   arrow::Array const& array,
-  data_type type,
-  bool skip_mask,
+  data_type,
+  bool,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -365,8 +362,8 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::struct_view>(
 template <>
 std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::list_view>(
   arrow::Array const& array,
-  data_type type,
-  bool skip_mask,
+  data_type,
+  bool,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {

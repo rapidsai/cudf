@@ -7,8 +7,13 @@ from typing import Any, Optional, Tuple
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from pandas.api import types as pd_types
 from pandas.api.extensions import ExtensionDtype
 from pandas.core.arrays._arrow_utils import ArrowIntervalType
+from pandas.core.dtypes.dtypes import (
+    CategoricalDtype as pd_CategoricalDtype,
+    CategoricalDtypeType as pd_CategoricalDtypeType,
+)
 
 import cudf
 from cudf._typing import Dtype
@@ -72,7 +77,7 @@ class CategoricalDtype(_BaseDtype):
     def _init_categories(self, categories: Any):
         if categories is None:
             return categories
-        if len(categories) == 0:
+        if len(categories) == 0 and not is_interval_dtype(categories):
             dtype = "object"  # type: Any
         else:
             dtype = None
@@ -373,3 +378,166 @@ class IntervalDtype(StructDtype):
         return ArrowIntervalType(
             pa.from_numpy_dtype(self.subtype), self.closed
         )
+
+
+def is_categorical_dtype(obj):
+    """Check whether an array-like or dtype is of the Categorical dtype.
+
+    Parameters
+    ----------
+    obj : array-like or dtype
+        The array-like or dtype to check.
+
+    Returns
+    -------
+    bool
+        Whether or not the array-like or dtype is of a categorical dtype.
+    """
+    if obj is None:
+        return False
+
+    if isinstance(
+        obj,
+        (
+            pd_CategoricalDtype,
+            cudf.CategoricalDtype,
+            cudf.core.index.CategoricalIndex,
+            cudf.core.column.CategoricalColumn,
+            pd.Categorical,
+            pd.CategoricalIndex,
+        ),
+    ):
+        return True
+    # Note that we cannot directly use `obj in (...)`  because that triggers
+    # equality as well as identity checks and pandas extension dtypes won't
+    # allow converting that equality check to a boolean; `__nonzero__` is
+    # disabled because they treat dtypes as "array-like".
+    if any(
+        obj is t
+        for t in (
+            cudf.CategoricalDtype,
+            pd_CategoricalDtype,
+            pd_CategoricalDtypeType,
+        )
+    ):
+        return True
+    if isinstance(obj, (np.ndarray, np.dtype)):
+        return False
+    if isinstance(obj, str) and obj == "category":
+        return True
+    if isinstance(
+        obj,
+        (
+            cudf.Index,
+            cudf.Series,
+            cudf.core.column.ColumnBase,
+            pd.Index,
+            pd.Series,
+        ),
+    ):
+        return is_categorical_dtype(obj.dtype)
+    if hasattr(obj, "type"):
+        if obj.type is pd_CategoricalDtypeType:
+            return True
+    # TODO: A lot of the above checks are probably redundant and should be
+    # farmed out to this function here instead.
+    return pd_types.is_categorical_dtype(obj)
+
+
+def is_list_dtype(obj):
+    """Check whether an array-like or dtype is of the list dtype.
+
+    Parameters
+    ----------
+    obj : array-like or dtype
+        The array-like or dtype to check.
+
+    Returns
+    -------
+    bool
+        Whether or not the array-like or dtype is of the list dtype.
+    """
+    return (
+        type(obj) is cudf.core.dtypes.ListDtype
+        or obj is cudf.core.dtypes.ListDtype
+        or type(obj) is cudf.core.column.ListColumn
+        or obj is cudf.core.column.ListColumn
+        or (isinstance(obj, str) and obj == cudf.core.dtypes.ListDtype.name)
+        or (hasattr(obj, "dtype") and is_list_dtype(obj.dtype))
+    )
+
+
+def is_struct_dtype(obj):
+    """Check whether an array-like or dtype is of the struct dtype.
+
+    Parameters
+    ----------
+    obj : array-like or dtype
+        The array-like or dtype to check.
+
+    Returns
+    -------
+    bool
+        Whether or not the array-like or dtype is of the struct dtype.
+    """
+    # TODO: This behavior is currently inconsistent for interval types. the
+    # actual class IntervalDtype will return False, but instances (e.g.
+    # IntervalDtype(int)) will return True. For now this is not being changed
+    # since the interval dtype is being modified as part of the array refactor,
+    # but this behavior should be made consistent afterwards.
+    return (
+        isinstance(obj, cudf.core.dtypes.StructDtype)
+        or obj is cudf.core.dtypes.StructDtype
+        or (isinstance(obj, str) and obj == cudf.core.dtypes.StructDtype.name)
+        or (hasattr(obj, "dtype") and is_struct_dtype(obj.dtype))
+    )
+
+
+def is_decimal_dtype(obj):
+    """Check whether an array-like or dtype is of the decimal dtype.
+
+    Parameters
+    ----------
+    obj : array-like or dtype
+        The array-like or dtype to check.
+
+    Returns
+    -------
+    bool
+        Whether or not the array-like or dtype is of the decimal dtype.
+    """
+    return (
+        type(obj) is cudf.core.dtypes.Decimal64Dtype
+        or obj is cudf.core.dtypes.Decimal64Dtype
+        or (
+            isinstance(obj, str)
+            and obj == cudf.core.dtypes.Decimal64Dtype.name
+        )
+        or (hasattr(obj, "dtype") and is_decimal_dtype(obj.dtype))
+    )
+
+
+def is_interval_dtype(obj):
+    """Check whether an array-like or dtype is of the interval dtype.
+
+    Parameters
+    ----------
+    obj : array-like or dtype
+        The array-like or dtype to check.
+
+    Returns
+    -------
+    bool
+        Whether or not the array-like or dtype is of the interval dtype.
+    """
+    # TODO: Should there be any branch in this function that calls
+    # pd.api.types.is_interval_dtype?
+    return (
+        isinstance(obj, cudf.core.dtypes.IntervalDtype)
+        or isinstance(obj, pd.core.dtypes.dtypes.IntervalDtype)
+        or obj is cudf.core.dtypes.IntervalDtype
+        or (
+            isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
+        )
+        or (hasattr(obj, "dtype") and is_interval_dtype(obj.dtype))
+    )

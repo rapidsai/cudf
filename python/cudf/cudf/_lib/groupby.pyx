@@ -136,7 +136,7 @@ cdef class GroupBy:
                 _LIST_AGGS if is_list_dtype(dtype)
                 else _STRING_AGGS if is_string_dtype(dtype)
                 else _CATEGORICAL_AGGS if is_categorical_dtype(dtype)
-                else _STRING_AGGS if is_struct_dtype(dtype)
+                else _STRUCT_AGGS if is_struct_dtype(dtype)
                 else _INTERVAL_AGGS if is_interval_dtype(dtype)
                 else _DECIMAL_AGGS if is_decimal_dtype(dtype)
                 else "ALL"
@@ -264,15 +264,11 @@ cdef class GroupBy:
                 self.c_obj.get()[0].replace_nulls(val_view, policies)
             )
 
-        sorted_keys = Table.from_unique_ptr(
-            move(c_result.first),
-            column_names=self.keys._column_names
-        )
         grouped_result = Table.from_unique_ptr(
             move(c_result.second), column_names=values._column_names
         )
 
-        result = Table(data=grouped_result, index=sorted_keys)
+        result = Table(data=grouped_result._data)
         return result
 
 _GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax"}

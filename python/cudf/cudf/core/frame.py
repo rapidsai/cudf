@@ -13,7 +13,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
-from pandas.api.types import is_dict_like, is_dtype_equal
 
 import cudf
 from cudf import _lib as libcudf
@@ -26,14 +25,18 @@ from cudf.core.column import (
 )
 from cudf.core.join import merge
 from cudf.utils.dtypes import (
+    _is_non_decimal_numeric_dtype,
     find_common_type,
     is_categorical_dtype,
     is_column_like,
     is_decimal_dtype,
+    is_integer_dtype,
     is_numerical_dtype,
     is_scalar,
     min_scalar_type,
 )
+
+from ..api.types import is_dict_like, is_dtype_equal
 
 T = TypeVar("T", bound="Frame")
 
@@ -505,7 +508,7 @@ class Frame(libcudf.table.Table):
         # Reassign precision for any decimal cols
         for name, col in out._data.items():
             if isinstance(col, cudf.core.column.DecimalColumn):
-                col = tables[0]._data[name]._copy_type_metadata(col)
+                col = col._with_type_metadata(tables[0]._data[name].dtype)
 
         # Reassign index and column names
         if isinstance(objs[0].columns, pd.MultiIndex):
@@ -640,7 +643,7 @@ class Frame(libcudf.table.Table):
         )
 
     def _gather(self, gather_map, keep_index=True, nullify=False):
-        if not pd.api.types.is_integer_dtype(gather_map.dtype):
+        if not is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self.__class__._from_table(
             libcudf.copying.gather(
@@ -1518,7 +1521,7 @@ class Frame(libcudf.table.Table):
             numeric_cols = (
                 name
                 for name in self._data.names
-                if is_numerical_dtype(self._data[name])
+                if _is_non_decimal_numeric_dtype(self._data[name])
             )
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:
@@ -1622,6 +1625,10 @@ class Frame(libcudf.table.Table):
         result._copy_type_metadata(self)
         return result
 
+    def _reverse(self):
+        result = self.__class__._from_table(libcudf.copying.reverse(self))
+        return result
+
     def _fill(self, fill_values, begin, end, inplace):
         col_and_fill = zip(self._columns, fill_values)
 
@@ -1661,7 +1668,7 @@ class Frame(libcudf.table.Table):
             "consider using .to_arrow()"
         )
 
-    def round(self, decimals=0):
+    def round(self, decimals=0, how="half_even"):
         """
         Round a DataFrame to a variable number of decimal places.
 
@@ -1676,6 +1683,9 @@ class Frame(libcudf.table.Table):
             columns not included in `decimals` will be left as is. Elements
             of `decimals` which are not columns of the input will be
             ignored.
+        how : str, optional
+            Type of rounding. Can be either "half_even" (default)
+            of "half_up" rounding.
 
         Returns
         -------
@@ -1741,18 +1751,18 @@ class Frame(libcudf.table.Table):
                 raise ValueError("Index of decimals must be unique")
 
             cols = {
-                name: col.round(decimals[name])
+                name: col.round(decimals[name], how=how)
                 if (
                     name in decimals.keys()
-                    and pd.api.types.is_numeric_dtype(col.dtype)
+                    and _is_non_decimal_numeric_dtype(col.dtype)
                 )
                 else col.copy(deep=True)
                 for name, col in self._data.items()
             }
         elif isinstance(decimals, int):
             cols = {
-                name: col.round(decimals)
-                if pd.api.types.is_numeric_dtype(col.dtype)
+                name: col.round(decimals, how=how)
+                if _is_non_decimal_numeric_dtype(col.dtype)
                 else col.copy(deep=True)
                 for name, col in self._data.items()
             }
@@ -2237,13 +2247,13 @@ class Frame(libcudf.table.Table):
         """
         Copy type metadata from each column of `other` to the corresponding
         column of `self`.
-        See `ColumnBase._copy_type_metadata` for more information.
+        See `ColumnBase._with_type_metadata` for more information.
         """
         for name, col, other_col in zip(
             self._data.keys(), self._data.values(), other._data.values()
         ):
             self._data.set_by_label(
-                name, other_col._copy_type_metadata(col), validate=False
+                name, col._with_type_metadata(other_col.dtype), validate=False
             )
 
         if include_index:
@@ -3886,7 +3896,7 @@ def _get_replacement_values_for_columns(
             to_replace_columns = {col: to_replace for col in columns_dtype_map}
             values_columns = {
                 col: [value]
-                if pd.api.types.is_numeric_dtype(columns_dtype_map[col])
+                if _is_non_decimal_numeric_dtype(columns_dtype_map[col])
                 else cudf.utils.utils.scalar_broadcast_to(
                     value, (len(to_replace),), np.dtype(type(value)),
                 )
@@ -4046,10 +4056,7 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
         # default to the first non-null dtype
         dtypes[idx] = cols[0].dtype
         # If all the non-null dtypes are int/float, find a common dtype
-        if all(
-            is_numerical_dtype(col.dtype) or is_decimal_dtype(col.dtype)
-            for col in cols
-        ):
+        if all(is_numerical_dtype(col.dtype) for col in cols):
             dtypes[idx] = find_common_type([col.dtype for col in cols])
         # If all categorical dtypes, combine the categories
         elif all(

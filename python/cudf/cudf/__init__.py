@@ -38,6 +38,7 @@ from cudf.core import (
     UInt16Index,
     UInt32Index,
     UInt64Index,
+    cut,
     from_pandas,
     interval_range,
     merge,
@@ -46,6 +47,7 @@ from cudf.core.algorithms import factorize
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal64Dtype,
+    IntervalDtype,
     ListDtype,
     StructDtype,
 )
