@@ -168,6 +168,7 @@ add_library(cudf
     src/copying/gather.cu
     src/copying/get_element.cu
     src/copying/pack.cpp
+    src/copying/reverse.cu
     src/copying/sample.cu
     src/copying/scatter.cu
     src/copying/shift.cu
