@@ -82,8 +82,8 @@ struct ops_wrapper {
   mutable_column_device_view& out;
   column_device_view const& lhs;
   column_device_view const& rhs;
-  bool is_lhs_scalar;
-  bool is_rhs_scalar;
+  bool const& is_lhs_scalar;
+  bool const& is_rhs_scalar;
   template <typename TypeCommon>
   __device__ void operator()(size_type i)
   {
@@ -130,8 +130,8 @@ struct ops2_wrapper {
   mutable_column_device_view& out;
   column_device_view const& lhs;
   column_device_view const& rhs;
-  bool is_lhs_scalar;
-  bool is_rhs_scalar;
+  bool const& is_lhs_scalar;
+  bool const& is_rhs_scalar;
   template <typename TypeLhs, typename TypeRhs>
   __device__ void operator()(size_type i)
   {
