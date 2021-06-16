@@ -43,7 +43,8 @@ TEST_F(ArrowIOTest, URIFileSystem)
 {
   const std::string file_name = temp_env->get_temp_dir() + "JsonLinesFileTest.json";
   std::ofstream outfile(file_name, std::ofstream::out);
-  outfile << "[11, 1.1]\n[22, 2.2]";
+  outfile << "[11, 1.1]" << std::endl;
+  outfile << "[22, 2.2]" << std::endl;
   outfile.close();
 
   std::string file_uri = "file://" + file_name;
