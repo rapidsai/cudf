@@ -8,12 +8,8 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-<<<<<<< HEAD
 from pandas.core.dtypes.common import infer_dtype_from_object, pandas_dtype
 from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
-=======
-from pandas.core.dtypes.common import infer_dtype_from_object
->>>>>>> 716dc12437a7b3bb33e8a2ccfa6ecb2c592568c7
 
 import cudf
 from cudf.core._compat import PANDAS_GE_120
