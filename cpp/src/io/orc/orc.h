@@ -537,10 +537,14 @@ class OrcDecompressor {
   std::vector<uint8_t> m_buf;
 };
 
-struct column_meta {
-  column_meta(uint32_t _id, uint32_t _num_children) : id(_id), num_children(_num_children){};
-  uint32_t id;
-  uint32_t num_children;
+/**
+ * @brief Stores orc id for a column and adjacent number of children of the column
+ * in case of struct or number of children in list column.
+ */
+struct orc_column_meta {
+  orc_column_meta(uint32_t _id, uint32_t _num_children) : id(_id), num_children(_num_children){};
+  uint32_t id;            // orc id for the column
+  uint32_t num_children;  // number of children at the same level of nesting in case of struct
 };
 
 /**
@@ -579,10 +583,10 @@ class metadata {
    * @param[in] use_names List of column names to select
    * @param[out] has_timestamp_column Whether there is a orc::TIMESTAMP column
    *
-   * @return List of ORC column indexes
+   * @return Vector of list of ORC column meta
    */
-  std::vector<std::vector<column_meta>> select_columns(std::vector<std::string> const &use_names,
-                                                       bool &has_timestamp_column) const;
+  std::vector<std::vector<orc_column_meta>> select_columns(
+    std::vector<std::string> const &use_names, bool &has_timestamp_column) const;
 
   size_t get_total_rows() const { return ff.numberOfRows; }
   int get_num_stripes() const { return ff.stripes.size(); }

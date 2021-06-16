@@ -668,9 +668,7 @@ static __device__ uint32_t Integer_RLEv2(
       uint32_t pos   = lastpos;
       uint32_t byte0 = bytestream_readbyte(bs, pos++);
       uint32_t n, l;
-      int mode = byte0 >> 6;
-      // printf("RGSL : byte0 is %x \n", byte0);
-      // printf("RGSL : mode is %d \n", mode);
+      int mode               = byte0 >> 6;
       rle->runs_loc[numruns] = numvals;
       vals[numvals]          = lastpos;
       if (mode == 0) {
@@ -703,19 +701,14 @@ static __device__ uint32_t Integer_RLEv2(
           l += deltapos;
         }
       }
-      // printf(
-      //  "RGSL : numvals in iteration is %u  and n is%u  and maxvals is %u\n", numvals, n,
-      //  maxvals);
       if ((numvals != 0) and (numvals + n > maxvals)) break;
       pos += l;
-      // printf("RGSL : pos %u and maxpos %u\n", pos, maxpos);
       if (pos > maxpos) break;
       ((numvals == 0) and (n > maxvals)) ? numvals = maxvals : numvals += n;
       // numvals += n;
       lastpos = pos;
       numruns++;
     }
-    // printf("RGSL: numvals will be read is %u \n", numvals);
     rle->num_vals = numvals;
     rle->num_runs = numruns;
     bytestream_flush_bytes(bs, lastpos - bs->pos);
@@ -1107,7 +1100,6 @@ __global__ void __launch_bounds__(block_size)
                                       DictionaryEntry *global_dictionary,
                                       uint32_t num_columns,
                                       uint32_t num_stripes,
-                                      size_t max_num_rows,
                                       size_t first_row)
 {
   __shared__ __align__(16) orcdec_state_s state_g;
@@ -1127,7 +1119,8 @@ __global__ void __launch_bounds__(block_size)
 
   if (t == 0) s->chunk = chunks[chunk_id];
   __syncthreads();
-  max_num_rows = s->chunk.column_num_rows;
+  size_t max_num_rows = s->chunk.column_num_rows;
+
   if (is_nulldec) {
     uint32_t null_count = 0;
     // Decode NULLs
@@ -1363,7 +1356,6 @@ static const __device__ __constant__ uint32_t kTimestampNanoScale[8] = {
  * @param[in] global_dictionary Global dictionary device array
  * @param[in] tz_table Timezone translation table
  * @param[in] row_groups Optional row index data
- * @param[in] max_num_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
  * @param[in] num_chunks Number of column chunks (num_columns * num_stripes)
  * @param[in] num_rowgroups Number of row groups in row index data
@@ -1376,7 +1368,6 @@ __global__ void __launch_bounds__(block_size)
                          DictionaryEntry *global_dictionary,
                          timezone_table_view tz_table,
                          const RowGroup *row_groups,
-                         size_t max_num_rows,
                          size_t first_row,
                          uint32_t num_columns,
                          uint32_t num_rowgroups,
@@ -1395,10 +1386,7 @@ __global__ void __launch_bounds__(block_size)
   bool is_valid = true;
 
   if (num_rowgroups > 0) {
-    if (t == 0) {
-      s->top.data.index = row_groups[blockIdx.y * num_columns + blockIdx.x];
-      // printf("RGSL : Is valid rowgroup %d \n", s->top.data.index.valid_row_group);
-    }
+    if (t == 0) { s->top.data.index = row_groups[blockIdx.y * num_columns + blockIdx.x]; }
     __syncthreads();
     is_valid = s->top.data.index.valid_row_group;
     chunk_id = s->top.data.index.chunk_id;
@@ -1409,12 +1397,10 @@ __global__ void __launch_bounds__(block_size)
     s->chunk          = chunks[chunk_id];
     s->num_child_rows = 0;
   }
-  // if (t == 1) printf("RGSL : chunk is valid and is being used %d\n", is_valid);
   __syncthreads();
-  is_valid     = is_valid && (s->chunk.type_kind != STRUCT);
-  max_num_rows = s->chunk.column_num_rows;
+  is_valid            = is_valid && (s->chunk.type_kind != STRUCT);
+  size_t max_num_rows = s->chunk.column_num_rows;
   if (t == 0 and is_valid) {
-    // printf("RGSL : max_num_rows is %lu\n", max_num_rows);
     // If we have an index, seek to the initial run and update row positions
     if (num_rowgroups > 0) {
       uint32_t ofs0 = min(s->top.data.index.strm_offset[0], s->chunk.strm_len[CI_DATA]);
@@ -1424,22 +1410,16 @@ __global__ void __launch_bounds__(block_size)
       s->chunk.strm_len[CI_DATA] -= ofs0;
       s->chunk.streams[CI_DATA2] += ofs1;
       s->chunk.strm_len[CI_DATA2] -= ofs1;
-      // printf("RGSL : ofs1 is %u \n", ofs1);
       rowgroup_rowofs = min((blockIdx.y - min(s->chunk.rowgroup_id, blockIdx.y)) * rowidx_stride,
                             s->chunk.num_rows);
       s->chunk.start_row += rowgroup_rowofs;
       s->chunk.num_rows -= rowgroup_rowofs;
     }
-    // printf("RGSL : start row %u and num rows %u \n", s->chunk.start_row, s->chunk.num_rows);
     s->is_string = (s->chunk.type_kind == STRING || s->chunk.type_kind == BINARY ||
                     s->chunk.type_kind == VARCHAR || s->chunk.type_kind == CHAR);
     s->top.data.cur_row =
       max(s->chunk.start_row, max((int32_t)(first_row - s->chunk.skip_count), 0));
-    s->top.data.end_row = s->chunk.start_row + s->chunk.num_rows;
-    // printf("RGSL : cur row is %u end row is %u  and skip_count is %u\n",
-    //       s->top.data.cur_row,
-    //       s->top.data.end_row,
-    //      s->chunk.skip_count);
+    s->top.data.end_row        = s->chunk.start_row + s->chunk.num_rows;
     s->top.data.buffered_count = 0;
     if (s->top.data.end_row > first_row + max_num_rows) {
       s->top.data.end_row = static_cast<uint32_t>(first_row + max_num_rows);
@@ -1447,21 +1427,15 @@ __global__ void __launch_bounds__(block_size)
     if (num_rowgroups > 0) {
       s->top.data.end_row = min(s->top.data.end_row, s->chunk.start_row + rowidx_stride);
     }
-    // printf("RGSL : end row %u \n", s->top.data.end_row);
     if (!is_dictionary(s->chunk.encoding_kind)) { s->chunk.dictionary_start = 0; }
 
     s->top.data.utc_epoch = kORCTimeToUTC - tz_table.gmt_offset;
 
-    // printf("RGSL : --------- stream len of data is %u amd stream len of data2 is %u\n",
-    //       s->chunk.strm_len[CI_DATA],
-    //       s->chunk.strm_len[CI_DATA2]);
     bytestream_init(&s->bs, s->chunk.streams[CI_DATA], s->chunk.strm_len[CI_DATA]);
     bytestream_init(&s->bs2, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
   }
   __syncthreads();
 
-  // if (t == 5) printf("RGSL : After chunk is valid and is being used %d---------------\n",
-  // is_valid);
   while (is_valid && (s->top.data.cur_row < s->top.data.end_row)) {
     uint64_t list_child_elements = 0;
     bytestream_fill(&s->bs, t);
@@ -1469,7 +1443,6 @@ __global__ void __launch_bounds__(block_size)
     __syncthreads();
     if (t == 0) {
       uint32_t max_vals = s->chunk.start_row + s->chunk.num_rows - s->top.data.cur_row;
-      // printf("RGSL : Maxvals is %u \n", max_vals);
       if (num_rowgroups > 0 && (s->is_string || s->chunk.type_kind == TIMESTAMP)) {
         max_vals +=
           s->top.data.index.run_pos[is_dictionary(s->chunk.encoding_kind) ? CI_DATA : CI_DATA2];
@@ -1575,7 +1548,6 @@ __global__ void __launch_bounds__(block_size)
         } else {
           numvals = Integer_RLEv2<uint32_t>(&s->bs2, &s->u.rlev2, s->vals.u32, numvals, t);
         }
-        // if (t == 0) printf("RGSL : numvals read is %d \n", numvals);
         // If we're using an index, we may have to drop values from the initial run
         uint32_t skip = 0;
         if (num_rowgroups > 0 and false) {
@@ -1587,7 +1559,6 @@ __global__ void __launch_bounds__(block_size)
             numvals -= skip;
           }
         }
-        // if (t == 0) printf("RGSL : after numvals read is %d \n", numvals);
 
         __syncthreads();
       } else if (s->chunk.type_kind == BYTE) {
@@ -1630,9 +1601,7 @@ __global__ void __launch_bounds__(block_size)
         if (is_rlev1(s->chunk.encoding_kind)) {
           numvals = Integer_RLEv1<int64_t>(bs, &s->u.rlev1, s->vals.i64, numvals, t);
         } else {
-          // if (t == 0) printf("RGSL : numvals being copied before is %u \n", numvals);
           numvals = Integer_RLEv2<int64_t>(bs, &s->u.rlev2, s->vals.i64, numvals, t);
-          // if (t == 0) printf("RGSL : numvals being copied after is %u \n", numvals);
         }
         if (s->chunk.type_kind == DECIMAL) {
           // If we're using an index, we may have to drop values from the initial run
@@ -1714,10 +1683,6 @@ __global__ void __launch_bounds__(block_size)
             case FLOAT:
             case INT:
             case LIST:
-              // if (row == 19998)
-              // printf("RGSL: val at 19998 is %u \n", s->vals.u32[t + vals_skipped]);
-              // if (row == 19999)
-              // printf("RGSL: val at 19999 is %u \n", s->vals.u32[t + vals_skipped]);
               static_cast<uint32_t *>(data_out)[row] = s->vals.u32[t + vals_skipped];
               list_child_elements                    = s->vals.u32[t + vals_skipped];
               break;
@@ -1725,8 +1690,6 @@ __global__ void __launch_bounds__(block_size)
             case LONG:
             case DECIMAL:
               static_cast<uint64_t *>(data_out)[row] = s->vals.u64[t + vals_skipped];
-              // printf("RGSL : vals @%u are %lu and t is %u, valsskipped is %u numvals is %u\n",
-              // row, s->vals.u64[t + vals_skipped], t, vals_skipped, numvals);
               break;
             case SHORT:
               static_cast<uint16_t *>(data_out)[row] =
@@ -1818,11 +1781,7 @@ __global__ void __launch_bounds__(block_size)
     }
     __syncthreads();
   }
-  if (t == 0) {
-    // printf("RGSL : Number of child are %d is_valid row group %d\n", s->num_child_rows, is_valid);
-    atomicAdd(&chunks[chunk_id].num_child_rows, s->num_child_rows);
-  }
-  __syncthreads();
+  if (t == 0) { atomicAdd(&chunks[chunk_id].num_child_rows, s->num_child_rows); }
 }
 
 /**
@@ -1832,7 +1791,6 @@ __global__ void __launch_bounds__(block_size)
  * @param[in] global_dictionary Global dictionary device array
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
- * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
@@ -1840,14 +1798,13 @@ void __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
                                                DictionaryEntry *global_dictionary,
                                                uint32_t num_columns,
                                                uint32_t num_stripes,
-                                               size_t max_num_rows,
                                                size_t first_row,
                                                rmm::cuda_stream_view stream)
 {
   dim3 dim_block(block_size, 1);
   dim3 dim_grid(num_columns, num_stripes * 2);  // 1024 threads per chunk
   gpuDecodeNullsAndStringDictionaries<block_size><<<dim_grid, dim_block, 0, stream.value()>>>(
-    chunks, global_dictionary, num_columns, num_stripes, max_num_rows, first_row);
+    chunks, global_dictionary, num_columns, num_stripes, first_row);
 }
 
 /**
@@ -1857,7 +1814,6 @@ void __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
  * @param[in] global_dictionary Global dictionary device array
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
- * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
  * @param[in] tz_table Timezone translation table
  * @param[in] row_groups Optional row index data
@@ -1869,7 +1825,6 @@ void __host__ DecodeOrcColumnData(ColumnDesc *chunks,
                                   DictionaryEntry *global_dictionary,
                                   uint32_t num_columns,
                                   uint32_t num_stripes,
-                                  size_t max_num_rows,
                                   size_t first_row,
                                   timezone_table_view tz_table,
                                   const RowGroup *row_groups,
@@ -1877,7 +1832,6 @@ void __host__ DecodeOrcColumnData(ColumnDesc *chunks,
                                   uint32_t rowidx_stride,
                                   rmm::cuda_stream_view stream)
 {
-  // printf("RGSL : number of rowgroups is %u \n", num_rowgroups);
   uint32_t num_chunks = num_columns * num_stripes;
   dim3 dim_block(block_size, 1);  // 1024 threads per chunk
   dim3 dim_grid((num_rowgroups > 0) ? num_columns : num_chunks,
@@ -1886,7 +1840,6 @@ void __host__ DecodeOrcColumnData(ColumnDesc *chunks,
                                                                                  global_dictionary,
                                                                                  tz_table,
                                                                                  row_groups,
-                                                                                 max_num_rows,
                                                                                  first_row,
                                                                                  num_columns,
                                                                                  num_rowgroups,

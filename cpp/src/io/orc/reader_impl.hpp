@@ -109,7 +109,6 @@ class reader::impl {
    * @param chunks List of column chunk descriptors
    * @param num_dicts Number of dictionary entries required
    * @param skip_rows Number of rows to offset from start
-   * @param num_rows Number of rows to output
    * @param tz_table Local time to UTC conversion table
    * @param row_groups List of row index descriptors
    * @param row_index_stride Distance between each row index
@@ -119,47 +118,84 @@ class reader::impl {
   void decode_stream_data(hostdevice_vector<gpu::ColumnDesc>& chunks,
                           size_t num_dicts,
                           size_t skip_rows,
-                          size_t num_rows,
                           timezone_table_view tz_table,
                           device_span<gpu::RowGroup const> row_groups,
                           size_t row_index_stride,
                           std::vector<column_buffer>& out_buffers,
                           rmm::cuda_stream_view stream);
 
+  /**
+   * @brief Aggregate child metadata from processed parent column.
+   *
+   * @param chunks Vector of parent column chunks.
+   * @param num_child_rows number of rows in whole child column.
+   * @param child_start_row start row of each child in each stripe/chunk.
+   * @param num_child_rows_per_stripe number of rows in child column per stripe/chunk.
+   * @param list_col Vector of column metadata of list type parent columns.
+   * @param orc_col_map Mapping between column id in orc to processing order.
+   * @param number_of_stripes number of stripes being processed.
+   * @param level Current nesting level being processed.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   */
   void aggregate_child_meta(hostdevice_vector<gpu::ColumnDesc>& chunks,
                             std::vector<int32_t>& num_child_rows,
                             std::vector<int32_t>& child_start_row,
                             std::vector<int32_t>& num_child_rows_per_stripe,
-                            std::vector<column_meta> const& list_col,
+                            std::vector<orc_column_meta> const& list_col,
                             std::vector<int32_t>& orc_col_map,
                             size_t number_of_stripes,
                             int32_t level,
                             rmm::cuda_stream_view stream);
 
+  /**
+   * @brief Assemble the buffer with child columns.
+   *
+   * @param orc_col_id Column id in orc.
+   * @param col_buffers Column buffers for columns and children.
+   * @param orc_col_map Mapping between column id in orc to processing order.
+   * @param level Current nesting level.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   */
   column_buffer&& assemble_buffer(int32_t orc_col_id,
                                   std::vector<std::vector<column_buffer>>& col_buffers,
                                   std::vector<std::vector<int32_t>> const& orc_col_map,
                                   int level,
                                   rmm::cuda_stream_view stream);
 
+  /**
+   * @brief Create columns and respective schema information from the buffer.
+   *
+   * @param col_buffers Column buffers for columns and children.
+   * @param out_columns Vector of columns formed from column buffers.
+   * @param schema_info Vector of schema information formed from column buffers.
+   * @param orc_col_map Mapping between column id in orc to processing order.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   */
   void create_columns(std::vector<std::vector<column_buffer>>& col_buffers,
                       std::vector<std::unique_ptr<column>>& out_columns,
                       std::vector<column_name_info>& schema_info,
                       std::vector<std::vector<int32_t>> const& orc_col_map,
                       rmm::cuda_stream_view stream);
 
+  /**
+   * @brief Create columns and respective schema information from the buffer.
+   *
+   * @param col_buffers Column buffers for columns and children.
+   * @param schema_info Vector of schema information formed from column buffers.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
+   *
+   * @return An empty column equivalent to orc column type.
+   */
   std::unique_ptr<column> create_empty_column(int32_t orc_col_id,
                                               column_name_info& schema_info,
                                               rmm::cuda_stream_view stream);
-
-  column_name_info assemble_schema_info(int32_t orc_col_id);
 
  private:
   rmm::mr::device_memory_resource* _mr = nullptr;
   std::vector<std::unique_ptr<datasource>> _sources;
   std::unique_ptr<aggregate_orc_metadata> _metadata;
   // _output_columns associated schema indices
-  std::vector<std::vector<column_meta>> _selected_columns;
+  std::vector<std::vector<orc_column_meta>> _selected_columns;
 
   bool _use_index            = true;
   bool _use_np_dtypes        = true;

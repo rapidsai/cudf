@@ -37,9 +37,7 @@ void ProtobufReader::skip_struct_field(int t)
     case PB_TYPE_FIXED64: skip_bytes(8); break;
     case PB_TYPE_FIXEDLEN: skip_bytes(get<uint32_t>()); break;
     case PB_TYPE_FIXED32: skip_bytes(4); break;
-    default:
-      // printf("invalid type (%d)\n", t);
-      break;
+    default: break;
   }
 }
 

@@ -112,7 +112,7 @@ struct RowGroup {
   uint32_t chunk_id;        // Column chunk this entry belongs to
   uint32_t strm_offset[2];  // Index offset for CI_DATA and CI_DATA2 streams
   uint16_t run_pos[2];      // Run position for CI_DATA and CI_DATA2
-  bool valid_row_group;
+  bool valid_row_group;     // To check if it is a valid rowgroup case of nested columns
 };
 
 /**
@@ -240,7 +240,6 @@ void ParseRowGroupIndex(RowGroup *row_groups,
  * @param[in] global_dictionary Global dictionary device array
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
- * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
  * @param[in] stream CUDA stream to use, default `rmm::cuda_stream_default`
  */
@@ -248,7 +247,6 @@ void DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
                                       DictionaryEntry *global_dictionary,
                                       uint32_t num_columns,
                                       uint32_t num_stripes,
-                                      size_t max_rows              = ~0,
                                       size_t first_row             = 0,
                                       rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
@@ -259,7 +257,6 @@ void DecodeNullsAndStringDictionaries(ColumnDesc *chunks,
  * @param[in] global_dictionary Global dictionary device array
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
- * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
  * @param[in] tz_table Timezone translation table
  * @param[in] tz_len Length of timezone translation table
@@ -272,7 +269,6 @@ void DecodeOrcColumnData(ColumnDesc *chunks,
                          DictionaryEntry *global_dictionary,
                          uint32_t num_columns,
                          uint32_t num_stripes,
-                         size_t max_rows              = ~0,
                          size_t first_row             = 0,
                          timezone_table_view tz_table = {},
                          const RowGroup *row_groups   = 0,
