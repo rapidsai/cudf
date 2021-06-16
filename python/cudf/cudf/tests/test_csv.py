@@ -979,6 +979,30 @@ def test_csv_reader_filepath_or_buffer(tmpdir, path_or_buf, src):
     assert_eq(expect, got)
 
 
+def test_small_zip(tmpdir):
+    df = pd.DataFrame(
+        {
+            "a": [1997] * 2,
+            "b": ["Ford"] * 2,
+            "c": ["Super, luxurious truck"] * 2,
+        }
+    )
+
+    fname = tmpdir.join("small_zip_file.zip")
+    df.to_csv(fname, index=False)
+
+    df = pd.DataFrame(
+        {
+            "a": [1997] * 2,
+            "b": ["Ford"] * 2,
+            "c": ["Superd, luxurious truck"] * 2,
+        }
+    )
+
+    got = cudf.read_csv(fname)
+    assert_eq(df, got)
+
+
 def test_csv_reader_carriage_return(tmpdir):
     rows = 1000
     names = ["int_row", "int_double_row"]
