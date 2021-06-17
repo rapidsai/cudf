@@ -72,6 +72,7 @@ ConfigureTest(GROUPBY_TEST
     groupby/nunique_tests.cpp
     groupby/product_tests.cpp
     groupby/quantile_tests.cpp
+    groupby/replace_nulls_tests.cpp
     groupby/shift_tests.cpp
     groupby/std_tests.cpp
     groupby/sum_of_squares_tests.cpp
@@ -84,7 +85,7 @@ ConfigureTest(GROUPBY_TEST
 ConfigureTest(JOIN_TEST
     join/join_tests.cpp
     join/cross_join_tests.cpp
-    join/semi_join_tests.cpp)
+    join/semi_anti_join_tests.cpp)
 
 ###################################################################################################
 # - is_sorted tests -------------------------------------------------------------------------------
@@ -179,12 +180,16 @@ ConfigureTest(INTEROP_TEST
 
 ###################################################################################################
 # - io tests --------------------------------------------------------------------------------------
-ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cu)
+ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cpp)
 
 ConfigureTest(CSV_TEST io/csv_test.cpp)
 ConfigureTest(ORC_TEST io/orc_test.cpp)
 ConfigureTest(PARQUET_TEST io/parquet_test.cpp)
 ConfigureTest(JSON_TEST io/json_test.cpp)
+ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
+if(CUDF_ENABLE_ARROW_S3)
+  target_compile_definitions(ARROW_IO_SOURCE_TEST PRIVATE "S3_ENABLED")
+endif()
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
@@ -210,12 +215,14 @@ ConfigureTest(COPYING_TEST
     copying/sample_tests.cpp
     copying/scatter_tests.cpp
     copying/scatter_list_tests.cpp
+    copying/scatter_list_scalar_tests.cpp
     copying/scatter_struct_tests.cpp
     copying/segmented_gather_list_tests.cpp
     copying/shift_tests.cpp
     copying/slice_tests.cpp
     copying/split_tests.cpp
-    copying/utility_tests.cpp)
+    copying/utility_tests.cpp
+    copying/reverse_tests.cpp)
 
 ###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------
@@ -278,12 +285,13 @@ ConfigureTest(STREAM_COMPACTION_TEST
 ###################################################################################################
 # - rolling tests ---------------------------------------------------------------------------------
 ConfigureTest(ROLLING_TEST
-    rolling/rolling_test.cpp
+    rolling/collect_ops_test.cpp
+    rolling/empty_input_test.cpp
     rolling/grouped_rolling_test.cpp
     rolling/lead_lag_test.cpp
-    rolling/range_window_bounds_test.cpp
     rolling/range_rolling_window_test.cpp
-    rolling/collect_list_test.cpp)
+    rolling/range_window_bounds_test.cpp
+    rolling/rolling_test.cpp)
 
 ###################################################################################################
 # - filling test ----------------------------------------------------------------------------------
@@ -348,6 +356,7 @@ ConfigureTest(STRINGS_TEST
     strings/ipv4_tests.cpp
     strings/json_tests.cpp
     strings/pad_tests.cpp
+    strings/repeat_strings_tests.cpp
     strings/replace_regex_tests.cpp
     strings/replace_tests.cpp
     strings/split_tests.cpp

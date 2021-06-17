@@ -23,7 +23,7 @@ from cudf._lib.table cimport Table
 cimport cudf._lib.cpp.io.types as cudf_io_types
 
 
-cpdef read_json(object filepath_or_buffer,
+cpdef read_json(object filepaths_or_buffers,
                 object dtype,
                 bool lines,
                 object compression,
@@ -37,16 +37,16 @@ cpdef read_json(object filepath_or_buffer,
     cudf.io.json.to_json
     """
 
-    # Determine read source
-    path_or_data = filepath_or_buffer
-
     # If input data is a JSON string (or StringIO), hold a reference to
     # the encoded memoryview externally to ensure the encoded buffer
     # isn't destroyed before calling libcudf++ `read_json()`
-    if isinstance(path_or_data, io.StringIO):
-        path_or_data = path_or_data.read().encode()
-    elif isinstance(path_or_data, str) and not os.path.isfile(path_or_data):
-        path_or_data = path_or_data.encode()
+    for idx in range(len(filepaths_or_buffers)):
+        if isinstance(filepaths_or_buffers[idx], io.StringIO):
+            filepaths_or_buffers[idx] = \
+                filepaths_or_buffers[idx].read().encode()
+        elif isinstance(filepaths_or_buffers[idx], str) and \
+                not os.path.isfile(filepaths_or_buffers[idx]):
+            filepaths_or_buffers[idx] = filepaths_or_buffers[idx].encode()
 
     # Setup arguments
     cdef vector[string] c_dtypes
@@ -95,7 +95,7 @@ cpdef read_json(object filepath_or_buffer,
                 c_dtypes.push_back(str(col_dtype).encode())
 
     cdef json_reader_options opts = move(
-        json_reader_options.builder(make_source_info([path_or_data]))
+        json_reader_options.builder(make_source_info(filepaths_or_buffers))
         .dtypes(c_dtypes)
         .compression(c_compression)
         .lines(c_lines)

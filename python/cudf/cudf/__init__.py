@@ -17,9 +17,8 @@ from cudf.api.extensions import (
 )
 from cudf.core import (
     NA,
+    BaseIndex,
     CategoricalIndex,
-    interval_range,
-    IntervalIndex,
     DataFrame,
     DatetimeIndex,
     Float32Index,
@@ -29,6 +28,7 @@ from cudf.core import (
     Int16Index,
     Int32Index,
     Int64Index,
+    IntervalIndex,
     MultiIndex,
     RangeIndex,
     Scalar,
@@ -38,13 +38,16 @@ from cudf.core import (
     UInt16Index,
     UInt32Index,
     UInt64Index,
+    cut,
     from_pandas,
+    interval_range,
     merge,
 )
 from cudf.core.algorithms import factorize
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal64Dtype,
+    IntervalDtype,
     ListDtype,
     StructDtype,
 )

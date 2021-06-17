@@ -4,7 +4,7 @@ from __future__ import annotations, division, print_function
 
 import pickle
 from numbers import Number
-from typing import Any, Dict, Type
+from typing import Any, Dict, Optional, Tuple, Type
 
 import cupy
 import numpy as np
@@ -14,6 +14,8 @@ from pandas._config import get_option
 
 import cudf
 from cudf._lib.filling import sequence
+from cudf._lib.search import search_sorted
+from cudf._lib.table import Table
 from cudf._typing import DtypeObj
 from cudf.core.abc import Serializable
 from cudf.core.column import (
@@ -27,44 +29,36 @@ from cudf.core.column import (
     arange,
     column,
 )
-from cudf.core.column.column import _concat_columns
+from cudf.core.column.column import _concat_columns, as_column
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import SingleColumnFrame
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
+    _is_non_decimal_numeric_dtype,
     find_common_type,
     is_categorical_dtype,
     is_interval_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
-    is_numerical_dtype,
     is_scalar,
     numeric_normalize_types,
 )
 from cudf.utils.utils import cached_property, search_range
 
+from ..api.types import (
+    _is_scalar_or_zero_d_array,
+    is_dtype_equal,
+    is_integer,
+    is_string_dtype,
+)
 
-class Index(SingleColumnFrame, Serializable):
+
+class BaseIndex(SingleColumnFrame, Serializable):
+    """Base class for all cudf Index types."""
 
     dtype: DtypeObj
-
-    def __new__(
-        cls,
-        data=None,
-        dtype=None,
-        copy=False,
-        name=None,
-        tupleize_cols=True,
-        **kwargs,
-    ):
-        if tupleize_cols is not True:
-            raise NotImplementedError(
-                "tupleize_cols != True is not yet supported"
-            )
-
-        return as_index(data, copy=copy, dtype=dtype, name=name, **kwargs)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
 
@@ -83,39 +77,6 @@ class Index(SingleColumnFrame, Serializable):
         tupleize_cols=True,
         **kwargs,
     ):
-        """Immutable, ordered and sliceable sequence of integer labels.
-        The basic object storing row labels for all cuDF objects.
-
-        Parameters
-        ----------
-        data : array-like (1-dimensional)/ DataFrame
-            If it is a DataFrame, it will return a MultiIndex
-        dtype : NumPy dtype (default: object)
-            If dtype is None, we find the dtype that best fits the data.
-        copy : bool
-            Make a copy of input data.
-        name : object
-            Name to be stored in the index.
-        tupleize_cols : bool (default: True)
-            When True, attempt to create a MultiIndex if possible.
-            tupleize_cols == False is not yet supported.
-
-        Returns
-        -------
-        Index
-            cudf Index
-
-        Examples
-        --------
-        >>> import cudf
-        >>> cudf.Index([1, 2, 3], dtype="uint64", name="a")
-        UInt64Index([1, 2, 3], dtype='uint64', name='a')
-
-        >>> cudf.Index(cudf.DataFrame({"a":[1, 2], "b":[2, 3]}))
-        MultiIndex([(1, 2),
-                    (2, 3)],
-                  names=['a', 'b'])
-        """
         pass
 
     @cached_property
@@ -180,7 +141,7 @@ class Index(SingleColumnFrame, Serializable):
             True if “other” is an Index and it has the same elements
             as calling index; False otherwise.
         """
-        if not isinstance(other, Index):
+        if not isinstance(other, BaseIndex):
             return False
 
         check_types = False
@@ -195,7 +156,9 @@ class Index(SingleColumnFrame, Serializable):
             check_types = True
 
         try:
-            return super(Index, self).equals(other, check_types=check_types)
+            return super(BaseIndex, self).equals(
+                other, check_types=check_types
+            )
         except TypeError:
             return False
 
@@ -235,7 +198,7 @@ class Index(SingleColumnFrame, Serializable):
 
         if level == self.name:
             return self
-        elif pd.api.types.is_integer(level):
+        elif is_integer(level):
             if level != 0:
                 raise IndexError(
                     f"Cannot get level: {level} " f"for index with 1 level"
@@ -526,7 +489,6 @@ class Index(SingleColumnFrame, Serializable):
             col_name = 0
         else:
             col_name = self.name
-
         return cudf.DataFrame(
             {col_name: self._values}, index=self if index else None
         )
@@ -713,7 +675,7 @@ class Index(SingleColumnFrame, Serializable):
                 to_concat = [this, other]
 
         for obj in to_concat:
-            if not isinstance(obj, Index):
+            if not isinstance(obj, BaseIndex):
                 raise TypeError("all inputs must be Index")
 
         return self._concat(to_concat)
@@ -1083,7 +1045,7 @@ class Index(SingleColumnFrame, Serializable):
         >>> index.astype('float64')
         Float64Index([1.0, 2.0, 3.0], dtype='float64')
         """
-        if pd.api.types.is_dtype_equal(dtype, self.dtype):
+        if is_dtype_equal(dtype, self.dtype):
             return self.copy(deep=copy)
 
         return as_index(
@@ -1126,7 +1088,6 @@ class Index(SingleColumnFrame, Serializable):
         Series
             The dtype will be based on the type of the Index values.
         """
-
         return cudf.Series(
             self._values,
             index=self.copy(deep=False) if index is None else index,
@@ -1263,6 +1224,144 @@ class Index(SingleColumnFrame, Serializable):
         """
         return self._values._memory_usage(deep=deep)
 
+    def get_loc(self, key, method=None, tolerance=None):
+        """Get integer location, slice or boolean mask for requested label.
+
+        Parameters
+        ----------
+        key : label
+        method : {None, 'pad'/'fill', 'backfill'/'bfill', 'nearest'}, optional
+            - default: exact matches only.
+            - pad / ffill: find the PREVIOUS index value if no exact match.
+            - backfill / bfill: use NEXT index value if no exact match.
+            - nearest: use the NEAREST index value if no exact match. Tied
+              distances are broken by preferring the larger index
+              value.
+        tolerance : int or float, optional
+            Maximum distance from index value for inexact matches. The value
+            of the index at the matching location must satisfy the equation
+            ``abs(index[loc] - key) <= tolerance``.
+
+        Returns
+        -------
+        int or slice or boolean mask
+            - If result is unique, return integer index
+            - If index is monotonic, loc is returned as a slice object
+            - Otherwise, a boolean mask is returned
+
+        Examples
+        --------
+        >>> unique_index = cudf.Index(list('abc'))
+        >>> unique_index.get_loc('b')
+        1
+        >>> monotonic_index = cudf.Index(list('abbc'))
+        >>> monotonic_index.get_loc('b')
+        slice(1, 3, None)
+        >>> non_monotonic_index = cudf.Index(list('abcb'))
+        >>> non_monotonic_index.get_loc('b')
+        array([False,  True, False,  True])
+        >>> numeric_unique_index = cudf.Index([1, 2, 3])
+        >>> numeric_unique_index.get_loc(3)
+        2
+        """
+        if tolerance is not None:
+            raise NotImplementedError(
+                "Parameter tolerance is unsupported yet."
+            )
+        if method not in {
+            None,
+            "ffill",
+            "bfill",
+            "pad",
+            "backfill",
+            "nearest",
+        }:
+            raise ValueError(
+                f"Invalid fill method. Expecting pad (ffill), backfill (bfill)"
+                f" or nearest. Got {method}"
+            )
+
+        is_sorted = (
+            self.is_monotonic_increasing or self.is_monotonic_decreasing
+        )
+
+        if not is_sorted and method is not None:
+            raise ValueError(
+                "index must be monotonic increasing or decreasing if `method`"
+                "is specified."
+            )
+
+        key_as_table = Table({"None": as_column(key, length=1)})
+        lower_bound, upper_bound, sort_inds = self._lexsorted_equal_range(
+            key_as_table, is_sorted
+        )
+
+        if lower_bound == upper_bound:
+            # Key not found, apply method
+            if method in ("pad", "ffill"):
+                if lower_bound == 0:
+                    raise KeyError(key)
+                return lower_bound - 1
+            elif method in ("backfill", "bfill"):
+                if lower_bound == self._data.nrows:
+                    raise KeyError(key)
+                return lower_bound
+            elif method == "nearest":
+                if lower_bound == self._data.nrows:
+                    return lower_bound - 1
+                elif lower_bound == 0:
+                    return 0
+                lower_val = self._column.element_indexing(lower_bound - 1)
+                upper_val = self._column.element_indexing(lower_bound)
+                return (
+                    lower_bound - 1
+                    if abs(lower_val - key) < abs(upper_val - key)
+                    else lower_bound
+                )
+            else:
+                raise KeyError(key)
+
+        if lower_bound + 1 == upper_bound:
+            # Search result is unique, return int.
+            return (
+                lower_bound
+                if is_sorted
+                else sort_inds.element_indexing(lower_bound)
+            )
+
+        if is_sorted:
+            # In monotonic index, lex search result is continuous. A slice for
+            # the range is returned.
+            return slice(lower_bound, upper_bound)
+
+        # Not sorted and not unique. Return a boolean mask
+        mask = cupy.full(self._data.nrows, False)
+        true_inds = sort_inds.slice(lower_bound, upper_bound).to_gpu_array()
+        mask[cupy.array(true_inds)] = True
+        return mask
+
+    def _lexsorted_equal_range(
+        self, key_as_table: Table, is_sorted: bool
+    ) -> Tuple[int, int, Optional[ColumnBase]]:
+        """Get equal range for key in lexicographically sorted index. If index
+        is not sorted when called, a sort will take place and `sort_inds` is
+        returned. Otherwise `None` is returned in that position.
+        """
+        if not is_sorted:
+            sort_inds = self._get_sorted_inds()
+            sort_vals = self._gather(sort_inds)
+        else:
+            sort_inds = None
+            sort_vals = self
+        lower_bound = search_sorted(
+            sort_vals, key_as_table, side="left"
+        ).element_indexing(0)
+        upper_bound = search_sorted(
+            sort_vals, key_as_table, side="right"
+        ).element_indexing(0)
+
+        return lower_bound, upper_bound, sort_inds
+
     @classmethod
     def from_pandas(cls, index, nan_as_null=None):
         """
@@ -1314,17 +1413,21 @@ class Index(SingleColumnFrame, Serializable):
                         index_class_type = _dtype_to_index[values.dtype.type]
                     except KeyError:
                         index_class_type = GenericIndex
-                    out = super(Index, index_class_type).__new__(
+                    out = super(BaseIndex, index_class_type).__new__(
                         index_class_type
                     )
                 elif isinstance(values, DatetimeColumn):
-                    out = super(Index, DatetimeIndex).__new__(DatetimeIndex)
+                    out = super(BaseIndex, DatetimeIndex).__new__(
+                        DatetimeIndex
+                    )
                 elif isinstance(values, TimeDeltaColumn):
-                    out = super(Index, TimedeltaIndex).__new__(TimedeltaIndex)
+                    out = super(BaseIndex, TimedeltaIndex).__new__(
+                        TimedeltaIndex
+                    )
                 elif isinstance(values, StringColumn):
-                    out = super(Index, StringIndex).__new__(StringIndex)
+                    out = super(BaseIndex, StringIndex).__new__(StringIndex)
                 elif isinstance(values, CategoricalColumn):
-                    out = super(Index, CategoricalIndex).__new__(
+                    out = super(BaseIndex, CategoricalIndex).__new__(
                         CategoricalIndex
                     )
                 out._data = table._data
@@ -1350,7 +1453,7 @@ class Index(SingleColumnFrame, Serializable):
         return cudf.MultiIndex
 
 
-class RangeIndex(Index):
+class RangeIndex(BaseIndex):
     """
     Immutable Index implementing a monotonic integer range.
 
@@ -1532,7 +1635,7 @@ class RangeIndex(Index):
             index = self._start + index * self._step
             return index
         else:
-            if is_scalar(index):
+            if _is_scalar_or_zero_d_array(index):
                 index = np.min_scalar_type(index).type(index)
             index = column.as_column(index)
 
@@ -1712,7 +1815,7 @@ def index_from_range(start, stop=None, step=None):
     return as_index(vals)
 
 
-class GenericIndex(Index):
+class GenericIndex(BaseIndex):
     """An array of orderable values that represent the indices of another Column
 
     Attributes
@@ -1756,7 +1859,7 @@ class GenericIndex(Index):
             assert isinstance(values, (NumericalColumn, StringColumn))
 
         name = kwargs.get("name")
-        super(Index, self).__init__({name: values})
+        super(BaseIndex, self).__init__({name: values})
 
     @property
     def _values(self):
@@ -2559,7 +2662,7 @@ def interval_range(
         for x in (start, end, freq, periods)
     ]
     if any(
-        not is_numerical_dtype(x.dtype) if x is not None else False
+        not _is_non_decimal_numeric_dtype(x.dtype) if x is not None else False
         for x in args
     ):
         raise ValueError("start, end, periods, freq must be numeric values.")
@@ -2753,7 +2856,7 @@ class StringIndex(GenericIndex):
             values = values._values.copy(deep=copy)
         else:
             values = column.as_column(values, dtype="str")
-            if not pd.api.types.is_string_dtype(values.dtype):
+            if not is_string_dtype(values.dtype):
                 raise ValueError(
                     "Couldn't create StringIndex from passed in object"
                 )
@@ -2795,7 +2898,7 @@ class StringIndex(GenericIndex):
             return self
 
 
-def as_index(arbitrary, **kwargs) -> Index:
+def as_index(arbitrary, **kwargs) -> BaseIndex:
     """Create an Index from an arbitrary object
 
     Currently supported inputs are:
@@ -2819,7 +2922,7 @@ def as_index(arbitrary, **kwargs) -> Index:
     kwargs = _setdefault_name(arbitrary, **kwargs)
     if isinstance(arbitrary, cudf.MultiIndex):
         return arbitrary
-    elif isinstance(arbitrary, Index):
+    elif isinstance(arbitrary, BaseIndex):
         if arbitrary.name == kwargs["name"]:
             return arbitrary
         idx = arbitrary.copy(deep=False)
@@ -2838,6 +2941,8 @@ def as_index(arbitrary, **kwargs) -> Index:
         return TimedeltaIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, **kwargs)
+    elif isinstance(arbitrary, IntervalColumn):
+        return IntervalIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, cudf.Series):
         return as_index(arbitrary._column, **kwargs)
     elif isinstance(arbitrary, pd.RangeIndex):
@@ -2853,7 +2958,7 @@ def as_index(arbitrary, **kwargs) -> Index:
     )
 
 
-_dtype_to_index: Dict[Any, Type[Index]] = {
+_dtype_to_index: Dict[Any, Type[BaseIndex]] = {
     np.int8: Int8Index,
     np.int16: Int16Index,
     np.int32: Int32Index,
@@ -2887,3 +2992,74 @@ def _setdefault_name(values, **kwargs):
         else:
             kwargs.update({"name": values.name})
     return kwargs
+
+
+class IndexMeta(type):
+    """Custom metaclass for Index that overrides instance/subclass tests."""
+
+    def __instancecheck__(self, instance):
+        return isinstance(instance, BaseIndex)
+
+    def __subclasscheck__(self, subclass):
+        return issubclass(subclass, BaseIndex)
+
+
+class Index(BaseIndex, metaclass=IndexMeta):
+    """The basic object storing row labels for all cuDF objects.
+
+    Parameters
+    ----------
+    data : array-like (1-dimensional)/ DataFrame
+        If it is a DataFrame, it will return a MultiIndex
+    dtype : NumPy dtype (default: object)
+        If dtype is None, we find the dtype that best fits the data.
+    copy : bool
+        Make a copy of input data.
+    name : object
+        Name to be stored in the index.
+    tupleize_cols : bool (default: True)
+        When True, attempt to create a MultiIndex if possible.
+        tupleize_cols == False is not yet supported.
+
+    Returns
+    -------
+    Index
+        cudf Index
+
+    Warnings
+    --------
+    This class should not be subclassed. It is designed as a factory for
+    different subclasses of :class:`BaseIndex` depending on the provided input.
+    If you absolutely must, and if you're intimately familiar with the
+    internals of cuDF, subclass :class:`BaseIndex` instead.
+
+    Examples
+    --------
+    >>> import cudf
+    >>> cudf.Index([1, 2, 3], dtype="uint64", name="a")
+    UInt64Index([1, 2, 3], dtype='uint64', name='a')
+
+    >>> cudf.Index(cudf.DataFrame({"a":[1, 2], "b":[2, 3]}))
+    MultiIndex([(1, 2),
+                (2, 3)],
+                names=['a', 'b'])
+    """
+
+    def __new__(
+        cls,
+        data=None,
+        dtype=None,
+        copy=False,
+        name=None,
+        tupleize_cols=True,
+        **kwargs,
+    ):
+        assert cls is Index, (
+            "Index cannot be subclassed, extend BaseIndex " "instead."
+        )
+        if tupleize_cols is not True:
+            raise NotImplementedError(
+                "tupleize_cols != True is not yet supported"
+            )
+
+        return as_index(data, copy=copy, dtype=dtype, name=name, **kwargs)

@@ -39,7 +39,7 @@ requirements:
     - cudatoolkit {{ cuda_version }}.*
     - arrow-cpp 1.0.1
     - arrow-cpp-proc * cuda
-    - dlpack 0.3
+    - dlpack>=0.5,<0.6.0a0
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
     - arrow-cpp-proc * cuda
@@ -74,6 +74,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/gather.hpp
     - test -f $PREFIX/include/cudf/detail/groupby.hpp
     - test -f $PREFIX/include/cudf/detail/groupby/sort_helper.hpp
+    - test -f $PREFIX/include/cudf/detail/groupby/group_replace_nulls.hpp
     - test -f $PREFIX/include/cudf/detail/hashing.hpp
     - test -f $PREFIX/include/cudf/detail/interop.hpp
     - test -f $PREFIX/include/cudf/detail/is_element_valid.hpp
@@ -140,6 +141,7 @@ test:
     - test -f $PREFIX/include/cudf/lists/detail/drop_list_duplicates.hpp
     - test -f $PREFIX/include/cudf/lists/detail/interleave_columns.hpp
     - test -f $PREFIX/include/cudf/lists/detail/sorting.hpp
+    - test -f $PREFIX/include/cudf/lists/detail/scatter_helper.cuh
     - test -f $PREFIX/include/cudf/lists/combine.hpp
     - test -f $PREFIX/include/cudf/lists/count_elements.hpp
     - test -f $PREFIX/include/cudf/lists/explode.hpp
@@ -193,6 +195,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/find_multiple.hpp
     - test -f $PREFIX/include/cudf/strings/json.hpp
     - test -f $PREFIX/include/cudf/strings/padding.hpp
+    - test -f $PREFIX/include/cudf/strings/repeat_strings.hpp
     - test -f $PREFIX/include/cudf/strings/replace.hpp
     - test -f $PREFIX/include/cudf/strings/replace_re.hpp
     - test -f $PREFIX/include/cudf/strings/split/partition.hpp

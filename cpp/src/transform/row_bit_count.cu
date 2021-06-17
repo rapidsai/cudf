@@ -166,10 +166,10 @@ struct flatten_functor {
                   std::vector<cudf::column_view>& out,
                   std::vector<column_info>& info,
                   hierarchy_info& h_info,
-                  rmm::cuda_stream_view stream,
+                  rmm::cuda_stream_view,
                   size_type cur_depth,
                   size_type cur_branch_depth,
-                  thrust::optional<int> parent_index)
+                  thrust::optional<int>)
   {
     out.push_back(col);
     info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
@@ -183,10 +183,10 @@ struct flatten_functor {
                   std::vector<cudf::column_view>& out,
                   std::vector<column_info>& info,
                   hierarchy_info& h_info,
-                  rmm::cuda_stream_view stream,
+                  rmm::cuda_stream_view,
                   size_type cur_depth,
                   size_type cur_branch_depth,
-                  thrust::optional<int> parent_index)
+                  thrust::optional<int>)
   {
     out.push_back(col);
     info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
@@ -219,7 +219,7 @@ struct flatten_functor {
 
     lists_column_view lcv(col);
     auto iter = cudf::detail::make_counting_transform_iterator(
-      0, [col = lcv.get_sliced_child(stream)](auto i) { return col; });
+      0, [col = lcv.get_sliced_child(stream)](auto) { return col; });
     h_info.complex_type_count++;
 
     flatten_hierarchy(
@@ -235,7 +235,7 @@ struct flatten_functor {
                   rmm::cuda_stream_view stream,
                   size_type cur_depth,
                   size_type cur_branch_depth,
-                  thrust::optional<int> parent_index)
+                  thrust::optional<int>)
   {
     out.push_back(col);
     info.push_back({cur_depth, cur_branch_depth, cur_branch_depth});
@@ -257,18 +257,11 @@ struct flatten_functor {
   }
 
   // everything else
-  template <typename T,
-            std::enable_if_t<!cudf::is_fixed_width<T>() && !std::is_same<T, string_view>::value &&
-                             !std::is_same<T, list_view>::value &&
-                             !std::is_same<T, struct_view>::value>* = nullptr>
-  void operator()(column_view const& col,
-                  std::vector<cudf::column_view>& out,
-                  std::vector<column_info>& info,
-                  hierarchy_info& h_info,
-                  rmm::cuda_stream_view stream,
-                  size_type cur_depth,
-                  size_type cur_branch_depth,
-                  thrust::optional<int> parent_index)
+  template <typename T, typename... Args>
+  std::enable_if_t<!cudf::is_fixed_width<T>() && !std::is_same<T, string_view>::value &&
+                     !std::is_same<T, list_view>::value && !std::is_same<T, struct_view>::value,
+                   void>
+  operator()(Args&&...)
   {
     CUDF_FAIL("Unsupported column type in row_bit_count");
   }
@@ -364,7 +357,6 @@ template <>
 __device__ size_type row_size_functor::operator()<list_view>(column_device_view const& col,
                                                              row_span const& span)
 {
-  column_device_view const& offsets = col.child(lists_column_view::offsets_column_index);
   auto const num_rows{span.row_end - span.row_start};
 
   auto const offsets_size  = sizeof(offset_type) * CHAR_BIT;

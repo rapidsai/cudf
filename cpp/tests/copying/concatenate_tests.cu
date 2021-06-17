@@ -54,8 +54,8 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 
   TypedColumnTest()
-    : data{_num_elements * cudf::size_of(type())},
-      mask{cudf::bitmask_allocation_size_bytes(_num_elements)}
+    : data{_num_elements * cudf::size_of(type()), rmm::cuda_stream_default},
+      mask{cudf::bitmask_allocation_size_bytes(_num_elements), rmm::cuda_stream_default}
   {
     auto typed_data = static_cast<char*>(data.data());
     auto typed_mask = static_cast<char*>(mask.data());
@@ -99,7 +99,7 @@ TYPED_TEST(TypedColumnTest, ConcatenateNoColumns)
 
 TYPED_TEST(TypedColumnTest, ConcatenateColumnView)
 {
-  column original{this->type(), this->num_elements(), this->data, this->mask};
+  column original{this->type(), this->num_elements(), std::move(this->data), std::move(this->mask)};
   std::vector<cudf::size_type> indices{0,
                                        this->num_elements() / 3,
                                        this->num_elements() / 3,
@@ -354,7 +354,7 @@ TEST_F(TableTest, SizeOverflowTest)
     auto offsets    = cudf::test::fixed_width_column_wrapper<int>{0, size};
     auto many_chars = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, size);
     auto col        = cudf::make_strings_column(
-      1, offsets.release(), std::move(many_chars), 0, rmm::device_buffer{0});
+      1, offsets.release(), std::move(many_chars), 0, rmm::device_buffer{});
 
     cudf::table_view tbl({*col});
     EXPECT_THROW(cudf::concatenate(std::vector<TView>({tbl, tbl, tbl, tbl, tbl, tbl})),
@@ -371,7 +371,7 @@ TEST_F(TableTest, SizeOverflowTest)
       cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, size + 1);
     auto chars = cudf::test::fixed_width_column_wrapper<int8_t>{0, 1, 2};
     auto col   = cudf::make_strings_column(
-      size, std::move(many_offsets), chars.release(), 0, rmm::device_buffer{0});
+      size, std::move(many_offsets), chars.release(), 0, rmm::device_buffer{});
 
     cudf::table_view tbl({*col});
     EXPECT_THROW(cudf::concatenate(std::vector<TView>({tbl, tbl, tbl, tbl, tbl, tbl})),
@@ -390,12 +390,12 @@ TEST_F(TableTest, SizeOverflowTest)
     children.push_back(
       cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, inner_size));
     auto struct_col =
-      cudf::make_structs_column(inner_size, std::move(children), 0, rmm::device_buffer{0});
+      cudf::make_structs_column(inner_size, std::move(children), 0, rmm::device_buffer{});
 
     // list
     auto offsets = cudf::test::fixed_width_column_wrapper<int>{0, inner_size};
-    auto col     = cudf::make_lists_column(
-      1, offsets.release(), std::move(struct_col), 0, rmm::device_buffer{0});
+    auto col =
+      cudf::make_lists_column(1, offsets.release(), std::move(struct_col), 0, rmm::device_buffer{});
 
     cudf::table_view tbl({*col});
     auto tables = std::vector<TView>({tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl});
@@ -412,14 +412,14 @@ TEST_F(TableTest, SizeOverflowTest)
     auto offsets = cudf::test::fixed_width_column_wrapper<int>{0, 0, 0, inner_size};
     auto many_chars =
       cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT8}, inner_size);
-    auto list_col = cudf::make_lists_column(
-      3, offsets.release(), std::move(many_chars), 0, rmm::device_buffer{0});
+    auto list_col =
+      cudf::make_lists_column(3, offsets.release(), std::move(many_chars), 0, rmm::device_buffer{});
 
     // struct
     std::vector<std::unique_ptr<column>> children;
     children.push_back(cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, size));
     children.push_back(std::move(list_col));
-    auto col = cudf::make_structs_column(size, std::move(children), 0, rmm::device_buffer{0});
+    auto col = cudf::make_structs_column(size, std::move(children), 0, rmm::device_buffer{});
 
     cudf::table_view tbl({*col});
     auto tables = std::vector<TView>({tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl, tbl});

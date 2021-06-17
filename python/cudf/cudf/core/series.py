@@ -14,7 +14,6 @@ import cupy
 import numpy as np
 import pandas as pd
 from pandas._config import get_option
-from pandas.api.types import is_dict_like
 
 import cudf
 from cudf import _lib as libcudf
@@ -39,25 +38,30 @@ from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import SingleColumnFrame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy
-from cudf.core.index import Index, RangeIndex, as_index
+from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
 from cudf.utils import cudautils, docutils, ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
+    find_common_type,
+    is_categorical_dtype,
     is_decimal_dtype,
+    is_interval_dtype,
     is_list_dtype,
     is_list_like,
     is_mixed_with_object_dtype,
     is_scalar,
+    is_struct_dtype,
     min_scalar_type,
-    find_common_type,
 )
 from cudf.utils.utils import (
     get_appropriate_dispatched_func,
     get_relevant_submodule,
 )
+
+from ..api.types import is_bool_dtype, is_dict_like, is_dtype_equal
 
 
 class Series(SingleColumnFrame, Serializable):
@@ -219,7 +223,7 @@ class Series(SingleColumnFrame, Serializable):
         elif isinstance(data, pd.Index):
             name = data.name
             data = data.values
-        elif isinstance(data, Index):
+        elif isinstance(data, BaseIndex):
             name = data.name
             data = data._values
             if dtype is not None:
@@ -255,7 +259,7 @@ class Series(SingleColumnFrame, Serializable):
             if dtype is not None:
                 data = data.astype(dtype)
 
-        if index is not None and not isinstance(index, Index):
+        if index is not None and not isinstance(index, BaseIndex):
             index = as_index(index)
 
         assert isinstance(data, column.ColumnBase)
@@ -739,7 +743,7 @@ class Series(SingleColumnFrame, Serializable):
         e    14
         dtype: int64
         """
-        index = index if isinstance(index, Index) else as_index(index)
+        index = index if isinstance(index, BaseIndex) else as_index(index)
         return self._copy_construct(index=index)
 
     def as_index(self):
@@ -1222,15 +1226,12 @@ class Series(SingleColumnFrame, Serializable):
             if get_option("display.max_rows") == 0
             else get_option("display.max_rows")
         )
-
         if len(self) > max_rows and max_rows != 0:
             top = self.head(int(max_rows / 2 + 1))
             bottom = self.tail(int(max_rows / 2 + 1))
-
             preprocess = cudf.concat([top, bottom])
         else:
             preprocess = self.copy()
-
         preprocess.index = preprocess.index._clean_nulls_from_index()
         if (
             preprocess.nullable
@@ -1271,6 +1272,14 @@ class Series(SingleColumnFrame, Serializable):
                     )
                 )
             else:
+                if is_categorical_dtype(self):
+                    if is_interval_dtype(
+                        self.dtype.categories
+                    ) and is_struct_dtype(preprocess._column.categories):
+                        # with a series input the IntervalIndex's are turn
+                        # into a struct dtype this line will change the
+                        # categories back to an intervalIndex.
+                        preprocess.dtype._categories = self.dtype.categories
                 pd_series = preprocess.to_pandas()
             output = pd_series.to_string(
                 name=self.name,
@@ -2407,7 +2416,7 @@ class Series(SingleColumnFrame, Serializable):
         col = _concat_columns([o._column for o in objs])
 
         if isinstance(col, cudf.core.column.DecimalColumn):
-            col = objs[0]._column._copy_type_metadata(col)
+            col = col._with_type_metadata(objs[0]._column.dtype)
 
         return cls(data=col, index=index, name=name)
 
@@ -2865,7 +2874,6 @@ class Series(SingleColumnFrame, Serializable):
         3    30.0
         dtype: float64
         """
-
         if index is True:
             index = self.index.to_pandas()
         s = self._column.to_pandas(index=index, nullable=nullable)
@@ -2981,7 +2989,7 @@ class Series(SingleColumnFrame, Serializable):
                  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0],
              dtype=uint8)
         """
-        if not pd.api.types.is_bool_dtype(self.dtype):
+        if not is_bool_dtype(self.dtype):
             raise TypeError(
                 f"Series must of boolean dtype, found: {self.dtype}"
             )
@@ -3075,7 +3083,7 @@ class Series(SingleColumnFrame, Serializable):
                 )
             dtype = dtype[self.name]
 
-        if pd.api.types.is_dtype_equal(dtype, self.dtype):
+        if is_dtype_equal(dtype, self.dtype):
             return self.copy(deep=copy)
         try:
             data = self._column.astype(dtype)
@@ -3967,11 +3975,9 @@ class Series(SingleColumnFrame, Serializable):
         4    105
         dtype: int64
         """
-        if callable(udf):
-            res_col = self._unaryop(udf)
-        else:
-            res_col = self._column.applymap(udf, out_dtype=out_dtype)
-        return self._copy_construct(data=res_col)
+        if not callable(udf):
+            raise ValueError("Input UDF must be a callable object.")
+        return self._copy_construct(data=self._unaryop(udf))
 
     #
     # Stats
@@ -4750,7 +4756,7 @@ class Series(SingleColumnFrame, Serializable):
 
         return Series(val_counts.index.sort_values(), name=self.name)
 
-    def round(self, decimals=0):
+    def round(self, decimals=0, how="half_even"):
         """
         Round each value in a Series to the given number of decimals.
 
@@ -4760,6 +4766,9 @@ class Series(SingleColumnFrame, Serializable):
             Number of decimal places to round to. If decimals is negative,
             it specifies the number of positions to the left of the decimal
             point.
+        how : str, optional
+            Type of rounding. Can be either "half_even" (default)
+            of "half_up" rounding.
 
         Returns
         -------
@@ -4775,9 +4784,8 @@ class Series(SingleColumnFrame, Serializable):
         2    3.0
         dtype: float64
         """
-
         return Series(
-            self._column.round(decimals=decimals),
+            self._column.round(decimals=decimals, how=how),
             name=self.name,
             index=self.index,
             dtype=self.dtype,
@@ -5182,7 +5190,6 @@ class Series(SingleColumnFrame, Serializable):
         1.0     1
         dtype: int32
         """
-
         if bins is not None:
             raise NotImplementedError("bins is not yet supported")
 
@@ -5597,7 +5604,7 @@ class Series(SingleColumnFrame, Serializable):
             # pandas defaults
             percentiles = np.array([0.25, 0.5, 0.75])
 
-        if pd.api.types.is_bool_dtype(self.dtype):
+        if is_bool_dtype(self.dtype):
             return _describe_categorical(self)
         elif isinstance(self._column, cudf.core.column.NumericalColumn):
             return _describe_numeric(self)

@@ -251,7 +251,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     for o in objs:
         if isinstance(o, cudf.MultiIndex):
             typs.add(cudf.MultiIndex)
-        elif isinstance(o, cudf.Index):
+        elif isinstance(o, cudf.BaseIndex):
             typs.add(type(o))
         elif isinstance(o, cudf.DataFrame):
             typs.add(cudf.DataFrame)

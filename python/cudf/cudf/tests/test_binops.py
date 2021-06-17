@@ -1697,7 +1697,7 @@ def test_binops_with_lhs_numpy_scalar(frame, dtype):
     got = val == data
 
     # In case of index, expected would be a numpy array
-    if isinstance(data, cudf.Index):
+    if isinstance(data, cudf.BaseIndex):
         expected = pd.Index(expected)
 
     utils.assert_eq(expected, got)
@@ -1772,11 +1772,11 @@ def _decimal_series(input, dtype):
         (
             operator.add,
             ["100", "200"],
-            cudf.Decimal64Dtype(scale=-2, precision=3),
+            cudf.Decimal64Dtype(scale=-2, precision=17),
             ["0.1", "0.2"],
             cudf.Decimal64Dtype(scale=3, precision=4),
             ["100.1", "200.2"],
-            cudf.Decimal64Dtype(scale=3, precision=9),
+            cudf.Decimal64Dtype(scale=3, precision=18),
         ),
         (
             operator.sub,
@@ -1799,11 +1799,11 @@ def _decimal_series(input, dtype):
         (
             operator.sub,
             ["100", "200"],
-            cudf.Decimal64Dtype(scale=-2, precision=3),
+            cudf.Decimal64Dtype(scale=-2, precision=10),
             ["0.1", "0.2"],
-            cudf.Decimal64Dtype(scale=3, precision=4),
+            cudf.Decimal64Dtype(scale=6, precision=10),
             ["99.9", "199.8"],
-            cudf.Decimal64Dtype(scale=3, precision=9),
+            cudf.Decimal64Dtype(scale=6, precision=18),
         ),
         (
             operator.mul,
@@ -1853,11 +1853,11 @@ def _decimal_series(input, dtype):
         (
             operator.truediv,
             ["132.86", "15.25"],
-            cudf.Decimal64Dtype(scale=4, precision=6),
+            cudf.Decimal64Dtype(scale=4, precision=14),
             ["2.34", "8.50"],
-            cudf.Decimal64Dtype(scale=2, precision=4),
+            cudf.Decimal64Dtype(scale=2, precision=8),
             ["56.77", "1.79"],
-            cudf.Decimal64Dtype(scale=2, precision=11),
+            cudf.Decimal64Dtype(scale=2, precision=18),
         ),
         (
             operator.add,
@@ -1907,11 +1907,11 @@ def _decimal_series(input, dtype):
         (
             operator.mul,
             ["100", "200"],
-            cudf.Decimal64Dtype(scale=-2, precision=3),
+            cudf.Decimal64Dtype(scale=-2, precision=10),
             ["0.1", None],
-            cudf.Decimal64Dtype(scale=3, precision=4),
+            cudf.Decimal64Dtype(scale=3, precision=12),
             ["10.0", None],
-            cudf.Decimal64Dtype(scale=1, precision=8),
+            cudf.Decimal64Dtype(scale=1, precision=18),
         ),
         (
             operator.eq,

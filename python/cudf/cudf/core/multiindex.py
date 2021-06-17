@@ -17,13 +17,14 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
 from cudf.core._compat import PANDAS_GE_120
-from cudf.core.column import column
+from cudf.core.column import as_column, column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, SingleColumnFrame
-from cudf.core.index import Index, as_index
+from cudf.core.index import BaseIndex, as_index
+from cudf.utils.utils import _maybe_indices_to_slice
 
 
-class MultiIndex(Index):
+class MultiIndex(BaseIndex):
     """A multi-level or hierarchical index.
 
     Provides N-Dimensional indexing into Series and DataFrame objects.
@@ -84,7 +85,7 @@ class MultiIndex(Index):
             )
 
         out = Frame.__new__(cls)
-        super(Index, out).__init__()
+        super(BaseIndex, out).__init__()
 
         if copy:
             if isinstance(codes, cudf.DataFrame):
@@ -1609,3 +1610,97 @@ class MultiIndex(Index):
 
     def _level_name_from_level(self, level):
         return self.names[self._level_index_from_level(level)]
+
+    def get_loc(self, key, method=None, tolerance=None):
+        """
+        Get location for a label or a tuple of labels.
+
+        The location is returned as an integer/slice or boolean mask.
+
+        Parameters
+        ----------
+        key : label or tuple of labels (one for each level)
+        method : None
+
+        Returns
+        -------
+        loc : int, slice object or boolean mask
+            - If index is unique, search result is unique, return a single int.
+            - If index is monotonic, index is returned as a slice object.
+            - Otherwise, cudf attempts a best effort to convert the search
+              result into a slice object, and will return a boolean mask if
+              failed to do so. Notice this can deviate from Pandas behavior
+              in some situations.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> mi = cudf.MultiIndex.from_tuples(
+            [('a', 'd'), ('b', 'e'), ('b', 'f')])
+        >>> mi.get_loc('b')
+        slice(1, 3, None)
+        >>> mi.get_loc(('b', 'e'))
+        1
+        >>> non_monotonic_non_unique_idx = cudf.MultiIndex.from_tuples(
+            [('c', 'd'), ('b', 'e'), ('a', 'f'), ('b', 'e')])
+        >>> non_monotonic_non_unique_idx.get_loc('b') # differ from pandas
+        slice(1, 4, 2)
+        """
+        if tolerance is not None:
+            raise NotImplementedError(
+                "Parameter tolerance is unsupported yet."
+            )
+        if method is not None:
+            raise NotImplementedError(
+                "only the default get_loc method is currently supported for"
+                " MultiIndex"
+            )
+
+        is_sorted = (
+            self.is_monotonic_increasing or self.is_monotonic_decreasing
+        )
+        is_unique = self.is_unique
+        key = (key,) if not isinstance(key, tuple) else key
+
+        # Handle partial key search. If length of `key` is less than `nlevels`,
+        # Only search levels up to `len(key)` level.
+        key_as_table = libcudf.table.Table(
+            {i: as_column(k, length=1) for i, k in enumerate(key)}
+        )
+        partial_index = self.__class__._from_data(
+            data=self._data.select_by_index(slice(key_as_table._num_columns))
+        )
+        (
+            lower_bound,
+            upper_bound,
+            sort_inds,
+        ) = partial_index._lexsorted_equal_range(key_as_table, is_sorted)
+
+        if lower_bound == upper_bound:
+            raise KeyError(key)
+
+        if is_unique and lower_bound + 1 == upper_bound:
+            # Indices are unique (Pandas constraint), search result is unique,
+            # return int.
+            return (
+                lower_bound
+                if is_sorted
+                else sort_inds.element_indexing(lower_bound)
+            )
+
+        if is_sorted:
+            # In monotonic index, lex search result is continuous. A slice for
+            # the range is returned.
+            return slice(lower_bound, upper_bound)
+
+        true_inds = cupy.array(
+            sort_inds.slice(lower_bound, upper_bound).to_gpu_array()
+        )
+        true_inds = _maybe_indices_to_slice(true_inds)
+        if isinstance(true_inds, slice):
+            return true_inds
+
+        # Not sorted and not unique. Return a boolean mask
+        mask = cupy.full(self._data.nrows, False)
+        mask[true_inds] = True
+        return mask
