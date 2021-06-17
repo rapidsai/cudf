@@ -85,7 +85,7 @@ TYPED_TEST(groupby_group_keys_and_values_test, some_nulls)
   using V = TypeParam;
 
   fixed_width_column_wrapper<K> keys({1, 1, 3, 2, 1, 2}, {1, 0, 1, 0, 0, 1});
-  fixed_width_column_wrapper<K> expect_grouped_keys({1, 2, 3}, no_null());
+  fixed_width_column_wrapper<K> expect_grouped_keys({1, 2, 3}, no_nulls());
   fixed_width_column_wrapper<V> values({1, 2, 3, 4, 5, 6});
   fixed_width_column_wrapper<V> expect_grouped_values({1, 6, 3});
   std::vector<size_type> expect_group_offsets = {0, 1, 2, 3};

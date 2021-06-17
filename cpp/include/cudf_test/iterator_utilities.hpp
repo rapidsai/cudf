@@ -34,7 +34,7 @@ namespace iterators {
  *
  * @code
  * auto indices = std::vector<size_type>{8,9};
- * auto iter = null_at(indices.cbegin(), indices.end());
+ * auto iter = nulls_at(indices.cbegin(), indices.end());
  * iter[6] == true;  // i.e. Valid row at index 6.
  * iter[7] == true;  // i.e. Valid row at index 7.
  * iter[8] == false; // i.e. Invalid row at index 8.
@@ -48,7 +48,7 @@ namespace iterators {
  * @return auto Validity iterator
  */
 template <typename Iter>
-[[maybe_unused]] static auto null_at(Iter index_start, Iter index_end)
+[[maybe_unused]] static auto nulls_at(Iter index_start, Iter index_end)
 {
   using index_type = typename std::iterator_traits<Iter>::value_type;
 
@@ -65,7 +65,7 @@ template <typename Iter>
  * and yields `true` (to mark valid rows) for all other indices. E.g.
  *
  * @code
- * auto iter = null_at({8,9});
+ * auto iter = nulls_at({8,9});
  * iter[6] == true;  // i.e. Valid row at index 6.
  * iter[7] == true;  // i.e. Valid row at index 7.
  * iter[8] == false; // i.e. Invalid row at index 8.
@@ -75,9 +75,11 @@ template <typename Iter>
  * @param indices The indices for which the validity iterator must return `false` (i.e. null)
  * @return auto Validity iterator
  */
-[[maybe_unused]] static auto null_at(std::vector<cudf::size_type> const& indices)
+[[maybe_unused]] static auto nulls_at(std::vector<cudf::size_type> const& indices)
 {
-  return null_at(indices.begin(), indices.end());
+  return cudf::detail::make_counting_transform_iterator(0, [&indices](auto i) {
+    return std::find(indices.cbegin(), indices.cend(), i) == indices.cend();
+  });
 }
 
 /**
@@ -97,7 +99,7 @@ template <typename Iter>
  */
 [[maybe_unused]] static auto null_at(cudf::size_type index)
 {
-  return null_at(std::vector<cudf::size_type>{index});
+  return nulls_at(std::vector<cudf::size_type>{index});
 }
 
 /**
@@ -112,20 +114,20 @@ template <typename Iter>
  *
  * @return auto Validity iterator which always yields `true`
  */
-[[maybe_unused]] static auto no_null() { return thrust::make_constant_iterator(true); }
+[[maybe_unused]] static auto no_nulls() { return thrust::make_constant_iterator(true); }
 
 /**
  * @brief Bool iterator for marking null elements from pointers of data
  *
  * The returned iterator yields `false` (to mark `null`) at the indices corresponding to the
- * pointers having `nullptr` value and `true` for the remaining indices.
+ * pointers having `nullptr` values and `true` for the remaining indices.
  *
  * @tparam T the data type
  * @param ptrs The data pointers for which the validity iterator is computed
  * @return auto Validity iterator
  */
 template <class T>
-[[maybe_unused]] static auto nulls_from_nullptr(std::vector<T const*> const& ptrs)
+[[maybe_unused]] static auto nulls_from_nullptrs(std::vector<T const*> const& ptrs)
 {
   return thrust::make_transform_iterator(ptrs.begin(), [](auto ptr) { return ptr != nullptr; });
 }

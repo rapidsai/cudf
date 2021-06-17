@@ -121,7 +121,7 @@ TYPED_TEST(groupby_sum_test, null_keys_and_values)
                                      {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
   //  { 1, 1,     2, 2, 2,   3, 3,    4}
-  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_null());
+  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_nulls());
   //  { 3, 6,     1, 4, 9,   2, 8,    -}
   fixed_width_column_wrapper<R> expect_vals({9, 14, 10, 0}, {1, 1, 1, 0});
 

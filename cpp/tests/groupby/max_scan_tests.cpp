@@ -118,7 +118,7 @@ TYPED_TEST(groupby_max_scan_test, null_keys_and_values)
   value_wrapper vals({5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 4}, {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
                          //  {1, 1, 1, 2, 2, 2, 2, 3,   _, 3, 4}
-  key_wrapper expect_keys(   {1, 1, 1, 2, 2, 2, 2, 3,      3, 4}, no_null() );
+  key_wrapper expect_keys(   {1, 1, 1, 2, 2, 2, 2, 3,      3, 4}, no_nulls() );
                          //  { -, 3, 6, 1, 4,  -, 9, 2, _, 8, -}
   result_wrapper expect_vals({-1, 8, 8, 6, 9, -1, 9, 7,    7, -1},
                              { 0, 1, 1, 1, 1,  0, 1, 1,    1, 0});

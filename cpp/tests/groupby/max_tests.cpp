@@ -118,7 +118,7 @@ TYPED_TEST(groupby_max_test, null_keys_and_values)
                                      {1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0});
 
   //  { 1, 1,     2, 2, 2,   3, 3,    4}
-  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_null());
+  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_nulls());
   //  { 0, 3,     1, 4, 5,   2, 8,    -}
   fixed_width_column_wrapper<R> expect_vals({3, 5, 8, 0}, {1, 1, 1, 0});
 

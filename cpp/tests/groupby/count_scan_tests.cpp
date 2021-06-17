@@ -125,7 +125,7 @@ TYPED_TEST(groupby_count_scan_test, null_keys_and_values)
   value_wrapper vals({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4}, {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
   //                        {1, 1, 1, 2, 2, 2, 2, 3, _, 3, 4}
-  key_wrapper expect_keys(  {1, 1, 1, 2, 2, 2, 2, 3,    3, 4}, no_null());
+  key_wrapper expect_keys(  {1, 1, 1, 2, 2, 2, 2, 3,    3, 4}, no_nulls());
   //                        {0, 3, 6, 1, 4, _, 9, 2, 7, 8, -}
   result_wrapper expect_vals{0, 1, 2, 0, 1,    2, 3, 0, 1, 0};
   // clang-format on

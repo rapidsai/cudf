@@ -48,7 +48,7 @@ TYPED_TEST(groupby_median_test, basic)
   //                                       {1, 1, 1, 2, 2, 2, 2, 3, 3, 3}
   fixed_width_column_wrapper<K> expect_keys{1,       2,          3};
   //                                        {0, 3, 6, 1, 4, 5, 9, 2, 7, 8}
-  fixed_width_column_wrapper<R> expect_vals({3.,     4.5,        7.}, no_null());
+  fixed_width_column_wrapper<R> expect_vals({3.,     4.5,        7.}, no_nulls());
   // clang-format on
 
   auto agg = cudf::make_median_aggregation();
@@ -111,7 +111,7 @@ TYPED_TEST(groupby_median_test, null_keys_and_values)
                                      {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
   //  { 1, 1,     2, 2, 2,   3, 3,    4}
-  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_null());
+  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_nulls());
   //  { 3, 6,     1, 4, 9,   2, 8,    -}
   fixed_width_column_wrapper<R> expect_vals({4.5, 4., 5., 0.}, {1, 1, 1, 0});
 
@@ -131,7 +131,7 @@ TYPED_TEST(groupby_median_test, dictionary)
   //                                        {1, 1, 1, 2, 2, 2, 2, 3, 3, 3}
   fixed_width_column_wrapper<K> expect_keys({1,       2,          3      });
   //                                        {0, 3, 6, 1, 4, 5, 9, 2, 7, 8}
-  fixed_width_column_wrapper<R> expect_vals({3.,       4.5,       7.     }, no_null());
+  fixed_width_column_wrapper<R> expect_vals({3.,       4.5,       7.     }, no_nulls());
   // clang-format on
 
   test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_median_aggregation());

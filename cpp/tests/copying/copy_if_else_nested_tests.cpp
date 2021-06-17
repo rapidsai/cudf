@@ -94,8 +94,8 @@ TYPED_TEST(TypedCopyIfElseNestedTest, StructsWithNulls)
   auto result_column =
     copy_if_else(lhs_structs_column->view(), rhs_structs_column->view(), selector_column->view());
 
-  auto null_at_0_3 = null_at(std::vector<size_type>{0, 3});
-  auto null_at_3_5 = null_at(std::vector<size_type>{3, 5});
+  auto null_at_0_3 = nulls_at(std::vector<size_type>{0, 3});
+  auto null_at_3_5 = nulls_at(std::vector<size_type>{3, 5});
 
   auto expected_ints    = ints{{-1, 1, 22, 3, 4, 55, 6}, null_at_0_3};
   auto expected_strings = strings{{"0", "1", "22", "", "4", "", "6"}, null_at_3_5};
@@ -124,7 +124,7 @@ TYPED_TEST(TypedCopyIfElseNestedTest, LongerStructsWithNulls)
           86, 125, 0,   0,   0,   75,  -49, 125, 60,  116, 118,  64,   20,  -70, -18, 0,   -25,
           22, -46, -89, -9,  27,  -56, -77, 123, 0,   -90, 87,   -113, -37, 22,  -22, -53, 73,
           99, 113, -2,  -24, 113, 75,  6,   82,  -58, 122, -123, -127, 19,  -62, -24},
-         null_at(std::vector<size_type>{13, 19, 20, 21, 32, 42})};
+         nulls_at(std::vector<size_type>{13, 19, 20, 21, 32, 42})};
 
   auto lhs_structs_column = structs{{lhs_child_1}}.release();
   auto result_column =
@@ -176,7 +176,6 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ListsWithNulls)
   using lcw = lists_column_wrapper<T, int32_t>;
 
   auto null_at_0 = null_at(0);
-  auto null_at_2 = null_at(2);
   auto null_at_4 = null_at(4);
   auto null_at_5 = null_at(5);
 
@@ -204,7 +203,7 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ListsWithNulls)
 
   auto result_column = copy_if_else(lhs->view(), rhs->view(), selector_column->view());
 
-  auto null_at_4_5 = null_at(std::vector{4, 5});
+  auto null_at_4_5 = nulls_at(std::vector{4, 5});
 
   auto expected_output =
     lcw{{{0, 0}, {1, 1}, {22, 22}, lcw{{3, 3, 3}, null_at_0}, {}, {}, {6, 6, 6, 6, 6, 6}},
@@ -259,7 +258,7 @@ TYPED_TEST(TypedCopyIfElseNestedTest, ListsWithStructs)
 
   auto result_column = copy_if_else(lhs->view(), rhs->view(), selector_column->view());
 
-  auto const null_at_6_9 = null_at(std::vector{6, 9});
+  auto const null_at_6_9 = nulls_at(std::vector{6, 9});
   auto expected_ints     = ints{{0, 1, 0, 11, 22, 33, 4, 5, -1, 77}, null_at_8};
   auto expected_strings =
     strings{{"0", "1", "00", "11", "22", "33", "", "5", "66", ""}, null_at_6_9};

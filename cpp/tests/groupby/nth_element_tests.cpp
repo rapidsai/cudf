@@ -181,7 +181,7 @@ TYPED_TEST(groupby_nth_element_test, null_keys_and_values)
   fixed_width_column_wrapper<V, int32_t> vals({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
                                               {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
-  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_null());
+  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_nulls());
   //keys                                    {1, 1, 1   2,2,2,2    3, 3,    4}
   //vals                                    {-,3,6,    1,4,-,9,  2,8,      -}
   fixed_width_column_wrapper<R, int32_t> expect_vals({-1, 1, 2, -1}, {0, 1, 1, 0});
@@ -201,7 +201,7 @@ TYPED_TEST(groupby_nth_element_test, null_keys_and_values_out_of_bounds)
   fixed_width_column_wrapper<V, int32_t> vals({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 4},
                                               {0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0});
   //                                        {1, 1, 1    2, 2, 2,    3, 3,   4}
-  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_null());
+  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_nulls());
   //                                        {-,3,6,     1,4,-,9,    2,8,    -}
   //                                         value,     null,       out,    out
   fixed_width_column_wrapper<R, int32_t> expect_vals({6, -1, -1, -1}, {1, 0, 0, 0});
@@ -221,7 +221,7 @@ TYPED_TEST(groupby_nth_element_test, exclude_nulls)
   fixed_width_column_wrapper<V, int32_t> vals({0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 4, 4, 2},
                                               {0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0});
 
-  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_null());
+  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_nulls());
   //keys                                    {1, 1, 1    2, 2, 2, 2      3, 3, 3    4}
   //vals                                    {-, 3, 6    1, 4, -, 9, -   2, 2, 8,   4,-}
   //                                      0  null,      value,          value,     null
@@ -263,7 +263,7 @@ TYPED_TEST(groupby_nth_element_test, exclude_nulls_negative_index)
   fixed_width_column_wrapper<V, int32_t> vals({0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 4, 4, 2},
                                               {0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 0});
 
-  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_null());
+  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_nulls());
   //keys                                    {1, 1, 1    2, 2, 2,        3, 3,       4}
   //vals                                    {-, 3, 6    1, 4, -, 9, -   2, 2, 8,    4,-}
   //                                      0  null,      value,          value,      value

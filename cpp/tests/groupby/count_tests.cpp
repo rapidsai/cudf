@@ -128,7 +128,7 @@ TYPED_TEST(groupby_count_test, null_keys_and_values)
 
   // clang-format off
   //                                        {1, 1,     2, 2, 2,   3, 3,    4}
-  fixed_width_column_wrapper<K> expect_keys({1,        2,         3,       4}, no_null());
+  fixed_width_column_wrapper<K> expect_keys({1,        2,         3,       4}, no_nulls());
   //                                        {3, 6,     1, 4, 9,   2, 8,    -}
   fixed_width_column_wrapper<R> expect_vals({2,        3,         2,       0});
   // clang-format on

@@ -298,8 +298,8 @@ TYPED_TEST(TypedStructSearchTest, OneColumnHasNullMaskButNoNullElementTest)
   auto const structs_col2 = structs_col{child_col2}.release();
 
   // structs_col3 (and its child column) will have a null mask but no null element
-  auto child_col3         = col_wrapper{{0, 10, 10}, no_null()};
-  auto const structs_col3 = structs_col{{child_col3}, no_null()}.release();
+  auto child_col3         = col_wrapper{{0, 10, 10}, no_nulls()};
+  auto const structs_col3 = structs_col{{child_col3}, no_nulls()}.release();
 
   // Search struct elements of structs_col2 and structs_col3 in the column structs_col1
   {

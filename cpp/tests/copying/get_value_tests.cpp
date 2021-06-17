@@ -564,7 +564,7 @@ struct ListGetStructValueTest : public BaseFixture {
     return this->make_test_structs_column({{1}, {1}},
                                           strings_column_wrapper({"aa"}, {false}),
                                           LCWinner_t({{}}, all_nulls()),
-                                          no_null());
+                                          no_nulls());
   }
 
   /**
@@ -584,8 +584,8 @@ struct ListGetStructValueTest : public BaseFixture {
     // {int: 3, string: "xyz", list: [3, 8, 4]}
     return this->make_test_structs_column({{3}, {1}},
                                           strings_column_wrapper({"xyz"}, {true}),
-                                          LCWinner_t({{3, 8, 4}}, no_null()),
-                                          no_null());
+                                          LCWinner_t({{3, 8, 4}}, no_nulls()),
+                                          no_nulls());
   }
 
   /**

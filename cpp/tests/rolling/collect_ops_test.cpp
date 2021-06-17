@@ -1877,7 +1877,6 @@ TYPED_TEST(TypedCollectSetTest, GroupedTimeRangeRollingWindowWithNulls)
                                       *make_collect_set_aggregation<rolling_aggregation>());
 
   auto null_at_1 = null_at(1);
-  auto null_at_2 = null_at(2);
   auto null_at_3 = null_at(3);
   auto null_at_4 = null_at(4);
 

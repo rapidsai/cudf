@@ -129,7 +129,7 @@ TYPED_TEST(groupby_mean_test, null_keys_and_values)
 
   // clang-format off
   //                                        {1, 1,     2, 2, 2,   3, 3,    4}
-  fixed_width_column_wrapper<K> expect_keys({1,        2,         3,       4}, no_null());
+  fixed_width_column_wrapper<K> expect_keys({1,        2,         3,       4}, no_nulls());
   //                                        {3, 6,     1, 4, 9,   2, 8,    -}
   std::vector<RT> expect_v = convert<RT>(   {4.5,      14. / 3,   5.,      0.});
   fixed_width_column_wrapper<R, RT> expect_vals(expect_v.cbegin(), expect_v.cend(), {1, 1, 1, 0});

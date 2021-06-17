@@ -141,7 +141,7 @@ TEST_F(StringsListsConcatenateTest, ColumnHasEmptyListAndNullListInput)
 
   // Empty list results in null
   {
-    auto const expected = STR_COL{{"abc-def-", "" /*NULL*/, "" /*NULL*/, "gh"}, null_at({1, 2})};
+    auto const expected = STR_COL{{"abc-def-", "" /*NULL*/, "" /*NULL*/, "gh"}, nulls_at({1, 2})};
     auto results =
       cudf::strings::join_list_elements(string_lv,
                                         cudf::string_scalar("-"),
@@ -185,7 +185,7 @@ TEST_F(StringsListsConcatenateTest, ScalarSeparator)
                                        STR_LISTS{}, /*NULL*/
                                        STR_LISTS{{"ddd" /*NULL*/, "efgh", "ijk"}, null_at(0)},
                                        STR_LISTS{"zzz", "xxxxx"},
-                                       STR_LISTS{{"v", "", "", "w"}, null_at({1, 2})}},
+                                       STR_LISTS{{"v", "", "", "w"}, nulls_at({1, 2})}},
                                       null_at(1)}
                               .release();
   auto const string_lv = cudf::lists_column_view(string_lists->view());
@@ -195,7 +195,7 @@ TEST_F(StringsListsConcatenateTest, ScalarSeparator)
     auto const results = cudf::strings::join_list_elements(string_lv, cudf::string_scalar("+++"));
     std::vector<char const*> h_expected{nullptr, nullptr, nullptr, "zzz+++xxxxx", nullptr};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -206,7 +206,7 @@ TEST_F(StringsListsConcatenateTest, ScalarSeparator)
     std::vector<char const*> h_expected{
       "a+++___+++ccc", nullptr, "___+++efgh+++ijk", "zzz+++xxxxx", "v+++___+++___+++w"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -218,7 +218,7 @@ TEST_F(StringsListsConcatenateTest, ScalarSeparator)
                                                            cudf::strings::separator_on_nulls::NO);
     std::vector<char const*> h_expected{"a+++ccc", nullptr, "efgh+++ijk", "zzz+++xxxxx", "v+++w"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 }
@@ -257,7 +257,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithScalarSeparator)
                                         "ééé+++12345abcdef",
                                         "aaaééébbbéééccc+++12345"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -278,7 +278,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithScalarSeparator)
                                         "ééé+++12345abcdef",
                                         "aaaééébbbéééccc+++12345"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -288,7 +288,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithScalarSeparator)
     auto const results   = cudf::strings::join_list_elements(string_lv, cudf::string_scalar("+++"));
     std::vector<char const*> h_expected{nullptr, nullptr, nullptr, "zzz+++xxxxx"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -300,7 +300,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithScalarSeparator)
     std::vector<char const*> h_expected{
       "a+++___+++ccc", nullptr, "___+++efgh+++ijk", "zzz+++xxxxx"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -311,7 +311,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithScalarSeparator)
     std::vector<char const*> h_expected{
       nullptr, nullptr, "0a0b0c+++5x5y5z", nullptr, "ééé+++12345abcdef", "aaaééébbbéééccc+++12345"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -327,7 +327,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithScalarSeparator)
                                         "ééé+++12345abcdef",
                                         "aaaééébbbéééccc+++12345"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -338,7 +338,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithScalarSeparator)
     std::vector<char const*> h_expected{
       "zzz+++xxxxx", nullptr, nullptr, nullptr, "0a0b0c+++5x5y5z"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -353,7 +353,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithScalarSeparator)
                                         "___+++11111+++00000",
                                         "0a0b0c+++5x5y5z"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 }
@@ -380,7 +380,7 @@ TEST_F(StringsListsConcatenateTest, ColumnSeparators)
     auto const results = cudf::strings::join_list_elements(string_lv, separators->view());
     std::vector<char const*> h_expected{nullptr, nullptr, nullptr, nullptr, nullptr, "zzz^^^xxxxx"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -391,7 +391,7 @@ TEST_F(StringsListsConcatenateTest, ColumnSeparators)
     std::vector<char const*> h_expected{
       nullptr, nullptr, "0a0b0c|||xyzééé", nullptr, nullptr, "zzz^^^xxxxx"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -402,7 +402,7 @@ TEST_F(StringsListsConcatenateTest, ColumnSeparators)
     std::vector<char const*> h_expected{
       "a+++XXXXX+++ccc", nullptr, nullptr, nullptr, "XXXXX%%%ááá%%%ííí", "zzz^^^xxxxx"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -417,7 +417,7 @@ TEST_F(StringsListsConcatenateTest, ColumnSeparators)
                                         "XXXXX%%%ááá%%%ííí",
                                         "zzz^^^xxxxx"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -431,7 +431,7 @@ TEST_F(StringsListsConcatenateTest, ColumnSeparators)
     std::vector<char const*> h_expected{
       "a+++ccc", nullptr, "0a0b0c+++xyzééé", "efgh+++ijk", "ááá%%%ííí", "zzz^^^xxxxx"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 }
@@ -476,7 +476,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithColumnSeparators)
                                         "ééé-+-12345abcdef",
                                         "aaaééébbbéééccc=+=12345"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -498,7 +498,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithColumnSeparators)
                                         "ééé-+-12345abcdef",
                                         "aaaééébbbéééccc=+=12345"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -509,7 +509,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithColumnSeparators)
     auto const results   = cudf::strings::join_list_elements(string_lv, sep_col);
     std::vector<char const*> h_expected{nullptr, nullptr, nullptr, nullptr};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -522,7 +522,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithColumnSeparators)
     std::vector<char const*> h_expected{
       "a+++___+++ccc", nullptr, "___|||efgh|||ijk", "zzz|||xxxxx"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -534,7 +534,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithColumnSeparators)
     std::vector<char const*> h_expected{
       nullptr, nullptr, "0a0b0c###5x5y5z", nullptr, "ééé-+-12345abcdef", "aaaééébbbéééccc=+=12345"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -551,7 +551,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithColumnSeparators)
                                         "ééé-+-12345abcdef",
                                         "aaaééébbbéééccc=+=12345"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -562,7 +562,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithColumnSeparators)
     auto const results   = cudf::strings::join_list_elements(string_lv, sep_col);
     std::vector<char const*> h_expected{nullptr, nullptr, nullptr, nullptr, "0a0b0c###5x5y5z"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 
@@ -578,7 +578,7 @@ TEST_F(StringsListsConcatenateTest, SlicedListsWithColumnSeparators)
                                         "___~!~11111~!~00000",
                                         "0a0b0c###5x5y5z"};
     auto const expected =
-      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptr(h_expected)};
+      STR_COL{h_expected.begin(), h_expected.end(), nulls_from_nullptrs(h_expected)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected, print_all);
   }
 }

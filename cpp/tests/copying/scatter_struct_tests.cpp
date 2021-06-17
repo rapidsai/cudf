@@ -145,7 +145,7 @@ TYPED_TEST(TypedStructScatterTest, SimpleScatterTests)
 
   // Expected data
   auto child_col_expected2     = col_wrapper{{1, null, 70, 3, 0, 2}, null_at(1)};
-  auto const structs_expected2 = structs_col{{child_col_expected2}, no_null()}.release();
+  auto const structs_expected2 = structs_col{{child_col_expected2}, no_nulls()}.release();
   auto const scatter_map2      = int32s_col{-2, 0, 5, 3}.release();
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     *structs_expected2, scatter_structs(structs_src, structs_tgt, scatter_map2), print_all);
@@ -158,7 +158,7 @@ TYPED_TEST(TypedStructScatterTest, ComplexDataScatterTest)
 
   // Source data
   auto names_column_src =
-    strings_col{{"Newton", "Washington", "Cherry", "Kiwi", "Lemon", "Tomato" /*XXX*/}, no_null()};
+    strings_col{{"Newton", "Washington", "Cherry", "Kiwi", "Lemon", "Tomato" /*XXX*/}, no_nulls()};
   auto ages_column_src = col_wrapper{{5, 10, 15, 20, null, XXX}, null_at(4)};
   auto is_human_col_src =
     bools_col{{true, true, false, false /*null*/, false, false /*XXX*/}, null_at(3)};
@@ -170,7 +170,7 @@ TYPED_TEST(TypedStructScatterTest, ComplexDataScatterTest)
     {"String 0" /*null*/, "String 1", "String 2" /*XXX*/, "String 3", "String 4", "String 5"},
     null_at(0)};
   auto ages_column_tgt  = col_wrapper{{50, null, XXX, 80, 90, 100}, null_at(1)};
-  auto is_human_col_tgt = bools_col{{true, true, true /*XXX*/, true, true, true}, no_null()};
+  auto is_human_col_tgt = bools_col{{true, true, true /*XXX*/, true, true, true}, no_nulls()};
   auto const structs_tgt =
     structs_col{{names_column_tgt, ages_column_tgt, is_human_col_tgt}, null_at(2)}.release();
 
@@ -181,7 +181,7 @@ TYPED_TEST(TypedStructScatterTest, ComplexDataScatterTest)
   auto is_human_col_expected =
     bools_col{{true, false, false /*null*/, false, true, true}, null_at(2)};
   auto const structs_expected =
-    structs_col{{names_column_expected, ages_column_expected, is_human_col_expected}, no_null()}
+    structs_col{{names_column_expected, ages_column_expected, is_human_col_expected}, no_nulls()}
       .release();
 
   // The first element of the target is not overwritten

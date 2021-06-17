@@ -50,7 +50,7 @@ TYPED_TEST(groupby_var_test, basic)
   //                                       {1, 1, 1,  2, 2, 2, 2,  3, 3, 3}
   fixed_width_column_wrapper<K> expect_keys{1,        2,           3};
   //                                       {0, 3, 6,  1, 4, 5, 9,  2, 7, 8}
-  fixed_width_column_wrapper<R> expect_vals({9.,      131. / 12,   31. / 3}, no_null());
+  fixed_width_column_wrapper<R> expect_vals({9.,      131. / 12,   31. / 3}, no_nulls());
   // clang-format on
 
   auto agg = cudf::make_variance_aggregation();
@@ -114,7 +114,7 @@ TYPED_TEST(groupby_var_test, null_keys_and_values)
 
   // clang-format off
   //                                        {1, 1,     2, 2, 2,   3, 3,    4}
-  fixed_width_column_wrapper<K> expect_keys({1,        2,         3,       4}, no_null());
+  fixed_width_column_wrapper<K> expect_keys({1,        2,         3,       4}, no_nulls());
   //                                        {3, 6,     1, 4, 9,   2, 8,    3}
   fixed_width_column_wrapper<R> expect_vals({4.5,      49. / 3,   18.,     0.}, {1, 1, 1, 0});
   // clang-format on
@@ -135,7 +135,7 @@ TYPED_TEST(groupby_var_test, ddof_non_default)
 
   // clang-format off
   //                                        { 1, 1,     2, 2, 2,   3, 3,    4}
-  fixed_width_column_wrapper<K> expect_keys({1,         2,         3,       4}, no_null());
+  fixed_width_column_wrapper<K> expect_keys({1,         2,         3,       4}, no_nulls());
   //                                        { 3, 6,     1, 4, 9,   2, 8,    3}
   fixed_width_column_wrapper<R> expect_vals({0.,        98. / 3,   0.,      0.},
                                             {0,         1,         0,       0});
@@ -157,7 +157,7 @@ TYPED_TEST(groupby_var_test, dictionary)
   //                                        {1, 1, 1,  2, 2, 2, 2,  3, 3, 3}
   fixed_width_column_wrapper<K> expect_keys({1,        2,           3      });
   //                                        {0, 3, 6,  1, 4, 5, 9,  2, 7, 8}
-  fixed_width_column_wrapper<R> expect_vals({9.,      131./12,      31./3  }, no_null());
+  fixed_width_column_wrapper<R> expect_vals({9.,      131./12,      31./3  }, no_nulls());
   // clang-format on
 
   test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_variance_aggregation());
