@@ -1476,6 +1476,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         However, lhs need not be self, which is why this is a classmethod.
         """
 
+        # TODO: Use the utility func for 0d arrays or scalars
         if isinstance(rhs, (numbers.Number, cudf.Scalar)) or (
             isinstance(rhs, np.ndarray) and rhs.ndim == 0
         ):
