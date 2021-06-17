@@ -551,9 +551,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Splits a column (including null values) into a set of columns
-   * according to a set of indices. The caller owns the ColumnVectors and is responsible
-   * closing them.
+   * Splits a ColumnView (including null values) into a set of ColumnViews
+   * according to a set of indices. No data is moved or copied
    *
    * The "split" function divides the input column into multiple intervals
    * of rows using the splits indices values and it stores the intervals into the
@@ -561,10 +560,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * from the indices array in a consecutive manner. The pair of indices are
    * left-closed and right-open.
    *
-   * The indices array ('splits') is require to be a monotonic non-decreasing set.
+   * The indices array ('splits') is required to be a monotonic non-decreasing set.
    * The indices in the array are required to comply with the following conditions:
    * a, b belongs to Range[0, input column size]
-   * a <= b, where the position of a is less or equal to the position of b.
+   * a <= b, where the position of 'a' is less or equal to the position of 'b'.
    *
    * The split function will take a pair of indices from the indices array
    * ('splits') in a consecutive manner. For the first pair, the function will
@@ -578,9 +577,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * undefined.
    * When any of the values in the pair don't belong to the range[0, input column
    * size), the outcome is undefined.
-   * When the indices array is empty, an empty vector of columns is returned.
+   * When the indices array is empty, an empty array of ColumnViews is returned.
    *
-   * The input columns may have different sizes. The number of
+   * The output columns may have different sizes. The number of
    * columns must be equal to the number of indices in the array plus one.
    *
    * Example:
@@ -590,16 +589,19 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * Note that this is very similar to the output from a PartitionedTable.
    *
-   * @param indices the indexes to split with
-   * @return A new ColumnVector array with slices from the original ColumnVector
+   * NOTE: Nothing is copied out from the vector and the slices will only be relevant for the
+   * lifecycle of the underlying ColumnVector
+   *
+   * @param indices the indices to split with
+   * @return A new ColumnView array with slices from the original ColumnView
    */
-  public final ColumnVector[] split(int... indices) {
+  public ColumnView[] split(int... indices) {
     long[] nativeHandles = split(this.getNativeView(), indices);
-    ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
+    ColumnView[] columnViews = new ColumnView[nativeHandles.length];
     for (int i = 0; i < nativeHandles.length; i++) {
-      columnVectors[i] = new ColumnVector(nativeHandles[i]);
+      columnViews[i] = new ColumnView(nativeHandles[i]);
     }
-    return columnVectors;
+    return columnViews;
   }
 
   /**

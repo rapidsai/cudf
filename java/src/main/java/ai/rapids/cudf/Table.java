@@ -80,6 +80,32 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Creates a Table that makes a copy of the array of {@link ColumnView}s passed to it.
+   * NOTE: The refcounts on the {@link ColumnVector} pointed by {@link ColumnView} will not be
+   * increased so once the {@link ColumnVector} is deleted, this {@link Table} will be useless
+   * use the {@link Table(ColumnVector)} if you want the table to point to ColumnVectors instead
+   * @param columnsViews - Array of ColumnViews
+   */
+  private Table(ColumnView... columnsViews) {
+    assert columnsViews != null && columnsViews.length > 0 : "ColumnViews can't be null or empty";
+    rows = columnsViews[0].getRowCount();
+
+    for (ColumnView columnView : columnsViews) {
+      assert (null != columnView) : "ColumnViews can't be null";
+      assert (rows == columnView.getRowCount()) : "All columns should have the same number of " +
+          "rows " + columnView.getType();
+    }
+
+    // Since Arrays are mutable objects make a copy
+    long[] viewPointers = new long[columnsViews.length];
+    for (int i = 0; i < columnsViews.length; i++) {
+      viewPointers[i] = columnsViews[i].getNativeView();
+    }
+
+    nativeHandle = createCudfTableView(viewPointers);
+  }
+
+  /**
    * Create a Table from an array of existing on device cudf::column pointers. Ownership of the
    * columns is transferred to the ColumnVectors held by the new Table. In the case of an exception
    * the columns will be deleted.
@@ -918,6 +944,28 @@ public final class Table implements AutoCloseable {
   public static TableWriter writeParquetChunked(ParquetWriterOptions options,
                                                 HostBufferConsumer consumer) {
     return new ParquetTableWriter(options, consumer);
+  }
+
+  /**
+   * This is an evolving API and most likely be removed in future releases. Please use with the
+   * caveat that this will not exist in the near future
+   * @param options the parquet writer options.
+   * @param consumer a class that will be called when host buffers are ready with parquet
+   *                 formatted data in them.
+   * @param columnViews ColumnViews to write to Parquet
+   */
+  public static void writeColumnViewsToParquet(ParquetWriterOptions options,
+                                               HostBufferConsumer consumer,
+                                               ColumnView... columnViews) {
+
+    try (ParquetTableWriter writer = new ParquetTableWriter(options, consumer);
+         Table notARealTable = new Table(columnViews)) {
+      long total = 0;
+      for (ColumnView cv: columnViews) {
+        total += cv.getDeviceMemorySize();
+      }
+      writeParquetChunk(writer.handle, notARealTable.nativeHandle, total);
+    }
   }
 
   /**

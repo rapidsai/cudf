@@ -1639,4 +1639,57 @@ public final class ColumnVector extends ColumnView {
       throw new IllegalArgumentException("Unsupported data type: " + colType);
     }
   }
+
+  /**
+   * Splits a column (including null values) into a set of columns
+   * according to a set of indices. The caller owns the ColumnVectors and is responsible
+   * closing them.
+   *
+   * The "split" function divides the input column into multiple intervals
+   * of rows using the splits indices values and it stores the intervals into the
+   * output columns. Regarding the interval of indices, a pair of values are taken
+   * from the indices array in a consecutive manner. The pair of indices are
+   * left-closed and right-open.
+   *
+   * The indices array ('splits') is require to be a monotonic non-decreasing set.
+   * The indices in the array are required to comply with the following conditions:
+   * a, b belongs to Range[0, input column size]
+   * a <= b, where the position of a is less or equal to the position of b.
+   *
+   * The split function will take a pair of indices from the indices array
+   * ('splits') in a consecutive manner. For the first pair, the function will
+   * take the value 0 and the first element of the indices array. For the last pair,
+   * the function will take the last element of the indices array and the size of
+   * the input column.
+   *
+   * Exceptional cases for the indices array are:
+   * When the values in the pair are equal, the function return an empty column.
+   * When the values in the pair are 'strictly decreasing', the outcome is
+   * undefined.
+   * When any of the values in the pair don't belong to the range[0, input column
+   * size), the outcome is undefined.
+   * When the indices array is empty, an empty vector of columns is returned.
+   *
+   * The input columns may have different sizes. The number of
+   * columns must be equal to the number of indices in the array plus one.
+   *
+   * Example:
+   * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
+   * splits: {2, 5, 9}
+   * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
+   *
+   * Note that this is very similar to the output from a PartitionedTable.
+   *
+   * @param indices the indexes to split with
+   * @return A new ColumnVector array with slices from the original ColumnVector
+   */
+  @Override
+  public final ColumnVector[] split(int... indices) {
+    ColumnView[] views = super.split(indices);
+    ColumnVector[] columnVectors = new ColumnVector[views.length];
+    for (int i = 0; i < views.length; i++) {
+      columnVectors[i] = views[i].copyToColumnVector();
+    }
+    return columnVectors;
+  }
 }
