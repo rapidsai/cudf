@@ -9,7 +9,12 @@ import pytest
 import cudf
 from cudf import NA
 from cudf._lib.copying import get_element
-from cudf.tests.utils import assert_eq, NUMERIC_TYPES, DATETIME_TYPES, TIMEDELTA_TYPES
+from cudf.tests.utils import (
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    TIMEDELTA_TYPES,
+    assert_eq,
+)
 
 
 @pytest.mark.parametrize(
@@ -374,15 +379,15 @@ def test_list_scalar_host_construction(data):
     assert slr.value == data
 
 
-@pytest.mark.parametrize('elem_type', 
-    NUMERIC_TYPES+DATETIME_TYPES+TIMEDELTA_TYPES+['str']
+@pytest.mark.parametrize(
+    "elem_type", NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + ["str"]
 )
-@pytest.mark.parametrize('nesting_level', [1,2,3])
+@pytest.mark.parametrize("nesting_level", [1, 2, 3])
 def test_list_scalar_host_construction_null(elem_type, nesting_level):
     dtype = cudf.ListDtype(elem_type)
     for level in range(nesting_level - 1):
         dtype = cudf.ListDtype(dtype)
-    
+
     slr = cudf.Scalar(None, dtype=dtype)
     assert slr.value is cudf.NA
 
@@ -408,6 +413,21 @@ def test_list_scalar_device_construction(data):
     col = cudf.Series([data])._column
     slr = get_element(col, 0)
     assert slr.value == data
+
+
+@pytest.mark.parametrize("nesting_level", [1, 2, 3])
+def test_list_scalar_device_construction_null(nesting_level):
+    data = [[]]
+    for i in range(nesting_level - 1):
+        data = [data]
+
+    arrow_type = pa.infer_type(data)
+    arrow_arr = pa.array([None], type=arrow_type)
+
+    col = cudf.Series(arrow_arr)._column
+    slr = get_element(col, 0)
+
+    assert slr.value is cudf.NA
 
 
 @pytest.mark.parametrize("input_obj", [[[1, NA, 3]], [[1, NA, 3], [4, 5, NA]]])
