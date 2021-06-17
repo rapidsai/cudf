@@ -1639,6 +1639,4 @@ public final class ColumnVector extends ColumnView {
       throw new IllegalArgumentException("Unsupported data type: " + colType);
     }
   }
-
-
 }
