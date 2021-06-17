@@ -18,6 +18,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/concatenate.hpp>
@@ -25,7 +26,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/table/table_view.hpp>
 
-using namespace cudf::test;
+using namespace cudf::test::iterators;
 
 namespace {
 constexpr bool print_all{false};  // For debugging
@@ -152,19 +153,19 @@ TYPED_TEST(GroupbyMergeListsTypedTest, InputHasNulls)
     lists_col{{null, null, null}, all_nulls()}  // key = 3
   };
   auto const lists3 = lists_col{
-    lists_col{20, 21, 22},                         // key = 2
-    lists_col{{null, 24, null}, null_at({0, 2})},  // key = 3
-    lists_col{{24, 25, 26}, all_valids()}          // key = 4
+    lists_col{20, 21, 22},                          // key = 2
+    lists_col{{null, 24, null}, nulls_at({0, 2})},  // key = 3
+    lists_col{{24, 25, 26}, no_nulls()}             // key = 4
   };
 
   auto const [out_keys, out_lists] =
     merge_lists(vcol_views{keys1, keys2, keys3}, vcol_views{lists1, lists2, lists3});
   auto const expected_keys  = keys_col{1, 2, 3, 4};
   auto const expected_lists = lists_col{
-    lists_col{{1, null, 3, 10, 11}, null_at(1)},                              // key = 1
-    lists_col{4, 5, 6, 20, 21, 22},                                           // key = 2
-    lists_col{{null, null, null, null, 24, null}, null_at({0, 1, 2, 3, 5})},  // key = 3
-    lists_col{24, 25, 26}                                                     // key = 4
+    lists_col{{1, null, 3, 10, 11}, null_at(1)},                               // key = 1
+    lists_col{4, 5, 6, 20, 21, 22},                                            // key = 2
+    lists_col{{null, null, null, null, 24, null}, nulls_at({0, 1, 2, 3, 5})},  // key = 3
+    lists_col{24, 25, 26}                                                      // key = 4
   };
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, print_all);
@@ -230,19 +231,19 @@ TYPED_TEST(GroupbyMergeListsTypedTest, InputHasNullsAndEmptyLists)
     lists_col{}                                  // key = 4
   };
   auto const lists3 = lists_col{
-    lists_col{20, 21, 22},                         // key = 2
-    lists_col{{null, 24, null}, null_at({0, 2})},  // key = 3
-    lists_col{{24, 25, 26}, all_valids()}          // key = 4
+    lists_col{20, 21, 22},                          // key = 2
+    lists_col{{null, 24, null}, nulls_at({0, 2})},  // key = 3
+    lists_col{{24, 25, 26}, no_nulls()}             // key = 4
   };
 
   auto const [out_keys, out_lists] =
     merge_lists(vcol_views{keys1, keys2, keys3}, vcol_views{lists1, lists2, lists3});
   auto const expected_keys  = keys_col{1, 2, 3, 4};
   auto const expected_lists = lists_col{
-    lists_col{{1, null, 3, 10, 11}, null_at(1)},                                    // key = 1
-    lists_col{20, 21, 22},                                                          // key = 2
-    lists_col{{4, 5, null, null, null, null, 24, null}, null_at({2, 3, 4, 5, 7})},  // key = 3
-    lists_col{24, 25, 26}                                                           // key = 4
+    lists_col{{1, null, 3, 10, 11}, null_at(1)},                                     // key = 1
+    lists_col{20, 21, 22},                                                           // key = 2
+    lists_col{{4, 5, null, null, null, null, 24, null}, nulls_at({2, 3, 4, 5, 7})},  // key = 3
+    lists_col{24, 25, 26}                                                            // key = 4
   };
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, print_all);
@@ -357,9 +358,9 @@ TEST_F(GroupbyMergeListsTest, StringsColumnInput)
     lists_col{{"" /*NULL*/, "" /*NULL*/}, all_nulls()}  // key = "dog"
   };
   auto const lists3 = lists_col{
-    lists_col{"Fuji", "Red Delicious"},                                         // key = "apple"
-    lists_col{{"" /*NULL*/, "German Shepherd", "" /*NULL*/}, null_at({0, 2})},  // key = "dog"
-    lists_col{{"Seeedless", "Mini"}, all_valids()}  // key = "water melon"
+    lists_col{"Fuji", "Red Delicious"},                                          // key = "apple"
+    lists_col{{"" /*NULL*/, "German Shepherd", "" /*NULL*/}, nulls_at({0, 2})},  // key = "dog"
+    lists_col{{"Seeedless", "Mini"}, no_nulls()}  // key = "water melon"
   };
 
   auto const [out_keys, out_lists] =
@@ -378,9 +379,9 @@ TEST_F(GroupbyMergeListsTest, StringsColumnInput)
                 "German Shepherd",
                 "" /*NULL*/
               },
-              null_at({3, 4, 5, 7})},                             // key = "dog"
+              nulls_at({3, 4, 5, 7})},                            // key = "dog"
     lists_col{{"Whale", "" /*NULL*/, "Polar Bear"}, null_at(1)},  // key = "unknown"
-    lists_col{{"Seeedless", "Mini"}, all_valids()}                // key = "water melon"
+    lists_col{{"Seeedless", "Mini"}, no_nulls()}                  // key = "water melon"
   };
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, print_all);

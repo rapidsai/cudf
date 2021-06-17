@@ -18,6 +18,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/concatenate.hpp>
@@ -25,11 +26,11 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/table/table_view.hpp>
 
-using namespace cudf::test;
+using namespace cudf::test::iterators;
 
 namespace {
 constexpr bool print_all{false};  // For debugging
-constexpr int32_t null{0};        // Mark for null child elements
+constexpr int32_t null{0};        // Mark for null elements
 
 using vcol_views = std::vector<cudf::column_view>;
 
@@ -144,12 +145,12 @@ TYPED_TEST(GroupbyMergeSetsTypedTest, InputHasNulls)
   auto const keys3 = keys_col{2, 3, 4};
 
   auto const lists1 = lists_col{
-    lists_col{{1, null, null, null, 5, 6}, null_at({1, 2, 3})},  // key = 1
-    lists_col{10, 11, 12, 13, 14, 15}                            // key = 2
+    lists_col{{1, null, null, null, 5, 6}, nulls_at({1, 2, 3})},  // key = 1
+    lists_col{10, 11, 12, 13, 14, 15}                             // key = 2
   };
   auto const lists2 = lists_col{
-    lists_col{{null, null, 6, 7, 8, 9}, null_at({0, 1})},  // key = 1
-    lists_col{{null, 21, 22, 23, 24, 25}, null_at(0)}      // key = 3
+    lists_col{{null, null, 6, 7, 8, 9}, nulls_at({0, 1})},  // key = 1
+    lists_col{{null, 21, 22, 23, 24, 25}, null_at(0)}       // key = 3
   };
   auto const lists3 = lists_col{
     lists_col{11, 12},                     // key = 2
@@ -225,14 +226,14 @@ TYPED_TEST(GroupbyMergeSetsTypedTest, InputHasNullsAndEmptyLists)
     lists_col{}                              // key = 3
   };
   auto const lists2 = lists_col{
-    lists_col{0, 1, 2, 3, 4, 5},                                       // key = 1
-    lists_col{{null, 11, null, 12, 12, 12, 12, 12}, null_at({0, 2})},  // key = 3
-    lists_col{20}                                                      // key = 4
+    lists_col{0, 1, 2, 3, 4, 5},                                        // key = 1
+    lists_col{{null, 11, null, 12, 12, 12, 12, 12}, nulls_at({0, 2})},  // key = 3
+    lists_col{20}                                                       // key = 4
   };
   auto const lists3 = lists_col{
-    lists_col{},                                                   // key = 2
-    lists_col{},                                                   // key = 3
-    lists_col{{24, 25, null, null, null, 26}, null_at({2, 3, 4})}  // key = 4
+    lists_col{},                                                    // key = 2
+    lists_col{},                                                    // key = 3
+    lists_col{{24, 25, null, null, null, 26}, nulls_at({2, 3, 4})}  // key = 4
   };
 
   auto const [out_keys, out_lists] =
@@ -322,8 +323,8 @@ TEST_F(GroupbyMergeSetsTest, StringsColumnInput)
   auto const lists3 = lists_col{
     lists_col{"Fuji", "Red Delicious"},  // key = "apple"
     lists_col{{"" /*NULL*/, "Corgi", "German Shepherd", "" /*NULL*/, "Golden Retriever"},
-              null_at({0, 3})},                     // key = "dog"
-    lists_col{{"Seeedless", "Mini"}, all_valids()}  // key = "water melon"
+              nulls_at({0, 3})},                  // key = "dog"
+    lists_col{{"Seeedless", "Mini"}, no_nulls()}  // key = "water melon"
   };
 
   auto const [out_keys, out_lists] =
@@ -337,7 +338,7 @@ TEST_F(GroupbyMergeSetsTest, StringsColumnInput)
               },
               null_at(4)},                                        // key = "dog"
     lists_col{{"Polar Bear", "Whale", "" /*NULL*/}, null_at(2)},  // key = "unknown"
-    lists_col{{"Mini", "Seeedless"}, all_valids()}                // key = "water melon"
+    lists_col{{"Mini", "Seeedless"}, no_nulls()}                  // key = "water melon"
   };
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_keys, *out_keys, print_all);
