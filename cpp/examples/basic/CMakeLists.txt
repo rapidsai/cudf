@@ -2,12 +2,14 @@ cmake_minimum_required(VERSION 3.18)
 
 project(basic_example VERSION 0.0.1 LANGUAGES C CXX CUDA)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_ARCHITECTURES "")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CPM_DOWNLOAD_VERSION 0.27.2) 
 set(CPM_DOWNLOAD_LOCATION "${CMAKE_BINARY_DIR}/cmake/CPM_${CPM_DOWNLOAD_VERSION}.cmake")
+
+set(CUDF_TAG "branch-21.08")
 
 if(NOT (EXISTS ${CPM_DOWNLOAD_LOCATION}))
     message(STATUS "Downloading CPM.cmake")
@@ -16,17 +18,11 @@ endif()
 
 include(${CPM_DOWNLOAD_LOCATION})
 
-CPMAddPackage(NAME  cudf
+CPMFindPackage(NAME  cudf
     GIT_REPOSITORY  https://github.com/rapidsai/cudf
-    GIT_TAG         main
+    GIT_TAG         ${CUDF_TAG}
     GIT_SHALLOW     TRUE
     SOURCE_SUBDIR   cpp
-    OPTIONS         "BUILD_TESTS OFF"
-                    "BUILD_BENCHMARKS OFF"
-                    "ARROW_STATIC_LIB ON"
-                    "JITIFY_USE_CACHE ON"
-                    "CUDA_STATIC_RUNTIME ON"
-                    "DISABLE_DEPRECATION_WARNING ON"
 )
 
 # Configure your project here
