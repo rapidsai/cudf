@@ -186,6 +186,10 @@ ConfigureTest(CSV_TEST io/csv_test.cpp)
 ConfigureTest(ORC_TEST io/orc_test.cpp)
 ConfigureTest(PARQUET_TEST io/parquet_test.cpp)
 ConfigureTest(JSON_TEST io/json_test.cpp)
+ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
+if(CUDF_ENABLE_ARROW_S3)
+  target_compile_definitions(ARROW_IO_SOURCE_TEST PRIVATE "S3_ENABLED")
+endif()
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
@@ -217,7 +221,8 @@ ConfigureTest(COPYING_TEST
     copying/shift_tests.cpp
     copying/slice_tests.cpp
     copying/split_tests.cpp
-    copying/utility_tests.cpp)
+    copying/utility_tests.cpp
+    copying/reverse_tests.cpp)
 
 ###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------

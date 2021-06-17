@@ -775,8 +775,8 @@ std::unique_ptr<column> grouped_range_rolling_window_impl(
   cudf::order const& timestamp_ordering,
   rmm::device_uvector<cudf::size_type> const& group_offsets,
   rmm::device_uvector<cudf::size_type> const& group_labels,
-  range_window_bounds preceding_window,
-  range_window_bounds following_window,
+  range_window_bounds const& preceding_window,
+  range_window_bounds const& following_window,
   size_type min_periods,
   rolling_aggregation const& aggr,
   rmm::cuda_stream_view stream,
@@ -843,12 +843,32 @@ struct dispatch_grouped_range_rolling_window {
     CUDF_FAIL("Unsupported OrderBy column type.");
   }
 
-  template <typename OrderByColumnType, typename... Args>
+  template <typename OrderByColumnType>
   std::enable_if_t<detail::is_supported_order_by_column_type<OrderByColumnType>(),
                    std::unique_ptr<column>>
-  operator()(Args&&... args) const
+  operator()(column_view const& input,
+             column_view const& orderby_column,
+             cudf::order const& timestamp_ordering,
+             rmm::device_uvector<cudf::size_type> const& group_offsets,
+             rmm::device_uvector<cudf::size_type> const& group_labels,
+             range_window_bounds const& preceding_window,
+             range_window_bounds const& following_window,
+             size_type min_periods,
+             rolling_aggregation const& aggr,
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr) const
   {
-    return grouped_range_rolling_window_impl<OrderByColumnType>(std::forward<Args>(args)...);
+    return grouped_range_rolling_window_impl<OrderByColumnType>(input,
+                                                                orderby_column,
+                                                                timestamp_ordering,
+                                                                group_offsets,
+                                                                group_labels,
+                                                                preceding_window,
+                                                                following_window,
+                                                                min_periods,
+                                                                aggr,
+                                                                stream,
+                                                                mr);
   }
 };
 
