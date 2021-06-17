@@ -1476,8 +1476,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         However, lhs need not be self, which is why this is a classmethod.
         """
 
-        # TODO: Instead of maintaining two dicts, probably better to maintain a
-        # single dict of pairs (2-tuples).
         operands = {}
 
         if isinstance(rhs, (numbers.Number, cudf.Scalar)) or (
@@ -1535,17 +1533,16 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             # Columns that are only in right go in left, with right as None
             # Columns that are in both go in both
 
-            # TODO: This code behaves differently than the old code. Rather
-            # than putting NaN in the columns that are only present in the
-            # series, it puts nan. However, I think the old behavior is wrong
-            # and the new behavior is correct.
             for col in result_cols:
                 if col in left_cols:
                     left = lhs[col]._column
                     right = right_dict[col] if col in right_dict else None
                 else:
+                    # We match pandas semantics here by performing binops
+                    # between a nan (not NULL!) column and the actual values,
+                    # which results in nans, the pandas output.
                     left = as_column(np.nan, length=lhs._num_rows)
-                    right = None
+                    right = right_dict[col]
                 operands[col] = (left, right)
 
         else:
