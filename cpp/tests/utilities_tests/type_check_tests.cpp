@@ -15,41 +15,32 @@
  */
 
 #include <cudf/utilities/type_checks.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
+
 namespace cudf {
 namespace test {
 
 template <typename T>
-struct ColumnTypeCheckTestFixedWidth : public cudf::test::BaseFixture {
+struct ColumnTypeCheckTestTyped : public cudf::test::BaseFixture {
 };
 
-struct ColumnTypeCheckTestString : public cudf::test::BaseFixture {
+struct ColumnTypeCheckTest : public cudf::test::BaseFixture {
 };
 
-template <typename T>
-struct ColumnTypeCheckTestDictionary : public cudf::test::BaseFixture {
-};
+TYPED_TEST_CASE(ColumnTypeCheckTestTyped, cudf::test::FixedWidthTypes);
 
-struct ColumnTypeCheckTestList : public cudf::test::BaseFixture {
-};
-
-struct ColumnTypeCheckTestStruct : public cudf::test::BaseFixture {
-};
-
-TYPED_TEST_CASE(ColumnTypeCheckTestFixedWidth, cudf::test::FixedWidthTypes);
-TYPED_TEST_CASE(ColumnTypeCheckTestDictionary, cudf::test::FixedWidthTypes);
-
-TYPED_TEST(ColumnTypeCheckTestFixedWidth, SameType)
+TYPED_TEST(ColumnTypeCheckTestTyped, SameFixedWidth)
 {
   fixed_width_column_wrapper<TypeParam> lhs{1, 1}, rhs{2};
   EXPECT_TRUE(column_types_equal(lhs, rhs));
 }
 
-TEST_F(ColumnTypeCheckTestString, SameType)
+TEST_F(ColumnTypeCheckTest, SameString)
 {
   strings_column_wrapper lhs{{'a', 'a'}}, rhs{{'b'}};
   EXPECT_TRUE(column_types_equal(lhs, rhs));
@@ -61,7 +52,7 @@ TEST_F(ColumnTypeCheckTestString, SameType)
   EXPECT_TRUE(column_types_equal(lhs3, rhs3));
 }
 
-TEST_F(ColumnTypeCheckTestList, SameType)
+TEST_F(ColumnTypeCheckTest, SameList)
 {
   using LCW = lists_column_wrapper<int32_t>;
 
@@ -78,7 +69,7 @@ TEST_F(ColumnTypeCheckTestList, SameType)
   EXPECT_TRUE(column_types_equal(lhs4, rhs4));
 }
 
-TYPED_TEST(ColumnTypeCheckTestDictionary, SameType)
+TYPED_TEST(ColumnTypeCheckTestTyped, SameDictionary)
 {
   using DCW = dictionary_column_wrapper<TypeParam>;
   DCW lhs{1, 1, 2, 3}, rhs{5, 5};
@@ -91,7 +82,7 @@ TYPED_TEST(ColumnTypeCheckTestDictionary, SameType)
   EXPECT_TRUE(column_types_equal(lhs3, rhs3));
 }
 
-TEST_F(ColumnTypeCheckTestStruct, SameType)
+TEST_F(ColumnTypeCheckTest, SameStruct)
 {
   using SCW      = structs_column_wrapper;
   using FCW      = fixed_width_column_wrapper<int32_t>;
@@ -106,6 +97,24 @@ TEST_F(ColumnTypeCheckTestStruct, SameType)
 
   SCW lhs{lf1, lf2, lf3, lf4}, rhs{rf1, rf2, rf3, rf4};
   EXPECT_TRUE(column_types_equal(lhs, rhs));
+}
+
+TEST_F(ColumnTypeCheckTest, DifferentFixedWidth)
+{
+  fixed_width_column_wrapper<int32_t> lhs1{1, 1};
+  fixed_width_column_wrapper<int64_t> rhs1{2};
+
+  EXPECT_FALSE(column_types_equal(lhs1, rhs1));
+
+  fixed_width_column_wrapper<float> lhs2{1, 1};
+  fixed_width_column_wrapper<double> rhs2{2};
+
+  EXPECT_FALSE(column_types_equal(lhs2, rhs2));
+
+  fixed_width_column_wrapper<int32_t, timestamp_ms> lhs3{1, 1};
+  fixed_width_column_wrapper<int32_t, timestamp_us> rhs3{2};
+
+  EXPECT_FALSE(column_types_equal(lhs3, rhs3));
 }
 
 }  // namespace test

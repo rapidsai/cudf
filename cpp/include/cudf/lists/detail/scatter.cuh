@@ -31,7 +31,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cinttypes>
-#include "cudf/utilities/error.hpp"
 
 namespace cudf {
 namespace lists {
