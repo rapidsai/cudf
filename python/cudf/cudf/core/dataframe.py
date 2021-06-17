@@ -1476,8 +1476,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         However, lhs need not be self, which is why this is a classmethod.
         """
 
-        operands = {}
-
         if isinstance(rhs, (numbers.Number, cudf.Scalar)) or (
             isinstance(rhs, np.ndarray) and rhs.ndim == 0
         ):
@@ -1487,8 +1485,10 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         # Frame.__getitem__ in favor of accessing elements of the underlying
         # ColumnAccessor directly).
         if isinstance(rhs, Sequence):
-            for k, col in enumerate(lhs._data):
-                operands[col] = (lhs[col]._column, rhs[k])
+            operands = {
+                col: (lhs[col]._column, rhs[k])
+                for k, col in enumerate(lhs._data)
+            }
         elif isinstance(rhs, DataFrame):
             if fn in cudf.utils.utils._EQUALITY_OPS:
                 if not lhs.columns.equals(rhs.columns) or not lhs.index.equals(
@@ -1501,13 +1501,15 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
             lhs, rhs = _align_indices(lhs, rhs)
 
-            for col in lhs._data:
-                # TODO: This may need to be something more e.g.
-                # normalize_binop.
-                operands[col] = (
+            # TODO: This may need to be something more e.g.
+            # normalize_binop.
+            operands = {
+                col: (
                     lhs._data[col],
                     rhs._data[col] if col in rhs._data else None,
                 )
+                for col in lhs._data
+            }
             for col in rhs._data:
                 if col not in lhs._data:
                     # Note: We have to switch these so that the code below can
@@ -1528,11 +1530,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             # operator exists. This implementation assumes that binary
             # operations between a column and NULL are always commutative, even
             # for binops (like subtraction) that are normally anticommutative.
-
-            # Columns that are only in left go in left, with right as None
-            # Columns that are only in right go in left, with right as None
-            # Columns that are in both go in both
-
+            operands = {}
             for col in result_cols:
                 if col in left_cols:
                     left = lhs[col]._column
