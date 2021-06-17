@@ -590,7 +590,6 @@ class ColumnBase(Column, Serializable):
             try:
                 if is_scalar(value):
                     input = self
-                    breakpoint()
                     out = input.as_frame()._scatter(key, [value])._as_column()
                 else:
                     if not isinstance(value, Column):
