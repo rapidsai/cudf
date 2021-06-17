@@ -171,7 +171,7 @@ else
     for gt in gtests/* ; do
         test_name=$(basename ${gt})
         echo "Running GoogleTest $test_name"
-        ${gt}
+        ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
 
     CUDF_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf-*.tar.bz2"`
