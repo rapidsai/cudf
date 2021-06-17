@@ -16,7 +16,7 @@ from cudf._lib.strings.convert.convert_fixed_point import (
 )
 from cudf._typing import Dtype
 from cudf.core.buffer import Buffer
-from cudf.core.column import ColumnBase, NumericalColumn, as_column
+from cudf.core.column import ColumnBase, as_column
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype
 from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import pa_mask_buffer_to_mask
@@ -234,7 +234,7 @@ class Decimal64Column(NumericalBaseColumn):
             value = cudf.Scalar(value, dtype=self.dtype)
         elif (
             isinstance(value, Decimal64Column)
-            or isinstance(value, NumericalColumn)
+            or isinstance(value, cudf.core.column.NumericalColumn)
             and is_integer_dtype(value.dtype)
         ):
             value = value.astype(self.dtype)

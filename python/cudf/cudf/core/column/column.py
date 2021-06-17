@@ -1970,7 +1970,6 @@ def as_column(
                                 "Cannot create list column from given data"
                             )
                         return as_column(data, nan_as_null=nan_as_null)
-                    # breakpoint()
                     if isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
                         data = pa.array(
                             arbitrary,
