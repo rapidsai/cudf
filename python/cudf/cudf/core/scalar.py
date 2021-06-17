@@ -130,7 +130,7 @@ class Scalar(object):
             if value is not None:
                 raise ValueError(f"Can not coerce {value} to ListDtype")
             else:
-                return  NA, dtype
+                return NA, dtype
         if isinstance(dtype, Decimal64Dtype):
             value = pa.scalar(
                 value, type=pa.decimal128(dtype.precision, dtype.scale)
