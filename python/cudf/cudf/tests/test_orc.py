@@ -180,14 +180,14 @@ def test_orc_read_statistics(datadir):
         (
             file_statistics,
             stripes_statistics,
-        ) = cudf.io.orc.read_orc_statistics(path)
+        ) = cudf.io.orc.read_orc_statistics([path])
     except pa.ArrowIOError as e:
         pytest.skip(".orc file is not found: %s" % e)
 
     # Check numberOfValues
-    assert_eq(file_statistics["int1"]["number_of_values"], 11_000)
+    assert_eq(file_statistics[0]["int1"]["number_of_values"], 11_000)
     assert_eq(
-        file_statistics["int1"]["number_of_values"],
+        file_statistics[0]["int1"]["number_of_values"],
         sum(
             [
                 stripes_statistics[0]["int1"]["number_of_values"],
@@ -205,15 +205,15 @@ def test_orc_read_statistics(datadir):
     # Check other statistics
     assert_eq(stripes_statistics[2]["string1"]["has_null"], False)
     assert_eq(
-        file_statistics["int1"]["minimum"],
+        file_statistics[0]["int1"]["minimum"],
         min(
             stripes_statistics[0]["int1"]["minimum"],
             stripes_statistics[1]["int1"]["minimum"],
             stripes_statistics[2]["int1"]["minimum"],
         ),
     )
-    assert_eq(file_statistics["int1"]["minimum"], 1)
-    assert_eq(file_statistics["string1"]["minimum"], "one")
+    assert_eq(file_statistics[0]["int1"]["minimum"], 1)
+    assert_eq(file_statistics[0]["string1"]["minimum"], "one")
 
 
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
@@ -251,19 +251,22 @@ def test_orc_read_stripes(datadir, engine):
 
     # Read stripes one at a time
     gdf = [
-        cudf.read_orc(path, engine=engine, stripes=[i]) for i in range(stripes)
+        cudf.read_orc(path, engine=engine, stripes=[[i]])
+        for i in range(stripes)
     ]
     gdf = cudf.concat(gdf).reset_index(drop=True)
     assert_eq(pdf, gdf, check_categorical=False)
 
     # Read stripes all at once
-    gdf = cudf.read_orc(path, engine=engine, stripes=range(stripes))
+    gdf = cudf.read_orc(
+        path, engine=engine, stripes=[[int(x) for x in range(stripes)]]
+    )
     assert_eq(pdf, gdf, check_categorical=False)
 
     # Read only some stripes
-    gdf = cudf.read_orc(path, engine=engine, stripes=[0, 1])
+    gdf = cudf.read_orc(path, engine=engine, stripes=[[0, 1]])
     assert_eq(gdf, pdf.head(25000))
-    gdf = cudf.read_orc(path, engine=engine, stripes=[0, stripes - 1])
+    gdf = cudf.read_orc(path, engine=engine, stripes=[[0, stripes - 1]])
     assert_eq(
         gdf, cudf.concat([pdf.head(15000), pdf.tail(10000)], ignore_index=True)
     )
@@ -611,16 +614,16 @@ def test_orc_write_statistics(tmpdir, datadir, nrows):
 
     # Read back written ORC's statistics
     orc_file = pa.orc.ORCFile(fname)
-    (file_stats, stripes_stats,) = cudf.io.orc.read_orc_statistics(fname)
+    (file_stats, stripes_stats,) = cudf.io.orc.read_orc_statistics([fname])
 
     # check file stats
     for col in gdf:
-        if "minimum" in file_stats[col]:
-            stats_min = file_stats[col]["minimum"]
+        if "minimum" in file_stats[0][col]:
+            stats_min = file_stats[0][col]["minimum"]
             actual_min = gdf[col].min()
             assert normalized_equals(actual_min, stats_min)
-        if "maximum" in file_stats[col]:
-            stats_max = file_stats[col]["maximum"]
+        if "maximum" in file_stats[0][col]:
+            stats_max = file_stats[0][col]["maximum"]
             actual_max = gdf[col].max()
             assert normalized_equals(actual_max, stats_max)
 
@@ -652,17 +655,17 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
 
     # Read back written ORC's statistics
     orc_file = pa.orc.ORCFile(fname)
-    (file_stats, stripes_stats,) = cudf.io.orc.read_orc_statistics(fname)
+    (file_stats, stripes_stats,) = cudf.io.orc.read_orc_statistics([fname])
 
     # check file stats
     col = "col_bool"
-    if "true_count" in file_stats[col]:
-        stats_true_count = file_stats[col]["true_count"]
+    if "true_count" in file_stats[0][col]:
+        stats_true_count = file_stats[0][col]["true_count"]
         actual_true_count = gdf[col].sum()
         assert normalized_equals(actual_true_count, stats_true_count)
 
-    if "number_of_values" in file_stats[col]:
-        stats_valid_count = file_stats[col]["number_of_values"]
+    if "number_of_values" in file_stats[0][col]:
+        stats_valid_count = file_stats[0][col]["number_of_values"]
         actual_valid_count = gdf[col].valid_count
         assert normalized_equals(actual_valid_count, stats_valid_count)
 
@@ -783,33 +786,17 @@ def test_orc_writer_decimal(tmpdir, scale):
     assert_eq(expected.to_pandas()["dec_val"], got["dec_val"])
 
 
-@pytest.mark.parametrize(
-    "src", ["filepath", "pathobj", "bytes_io", "bytes", "url"]
-)
-def test_orc_reader_multiple_files(datadir, src):
+def test_orc_reader_multiple_files(datadir):
 
-    path = datadir / "TestOrcFile.test1.orc"
-    try:
-        orcfile_0 = pa.orc.ORCFile(path)
-        orcfile_1 = pa.orc.ORCFile(path)
-    except pa.ArrowIOError as e:
-        pytest.skip(".orc file is not found: %s" % e)
+    path = datadir / "TestOrcFile.testSnappy.orc"
 
-    pdf_0 = orcfile_0.read().to_pandas()
-    pdf_1 = orcfile_1.read().to_pandas()
-    expect = pd.concat([pdf_0, pdf_1])
+    df_1 = pd.read_orc(path)
+    df_2 = pd.read_orc(path)
+    df = pd.concat([df_1, df_2], ignore_index=True)
 
-    print("\nExpected Columns:")
-    for col in expect.columns:
-        print(col)
+    gdf = cudf.read_orc([path, path], engine="cudf").to_pandas()
 
-    got = cudf.read_orc([path, path], engine="cudf").to_pandas()
-
-    print("\nGot Columns:")
-    for col in got.columns:
-        print(col)
-
-    assert_eq(expect, got)
+    assert_eq(df, gdf)
 
 
 def test_orc_string_stream_offset_issue():

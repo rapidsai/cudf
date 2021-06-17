@@ -109,65 +109,62 @@ def read_orc_metadata(path):
 
 @ioutils.doc_read_orc_statistics()
 def read_orc_statistics(
-    filepath_or_buffer, columns=None, **kwargs,
+    filepaths_or_buffers, columns=None, **kwargs,
 ):
     """{docstring}"""
 
-    is_single_filepath_or_buffer = ioutils.ensure_single_filepath_or_buffer(
-        path_or_data=filepath_or_buffer, **kwargs,
-    )
-    if not is_single_filepath_or_buffer:
-        raise NotImplementedError(
-            "`read_orc_statistics` does not support reading multiple files"
-        )
-
-    filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
-        path_or_data=filepath_or_buffer, compression=None, **kwargs
-    )
-    if compression is not None:
-        ValueError("URL content-encoding decompression is not supported")
-
-    # Read in statistics and unpack
-    (
-        column_names,
-        raw_file_statistics,
-        raw_stripes_statistics,
-    ) = liborc.read_raw_orc_statistics(filepath_or_buffer)
-
-    # Parse column names
-    column_names = [
-        column_name.decode("utf-8") for column_name in column_names
-    ]
-
-    # Parse statistics
-    cs = cs_pb2.ColumnStatistics()
-
-    file_statistics = {
-        column_names[i]: _parse_column_statistics(cs, raw_file_stats)
-        for i, raw_file_stats in enumerate(raw_file_statistics)
-        if columns is None or column_names[i] in columns
-    }
-    if any(
-        not parsed_statistics for parsed_statistics in file_statistics.values()
-    ):
-        return None
-
+    files_statistics = []
     stripes_statistics = []
-    for raw_stripe_statistics in raw_stripes_statistics:
-        stripe_statistics = {
+    for source in filepaths_or_buffers:
+        filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
+            path_or_data=source, compression=None, **kwargs
+        )
+        if compression is not None:
+            ValueError("URL content-encoding decompression is not supported")
+
+        # Read in statistics and unpack
+        (
+            column_names,
+            raw_file_statistics,
+            raw_stripes_statistics,
+        ) = liborc.read_raw_orc_statistics(filepath_or_buffer)
+
+        # Parse column names
+        column_names = [
+            column_name.decode("utf-8") for column_name in column_names
+        ]
+
+        # Parse statistics
+        cs = cs_pb2.ColumnStatistics()
+
+        file_statistics = {
             column_names[i]: _parse_column_statistics(cs, raw_file_stats)
-            for i, raw_file_stats in enumerate(raw_stripe_statistics)
+            for i, raw_file_stats in enumerate(raw_file_statistics)
             if columns is None or column_names[i] in columns
         }
         if any(
             not parsed_statistics
-            for parsed_statistics in stripe_statistics.values()
+            for parsed_statistics in file_statistics.values()
         ):
-            return None
+            continue
         else:
-            stripes_statistics.append(stripe_statistics)
+            files_statistics.append(file_statistics)
 
-    return file_statistics, stripes_statistics
+        for raw_stripe_statistics in raw_stripes_statistics:
+            stripe_statistics = {
+                column_names[i]: _parse_column_statistics(cs, raw_file_stats)
+                for i, raw_file_stats in enumerate(raw_stripe_statistics)
+                if columns is None or column_names[i] in columns
+            }
+            if any(
+                not parsed_statistics
+                for parsed_statistics in stripe_statistics.values()
+            ):
+                continue
+            else:
+                stripes_statistics.append(stripe_statistics)
+
+    return files_statistics, stripes_statistics
 
 
 def _filter_stripes(
@@ -186,34 +183,38 @@ def _filter_stripes(
         filepath_or_buffer, columns_in_predicate
     )
 
-    # Filter using file-level statistics
-    if not ioutils._apply_filters(filters, file_statistics):
-        return []
+    file_stripe_map = []
+    for file_stat in file_statistics:
+        # Filter using file-level statistics
+        if not ioutils._apply_filters(filters, file_stat):
+            continue
 
-    # Filter using stripe-level statistics
-    selected_stripes = []
-    num_rows_scanned = 0
-    for i, stripe_statistics in enumerate(stripes_statistics):
-        num_rows_before_stripe = num_rows_scanned
-        num_rows_scanned += next(iter(stripe_statistics.values()))[
-            "number_of_values"
-        ]
-        if stripes is not None and i not in stripes:
-            continue
-        if skip_rows is not None and num_rows_scanned <= skip_rows:
-            continue
-        else:
-            skip_rows = 0
-        if (
-            skip_rows is not None
-            and num_rows is not None
-            and num_rows_before_stripe >= skip_rows + num_rows
-        ):
-            continue
-        if ioutils._apply_filters(filters, stripe_statistics):
-            selected_stripes.append(i)
+        # Filter using stripe-level statistics
+        selected_stripes = []
+        num_rows_scanned = 0
+        for i, stripe_statistics in enumerate(stripes_statistics):
+            num_rows_before_stripe = num_rows_scanned
+            num_rows_scanned += next(iter(stripe_statistics.values()))[
+                "number_of_values"
+            ]
+            if stripes is not None and i not in stripes:
+                continue
+            if skip_rows is not None and num_rows_scanned <= skip_rows:
+                continue
+            else:
+                skip_rows = 0
+            if (
+                skip_rows is not None
+                and num_rows is not None
+                and num_rows_before_stripe >= skip_rows + num_rows
+            ):
+                continue
+            if ioutils._apply_filters(filters, stripe_statistics):
+                selected_stripes.append(i)
 
-    return selected_stripes
+        file_stripe_map.append(selected_stripes)
+
+    return file_stripe_map
 
 
 def _ensure_filesystem(passed_filesystem, path):
@@ -251,7 +252,7 @@ def read_orc(
         if ioutils.is_directory(source, **kwargs):
             fs = _ensure_filesystem(passed_filesystem=None, path=source)
             source = stringify_path(source)
-            source = fs.sep.join([source, "*.parquet"])
+            source = fs.sep.join([source, "*.orc"])
 
         tmp_source, compression = ioutils.get_filepath_or_buffer(
             path_or_data=source, compression=None, **kwargs,
@@ -261,7 +262,7 @@ def read_orc(
                 "URL content-encoding decompression is not supported"
             )
         if isinstance(tmp_source, list):
-            filepath_or_buffer.extend(tmp_source)
+            filepaths_or_buffers.extend(tmp_source)
         else:
             filepaths_or_buffers.append(tmp_source)
 
@@ -272,7 +273,7 @@ def read_orc(
 
         # Return empty if everything was filtered
         if len(selected_stripes) == 0:
-            return _make_empty_df(filepaths_or_buffers, columns)
+            return _make_empty_df(filepaths_or_buffers[0], columns)
         else:
             stripes = selected_stripes
 
@@ -297,12 +298,14 @@ def read_orc(
             return pa_table
 
         warnings.warn("Using CPU via PyArrow to read ORC dataset.")
-        orc_file = orc.ORCFile(filepath_or_buffer)
+        orc_file = orc.ORCFile(filepath_or_buffer[0])
         if stripes is not None and len(stripes) > 0:
-            pa_tables = [
-                read_orc_stripe(orc_file, i, columns) for i in stripes
-            ]
-            pa_table = pa.concat_tables(pa_tables)
+            for stripe_source_file in stripes:
+                pa_tables = [
+                    read_orc_stripe(orc_file, i, columns)
+                    for i in stripe_source_file
+                ]
+                pa_table = pa.concat_tables(pa_tables)
         else:
             pa_table = orc_file.read(columns=columns)
         df = cudf.DataFrame.from_arrow(pa_table)
