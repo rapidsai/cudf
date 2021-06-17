@@ -396,15 +396,7 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
   std::vector<int32_t> ids(columns.size() * gpu::CI_NUM_STREAMS, -1);
 
   for (auto &column : columns) {
-    TypeKind kind                    = column.orc_kind();
-    StreamKind data_kind             = DATA;
-    StreamKind data2_kind            = LENGTH;
-    ColumnEncodingKind encoding_kind = DIRECT;
-
-    int64_t present_stream_size = 0;
-    int64_t data_stream_size    = 0;
-    int64_t data2_stream_size   = 0;
-    int64_t dict_stream_size    = 0;
+    TypeKind const kind = column.orc_kind();
 
     auto const is_nullable = [&]() -> bool {
       if (single_write_mode) {
@@ -417,43 +409,53 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
         return user_metadata_with_nullability.column_nullable[column.flat_index()];
       }
     }();
+
+    auto add_stream = [&](gpu::StreamIndexType index_type, StreamKind kind, size_t size) {
+      const auto base        = column.flat_index() * gpu::CI_NUM_STREAMS;
+      ids[base + index_type] = streams.size();
+      streams.push_back(orc::Stream{kind, column.id(), size});
+    };
+
     if (is_nullable) {
-      present_stream_size = ((row_index_stride_ + 7) >> 3);
+      auto present_stream_size = ((row_index_stride_ + 7) >> 3);
       present_stream_size += (present_stream_size + 0x7f) >> 7;
+      add_stream(gpu::CI_PRESENT, PRESENT, present_stream_size);
     }
     switch (kind) {
       case TypeKind::BOOLEAN:
-        data_stream_size = div_rowgroups_by<int64_t>(1024) * (128 + 1);
-        encoding_kind    = DIRECT;
+        add_stream(gpu::CI_DATA, DATA, div_rowgroups_by<int64_t>(1024) * (128 + 1));
+        column.set_orc_encoding(DIRECT);
         break;
       case TypeKind::BYTE:
-        data_stream_size = div_rowgroups_by<int64_t>(128) * (128 + 1);
-        encoding_kind    = DIRECT;
+        add_stream(gpu::CI_DATA, DATA, div_rowgroups_by<int64_t>(128) * (128 + 1));
+        column.set_orc_encoding(DIRECT);
         break;
       case TypeKind::SHORT:
-        data_stream_size = div_rowgroups_by<int64_t>(512) * (512 * 2 + 2);
-        encoding_kind    = DIRECT_V2;
+        add_stream(gpu::CI_DATA, DATA, div_rowgroups_by<int64_t>(512) * (512 * 2 + 2));
+        column.set_orc_encoding(DIRECT_V2);
         break;
       case TypeKind::FLOAT:
         // Pass through if no nulls (no RLE encoding for floating point)
-        data_stream_size =
-          (column.null_count() != 0) ? div_rowgroups_by<int64_t>(512) * (512 * 4 + 2) : INT64_C(-1);
-        encoding_kind = DIRECT;
+        add_stream(gpu::CI_DATA,
+                   DATA,
+                   (column.null_count() != 0) ? div_rowgroups_by<int64_t>(512) * (512 * 4 + 2) : 0);
+        column.set_orc_encoding(DIRECT);
         break;
       case TypeKind::INT:
       case TypeKind::DATE:
-        data_stream_size = div_rowgroups_by<int64_t>(512) * (512 * 4 + 2);
-        encoding_kind    = DIRECT_V2;
+        add_stream(gpu::CI_DATA, DATA, div_rowgroups_by<int64_t>(512) * (512 * 4 + 2));
+        column.set_orc_encoding(DIRECT_V2);
         break;
       case TypeKind::DOUBLE:
         // Pass through if no nulls (no RLE encoding for floating point)
-        data_stream_size =
-          (column.null_count() != 0) ? div_rowgroups_by<int64_t>(512) * (512 * 8 + 2) : INT64_C(-1);
-        encoding_kind = DIRECT;
+        add_stream(gpu::CI_DATA,
+                   DATA,
+                   (column.null_count() != 0) ? div_rowgroups_by<int64_t>(512) * (512 * 8 + 2) : 0);
+        column.set_orc_encoding(DIRECT);
         break;
       case TypeKind::LONG:
-        data_stream_size = div_rowgroups_by<int64_t>(512) * (512 * 8 + 2);
-        encoding_kind    = DIRECT_V2;
+        add_stream(gpu::CI_DATA, DATA, div_rowgroups_by<int64_t>(512) * (512 * 8 + 2));
+        column.set_orc_encoding(DIRECT_V2);
         break;
       case TypeKind::STRING: {
         bool enable_dict           = enable_dictionary_;
@@ -488,61 +490,34 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
 
         // Decide between direct or dictionary encoding
         if (enable_dict && dict_data_size < direct_data_size) {
-          data_stream_size  = div_rowgroups_by<int64_t>(512) * (512 * 4 + 2);
-          data2_stream_size = dict_lengths_div512 * (512 * 4 + 2);
-          dict_stream_size  = std::max<size_t>(dict_data_size, 1);
-          encoding_kind     = DICTIONARY_V2;
+          add_stream(gpu::CI_DATA, DATA, div_rowgroups_by<int64_t>(512) * (512 * 4 + 2));
+          add_stream(gpu::CI_DATA2, LENGTH, dict_lengths_div512 * (512 * 4 + 2));
+          add_stream(gpu::CI_DICTIONARY, DICTIONARY_DATA, std::max<size_t>(dict_data_size, 1));
+          column.set_orc_encoding(DICTIONARY_V2);
         } else {
-          data_stream_size  = std::max<size_t>(direct_data_size, 1);
-          data2_stream_size = div_rowgroups_by<int64_t>(512) * (512 * 4 + 2);
-          encoding_kind     = DIRECT_V2;
+          add_stream(gpu::CI_DATA, DATA, std::max<size_t>(direct_data_size, 1));
+          add_stream(gpu::CI_DATA2, LENGTH, div_rowgroups_by<int64_t>(512) * (512 * 4 + 2));
+          column.set_orc_encoding(DIRECT_V2);
         }
         break;
       }
       case TypeKind::TIMESTAMP:
-        data_stream_size  = ((row_index_stride_ + 0x1ff) >> 9) * (512 * 4 + 2);
-        data2_stream_size = data_stream_size;
-        data2_kind        = SECONDARY;
-        encoding_kind     = DIRECT_V2;
+        add_stream(gpu::CI_DATA, DATA, div_rowgroups_by<int64_t>(512) * (512 * 4 + 2));
+        add_stream(gpu::CI_DATA2, SECONDARY, div_rowgroups_by<int64_t>(512) * (512 * 4 + 2));
+        column.set_orc_encoding(DIRECT_V2);
         break;
       case TypeKind::DECIMAL:
         // varint values (NO RLE)
-        data_stream_size = decimal_column_sizes.at(column.flat_index());
+        // data_stream_size = decimal_column_sizes.at(column.flat_index());
+        add_stream(gpu::CI_DATA, DATA, decimal_column_sizes.at(column.flat_index()));
         // scale stream TODO: compute exact size since all elems are equal
-        data2_stream_size = div_rowgroups_by<int64_t>(512) * (512 * 4 + 2);
-        data2_kind        = SECONDARY;
-        encoding_kind     = DIRECT_V2;
+        add_stream(gpu::CI_DATA2, SECONDARY, div_rowgroups_by<int64_t>(512) * (512 * 4 + 2));
+        column.set_orc_encoding(DIRECT_V2);
         break;
       case TypeKind::LIST:
         // no data streams, only present
         break;
-      default: std::cout << kind << std::endl; CUDF_FAIL("Unsupported ORC type kind");
-    }
-
-    // Initialize the column's metadata (this is the only reason columns is in/out param)
-    column.set_orc_encoding(encoding_kind);
-
-    // Initialize the column's data stream(s)
-    const auto base = column.flat_index() * gpu::CI_NUM_STREAMS;
-    if (present_stream_size != 0) {
-      auto len                    = static_cast<uint64_t>(present_stream_size);
-      ids[base + gpu::CI_PRESENT] = streams.size();
-      streams.push_back(orc::Stream{PRESENT, column.id(), len});
-    }
-    if (data_stream_size != 0) {
-      auto len                 = static_cast<uint64_t>(std::max<int64_t>(data_stream_size, 0));
-      ids[base + gpu::CI_DATA] = streams.size();
-      streams.push_back(orc::Stream{data_kind, column.id(), len});
-    }
-    if (data2_stream_size != 0) {
-      auto len                  = static_cast<uint64_t>(std::max<int64_t>(data2_stream_size, 0));
-      ids[base + gpu::CI_DATA2] = streams.size();
-      streams.push_back(orc::Stream{data2_kind, column.id(), len});
-    }
-    if (dict_stream_size != 0) {
-      auto len                       = static_cast<uint64_t>(dict_stream_size);
-      ids[base + gpu::CI_DICTIONARY] = streams.size();
-      streams.push_back(orc::Stream{DICTIONARY_DATA, column.id(), len});
+      default: CUDF_FAIL("Unsupported ORC type kind");
     }
   }
   return {std::move(streams), std::move(ids)};
@@ -595,6 +570,7 @@ struct segmented_valid_cnt_input {
 encoded_data writer::impl::encode_columns(orc_table_view const &orc_table,
                                           string_dictionaries &&dictionaries,
                                           encoder_decimal_info &&dec_chunk_sizes,
+                                          host_2dspan<rows_range const> rowgroup_bounds,
                                           host_span<stripe_rowgroups const> stripe_bounds,
                                           orc_streams const &streams)
 {
@@ -614,8 +590,8 @@ encoded_data writer::impl::encode_columns(orc_table_view const &orc_table,
         auto const rg_idx = *rg_idx_it;
         auto &ck          = chunks[column.flat_index()][rg_idx];
 
-        ck.start_row     = (rg_idx * row_index_stride_);
-        ck.num_rows      = std::min<uint32_t>(row_index_stride_, column.size() - ck.start_row);
+        ck.start_row     = rowgroup_bounds[rg_idx][column.flat_index()].begin;
+        ck.num_rows      = rowgroup_bounds[rg_idx][column.flat_index()].size();
         ck.encoding_kind = column.orc_encoding();
         ck.type_kind     = column.orc_kind();
         if (ck.type_kind == TypeKind::STRING) {
@@ -1324,8 +1300,12 @@ void writer::impl::write(table_view const &table)
 
   auto streams = create_streams(
     orc_table.columns, stripe_bounds, decimal_column_sizes(dec_chunk_sizes.rg_sizes));
-  auto enc_data = encode_columns(
-    orc_table, std::move(dictionaries), std::move(dec_chunk_sizes), stripe_bounds, streams);
+  auto enc_data = encode_columns(orc_table,
+                                 std::move(dictionaries),
+                                 std::move(dec_chunk_sizes),
+                                 rowgroup_bounds,
+                                 stripe_bounds,
+                                 streams);
 
   // Assemble individual disparate column chunks into contiguous data streams
   size_type const num_index_streams = (orc_table.num_columns() + 1);

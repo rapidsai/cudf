@@ -285,6 +285,7 @@ class writer::impl {
   encoded_data encode_columns(orc_table_view const& orc_table,
                               string_dictionaries&& dictionaries,
                               encoder_decimal_info&& dec_chunk_sizes,
+                              host_2dspan<rows_range const> rowgroup_bounds,
                               host_span<stripe_rowgroups const> stripe_bounds,
                               orc_streams const& streams);
 
