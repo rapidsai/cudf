@@ -12,9 +12,7 @@ def option_context(*args):
     original_options = _OPTIONS.copy()
     try:
         for opt, val in zip(args[::2], args[1::2]):
-            if opt not in _OPTIONS:
-                raise ValueError(f"Invalid option {opt}")
-            _OPTIONS[opt] = val
+            set_option(opt, val)
         yield
     finally:
         _OPTIONS = original_options
@@ -22,11 +20,11 @@ def option_context(*args):
 
 def get_option(key):
     if key not in _OPTIONS:
-        raise ValueError(f"Invalid option {key}")
+        raise KeyError(f"Invalid option {key}")
     return _OPTIONS[key]
 
 
 def set_option(key, value):
     if key not in _OPTIONS:
-        raise ValueError(f"Invalid option {key}")
+        raise KeyError(f"Invalid option {key}")
     _OPTIONS[key] = value
