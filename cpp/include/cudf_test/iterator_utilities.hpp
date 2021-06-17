@@ -77,9 +77,7 @@ template <typename Iter>
  */
 [[maybe_unused]] static auto nulls_at(std::vector<cudf::size_type> const& indices)
 {
-  return cudf::detail::make_counting_transform_iterator(0, [&indices](auto i) {
-    return std::find(indices.cbegin(), indices.cend(), i) == indices.cend();
-  });
+  return nulls_at(indices.cbegin(), indices.cend());
 }
 
 /**
@@ -129,7 +127,8 @@ template <typename Iter>
 template <class T>
 [[maybe_unused]] static auto nulls_from_nullptrs(std::vector<T const*> const& ptrs)
 {
-  return thrust::make_transform_iterator(ptrs.begin(), [](auto ptr) { return ptr != nullptr; });
+  // The vector `indices` is copied into the lambda as it can be destroyed at the caller site.
+  return thrust::make_transform_iterator(ptrs.begin(), [ptrs](auto ptr) { return ptr != nullptr; });
 }
 
 }  // namespace iterators
