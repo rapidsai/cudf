@@ -471,11 +471,6 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_split(JNIEnv *env, j
 
     std::vector<cudf::column_view> result = cudf::split(*n_column, indices);
 
-    // std::transform(result.begin(), result.end(), result.begin(),
-    //               [](cudf::column_view const &c) -> jlong { return reinterpret_cast<jlong>(&c); });
-
-    // cudf::jni::native_jlongArray n_result(env, (jlong*)result.data(), result.size());
-
     cudf::jni::native_jlongArray n_result(env, result.size());
     for (size_t i = 0; i < result.size(); i++) {
       cudf::column_view const * c = new cudf::column_view(result[i]);

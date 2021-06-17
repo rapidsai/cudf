@@ -115,7 +115,6 @@ endif(CUDA_STATIC_RUNTIME)
 
 ###################################################################################################
 # - Thrust/CUB/libcudacxx ------------------------------------------------------------------------------------
-message("cpp build dir: " ${CUDF_CPP_BUILD_DIR})
 find_path(THRUST_INCLUDE "thrust"
     HINTS "$ENV{CUDF_ROOT}/_deps/thrust-src"
           "${CUDF_CPP_BUILD_DIR}/_deps/thrust-src"
