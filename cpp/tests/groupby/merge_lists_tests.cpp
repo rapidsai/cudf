@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <tests/groupby/groupby_test_util.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
@@ -24,6 +22,7 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/groupby.hpp>
 #include <cudf/table/table_view.hpp>
 
 using namespace cudf::test::iterators;
