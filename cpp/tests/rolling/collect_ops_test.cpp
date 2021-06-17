@@ -34,6 +34,8 @@
 #include <algorithm>
 #include <vector>
 
+using namespace cudf::test::iterators;
+
 struct CollectListTest : public cudf::test::BaseFixture {
 };
 
@@ -731,8 +733,8 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowWithNulls)
                                       min_periods,
                                       *make_collect_list_aggregation<rolling_aggregation>());
 
-  auto null_at_0 = iterator_with_null_at(0);
-  auto null_at_1 = iterator_with_null_at(1);
+  auto null_at_0 = null_at(0);
+  auto null_at_1 = null_at(1);
 
   // In the results, `11` and `21` should be nulls.
   auto const expected_result = lists_column_wrapper<T, int32_t>{
@@ -846,8 +848,8 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithNulls)
                                       min_periods,
                                       *make_collect_list_aggregation<rolling_aggregation>());
 
-  auto null_at_0 = iterator_with_null_at(0);
-  auto null_at_1 = iterator_with_null_at(1);
+  auto null_at_0 = null_at(0);
+  auto null_at_1 = null_at(1);
 
   // In the results, `11` and `21` should be nulls.
   auto const expected_result = lists_column_wrapper<cudf::string_view>{
@@ -1037,7 +1039,7 @@ TYPED_TEST(TypedCollectListTest, GroupedTimeRangeRollingWindowWithNullsAndMinPer
                                       min_periods,
                                       *make_collect_list_aggregation<rolling_aggregation>());
 
-  auto null_at_1 = iterator_with_null_at(1);
+  auto null_at_1 = null_at(1);
 
   // In the results, `11` and `21` should be nulls.
   auto const expected_result = lists_column_wrapper<T, int32_t>{
@@ -1163,7 +1165,7 @@ TEST_F(CollectListTest, GroupedTimeRangeRollingWindowOnStringsWithNullsAndMinPer
                                       min_periods,
                                       *make_collect_list_aggregation<rolling_aggregation>());
 
-  auto null_at_1 = iterator_with_null_at(1);
+  auto null_at_1 = null_at(1);
 
   // In the results, `11` and `21` should be nulls.
   auto const expected_result = lists_column_wrapper<cudf::string_view>{
@@ -1874,10 +1876,9 @@ TYPED_TEST(TypedCollectSetTest, GroupedTimeRangeRollingWindowWithNulls)
                                       min_periods,
                                       *make_collect_set_aggregation<rolling_aggregation>());
 
-  auto null_at_1 = iterator_with_null_at(1);
-  auto null_at_2 = iterator_with_null_at(2);
-  auto null_at_3 = iterator_with_null_at(3);
-  auto null_at_4 = iterator_with_null_at(4);
+  auto null_at_1 = null_at(1);
+  auto null_at_3 = null_at(3);
+  auto null_at_4 = null_at(4);
 
   // In the results, `11` and `21` should be nulls.
   auto const expected_result = lists_column_wrapper<T, int32_t>{
