@@ -15,8 +15,7 @@ from numba.core.typing.templates import (
 )
 from numba.core.typing.typeof import typeof
 from numba.cuda.cudadecl import registry as cuda_decl_registry
-
-from cudf.core.scalar import _NAType
+from pandas._libs.missing import NAType as _NAType
 
 from . import classes
 from ._ops import arith_ops, comparison_ops
