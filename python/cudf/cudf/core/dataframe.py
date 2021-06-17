@@ -1478,21 +1478,19 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         # TODO: Instead of maintaining two dicts, probably better to maintain a
         # single dict of pairs (2-tuples).
-        left = {}
-        right = {}
+        operands = {}
 
         if isinstance(rhs, (numbers.Number, cudf.Scalar)) or (
             isinstance(rhs, np.ndarray) and rhs.ndim == 0
         ):
-            rhs = [rhs] * left._num_columns
+            rhs = [rhs] * lhs._num_columns
 
         # TODO: Use faster indexers below wherever possible (avoid
         # Frame.__getitem__ in favor of accessing elements of the underlying
         # ColumnAccessor directly).
         if isinstance(rhs, Sequence):
             for k, col in enumerate(lhs._data):
-                left[col] = lhs[col]._column
-                right[col] = rhs[k]
+                operands[col] = (lhs[col]._column, rhs[k])
         elif isinstance(rhs, DataFrame):
             if fn in cudf.utils.utils._EQUALITY_OPS:
                 if not lhs.columns.equals(rhs.columns) or not lhs.index.equals(
@@ -1503,29 +1501,30 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                         "DataFrame objects"
                     )
 
-            left, right = _align_indices(left, right)
+            lhs, rhs = _align_indices(lhs, rhs)
 
             for col in lhs._data:
-                left[col] = lhs._data[col]
                 # TODO: This may need to be something more e.g.
                 # normalize_binop.
-                right[col] = rhs._data[col] if col in rhs._data else None
+                operands[col] = (
+                    lhs._data[col],
+                    rhs._data[col] if col in rhs._data else None,
+                )
             for col in rhs._data:
                 if col not in lhs._data:
                     # Note: We have to switch these so that the code below can
                     # assume that the contents of left are always columns and
                     # access its binary operator.
-                    left[col] = rhs[col]._column
                     # TODO: This may need to be something more e.g.
                     # normalize_binop.
-                    right[col] = None
+                    operands[col] = (rhs[col]._column, None)
         elif isinstance(rhs, Series):
             # TODO: This logic will need updating if any of the user-facing
             # binop methods (e.g. DataFrame.add) ever support axis=0/rows.
-            right = dict(zip(rhs.index.values_host, rhs.values_host))
+            right_dict = dict(zip(rhs.index.values_host, rhs.values_host))
             left_cols = lhs._column_names
             result_cols = left_cols + tuple(
-                col for col in right if col not in left_cols
+                col for col in right_dict if col not in left_cols
             )
             # Note: Existing columns must always go in left so that the binary
             # operator exists. This implementation assumes that binary
@@ -1540,20 +1539,14 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             # than putting NaN in the columns that are only present in the
             # series, it puts nan. However, I think the old behavior is wrong
             # and the new behavior is correct.
-            left = {
-                col: (
-                    lhs[col]._column
-                    if col in left_cols
-                    else as_column(np.nan, length=lhs._num_rows)
-                )
-                for col in result_cols
-            }
-            right = {
-                col: (
-                    right[col] if (col in right and col in left_cols) else None
-                )
-                for col in result_cols
-            }
+            for col in result_cols:
+                if col in left_cols:
+                    left = lhs[col]._column
+                    right = right_dict[col] if col in right_dict else None
+                else:
+                    left = as_column(np.nan, length=lhs._num_rows)
+                    right = None
+                operands[col] = (left, right)
 
         else:
             raise NotImplementedError(
@@ -1563,11 +1556,10 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         # Now actually perform the binop on the columns in left and right.
         output = {}
-        for col, left_column in left.items():
+        for col, (left_column, right_column) in operands.items():
             # TODO: This is duplicating logic from
             # SingleColumnFrame._normalize_binop_value, but is ignoring
             # cudf.NA. That possibility must be considered.
-            right_column = right[col]
             if not isinstance(right_column, cudf.core.column.ColumnBase):
                 right_column = left_column.normalize_binop_value(right_column)
 
