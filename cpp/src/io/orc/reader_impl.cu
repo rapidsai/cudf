@@ -26,6 +26,7 @@
 #include <io/comp/gpuinflate.h>
 #include "orc.h"
 
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -842,7 +843,7 @@ void reader::impl::create_columns(std::vector<std::vector<column_buffer>> &col_b
     auto const &col_meta = _selected_columns[0][i];
     schema_info.emplace_back("");
     auto col_buffer = assemble_buffer(col_meta.id, col_buffers, orc_col_map, 0, stream);
-    out_columns.emplace_back(make_column(col_buffer, &schema_info.back(), stream));
+    out_columns.emplace_back(make_column(col_buffer, &schema_info.back(), stream, _mr));
     i += (col_buffers[0][i].type.id() == type_id::STRUCT) ? col_meta.num_children + 1 : 1;
   }
 }
@@ -880,6 +881,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   std::vector<std::vector<column_buffer>> out_buffers(_selected_columns.size());
   std::vector<std::vector<int32_t>> orc_col_map;
   std::vector<column_name_info> schema_info;
+  std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data(_selected_columns.size());
   table_metadata out_metadata;
 
   // TBD : Need to update num_rows for later set of levels
@@ -939,8 +941,13 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       }
       break;
     } else {
+      // Get the total number of stripes across all input files.
+      size_t total_num_stripes = 0;
+      for (const auto &stripe_source_mapping : selected_stripes) {
+        total_num_stripes += stripe_source_mapping.stripe_idx_in_source.size();
+      }
       const auto num_columns = selected_columns.size();
-      const auto num_chunks  = selected_stripes.size() * num_columns;
+      const auto num_chunks  = total_num_stripes * num_columns;
       hostdevice_vector<gpu::ColumnDesc> chunks(num_chunks, stream);
       memset(chunks.host_ptr(), 0, chunks.memory_size());
 
@@ -949,8 +956,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         // Only use if we don't have much work with complete columns & stripes
         // TODO: Consider nrows, gpu, and tune the threshold
         (num_rows > _metadata->get_row_index_stride() && !(_metadata->get_row_index_stride() & 7) &&
-         _metadata->get_row_index_stride() > 0 &&
-         num_columns * selected_stripes.size() < 8 * 128) &&
+         _metadata->get_row_index_stride() > 0 && num_columns * total_num_stripes < 8 * 128) &&
         // Only use if first row is aligned to a stripe boundary
         // TODO: Fix logic to handle unaligned rows
         (skip_rows == 0);
@@ -959,7 +965,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       std::vector<orc_stream_info> stream_info;
 
       // Tracker for eventually deallocating compressed and uncompressed data
-      std::vector<rmm::device_buffer> stripe_data;
+      auto &stripe_data = lvl_stripe_data[level];
 
       size_t stripe_start_row = 0;
       size_t num_dict_entries = 0;
@@ -1064,16 +1070,15 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       // Process dataset chunk pages into output columns
       if (stripe_data.size() != 0) {
         // Setup row group descriptors if using indexes
-        rmm::device_uvector<gpu::RowGroup> row_groups(num_rowgroups * num_columns, stream);
-        CUDA_TRY(cudaMemsetAsync(
-          row_groups.data(), 0, row_groups.size() * sizeof(gpu::RowGroup), stream.value()));
+        auto row_groups = cudf::detail::make_zeroed_device_uvector_sync<gpu::RowGroup>(
+          num_rowgroups * num_columns, stream, _mr);
         if (_metadata->per_file_metadata[0].ps.compression != orc::NONE) {
           auto decomp_data =
             decompress_stripe_data(chunks,
                                    stripe_data,
                                    _metadata->per_file_metadata[0].decompressor.get(),
                                    stream_info,
-                                   selected_stripes.size(),
+                                   total_num_stripes,
                                    row_groups,
                                    _metadata->get_row_index_stride(),
                                    stream);
@@ -1086,7 +1091,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                     nullptr,
                                     chunks.device_ptr(),
                                     num_columns,
-                                    selected_stripes.size(),
+                                    total_num_stripes,
                                     num_rowgroups,
                                     _metadata->get_row_index_stride(),
                                     stream);
@@ -1102,7 +1107,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
         for (size_t i = 0; i < column_types.size(); ++i) {
           bool is_nullable = false;
-          for (size_t j = 0; j < selected_stripes.size(); ++j) {
+          for (size_t j = 0; j < total_num_stripes; ++j) {
             if (chunks[j * num_columns + i].strm_len[gpu::CI_PRESENT] != 0) {
               is_nullable = true;
               break;

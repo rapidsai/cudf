@@ -84,7 +84,6 @@ def test_orc_reader_basic(datadir, inputfile, columns, use_index, engine):
     except pa.ArrowIOError as e:
         pytest.skip(".orc file is not found: %s" % e)
 
-    breakpoint()
     expect = orcfile.read(columns=columns).to_pandas()
     got = cudf.read_orc(
         path, engine=engine, columns=columns, use_index=use_index
