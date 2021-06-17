@@ -193,6 +193,56 @@ def test_json_lines_basic(json_input, engine):
         np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_array())
 
 
+@pytest.mark.filterwarnings("ignore:Using CPU")
+@pytest.mark.parametrize("engine", ["auto", "cudf"])
+def test_json_lines_multiple(tmpdir, json_input, engine):
+    tmp_file1 = tmpdir.join("MultiInputs1.json")
+    tmp_file2 = tmpdir.join("MultiInputs2.json")
+
+    pdf = pd.read_json(json_input, lines=True)
+    pdf.to_json(tmp_file1, compression="infer", lines=True, orient="records")
+    pdf.to_json(tmp_file2, compression="infer", lines=True, orient="records")
+
+    cu_df = cudf.read_json([tmp_file1, tmp_file2], engine=engine, lines=True)
+    pd_df = pd.concat([pdf, pdf])
+
+    assert all(cu_df.dtypes == ["int64", "int64", "int64"])
+    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
+        assert str(cu_col) == str(pd_col)
+        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_array())
+
+
+@pytest.mark.parametrize("engine", ["auto", "cudf"])
+def test_json_read_directory(tmpdir, json_input, engine):
+    pdf = pd.read_json(json_input, lines=True)
+    pdf.to_json(
+        tmpdir.join("MultiInputs1.json"),
+        compression="infer",
+        lines=True,
+        orient="records",
+    )
+    pdf.to_json(
+        tmpdir.join("MultiInputs2.json"),
+        compression="infer",
+        lines=True,
+        orient="records",
+    )
+    pdf.to_json(
+        tmpdir.join("MultiInputs3.json"),
+        compression="infer",
+        lines=True,
+        orient="records",
+    )
+
+    cu_df = cudf.read_json(tmpdir, engine=engine, lines=True)
+    pd_df = pd.concat([pdf, pdf, pdf])
+
+    assert all(cu_df.dtypes == ["int64", "int64", "int64"])
+    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
+        assert str(cu_col) == str(pd_col)
+        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_array())
+
+
 def test_json_lines_byte_range(json_input):
     # include the first row and half of the second row
     # should parse the first two rows

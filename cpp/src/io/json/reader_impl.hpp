@@ -56,9 +56,9 @@ class reader::impl {
 
   rmm::mr::device_memory_resource *mr_ = nullptr;
 
-  std::unique_ptr<datasource> source_;
-  std::string filepath_;
-  std::unique_ptr<datasource::buffer> buffer_;
+  std::vector<std::unique_ptr<datasource>> sources_;
+  std::vector<std::string> filepaths_;
+  std::vector<uint8_t> buffer_;
 
   const char *uncomp_data_ = nullptr;
   size_t uncomp_size_      = 0;
@@ -183,8 +183,8 @@ class reader::impl {
   /**
    * @brief Constructor from a dataset source with reader options.
    */
-  explicit impl(std::unique_ptr<datasource> source,
-                std::string filepath,
+  explicit impl(std::vector<std::unique_ptr<datasource>> &&sources,
+                std::vector<std::string> const &filepaths,
                 json_reader_options const &options,
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource *mr);
