@@ -18,7 +18,6 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/concatenate.hpp>
@@ -26,8 +25,9 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/table/table_view.hpp>
 
-namespace {
+using namespace cudf::test;
 
+namespace {
 constexpr bool print_all{false};  // For debugging
 constexpr int32_t null{0};        // Mark for null child elements
 
@@ -48,17 +48,6 @@ auto merge_sets(vcol_views const& keys_cols, vcol_views const& values_cols)
   auto result = gb_obj.aggregate(requests);
   return std::make_pair(std::move(result.first->release()[0]),
                         std::move(result.second[0].results[0]));
-}
-
-auto all_valids() { return cudf::test::iterator_no_null(); }
-
-auto all_nulls() { return cudf::test::iterator_all_nulls(); }
-
-auto null_at(cudf::size_type idx) { return cudf::test::iterator_with_null_at(idx); }
-
-auto null_at(std::vector<cudf::size_type> const& indices)
-{
-  return cudf::test::iterator_with_null_at(cudf::host_span<cudf::size_type const>{indices});
 }
 
 }  // namespace
