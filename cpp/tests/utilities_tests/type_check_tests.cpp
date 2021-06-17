@@ -21,7 +21,6 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
-
 namespace cudf {
 namespace test {
 
