@@ -21,6 +21,8 @@
 
 #include <cudf/lists/combine.hpp>
 
+using namespace cudf::test::iterators;
+
 namespace {
 using StrListsCol = cudf::test::lists_column_wrapper<cudf::string_view>;
 using IntListsCol = cudf::test::lists_column_wrapper<int32_t>;
@@ -29,16 +31,6 @@ using TView       = cudf::table_view;
 
 constexpr bool print_all{false};  // For debugging
 constexpr int32_t null{0};
-
-auto all_nulls() { return cudf::test::iterator_all_nulls(); }
-
-auto null_at(cudf::size_type idx) { return cudf::test::iterator_with_null_at(idx); }
-
-auto null_at(std::vector<cudf::size_type> const& indices)
-{
-  return cudf::test::iterator_with_null_at(cudf::host_span<cudf::size_type const>{indices});
-}
-
 }  // namespace
 
 struct ListConcatenateRowsTest : public cudf::test::BaseFixture {

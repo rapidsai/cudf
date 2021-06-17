@@ -24,6 +24,8 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 
+using namespace cudf::test::iterators;
+
 using bools_col   = cudf::test::fixed_width_column_wrapper<bool>;
 using int32s_col  = cudf::test::fixed_width_column_wrapper<int32_t>;
 using structs_col = cudf::test::structs_column_wrapper;
@@ -45,10 +47,6 @@ using TestTypes = cudf::test::Concat<cudf::test::IntegralTypes,
 TYPED_TEST_CASE(TypedStructScatterTest, TestTypes);
 
 namespace {
-auto no_null() { return cudf::test::iterator_no_null(); }
-
-auto null_at(cudf::size_type idx) { return cudf::test::iterator_with_null_at(idx); }
-
 auto scatter_structs(std::unique_ptr<cudf::column> const& structs_src,
                      std::unique_ptr<cudf::column> const& structs_tgt,
                      std::unique_ptr<cudf::column> const& scatter_map)

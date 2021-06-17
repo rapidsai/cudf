@@ -21,6 +21,8 @@
 
 #include <cudf/lists/combine.hpp>
 
+using namespace cudf::test::iterators;
+
 namespace {
 using StrListsCol = cudf::test::lists_column_wrapper<cudf::string_view>;
 using IntListsCol = cudf::test::lists_column_wrapper<int32_t>;
@@ -33,15 +35,6 @@ template <class T, class... Ts>
 auto build_lists_col(T& list, Ts&... lists)
 {
   return T(std::initializer_list<T>{std::move(list), std::move(lists)...});
-}
-
-auto all_nulls() { return cudf::test::iterator_all_nulls(); }
-
-auto null_at(cudf::size_type idx) { return cudf::test::iterator_with_null_at(idx); }
-
-auto null_at(std::vector<cudf::size_type> const& indices)
-{
-  return cudf::test::iterator_with_null_at(cudf::host_span<cudf::size_type const>{indices});
 }
 
 }  // namespace

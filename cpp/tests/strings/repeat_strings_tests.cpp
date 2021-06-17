@@ -22,20 +22,12 @@
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
+using namespace cudf::test::iterators;
+
 namespace {
 using STR_COL = cudf::test::strings_column_wrapper;
 
 constexpr bool print_all{false};
-
-auto all_nulls() { return cudf::test::iterator_all_nulls(); }
-
-auto null_at(cudf::size_type idx) { return cudf::test::iterator_with_null_at(idx); }
-
-auto null_at(std::vector<cudf::size_type> const& indices)
-{
-  return cudf::test::iterator_with_null_at(cudf::host_span<cudf::size_type const>{indices});
-}
-
 }  // namespace
 
 struct RepeatJoinStringTest : public cudf::test::BaseFixture {
