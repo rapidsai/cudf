@@ -85,7 +85,7 @@ std::vector<std::string> make_template_types(column_view outcol_view, table_view
 }
 
 void generalized_operation(table_view data_view,
-                           std::string const& binary_udf,
+                           std::string const& udf,
                            data_type output_type,
                            mutable_column_view outcol_view,
                            mutable_column_view outmsk_view,
@@ -98,7 +98,7 @@ void generalized_operation(table_view data_view,
       .instantiate(template_types);
 
   std::string generic_cuda_source = cudf::jit::parse_single_function_ptx(
-    binary_udf, "GENERIC_OP", cudf::jit::get_type_name(output_type), {0});
+    udf, "GENERIC_OP", cudf::jit::get_type_name(output_type), {0});
 
   // {size, out_ptr, out_mask_ptr, col0_ptr, col0_mask_ptr, col0_offset, col1_ptr...}
   std::vector<void*> kernel_args;
@@ -197,11 +197,11 @@ std::unique_ptr<column> transform(column_view const& input,
 }
 
 std::unique_ptr<column> generalized_masked_op(table_view data_view,
-                                              std::string const& binary_udf,
+                                              std::string const& udf,
                                               data_type output_type,
                                               rmm::mr::device_memory_resource* mr)
 {
-  return detail::generalized_masked_op(data_view, binary_udf, output_type, mr);
+  return detail::generalized_masked_op(data_view, udf, output_type, mr);
 }
 
 }  // namespace cudf
