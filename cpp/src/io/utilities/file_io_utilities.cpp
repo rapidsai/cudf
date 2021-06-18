@@ -178,7 +178,15 @@ std::unique_ptr<datasource::buffer> cufile_input_impl::read(size_t offset,
 {
   CUDF_FUNC_RANGE();
   rmm::device_buffer out_data(size, stream);
+  read(offset, size, reinterpret_cast<uint8_t *>(out_data.data()), stream);
+  return datasource::buffer::create(std::move(out_data));
+}
 
+size_t cufile_input_impl::read(size_t offset,
+                               size_t size,
+                               uint8_t *dst,
+                               rmm::cuda_stream_view stream)
+{
   int device;
   cudaGetDevice(&device);
 
@@ -192,7 +200,7 @@ std::unique_ptr<datasource::buffer> cufile_input_impl::read(size_t offset,
   size_t slice_size          = size / n_threads;
   size_t slice_offset        = 0;
   for (size_t t = 0; t < n_threads; ++t) {
-    void *dst_slice = reinterpret_cast<char *>(out_data.data()) + slice_offset;
+    void *dst_slice = dst + slice_offset;
 
     if (t == n_threads - 1) { slice_size += size % n_threads; }
     threads.emplace_back(read_slice, dst_slice, slice_size, offset + slice_offset);
@@ -201,17 +209,6 @@ std::unique_ptr<datasource::buffer> cufile_input_impl::read(size_t offset,
   }
   for (auto &thread : threads) { thread.join(); }
 
-  return datasource::buffer::create(std::move(out_data));
-}
-
-size_t cufile_input_impl::read(size_t offset,
-                               size_t size,
-                               uint8_t *dst,
-                               rmm::cuda_stream_view stream)
-{
-  // std::cout << "cufile read" << std::endl;
-  CUDF_EXPECTS(shim->read(cf_file.handle(), dst, size, offset, 0) != -1,
-               "cuFile error reading from a file");
   // always read the requested size for now
   return size;
 }
