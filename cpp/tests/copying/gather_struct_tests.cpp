@@ -84,7 +84,9 @@ auto get_expected_column(std::vector<SourceElementT> const& input_values,
 {
   auto is_valid =  // Validity predicate.
     [&input_values, &input_validity, &struct_validity, &gather_map](auto gather_index) {
-      assert(gather_index >= 0 && gather_index < gather_map.size() || "Gather-index out of range.");
+      assert(
+        gather_index >= 0 && gather_index < static_cast<cudf::size_type>(gather_map.size())) ||
+        "Gather-index out of range.");
 
       auto i{gather_map[gather_index]};  // Index into input_values.
 
