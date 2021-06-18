@@ -138,7 +138,7 @@ TEST_F(RepeatJoinStringTest, AllNullStringsColumnWithColumnRepeatTimes)
 
   // The repeat_times column also contains some nulls and some valid numbers.
   {
-    auto const repeat_times = INT_COL{{null, 1, null}, null_at({0, 2})};
+    auto const repeat_times = INT_COL{{null, 1, null}, nulls_at({0, 2})};
     auto const results =
       cudf::strings::repeat_strings(cudf::strings_column_view(strs), repeat_times);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(strs, *results, print_all);
@@ -173,7 +173,7 @@ TEST_F(RepeatJoinStringTest, ZeroSizeAndNullStringsColumnWithScalarRepeatTimes)
 TEST_F(RepeatJoinStringTest, ZeroSizeAndNullStringsColumnWithColumnRepeatTimes)
 {
   auto const strs =
-    STR_COL{{"" /*NULL*/, "", "" /*NULL*/, "", "", "" /*NULL*/}, null_at({0, 2, 5})};
+    STR_COL{{"" /*NULL*/, "", "" /*NULL*/, "", "", "" /*NULL*/}, nulls_at({0, 2, 5})};
   auto const repeat_times = INT_COL{1, 2, 3, 4, 5, 6};
   auto const results      = cudf::strings::repeat_strings(cudf::strings_column_view(strs), 10);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(strs, *results, print_all);
@@ -256,11 +256,11 @@ TEST_F(RepeatJoinStringTest, StringsColumnNoNullWithColumnRepeatTimes)
 
   // repeat_times column has nulls.
   {
-    auto const repeat_times = INT_COL{{1, null, 3, 2, null}, null_at({1, 4})};
+    auto const repeat_times = INT_COL{{1, null, 3, 2, null}, nulls_at({1, 4})};
     auto const results =
       cudf::strings::repeat_strings(cudf::strings_column_view(strs), repeat_times);
     auto const expected = STR_COL{
-      {"0a0b0c", "" /*NULL*/, "xyzéééxyzéééxyzééé", "áááááá", "" /*NULL*/}, null_at({1, 4})};
+      {"0a0b0c", "" /*NULL*/, "xyzéééxyzéééxyzééé", "áááááá", "" /*NULL*/}, nulls_at({1, 4})};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
   }
 }
@@ -391,7 +391,7 @@ TEST_F(RepeatJoinStringTest, StringsColumnWithNullsWithColumnRepeatTimes)
                              "íí",
                              "",
                              "Hello World"},
-                            null_at({1, 3, 5})};
+                            nulls_at({1, 3, 5})};
 
   // Repeat once.
   {
@@ -416,14 +416,14 @@ TEST_F(RepeatJoinStringTest, StringsColumnWithNullsWithColumnRepeatTimes)
                                    "íííííí",
                                    "",
                                    ""},
-                                  null_at({1, 3, 5})};
+                                  nulls_at({1, 3, 5})};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
   }
 
   // repeat_times column has nulls.
   {
     auto const repeat_times =
-      INT_COL{{1, 2, null, -1, null, 1, 2, null, -5, 0}, null_at({2, 4, 7})};
+      INT_COL{{1, 2, null, -1, null, 1, 2, null, -5, 0}, nulls_at({2, 4, 7})};
     auto const results =
       cudf::strings::repeat_strings(cudf::strings_column_view(strs), repeat_times);
     auto const expected = STR_COL{{"0a0b0c",
@@ -436,7 +436,7 @@ TEST_F(RepeatJoinStringTest, StringsColumnWithNullsWithColumnRepeatTimes)
                                    "" /*NULL*/,
                                    "",
                                    ""},
-                                  null_at({1, 2, 3, 4, 5, 7})};
+                                  nulls_at({1, 2, 3, 4, 5, 7})};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
   }
 }
@@ -453,7 +453,7 @@ TEST_F(RepeatJoinStringTest, SlicedStringsColumnWithNullsWithScalarRepeatTimes)
                              "íí",
                              "",
                              "Hello World"},
-                            null_at({1, 3, 5})};
+                            nulls_at({1, 3, 5})};
 
   // Sliced the first half of the column.
   {
@@ -495,9 +495,9 @@ TEST_F(RepeatJoinStringTest, SlicedStringsColumnWithNullsWithColumnRepeatTimes)
                              "íí",
                              "",
                              "Hello World"},
-                            null_at({1, 3, 5})};
+                            nulls_at({1, 3, 5})};
 
-  auto const repeat_times = INT_COL{{1, 2, null, -1, null, 1, 2, null, -5, 0}, null_at({2, 4, 7})};
+  auto const repeat_times = INT_COL{{1, 2, null, -1, null, 1, 2, null, -5, 0}, nulls_at({2, 4, 7})};
 
   // Sliced the first half of the column.
   {
@@ -505,7 +505,7 @@ TEST_F(RepeatJoinStringTest, SlicedStringsColumnWithNullsWithColumnRepeatTimes)
     auto const sliced_rtimes = cudf::slice(repeat_times, {0, 3})[0];
     auto const results =
       cudf::strings::repeat_strings(cudf::strings_column_view(sliced_strs), sliced_rtimes);
-    auto const expected = STR_COL{{"0a0b0c", "" /*NULL*/, "" /*NULL*/}, null_at({1, 2})};
+    auto const expected = STR_COL{{"0a0b0c", "" /*NULL*/, "" /*NULL*/}, nulls_at({1, 2})};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
   }
 
@@ -516,7 +516,7 @@ TEST_F(RepeatJoinStringTest, SlicedStringsColumnWithNullsWithColumnRepeatTimes)
     auto const results =
       cudf::strings::repeat_strings(cudf::strings_column_view(sliced_strs), sliced_rtimes);
     auto const expected = STR_COL{{"" /*NULL*/, "" /*NULL*/, "" /*NULL*/, "" /*NULL*/, "áááááá"},
-                                  null_at({0, 1, 2, 3})};
+                                  nulls_at({0, 1, 2, 3})};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, print_all);
   }
 
