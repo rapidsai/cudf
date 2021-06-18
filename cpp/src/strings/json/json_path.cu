@@ -108,8 +108,8 @@ class parser {
   /**
    * @brief Parse an escape sequence.
    *
-   * Parse an escape sequence.  Must be a valid sequence as specified
-   * by the JSON format  https://www.json.org/json-en.html
+   * Must be a valid sequence as specified by the JSON format
+   * https://www.json.org/json-en.html
    *
    * @returns True on success or false on fail.
    */
