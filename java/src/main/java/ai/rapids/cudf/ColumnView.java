@@ -595,14 +595,21 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   public final ColumnVector[] split(int... indices) {
     ColumnView[] views = splitAsViews(indices);
+    ColumnVector[] columnVectors = new ColumnVector[views.length];
     try {
-      ColumnVector[] columnVectors = new ColumnVector[views.length];
       for (int i = 0; i < views.length; i++) {
         columnVectors[i] = views[i].copyToColumnVector();
       }
       return columnVectors;
+    } catch (Throwable t) {
+      for (ColumnVector cv : columnVectors) {
+        if (cv != null) {
+          cv.close();
+        }
+      }
+      throw t;
     } finally {
-      for (ColumnView view: views) {
+      for (ColumnView view : views) {
         view.close();
       }
     }
@@ -613,7 +620,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * according to a set of indices. No data is moved or copied.
    *
    * IMPORTANT NOTE: Nothing is copied out from the vector and the slices will only be relevant for
-   * the lifecycle of the underlying ColumnVector
+   * the lifecycle of the underlying ColumnVector.
    *
    * The "split" function divides the input column into multiple intervals
    * of rows using the splits indices values and it stores the intervals into the
