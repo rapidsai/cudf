@@ -11,7 +11,6 @@ from tlz import partition_all
 import dask
 from dask import dataframe as dd
 from dask.base import normalize_token, tokenize
-from dask.compatibility import apply
 from dask.context import _globals
 from dask.core import flatten
 from dask.dataframe.core import (
@@ -24,7 +23,7 @@ from dask.dataframe.core import (
 from dask.dataframe.utils import raise_on_meta_error
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import cull, fuse
-from dask.utils import M, OperatorMethodMixin, derived_from, funcname
+from dask.utils import M, OperatorMethodMixin, apply, derived_from, funcname
 
 import cudf
 from cudf import _lib as libcudf
