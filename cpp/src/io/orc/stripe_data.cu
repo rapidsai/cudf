@@ -928,10 +928,13 @@ static __device__ uint32_t Byte_RLE(orc_bytestream_s *bs,
         n = 0x100 - n;
         pos += n;
       }
-      if (pos > maxpos || numvals + n > maxvals) { break; }
+      printf(
+        "RGSL: pos %u maxpos %u numvals %u n %u maxvals %u \n", pos, maxpos, numvals, n, maxvals);
+      if ((numvals != 0) and (numvals + n > maxvals)) break;
+      if (pos > maxpos) break;
       numruns++;
-      numvals += n;
-      lastpos = pos;
+      ((numvals == 0) and (n > maxvals)) ? numvals = maxvals : numvals += n;
+      lastpos                                      = pos;
     }
     rle->num_runs = numruns;
     rle->num_vals = numvals;
@@ -1120,6 +1123,7 @@ __global__ void __launch_bounds__(block_size)
   if (t == 0) s->chunk = chunks[chunk_id];
   __syncthreads();
   size_t max_num_rows = s->chunk.column_num_rows;
+  if (t == 0) printf("RGSL : Max num rows in nulls is %lu \n", max_num_rows);
 
   if (is_nulldec) {
     uint32_t null_count = 0;
@@ -1146,6 +1150,7 @@ __global__ void __launch_bounds__(block_size)
         nrows           = min(nrows_max, nbytes * 8u);
         if (!nrows) {
           // Error: mark all remaining rows as null
+          printf("RGSL : Hitting error nrows_max is %u nbytes is %u\n", nrows_max, nbytes);
           nrows = nrows_max;
           if (t * 32 < nrows) { s->vals.u32[t] = 0; }
         }
@@ -1154,6 +1159,7 @@ __global__ void __launch_bounds__(block_size)
       }
       __syncthreads();
       row_in = s->chunk.start_row + s->top.nulls_desc_row;
+      // printf("RGSL : first_row %u and row_in is %u\n", first_row, row_in);
       if (row_in + nrows > first_row && row_in < first_row + max_num_rows &&
           s->chunk.valid_map_base != NULL) {
         int64_t dst_row   = row_in - first_row;
@@ -1217,6 +1223,7 @@ __global__ void __launch_bounds__(block_size)
     // Sum up the valid counts and infer null_count
     null_count = block_reduce(temp_storage.bk_storage).Sum(null_count);
     if (t == 0) {
+      printf("RGSL : null count is %u \n", null_count);
       chunks[chunk_id].null_count = null_count;
       chunks[chunk_id].skip_count = s->chunk.skip_count;
     }
@@ -1400,6 +1407,7 @@ __global__ void __launch_bounds__(block_size)
   __syncthreads();
   is_valid            = is_valid && (s->chunk.type_kind != STRUCT);
   size_t max_num_rows = s->chunk.column_num_rows;
+  if (t == 0) printf("RGSL : Max num rows in decoding is %lu \n", max_num_rows);
   if (t == 0 and is_valid) {
     // If we have an index, seek to the initial run and update row positions
     if (num_rowgroups > 0) {
@@ -1433,6 +1441,7 @@ __global__ void __launch_bounds__(block_size)
 
     bytestream_init(&s->bs, s->chunk.streams[CI_DATA], s->chunk.strm_len[CI_DATA]);
     bytestream_init(&s->bs2, s->chunk.streams[CI_DATA2], s->chunk.strm_len[CI_DATA2]);
+    printf("RGSL : current row %u and end row %u\n", s->top.data.cur_row, s->top.data.end_row);
   }
   __syncthreads();
 
@@ -1602,6 +1611,7 @@ __global__ void __launch_bounds__(block_size)
           numvals = Integer_RLEv1<int64_t>(bs, &s->u.rlev1, s->vals.i64, numvals, t);
         } else {
           numvals = Integer_RLEv2<int64_t>(bs, &s->u.rlev2, s->vals.i64, numvals, t);
+          if (t == 0) printf("RGSL : number of values read %u\n", numvals);
         }
         if (s->chunk.type_kind == DECIMAL) {
           // If we're using an index, we may have to drop values from the initial run
@@ -1672,10 +1682,14 @@ __global__ void __launch_bounds__(block_size)
         return;
       }
 
+      if (t == 0)
+        printf(
+          "RGSL: : max vals is %u nzcount is %u\n", s->top.data.max_vals, s->u.rowdec.nz_count);
       // Store decoded values to output
       if (t < min(min(s->top.data.max_vals, s->u.rowdec.nz_count), s->top.data.nrows) &&
           s->u.rowdec.row[t] != 0 &&
           s->top.data.cur_row + s->u.rowdec.row[t] - 1 < s->top.data.end_row) {
+        printf("RGSL  :Got into if \n");
         size_t row = s->top.data.cur_row + s->u.rowdec.row[t] - 1 - first_row;
         if (row < max_num_rows) {
           void *data_out = s->chunk.column_data_base;
@@ -1690,6 +1704,7 @@ __global__ void __launch_bounds__(block_size)
             case LONG:
             case DECIMAL:
               static_cast<uint64_t *>(data_out)[row] = s->vals.u64[t + vals_skipped];
+              printf("RGSL : Values being copied %lu\n", s->vals.u64[t + vals_skipped]);
               break;
             case SHORT:
               static_cast<uint16_t *>(data_out)[row] =
