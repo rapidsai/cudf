@@ -29,8 +29,6 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/table/table.hpp>
 
-#include <rmm/device_uvector.hpp>
-
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
 
@@ -59,8 +57,20 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   {
     auto typed_data = static_cast<char*>(data.data());
     auto typed_mask = static_cast<char*>(mask.data());
-    thrust::sequence(thrust::device, typed_data, typed_data + data_size());
-    thrust::sequence(thrust::device, typed_mask, typed_mask + mask_size());
+    std::vector<char> h_data(data_size());
+    thrust::sequence(h_data.begin(), h_data.end());
+    std::vector<char> h_mask(mask_size());
+    thrust::sequence(h_mask.begin(), h_mask.end());
+    CUDA_TRY(cudaMemcpyAsync(typed_data,
+                             h_data.data(),
+                             data_size(),
+                             cudaMemcpyHostToDevice,
+                             rmm::cuda_stream_default.value()));
+    CUDA_TRY(cudaMemcpyAsync(typed_mask,
+                             h_mask.data(),
+                             mask_size(),
+                             cudaMemcpyHostToDevice,
+                             rmm::cuda_stream_default.value()));
   }
 
   cudf::size_type num_elements() { return _num_elements; }
@@ -703,7 +713,7 @@ TEST_F(ListsColumnTest, ConcatenateEmptyLists)
   }
 
   {
-    cudf::test::lists_column_wrapper<int> a{{LCW{}}};
+    cudf::test::lists_column_wrapper<int> a{LCW{}};
     cudf::test::lists_column_wrapper<int> b{4, 5, 6, 7};
     cudf::test::lists_column_wrapper<int> expected{LCW{}, {4, 5, 6, 7}};
 
@@ -713,7 +723,7 @@ TEST_F(ListsColumnTest, ConcatenateEmptyLists)
   }
 
   {
-    cudf::test::lists_column_wrapper<int> a{{LCW{}}}, b{{LCW{}}}, c{{LCW{}}};
+    cudf::test::lists_column_wrapper<int> a{LCW{}}, b{LCW{}}, c{LCW{}};
     cudf::test::lists_column_wrapper<int> d{4, 5, 6, 7};
     cudf::test::lists_column_wrapper<int> expected{LCW{}, LCW{}, LCW{}, {4, 5, 6, 7}};
 
@@ -724,7 +734,7 @@ TEST_F(ListsColumnTest, ConcatenateEmptyLists)
 
   {
     cudf::test::lists_column_wrapper<int> a{1, 2};
-    cudf::test::lists_column_wrapper<int> b{{LCW{}}}, c{{LCW{}}};
+    cudf::test::lists_column_wrapper<int> b{LCW{}}, c{LCW{}};
     cudf::test::lists_column_wrapper<int> d{4, 5, 6, 7};
     cudf::test::lists_column_wrapper<int> expected{{1, 2}, LCW{}, LCW{}, {4, 5, 6, 7}};
 
@@ -797,10 +807,10 @@ TEST_F(ListsColumnTest, ConcatenateNestedEmptyLists)
   // empty lists in lists_column_wrapper documentation
   using LCW = cudf::test::lists_column_wrapper<T>;
   {
-    cudf::test::lists_column_wrapper<T> a{{{LCW{}}}, {{0, 1}, {2, 3}}};
+    cudf::test::lists_column_wrapper<T> a{{LCW{}}, {{0, 1}, {2, 3}}};
     cudf::test::lists_column_wrapper<int> b{{{6, 7}}, {LCW{}, {11, 12}}};
     cudf::test::lists_column_wrapper<int> expected{
-      {{LCW{}}}, {{0, 1}, {2, 3}}, {{6, 7}}, {LCW{}, {11, 12}}};
+      {LCW{}}, {{0, 1}, {2, 3}}, {{6, 7}}, {LCW{}, {11, 12}}};
 
     auto result = cudf::concatenate(std::vector<column_view>({a, b}));
 
@@ -810,23 +820,23 @@ TEST_F(ListsColumnTest, ConcatenateNestedEmptyLists)
   {
     cudf::test::lists_column_wrapper<int> a{
       {{{0, 1, 2}, LCW{}}, {{5}, {6, 7}}, {{8, 9}}},
-      {{{LCW{}}}, {{17, 18}, {19, 20}}},
-      {{{LCW{}}}},
+      {{LCW{}}, {{17, 18}, {19, 20}}},
+      {{LCW{}}},
       {{{50}, {51, 52}}, {{53, 54}, {55, 16, 17}}, {{59, 60}}}};
 
     cudf::test::lists_column_wrapper<int> b{
       {{{21, 22}, {23, 24}}, {LCW{}, {26, 27}}, {{28, 29, 30}}},
       {{{31, 32}, {33, 34}}, {{35, 36}, {37, 38}, {1, 2}}, {{39, 40}}},
-      {{{LCW{}}}}};
+      {{LCW{}}}};
 
     cudf::test::lists_column_wrapper<int> expected{
       {{{0, 1, 2}, LCW{}}, {{5}, {6, 7}}, {{8, 9}}},
-      {{{LCW{}}}, {{17, 18}, {19, 20}}},
-      {{{LCW{}}}},
+      {{LCW{}}, {{17, 18}, {19, 20}}},
+      {{LCW{}}},
       {{{50}, {51, 52}}, {{53, 54}, {55, 16, 17}}, {{59, 60}}},
       {{{21, 22}, {23, 24}}, {LCW{}, {26, 27}}, {{28, 29, 30}}},
       {{{31, 32}, {33, 34}}, {{35, 36}, {37, 38}, {1, 2}}, {{39, 40}}},
-      {{{LCW{}}}}};
+      {{LCW{}}}};
 
     auto result = cudf::concatenate(std::vector<column_view>({a, b}));
 
