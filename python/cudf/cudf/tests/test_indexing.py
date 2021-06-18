@@ -1401,6 +1401,10 @@ def test_iloc_with_lists(data, key):
     gsr = cudf.Series(data)
     assert_eq(psr.iloc[key], gsr.iloc[key])
 
+    pdf = pd.DataFrame({"a": data, "b": data})
+    gdf = cudf.DataFrame({"a": data, "b": data})
+    assert_eq(pdf.iloc[key], gdf.iloc[key])
+
 
 @pytest.mark.parametrize("key", [5, -10, "0", "a", np.array(5), np.array("a")])
 def test_loc_bad_key_type(key):
