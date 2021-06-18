@@ -607,15 +607,7 @@ def is_decimal_dtype(obj):
     bool
         Whether or not the array-like or dtype is of the decimal dtype.
     """
-    return (
-        type(obj) is cudf.core.dtypes.Decimal64Dtype
-        or obj is cudf.core.dtypes.Decimal64Dtype
-        or (
-            isinstance(obj, str)
-            and obj == cudf.core.dtypes.Decimal64Dtype.name
-        )
-        or (hasattr(obj, "dtype") and is_decimal_dtype(obj.dtype))
-    )
+    return is_decimal32_dtype(obj) or is_decimal64_dtype(obj)
 
 
 def is_interval_dtype(obj):
@@ -641,4 +633,28 @@ def is_interval_dtype(obj):
             isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
         )
         or (hasattr(obj, "dtype") and is_interval_dtype(obj.dtype))
+    )
+
+
+def is_decimal32_dtype(obj):
+    return (
+        type(obj) is cudf.core.dtypes.Decimal32Dtype
+        or obj is cudf.core.dtypes.Decimal32Dtype
+        or (
+            isinstance(obj, str)
+            and obj == cudf.core.dtypes.Decimal32Dtype.name
+        )
+        or (hasattr(obj, "dtype") and is_decimal32_dtype(obj.dtype))
+    )
+
+
+def is_decimal64_dtype(obj):
+    return (
+        type(obj) is cudf.core.dtypes.Decimal64Dtype
+        or obj is cudf.core.dtypes.Decimal64Dtype
+        or (
+            isinstance(obj, str)
+            and obj == cudf.core.dtypes.Decimal64Dtype.name
+        )
+        or (hasattr(obj, "dtype") and is_decimal64_dtype(obj.dtype))
     )

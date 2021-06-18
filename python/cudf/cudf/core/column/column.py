@@ -47,30 +47,30 @@ from cudf.core.dtypes import (
 )
 from cudf.utils import ioutils, utils
 from cudf.utils.dtypes import (
-    _is_non_decimal_numeric_dtype,
-    _is_scalar_or_zero_d_array,
     check_cast_unsupported_dtype,
     cudf_dtype_from_pa_type,
     get_time_unit,
-    is_categorical_dtype,
-    is_decimal32_dtype,
-    is_decimal64_dtype,
-    is_decimal_dtype,
-    is_interval_dtype,
-    is_list_dtype,
-    is_scalar,
-    is_string_dtype,
-    is_struct_dtype,
     min_unsigned_type,
     np_to_pa_dtype,
 )
 from cudf.utils.utils import mask_dtype
 
 from ...api.types import (
+    _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
     infer_dtype,
     is_bool_dtype,
+    is_categorical_dtype,
+    is_decimal32_dtype,
+    is_decimal64_dtype,
+    is_decimal_dtype,
     is_dtype_equal,
     is_integer_dtype,
+    is_interval_dtype,
+    is_list_dtype,
+    is_scalar,
+    is_string_dtype,
+    is_struct_dtype,
     pandas_dtype,
 )
 
@@ -975,7 +975,19 @@ class ColumnBase(Column, Serializable):
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
+    ) -> Union[
+        "cudf.core.column.Decimal32Column", "cudf.core.column.Decimal64Column"
+    ]:
+        raise NotImplementedError
+
+    def as_decimal64_column(
+        self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.Decimal64Column":
+        raise NotImplementedError
+
+    def as_decimal32_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.Decimal32Column":
         raise NotImplementedError
 
     def apply_boolean_mask(self, mask) -> ColumnBase:

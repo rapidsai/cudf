@@ -20,8 +20,8 @@ from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype
 from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
-from .numerical_base import NumericalBaseColumn
 from ...api.types import is_integer_dtype
+from .numerical_base import NumericalBaseColumn
 
 
 class Decimal32Column(NumericalBaseColumn):
@@ -268,8 +268,8 @@ class Decimal64Column(NumericalBaseColumn):
         )
 
     def _with_type_metadata(
-        self: "cudf.core.column.DecimalColumn", dtype: Dtype
-    ) -> "cudf.core.column.DecimalColumn":
+        self: "cudf.core.column.Decimal64Column", dtype: Dtype
+    ) -> "cudf.core.column.Decimal64Column":
         if isinstance(dtype, Decimal64Dtype):
             self.dtype.precision = dtype.precision
 
