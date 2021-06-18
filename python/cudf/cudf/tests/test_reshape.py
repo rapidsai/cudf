@@ -416,7 +416,7 @@ def test_unstack_multiindex(level):
     pdf = pd.DataFrame(
         {
             "foo": ["one", "one", "one", "two", "two", "two"],
-            "bar": ["A", "B", "C", "A", "B", "C"],
+            "bar": pd.Categorical(["A", "B", "C", "A", "B", "C"]),
             "baz": [1, 2, 3, 4, 5, 6],
             "zoo": ["x", "y", "z", "q", "w", "t"],
         }
@@ -436,6 +436,7 @@ def test_unstack_multiindex(level):
     [
         pd.Index(range(0, 5), name=None),
         pd.Index(range(0, 5), name="row_index"),
+        pd.CategoricalIndex(["d", "e", "f", "g", "h"]),
     ],
 )
 @pytest.mark.parametrize(
@@ -472,6 +473,20 @@ def test_unstack_index_invalid():
         ),
     ):
         gdf.unstack()
+
+
+def test_unstack_categorical_index():
+    pdf = pd.DataFrame(
+        {
+            "foo": pd.Categorical(list("abcabc")),
+            "bar": [1, 2, 3, 4, 5, 6],
+            "baz": np.random.rand(6),
+        }
+    ).set_index(["foo", "bar"])
+
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(pdf.unstack("foo"), gdf.unstack("foo"))
 
 
 def test_pivot_duplicate_error():
