@@ -106,22 +106,19 @@ get_conditional_join_indices(table_view const& left,
   rmm::device_scalar<size_type> size(0, stream, mr);
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   detail::grid_1d config(left_table->num_rows(), block_size);
+  auto const shmem_size_per_block = plan.dev_plan.shmem_per_thread * config.num_threads_per_block;
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
   join_kind KernelJoinKind = JoinKind == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : JoinKind;
   if (has_nulls) {
-    compute_conditional_join_output_size<block_size, true><<<config.num_blocks,
-                                                             config.num_threads_per_block,
-                                                             plan.dev_plan.shmem_per_thread,
-                                                             stream.value()>>>(
-      *left_table, *right_table, KernelJoinKind, compare_nulls, plan.dev_plan, size.data());
+    compute_conditional_join_output_size<block_size, true>
+      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+        *left_table, *right_table, KernelJoinKind, compare_nulls, plan.dev_plan, size.data());
   } else {
-    compute_conditional_join_output_size<block_size, false><<<config.num_blocks,
-                                                              config.num_threads_per_block,
-                                                              plan.dev_plan.shmem_per_thread,
-                                                              stream.value()>>>(
-      *left_table, *right_table, KernelJoinKind, compare_nulls, plan.dev_plan, size.data());
+    compute_conditional_join_output_size<block_size, false>
+      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+        *left_table, *right_table, KernelJoinKind, compare_nulls, plan.dev_plan, size.data());
   }
   CHECK_CUDA(stream.value());
 
@@ -142,32 +139,28 @@ get_conditional_join_indices(table_view const& left,
   const auto& join_output_r = right_indices->data();
   if (has_nulls) {
     conditional_join<block_size, DEFAULT_JOIN_CACHE_SIZE, true>
-      <<<config.num_blocks,
-         config.num_threads_per_block,
-         plan.dev_plan.shmem_per_thread,
-         stream.value()>>>(*left_table,
-                           *right_table,
-                           KernelJoinKind,
-                           compare_nulls,
-                           join_output_l,
-                           join_output_r,
-                           write_index.data(),
-                           plan.dev_plan,
-                           join_size);
+      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+        *left_table,
+        *right_table,
+        KernelJoinKind,
+        compare_nulls,
+        join_output_l,
+        join_output_r,
+        write_index.data(),
+        plan.dev_plan,
+        join_size);
   } else {
     conditional_join<block_size, DEFAULT_JOIN_CACHE_SIZE, false>
-      <<<config.num_blocks,
-         config.num_threads_per_block,
-         plan.dev_plan.shmem_per_thread,
-         stream.value()>>>(*left_table,
-                           *right_table,
-                           KernelJoinKind,
-                           compare_nulls,
-                           join_output_l,
-                           join_output_r,
-                           write_index.data(),
-                           plan.dev_plan,
-                           join_size);
+      <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
+        *left_table,
+        *right_table,
+        KernelJoinKind,
+        compare_nulls,
+        join_output_l,
+        join_output_r,
+        write_index.data(),
+        plan.dev_plan,
+        join_size);
   }
 
   CHECK_CUDA(stream.value());
