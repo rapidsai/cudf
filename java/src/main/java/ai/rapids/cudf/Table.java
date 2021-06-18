@@ -922,9 +922,9 @@ public final class Table implements AutoCloseable {
 
   /**
    * This is an evolving API and most likely be removed in future releases. Please use with the
-   * caveat that this will not exist in the near future
-   * @param options the parquet writer options.
-   * @param consumer a class that will be called when host buffers are ready with parquet
+   * caveat that this will not exist in the near future.
+   * @param options the Parquet writer options.
+   * @param consumer a class that will be called when host buffers are ready with Parquet
    *                 formatted data in them.
    * @param columnViews ColumnViews to write to Parquet
    */
