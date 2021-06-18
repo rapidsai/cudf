@@ -73,30 +73,30 @@ TEST_F(ArrowIOTest, URIFileSystem)
 
 TEST_F(ArrowIOTest, S3FileSystem)
 {
-  std::string s3_uri = "s3://rapidsai-data/cudf/test/tips.parquet?region=us-east-2";
-  std::unique_ptr<cudf::io::arrow_io_source> datasource =
-    std::make_unique<cudf::io::arrow_io_source>(s3_uri);
+  // std::string s3_uri = "s3://rapidsai-data/cudf/test/tips.parquet?region=us-east-2";
+  // std::unique_ptr<cudf::io::arrow_io_source> datasource =
+  //   std::make_unique<cudf::io::arrow_io_source>(s3_uri);
 
-  // Populate the Parquet Reader Options
-  cudf::io::source_info src(datasource.get());
-  std::vector<std::string> single_column;
-  single_column.insert(single_column.begin(), "total_bill");
-  cudf::io::parquet_reader_options_builder builder(src);
-  cudf::io::parquet_reader_options options = builder.columns(single_column).build();
+  // // Populate the Parquet Reader Options
+  // cudf::io::source_info src(datasource.get());
+  // std::vector<std::string> single_column;
+  // single_column.insert(single_column.begin(), "total_bill");
+  // cudf::io::parquet_reader_options_builder builder(src);
+  // cudf::io::parquet_reader_options options = builder.columns(single_column).build();
 
-  // Read the Parquet file from S3
-  cudf::io::table_with_metadata tbl = cudf::io::read_parquet(options);
+  // // Read the Parquet file from S3
+  // cudf::io::table_with_metadata tbl = cudf::io::read_parquet(options);
 
-  ASSERT_EQ(1, tbl.tbl->num_columns());  // Only single column specified in reader_options
-  ASSERT_EQ(244, tbl.tbl->num_rows());   // known number of rows from the S3 file
+  // ASSERT_EQ(1, tbl.tbl->num_columns());  // Only single column specified in reader_options
+  // ASSERT_EQ(244, tbl.tbl->num_rows());   // known number of rows from the S3 file
 }
 
 #else
 
 TEST_F(ArrowIOTest, S3URIWhenNotEnabled)
 {
-  std::string s3_uri = "s3://rapidsai-data/cudf/test/tips.parquet?region=us-east-2";
-  EXPECT_THROW(std::make_unique<cudf::io::arrow_io_source>(s3_uri), cudf::logic_error);
+  // std::string s3_uri = "s3://rapidsai-data/cudf/test/tips.parquet?region=us-east-2";
+  // EXPECT_THROW(std::make_unique<cudf::io::arrow_io_source>(s3_uri), cudf::logic_error);
 }
 
 #endif
