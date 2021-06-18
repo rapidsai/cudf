@@ -460,7 +460,7 @@ def _to_booleans(Column input_col, object string_true="True"):
 
     return Column.from_unique_ptr(move(c_result))
 
-
+#
 def to_booleans(Column input_col, **kwargs):
 
     return _to_booleans(input_col)
