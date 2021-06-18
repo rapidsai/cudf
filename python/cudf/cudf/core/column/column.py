@@ -1264,20 +1264,20 @@ def column_empty_like(
         dtype = column.dtype
     row_count = len(column) if newsize is None else newsize
 
-    if (
-        hasattr(column, "dtype")
-        and is_categorical_dtype(column.dtype)
-        and dtype == column.dtype
-    ):
-        column = cast("cudf.core.column.CategoricalColumn", column)
-        codes = column_empty_like(column.codes, masked=masked, newsize=newsize)
-        return build_column(
-            data=None,
-            dtype=dtype,
-            mask=codes.base_mask,
-            children=(as_column(codes.base_data, dtype=codes.dtype),),
-            size=codes.size,
-        )
+    # if (
+    #     hasattr(column, "dtype")
+    #     and is_categorical_dtype(column.dtype)
+    #     and dtype == column.dtype
+    # ):
+    #     column = cast("cudf.core.column.CategoricalColumn", column)
+    #     codes = column_empty_like(column.codes, masked=masked, newsize=newsize)
+    #     return build_column(
+    #         data=None,
+    #         dtype=dtype,
+    #         mask=codes.base_mask,
+    #         children=(as_column(codes.base_data, dtype=codes.dtype),),
+    #         size=codes.size,
+    #     )
 
     return column_empty(row_count, dtype, masked)
 
@@ -1308,12 +1308,9 @@ def column_empty(
 
     if is_categorical_dtype(dtype):
         data = None
-        children = (
-            build_column(
-                data=Buffer.empty(row_count * np.dtype("int32").itemsize),
-                dtype="int32",
-            ),
-        )
+        indices = column_empty(row_count, dtype="uint32", masked=False)
+        keys = dtype.categories._values.copy()
+        children = ( indices, keys )
     elif dtype.kind in "OU" and not is_decimal_dtype(dtype):
         data = None
         children = (
@@ -2266,15 +2263,15 @@ def _concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     # ColumnBase._concat so that all subclasses can override necessary
     # behavior. However, at the moment it's not clear what that API should look
     # like, so CategoricalColumn simply implements a minimal working API.
-    if all(is_categorical_dtype(o.dtype) for o in objs):
-        return cudf.core.column.categorical.CategoricalColumn._concat(
-            cast(
-                MutableSequence[
-                    cudf.core.column.categorical.CategoricalColumn
-                ],
-                objs,
-            )
-        )
+    # if all(is_categorical_dtype(o.dtype) for o in objs):
+    #     return cudf.core.column.categorical.CategoricalColumn._concat(
+    #         cast(
+    #             MutableSequence[
+    #                 cudf.core.column.categorical.CategoricalColumn
+    #             ],
+    #             objs,
+    #         )
+    #     )
 
     newsize = sum(map(len, objs))
     if newsize > libcudf.MAX_COLUMN_SIZE:

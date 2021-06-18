@@ -4093,7 +4093,6 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
                         cols[idx]
                         .cat()
                         ._set_categories(
-                            cols[idx].cat().categories,
                             categories[idx],
                             is_unique=True,
                         )

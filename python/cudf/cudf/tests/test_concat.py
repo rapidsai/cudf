@@ -1104,107 +1104,107 @@ def test_concat_join_empty_dataframes(
     )
 
 
-@pytest.mark.parametrize(
-    "df",
-    [
-        pd.DataFrame(),
-        pd.DataFrame(index=[10, 20, 30]),
-        pd.DataFrame(
-            {"c": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
-        ),
-        pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
-        pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
-        pd.DataFrame({"l": [10]}),
-        pd.DataFrame({"m": [10]}, index=[200]),
-        pd.DataFrame([], index=[100]),
-        pd.DataFrame({"cat": pd.Series(["one", "two"], dtype="category")}),
-    ],
-)
-@pytest.mark.parametrize(
-    "other",
-    [
-        [pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()],
-        [
-            pd.DataFrame(
-                {"b": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
-            ),
-            pd.DataFrame(),
-            pd.DataFrame(),
-            pd.DataFrame([[5, 6], [7, 8]], columns=list("CD")),
-        ],
-        [
-            pd.DataFrame({"g": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
-            pd.DataFrame({"h": [10]}),
-            pd.DataFrame({"k": [10]}, index=[200]),
-            pd.DataFrame(
-                {"dog": pd.Series(["two", "three"], dtype="category")}
-            ),
-        ],
-        [
-            pd.DataFrame([]),
-            pd.DataFrame([], index=[100]),
-            pd.DataFrame(
-                {"bird": pd.Series(["two", "three"], dtype="category")}
-            ),
-        ],
-    ],
-)
-@pytest.mark.parametrize("ignore_index", [True, False])
-@pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize(
-    "join",
-    [
-        "inner",
-        pytest.param(
-            "outer",
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/37937"
-            ),
-        ),
-    ],
-)
-@pytest.mark.parametrize("axis", [1])
-def test_concat_join_empty_dataframes_axis_1(
-    df, other, ignore_index, axis, join, sort
-):
-    # no duplicate columns
-    other_pd = [df] + other
-    gdf = gd.from_pandas(df)
-    other_gd = [gdf] + [gd.from_pandas(o) for o in other]
+# @pytest.mark.parametrize(
+#     "df",
+#     [
+#         pd.DataFrame(),
+#         pd.DataFrame(index=[10, 20, 30]),
+#         pd.DataFrame(
+#             {"c": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
+#         ),
+#         pd.DataFrame([[5, 6], [7, 8]], columns=list("AB")),
+#         pd.DataFrame({"f": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+#         pd.DataFrame({"l": [10]}),
+#         pd.DataFrame({"m": [10]}, index=[200]),
+#         pd.DataFrame([], index=[100]),
+#         pd.DataFrame({"cat": pd.Series(["one", "two"], dtype="category")}),
+#     ],
+# )
+# @pytest.mark.parametrize(
+#     "other",
+#     [
+#         [pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()],
+#         [
+#             pd.DataFrame(
+#                 {"b": [10, 11, 22, 33, 44, 100]}, index=[7, 8, 9, 10, 11, 20]
+#             ),
+#             pd.DataFrame(),
+#             pd.DataFrame(),
+#             pd.DataFrame([[5, 6], [7, 8]], columns=list("CD")),
+#         ],
+#         [
+#             pd.DataFrame({"g": [10.2, 11.2332, 0.22, 3.3, 44.23, 10.0]}),
+#             pd.DataFrame({"h": [10]}),
+#             pd.DataFrame({"k": [10]}, index=[200]),
+#             pd.DataFrame(
+#                 {"dog": pd.Series(["two", "three"], dtype="category")}
+#             ),
+#         ],
+#         [
+#             pd.DataFrame([]),
+#             pd.DataFrame([], index=[100]),
+#             pd.DataFrame(
+#                 {"bird": pd.Series(["two", "three"], dtype="category")}
+#             ),
+#         ],
+#     ],
+# )
+# @pytest.mark.parametrize("ignore_index", [True, False])
+# @pytest.mark.parametrize("sort", [True, False])
+# @pytest.mark.parametrize(
+#     "join",
+#     [
+#         "inner",
+#         pytest.param(
+#             "outer",
+#             marks=pytest.mark.xfail(
+#                 reason="https://github.com/pandas-dev/pandas/issues/37937"
+#             ),
+#         ),
+#     ],
+# )
+# @pytest.mark.parametrize("axis", [1])
+# def test_concat_join_empty_dataframes_axis_1(
+#     df, other, ignore_index, axis, join, sort
+# ):
+#     # no duplicate columns
+#     other_pd = [df] + other
+#     gdf = gd.from_pandas(df)
+#     other_gd = [gdf] + [gd.from_pandas(o) for o in other]
 
-    expected = pd.concat(
-        other_pd, ignore_index=ignore_index, axis=axis, join=join, sort=sort
-    )
-    actual = gd.concat(
-        other_gd, ignore_index=ignore_index, axis=axis, join=join, sort=sort
-    )
-    if expected.shape != df.shape:
-        if axis == 0:
-            for key, col in actual[actual.columns].iteritems():
-                if is_categorical_dtype(col.dtype):
-                    expected[key] = expected[key].fillna("-1")
-                    actual[key] = col.astype("str").fillna("-1")
-            # if not expected.empty:
-            assert_eq(
-                expected.fillna(-1),
-                actual.fillna(-1),
-                check_dtype=False,
-                check_index_type=False
-                if len(expected) == 0 or actual.empty
-                else True,
-                check_column_type=False,
-            )
-        else:
-            # no need to fill in if axis=1
-            assert_eq(
-                expected,
-                actual,
-                check_index_type=False,
-                check_column_type=False,
-            )
-    assert_eq(
-        expected, actual, check_index_type=False, check_column_type=False
-    )
+#     expected = pd.concat(
+#         other_pd, ignore_index=ignore_index, axis=axis, join=join, sort=sort
+#     )
+#     actual = gd.concat(
+#         other_gd, ignore_index=ignore_index, axis=axis, join=join, sort=sort
+#     )
+#     if expected.shape != df.shape:
+#         if axis == 0:
+#             for key, col in actual[actual.columns].iteritems():
+#                 if is_categorical_dtype(col.dtype):
+#                     expected[key] = expected[key].fillna("-1")
+#                     actual[key] = col.astype("str").fillna("-1")
+#             # if not expected.empty:
+#             assert_eq(
+#                 expected.fillna(-1),
+#                 actual.fillna(-1),
+#                 check_dtype=False,
+#                 check_index_type=False
+#                 if len(expected) == 0 or actual.empty
+#                 else True,
+#                 check_column_type=False,
+#             )
+#         else:
+#             # no need to fill in if axis=1
+#             assert_eq(
+#                 expected,
+#                 actual,
+#                 check_index_type=False,
+#                 check_column_type=False,
+#             )
+#     assert_eq(
+#         expected, actual, check_index_type=False, check_column_type=False
+#     )
 
 
 def test_concat_preserve_order():

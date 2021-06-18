@@ -544,7 +544,7 @@ def melt(
 
     mdata[var_name] = cudf.Series(
         cudf.core.column.build_categorical_column(
-            categories=value_vars,
+            categories=cudf.core.column.as_column(value_vars),
             codes=cudf.core.column.as_column(
                 temp._column.base_data, dtype=temp._column.dtype
             ),
