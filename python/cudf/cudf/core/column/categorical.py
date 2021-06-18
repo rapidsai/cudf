@@ -574,13 +574,12 @@ class CategoricalAccessor(ColumnMethodsMixin):
             )
 
 
-        out_col = self._column
         if not type(self._column.children[1]) == type(new_categories):
             # Return a new categorical column of same size, but null-filled
             out_col = _null_filled_categorical_column_like(self._column, 
                                                         dtype=CategoricalDtype(
                                                             new_categories,
-                                                            ordered=self.ordered
+                                                            ordered=ordered
                                                         )
                                                         )
         elif (
@@ -590,6 +589,8 @@ class CategoricalAccessor(ColumnMethodsMixin):
                 out_col = self._set_categories(
                     new_categories, ordered=ordered,
                 )
+        else:
+            out_col = self._column
         return self._return_or_inplace(out_col, inplace=inplace)
 
     def reorder_categories(
@@ -719,7 +720,6 @@ class CategoricalAccessor(ColumnMethodsMixin):
             new_categories = drop_duplicates(Table({None: new_categories}))._columns[0]
 
         col = self._column
-
         new_categories_as_common_type = new_categories
         if isinstance(new_categories, cudf.core.column.NumericalColumn) and not new_categories.dtype == col.children[1].dtype:
             common_type = find_common_type([col.children[1].dtype, new_categories.dtype])
@@ -735,18 +735,19 @@ class CategoricalAccessor(ColumnMethodsMixin):
             )
             new_categories_as_common_type = new_categories.astype(common_type)
             
-        new_col = cpp_set_categories(col, new_categories_as_common_type)
-        new_col = column.build_column(
-            dtype=CategoricalDtype(new_categories, ordered=ordered),
-            data=None,
-            size=new_col.size,
-            mask=new_col.mask,
-            offset=new_col.offset,
-            null_count=new_col.null_count,
-            children=new_col.base_children
+        res_col = cpp_set_categories(col, new_categories_as_common_type)
+        # Update with `ordered` info
+        res_col = column.build_categorical_column(
+            categories=res_col.children[1],
+            codes=res_col.children[0],
+            mask=res_col.base_mask,
+            size=res_col.base_size,
+            offset=res_col.offset,
+            null_count=res_col.null_count,
+            ordered=ordered
         )
 
-        return new_col
+        return res_col
 
     def _decategorize(self) -> ColumnBase:
         return self._column._get_decategorized_column()
@@ -1211,59 +1212,59 @@ class CategoricalColumn(column.ColumnBase):
 
         return result
 
-    def fillna(
-        self, fill_value: Any = None, method: Any = None, dtype: Dtype = None
-    ) -> CategoricalColumn:
-        """
-        Fill null values with *fill_value*
-        """
-        if not self.nullable:
-            return self
+    # def fillna(
+    #     self, fill_value: Any = None, method: Any = None, dtype: Dtype = None
+    # ) -> CategoricalColumn:
+    #     """
+    #     Fill null values with *fill_value*
+    #     """
+    #     if not self.nullable:
+    #         return self
 
-        if fill_value is not None:
-            fill_is_scalar = np.isscalar(fill_value)
+    #     if fill_value is not None:
+    #         fill_is_scalar = np.isscalar(fill_value)
 
-            if fill_is_scalar:
-                if fill_value == self.default_na_value():
-                    fill_value = self.codes.dtype.type(fill_value)
-                else:
-                    try:
-                        fill_value = self._encode(fill_value)
-                        fill_value = self.codes.dtype.type(fill_value)
-                    except (ValueError) as err:
-                        err_msg = "fill value must be in categories"
-                        raise ValueError(err_msg) from err
-            else:
-                fill_value = column.as_column(fill_value, nan_as_null=False)
-                if isinstance(fill_value, CategoricalColumn):
-                    if self.dtype != fill_value.dtype:
-                        raise ValueError(
-                            "Cannot set a Categorical with another, "
-                            "without identical categories"
-                        )
-                # TODO: only required if fill_value has a subset of the
-                # categories:
-                fill_value = fill_value.cat()._set_categories(
-                    fill_value.cat().categories,
-                    self.categories,
-                    is_unique=True,
-                )
-                fill_value = column.as_column(fill_value.codes).astype(
-                    self.codes.dtype
-                )
+    #         if fill_is_scalar:
+    #             if fill_value == self.default_na_value():
+    #                 fill_value = self.codes.dtype.type(fill_value)
+    #             else:
+    #                 try:
+    #                     fill_value = self._encode(fill_value)
+    #                     fill_value = self.codes.dtype.type(fill_value)
+    #                 except (ValueError) as err:
+    #                     err_msg = "fill value must be in categories"
+    #                     raise ValueError(err_msg) from err
+    #         else:
+    #             fill_value = column.as_column(fill_value, nan_as_null=False)
+    #             if isinstance(fill_value, CategoricalColumn):
+    #                 if self.dtype != fill_value.dtype:
+    #                     raise ValueError(
+    #                         "Cannot set a Categorical with another, "
+    #                         "without identical categories"
+    #                     )
+    #             # TODO: only required if fill_value has a subset of the
+    #             # categories:
+    #             fill_value = fill_value.cat()._set_categories(
+    #                 fill_value.cat().categories,
+    #                 self.categories,
+    #                 is_unique=True,
+    #             )
+    #             fill_value = column.as_column(fill_value.codes).astype(
+    #                 self.codes.dtype
+    #             )
 
-        result = super().fillna(value=fill_value, method=method)
+    #     result = super().fillna(value=fill_value, method=method)
 
-        result = column.build_categorical_column(
-            categories=self.dtype.categories._values,
-            codes=column.as_column(result.base_data, dtype=result.dtype),
-            offset=result.offset,
-            size=result.size,
-            mask=result.base_mask,
-            ordered=self.dtype.ordered,
-        )
+    #     result = column.build_categorical_column(
+    #         categories=self.dtype.categories._values,
+    #         codes=column.as_column(result.base_data, dtype=result.dtype),
+    #         offset=result.offset,
+    #         size=result.size,
+    #         mask=result.base_mask,
+    #         ordered=self.dtype.ordered,
+    #     )
 
-        return result
+    #     return result
 
     def find_first_value(
         self, value: ScalarLike, closest: bool = False
