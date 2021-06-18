@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 #include "file_io_utilities.hpp"
+#include <cudf/detail/nvtx/ranges.hpp>
 
+#include <future>
 #include <rmm/device_buffer.hpp>
 
 #include <dlfcn.h>
@@ -174,31 +176,30 @@ std::unique_ptr<datasource::buffer> cufile_input_impl::read(size_t offset,
                                                             size_t size,
                                                             rmm::cuda_stream_view stream)
 {
-  // std::cout << "cufile read" << std::endl;
+  CUDF_FUNC_RANGE();
   rmm::device_buffer out_data(size, stream);
-  stream.synchronize();
-  auto read_slice =
-    [](decltype(cuFileRead) *fn, CUfileHandle_t cfd, void *dst, size_t size, size_t offset) {
-      auto func = *fn;
-      func(cfd, dst, size, offset, 0);
-    };
-  // std::vector<std::thread> threads;
-  // constexpr size_t n_threads = 1;
-  // for (size_t t = 0; t < n_threads; ++t) {
-  //   size_t slice_size   = size / n_threads;
-  //   size_t slice_offset = slice_size * t;
-  //   void *dst_slice     = reinterpret_cast<char *>(out_data.data()) + slice_offset;
 
-  //   if (t == n_threads - 1) { slice_size += size % n_threads; }
-  //   threads.emplace_back(read_slice, shim->read, dst_slice, slice_size, offset + slice_offset);
-  // }
-  // for (auto &thread : threads) { thread.join(); }
+  int device;
+  cudaGetDevice(&device);
 
-  std::thread(read_slice, shim->read, cf_file.handle(), out_data.data(), size, offset).join();
-  // read_slice(shim->read, cf_file.handle(), out_data.data(), size, offset);
+  auto read_slice = [=](void *dst, size_t size, size_t offset) {
+    cudaSetDevice(device);
+    shim->read(cf_file.handle(), dst, size, offset, 0);
+  };
 
-  // CUDF_EXPECTS(shim->read(cf_file.handle(), out_data.data(), size, offset, 0) != -1,
-  //              "cuFile error reading from a file");
+  std::vector<std::thread> threads;
+  constexpr size_t n_threads = 16;
+  size_t slice_size          = size / n_threads;
+  size_t slice_offset        = 0;
+  for (size_t t = 0; t < n_threads; ++t) {
+    void *dst_slice = reinterpret_cast<char *>(out_data.data()) + slice_offset;
+
+    if (t == n_threads - 1) { slice_size += size % n_threads; }
+    threads.emplace_back(read_slice, dst_slice, slice_size, offset + slice_offset);
+
+    slice_offset += slice_size;
+  }
+  for (auto &thread : threads) { thread.join(); }
 
   return datasource::buffer::create(std::move(out_data));
 }
