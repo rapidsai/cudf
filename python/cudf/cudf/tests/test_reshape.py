@@ -475,20 +475,6 @@ def test_unstack_index_invalid():
         gdf.unstack()
 
 
-def test_unstack_categorical_index():
-    pdf = pd.DataFrame(
-        {
-            "foo": pd.Categorical(list("abcabc")),
-            "bar": [1, 2, 3, 4, 5, 6],
-            "baz": np.random.rand(6),
-        }
-    ).set_index(["foo", "bar"])
-
-    gdf = cudf.from_pandas(pdf)
-
-    assert_eq(pdf.unstack("foo"), gdf.unstack("foo"))
-
-
 def test_pivot_duplicate_error():
     gdf = cudf.DataFrame(
         {"a": [0, 1, 2, 2], "b": [1, 2, 3, 3], "d": [1, 2, 3, 4]}
