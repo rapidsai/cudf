@@ -253,8 +253,6 @@ __global__ void compute_conditional_join_output_size(table_device_view left_tabl
     for (cudf::size_type right_row_index = 0; right_row_index < right_num_rows; right_row_index++) {
       auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
       evaluator.evaluate(output_dest, left_row_index, right_row_index, 0);
-      // TODO: Handle null equality propertly, right now I'm just assuming
-      // that null translates to null.
       if (output_dest.is_valid() && output_dest.value()) {
         if ((JoinKind != join_kind::LEFT_ANTI_JOIN) &&
             !(JoinKind == join_kind::LEFT_SEMI_JOIN && found_match)) {
@@ -496,10 +494,10 @@ __global__ void conditional_join(table_device_view left_table,
   __shared__ cudf::size_type join_shared_l[num_warps][output_cache_size];
   __shared__ cudf::size_type join_shared_r[num_warps][output_cache_size];
 
-  // The (required) extern storage of the shared memory array leads to
-  // conflicting declarations between different templates. The easiest
-  // workaround is to declare an arbitrary (here char) array type then cast it
-  // after the fact to the appropriate type.
+  // Normally the casting of a shared memory array is used to create multiple
+  // arrays of different types from the shared memory buffer, but here it is
+  // used to circumvent conflicts between arrays of different types between
+  // different template instantiations due to the extern specifier.
   extern __shared__ char raw_intermediate_storage[];
   cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
     reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
@@ -523,11 +521,10 @@ __global__ void conditional_join(table_device_view left_table,
 
   if (left_row_index < left_num_rows) {
     bool found_match = false;
-    for (size_type right_row_index(0); right_row_index < right_num_rows; right_row_index++) {
+    for (size_type right_row_index(0); right_row_index < right_num_rows; ++right_row_index) {
       auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
       evaluator.evaluate(output_dest, left_row_index, right_row_index, 0);
 
-      // TODO: Handle null equality properly.
       if (output_dest.is_valid() && output_dest.value()) {
         // If the rows are equal, then we have found a true match
         // In the case of left anti joins we only add indices from left after

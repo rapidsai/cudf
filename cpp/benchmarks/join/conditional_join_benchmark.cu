@@ -122,7 +122,7 @@ static void BM_join(benchmark::State& state, Join JoinFunc)
                    cudf::table_view const& right,                                       \
                    cudf::ast::expression binary_pred,                                   \
                    cudf::null_equality compare_nulls) {                                 \
-      return cudf::conditional_inner_join(left, right, binary_pred);                    \
+      return cudf::conditional_inner_join(left, right, binary_pred, compare_nulls);     \
     };                                                                                  \
     BM_join<key_type, payload_type, nullable>(st, join);                                \
   }
@@ -140,7 +140,7 @@ CONDITIONAL_INNER_JOIN_BENCHMARK_DEFINE(conditional_inner_join_64bit_nulls, int6
                    cudf::table_view const& right,                                      \
                    cudf::ast::expression binary_pred,                                  \
                    cudf::null_equality compare_nulls) {                                \
-      return cudf::conditional_left_join(left, right, binary_pred);                    \
+      return cudf::conditional_left_join(left, right, binary_pred, compare_nulls);     \
     };                                                                                 \
     BM_join<key_type, payload_type, nullable>(st, join);                               \
   }
@@ -158,7 +158,7 @@ CONDITIONAL_LEFT_JOIN_BENCHMARK_DEFINE(conditional_left_join_64bit_nulls, int64_
                    cudf::table_view const& right,                                      \
                    cudf::ast::expression binary_pred,                                  \
                    cudf::null_equality compare_nulls) {                                \
-      return cudf::conditional_inner_join(left, right, binary_pred);                   \
+      return cudf::conditional_inner_join(left, right, binary_pred, compare_nulls);    \
     };                                                                                 \
     BM_join<key_type, payload_type, nullable>(st, join);                               \
   }
@@ -176,7 +176,7 @@ CONDITIONAL_FULL_JOIN_BENCHMARK_DEFINE(conditional_full_join_64bit_nulls, int64_
                    cudf::table_view const& right,                                           \
                    cudf::ast::expression binary_pred,                                       \
                    cudf::null_equality compare_nulls) {                                     \
-      return cudf::conditional_left_anti_join(left, right, binary_pred);                    \
+      return cudf::conditional_left_anti_join(left, right, binary_pred, compare_nulls);     \
     };                                                                                      \
     BM_join<key_type, payload_type, nullable>(st, join);                                    \
   }
@@ -206,7 +206,7 @@ CONDITIONAL_LEFT_ANTI_JOIN_BENCHMARK_DEFINE(conditional_left_anti_join_64bit_nul
                    cudf::table_view const& right,                                           \
                    cudf::ast::expression binary_pred,                                       \
                    cudf::null_equality compare_nulls) {                                     \
-      return cudf::conditional_left_semi_join(left, right, binary_pred);                    \
+      return cudf::conditional_left_semi_join(left, right, binary_pred, compare_nulls);     \
     };                                                                                      \
     BM_join<key_type, payload_type, nullable>(st, join);                                    \
   }
@@ -248,28 +248,19 @@ BENCHMARK_REGISTER_F(ConditionalJoin, conditional_inner_join_64bit)
   ->Args({100'000, 1'000'000})
   ->UseManualTime();
 
-// TODO: This benchmark is temporarily reduced in size to debug why larger
-// benchmarks fail with a cuda_error. All other null benchmarks are
-// commented out for now.
-// CUDA error encountered at: ../../../../benchmarks/synchronization/synchronization.cpp:53: 700
-// cudaErrorIllegalAddress an illegal memory access was encountered
 BENCHMARK_REGISTER_F(ConditionalJoin, conditional_inner_join_32bit_nulls)
   ->Unit(benchmark::kMillisecond)
-  ->Args({10, 10})
-  ->Args({100, 100})
-  ->Args({1000, 1000})
-  ->Args({10000, 10000})
   ->Args({100'000, 100'000})
-  //->Args({100'000, 400'000})
-  //->Args({100'000, 1'000'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
   ->UseManualTime();
 
-// BENCHMARK_REGISTER_F(ConditionalJoin, conditional_inner_join_64bit_nulls)
-//  ->Unit(benchmark::kMillisecond)
-//  ->Args({100'000, 100'000})
-//  ->Args({100'000, 400'000})
-//  ->Args({100'000, 1'000'000})
-//  ->UseManualTime();
+BENCHMARK_REGISTER_F(ConditionalJoin, conditional_inner_join_64bit_nulls)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 100'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
+  ->UseManualTime();
 
 // left join -----------------------------------------------------------------------
 BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_join_32bit)
@@ -286,19 +277,19 @@ BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_join_64bit)
   ->Args({100'000, 1'000'000})
   ->UseManualTime();
 
-// BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_join_32bit_nulls)
-//  ->Unit(benchmark::kMillisecond)
-//  ->Args({100'000, 100'000})
-//  ->Args({100'000, 400'000})
-//  ->Args({100'000, 1'000'000})
-//  ->UseManualTime();
-//
-// BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_join_64bit_nulls)
-//  ->Unit(benchmark::kMillisecond)
-//  ->Args({100'000, 100'000})
-//  ->Args({100'000, 400'000})
-//  ->Args({100'000, 1'000'000})
-//  ->UseManualTime();
+BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_join_32bit_nulls)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 100'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
+  ->UseManualTime();
+
+BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_join_64bit_nulls)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 100'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
+  ->UseManualTime();
 
 // full join -----------------------------------------------------------------------
 BENCHMARK_REGISTER_F(ConditionalJoin, conditional_full_join_32bit)
@@ -315,19 +306,19 @@ BENCHMARK_REGISTER_F(ConditionalJoin, conditional_full_join_64bit)
   ->Args({100'000, 1'000'000})
   ->UseManualTime();
 
-// BENCHMARK_REGISTER_F(ConditionalJoin, conditional_full_join_32bit_nulls)
-//  ->Unit(benchmark::kMillisecond)
-//  ->Args({100'000, 100'000})
-//  ->Args({100'000, 400'000})
-//  ->Args({100'000, 1'000'000})
-//  ->UseManualTime();
-//
-// BENCHMARK_REGISTER_F(ConditionalJoin, conditional_full_join_64bit_nulls)
-//  ->Unit(benchmark::kMillisecond)
-//  ->Args({100'000, 100'000})
-//  ->Args({100'000, 400'000})
-//  ->Args({100'000, 1'000'000})
-//  ->UseManualTime();
+BENCHMARK_REGISTER_F(ConditionalJoin, conditional_full_join_32bit_nulls)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 100'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
+  ->UseManualTime();
+
+BENCHMARK_REGISTER_F(ConditionalJoin, conditional_full_join_64bit_nulls)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 100'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
+  ->UseManualTime();
 
 // left anti-join -------------------------------------------------------------
 BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_anti_join_32bit)
@@ -344,19 +335,19 @@ BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_anti_join_64bit)
   ->Args({100'000, 1'000'000})
   ->UseManualTime();
 
-// BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_anti_join_32bit_nulls)
-//  ->Unit(benchmark::kMillisecond)
-//  ->Args({100'000, 100'000})
-//  ->Args({100'000, 400'000})
-//  ->Args({100'000, 1'000'000})
-//  ->UseManualTime();
-//
-// BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_anti_join_64bit_nulls)
-//  ->Unit(benchmark::kMillisecond)
-//  ->Args({100'000, 100'000})
-//  ->Args({100'000, 400'000})
-//  ->Args({100'000, 1'000'000})
-//  ->UseManualTime();
+BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_anti_join_32bit_nulls)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 100'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
+  ->UseManualTime();
+
+BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_anti_join_64bit_nulls)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 100'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
+  ->UseManualTime();
 
 // left semi-join -------------------------------------------------------------
 BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_semi_join_32bit)
@@ -373,16 +364,16 @@ BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_semi_join_64bit)
   ->Args({100'000, 1'000'000})
   ->UseManualTime();
 
-// BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_semi_join_32bit_nulls)
-//  ->Unit(benchmark::kMillisecond)
-//  ->Args({100'000, 100'000})
-//  ->Args({100'000, 400'000})
-//  ->Args({100'000, 1'000'000})
-//  ->UseManualTime();
-//
-// BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_semi_join_64bit_nulls)
-//  ->Unit(benchmark::kMillisecond)
-//  ->Args({100'000, 100'000})
-//  ->Args({100'000, 400'000})
-//  ->Args({100'000, 1'000'000})
-//  ->UseManualTime();
+BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_semi_join_32bit_nulls)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 100'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
+  ->UseManualTime();
+
+BENCHMARK_REGISTER_F(ConditionalJoin, conditional_left_semi_join_64bit_nulls)
+  ->Unit(benchmark::kMillisecond)
+  ->Args({100'000, 100'000})
+  ->Args({100'000, 400'000})
+  ->Args({100'000, 1'000'000})
+  ->UseManualTime();

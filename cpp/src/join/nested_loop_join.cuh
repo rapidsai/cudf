@@ -104,6 +104,7 @@ get_conditional_join_indices(table_view const& left,
 
   // Allocate storage for the counter used to get the size of the join output
   rmm::device_scalar<size_type> size(0, stream, mr);
+  CHECK_CUDA(stream.value());
   constexpr int block_size{DEFAULT_JOIN_BLOCK_SIZE};
   detail::grid_1d config(left_table->num_rows(), block_size);
   auto const shmem_size_per_block = plan.dev_plan.shmem_per_thread * config.num_threads_per_block;
