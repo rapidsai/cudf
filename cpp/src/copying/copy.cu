@@ -69,6 +69,10 @@ struct copy_if_else_functor_impl<T, std::enable_if_t<is_rep_layout_compatible<T>
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
+    std::cout
+      << "GERA_DEBUG copy_if_else_functor_impl<T, std::enable_if_t<is_rep_layout_compatible<T>()>>"
+      << std::endl;
+
     auto p_lhs      = get_iterable_device_view{}(lhs_h);
     auto p_rhs      = get_iterable_device_view{}(rhs_h);
     auto const& lhs = *p_lhs;
@@ -114,6 +118,8 @@ struct copy_if_else_functor_impl<string_view> {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
+    std::cout << "GERA_DEBUG copy_if_else_functor_impl<string_view> " << std::endl;
+
     using T = string_view;
 
     auto p_lhs      = get_iterable_device_view{}(lhs_h);
@@ -220,6 +226,37 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
     return std::move(result->release()[0]);
   }
 
+  if constexpr (std::is_same<Left, cudf::scalar>::value &&
+                std::is_same<Right, cudf::column_view>::value) {
+    std::cout << "GERA_DEBUG " << __FILE__ << ":" << __LINE__ << std::endl;
+
+    // scatter scalar to column
+
+    auto scatter_map_lhs = rmm::device_uvector<size_type>{static_cast<std::size_t>(1), stream};
+    auto const scatter_map_end = thrust::copy_if(rmm::exec_policy(stream),
+                                                 thrust::make_counting_iterator(size_type{0}),
+                                                 thrust::make_counting_iterator(size_type{1}),
+                                                 scatter_map_lhs.begin(),
+                                                 logical_not{is_left});
+
+    auto const scatter_src_rhs = cudf::detail::gather(table_view{std::vector<column_view>{rhs}},
+                                                      scatter_map_lhs.begin(),
+                                                      scatter_map_end,
+                                                      out_of_bounds_policy::DONT_CHECK,
+                                                      stream);
+
+    auto result = cudf::detail::scatter(
+      table_view{std::vector<column_view>{scatter_src_rhs->get_column(0).view()}},
+      scatter_map_lhs.begin(),
+      scatter_map_end,
+      table_view{std::vector<column_view>{rhs}},
+      false,
+      stream,
+      mr);
+
+    return std::move(result->release()[0]);
+  }
+
   // Bail out for Scalars.
   // For nested types types, scatter/gather based copy_if_else() is not currently supported
   // if either `lhs` or `rhs` is a scalar, partially because:
@@ -273,6 +310,7 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
   CUDF_EXPECTS(lhs.type() == rhs.type(), "Both inputs must be of the same type");
   CUDF_EXPECTS(boolean_mask.type() == data_type(type_id::BOOL8),
                "Boolean mask column must be of type type_id::BOOL8");
+  std::cout << "GERA_DEBUG " << __FILE__ << ":" << __LINE__ << std::endl;
 
   if (boolean_mask.is_empty()) { return cudf::empty_like(lhs); }
 

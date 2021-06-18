@@ -15,6 +15,7 @@
  */
 
 #include <cudf/copying.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -129,6 +130,43 @@ TYPED_TEST(TypedCopyIfElseNestedTest, LongerStructsWithNulls)
     copy_if_else(lhs_structs_column->view(), lhs_structs_column->view(), selector_column->view());
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result_column->view(), lhs_structs_column->view());
+}
+
+TYPED_TEST(TypedCopyIfElseNestedTest, StructsWithScalars1)
+{
+  using T = TypeParam;
+
+  using namespace cudf;
+  using namespace cudf::test;
+
+  using ints    = fixed_width_column_wrapper<T, int32_t>;
+  using strings = strings_column_wrapper;
+  using structs = structs_column_wrapper;
+  using bools   = fixed_width_column_wrapper<bool, int32_t>;
+
+  auto lhs_ints_child     = ints{1};
+  auto lhs_strings_child  = strings{"1"};
+  auto lhs_structs_column = structs{{lhs_ints_child, lhs_strings_child}}.release();
+  auto lhs_children       = std::vector<column_view>{lhs_structs_column->view()};
+  auto lhs_scalar =
+    cudf::make_struct_scalar(cudf::host_span<cudf::column_view const>{lhs_children});
+
+  auto rhs_ints_child     = ints{0, 11, 22, 33, 44, 55, 66};
+  auto rhs_strings_child  = strings{"00", "11", "22", "33", "44", "55", "66"};
+  auto rhs_structs_column = structs{{rhs_ints_child, rhs_strings_child}}.release();
+
+  auto selector_column = bools{1, 1, 0, 1, 1, 0, 1}.release();
+
+  auto result_column =
+    copy_if_else(*lhs_scalar, rhs_structs_column->view(), selector_column->view());
+
+  cudf::test::print(*result_column);
+
+  auto expected_ints    = ints{1, 1, 22, 3, 4, 55, 6};
+  auto expected_strings = strings{"1", "1", "22", "3", "4", "55", "6"};
+  auto expected_result  = structs{{expected_ints, expected_strings}}.release();
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result_column->view(), expected_result->view());
 }
 
 TYPED_TEST(TypedCopyIfElseNestedTest, Lists)
