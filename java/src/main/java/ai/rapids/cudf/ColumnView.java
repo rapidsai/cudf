@@ -615,7 +615,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * IMPORTANT NOTE: Nothing is copied out from the vector and the slices will only be relevant for
    * the lifecycle of the underlying ColumnVector
    *
-   *
    * The "split" function divides the input column into multiple intervals
    * of rows using the splits indices values and it stores the intervals into the
    * output columns. Regarding the interval of indices, a pair of values are taken
@@ -651,7 +650,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * Note that this is very similar to the output from a PartitionedTable.
    *
-
    *
    * @param indices the indices to split with
    * @return A new ColumnView array with slices from the original ColumnView
