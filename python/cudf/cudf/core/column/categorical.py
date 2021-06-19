@@ -1005,24 +1005,6 @@ class CategoricalColumn(column.ColumnBase):
         )
         self._mimic_inplace(out, inplace=True)
 
-    def _fill(
-        self,
-        fill_value: ScalarLike,
-        begin: int,
-        end: int,
-        inplace: bool = False,
-    ) -> "column.ColumnBase":
-        if end <= begin or begin >= self.size:
-            return self if inplace else self.copy()
-
-        fill_code = self._encode(fill_value)
-        fill_scalar = as_device_scalar(fill_code, self.codes.dtype)
-
-        result = self if inplace else self.copy()
-
-        libcudf.filling.fill_in_place(result.codes, begin, end, fill_scalar)
-        return result
-
     def binary_operator(
         self, op: str, rhs, reflect: bool = False
     ) -> ColumnBase:
@@ -1381,7 +1363,7 @@ class CategoricalColumn(column.ColumnBase):
     def _get_decategorized_column(self) -> ColumnBase:
         if self.null_count == len(self):
             # self.categories is empty; just return codes
-            return self.cat().codes._column
+            return self.cat()._min_type_codes
         gather_map = self.cat().codes.astype("int32").fillna(0)._column
         out = self.categories.take(gather_map)
         out = out.set_mask(self.mask)
