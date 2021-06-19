@@ -253,11 +253,13 @@ class writer::impl {
    * @brief Builds up per-column streams.
    *
    * @param[in,out] columns List of columns
+   * @param[in] rowgroup_bounds TODO
    * @param[in] stripe_bounds List of stripe boundaries
    * @param[in] decimal_column_sizes Sizes of encoded decimal columns
    * @return List of stream descriptors
    */
   orc_streams create_streams(host_span<orc_column_view> columns,
+                             host_2dspan<rows_range const> rowgroup_bounds,
                              host_span<stripe_rowgroups const> stripe_bounds,
                              std::map<uint32_t, size_t> const& decimal_column_sizes);
 
@@ -371,18 +373,6 @@ class writer::impl {
    * @param byte_vector Raw data (must include initial 3-byte header)
    */
   void add_uncompressed_block_headers(std::vector<uint8_t>& byte_vector);
-
-  /**
-   * @brief Returns the row index stride divided by the specified number
-   *
-   * @tparam T Optional type
-   * @param modulus Number to use for division
-   */
-  template <typename T = size_t>
-  constexpr inline auto div_rowgroups_by(T modulus) const
-  {
-    return cudf::util::div_rounding_up_unsafe<T, T>(row_index_stride_, modulus);
-  }
 
  private:
   rmm::mr::device_memory_resource* _mr = nullptr;
