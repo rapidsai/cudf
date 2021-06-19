@@ -322,40 +322,42 @@ class ColumnBase(Column, Serializable):
 
         return self.to_gpu_array(fillna=fillna).copy_to_host()
 
-    # def _fill(
-    #     self,
-    #     fill_value: ScalarLike,
-    #     begin: int,
-    #     end: int,
-    #     inplace: bool = False,
-    # ) -> Optional[ColumnBase]:
-    #     if end <= begin or begin >= self.size:
-    #         return self if inplace else self.copy()
+    def _fill(
+        self,
+        fill_value: ScalarLike,
+        begin: int,
+        end: int,
+        inplace: bool = False,
+    ) -> Optional[ColumnBase]:
+        if end <= begin or begin >= self.size:
+            return self if inplace else self.copy()
 
-    #     fill_scalar = as_device_scalar(fill_value, self.dtype)
+        fill_scalar = as_device_scalar(fill_value, self.dtype)
 
-    #     if not inplace:
-    #         return libcudf.filling.fill(self, begin, end, fill_scalar)
+        if not inplace:
+            return libcudf.filling.fill(self, begin, end, fill_scalar)
 
-    #     if is_string_dtype(self.dtype):
-    #         return self._mimic_inplace(
-    #             libcudf.filling.fill(self, begin, end, fill_scalar),
-    #             inplace=True,
-    #         )
+        if is_string_dtype(self.dtype):
+            return self._mimic_inplace(
+                libcudf.filling.fill(self, begin, end, fill_scalar),
+                inplace=True,
+            )
 
-    #     if fill_value is None and not self.nullable:
-    #         mask = create_null_mask(self.size, state=MaskState.ALL_VALID)
-    #         self.set_base_mask(mask)
+        if fill_value is None and not self.nullable:
+            mask = create_null_mask(self.size, state=MaskState.ALL_VALID)
+            self.set_base_mask(mask)
 
-    #     libcudf.filling.fill_in_place(self, begin, end, fill_scalar)
+        libcudf.filling.fill_in_place(self, begin, end, fill_scalar)
 
-    #     fill_code = self._encode(fill_value)
-    #     fill_scalar = as_device_scalar(fill_code, self.codes.dtype)
+        return self
 
-    #     result = self if inplace else self.copy()
+        fill_code = self._encode(fill_value)
+        fill_scalar = as_device_scalar(fill_code, self.codes.dtype)
 
-    #     libcudf.filling.fill_in_place(result.codes, begin, end, fill_scalar)
-    #     return result
+        result = self if inplace else self.copy()
+
+        libcudf.filling.fill_in_place(result.codes, begin, end, fill_scalar)
+        return result
 
     def shift(self, offset: int, fill_value: ScalarLike) -> ColumnBase:
         return libcudf.copying.shift(self, offset, fill_value)
