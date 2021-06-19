@@ -97,8 +97,8 @@ struct ColumnDesc {
   uint32_t null_count;                     // number of null values in this stripe's column
   uint32_t skip_count;                     // number of non-null values to skip
   uint32_t rowgroup_id;                    // row group position
-  uint8_t encoding_kind;                   // column encoding kind (orc::ColumnEncodingKind)
-  uint8_t type_kind;                       // column data type (orc::TypeKind)
+  ColumnEncodingKind encoding_kind;        // column encoding kind
+  TypeKind type_kind;                      // column data type
   uint8_t dtype_len;      // data type length (for types that can be mapped to different sizes)
   int32_t decimal_scale;  // number of fractional decimal digits for decimal type
   int32_t ts_clock_rate;  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
@@ -117,12 +117,12 @@ struct RowGroup {
  * @brief Struct to describe an encoder data chunk
  */
 struct EncChunk {
-  uint32_t start_row;     // start row of this chunk
-  uint32_t num_rows;      // number of rows in this chunk
-  uint8_t encoding_kind;  // column encoding kind (orc::ColumnEncodingKind)
-  uint8_t type_kind;      // column data type (orc::TypeKind)
-  uint8_t dtype_len;      // data type length
-  int32_t scale;          // scale for decimals or timestamps
+  uint32_t start_row;                // start row of this chunk
+  uint32_t num_rows;                 // number of rows in this chunk
+  ColumnEncodingKind encoding_kind;  // column encoding kind
+  TypeKind type_kind;                // column data type
+  uint8_t dtype_len;                 // data type length
+  int32_t scale;                     // scale for decimals or timestamps
 
   uint32_t *dict_index;  // dictionary index from row index
   device_span<uint32_t> decimal_offsets;
