@@ -428,6 +428,17 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
       }
     }();
 
+    auto RLE_column_size = [&](TypeKind type_kind) {
+      return std::accumulate(
+        thrust::make_counting_iterator(0ul),
+        thrust::make_counting_iterator(rowgroup_bounds.size().first),
+        0ul,
+        [&](auto data_size, auto rg_idx) {
+          return data_size +
+                 RLE_stream_size(type_kind, rowgroup_bounds[rg_idx][column.flat_index()].size());
+        });
+    };
+
     auto add_stream =
       [&](gpu::StreamIndexType index_type, StreamKind kind, TypeKind type_kind, size_t size) {
         const auto base        = column.flat_index() * gpu::CI_NUM_STREAMS;
@@ -435,32 +446,30 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
         streams.push_back(orc::Stream{kind, column.id(), size, type_kind});
       };
 
-    if (is_nullable) {
-      add_stream(gpu::CI_PRESENT,
-                 PRESENT,
-                 TypeKind::BOOLEAN,
-                 RLE_stream_size(TypeKind::BOOLEAN, row_index_stride_));
-    }
+    auto add_RLE_stream = [&](
+                            gpu::StreamIndexType index_type, StreamKind kind, TypeKind type_kind) {
+      add_stream(index_type, kind, type_kind, RLE_column_size(type_kind));
+    };
+
+    if (is_nullable) { add_RLE_stream(gpu::CI_PRESENT, PRESENT, TypeKind::BOOLEAN); }
     switch (kind) {
       case TypeKind::BOOLEAN:
       case TypeKind::BYTE:
-        add_stream(gpu::CI_DATA, DATA, kind, RLE_stream_size(kind, row_index_stride_));
+        add_RLE_stream(gpu::CI_DATA, DATA, kind);
         column.set_orc_encoding(DIRECT);
         break;
       case TypeKind::SHORT:
       case TypeKind::INT:
       case TypeKind::LONG:
       case TypeKind::DATE:
-        add_stream(gpu::CI_DATA, DATA, kind, RLE_stream_size(kind, row_index_stride_));
+        add_RLE_stream(gpu::CI_DATA, DATA, kind);
         column.set_orc_encoding(DIRECT_V2);
         break;
       case TypeKind::FLOAT:
       case TypeKind::DOUBLE:
         // Pass through if no nulls (no RLE encoding for floating point)
-        add_stream(gpu::CI_DATA,
-                   DATA,
-                   kind,
-                   (column.null_count() != 0) ? RLE_stream_size(kind, row_index_stride_) : 0);
+        add_stream(
+          gpu::CI_DATA, DATA, kind, (column.null_count() != 0) ? RLE_column_size(kind) : 0);
         column.set_orc_encoding(DIRECT);
         break;
       case TypeKind::STRING: {
@@ -496,31 +505,21 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
 
         // Decide between direct or dictionary encoding
         if (enable_dict && dict_data_size < direct_data_size) {
-          add_stream(
-            gpu::CI_DATA, DATA, TypeKind::INT, RLE_stream_size(TypeKind::INT, row_index_stride_));
+          add_RLE_stream(gpu::CI_DATA, DATA, TypeKind::INT);
           add_stream(gpu::CI_DATA2, LENGTH, TypeKind::INT, dict_lengths_div512 * (512 * 4 + 2));
-          add_stream(gpu::CI_DICTIONARY,
-                     DICTIONARY_DATA,
-                     TypeKind::CHAR,
-                     std::max<size_t>(dict_data_size, 1));
+          add_stream(
+            gpu::CI_DICTIONARY, DICTIONARY_DATA, TypeKind::CHAR, std::max(dict_data_size, 1ul));
           column.set_orc_encoding(DICTIONARY_V2);
         } else {
           add_stream(gpu::CI_DATA, DATA, TypeKind::CHAR, std::max<size_t>(direct_data_size, 1));
-          add_stream(gpu::CI_DATA2,
-                     LENGTH,
-                     TypeKind::INT,
-                     RLE_stream_size(TypeKind::INT, row_index_stride_));
+          add_RLE_stream(gpu::CI_DATA2, LENGTH, TypeKind::INT);
           column.set_orc_encoding(DIRECT_V2);
         }
         break;
       }
       case TypeKind::TIMESTAMP:
-        add_stream(
-          gpu::CI_DATA, DATA, TypeKind::INT, RLE_stream_size(TypeKind::INT, row_index_stride_));
-        add_stream(gpu::CI_DATA2,
-                   SECONDARY,
-                   TypeKind::INT,
-                   RLE_stream_size(TypeKind::INT, row_index_stride_));
+        add_RLE_stream(gpu::CI_DATA, DATA, TypeKind::INT);
+        add_RLE_stream(gpu::CI_DATA2, SECONDARY, TypeKind::INT);
         column.set_orc_encoding(DIRECT_V2);
         break;
       case TypeKind::DECIMAL:
@@ -529,14 +528,12 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
         add_stream(
           gpu::CI_DATA, DATA, TypeKind::DECIMAL, decimal_column_sizes.at(column.flat_index()));
         // scale stream TODO: compute exact size since all elems are equal
-        add_stream(gpu::CI_DATA2,
-                   SECONDARY,
-                   TypeKind::INT,
-                   RLE_stream_size(TypeKind::INT, row_index_stride_));
+        add_RLE_stream(gpu::CI_DATA2, SECONDARY, TypeKind::INT);
         column.set_orc_encoding(DIRECT_V2);
         break;
       case TypeKind::LIST:
         // no data streams, only present
+        column.set_orc_encoding(DIRECT_V2);
         break;
       default: CUDF_FAIL("Unsupported ORC type kind");
     }
@@ -572,7 +569,7 @@ orc_streams::orc_stream_offsets orc_streams::compute_offsets(
     }();
     if (is_rle_data) {
       strm_offsets[i] = rle_data_size;
-      rle_data_size += (stream.length * num_rowgroups + 7) & ~7;
+      rle_data_size += (stream.length + 7) & ~7;
     } else {
       strm_offsets[i] = non_rle_data_size;
       non_rle_data_size += stream.length;
