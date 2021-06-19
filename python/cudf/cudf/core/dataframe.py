@@ -1482,13 +1482,10 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         ):
             rhs = [rhs] * lhs._num_columns
 
-        # TODO: Use faster indexers below wherever possible (avoid
-        # Frame.__getitem__ in favor of accessing elements of the underlying
-        # ColumnAccessor directly).
         if isinstance(rhs, Sequence):
             operands = {
-                col: (lhs[col]._column, rhs[k])
-                for k, col in enumerate(lhs._data)
+                name: (left, right)
+                for right, (name, left) in zip(rhs, lhs._data.items())
             }
         elif isinstance(rhs, DataFrame):
             if fn in cudf.utils.utils._EQUALITY_OPS:
@@ -1505,20 +1502,17 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             # TODO: This may need to be something more e.g.
             # normalize_binop.
             operands = {
-                col: (
-                    lhs._data[col],
-                    rhs._data[col] if col in rhs._data else None,
-                )
-                for col in lhs._data
+                name: (lcol, rhs._data[name] if name in rhs._data else None,)
+                for name, lcol in lhs._data.items()
             }
-            for col in rhs._data:
-                if col not in lhs._data:
+            for name, col in rhs._data.items():
+                if name not in lhs._data:
                     # Note: We have to switch these so that the code below can
                     # assume that the contents of left are always columns and
                     # access its binary operator.
                     # TODO: This may need to be something more e.g.
                     # normalize_binop.
-                    operands[col] = (rhs[col]._column, None)
+                    operands[name] = (col, None)
         elif isinstance(rhs, Series):
             # TODO: This logic will need updating if any of the user-facing
             # binop methods (e.g. DataFrame.add) ever support axis=0/rows.
@@ -1534,7 +1528,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             operands = {}
             for col in result_cols:
                 if col in left_cols:
-                    left = lhs[col]._column
+                    left = lhs._data[col]
                     right = right_dict[col] if col in right_dict else None
                 else:
                     # We match pandas semantics here by performing binops
