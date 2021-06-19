@@ -4055,19 +4055,19 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
         ):
             dtypes[idx] = find_common_type([col.dtype for col in cols])
         # If all categorical dtypes, combine the categories
-        elif all(
-            isinstance(col, cudf.core.column.CategoricalColumn) for col in cols
-        ):
-            # Combine and de-dupe the categories
-            categories[idx] = (
-                cudf.concat([col.cat().categories for col in cols])
-                .to_series()
-                .drop_duplicates(ignore_index=True)
-                ._column
-            )
-            # Set the column dtype to the codes' dtype. The categories
-            # will be re-assigned at the end
-            dtypes[idx] = min_scalar_type(len(categories[idx]))
+        # elif all(
+        #     isinstance(col, cudf.core.column.CategoricalColumn) for col in cols
+        # ):
+        #     # Combine and de-dupe the categories
+        #     categories[idx] = (
+        #         cudf.concat([col.cat().categories for col in cols])
+        #         .to_series()
+        #         .drop_duplicates(ignore_index=True)
+        #         ._column
+        #     )
+        #     # Set the column dtype to the codes' dtype. The categories
+        #     # will be re-assigned at the end
+        #     dtypes[idx] = min_scalar_type(len(categories[idx]))
         # Otherwise raise an error if columns have different dtypes
         elif not all(is_dtype_equal(c.dtype, dtypes[idx]) for c in cols):
             raise ValueError("All columns must be the same type")
@@ -4085,19 +4085,19 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
                 n = len(next(x for x in cols if x is not None))
                 cols[idx] = column_empty(row_count=n, dtype=dtype, masked=True)
             else:
-                # If column is categorical, rebase the codes with the
-                # combined categories, and cast the new codes to the
-                # min-scalar-sized dtype
-                if idx in categories:
-                    cols[idx] = (
-                        cols[idx]
-                        .cat()
-                        ._set_categories(
-                            categories[idx],
-                            is_unique=True,
-                        )
-                        .codes
-                    )
+                # # If column is categorical, rebase the codes with the
+                # # combined categories, and cast the new codes to the
+                # # min-scalar-sized dtype
+                # if idx in categories:
+                #     cols[idx] = (
+                #         cols[idx]
+                #         .cat()
+                #         ._set_categories(
+                #             categories[idx],
+                #             is_unique=True,
+                #         )
+                #         .codes
+                #     )
                 cols[idx] = cols[idx].astype(dtype)
 
 

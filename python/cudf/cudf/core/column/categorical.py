@@ -144,12 +144,17 @@ class CategoricalAccessor(ColumnMethodsMixin):
             if isinstance(self._parent, cudf.Series)
             else None
         )
+        codes = self._min_type_codes
+        codes = codes.fillna(-1)
+        return cudf.Series(codes, index=index)
+
+    @property
+    def _min_type_codes(self) -> NumericalColumn:
         codes = self._column.codes
         codes.set_base_mask(self._column.base_mask)
         dtype = min_signed_type(codes.max(skipna=True))
         codes = codes.astype(dtype=dtype)
-        codes = codes.fillna(-1)
-        return cudf.Series(codes, index=index)
+        return codes
 
     @property
     def ordered(self) -> Optional[bool]:
@@ -803,7 +808,6 @@ class CategoricalColumn(column.ColumnBase):
             children=children,
         )
         self._codes = None
-        self._category_order = None
 
     @property
     def base_size(self) -> int:
@@ -817,47 +821,88 @@ class CategoricalColumn(column.ColumnBase):
         return self._encode(item) in self.as_numerical
 
     def serialize(self) -> Tuple[dict, list]:
+        """
+        The below shows the keys for header dict, with explanation.
+        Headers:
+            - dtype                 # header for dtype
+            - dtype_frames_count    # num frames for `dtype`
+            - mask                  # header for mask
+            - mask_frames_count     # num frames for `mask`
+            - sub_frames_counts     # list of children frames counts
+            - subheaders            # children headers
+            - sub_frames_types      # type of children
+        
+        The below shows the items stored in `frames` list. The number of
+        frames stored for each item can be retrieved via the following key
+        from `headers` dict.
+        Frames: `length_key_in_header`:
+            - dtype_frames: `dtype_frame_count`
+            - mask: `mask_frames_count`
+            - sub_frame_{i}: `sub_frames_counts[i]`
+        """
         header: Dict[Any, Any] = {}
         frames = []
+        
+
         header["type-serialized"] = pickle.dumps(type(self))
+        
         header["dtype"], dtype_frames = self.dtype.serialize()
         header["dtype_frames_count"] = len(dtype_frames)
         frames.extend(dtype_frames)
-        header["data"], data_frames = self.codes.serialize()
-        header["data_frames_count"] = len(data_frames)
-        frames.extend(data_frames)
+
         if self.mask is not None:
             mask_header, mask_frames = self.mask.serialize()
             header["mask"] = mask_header
+            header["mask_frames_count"] = len(mask_frames)
             frames.extend(mask_frames)
-        header["frame_count"] = len(frames)
+        
+        sub_headers = []
+        sub_frames_counts = []
+        sub_frame_type = []
+        for item in self.children:
+            sheader, sframes = item.serialize()
+            sub_headers.append(sheader)
+            sub_frames_counts.append(len(sframes))
+            sub_frame_type.append(type(item))
+            frames.extend(sframes)
+        
+        header["sub_frames_counts"] = sub_frames_counts
+        header["sub_frames_types"] = sub_frame_type
+        header["subheaders"] = sub_headers
         return header, frames
 
     @classmethod
     def deserialize(cls, header: dict, frames: list) -> CategoricalColumn:
         n_dtype_frames = header["dtype_frames_count"]
-        dtype = CategoricalDtype.deserialize(
-            header["dtype"], frames[:n_dtype_frames]
-        )
-        n_data_frames = header["data_frames_count"]
+        n_sframes = header["sub_frames_counts"]
 
-        column_type = pickle.loads(header["data"]["type-serialized"])
-        data = column_type.deserialize(
-            header["data"],
-            frames[n_dtype_frames : n_dtype_frames + n_data_frames],
+        b = 0
+        dtype = CategoricalDtype.deserialize(
+            header["dtype"], frames[b:b+n_dtype_frames]
         )
+        b += n_dtype_frames
+
         mask = None
         if "mask" in header:
+            n_mask_frames = header["mask_frames_count"]
             mask = Buffer.deserialize(
-                header["mask"], [frames[n_dtype_frames + n_data_frames]]
+                header["mask"], frames[b: b+n_mask_frames]
             )
+            b += n_mask_frames
+
+        children = []
+        for typ, sheader, n_sframe in zip(header["sub_frames_types"], header["subheaders"], n_sframes):
+            child = typ.deserialize(sheader, frames[b:b+n_sframe])
+            children.append(child)
+            b += n_sframe
+
         return cast(
             CategoricalColumn,
             column.build_column(
                 data=None,
                 dtype=dtype,
                 mask=mask,
-                children=(column.as_column(data.base_data, dtype=data.dtype),),
+                children=tuple(children),
             ),
         )
 
@@ -1065,6 +1110,11 @@ class CategoricalColumn(column.ColumnBase):
         )
         return pd.Series(data, index=index)
 
+    def to_arrow(self) -> pa.Array:
+        result = super().to_arrow()
+        min_type_codes = self.cat()._min_type_codes
+        return pa.DictionaryArray.from_arrays(indices=min_type_codes.to_arrow(), dictionary=result.dictionary)
+        
     @property
     def values_host(self) -> np.ndarray:
         """
@@ -1212,59 +1262,50 @@ class CategoricalColumn(column.ColumnBase):
 
         return result
 
-    # def fillna(
-    #     self, fill_value: Any = None, method: Any = None, dtype: Dtype = None
-    # ) -> CategoricalColumn:
-    #     """
-    #     Fill null values with *fill_value*
-    #     """
-    #     if not self.nullable:
-    #         return self
+    def fillna(
+        self, fill_value: Any = None, method: Any = None, dtype: Dtype = None
+    ) -> CategoricalColumn:
+        """
+        Fill null values with *fill_value*
+        """
+        if not self.nullable:
+            return self
 
-    #     if fill_value is not None:
-    #         fill_is_scalar = np.isscalar(fill_value)
+        if fill_value is not None:
+            fill_is_scalar = np.isscalar(fill_value)
 
-    #         if fill_is_scalar:
-    #             if fill_value == self.default_na_value():
-    #                 fill_value = self.codes.dtype.type(fill_value)
-    #             else:
-    #                 try:
-    #                     fill_value = self._encode(fill_value)
-    #                     fill_value = self.codes.dtype.type(fill_value)
-    #                 except (ValueError) as err:
-    #                     err_msg = "fill value must be in categories"
-    #                     raise ValueError(err_msg) from err
-    #         else:
-    #             fill_value = column.as_column(fill_value, nan_as_null=False)
-    #             if isinstance(fill_value, CategoricalColumn):
-    #                 if self.dtype != fill_value.dtype:
-    #                     raise ValueError(
-    #                         "Cannot set a Categorical with another, "
-    #                         "without identical categories"
-    #                     )
-    #             # TODO: only required if fill_value has a subset of the
-    #             # categories:
-    #             fill_value = fill_value.cat()._set_categories(
-    #                 fill_value.cat().categories,
-    #                 self.categories,
-    #                 is_unique=True,
-    #             )
-    #             fill_value = column.as_column(fill_value.codes).astype(
-    #                 self.codes.dtype
-    #             )
+            if fill_is_scalar:
+                if fill_value == self.default_na_value():
+                    fill_value = cudf.Scalar(None, dtype=self.dtype)
+                else:
+                    fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
+            else:
+                fill_value = column.as_column(fill_value, nan_as_null=False)
+                if isinstance(fill_value, CategoricalColumn):
+                    if self.dtype != fill_value.dtype:
+                        raise ValueError(
+                            "Cannot set a Categorical with another, "
+                            "without identical categories"
+                        )
+                # TODO: only required if fill_value has a subset of the
+                # categories:
+                fill_value = fill_value.cat()._set_categories(
+                    self.categories,
+                    is_unique=True,
+                )
 
-    #     result = super().fillna(value=fill_value, method=method)
+        result = super().fillna(value=fill_value, method=method)
 
-    #     result = column.build_categorical_column(
-    #         categories=self.dtype.categories._values,
-    #         codes=column.as_column(result.base_data, dtype=result.dtype),
-    #         offset=result.offset,
-    #         size=result.size,
-    #         mask=result.base_mask,
-    #         ordered=self.dtype.ordered,
-    #     )
+        result = column.build_categorical_column(
+            categories=result.children[1],
+            codes=result.children[0],
+            offset=result.offset,
+            size=result.size,
+            mask=result.base_mask,
+            ordered=self.dtype.ordered,
+        )
 
-    #     return result
+        return result
 
     def find_first_value(
         self, value: ScalarLike, closest: bool = False

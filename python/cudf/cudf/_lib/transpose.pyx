@@ -39,8 +39,7 @@ def transpose(Table source):
         cats = list(c.cat().categories for c in source._columns)
         cats = cudf.Series(cudf.concat(cats)).drop_duplicates()._column
         source = Table(index=source._index, data=[
-            (name, col.cat()._set_categories(
-                col.cat().categories, cats, is_unique=True).codes)
+            (name, col.cat()._set_categories(cats, is_unique=True).codes)
             for name, col in source._data.items()
         ])
     elif dtype.kind in 'OU':
@@ -61,17 +60,17 @@ def transpose(Table source):
         column_names=range(source._num_rows)
     )
 
-    # if cats is not None:
-    #     result = Table(index=result._index, data=[
-    #         (name, cudf.core.column.column.build_categorical_column(
-    #             codes=cudf.core.column.column.as_column(
-    #                 col.base_data, dtype=col.dtype),
-    #             mask=col.base_mask,
-    #             size=col.size,
-    #             categories=cats,
-    #             offset=col.offset,
-    #         ))
-    #         for name, col in result._data.items()
-    #     ])
+    if cats is not None:
+        result = Table(index=result._index, data=[
+            (name, cudf.core.column.column.build_categorical_column(
+                codes=cudf.core.column.column.as_column(
+                    col.base_data, dtype=col.dtype),
+                mask=col.base_mask,
+                size=col.size,
+                categories=cats,
+                offset=col.offset,
+            ))
+            for name, col in result._data.items()
+        ])
 
     return result
