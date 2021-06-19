@@ -208,6 +208,15 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
                                                  scatter_map_rhs.begin(),
                                                  logical_not{is_left});
 
+    // Gather source = [a,b,c,d,e,f,g]
+    // Gather map    = [ 4, 3 ]
+    // cudf::gather(source, map) == [ e, d ]
+
+    // Scatter source = [d,e] // [a,b,c,d,e,f,g]
+    // Scatter map    = [3,4]
+    // Scatter target = [aa,bb,cc,dd,ee,ff,gg,hh,ii]
+    // cudf::scatter(source, map, target) == [aa,bb,cc,d,e,ff,gg,hh,ii]
+
     auto const scatter_src_rhs = cudf::detail::gather(table_view{std::vector<column_view>{rhs}},
                                                       scatter_map_rhs.begin(),
                                                       scatter_map_end,
