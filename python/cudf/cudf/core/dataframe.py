@@ -1476,12 +1476,18 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         However, lhs need not be self, which is why this is a classmethod.
         """
 
-        # TODO: Use the utility func for 0d arrays or scalars
-        if isinstance(rhs, (numbers.Number, cudf.Scalar)) or (
-            isinstance(rhs, np.ndarray) and rhs.ndim == 0
-        ):
+        if _is_scalar_or_zero_d_array(rhs):
             rhs = [rhs] * lhs._num_columns
 
+        # TODO: Need to normalize all the right operands in the branches below.
+        # The various branches of the conditional below construct a dictionary
+        # of the form {col: (left, right)}, where left is a ColumnBase and
+        # right is a suitable right operand for a binary operation with left.
+        # For columns that exist in rhs but not lhs, we swap the order so that
+        # we can always assume that left has a binary operator.  This
+        # implementation assumes that binary operations between a column and
+        # NULL are always commutative, even for binops (like subtraction) that
+        # are normally anticommutative.
         if isinstance(rhs, Sequence):
             operands = {
                 name: (left, right)
@@ -1499,32 +1505,21 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
             lhs, rhs = _align_indices(lhs, rhs)
 
-            # TODO: This may need to be something more e.g.
-            # normalize_binop.
             operands = {
                 name: (lcol, rhs._data[name] if name in rhs._data else None,)
                 for name, lcol in lhs._data.items()
             }
             for name, col in rhs._data.items():
                 if name not in lhs._data:
-                    # Note: We have to switch these so that the code below can
-                    # assume that the contents of left are always columns and
-                    # access its binary operator.
-                    # TODO: This may need to be something more e.g.
-                    # normalize_binop.
                     operands[name] = (col, None)
         elif isinstance(rhs, Series):
-            # TODO: This logic will need updating if any of the user-facing
+            # Note: This logic will need updating if any of the user-facing
             # binop methods (e.g. DataFrame.add) ever support axis=0/rows.
             right_dict = dict(zip(rhs.index.values_host, rhs.values_host))
             left_cols = lhs._column_names
             result_cols = left_cols + tuple(
                 col for col in right_dict if col not in left_cols
             )
-            # Note: Existing columns must always go in left so that the binary
-            # operator exists. This implementation assumes that binary
-            # operations between a column and NULL are always commutative, even
-            # for binops (like subtraction) that are normally anticommutative.
             operands = {}
             for col in result_cols:
                 if col in left_cols:
@@ -1539,10 +1534,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 operands[col] = (left, right)
 
         else:
-            raise NotImplementedError(
-                "DataFrame operations with " + str(type(rhs)) + " not "
-                "supported at this time."
-            )
+            return NotImplemented
 
         # Now actually perform the binop on the columns in left and right.
         output = {}
