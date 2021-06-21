@@ -30,6 +30,8 @@
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+using namespace cudf::test::iterators;
+
 namespace cudf {
 namespace test {
 
@@ -561,8 +563,8 @@ struct ListGetStructValueTest : public BaseFixture {
     // {int: 1, string: NULL, list: NULL}
     return this->make_test_structs_column({{1}, {1}},
                                           strings_column_wrapper({"aa"}, {false}),
-                                          LCWinner_t({{}}, iterator_all_nulls()),
-                                          iterator_no_null());
+                                          LCWinner_t({{}}, all_nulls()),
+                                          no_nulls());
   }
 
   /**
@@ -571,7 +573,7 @@ struct ListGetStructValueTest : public BaseFixture {
   SCW row1()
   {
     // NULL
-    return this->make_test_structs_column({-1}, {""}, LCWinner_t{-1}, iterator_all_nulls());
+    return this->make_test_structs_column({-1}, {""}, LCWinner_t{-1}, all_nulls());
   }
 
   /**
@@ -582,8 +584,8 @@ struct ListGetStructValueTest : public BaseFixture {
     // {int: 3, string: "xyz", list: [3, 8, 4]}
     return this->make_test_structs_column({{3}, {1}},
                                           strings_column_wrapper({"xyz"}, {true}),
-                                          LCWinner_t({{3, 8, 4}}, iterator_no_null()),
-                                          iterator_no_null());
+                                          LCWinner_t({{3, 8, 4}}, no_nulls()),
+                                          no_nulls());
   }
 
   /**

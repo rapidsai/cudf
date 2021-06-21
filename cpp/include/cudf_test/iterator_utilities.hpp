@@ -18,7 +18,6 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
-#include <cudf/utilities/span.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -26,7 +25,7 @@
 
 namespace cudf {
 namespace test {
-
+namespace iterators {
 /**
  * @brief Bool iterator for marking (possibly multiple) null elements in a column_wrapper.
  *
@@ -35,7 +34,7 @@ namespace test {
  *
  * @code
  * auto indices = std::vector<size_type>{8,9};
- * auto iter = iterator_with_null_at(indices.cbegin(), indices.end());
+ * auto iter = nulls_at(indices.cbegin(), indices.end());
  * iter[6] == true;  // i.e. Valid row at index 6.
  * iter[7] == true;  // i.e. Valid row at index 7.
  * iter[8] == false; // i.e. Invalid row at index 8.
@@ -49,7 +48,7 @@ namespace test {
  * @return auto Validity iterator
  */
 template <typename Iter>
-[[maybe_unused]] static auto iterator_with_null_at(Iter index_start, Iter index_end)
+[[maybe_unused]] static auto nulls_at(Iter index_start, Iter index_end)
 {
   using index_type = typename std::iterator_traits<Iter>::value_type;
 
@@ -66,8 +65,7 @@ template <typename Iter>
  * and yields `true` (to mark valid rows) for all other indices. E.g.
  *
  * @code
- * using host_span = cudf::host_span<cudf::size_type const>;
- * auto iter = iterator_with_null_at(host_span{std::vector<size_type>{8,9}});
+ * auto iter = nulls_at({8,9});
  * iter[6] == true;  // i.e. Valid row at index 6.
  * iter[7] == true;  // i.e. Valid row at index 7.
  * iter[8] == false; // i.e. Invalid row at index 8.
@@ -77,9 +75,9 @@ template <typename Iter>
  * @param indices The indices for which the validity iterator must return `false` (i.e. null)
  * @return auto Validity iterator
  */
-[[maybe_unused]] static auto iterator_with_null_at(cudf::host_span<cudf::size_type const> indices)
+[[maybe_unused]] static auto nulls_at(std::vector<cudf::size_type> const& indices)
 {
-  return iterator_with_null_at(indices.begin(), indices.end());
+  return nulls_at(indices.cbegin(), indices.cend());
 }
 
 /**
@@ -89,7 +87,7 @@ template <typename Iter>
  * and yields `true` (to mark valid rows) for all other indices. E.g.
  *
  * @code
- * auto iter = iterator_with_null_at(8);
+ * auto iter = null_at(8);
  * iter[7] == true;  // i.e. Valid row at index 7.
  * iter[8] == false; // i.e. Invalid row at index 8.
  * @endcode
@@ -97,9 +95,9 @@ template <typename Iter>
  * @param index The index for which the validity iterator must return `false` (i.e. null)
  * @return auto Validity iterator
  */
-[[maybe_unused]] static auto iterator_with_null_at(cudf::size_type index)
+[[maybe_unused]] static auto null_at(cudf::size_type index)
 {
-  return iterator_with_null_at(std::vector<size_type>{index});
+  return nulls_at(std::vector<cudf::size_type>{index});
 }
 
 /**
@@ -107,14 +105,32 @@ template <typename Iter>
  *
  * @return auto Validity iterator which always yields `false`
  */
-[[maybe_unused]] static auto iterator_all_nulls() { return thrust::make_constant_iterator(false); }
+[[maybe_unused]] static auto all_nulls() { return thrust::make_constant_iterator(false); }
 
 /**
  * @brief Bool iterator for marking all elements are valid (non-null)
  *
  * @return auto Validity iterator which always yields `true`
  */
-[[maybe_unused]] static auto iterator_no_null() { return thrust::make_constant_iterator(true); }
+[[maybe_unused]] static auto no_nulls() { return thrust::make_constant_iterator(true); }
 
+/**
+ * @brief Bool iterator for marking null elements from pointers of data
+ *
+ * The returned iterator yields `false` (to mark `null`) at the indices corresponding to the
+ * pointers having `nullptr` values and `true` for the remaining indices.
+ *
+ * @tparam T the data type
+ * @param ptrs The data pointers for which the validity iterator is computed
+ * @return auto Validity iterator
+ */
+template <class T>
+[[maybe_unused]] static auto nulls_from_nullptrs(std::vector<T const*> const& ptrs)
+{
+  // The vector `indices` is copied into the lambda as it can be destroyed at the caller site.
+  return thrust::make_transform_iterator(ptrs.begin(), [ptrs](auto ptr) { return ptr != nullptr; });
+}
+
+}  // namespace iterators
 }  // namespace test
 }  // namespace cudf

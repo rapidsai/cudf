@@ -61,6 +61,8 @@ TEST_F(ArrowIOTest, URIFileSystem)
   ASSERT_EQ(2, tbl.tbl->num_rows());
 }
 
+#ifdef S3_ENABLED
+
 TEST_F(ArrowIOTest, S3FileSystem)
 {
   std::string s3_uri = "s3://rapidsai-data/cudf/test/tips.parquet?region=us-east-2";
@@ -80,5 +82,15 @@ TEST_F(ArrowIOTest, S3FileSystem)
   ASSERT_EQ(1, tbl.tbl->num_columns());  // Only single column specified in reader_options
   ASSERT_EQ(244, tbl.tbl->num_rows());   // known number of rows from the S3 file
 }
+
+#else
+
+TEST_F(ArrowIOTest, S3URIWhenNotEnabled)
+{
+  std::string s3_uri = "s3://rapidsai-data/cudf/test/tips.parquet?region=us-east-2";
+  EXPECT_THROW(std::make_unique<cudf::io::arrow_io_source>(s3_uri), cudf::logic_error);
+}
+
+#endif
 
 CUDF_TEST_PROGRAM_MAIN()
