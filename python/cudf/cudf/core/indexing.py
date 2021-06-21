@@ -11,6 +11,12 @@ import cudf
 from cudf._lib.concat import concat_columns
 from cudf._lib.scalar import _is_null_host_scalar
 from cudf._typing import ColumnLike, DataFrameOrSeries, ScalarLike
+from cudf.api.types import (
+    is_bool_dtype,
+    is_integer,
+    is_integer_dtype,
+    is_numeric_dtype,
+)
 from cudf.core.column.column import as_column
 from cudf.utils.dtypes import (
     _is_non_decimal_numeric_dtype,
@@ -21,13 +27,6 @@ from cudf.utils.dtypes import (
     is_list_like,
     is_scalar,
     to_cudf_compatible_scalar,
-)
-
-from ..api.types import (
-    is_bool_dtype,
-    is_integer,
-    is_integer_dtype,
-    is_numeric_dtype,
 )
 
 
