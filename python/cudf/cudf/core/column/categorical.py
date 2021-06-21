@@ -374,7 +374,11 @@ class CategoricalAccessor(ColumnMethodsMixin):
         if old_categories.isin(new_categories).any():
             raise ValueError("new categories must not include old categories")
 
-        out_col = cpp_add_categories(self._column, new_categories)
+        new_categories = old_categories.append(new_categories)
+        out_col = self._column
+        if not self._categories_equal(new_categories):
+            out_col = self._set_categories(new_categories)
+
         return self._return_or_inplace(out_col, inplace=inplace)
 
     def remove_categories(
@@ -724,6 +728,13 @@ class CategoricalAccessor(ColumnMethodsMixin):
         if should_drop_duplicates:
             new_categories = drop_duplicates(Table({None: new_categories}))._columns[0]
 
+        # libcudf expects source and target categories to have exact same type.
+        # Here we upcast the numerical types to make sure that floating point
+        # categories can find their integer counterparts.
+        # For example: old_categories [1.0, 3.14]
+        #              new_categories [3, 2, 1]
+        # The codes for "1.0" in old categories should point to "1" in the new
+        # categories.
         col = self._column
         new_categories_as_common_type = new_categories
         if isinstance(new_categories, cudf.core.column.NumericalColumn) and not new_categories.dtype == col.children[1].dtype:
@@ -739,11 +750,16 @@ class CategoricalAccessor(ColumnMethodsMixin):
                 ordered=col.ordered
             )
             new_categories_as_common_type = new_categories.astype(common_type)
-            
+        
         res_col = cpp_set_categories(col, new_categories_as_common_type)
+
+        # In case there was an upcast, convert it to result dtype.
+        result_cats = res_col.children[1]
+        if isinstance(new_categories, cudf.core.column.NumericalColumn) and not result_cats.dtype == new_categories.dtype:
+            result_cats = result_cats.astype(new_categories.dtype)
         # Update with `ordered` info
         res_col = column.build_categorical_column(
-            categories=res_col.children[1],
+            categories=result_cats,
             codes=res_col.children[0],
             mask=res_col.base_mask,
             size=res_col.base_size,

@@ -1500,7 +1500,7 @@ def build_categorical_column(
         size=size,
         offset=offset,
         null_count=null_count,
-        children=(codes, dtype._categories),
+        children=(codes, categories),
     )
     return cast("cudf.core.column.CategoricalColumn", result)
 
