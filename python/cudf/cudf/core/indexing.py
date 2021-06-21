@@ -101,6 +101,10 @@ class _SeriesIlocIndexer(object):
             key = list(key)
 
         # coerce value into a scalar or column
+        if isinstance(value, list):
+            value = cudf.Scalar(value)
+            self._sr._column[key] = value
+            return
         if is_scalar(value):
             value = to_cudf_compatible_scalar(value)
         else:

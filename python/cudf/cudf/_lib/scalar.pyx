@@ -302,7 +302,9 @@ cdef _set_list_from_pylist(unique_ptr[scalar]& s,
                            object value,
                            object dtype,
                            bool valid=True):
-    value = value if valid else [cudf.NA]
+    value = [value] if valid else [cudf.NA]
+    print('value is')
+    print(value)
     cdef Column col = cudf.core.column.as_column(
         pa.array(value, from_pandas=True, type=dtype.to_arrow())
     )
@@ -460,6 +462,8 @@ cdef _get_np_scalar_from_timedelta64(unique_ptr[scalar]& s):
 
 
 def as_device_scalar(val, dtype=None):
+    if isinstance(val, cudf.Scalar):
+        return val.device_value
     if dtype:
         if isinstance(val, (cudf.Scalar, DeviceScalar)) and dtype != val.dtype:
             raise TypeError("Can't update dtype of existing GPU scalar")

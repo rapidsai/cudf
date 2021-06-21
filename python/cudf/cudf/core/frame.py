@@ -682,6 +682,7 @@ class Frame(libcudf.table.Table):
         return self._data[None].copy(deep=False)
 
     def _scatter(self, key, value):
+        breakpoint()
         result = self._from_table(libcudf.copying.scatter(value, key, self))
 
         result._copy_type_metadata(self)

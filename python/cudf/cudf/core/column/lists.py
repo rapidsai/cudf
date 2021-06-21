@@ -74,6 +74,19 @@ class ListColumn(ColumnBase):
 
         return self._cached_sizeof
 
+    def __setitem__(self, key, value):
+        if isinstance(value, cudf.Scalar):
+            if value.dtype != self.dtype:
+                raise TypeError("fill in later")
+            else:
+                super().__setitem__(key, value)
+        elif isinstance(value, list):
+            value = cudf.Scalar([value])
+            super().__setitem__(key, value)
+        else:
+            raise ValueError('something went wrong')
+
+
     @property
     def base_size(self):
         return len(self.base_children[0]) - 1

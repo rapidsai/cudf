@@ -375,6 +375,7 @@ def test_list_getitem(data):
     ],
 )
 def test_list_scalar_host_construction(data):
+    breakpoint()
     slr = cudf.Scalar(data)
     assert slr.value == data
 
