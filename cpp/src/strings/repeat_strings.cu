@@ -174,6 +174,50 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
 
 namespace {
 /**
+ * @brief Check if the size of the output strings column exceeds the maximum indexable value.
+ */
+template <typename SizeCompFunc>
+bool is_output_overflow(SizeCompFunc size_comp_fn,
+                        size_type strings_count,
+                        rmm::cuda_stream_view stream)
+{
+  // Firstly, compute size of the output strings.
+  auto string_sizes      = rmm::device_uvector<size_type>(strings_count + 1, stream);
+  size_comp_fn.d_offsets = string_sizes.begin();
+
+  thrust::for_each_n(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     strings_count,
+                     size_comp_fn);
+
+  // Compute offsets of the output strings.
+  // If there is overflow then we write a marker value `invalid_offset` to the offsets.
+  static constexpr size_type invalid_offset = std::numeric_limits<size_type>::lowest();
+  static constexpr int64_t max_offset = static_cast<int64_t>(std::numeric_limits<size_type>::max());
+  thrust::exclusive_scan(rmm::exec_policy(stream),
+                         string_sizes.begin(),
+                         string_sizes.end(),
+                         string_sizes.begin(),
+                         size_type{0},
+                         [] __device__(auto const lhs, auto const rhs) {
+                           // If there was already overflow...
+                           if (lhs == invalid_offset || rhs == invalid_offset) {
+                             return invalid_offset;
+                           }
+                           auto const sum = static_cast<int64_t>(lhs) + static_cast<int64_t>(rhs);
+                           if (sum > max_offset) { return invalid_offset; }
+                           return static_cast<size_type>(sum);
+                         });
+
+  auto const invalid_count =
+    thrust::count_if(rmm::exec_policy(stream),
+                     string_sizes.begin(),
+                     string_sizes.end(),
+                     [] __device__(auto const offset) { return offset == invalid_offset; });
+  return invalid_count > 0;
+}
+
+/**
  * @brief Functor to compute string sizes and repeat the input strings, each string is repeated by a
  * separate number of times.
  */
@@ -212,7 +256,7 @@ struct compute_size_and_repeat_separately_fn {
         repeat_times > 0 ? repeat_times * strings_dv.element<string_view>(idx).size_bytes() : 0;
 
       // We will allocate memory for `d_validities` only when both input columns have nulls.
-      if (strings_has_nulls && rtimes_has_nulls) { d_validities[idx] = is_valid; }
+      if (d_validities) { d_validities[idx] = is_valid; }
     }
 
     if (d_chars && repeat_times > 0) {
@@ -238,18 +282,26 @@ struct compute_size_and_repeat_separately_fn {
 struct dispatch_repeat_strings_separately_fn {
   template <class T, std::enable_if_t<cudf::is_index_type<T>()>* = nullptr>
   std::tuple<std::unique_ptr<column>, std::unique_ptr<column>, rmm::device_buffer, size_type>
-  operator()(strings_column_view const& input,
+  operator()(size_type strings_count,
+             strings_column_view const& input,
              column_view const& repeat_times,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr) const
   {
-    auto const strings_count       = input.size();
     auto const strings_dv_ptr      = column_device_view::create(input.parent(), stream);
     auto const repeat_times_dv_ptr = column_device_view::create(repeat_times, stream);
     auto const strings_has_nulls   = input.has_nulls();
     auto const rtimes_has_nulls    = repeat_times.has_nulls();
     auto const fn                  = compute_size_and_repeat_separately_fn<T>{
       *strings_dv_ptr, *repeat_times_dv_ptr, strings_has_nulls, rtimes_has_nulls};
+
+    // Check for overflow (whether the total size of the output strings column exceeds
+    // numeric_limits<size_type>::max().
+    if (is_output_overflow(fn, strings_count, stream)) {
+      CUDF_FAIL(
+        "Size of the output strings column exceeds the maximum value that can be indexed by "
+        "size_type (offset_type)");
+    }
 
     // Repeat the strings in each row.
     // Note that this cannot handle the cases when the size of the output column exceeds the maximum
@@ -279,12 +331,13 @@ struct dispatch_repeat_strings_separately_fn {
 
   template <class T, std::enable_if_t<!cudf::is_index_type<T>()>* = nullptr>
   std::tuple<std::unique_ptr<column>, std::unique_ptr<column>, rmm::device_buffer, size_type>
-  operator()(strings_column_view const&,
+  operator()(size_type,
+             strings_column_view const&,
              column_view const&,
              rmm::cuda_stream_view,
              rmm::mr::device_memory_resource*) const
   {
-    CUDF_FAIL("repeat_strings is expecting an integer type for the `repeat_times` input column.");
+    CUDF_FAIL("repeat_strings expects an integer type for the `repeat_times` input column.");
   }
 };
 
@@ -300,8 +353,14 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
   auto const strings_count = input.size();
   if (strings_count == 0) { return make_empty_column(data_type{type_id::STRING}); }
 
-  auto [offsets_column, chars_column, null_mask, null_count] = type_dispatcher(
-    repeat_times.type(), dispatch_repeat_strings_separately_fn{}, input, repeat_times, stream, mr);
+  auto [offsets_column, chars_column, null_mask, null_count] =
+    type_dispatcher(repeat_times.type(),
+                    dispatch_repeat_strings_separately_fn{},
+                    strings_count,
+                    input,
+                    repeat_times,
+                    stream,
+                    mr);
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              std::move(chars_column),
