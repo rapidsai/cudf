@@ -186,6 +186,23 @@ TEST_F(StringsReplaceTests, ReplaceBackrefsRegexReversedTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
+TEST_F(StringsReplaceTests, BackrefWithGreedyQuantifier)
+{
+  cudf::test::strings_column_wrapper input(
+    {"<h1>title</h1><h2>ABC</h2>", "<h1>1234567</h1><h2>XYZ</h2>"});
+  std::string replacement = "<h2>\\1</h2><p>\\2</p>";
+
+  auto results = cudf::strings::replace_with_backrefs(
+    cudf::strings_column_view(input), "<h1>(.*)</h1><h2>(.*)</h2>", replacement);
+  cudf::test::strings_column_wrapper expected(
+    {"<h2>title</h2><p>ABC</p>", "<h2>1234567</h2><p>XYZ</p>"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  results = cudf::strings::replace_with_backrefs(
+    cudf::strings_column_view(input), "<h1>([a-z\\d]+)</h1><h2>([A-Z]+)</h2>", replacement);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(StringsReplaceTests, MediumReplaceRegex)
 {
   // This results in 95 regex instructions and falls in the 'medium' range.

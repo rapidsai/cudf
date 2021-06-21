@@ -18,7 +18,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
-#include <cudf/utilities/span.hpp>
 
 #include <strings/regex/regex.cuh>
 
@@ -43,7 +42,6 @@ struct backrefs_fn {
   string_view const d_repl;  // string replacement template
   Iterator backrefs_begin;
   Iterator backrefs_end;
-  cudf::detail::device_2dspan<string_index_pair> d_indices;
   int32_t* d_offsets{};
   char* d_chars{};
 
@@ -62,9 +60,6 @@ struct backrefs_fn {
     size_type begin   = 0;       // first character position matching regex
     size_type end     = nchars;  // last character position (exclusive)
 
-    // working memory for extract on this string
-    auto d_extracts = d_indices[idx];
-
     // copy input to output replacing strings as we go
     while (prog.find<stack_size>(idx, d_str, begin, end) > 0)  // inits the begin/end vars
     {
@@ -77,23 +72,23 @@ struct backrefs_fn {
       size_type lpos_template = 0;              // last end pos of replace template
       auto const repl_ptr     = d_repl.data();  // replace template pattern
 
-      // extracts all groups for this string into d_extracts
-      prog.extract<stack_size>(idx, d_str, begin, end, d_extracts);
-
       thrust::for_each(
         thrust::seq, backrefs_begin, backrefs_end, [&] __device__(backref_type backref) {
-          // copy the static data at the beginning of the template
           if (out_ptr) {
             auto const copy_length = backref.second - lpos_template;
             out_ptr = copy_and_increment(out_ptr, repl_ptr + lpos_template, copy_length);
             lpos_template += copy_length;
           }
-          // retrieve the string for this backref
-          auto const extracted_string = d_extracts[backref.first - 1];
-          nbytes += extracted_string.second;
-          if (out_ptr) {
-            out_ptr = copy_and_increment(out_ptr, extracted_string.first, extracted_string.second);
-          }
+          // extract the specific group's string for this backref's index
+          auto extracted = prog.extract<stack_size>(idx, d_str, begin, end, backref.first - 1);
+          if (!extracted || (extracted.value().second <= extracted.value().first))
+            return;  // no value for this backref number; that is ok
+          auto spos_extract = d_str.byte_offset(extracted.value().first);   // convert
+          auto epos_extract = d_str.byte_offset(extracted.value().second);  // to bytes
+          nbytes += epos_extract - spos_extract;
+          if (out_ptr)
+            out_ptr =
+              copy_and_increment(out_ptr, in_ptr + spos_extract, (epos_extract - spos_extract));
         });
 
       // copy remainder of template
