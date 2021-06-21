@@ -66,8 +66,8 @@ struct get_element_functor {
   {
     auto device_col = column_device_view::create(input, stream);
 
-    rmm::device_scalar<string_view> temp_data;
-    rmm::device_scalar<bool> temp_valid;
+    rmm::device_scalar<string_view> temp_data(stream, mr);
+    rmm::device_scalar<bool> temp_valid(stream, mr);
 
     device_single_thread(
       [buffer   = temp_data.data(),
@@ -105,7 +105,7 @@ struct get_element_functor {
 
     if (!key_index_scalar.is_valid(stream)) {
       auto null_result = make_default_constructed_scalar(dict_view.keys().type(), stream, mr);
-      null_result->set_valid(false, stream);
+      null_result->set_valid_async(false, stream);
       return null_result;
     }
 
@@ -125,7 +125,8 @@ struct get_element_functor {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
   {
-    bool valid = is_element_valid_sync(input, index, stream);
+    bool valid               = is_element_valid_sync(input, index, stream);
+    auto const child_col_idx = lists_column_view::child_column_index;
 
     if (valid) {
       lists_column_view lcv(input);
@@ -134,9 +135,11 @@ struct get_element_functor {
         lists::detail::copy_slice(lcv, index, index + 1, stream, mr)->release();
       // Construct scalar with row data
       return std::make_unique<list_scalar>(
-        std::move(*row_slice_contents.children[1]), valid, stream, mr);
+        std::move(*row_slice_contents.children[child_col_idx]), valid, stream, mr);
     } else {
-      return make_default_constructed_scalar(data_type(type_id::LIST));
+      auto empty_row_contents = empty_like(input)->release();
+      return std::make_unique<list_scalar>(
+        std::move(*empty_row_contents.children[child_col_idx]), valid, stream, mr);
     }
   }
 
@@ -151,8 +154,8 @@ struct get_element_functor {
 
     auto device_col = column_device_view::create(input, stream);
 
-    rmm::device_scalar<Type> temp_data;
-    rmm::device_scalar<bool> temp_valid;
+    rmm::device_scalar<Type> temp_data(stream, mr);
+    rmm::device_scalar<bool> temp_valid(stream, mr);
 
     device_single_thread(
       [buffer   = temp_data.data(),
@@ -171,12 +174,9 @@ struct get_element_functor {
                                                    mr);
   }
 
-  template <typename T, std::enable_if_t<std::is_same<T, struct_view>::value> *p = nullptr>
-  std::unique_ptr<scalar> operator()(
-    column_view const &input,
-    size_type index,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource())
+  template <typename T, typename... Args>
+  std::enable_if_t<std::is_same<T, struct_view>::value, std::unique_ptr<scalar>> operator()(
+    Args &&...)
   {
     CUDF_FAIL("get_element_functor not supported for struct_view");
   }

@@ -42,6 +42,8 @@
 
 #include <numeric>
 #include <sstream>
+#include "cudf/detail/utilities/vector_factories.hpp"
+#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 namespace test {
@@ -148,7 +150,7 @@ class corresponding_rows_not_equivalent {
     }
 
     template <typename T, typename... Args>
-    __device__ std::enable_if_t<not std::is_floating_point<T>::value, bool> operator()(Args... args)
+    __device__ std::enable_if_t<not std::is_floating_point<T>::value, bool> operator()(Args...)
     {
       // Non-floating point inequality is checked already
       return true;
@@ -170,7 +172,7 @@ class corresponding_rows_not_equivalent {
 };
 
 // Stringify the inconsistent values resulted from the comparison of two columns element-wise
-std::string stringify_column_differences(thrust::device_vector<int> const& differences,
+std::string stringify_column_differences(cudf::device_span<int const> differences,
                                          column_view const& lhs,
                                          column_view const& rhs,
                                          bool print_all_differences,
@@ -178,13 +180,12 @@ std::string stringify_column_differences(thrust::device_vector<int> const& diffe
 {
   CUDF_EXPECTS(not differences.empty(), "Shouldn't enter this function if `differences` is empty");
   std::string const depth_str = depth > 0 ? "depth " + std::to_string(depth) + '\n' : "";
+  // move the differences to the host.
+  auto h_differences = cudf::detail::make_host_vector_sync(differences);
   if (print_all_differences) {
     std::ostringstream buffer;
     buffer << depth_str << "differences:" << std::endl;
 
-    // thrust may crash if a device_vector is passed to fixed_width_column_wrapper,
-    // thus we construct fixed_width_column_wrapper from a host_vector instead
-    thrust::host_vector<int> h_differences(differences);
     auto source_table = cudf::table_view({lhs, rhs});
     auto diff_column =
       fixed_width_column_wrapper<int32_t>(h_differences.begin(), h_differences.end());
@@ -198,7 +199,7 @@ std::string stringify_column_differences(thrust::device_vector<int> const& diffe
              << h_differences[i] << "] = " << h_right_strings[i] << std::endl;
     return buffer.str();
   } else {
-    int index     = differences[0];  // only stringify first difference
+    int index     = h_differences[0];  // only stringify first difference
     auto diff_lhs = cudf::detail::slice(lhs, index, index + 1);
     auto diff_rhs = cudf::detail::slice(rhs, index, index + 1);
     return depth_str + "first difference: " + "lhs[" + std::to_string(index) +
@@ -222,16 +223,18 @@ struct column_comparator_impl {
                                               corresponding_rows_unequal,
                                               corresponding_rows_not_equivalent>;
 
-    auto differences = thrust::device_vector<int>(lhs.size());  // worst case: everything different
-    auto diff_iter   = thrust::copy_if(thrust::device,
+    auto differences = rmm::device_uvector<int>(
+      lhs.size(), rmm::cuda_stream_default);  // worst case: everything different
+    auto diff_iter = thrust::copy_if(rmm::exec_policy(),
                                      thrust::make_counting_iterator(0),
                                      thrust::make_counting_iterator(lhs.size()),
                                      differences.begin(),
                                      ComparatorType(*d_lhs, *d_rhs));
 
-    differences.resize(thrust::distance(differences.begin(), diff_iter));  // shrink back down
+    differences.resize(thrust::distance(differences.begin(), diff_iter),
+                       rmm::cuda_stream_default);  // shrink back down
 
-    if (not differences.empty())
+    if (not differences.is_empty())
       GTEST_FAIL() << stringify_column_differences(
         differences, lhs, rhs, print_all_differences, depth);
   }
@@ -256,7 +259,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     if (lhs_l.is_empty()) { return; }
 
     // worst case - everything is different
-    thrust::device_vector<int> differences(lhs.size());
+    rmm::device_uvector<int> differences(lhs.size(), rmm::cuda_stream_default);
 
     // TODO : determine how equals/equivalency should work for columns with divergent underlying
     // data, but equivalent null masks. Example:
@@ -307,7 +310,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
       });
 
     auto diff_iter = thrust::copy_if(
-      thrust::device,
+      rmm::exec_policy(),
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(lhs_l.size() + 1),
       differences.begin(),
@@ -323,9 +326,10 @@ struct column_comparator_impl<list_view, check_exact_equality> {
         return lhs_offsets[index] == rhs_offsets[index] ? false : true;
       });
 
-    differences.resize(thrust::distance(differences.begin(), diff_iter));  // shrink back down
+    differences.resize(thrust::distance(differences.begin(), diff_iter),
+                       rmm::cuda_stream_default);  // shrink back down
 
-    if (not differences.empty())
+    if (not differences.is_empty())
       GTEST_FAIL() << stringify_column_differences(
         differences, lhs, rhs, print_all_differences, depth);
 
@@ -522,7 +526,7 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
   // the first offset value to normalize everything against
   size_type first =
     cudf::detail::get_value<size_type>(offsets, c.offset(), rmm::cuda_stream_default);
-  rmm::device_vector<size_type> shifted_offsets(output_size);
+  rmm::device_uvector<size_type> shifted_offsets(output_size, rmm::cuda_stream_default);
 
   // normalize the offset values for the column offset
   size_type const* d_offsets = offsets.head<size_type>() + c.offset();
@@ -533,7 +537,7 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
     shifted_offsets.begin(),
     [first] __device__(int32_t offset) { return static_cast<size_type>(offset - first); });
 
-  thrust::host_vector<size_type> h_shifted_offsets(shifted_offsets);
+  auto const h_shifted_offsets = cudf::detail::make_host_vector_sync(shifted_offsets);
   std::ostringstream buffer;
   for (size_t idx = 0; idx < h_shifted_offsets.size(); idx++) {
     buffer << h_shifted_offsets[idx];
@@ -544,9 +548,7 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
 
 struct column_view_printer {
   template <typename Element, typename std::enable_if_t<is_numeric<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     auto h_data = cudf::test::to_host<Element>(col);
 
@@ -585,9 +587,7 @@ struct column_view_printer {
   }
 
   template <typename Element, typename std::enable_if_t<cudf::is_fixed_point<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     auto const h_data = cudf::test::to_host<Element>(col);
     if (col.nullable()) {
@@ -609,9 +609,7 @@ struct column_view_printer {
 
   template <typename Element,
             typename std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     //
     //  Implementation for strings, call special to_host variant
@@ -632,9 +630,7 @@ struct column_view_printer {
 
   template <typename Element,
             typename std::enable_if_t<std::is_same<Element, cudf::dictionary32>::value>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     cudf::dictionary_column_view dictionary(col);
     if (col.is_empty()) return;
@@ -655,9 +651,7 @@ struct column_view_printer {
 
   // Print the tick counts with the units
   template <typename Element, typename std::enable_if_t<is_duration<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     auto h_data = cudf::test::to_host<Element>(col);
 

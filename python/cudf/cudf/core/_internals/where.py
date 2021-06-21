@@ -65,7 +65,9 @@ def _check_and_cast_columns_with_other(
     else:
         if (
             cudf.utils.dtypes.is_scalar(other)
-            and cudf.utils.dtypes.is_numerical_dtype(source_col.dtype)
+            and cudf.utils.dtypes._is_non_decimal_numeric_dtype(
+                source_col.dtype
+            )
             and cudf.utils.dtypes._can_cast(other, source_col.dtype)
         ):
             common_dtype = source_col.dtype

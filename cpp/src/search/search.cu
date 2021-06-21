@@ -101,7 +101,7 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   auto const matched = dictionary::detail::match_dictionaries({t, values}, stream);
 
   // Prepare to flatten the structs column
-  auto const has_null_elements   = has_nulls(t) or has_nulls(values);
+  auto const has_null_elements   = has_nested_nulls(t) or has_nested_nulls(values);
   auto const flatten_nullability = has_null_elements
                                      ? structs::detail::column_nullability::FORCE
                                      : structs::detail::column_nullability::MATCH_INCOMING;
@@ -169,17 +169,17 @@ struct contains_scalar_dispatch {
 };
 
 template <>
-bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const& col,
-                                                           scalar const& value,
-                                                           rmm::cuda_stream_view stream)
+bool contains_scalar_dispatch::operator()<cudf::list_view>(column_view const&,
+                                                           scalar const&,
+                                                           rmm::cuda_stream_view)
 {
   CUDF_FAIL("list_view type not supported yet");
 }
 
 template <>
-bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& col,
-                                                             scalar const& value,
-                                                             rmm::cuda_stream_view stream)
+bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const&,
+                                                             scalar const&,
+                                                             rmm::cuda_stream_view)
 {
   CUDF_FAIL("struct_view type not supported yet");
 }

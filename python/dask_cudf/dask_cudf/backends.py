@@ -6,7 +6,7 @@ import pandas as pd
 import pyarrow as pa
 
 from dask.dataframe.categorical import categorical_dtype_dispatch
-from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
+from dask.dataframe.core import get_parallel_type, meta_nonempty
 from dask.dataframe.methods import (
     concat_dispatch,
     is_categorical_dtype_dispatch,
@@ -20,6 +20,18 @@ from dask.dataframe.utils import (
     is_scalar,
 )
 
+try:
+    from dask.dataframe.utils import make_meta_obj as make_meta_obj
+except ImportError:
+    from dask.dataframe.utils import make_meta as make_meta_obj
+
+try:
+    from dask.dataframe.dispatch import (
+        make_meta_dispatch as make_meta_dispatch,
+    )
+except ImportError:
+    from dask.dataframe.utils import make_meta as make_meta_dispatch
+
 import cudf
 from cudf.utils.dtypes import is_string_dtype
 
@@ -27,10 +39,10 @@ from .core import DataFrame, Index, Series
 
 get_parallel_type.register(cudf.DataFrame, lambda _: DataFrame)
 get_parallel_type.register(cudf.Series, lambda _: Series)
-get_parallel_type.register(cudf.Index, lambda _: Index)
+get_parallel_type.register(cudf.BaseIndex, lambda _: Index)
 
 
-@meta_nonempty.register(cudf.Index)
+@meta_nonempty.register(cudf.BaseIndex)
 def _nonempty_index(idx):
     if isinstance(idx, cudf.core.index.RangeIndex):
         return cudf.core.index.RangeIndex(2, name=idx.name)
@@ -115,12 +127,12 @@ def meta_nonempty_cudf(x):
     return res
 
 
-@make_meta.register((cudf.Series, cudf.DataFrame))
+@make_meta_dispatch.register((cudf.Series, cudf.DataFrame))
 def make_meta_cudf(x, index=None):
     return x.head(0)
 
 
-@make_meta.register(cudf.Index)
+@make_meta_dispatch.register(cudf.BaseIndex)
 def make_meta_cudf_index(x, index=None):
     return x[:0]
 
@@ -133,8 +145,8 @@ def _empty_series(name, dtype, index=None):
     return cudf.Series([], dtype=dtype, name=name, index=index)
 
 
-@make_meta.register(object)
-def make_meta_object(x, index=None):
+@make_meta_obj.register(object)
+def make_meta_object_cudf(x, index=None):
     """Create an empty cudf object containing the desired metadata.
 
     Parameters
@@ -167,7 +179,7 @@ def make_meta_object(x, index=None):
         return x[:0]
 
     if index is not None:
-        index = make_meta(index)
+        index = make_meta_dispatch(index)
 
     if isinstance(x, dict):
         return cudf.DataFrame(
@@ -203,7 +215,7 @@ def make_meta_object(x, index=None):
     raise TypeError(f"Don't know how to create metadata from {x}")
 
 
-@concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
+@concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.BaseIndex))
 def concat_cudf(
     dfs,
     axis=0,
@@ -225,26 +237,43 @@ def concat_cudf(
     return cudf.concat(dfs, axis=axis, ignore_index=ignore_index)
 
 
-@categorical_dtype_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
+@categorical_dtype_dispatch.register(
+    (cudf.DataFrame, cudf.Series, cudf.BaseIndex)
+)
 def categorical_dtype_cudf(categories=None, ordered=None):
     return cudf.CategoricalDtype(categories=categories, ordered=ordered)
 
 
-@tolist_dispatch.register((cudf.Series, cudf.Index))
+@tolist_dispatch.register((cudf.Series, cudf.BaseIndex))
 def tolist_cudf(obj):
     return obj.to_arrow().to_pylist()
 
 
 @is_categorical_dtype_dispatch.register(
-    (cudf.Series, cudf.Index, cudf.CategoricalDtype, Series)
+    (cudf.Series, cudf.BaseIndex, cudf.CategoricalDtype, Series)
 )
 def is_categorical_dtype_cudf(obj):
     return cudf.utils.dtypes.is_categorical_dtype(obj)
 
 
 try:
+    from dask.dataframe.dispatch import union_categoricals_dispatch
 
-    from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
+    @union_categoricals_dispatch.register((cudf.Series, cudf.BaseIndex))
+    def union_categoricals_cudf(
+        to_union, sort_categories=False, ignore_order=False
+    ):
+        return cudf.api.types._union_categoricals(
+            to_union, sort_categories=False, ignore_order=False
+        )
+
+
+except ImportError:
+    pass
+
+try:
+
+    from dask.dataframe.core import group_split_dispatch, hash_object_dispatch
 
     def safe_hash(frame):
         index = frame.index
@@ -259,7 +288,7 @@ try:
             return safe_hash(frame.reset_index())
         return safe_hash(frame)
 
-    @hash_object_dispatch.register(cudf.Index)
+    @hash_object_dispatch.register(cudf.BaseIndex)
     def hash_object_cudf_index(ind, index=None):
 
         if isinstance(ind, cudf.MultiIndex):

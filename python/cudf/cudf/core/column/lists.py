@@ -8,16 +8,20 @@ import pyarrow as pa
 import cudf
 from cudf._lib.copying import segmented_gather
 from cudf._lib.lists import (
+    concatenate_rows,
     contains_scalar,
     count_elements,
     drop_list_duplicates,
     extract_element,
     sort_lists,
 )
+from cudf._lib.table import Table
+from cudf._typing import BinaryOperand, Dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethodsMixin
-from cudf.utils.dtypes import is_list_dtype, is_numerical_dtype
+from cudf.core.dtypes import ListDtype
+from cudf.utils.dtypes import _is_non_decimal_numeric_dtype, is_list_dtype
 
 
 class ListColumn(ColumnBase):
@@ -72,7 +76,62 @@ class ListColumn(ColumnBase):
 
     @property
     def base_size(self):
-        return len(self.base_children[0]) - 1
+        # in some cases, libcudf will return an empty ListColumn with no
+        # indices; in these cases, we must manually set the base_size to 0 to
+        # avoid it being negative
+        return max(0, len(self.base_children[0]) - 1)
+
+    def binary_operator(
+        self, binop: str, other: BinaryOperand, reflect: bool = False
+    ) -> ColumnBase:
+        """
+        Calls a binary operator *binop* on operands *self*
+        and *other*.
+
+        Parameters
+        ----------
+        self, other : list columns
+
+        binop :  binary operator
+            Only "add" operator is currently being supported
+            for lists concatenation functions
+
+        reflect : boolean, default False
+            If ``reflect`` is ``True``, swap the order of
+            the operands.
+
+        Returns
+        -------
+        Series : the output dtype is determined by the
+            input operands.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame({'val': [['a', 'a'], ['b'], ['c']]})
+        >>> gdf
+            val
+        0  [a, a]
+        1     [b]
+        2     [c]
+        >>> gdf['val'] + gdf['val']
+        0    [a, a, a, a]
+        1          [b, b]
+        2          [c, c]
+        Name: val, dtype: list
+
+        """
+
+        if isinstance(other.dtype, ListDtype):
+            if binop == "add":
+                return concatenate_rows(Table({0: self, 1: other}))
+            else:
+                raise NotImplementedError(
+                    "Lists concatenation for this operation is not yet"
+                    "supported"
+                )
+        else:
+            raise TypeError("can only concatenate list to list")
 
     @property
     def elements(self):
@@ -122,12 +181,14 @@ class ListColumn(ColumnBase):
 
     def serialize(self):
         header = {}
+        frames = []
         header["type-serialized"] = pickle.dumps(type(self))
-        header["dtype"] = pickle.dumps(self.dtype)
         header["null_count"] = self.null_count
         header["size"] = self.size
+        header["dtype"], dtype_frames = self.dtype.serialize()
+        header["dtype_frames_count"] = len(dtype_frames)
+        frames.extend(dtype_frames)
 
-        frames = []
         sub_headers = []
 
         for item in self.children:
@@ -152,9 +213,14 @@ class ListColumn(ColumnBase):
         else:
             mask = None
 
+        # Deserialize dtype
+        dtype = pickle.loads(header["dtype"]["type-serialized"]).deserialize(
+            header["dtype"], frames[: header["dtype_frames_count"]]
+        )
+
         # Deserialize child columns
         children = []
-        f = 0
+        f = header["dtype_frames_count"]
         for h in header["subheaders"]:
             fcount = h["frame_count"]
             child_frames = frames[f : f + fcount]
@@ -165,7 +231,7 @@ class ListColumn(ColumnBase):
         # Materialize list column
         return column.build_column(
             data=None,
-            dtype=pickle.loads(header["dtype"]),
+            dtype=dtype,
             mask=mask,
             children=tuple(children),
             size=header["size"],
@@ -176,6 +242,23 @@ class ListColumn(ColumnBase):
         raise NotImplementedError(
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
+
+    def _with_type_metadata(
+        self: "cudf.core.column.ListColumn", dtype: Dtype
+    ) -> "cudf.core.column.ListColumn":
+        if isinstance(dtype, ListDtype):
+            return column.build_list_column(
+                indices=self.base_children[0],
+                elements=self.base_children[1]._with_type_metadata(
+                    dtype.element_type
+                ),
+                mask=self.base_mask,
+                size=self.size,
+                offset=self.offset,
+                null_count=self.null_count,
+            )
+
+        return self
 
 
 class ListMethods(ColumnMethodsMixin):
@@ -349,7 +432,7 @@ class ListMethods(ColumnMethodsMixin):
             raise ValueError(
                 "lists_indices and list column is of different " "size."
             )
-        if not is_numerical_dtype(
+        if not _is_non_decimal_numeric_dtype(
             lists_indices_col.children[1].dtype
         ) or not np.issubdtype(
             lists_indices_col.children[1].dtype, np.integer

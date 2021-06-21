@@ -11,7 +11,6 @@ from typing import Any, Mapping, Sequence, Union, cast
 
 import numpy as np
 import pandas as pd
-from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
@@ -307,7 +306,7 @@ class DatetimeColumn(column.ColumnBase):
     ) -> ColumnBase:
         if isinstance(rhs, cudf.DateOffset):
             return rhs._datetime_binop(self, op, reflect=reflect)
-        lhs, rhs = self, rhs
+        lhs: Union[ScalarLike, ColumnBase] = self
         if op in ("eq", "ne", "lt", "gt", "le", "ge", "NULL_EQUALS"):
             out_dtype = np.dtype(np.bool_)  # type: Dtype
         elif op == "add" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
@@ -332,7 +331,10 @@ class DatetimeColumn(column.ColumnBase):
                 f"Series of dtype {self.dtype} cannot perform "
                 f" the operation {op}"
             )
-        return binop(lhs, rhs, op=op, out_dtype=out_dtype, reflect=reflect)
+
+        if reflect:
+            lhs, rhs = rhs, lhs
+        return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
     def fillna(
         self, fill_value: Any = None, method: str = None, dtype: Dtype = None
@@ -420,20 +422,6 @@ class DatetimeColumn(column.ColumnBase):
             null,
         )
         return out_col
-
-
-@annotate("BINARY_OP", color="orange", domain="cudf_python")
-def binop(
-    lhs: Union[ColumnBase, ScalarLike],
-    rhs: Union[ColumnBase, ScalarLike],
-    op: str,
-    out_dtype: Dtype,
-    reflect: bool,
-) -> ColumnBase:
-    if reflect:
-        lhs, rhs = rhs, lhs
-    out = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
-    return out
 
 
 def binop_offset(lhs, rhs, op):

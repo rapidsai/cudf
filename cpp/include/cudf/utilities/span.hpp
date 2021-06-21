@@ -120,6 +120,11 @@ struct is_host_span_supported_container<  //
   thrust::host_vector<T, Alloc>> : std::true_type {
 };
 
+template <typename T, typename Alloc>
+struct is_host_span_supported_container<  //
+  std::basic_string<T, std::char_traits<T>, Alloc>> : std::true_type {
+};
+
 template <typename T, std::size_t Extent = cudf::dynamic_extent>
 struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent>> {
   using base = cudf::detail::span_base<T, Extent, host_span<T, Extent>>;
