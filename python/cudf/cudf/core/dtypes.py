@@ -337,7 +337,14 @@ class Decimal32Dtype(_BaseDtype):
         return cls(precision, -metadata.exponent)
 
     def serialize(self) -> Tuple[dict, list]:
-        return {"precision": self.precision, "scale": self.scale}, []
+        return (
+            {
+                "type-serialized": pickle.dumps(type(self)),
+                "precision": self.precision,
+                "scale": self.scale,
+            },
+            [],
+        )
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):

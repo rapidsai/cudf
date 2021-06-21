@@ -2,6 +2,7 @@
 
 from decimal import Decimal
 from typing import Any, Sequence, Tuple, Union, cast
+from warnings import warn
 
 import cupy as cp
 import numpy as np
@@ -153,7 +154,7 @@ class Decimal64Column(NumericalBaseColumn):
             if not isinstance(
                 other,
                 (
-                    Decimal64Dtype,
+                    Decimal64Column,
                     cudf.core.column.NumericalColumn,
                     cudf.Scalar,
                 ),
@@ -203,7 +204,18 @@ class Decimal64Column(NumericalBaseColumn):
 
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
-    ) -> "cudf.core.column.Decimal64Column":
+    ) -> Union[
+        "cudf.core.column.Decimal32Column", "cudf.core.column.Decimal64Column"
+    ]:
+        if (
+            isinstance(dtype, Decimal64Dtype)
+            and dtype.scale < self.dtype.scale
+        ):
+            warn(
+                "cuDF truncates when downcasting decimals to a lower scale. "
+                "To round, use Series.round() or DataFrame.round()."
+            )
+
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype)
