@@ -190,12 +190,12 @@ size_t cufile_input_impl::read(size_t offset,
   int device;
   cudaGetDevice(&device);
 
-  auto read_slice = [=](void *dst, size_t size, size_t offset) {
+  auto read_slice = [=](void *dst, size_t size, size_t offset) -> int {
     cudaSetDevice(device);
-    shim->read(cf_file.handle(), dst, size, offset, 0);
+    return shim->read(cf_file.handle(), dst, size, offset, 0);
   };
 
-  std::vector<std::thread> threads;
+  std::vector<std::future<int>> threads;
   constexpr size_t n_threads = 16;
   size_t slice_size          = size / n_threads;
   size_t slice_offset        = 0;
@@ -203,11 +203,15 @@ size_t cufile_input_impl::read(size_t offset,
     void *dst_slice = dst + slice_offset;
 
     if (t == n_threads - 1) { slice_size += size % n_threads; }
-    threads.emplace_back(read_slice, dst_slice, slice_size, offset + slice_offset);
+    threads.push_back(
+      std::async(std::launch::async, read_slice, dst_slice, slice_size, offset + slice_offset));
 
     slice_offset += slice_size;
   }
-  for (auto &thread : threads) { thread.join(); }
+  for (auto &thread : threads) {
+    thread.wait();
+    CUDF_EXPECTS(thread.get() != -1, "cuFile error reading from a file");
+  }
 
   // always read the requested size for now
   return size;
