@@ -1479,7 +1479,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if _is_scalar_or_zero_d_array(rhs):
             rhs = [rhs] * lhs._num_columns
 
-        # TODO: Need to normalize all the right operands in the branches below.
         # The various branches of the conditional below construct a dictionary
         # of the form {col: (left, right)}, where left is a ColumnBase and
         # right is a suitable right operand for a binary operation with left.
@@ -1489,6 +1488,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         # NULL are always commutative, even for binops (like subtraction) that
         # are normally anticommutative.
         if isinstance(rhs, Sequence):
+            # TODO: Consider validating sequence length (pandas does).
             operands = {
                 name: (left, right)
                 for right, (name, left) in zip(rhs, lhs._data.items())
@@ -1539,10 +1539,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         # Now actually perform the binop on the columns in left and right.
         output = {}
         for col, (left_column, right_column) in operands.items():
-            # TODO: This is duplicating logic from
-            # SingleColumnFrame._normalize_binop_value, but is ignoring
-            # cudf.NA. That possibility must be considered.
-            if not isinstance(right_column, cudf.core.column.ColumnBase):
+            if right_column is cudf.NA:
+                right_column = cudf.Scalar(
+                    right_column, dtype=left_column.dtype
+                )
+            elif not isinstance(right_column, cudf.core.column.ColumnBase):
                 right_column = left_column.normalize_binop_value(right_column)
 
             if fn == "truediv":
@@ -1599,8 +1600,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 outcol = outcol._column.set_mask(output_mask)
             output[col] = outcol
 
-        # TODO: Figure out if multiindexes need special handling here
-        # (probably...).
         # TODO: Figure out how to handle this depending on whether or not the
         # objects have indexes (so that binops work for indexes as lhs).
         return cls._from_data(ColumnAccessor(output), index=lhs._index)
