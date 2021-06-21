@@ -3,13 +3,14 @@
 import datetime
 import decimal
 import os
+import random
 from io import BytesIO
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.orc
-import pyorc
+import pyorc as po
 import pytest
 
 import cudf
@@ -300,7 +301,7 @@ def test_orc_read_skiprows(tmpdir):
         {"a": [1, 0, 1, 0, None, 1, 1, 1, 0, None, 0, 0, 1, 1, 1, 1]},
         dtype=pd.BooleanDtype(),
     )
-    writer = pyorc.Writer(buff, pyorc.Struct(a=pyorc.Boolean()))
+    writer = po.Writer(buff, po.Struct(a=po.Boolean()))
     tuples = list(
         map(
             lambda x: (None,) if x[0] is pd.NA else x,
@@ -811,3 +812,126 @@ def test_orc_string_stream_offset_issue():
     df.to_orc(buffer)
 
     assert_eq(df, cudf.read_orc(buffer))
+
+
+@pytest.mark.parametrize(
+    "columns",
+    [
+        None,
+        ["lvl3_list", "list_nests_struct", "struct_nests_list"],
+        ["lvl3_list", "lvl1_struct", "lvl2_struct"],
+    ],
+)
+@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 20000])
+@pytest.mark.parametrize("use_index", [True, False])
+def test_lists_struct_nests(columns, num_rows, use_index):
+    rd = random.Random(0)
+    np.random.seed(seed=0)
+
+    buff = BytesIO()
+
+    schema = {
+        "lvl3_list": po.Array(po.Array(po.Array(po.BigInt()))),
+        "lvl1_list": po.Array(po.BigInt()),
+        "lvl1_struct": po.Struct(**{"a": po.BigInt(), "b": po.BigInt()}),
+        "lvl2_struct": po.Struct(
+            **{
+                "a": po.BigInt(),
+                "b": po.Struct(**{"c": po.BigInt(), "d": po.BigInt()}),
+            }
+        ),
+        "list_nests_struct": po.Array(
+            po.Array(po.Struct(**{"a": po.BigInt(), "b": po.BigInt()}))
+        ),
+        "struct_nests_list": po.Struct(
+            **{
+                "struct": po.Struct(**{"a": po.BigInt(), "b": po.BigInt()}),
+                "list": po.Array(po.BigInt()),
+            }
+        ),
+    }
+
+    schema = po.Struct(**schema)
+
+    size = 20000
+
+    lvl3_list = [
+        [
+            [
+                [
+                    rd.choice([None, np.random.randint(1, 3)])
+                    for z in range(np.random.randint(1, 3))
+                ]
+                for z in range(np.random.randint(0, 3))
+            ]
+            for y in range(np.random.randint(0, 3))
+        ]
+        for x in range(size)
+    ]
+    lvl1_list = [
+        [
+            rd.choice([None, np.random.randint(0, 3)])
+            for y in range(np.random.randint(1, 4))
+        ]
+        for x in range(size)
+    ]
+    lvl1_struct = [
+        (np.random.randint(0, 3), np.random.randint(0, 3)) for x in range(size)
+    ]
+    lvl2_struct = [
+        (
+            rd.choice([None, np.random.randint(0, 3)]),
+            (
+                rd.choice([None, np.random.randint(0, 3)]),
+                np.random.randint(0, 3),
+            ),
+        )
+        for x in range(size)
+    ]
+    list_nests_struct = [
+        [
+            [rd.choice(lvl1_struct), rd.choice(lvl1_struct)]
+            for y in range(np.random.randint(1, 4))
+        ]
+        for x in range(size)
+    ]
+    struct_nests_list = [(lvl1_struct[x], lvl1_list[x]) for x in range(size)]
+
+    df = pd.DataFrame(
+        {
+            "lvl3_list": lvl3_list,
+            "lvl1_list": lvl1_list,
+            "lvl1_struct": lvl1_struct,
+            "lvl2_struct": lvl2_struct,
+            "list_nests_struct": list_nests_struct,
+            "struct_nests_list": struct_nests_list,
+        }
+    )
+
+    writer = po.Writer(buff, schema)
+    tuples = list(
+        map(
+            lambda x: (None,) if x[0] is pd.NA else x,
+            list(df.itertuples(index=False, name=None)),
+        )
+    )
+    writer.writerows(tuples)
+    writer.close()
+
+    gdf = cudf.read_orc(
+        buff, columns=columns, num_rows=num_rows, use_index=use_index
+    )
+    # pyarrow_tbl = pd.read_orc(buff)
+    pyarrow_tbl = pyarrow.orc.ORCFile(buff).read()
+    # breakpoint()
+    pyarrow_tbl = (
+        pyarrow_tbl[0:num_rows]
+        if columns is None
+        else pyarrow_tbl.select(columns)[0:num_rows]
+    )
+
+    if num_rows > 0:
+        # pyarrow_tbl = pyarrow.Table.from_pandas(pyarrow_tbl)
+        assert_eq(True, pyarrow_tbl.equals(gdf.to_arrow()))
+    else:
+        assert_eq(pyarrow_tbl.to_pandas(), gdf)

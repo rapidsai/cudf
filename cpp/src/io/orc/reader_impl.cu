@@ -81,7 +81,6 @@ constexpr type_id to_type_id(const orc::SchemaType &schema,
     default: break;
   }
 
-  // printf("RGSL : Unknown type encountered is %d \n", static_cast<int32_t>(schema.kind));
   return type_id::EMPTY;
 }
 
@@ -730,19 +729,10 @@ void reader::impl::aggregate_child_meta(hostdevice_vector<gpu::ColumnDesc> &chun
     auto col_idx   = orc_col_map[p_col.id];
     auto start_row = 0;
 
-    auto lvl = false;
-    if (lvl)
-      printf("RGSL : level2 -------------------------- chunks size is %lu \n", chunks.size());
     for (size_t i = 0; i < number_of_stripes; i++) {
-      if (lvl) printf("RGSL : index into chunk is %u and col_id is %u\n", col_idx, p_col.id);
       auto child_rows = chunks[i * num_cols + col_idx].num_child_rows;
-      if (lvl)
-        printf("RGSL : p_col.num_children is %u and num of child_rows is %u\n",
-               p_col.num_children,
-               child_rows);
       for (uint32_t j = 0; j < p_col.num_children; j++) {
         num_child_rows[index + j] += child_rows;
-        if (lvl) printf("Updating %u with %u\n", index + j, child_rows);
         num_child_rows_per_stripe[i * num_child_cols + index + j] = child_rows;
         child_start_row[i * num_child_cols + index + j]           = (i == 0) ? 0 : start_row;
       }
@@ -902,8 +892,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   // There are no columns in table
   if (_selected_columns.size() == 0) return {std::make_unique<table>(), std::move(out_metadata)};
 
-  printf("RGSL : size of first set of columns is %lu \n", _selected_columns[0].size());
-
   // Select only stripes required (aka row groups)
   const auto selected_stripes = _metadata->select_stripes(stripes, skip_rows, num_rows);
 
@@ -952,9 +940,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         out_columns.push_back(
           std::move(create_empty_column(col_meta.id, schema_info.back(), stream)));
         // Since struct children will be in the same level, have to skip them.
-        printf("RGSL : %s col number of children for parent is %u \n",
-               schema_info.back().name.c_str(),
-               col_meta.num_children);
         i += (schema.kind == orc::STRUCT) ? col_meta.num_children + 1 : 1;
       }
       break;
@@ -1051,12 +1036,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             chunk.num_rows = (level == 0)
                                ? stripe_info->numberOfRows
                                : num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
-            printf(
-              "RGSL : At level %lu Number of child rows per stripe %u \n", level, chunk.num_rows);
             chunk.column_num_rows = (level == 0) ? num_rows : num_child_rows[col_idx];
-            printf("RGSL : At level %lu Number of child rows %u \n", level, chunk.column_num_rows);
-            chunk.encoding_kind = stripe_footer->columns[selected_columns[col_idx].id].kind;
-            chunk.type_kind     = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
+            chunk.encoding_kind   = stripe_footer->columns[selected_columns[col_idx].id].kind;
+            chunk.type_kind       = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
                                 .ff.types[selected_columns[col_idx].id]
                                 .kind;
             chunk.decimal_scale = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
@@ -1137,7 +1119,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           auto is_list_type = (column_types[i].id() == type_id::LIST);
           auto n_rows       = (level == 0) ? num_rows : num_child_rows[i];
           n_rows += is_list_type;
-          // printf("RGSL : level %lu buffer size is %u \n", level, n_rows);
           out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, stream, _mr);
         }
 
@@ -1182,8 +1163,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     create_columns(out_buffers, out_columns, schema_info, orc_col_map, stream);
   }
 
-  printf("RGSL : Number of columns formed is %lu \n", schema_info.size());
-  printf("RGSL : Number of columns %lu \n", out_columns.size());
   // Return column names (must match order of returned columns)
   out_metadata.column_names.resize(schema_info.size());
   for (size_t i = 0; i < schema_info.size(); i++) {
