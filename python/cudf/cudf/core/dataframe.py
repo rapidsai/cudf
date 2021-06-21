@@ -24,16 +24,12 @@ from pandas.io.formats.printing import pprint_thing
 
 import cudf
 from cudf import _lib as libcudf
-from cudf.api.types import is_bool_dtype, is_decimal_dtype, is_dict_like
+from cudf.api.types import is_bool_dtype, is_dict_like
 from cudf.core import column, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import (
-    Frame,
-    _drop_rows_by_labels,
-    _truediv_int_dtype_corrections,
-)
+from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import BaseIndex, Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
@@ -1457,24 +1453,10 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         )
         return out
 
-    @classmethod
-    def _colwise_binop(cls, lhs, rhs, fn, fill_value=None, reflect=False):
-        """Implement binary ops between two frame-like objects.
-
-        This method is designed to handle arbitrary binary operations by
-        preprocessing two frame-like objects into a form suitable for pairwise
-        columnar binary operations. The reason that this is implemented as a
-        classmethod is that frequently the semantics of the operations between
-        different types of frames dictate that the object being operated on
-        (the lhs in normal binops and the rhs in reflected binops) needs to be
-        modified before the operation occurs, without that modification
-        actually being reflected in the instance. The classmethod API is
-        designed around that expectation. Additionally, either object could be
-        a scalar value or something else as needed.
-
-        Actually lhs will always be a frame, but rhs could be anything.
-        However, lhs need not be self, which is why this is a classmethod.
-        """
+    def _binaryop(
+        self, other, fn, fill_value=None, reflect=False,
+    ):
+        lhs, rhs = self, other
 
         if _is_scalar_or_zero_d_array(rhs):
             rhs = [rhs] * lhs._num_columns
@@ -1547,133 +1529,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         else:
             return NotImplemented
 
-        # Now actually perform the binop on the columns in left and right.
-        output = {}
-        for (
-            col,
-            (left_column, right_column, reflect, fill_value),
-        ) in operands.items():
-            if right_column is cudf.NA:
-                right_column = cudf.Scalar(
-                    right_column, dtype=left_column.dtype
-                )
-            elif not isinstance(right_column, cudf.core.column.ColumnBase):
-                right_column = left_column.normalize_binop_value(right_column)
-
-            if fn == "truediv" and is_decimal_dtype(left_column.dtype):
-                fn_apply = "div"
-            else:
-                fn_apply = fn
-
-            if fn_apply == "truediv":
-                truediv_type = _truediv_int_dtype_corrections.get(
-                    left_column.dtype.type
-                )
-                if truediv_type is not None:
-                    left_column = left_column.astype(truediv_type)
-
-            output_mask = None
-            if fill_value is not None:
-                if is_scalar(right_column):
-                    if left_column.nullable:
-                        left_column = left_column.fillna(fill_value)
-                else:
-                    # If both columns are nullable, pandas semantics dictate
-                    # that nulls that are present in both left_column and
-                    # right_column are not filled.
-                    if left_column.nullable and right_column.nullable:
-                        lmask = as_column(left_column.nullmask)
-                        rmask = as_column(right_column.nullmask)
-                        output_mask = (lmask | rmask).data
-                        left_column = left_column.fillna(fill_value)
-                        right_column = right_column.fillna(fill_value)
-                    elif left_column.nullable:
-                        left_column = left_column.fillna(fill_value)
-                    elif right_column.nullable:
-                        right_column = right_column.fillna(fill_value)
-
-            # For bitwise operations we must verify whether the input column
-            # types are valid, and if so, whether we need to coerce the output
-            # columns to booleans.
-            coerce_to_bool = False
-            _BITWISE_OPS = {"and", "or", "xor"}
-            if fn_apply in _BITWISE_OPS:
-                err_msg = (
-                    f"Operation 'bitwise {fn_apply}' not supported between "
-                    f"{left_column.dtype.type.__name__} and {{}}"
-                )
-                if right_column is None:
-                    raise TypeError(err_msg.format(type(None)))
-
-                try:
-                    left_is_bool = np.issubdtype(left_column.dtype, np.bool_)
-                    right_is_bool = np.issubdtype(right_column.dtype, np.bool_)
-                except TypeError:
-                    raise TypeError(err_msg.format(type(right_column)))
-
-                coerce_to_bool = left_is_bool or right_is_bool
-
-                if not (
-                    (
-                        left_is_bool
-                        or np.issubdtype(left_column.dtype, np.integer)
-                    )
-                    and (
-                        right_is_bool
-                        or np.issubdtype(right_column.dtype, np.integer)
-                    )
-                ):
-                    raise TypeError(
-                        err_msg.format(right_column.dtype.type.__name__)
-                    )
-
-            outcol = left_column.binary_operator(
-                fn_apply, right_column, reflect=reflect
-            )
-
-            # Get the appropriate name for output operations involving two
-            # objects that are Series-like objects. The output shares the
-            # left_column's name unless the right_column is a _differently_
-            # named Series-like object.
-            # TODO: Figure out how to handle names correctly. This code path
-            # can only occur for Series, not DataFrame (mismatched columns of a
-            # DataFrame result in separate outputs) so this issue has to be
-            # handled later in the refactor.
-            # if (
-            #     isinstance(other, (SingleColumnFrame, pd.Series, pd.Index))
-            #     and self.name != other.name
-            # ):
-            #     result_name = None
-            # else:
-            #     result_name = self.name
-
-            # output = left_column._copy_construct(
-            #     data=outcol, name=result_name)
-
-            if output_mask is not None:
-                outcol = outcol.set_mask(output_mask)
-
-            if coerce_to_bool:
-                outcol = outcol.astype(np.bool_)
-
-            output[col] = outcol
-
-        # TODO: Figure out how to handle this depending on whether or not the
-        # objects have indexes (so that binops work for indexes as lhs).
-        return cls._from_data(ColumnAccessor(output), index=lhs._index)
-
-    def _binaryop(
-        self,
-        other,
-        fn,
-        fill_value=None,
-        reflect=False,
-        # lhs=None,
-        # *args,
-        # **kwargs,
-    ):
-        return self._colwise_binop(
-            self, other, fn, fill_value=fill_value, reflect=reflect
+        return self._from_data(
+            ColumnAccessor(type(self)._colwise_binop(operands, fn)),
+            index=lhs._index,
         )
 
     def _unaryop(self, op):
