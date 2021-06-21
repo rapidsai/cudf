@@ -190,31 +190,32 @@ bool is_output_overflow(SizeCompFunc size_comp_fn,
                      strings_count,
                      size_comp_fn);
 
-  // Compute offsets of the output strings.
-  // If there is overflow then we write a marker value `invalid_offset` to the offsets.
-  static constexpr size_type invalid_offset = std::numeric_limits<size_type>::lowest();
   static constexpr int64_t max_offset = static_cast<int64_t>(std::numeric_limits<size_type>::max());
-  thrust::exclusive_scan(rmm::exec_policy(stream),
-                         string_sizes.begin(),
-                         string_sizes.end(),
-                         string_sizes.begin(),
-                         size_type{0},
-                         [] __device__(auto const lhs, auto const rhs) {
-                           // If there was already overflow...
-                           if (lhs == invalid_offset || rhs == invalid_offset) {
-                             return invalid_offset;
-                           }
-                           auto const sum = static_cast<int64_t>(lhs) + static_cast<int64_t>(rhs);
-                           if (sum > max_offset) { return invalid_offset; }
-                           return static_cast<size_type>(sum);
-                         });
 
-  auto const invalid_count =
-    thrust::count_if(rmm::exec_policy(stream),
-                     string_sizes.begin(),
-                     string_sizes.end(),
-                     [] __device__(auto const offset) { return offset == invalid_offset; });
-  return invalid_count > 0;
+  // Compute offsets of the output strings and detect overflow at the same time.
+  auto has_overflow = rmm::device_uvector<bool>(1, stream);
+  CUDA_TRY(cudaMemsetAsync(has_overflow.begin(), 0, sizeof(bool), stream.value()));
+
+  thrust::exclusive_scan(
+    rmm::exec_policy(stream),
+    string_sizes.begin(),
+    string_sizes.end(),
+    string_sizes.begin(),
+    size_type{0},
+    [overflow = has_overflow.begin()] __device__(auto const lhs, auto const rhs) {
+      auto const sum = static_cast<int64_t>(lhs) + static_cast<int64_t>(rhs);
+      if (sum > max_offset) {
+        *overflow = true;
+        return 0;
+      }
+      return static_cast<size_type>(sum);
+    });
+
+  bool result;
+  CUDA_TRY(cudaMemcpyAsync(
+    &result, has_overflow.begin(), sizeof(bool), cudaMemcpyDeviceToHost, stream.value()));
+  stream.synchronize();
+  return result;
 }
 
 /**
