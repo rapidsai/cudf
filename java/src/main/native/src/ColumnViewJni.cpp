@@ -23,9 +23,11 @@
 #include <cudf/datetime.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/hashing.hpp>
+#include <cudf/lists/contains.hpp>
 #include <cudf/lists/count_elements.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/extract.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/lists/sorting.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/quantiles.hpp>
@@ -49,6 +51,7 @@
 #include <cudf/strings/convert/convert_urls.hpp>
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/find.hpp>
+#include <cudf/strings/json.hpp>
 #include <cudf/strings/padding.hpp>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/replace.hpp>
@@ -56,21 +59,18 @@
 #include <cudf/strings/split/split.hpp>
 #include <cudf/strings/strip.hpp>
 #include <cudf/strings/substring.hpp>
-#include <cudf/strings/json.hpp>
+#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/transform.hpp>
+#include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <cudf/lists/contains.hpp>
-#include <cudf/lists/lists_column_view.hpp>
-#include <cudf/structs/structs_column_view.hpp>
-#include <map_lookup.hpp>
-#include "cudf/types.hpp"
 
-#include "prefix_sum.hpp"
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
 #include "jni.h"
 #include "jni_utils.hpp"
+#include "map_lookup.hpp"
+#include "prefix_sum.hpp"
 
 namespace {
 
@@ -1969,6 +1969,21 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_repeatStrings(JNIEnv *env
     auto const cv = *reinterpret_cast<cudf::column_view *>(column_handle);
     auto const strs_col = cudf::strings_column_view(cv);
     return reinterpret_cast<jlong>(cudf::strings::repeat_strings(strs_col, repeat_times).release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_repeatStringsWithColumnRepeatTimes(
+    JNIEnv *env, jclass, jlong strings_handle, jlong repeat_times_handle) {
+  JNI_NULL_CHECK(env, strings_handle, "strings handle is null", 0);
+  JNI_NULL_CHECK(env, repeat_times_handle, "repeat_times handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const strings_cv = *reinterpret_cast<cudf::column_view *>(strings_handle);
+    auto const strs_col = cudf::strings_column_view(strings_cv);
+    auto const repeat_times_cv = *reinterpret_cast<cudf::column_view *>(repeat_times_handle);
+    return reinterpret_cast<jlong>(
+        cudf::strings::repeat_strings(strs_col, repeat_times_cv).release());
   }
   CATCH_STD(env, 0);
 }
