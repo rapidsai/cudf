@@ -53,7 +53,7 @@ from cudf._lib.cpp.scalar.scalar cimport (
     fixed_point_scalar,
     list_scalar,
 )
-from cudf.utils.dtypes import _decimal_to_int64, is_list_dtype
+from cudf.utils.dtypes import _decimal_to_int64, is_list_dtype, is_struct_dtype
 cimport cudf._lib.cpp.types as libcudf_types
 
 cdef class DeviceScalar:
@@ -106,6 +106,8 @@ cdef class DeviceScalar:
     def _to_host_scalar(self):
         if isinstance(self.dtype, cudf.Decimal64Dtype):
             result = _get_py_decimal_from_fixed_point(self.c_value)
+        elif is_struct_dtype(self.dtype):
+            result = _get_py_dict_from_struct(self.c_value)
         elif is_list_dtype(self.dtype):
             result = _get_py_list_from_list(self.c_value)
         elif pd.api.types.is_string_dtype(self.dtype):
@@ -294,6 +296,19 @@ cdef _set_decimal64_from_scalar(unique_ptr[scalar]& s,
             <int64_t>np.int64(value), scale_type(-dtype.scale), valid
         )
     )
+
+cdef _get_py_dict_from_struct(unique_ptr[scalar]& s):
+    if not s.get()[0].is_valid():
+        return cudf.NA
+
+    cdef column_view struct_col_view = (<struct_scalar*>s.get()).view()
+    cdef Column struct_col = Column.from_column_view(struct_col_view, None)
+    cdef Table to_arrow_table = Table({"col": struct_col})
+
+    arrow_table = to_arrow(to_arrow_table, [["col", []]])
+    result = arrow_table['col'].to_pylist()
+
+    return _nested_na_replace_dict(result)
 
 cdef _get_py_list_from_list(unique_ptr[scalar]& s):
 
@@ -492,4 +507,20 @@ def _nested_na_replace(input_list):
             _nested_na_replace(value)
         elif value is None:
             input_list[idx] = cudf.NA
+    return input_list
+
+
+def _nested_na_replace_dict(input_list):
+    '''
+    Replace `None` with `cudf.NA` in the result of
+    `__getitem__` calls to struct type columns
+    '''
+
+    # just a first level traversal
+    for value in input_list:
+        if isinstance(value, dict):
+            for key, val in value.items():
+                if val is None:
+                    value[key] = cudf.NA
+
     return input_list
