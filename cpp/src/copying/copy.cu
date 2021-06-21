@@ -186,13 +186,7 @@ std::unique_ptr<column> scatter_if_else_scalar_lhs(cudf::scalar lhs,
                                                    size_type size,
                                                    Filter is_left,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
-{
-  cudf::make_column_from_scalar(lhs, size, stream, mr);
-
-  return std::unique_ptr<column>(nullptr);
-}
-
+                                                   rmm::mr::device_memory_resource* mr);
 /**
  * @brief Implementation of copy_if_else() with gather()/scatter().
  *
@@ -289,6 +283,18 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
   (void)is_left;
   (void)stream;
   (void)mr;
+}
+
+template <typename Filter>
+std::unique_ptr<column> scatter_if_else_scalar_lhs(cudf::scalar lhs,
+                                                   cudf::column_view rhs,
+                                                   size_type size,
+                                                   Filter is_left,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::mr::device_memory_resource* mr)
+{
+  auto lhs_column = cudf::make_column_from_scalar(lhs, size, stream, mr);
+  return scatter_gather_based_if_else(lhs_column, rhs, size, is_left, stream, mr);
 }
 
 /**
