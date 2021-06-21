@@ -16,7 +16,6 @@
 #include <tests/strings/utilities.h>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -25,8 +24,6 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/table_utilities.hpp>
-
-#include <rmm/device_uvector.hpp>
 
 class GatherTestStr : public cudf::test::BaseFixture {
 };
@@ -133,11 +130,11 @@ TEST_F(GatherTestStr, GatherEmptyMapStringsColumn)
 {
   cudf::column_view zero_size_strings_column(
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  rmm::device_uvector<cudf::size_type> gather_map{0, rmm::cuda_stream_default};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> gather_map;
   auto results = cudf::detail::gather(cudf::table_view({zero_size_strings_column}),
-                                      gather_map.begin(),
-                                      gather_map.end(),
-                                      cudf::out_of_bounds_policy::NULLIFY);
+                                      gather_map,
+                                      cudf::out_of_bounds_policy::NULLIFY,
+                                      cudf::detail::negative_index_policy::NOT_ALLOWED);
   cudf::test::expect_strings_empty(results->get_column(0).view());
 }
 
@@ -146,11 +143,10 @@ TEST_F(GatherTestStr, GatherZeroSizeStringsColumn)
   cudf::column_view zero_size_strings_column(
     cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
   cudf::test::fixed_width_column_wrapper<int32_t> gather_map({0});
-  cudf::column_view gather_view = gather_map;
   cudf::test::strings_column_wrapper expected{std::pair<std::string, bool>{"", false}};
   auto results = cudf::detail::gather(cudf::table_view({zero_size_strings_column}),
-                                      gather_view.begin<int32_t>(),
-                                      gather_view.end<int32_t>(),
-                                      cudf::out_of_bounds_policy::NULLIFY);
+                                      gather_map,
+                                      cudf::out_of_bounds_policy::NULLIFY,
+                                      cudf::detail::negative_index_policy::NOT_ALLOWED);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, results->get_column(0).view());
 }
