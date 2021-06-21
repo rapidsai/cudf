@@ -1906,6 +1906,25 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
     def __rtruediv__(self, other):
         return self._binaryop(other, "truediv", reflect=True)
 
+    # Binary rich comparison operations.
+    def __eq__(self, other):
+        return self._binaryop(other, "eq")
+
+    def __ne__(self, other):
+        return self._binaryop(other, "ne")
+
+    def __lt__(self, other):
+        return self._binaryop(other, "lt")
+
+    def __le__(self, other):
+        return self._binaryop(other, "le")
+
+    def __gt__(self, other):
+        return self._binaryop(other, "gt")
+
+    def __ge__(self, other):
+        return self._binaryop(other, "ge")
+
     def radd(self, other, axis=1, level=None, fill_value=None):
         """
         Get Addition of dataframe and other, element-wise (binary
@@ -2643,24 +2662,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
     def __xor__(self, other):
         return self._apply_op("__xor__", other)
-
-    def __eq__(self, other):
-        return self._apply_op("__eq__", other)
-
-    def __ne__(self, other):
-        return self._apply_op("__ne__", other)
-
-    def __lt__(self, other):
-        return self._apply_op("__lt__", other)
-
-    def __le__(self, other):
-        return self._apply_op("__le__", other)
-
-    def __gt__(self, other):
-        return self._apply_op("__gt__", other)
-
-    def __ge__(self, other):
-        return self._apply_op("__ge__", other)
 
     def __invert__(self):
         return self._apply_op("__invert__")
