@@ -295,8 +295,8 @@ class writer::impl {
    * @brief Returns stripe information after compacting columns' individual data
    * chunks into contiguous data streams.
    *
-   * @param[in] num_rows Total number of rows
    * @param[in] num_index_streams Total number of index streams
+   * @param[in] rowgroup_bounds List of rowgroup boundaries
    * @param[in] stripe_bounds List of stripe boundaries
    * @param[in,out] enc_streams List of encoder chunk streams [column][rowgroup]
    * @param[in,out] strm_desc List of stream descriptors [stripe][data_stream]
@@ -304,8 +304,8 @@ class writer::impl {
    * @return The stripes' information
    */
   std::vector<StripeInformation> gather_stripes(
-    size_t num_rows,
     size_t num_index_streams,
+    host_2dspan<rows_range const> rowgroup_bounds,
     host_span<stripe_rowgroups const> stripe_bounds,
     hostdevice_2dvector<gpu::encoder_chunk_streams>* enc_streams,
     hostdevice_2dvector<gpu::StripeStream>* strm_desc);

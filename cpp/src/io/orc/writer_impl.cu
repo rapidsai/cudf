@@ -750,12 +750,13 @@ encoded_data writer::impl::encode_columns(orc_table_view const &orc_table,
 }
 
 std::vector<StripeInformation> writer::impl::gather_stripes(
-  size_t num_rows,
   size_t num_index_streams,
+  host_2dspan<rows_range const> rowgroup_bounds,
   host_span<stripe_rowgroups const> stripe_bounds,
   hostdevice_2dvector<gpu::encoder_chunk_streams> *enc_streams,
   hostdevice_2dvector<gpu::StripeStream> *strm_desc)
 {
+  auto const num_rows = rowgroup_bounds.is_empty() ? 0 : rowgroup_bounds.back()[0].end;
   std::vector<StripeInformation> stripes(stripe_bounds.size());
   for (auto const &stripe : stripe_bounds) {
     for (size_t col_idx = 0; col_idx < enc_streams->size().first; col_idx++) {
@@ -775,8 +776,8 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
       }
     }
 
-    auto const stripe_group_end     = *stripe.cend();
-    auto const stripe_end           = std::min(stripe_group_end * row_index_stride_, num_rows);
+    auto const stripe_group_end = *stripe.cend();
+    auto const stripe_end = std::min<size_type>(stripe_group_end * row_index_stride_, num_rows);
     stripes[stripe.id].numberOfRows = stripe_end - stripe.first * row_index_stride_;
   }
 
@@ -1333,8 +1334,8 @@ void writer::impl::write(table_view const &table)
   size_type const num_index_streams = (orc_table.num_columns() + 1);
   const auto num_data_streams       = streams.size() - num_index_streams;
   hostdevice_2dvector<gpu::StripeStream> strm_descs(stripe_bounds.size(), num_data_streams, stream);
-  auto stripes =
-    gather_stripes(num_rows, num_index_streams, stripe_bounds, &enc_data.streams, &strm_descs);
+  auto stripes = gather_stripes(
+    num_index_streams, rowgroup_bounds, stripe_bounds, &enc_data.streams, &strm_descs);
 
   // Gather column statistics
   std::vector<ColStatsBlob> column_stats;
