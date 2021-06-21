@@ -4,10 +4,11 @@
 Test related to Cut
 """
 
-import pandas as pd
 import numpy as np
-from cudf.core.cut import cut
+import pandas as pd
 import pytest
+
+from cudf.core.cut import cut
 from cudf.tests.utils import assert_eq
 
 

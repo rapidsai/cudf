@@ -1,7 +1,8 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-import numpy as np
 from enum import IntEnum
+
+import numpy as np
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -9,24 +10,24 @@ from libcpp.utility cimport move
 
 from cudf._lib.binaryop cimport underlying_type_t_binary_operator
 from cudf._lib.column cimport Column
+
 from cudf._lib.replace import replace_nulls
 from cudf._lib.scalar import as_device_scalar
+
 from cudf._lib.scalar cimport DeviceScalar
+
 from cudf._lib.types import np_to_cudf_types
-from cudf._lib.types cimport underlying_type_t_type_id, dtype_to_data_type
 
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.types cimport (
-    data_type,
-    type_id,
-)
+from cudf._lib.cpp.scalar.scalar cimport scalar
+from cudf._lib.cpp.types cimport data_type, type_id
+from cudf._lib.types cimport dtype_to_data_type, underlying_type_t_type_id
 
-from cudf.utils.dtypes import is_string_dtype, is_scalar
+from cudf.utils.dtypes import is_scalar, is_string_dtype
 
-from cudf._lib.cpp.binaryop cimport binary_operator
 cimport cudf._lib.cpp.binaryop as cpp_binaryop
+from cudf._lib.cpp.binaryop cimport binary_operator
 
 
 class BinaryOperation(IntEnum):

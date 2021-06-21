@@ -21,8 +21,8 @@ from cudf.core.dtypes import Decimal64Dtype
 from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
-from .numerical_base import NumericalBaseColumn
 from ...api.types import is_integer_dtype
+from .numerical_base import NumericalBaseColumn
 
 
 class DecimalColumn(NumericalBaseColumn):

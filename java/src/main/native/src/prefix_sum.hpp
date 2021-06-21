@@ -27,8 +27,7 @@ namespace jni {
  * @brief compute the prefix sum of a column of longs
  */
 std::unique_ptr<column>
-prefix_sum(column_view const &value_column,
-           rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+prefix_sum(column_view const &value_column, rmm::cuda_stream_view stream = rmm::cuda_stream_default,
            rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
 } // namespace jni
