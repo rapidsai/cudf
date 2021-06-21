@@ -332,9 +332,10 @@ struct dispatch_unary_cast_to {
   template <typename TargetT,
             typename SourceT                                                      = _SourceT,
             typename std::enable_if_t<not is_supported_cast<SourceT, TargetT>()>* = nullptr>
-  std::unique_ptr<column> operator()(data_type type,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+  std::unique_ptr<column> operator()(data_type,
+                                     rmm::cuda_stream_view,
+                                     rmm::mr::device_memory_resource*)
+
   {
     if (!cudf::is_fixed_width<TargetT>())
       CUDF_FAIL("Column type must be numeric or chrono or decimal32/64");
@@ -360,10 +361,8 @@ struct dispatch_unary_cast_from {
     return type_dispatcher(type, dispatch_unary_cast_to<T>{input}, type, stream, mr);
   }
 
-  template <typename T, typename std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
-  std::unique_ptr<column> operator()(data_type type,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+  template <typename T, typename... Args>
+  std::enable_if_t<!cudf::is_fixed_width<T>(), std::unique_ptr<column>> operator()(Args&&...)
   {
     CUDF_FAIL("Column type must be numeric or chrono or decimal32/64");
   }

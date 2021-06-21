@@ -103,7 +103,9 @@ function install_dask {
     set -x
     pip install "git+https://github.com/dask/distributed.git@main" --upgrade --no-deps
     pip install "git+https://github.com/dask/dask.git@main" --upgrade --no-deps
-    pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
+    # Need to uninstall streamz that is already in the env.
+    pip uninstall -y streamz
+    pip install "git+https://github.com/python-streamz/streamz.git@master" --upgrade --no-deps
     set +x
 }
 
@@ -189,6 +191,10 @@ else
     else
         "$WORKSPACE/build.sh" cudf dask_cudf cudf_kafka -l --ptds
     fi
+
+    # If examples grows too large to build, should move to cpu side
+    gpuci_logger "Building libcudf examples"
+    $WORKSPACE/cpp/examples/build.sh
 fi
 
 # Both regular and Project Flash proceed here

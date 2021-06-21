@@ -21,7 +21,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.core.dtypes import ListDtype
-from cudf.utils.dtypes import is_list_dtype, is_numerical_dtype
+from cudf.utils.dtypes import _is_non_decimal_numeric_dtype, is_list_dtype
 
 
 class ListColumn(ColumnBase):
@@ -181,12 +181,14 @@ class ListColumn(ColumnBase):
 
     def serialize(self):
         header = {}
+        frames = []
         header["type-serialized"] = pickle.dumps(type(self))
-        header["dtype"] = pickle.dumps(self.dtype)
         header["null_count"] = self.null_count
         header["size"] = self.size
+        header["dtype"], dtype_frames = self.dtype.serialize()
+        header["dtype_frames_count"] = len(dtype_frames)
+        frames.extend(dtype_frames)
 
-        frames = []
         sub_headers = []
 
         for item in self.children:
@@ -211,9 +213,14 @@ class ListColumn(ColumnBase):
         else:
             mask = None
 
+        # Deserialize dtype
+        dtype = pickle.loads(header["dtype"]["type-serialized"]).deserialize(
+            header["dtype"], frames[: header["dtype_frames_count"]]
+        )
+
         # Deserialize child columns
         children = []
-        f = 0
+        f = header["dtype_frames_count"]
         for h in header["subheaders"]:
             fcount = h["frame_count"]
             child_frames = frames[f : f + fcount]
@@ -224,7 +231,7 @@ class ListColumn(ColumnBase):
         # Materialize list column
         return column.build_column(
             data=None,
-            dtype=pickle.loads(header["dtype"]),
+            dtype=dtype,
             mask=mask,
             children=tuple(children),
             size=header["size"],
@@ -246,7 +253,7 @@ class ListColumn(ColumnBase):
                     dtype.element_type
                 ),
                 mask=self.base_mask,
-                size=self.base_size,
+                size=self.size,
                 offset=self.offset,
                 null_count=self.null_count,
             )
@@ -425,7 +432,7 @@ class ListMethods(ColumnMethodsMixin):
             raise ValueError(
                 "lists_indices and list column is of different " "size."
             )
-        if not is_numerical_dtype(
+        if not _is_non_decimal_numeric_dtype(
             lists_indices_col.children[1].dtype
         ) or not np.issubdtype(
             lists_indices_col.children[1].dtype, np.integer
