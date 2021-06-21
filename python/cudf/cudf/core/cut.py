@@ -271,7 +271,7 @@ def cut(
             )
 
     col = build_categorical_column(
-        categories=interval_labels,
+        categories=as_column(interval_labels),
         codes=index_labels,
         mask=index_labels.base_mask,
         offset=index_labels.offset,

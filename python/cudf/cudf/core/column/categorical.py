@@ -847,6 +847,7 @@ class CategoricalColumn(column.ColumnBase):
             - sub_frames_counts     # list of children frames counts
             - subheaders            # children headers
             - sub_frames_types      # type of children
+            - frame_count           # number of total frames
         
         The below shows the items stored in `frames` list. The number of
         frames stored for each item can be retrieved via the following key
@@ -885,6 +886,7 @@ class CategoricalColumn(column.ColumnBase):
         header["sub_frames_counts"] = sub_frames_counts
         header["sub_frames_types"] = sub_frame_type
         header["subheaders"] = sub_headers
+        header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod

@@ -50,13 +50,13 @@ def scalar_broadcast_to(scalar, size, dtype=None):
             dtype = "object"
         return column.column_empty(size, dtype=dtype, masked=True)
 
-    # if isinstance(scalar, pd.Categorical):
-    #     if dtype is None:
-    #         return _categorical_scalar_broadcast_to(scalar, size)
-    #     else:
-    #         return scalar_broadcast_to(scalar.categories[0], size).astype(
-    #             dtype
-    #         )
+    if isinstance(scalar, pd.Categorical):
+        if dtype is None:
+            return _categorical_scalar_broadcast_to(scalar, size)
+        else:
+            return scalar_broadcast_to(scalar.categories[0], size).astype(
+                dtype
+            )
 
     if isinstance(scalar, decimal.Decimal):
         if dtype is None:
