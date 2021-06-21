@@ -8678,15 +8678,15 @@ def test_is_homogeneous_index(data, expected):
     assert actual == expected
 
 
-def test_add_list():
-    assert_eq(
-        cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}).add(
-            [None, 2], fill_value=1
-        ),
-        cudf.DataFrame({"a": [2, 3, 4], "b": [6, 7, 8]}),
-    )
-
-
-def test_add_series():
-    # TODO: Add assertion that this generates NA everywhere, not NaN.
-    cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}) + cudf.Series([1, 2])
+# def test_add_list():
+#     assert_eq(
+#         cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}).add(
+#             [None, 2], fill_value=1
+#         ),
+#         cudf.DataFrame({"a": [2, 3, 4], "b": [6, 7, 8]}),
+#     )
+#
+#
+# def test_add_series():
+#     # TODO: Add assertion that this generates NA everywhere, not NaN.
+#     cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}) + cudf.Series([1, 2])
