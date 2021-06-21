@@ -2265,8 +2265,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Given a strings column, each string in the given column is repeated a number of times
    * specified by the <code>repeatTimes</code> parameter. If the parameter has a non-positive value,
-   * all the rows of the output strings column will be an empty string. Any null row will result
-   * in a null row regardless of the value of <code>repeatTimes</code>.
+   * all the non-null rows of the output strings column will be an empty string. Any null row will
+   * result in a null row regardless of the value of <code>repeatTimes</code>.
    *
    * Note that this function cannot handle the cases when the size of the output column exceeds
    * the maximum value that can be indexed by int type (i.e., {@link Integer#MAX_VALUE}).
@@ -2279,6 +2279,30 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert type.equals(DType.STRING) : "column type must be a String";
 
     return new ColumnVector(repeatStrings(getNativeView(), repeatTimes));
+  }
+
+  /**
+   * Given a strings column, each string in the given column is repeated a number of times
+   * given by the corresponding row in a <code>repeatTimes</code> numeric column. If any row in
+   * that column contains a non-positive value and the corresponding input string is not null, the
+   * output string for that row will always be an empty string. Any null row (from either the input
+   * strings column or the <code>repeatTimes</code> column) will result in a null output.
+   *
+   * If the input <code>repeatTimes</code> column does not have a numeric type, an exception will be
+   * thrown.
+   *
+   * Note that this function cannot handle the cases when the size of the output column exceeds
+   * the maximum value that can be indexed by int type (i.e., {@link Integer#MAX_VALUE}).
+   * In such situations, the output result is undefined.
+   *
+   * @param repeatTimes The column containing numbers of times each input string is repeated.
+   * @return A new java column vector containing repeated strings.
+   */
+  public final ColumnVector repeatStrings(ColumnView repeatTimes) {
+    assert type.equals(DType.STRING) : "column type must be a String";
+
+    return new ColumnVector(repeatStringsWithColumnRepeatTimes(getNativeView(),
+        repeatTimes.getNativeView()));
   }
 
    /**
@@ -2972,6 +2996,28 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column containing repeated strings.
    */
   private static native long repeatStrings(long viewHandle, int repeatTimes);
+
+  /**
+   * Native method to repeat each string in the given strings column a number of times given by the
+   * corresponding row in a <code>repeatTimes</code> numeric column. If any row in that column
+   * contains a non-positive value and the corresponding input string is not null, the output string
+   * for that row will always be an empty string. Any null row (from either the input strings column
+   * or the <code>repeatTimes</code> column) will result in a null output.
+   *
+   * If the input <code>repeatTimes</code> column does not have a numeric type, an exception will be
+   * thrown.
+   *
+   * Note that this function cannot handle the cases when the size of the output column exceeds
+   * the maximum value that can be indexed by int type (i.e., {@link Integer#MAX_VALUE}).
+   * In such situations, the output result is undefined.
+   *
+   * @param stringsHandle long holding the native handle of the column containing strings to repeat.
+   * @param repeatTimesHandle long holding the native handle of the numbers of times each input
+   *        string is copied to the output.
+   * @return native handle of the resulting cudf column containing repeated strings.
+   */
+  private static native long repeatStringsWithColumnRepeatTimes(long stringsHandle,
+      long repeatTimesHandle);
 
 
   private static native long getJSONObject(long viewHandle, long scalarHandle) throws CudfException;
