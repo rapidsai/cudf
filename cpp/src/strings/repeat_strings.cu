@@ -292,8 +292,6 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(repeat_times.type().id() == type_id::INT32,
-               "The input repeat_times column must have INT32 data type.");
   CUDF_EXPECTS(input.size() == repeat_times.size(), "The input columns must have the same size.");
 
   auto const strings_count = input.size();
