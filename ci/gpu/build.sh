@@ -192,9 +192,6 @@ else
         "$WORKSPACE/build.sh" cudf dask_cudf cudf_kafka -l --ptds
     fi
 
-    # If examples grows too large to build, should move to cpu side
-    gpuci_logger "Building libcudf examples"
-    $WORKSPACE/cpp/examples/build.sh
 fi
 
 # Both regular and Project Flash proceed here
@@ -206,6 +203,13 @@ if [ "$np_ver" == "1.16" ];then
     export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
 fi
 
+################################################################################
+# BUILD - Build libcudf examples
+################################################################################
+
+# If examples grows too large to build, should move to cpu side
+gpuci_logger "Building libcudf examples"
+$WORKSPACE/cpp/examples/build.sh
 
 ################################################################################
 # TEST - Run py.test, notebooks
