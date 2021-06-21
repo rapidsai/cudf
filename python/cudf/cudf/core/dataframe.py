@@ -25,7 +25,7 @@ from pandas.io.formats.printing import pprint_thing
 import cudf
 from cudf import _lib as libcudf
 from cudf._lib.null_mask import MaskState, create_null_mask
-from cudf.api.types import is_bool_dtype, is_dict_like
+from cudf.api.types import is_bool_dtype, is_decimal_dtype, is_dict_like
 from cudf.core import column, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import as_column, column_empty
@@ -58,6 +58,7 @@ from cudf.utils.dtypes import (
     numeric_normalize_types,
 )
 from cudf.utils.utils import GetAttrGetItemMixin
+
 
 T = TypeVar("T", bound="DataFrame")
 
@@ -1546,12 +1547,17 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             elif not isinstance(right_column, cudf.core.column.ColumnBase):
                 right_column = left_column.normalize_binop_value(right_column)
 
-            if fn == "truediv":
+            if fn == "truediv" and is_decimal_dtype(left_column.dtype):
+                fn_apply = "div"
+            else:
+                fn_apply = fn
+
+            if fn_apply == "truediv":
                 truediv_type = _truediv_int_dtype_corrections.get(
-                    lhs.dtype.type
+                    left_column.dtype.type
                 )
                 if truediv_type is not None:
-                    lhs = left_column.astype(truediv_type)
+                    left_column = left_column.astype(truediv_type)
 
             output_mask = None
             if fill_value is not None:
@@ -1578,7 +1584,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             # TODO: Handle reflection.
             # outcol = left_column._column.binary_operator(
             #     fn, right_column, reflect=reflect)
-            outcol = left_column.binary_operator(fn, right_column)
+            outcol = left_column.binary_operator(fn_apply, right_column)
 
             # Get the appropriate name for output operations involving two
             # objects that are Series-like objects. The output shares the
@@ -1878,14 +1884,8 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
     # def __rfloordiv__(self, other):
     #     return self._binaryop(other, "floordiv", reflect=True)
 
-    # def __truediv__(self, other):
-    #     if is_decimal_dtype(self.dtype):
-    #         return self._binaryop(other, "div")
-    #     else:
-    #         return self._binaryop(other, "truediv")
-
     def __truediv__(self, other):
-        return self._apply_op("__truediv__", other)
+        return self._binaryop(other, "truediv")
 
     # def __rtruediv__(self, other):
     #     if is_decimal_dtype(self.dtype):
