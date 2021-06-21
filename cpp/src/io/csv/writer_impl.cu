@@ -28,6 +28,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/combine.hpp>
 #include <cudf/strings/detail/converters.hpp>
+#include <cudf/strings/detail/replace.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -119,7 +120,8 @@ struct column_to_strings_fn {
     return not((std::is_same<column_type, cudf::string_view>::value) ||
                (std::is_integral<column_type>::value) ||
                (std::is_floating_point<column_type>::value) ||
-               (cudf::is_timestamp<column_type>()) || (cudf::is_duration<column_type>()));
+               (cudf::is_fixed_point<column_type>()) || (cudf::is_timestamp<column_type>()) ||
+               (cudf::is_duration<column_type>()));
   }
 
   explicit column_to_strings_fn(
@@ -189,6 +191,15 @@ struct column_to_strings_fn {
     return cudf::strings::detail::from_floats(column, stream_, mr_);
   }
 
+  // fixed point:
+  //
+  template <typename column_type>
+  std::enable_if_t<cudf::is_fixed_point<column_type>(), std::unique_ptr<column>> operator()(
+    column_view const& column) const
+  {
+    return cudf::strings::detail::from_fixed_point(column, stream_, mr_);
+  }
+
   // timestamps:
   //
   template <typename column_type>
@@ -235,7 +246,7 @@ struct column_to_strings_fn {
   //
   template <typename column_type>
   std::enable_if_t<is_not_handled<column_type>(), std::unique_ptr<column>> operator()(
-    column_view const& column) const
+    column_view const&) const
   {
     CUDF_FAIL("Unsupported column type.");
   }
@@ -275,7 +286,6 @@ void writer::impl::write_chunked_begin(table_view const& table,
   if ((metadata != nullptr) && (options_.is_enabled_include_header())) {
     CUDF_EXPECTS(metadata->column_names.size() == static_cast<size_t>(table.num_columns()),
                  "Mismatch between number of column headers and table columns.");
-
     std::string delimiter_str{options_.get_inter_column_delimiter()};
 
     // avoid delimiter after last element:
@@ -284,7 +294,12 @@ void writer::impl::write_chunked_begin(table_view const& table,
     std::copy(metadata->column_names.begin(),
               metadata->column_names.end() - 1,
               std::ostream_iterator<std::string>(ss, delimiter_str.c_str()));
-    ss << metadata->column_names.back() << options_.get_line_terminator();
+
+    if (metadata->column_names.size() > 0) {
+      ss << metadata->column_names.back() << options_.get_line_terminator();
+    } else {
+      ss << options_.get_line_terminator();
+    }
 
     out_sink_->host_write(ss.str().data(), ss.str().size());
   }
@@ -344,8 +359,6 @@ void writer::impl::write(table_view const& table,
                          const table_metadata* metadata,
                          rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(table.num_columns() > 0, "Empty table.");
-
   // write header: column names separated by delimiter:
   // (even for tables with no rows)
   //
@@ -404,11 +417,19 @@ void writer::impl::write(table_view const& table,
       auto str_table_view = str_table_ptr->view();
 
       // concatenate columns in each row into one big string column
-      //(using null representation and delimiter):
+      // (using null representation and delimiter):
       //
       std::string delimiter_str{options_.get_inter_column_delimiter()};
-      auto str_concat_col = cudf::strings::detail::concatenate(
-        str_table_view, delimiter_str, options_.get_na_rep(), stream);
+      auto str_concat_col = [&] {
+        if (str_table_view.num_columns() > 1)
+          return cudf::strings::detail::concatenate(str_table_view,
+                                                    delimiter_str,
+                                                    options_.get_na_rep(),
+                                                    strings::separator_on_nulls::YES,
+                                                    stream);
+        cudf::string_scalar narep{options_.get_na_rep()};
+        return cudf::strings::detail::replace_nulls(str_table_view.column(0), narep, stream);
+      }();
 
       write_chunked(str_concat_col->view(), metadata, stream);
     }

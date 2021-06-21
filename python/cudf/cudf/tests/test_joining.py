@@ -96,7 +96,7 @@ def assert_join_results_equal(expect, got, how, **kwargs):
             got.sort_values(got.columns.to_list()).reset_index(drop=True),
             **kwargs,
         )
-    elif isinstance(expect, (pd.Index, cudf.Index)):
+    elif isinstance(expect, (pd.Index, cudf.BaseIndex)):
         return assert_eq(expect.sort_values(), got.sort_values(), **kwargs)
     else:
         raise ValueError(f"Not a join result: {type(expect).__name__}")

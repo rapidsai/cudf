@@ -33,9 +33,9 @@ struct ClampErrorTest : public cudf::test::BaseFixture {
 TEST_F(ClampErrorTest, MisMatchingScalarTypes)
 {
   auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  lo->set_valid(true);
+  lo->set_valid_async(true);
   auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT64));
-  hi->set_valid(true);
+  hi->set_valid_async(true);
 
   cudf::test::fixed_width_column_wrapper<int32_t> input({1, 2, 3, 4, 5, 6});
 
@@ -45,9 +45,9 @@ TEST_F(ClampErrorTest, MisMatchingScalarTypes)
 TEST_F(ClampErrorTest, MisMatchingInputAndScalarTypes)
 {
   auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  lo->set_valid(true);
+  lo->set_valid_async(true);
   auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  hi->set_valid(true);
+  hi->set_valid_async(true);
 
   cudf::test::fixed_width_column_wrapper<int64_t> input({1, 2, 3, 4, 5, 6});
 
@@ -57,13 +57,13 @@ TEST_F(ClampErrorTest, MisMatchingInputAndScalarTypes)
 TEST_F(ClampErrorTest, MisMatchingReplaceScalarTypes)
 {
   auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  lo->set_valid(true);
+  lo->set_valid_async(true);
   auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  hi->set_valid(true);
+  hi->set_valid_async(true);
   auto lo_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT64));
-  lo_replace->set_valid(true);
+  lo_replace->set_valid_async(true);
   auto hi_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  hi_replace->set_valid(true);
+  hi_replace->set_valid_async(true);
 
   cudf::test::fixed_width_column_wrapper<int64_t> input({1, 2, 3, 4, 5, 6});
 
@@ -73,13 +73,13 @@ TEST_F(ClampErrorTest, MisMatchingReplaceScalarTypes)
 TEST_F(ClampErrorTest, InValidCase1)
 {
   auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  lo->set_valid(true);
+  lo->set_valid_async(true);
   auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  hi->set_valid(true);
+  hi->set_valid_async(true);
   auto lo_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  lo_replace->set_valid(false);
+  lo_replace->set_valid_async(false);
   auto hi_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  hi_replace->set_valid(true);
+  hi_replace->set_valid_async(true);
 
   cudf::test::fixed_width_column_wrapper<int64_t> input({1, 2, 3, 4, 5, 6});
 
@@ -89,13 +89,13 @@ TEST_F(ClampErrorTest, InValidCase1)
 TEST_F(ClampErrorTest, InValidCase2)
 {
   auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  lo->set_valid(true);
+  lo->set_valid_async(true);
   auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  hi->set_valid(true);
+  hi->set_valid_async(true);
   auto lo_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  lo_replace->set_valid(true);
+  lo_replace->set_valid_async(true);
   auto hi_replace = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  hi_replace->set_valid(false);
+  hi_replace->set_valid_async(false);
 
   cudf::test::fixed_width_column_wrapper<int64_t> input({1, 2, 3, 4, 5, 6});
 
@@ -108,9 +108,9 @@ struct ClampEmptyCaseTest : public cudf::test::BaseFixture {
 TEST_F(ClampEmptyCaseTest, BothScalarEmptyInvalid)
 {
   auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  lo->set_valid(false);
+  lo->set_valid_async(false);
   auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  hi->set_valid(false);
+  hi->set_valid_async(false);
 
   cudf::test::fixed_width_column_wrapper<int32_t> input({1, 2, 3, 4, 5, 6});
 
@@ -122,9 +122,9 @@ TEST_F(ClampEmptyCaseTest, BothScalarEmptyInvalid)
 TEST_F(ClampEmptyCaseTest, EmptyInput)
 {
   auto lo = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  lo->set_valid(true);
+  lo->set_valid_async(true);
   auto hi = cudf::make_numeric_scalar(cudf::data_type(cudf::type_id::INT32));
-  hi->set_valid(true);
+  hi->set_valid_async(true);
 
   cudf::test::fixed_width_column_wrapper<int32_t> input({});
 
@@ -181,13 +181,13 @@ struct ClampTestNumeric : public cudf::test::BaseFixture {
     }
 
     static_cast<ScalarType*>(lo_scalar.get())->set_value(lo);
-    static_cast<ScalarType*>(lo_scalar.get())->set_valid(lo_validity);
+    static_cast<ScalarType*>(lo_scalar.get())->set_valid_async(lo_validity);
     static_cast<ScalarType*>(lo_replace_scalar.get())->set_value(lo_replace);
-    static_cast<ScalarType*>(lo_replace_scalar.get())->set_valid(lo_replace_validity);
+    static_cast<ScalarType*>(lo_replace_scalar.get())->set_valid_async(lo_replace_validity);
     static_cast<ScalarType*>(hi_scalar.get())->set_value(hi);
-    static_cast<ScalarType*>(hi_scalar.get())->set_valid(hi_validity);
+    static_cast<ScalarType*>(hi_scalar.get())->set_valid_async(hi_validity);
     static_cast<ScalarType*>(hi_replace_scalar.get())->set_value(hi_replace);
-    static_cast<ScalarType*>(hi_replace_scalar.get())->set_valid(hi_replace_validity);
+    static_cast<ScalarType*>(hi_replace_scalar.get())->set_valid_async(hi_replace_validity);
 
     if (input.size() == input_validity.size()) {
       cudf::test::fixed_width_column_wrapper<T> input_column(
@@ -307,9 +307,9 @@ TYPED_TEST(ClampFloatTest, WithNANandNoNull)
     cudf::make_numeric_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
 
   static_cast<ScalarType*>(lo_scalar.get())->set_value(2.0);
-  static_cast<ScalarType*>(lo_scalar.get())->set_valid(true);
+  static_cast<ScalarType*>(lo_scalar.get())->set_valid_async(true);
   static_cast<ScalarType*>(hi_scalar.get())->set_value(6.0);
-  static_cast<ScalarType*>(hi_scalar.get())->set_valid(true);
+  static_cast<ScalarType*>(hi_scalar.get())->set_valid_async(true);
 
   auto got = cudf::clamp(input, *lo_scalar, *hi_scalar);
   cudf::test::fixed_width_column_wrapper<T> expected(
@@ -332,9 +332,9 @@ TYPED_TEST(ClampFloatTest, WithNANandNull)
     cudf::make_numeric_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
 
   static_cast<ScalarType*>(lo_scalar.get())->set_value(2.0);
-  static_cast<ScalarType*>(lo_scalar.get())->set_valid(true);
+  static_cast<ScalarType*>(lo_scalar.get())->set_valid_async(true);
   static_cast<ScalarType*>(hi_scalar.get())->set_value(6.0);
-  static_cast<ScalarType*>(hi_scalar.get())->set_valid(true);
+  static_cast<ScalarType*>(hi_scalar.get())->set_valid_async(true);
 
   auto got = cudf::clamp(input, *lo_scalar, *hi_scalar);
   cudf::test::fixed_width_column_wrapper<T> expected(
@@ -362,13 +362,13 @@ TYPED_TEST(ClampFloatTest, SignOfAFloat)
     cudf::make_numeric_scalar(cudf::data_type(cudf::data_type{cudf::type_to_id<T>()}));
 
   static_cast<ScalarType*>(lo_scalar.get())->set_value(0.0);
-  static_cast<ScalarType*>(lo_scalar.get())->set_valid(true);
+  static_cast<ScalarType*>(lo_scalar.get())->set_valid_async(true);
   static_cast<ScalarType*>(hi_scalar.get())->set_value(0.0);
-  static_cast<ScalarType*>(hi_scalar.get())->set_valid(true);
+  static_cast<ScalarType*>(hi_scalar.get())->set_valid_async(true);
   static_cast<ScalarType*>(lo_replace_scalar.get())->set_value(-1.0);
-  static_cast<ScalarType*>(lo_replace_scalar.get())->set_valid(true);
+  static_cast<ScalarType*>(lo_replace_scalar.get())->set_valid_async(true);
   static_cast<ScalarType*>(hi_replace_scalar.get())->set_value(1.0);
-  static_cast<ScalarType*>(hi_replace_scalar.get())->set_valid(true);
+  static_cast<ScalarType*>(hi_replace_scalar.get())->set_valid_async(true);
 
   auto got = cudf::clamp(input, *lo_scalar, *lo_replace_scalar, *hi_scalar, *hi_replace_scalar);
   cudf::test::fixed_width_column_wrapper<T> expected(
@@ -390,8 +390,8 @@ TEST_F(ClampStringTest, WithNullableColumn)
 
   auto lo = cudf::make_string_scalar("B");
   auto hi = cudf::make_string_scalar("e");
-  lo->set_valid(true);
-  hi->set_valid(true);
+  lo->set_valid_async(true);
+  hi->set_valid_async(true);
 
   std::vector<std::string> expected_strings{"B", "b", "c", "D", "e", "F", "G", "H", "i", "e", "B"};
 
@@ -411,8 +411,8 @@ TEST_F(ClampStringTest, WithNonNullableColumn)
 
   auto lo = cudf::make_string_scalar("B");
   auto hi = cudf::make_string_scalar("e");
-  lo->set_valid(true);
-  hi->set_valid(true);
+  lo->set_valid_async(true);
+  hi->set_valid_async(true);
 
   std::vector<std::string> expected_strings{"B", "b", "c", "D", "e", "F", "G", "H", "e", "e", "B"};
 
@@ -432,8 +432,8 @@ TEST_F(ClampStringTest, WithNullableColumnNullLow)
 
   auto lo = cudf::make_string_scalar("B");
   auto hi = cudf::make_string_scalar("e");
-  lo->set_valid(false);
-  hi->set_valid(true);
+  lo->set_valid_async(false);
+  hi->set_valid_async(true);
 
   std::vector<std::string> expected_strings{"A", "b", "c", "D", "e", "F", "G", "H", "i", "e", "B"};
 
@@ -454,8 +454,8 @@ TEST_F(ClampStringTest, WithNullableColumnNullHigh)
 
   auto lo = cudf::make_string_scalar("B");
   auto hi = cudf::make_string_scalar("e");
-  lo->set_valid(true);
-  hi->set_valid(false);
+  lo->set_valid_async(true);
+  hi->set_valid_async(false);
 
   std::vector<std::string> expected_strings{"B", "b", "c", "D", "e", "F", "G", "H", "i", "j", "B"};
 
@@ -476,8 +476,8 @@ TEST_F(ClampStringTest, WithNullableColumnBothLoAndHiNull)
 
   auto lo = cudf::make_string_scalar("B");
   auto hi = cudf::make_string_scalar("e");
-  lo->set_valid(false);
-  hi->set_valid(false);
+  lo->set_valid_async(false);
+  hi->set_valid_async(false);
 
   auto got = cudf::clamp(input, *lo, *hi);
 
@@ -495,10 +495,10 @@ TEST_F(ClampStringTest, WithReplaceString)
   auto lo_replace = cudf::make_string_scalar("Z");
   auto hi         = cudf::make_string_scalar("e");
   auto hi_replace = cudf::make_string_scalar("z");
-  lo->set_valid(true);
-  lo_replace->set_valid(true);
-  hi->set_valid(true);
-  hi_replace->set_valid(true);
+  lo->set_valid_async(true);
+  lo_replace->set_valid_async(true);
+  hi->set_valid_async(true);
+  hi_replace->set_valid_async(true);
 
   std::vector<std::string> expected_strings{"Z", "b", "c", "D", "e", "F", "G", "H", "z", "z", "B"};
 

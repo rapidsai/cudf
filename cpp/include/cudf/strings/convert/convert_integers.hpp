@@ -171,7 +171,7 @@ std::unique_ptr<column> hex_to_integers(
  * @code{.pseudo}
  * Example:
  * s = ['123', '-456', '', 'AGE', '+17EA', '0x9EF' '123ABC']
- * b = s.is_hex(s)
+ * b = is_hex(s)
  * b is [true, false, false, false, false, true, true]
  * @endcode
  *
@@ -183,6 +183,37 @@ std::unique_ptr<column> hex_to_integers(
  */
 std::unique_ptr<column> is_hex(
   strings_column_view const& strings,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns a new strings column converting integer columns to hexadecimal
+ * characters.
+ *
+ * Any null entries will result in corresponding null entries in the output column.
+ *
+ * The output character set is '0'-'9' and 'A'-'F'. The output string width will
+ * be a multiple of 2 depending on the size of the integer type. A single leading
+ * zero is applied to the first non-zero output byte if it less than 0x10.
+ *
+ * @code{.pseudo}
+ * Example:
+ * input = [123, -1, 0, 27, 342718233] // int32 type input column
+ * s = integers_to_hex(input)
+ * s is [ '04D2', 'FFFFFFFF', '00', '1B', '146D7719']
+ * @endcode
+ *
+ * The example above shows an `INT32` type column where each integer is 4 bytes.
+ * Leading zeros are suppressed unless filling out a complete byte as in
+ * `123 -> '04D2'` instead of `000004D2` or `4D2`.
+ *
+ * @throw cudf::logic_error if the input column is not integral type.
+ *
+ * @param input Integer column to convert to hex.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New strings column with hexadecimal characters.
+ */
+std::unique_ptr<column> integers_to_hex(
+  column_view const& input,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group

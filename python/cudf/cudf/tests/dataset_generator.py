@@ -282,7 +282,9 @@ def get_dataframe(parameters, use_threads):
     return tbl
 
 
-def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
+def rand_dataframe(
+    dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1), use_threads=True
+):
     """
     Generates a random table.
 
@@ -300,6 +302,8 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
     seed : int
         Specifies the `seed` value to be utilized by all downstream
         random data generation APIs.
+    use_threads : bool
+        Indicates whether to use threads pools to build the columns
 
     Returns
     -------
@@ -457,7 +461,7 @@ def rand_dataframe(dtypes_meta, rows, seed=random.randint(0, 2 ** 32 - 1)):
 
     df = get_dataframe(
         Parameters(num_rows=rows, column_parameters=column_params, seed=seed,),
-        use_threads=True,
+        use_threads=use_threads,
     )
 
     return df

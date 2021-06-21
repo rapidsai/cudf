@@ -150,7 +150,7 @@ class corresponding_rows_not_equivalent {
     }
 
     template <typename T, typename... Args>
-    __device__ std::enable_if_t<not std::is_floating_point<T>::value, bool> operator()(Args... args)
+    __device__ std::enable_if_t<not std::is_floating_point<T>::value, bool> operator()(Args...)
     {
       // Non-floating point inequality is checked already
       return true;
@@ -180,14 +180,13 @@ std::string stringify_column_differences(cudf::device_span<int const> difference
 {
   CUDF_EXPECTS(not differences.empty(), "Shouldn't enter this function if `differences` is empty");
   std::string const depth_str = depth > 0 ? "depth " + std::to_string(depth) + '\n' : "";
+  // move the differences to the host.
+  auto h_differences = cudf::detail::make_host_vector_sync(differences);
   if (print_all_differences) {
     std::ostringstream buffer;
     buffer << depth_str << "differences:" << std::endl;
 
-    // thrust may crash if a device vector is passed to fixed_width_column_wrapper,
-    // thus we construct fixed_width_column_wrapper from a host_vector instead
-    auto h_differences = cudf::detail::make_host_vector_sync(differences);
-    auto source_table  = cudf::table_view({lhs, rhs});
+    auto source_table = cudf::table_view({lhs, rhs});
     auto diff_column =
       fixed_width_column_wrapper<int32_t>(h_differences.begin(), h_differences.end());
     auto diff_table = cudf::gather(source_table, diff_column);
@@ -200,7 +199,7 @@ std::string stringify_column_differences(cudf::device_span<int const> difference
              << h_differences[i] << "] = " << h_right_strings[i] << std::endl;
     return buffer.str();
   } else {
-    int index     = differences[0];  // only stringify first difference
+    int index     = h_differences[0];  // only stringify first difference
     auto diff_lhs = cudf::detail::slice(lhs, index, index + 1);
     auto diff_rhs = cudf::detail::slice(rhs, index, index + 1);
     return depth_str + "first difference: " + "lhs[" + std::to_string(index) +
@@ -549,9 +548,7 @@ std::string nested_offsets_to_string(NestedColumnView const& c, std::string cons
 
 struct column_view_printer {
   template <typename Element, typename std::enable_if_t<is_numeric<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     auto h_data = cudf::test::to_host<Element>(col);
 
@@ -590,9 +587,7 @@ struct column_view_printer {
   }
 
   template <typename Element, typename std::enable_if_t<cudf::is_fixed_point<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     auto const h_data = cudf::test::to_host<Element>(col);
     if (col.nullable()) {
@@ -614,9 +609,7 @@ struct column_view_printer {
 
   template <typename Element,
             typename std::enable_if_t<std::is_same<Element, cudf::string_view>::value>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     //
     //  Implementation for strings, call special to_host variant
@@ -637,9 +630,7 @@ struct column_view_printer {
 
   template <typename Element,
             typename std::enable_if_t<std::is_same<Element, cudf::dictionary32>::value>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     cudf::dictionary_column_view dictionary(col);
     if (col.is_empty()) return;
@@ -660,9 +651,7 @@ struct column_view_printer {
 
   // Print the tick counts with the units
   template <typename Element, typename std::enable_if_t<is_duration<Element>()>* = nullptr>
-  void operator()(cudf::column_view const& col,
-                  std::vector<std::string>& out,
-                  std::string const& indent)
+  void operator()(cudf::column_view const& col, std::vector<std::string>& out, std::string const&)
   {
     auto h_data = cudf::test::to_host<Element>(col);
 

@@ -9,3 +9,4 @@ This page contains Input / Output related APIs in cuDF.
    :caption: Contents:
 
    io-supported-types.rst
+   io-gds-integration.rst

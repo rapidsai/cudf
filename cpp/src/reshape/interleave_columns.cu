@@ -34,7 +34,7 @@ struct interleave_columns_functor {
                      not std::is_same<T, cudf::string_view>::value and
                      not std::is_same<T, cudf::list_view>::value,
                    std::unique_ptr<cudf::column>>
-  operator()(Args&&... args)
+  operator()(Args&&...)
   {
     CUDF_FAIL("Called `interleave_columns` on none-supported data type.");
   }
@@ -62,14 +62,14 @@ struct interleave_columns_functor {
 
     auto strings_count = strings_columns.num_rows();
     if (strings_count == 0)  // All columns have 0 rows
-      return strings::detail::make_empty_strings_column(stream, mr);
+      return make_empty_column(data_type{type_id::STRING});
 
     // Create device views from the strings columns.
     auto table       = table_device_view::create(strings_columns, stream);
     auto d_table     = *table;
     auto num_strings = num_columns * strings_count;
 
-    std::pair<rmm::device_buffer, size_type> valid_mask{{}, 0};
+    std::pair<rmm::device_buffer, size_type> valid_mask{};
     if (create_mask) {
       // Create resulting null mask
       valid_mask = cudf::detail::valid_if(

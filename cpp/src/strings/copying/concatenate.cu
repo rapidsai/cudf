@@ -22,7 +22,6 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/detail/concatenate.hpp>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 
@@ -91,8 +90,7 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
   // Compute the partition offsets and size of chars column
   // Note: Using 64-bit size_t so we can detect overflow of 32-bit size_type
   auto d_partition_offsets = rmm::device_uvector<size_t>(views.size() + 1, stream);
-  size_t zero{0};
-  d_partition_offsets.set_element_async(0, zero, stream);  // zero first element
+  d_partition_offsets.set_element_to_zero_async(0, stream);  // zero first element
 
   thrust::transform_inclusive_scan(rmm::exec_policy(stream),
                                    device_views_ptr,
@@ -217,7 +215,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   auto const total_bytes          = std::get<5>(device_views);
   auto const offsets_count        = strings_count + 1;
 
-  if (strings_count == 0) { return make_empty_strings_column(stream, mr); }
+  if (strings_count == 0) { return make_empty_column(data_type{type_id::STRING}); }
 
   CUDF_EXPECTS(offsets_count <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "total number of strings is too large for cudf column");
@@ -247,7 +245,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   }
 
   {  // Copy offsets columns with single kernel launch
-    rmm::device_scalar<size_type> d_valid_count(0);
+    rmm::device_scalar<size_type> d_valid_count(0, stream);
 
     constexpr size_type block_size{256};
     cudf::detail::grid_1d config(offsets_count, block_size);
