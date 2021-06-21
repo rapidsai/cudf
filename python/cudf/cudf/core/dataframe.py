@@ -24,7 +24,6 @@ from pandas.io.formats.printing import pprint_thing
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.null_mask import MaskState, create_null_mask
 from cudf.api.types import is_bool_dtype, is_decimal_dtype, is_dict_like
 from cudf.core import column, reshape
 from cudf.core.abc import Serializable
@@ -1677,84 +1676,10 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             self, other, fn, fill_value=fill_value, reflect=reflect
         )
 
-    # unary, binary, rbinary, orderedcompare, unorderedcompare
-    def _apply_op(self, fn, other=None, fill_value=None):
-
-        result = DataFrame(index=self.index)
-
-        def op(lhs, rhs):
-            if fill_value is None:
-                return getattr(lhs, fn)(rhs)
-            else:
-                return getattr(lhs, fn)(rhs, fill_value)
-
-        if other is None:
-            for col in self._data:
-                result[col] = getattr(self[col], fn)()
-        elif isinstance(other, Sequence):
-            # This adds the ith element of other to the ith column of self.
-            for k, col in enumerate(self._data):
-                result[col] = getattr(self[col], fn)(other[k])
-        elif isinstance(other, DataFrame):
-            if fn in cudf.utils.utils._EQUALITY_OPS:
-                if not self.columns.equals(
-                    other.columns
-                ) or not self.index.equals(other.index):
-                    raise ValueError(
-                        "Can only compare identically-labeled "
-                        "DataFrame objects"
-                    )
-
-            lhs, rhs = _align_indices(self, other)
-            result.index = lhs.index
-            max_num_rows = max(lhs.shape[0], rhs.shape[0])
-
-            def fallback(col, fn):
-                if fill_value is None:
-                    return Series.from_masked_array(
-                        data=column_empty(max_num_rows, dtype="float64"),
-                        mask=create_null_mask(
-                            max_num_rows, state=MaskState.ALL_NULL
-                        ),
-                    ).set_index(col.index)
-                else:
-                    return getattr(col, fn)(fill_value)
-
-            for col in lhs._data:
-                if col not in rhs._data:
-                    result[col] = fallback(lhs[col], fn)
-                else:
-                    result[col] = op(lhs[col], rhs[col])
-            for col in rhs._data:
-                if col not in lhs._data:
-                    result[col] = fallback(rhs[col], _reverse_op[fn])
-        elif isinstance(other, Series):
-            other_cols = other.to_pandas().to_dict()
-            df_cols = self._column_names
-            result_cols = df_cols + tuple(
-                col for col in other_cols if col not in df_cols
-            )
-
-            for col in result_cols:
-                l_opr = (
-                    self[col]
-                    if col in df_cols
-                    else Series(as_column(np.nan, length=len(self)))
-                )
-                r_opr = other_cols.get(col)
-                result[col] = op(l_opr, r_opr)
-
-        elif isinstance(other, (numbers.Number, cudf.Scalar)) or (
-            isinstance(other, np.ndarray) and other.ndim == 0
-        ):
-            for col in self._data:
-                result[col] = op(self[col], other)
-        else:
-            raise NotImplementedError(
-                "DataFrame operations with " + str(type(other)) + " not "
-                "supported at this time."
-            )
-        return result
+    def _unaryop(self, op):
+        data_columns = (col.unary_operator(op) for col in self._columns)
+        data = zip(self._column_names, data_columns)
+        return self.__class__._from_table(Frame(data, self._index))
 
     def add(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -1972,6 +1897,24 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
     def __ge__(self, other):
         return self._binaryop(other, "ge")
+
+    # Unary logical operators
+    def __neg__(self):
+        return -1 * self
+
+    def __pos__(self):
+        return self.copy(deep=True)
+
+    def __abs__(self):
+        return self._unaryop("abs")
+
+    def __invert__(self):
+        # Defer logic to Series since pandas semantics dictate different
+        # behaviors for different types that requires too much special casing
+        # of the standard _unaryop.
+        return DataFrame(
+            data={col: ~self[col] for col in self}, index=self.index
+        )
 
     def radd(self, other, axis=1, level=None, fill_value=None):
         """
@@ -2701,15 +2644,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
     # Alias for rtruediv
     rdiv = rtruediv
-
-    def __invert__(self):
-        return self._apply_op("__invert__")
-
-    def __neg__(self):
-        return self._apply_op("__neg__")
-
-    def __abs__(self):
-        return self._apply_op("__abs__")
 
     def __iter__(self):
         return iter(self.columns)
