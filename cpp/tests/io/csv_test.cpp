@@ -113,7 +113,6 @@ struct CsvFixedPointReaderTest : public CsvReaderTest {
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*input_column, result_view.column(0));
     EXPECT_EQ(result_view.num_columns(), 1);
-    EXPECT_EQ(result_view.column(0).type().id(), cudf::type_to_id<DecimalType>());
   }
 };
 
@@ -355,6 +354,12 @@ TYPED_TEST(CsvFixedPointReaderTest, SingleColumnNegativeScale)
 {
   this->run_tests({"1.23", "8.76", "5.43", "-0.12", "0.25", "-0.23", "-0.27", "0.00", "0.00"},
                   numeric::scale_type{-2});
+}
+
+TYPED_TEST(CsvFixedPointReaderTest, SingleColumnNoScale)
+{
+  this->run_tests({"123", "-876", "543", "-12", "25", "-23", "-27", "0", "0"},
+                  numeric::scale_type{0});
 }
 
 TYPED_TEST(CsvFixedPointReaderTest, SingleColumnPositiveScale)

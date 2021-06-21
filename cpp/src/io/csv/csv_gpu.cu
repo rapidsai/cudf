@@ -472,7 +472,6 @@ struct decode_op {
   {
     static_cast<device_storage_type_t<T> *>(out_buffer)[row] =
       [&flags, &opts, output_type, begin, end]() -> device_storage_type_t<T> {
-      auto const field_len = static_cast<size_t>(end - begin);
       return strings::detail::parse_decimal<device_storage_type_t<T>>(
         begin, end, output_type.scale());
     }();
