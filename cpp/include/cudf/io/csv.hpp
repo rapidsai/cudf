@@ -24,6 +24,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 namespace cudf {
@@ -109,10 +110,8 @@ class csv_reader_options {
 
   // Conversion settings
 
-  // Per-column types; if provided, this takes precedence over _dtypes
-  std::vector<data_type> _data_types;
   // Per-column types; disables type inference on those columns
-  std::vector<std::string> _dtypes;
+  std::variant<std::vector<std::string>, std::vector<data_type>> _dtypes;
   // Additional values to recognize as boolean true values
   std::vector<std::string> _true_values{"True", "TRUE", "true"};
   // Additional values to recognize as boolean false values
@@ -291,12 +290,10 @@ class csv_reader_options {
   /**
    * @brief Returns per-column types.
    */
-  std::vector<data_type> const& get_data_types() const { return _data_types; }
-
-  /**
-   * @brief Returns per-column types.
-   */
-  std::vector<std::string> const& get_dtypes() const { return _dtypes; }
+  std::variant<std::vector<std::string>, std::vector<data_type>> const& get_dtypes() const
+  {
+    return _dtypes;
+  }
 
   /**
    * @brief Returns additional values to recognize as boolean true values.
@@ -566,14 +563,14 @@ class csv_reader_options {
   }
 
   /**
-   * @brief Sets per-column types. If this is set, this takes precedence over dtypes.
+   * @brief Sets per-column types
    *
    * @param types Vector specifying the columns' target data types.
    */
-  void set_data_types(std::vector<data_type> types) { _data_types = std::move(types); }
+  void set_dtypes(std::vector<data_type> types) { _dtypes = std::move(types); }
 
   /**
-   * @brief Sets per-column types.
+   * @brief Sets per-column types, specified by the type's respective string representation.
    *
    * @param types Vector of dtypes in which the column needs to be read.
    */
@@ -982,14 +979,14 @@ class csv_reader_options_builder {
    * @param types Vector of data types in which the column needs to be read.
    * @return this for chaining.
    */
-  csv_reader_options_builder& data_types(std::vector<data_type> types)
+  csv_reader_options_builder& dtypes(std::vector<data_type> types)
   {
-    options._data_types = std::move(types);
+    options._dtypes = std::move(types);
     return *this;
   }
 
   /**
-   * @brief Sets per-column types.
+   * @brief Sets per-column types, specified by the type's respective string representation.
    *
    * @param types Vector of dtypes in which the column needs to be read.
    * @return this for chaining.
