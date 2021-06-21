@@ -125,7 +125,7 @@ static void BM_new_to_row(benchmark::State& state)
   state.SetBytesProcessed(state.iterations() * total_bytes * 2 * table->num_rows());
 }*/
 
-#define TO_ROW_CONVERSION_BENCHMARK_DEFINE(name, f) \
+#define OLD_TO_ROW_CONVERSION_BENCHMARK_DEFINE(name, f) \
   BENCHMARK_DEFINE_F(RowConversion, name)           \
   (::benchmark::State & st) { f(st); }              \
   BENCHMARK_REGISTER_F(RowConversion, name)         \
@@ -134,8 +134,17 @@ static void BM_new_to_row(benchmark::State& state)
     ->UseManualTime()                               \
     ->Unit(benchmark::kMillisecond);
 
-TO_ROW_CONVERSION_BENCHMARK_DEFINE(old_to_row_conversion, BM_old_to_row)
-TO_ROW_CONVERSION_BENCHMARK_DEFINE(new_to_row_conversion, BM_new_to_row)
+#define NEW_TO_ROW_CONVERSION_BENCHMARK_DEFINE(name, f) \
+  BENCHMARK_DEFINE_F(RowConversion, name)           \
+  (::benchmark::State & st) { f(st); }              \
+  BENCHMARK_REGISTER_F(RowConversion, name)         \
+    ->RangeMultiplier(8)                            \
+    ->Ranges({{1 << 6, 1 << 20}})                   \
+    ->UseManualTime()                               \
+    ->Unit(benchmark::kMillisecond);
+
+OLD_TO_ROW_CONVERSION_BENCHMARK_DEFINE(old_to_row_conversion, BM_old_to_row)
+NEW_TO_ROW_CONVERSION_BENCHMARK_DEFINE(new_to_row_conversion, BM_new_to_row)
 
 #define FROM_ROW_CONVERSION_BENCHMARK_DEFINE(name) \
   BENCHMARK_DEFINE_F(RowConversion, name)          \
