@@ -2,7 +2,7 @@
 
 import decimal
 import pickle
-from typing import Any, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -17,9 +17,11 @@ from pandas.core.dtypes.dtypes import (
 
 import cudf
 from cudf._typing import Dtype
+from cudf.core.abc import Serializable
+from cudf.core.buffer import Buffer
 
 
-class _BaseDtype(ExtensionDtype):
+class _BaseDtype(ExtensionDtype, Serializable):
     # Base type for all cudf-specific dtypes
     pass
 
@@ -111,12 +113,16 @@ class CategoricalDtype(_BaseDtype):
 
     def serialize(self):
         header = {}
-        frames = []
+        header["type-serialized"] = pickle.dumps(type(self))
         header["ordered"] = self.ordered
+
+        frames = []
+
         if self.categories is not None:
             categories_header, categories_frames = self.categories.serialize()
         header["categories"] = categories_header
         frames.extend(categories_frames)
+
         return header, frames
 
     @classmethod
@@ -191,6 +197,30 @@ class ListDtype(_BaseDtype):
     def __hash__(self):
         return hash(self._typ)
 
+    def serialize(self) -> Tuple[dict, list]:
+        header: Dict[str, Dtype] = {}
+        header["type-serialized"] = pickle.dumps(type(self))
+
+        frames = []
+
+        if isinstance(self.element_type, _BaseDtype):
+            header["element-type"], frames = self.element_type.serialize()
+        else:
+            header["element-type"] = self.element_type
+
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header: dict, frames: list):
+        if isinstance(header["element-type"], dict):
+            element_type = pickle.loads(
+                header["element-type"]["type-serialized"]
+            ).deserialize(header["element-type"], frames)
+        else:
+            element_type = header["element-type"]
+
+        return cls(element_type=element_type)
+
 
 class StructDtype(_BaseDtype):
 
@@ -241,6 +271,41 @@ class StructDtype(_BaseDtype):
 
     def __hash__(self):
         return hash(self._typ)
+
+    def serialize(self) -> Tuple[dict, list]:
+        header: Dict[str, Any] = {}
+        header["type-serialized"] = pickle.dumps(type(self))
+
+        frames: List[Buffer] = []
+
+        fields = {}
+
+        for k, dtype in self.fields.items():
+            if isinstance(dtype, _BaseDtype):
+                dtype_header, dtype_frames = dtype.serialize()
+                fields[k] = (
+                    dtype_header,
+                    (len(frames), len(frames) + len(dtype_frames)),
+                )
+                frames.extend(dtype_frames)
+            else:
+                fields[k] = dtype
+        header["fields"] = fields
+
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header: dict, frames: list):
+        fields = {}
+        for k, dtype in header["fields"].items():
+            if isinstance(dtype, tuple):
+                dtype_header, (start, stop) = dtype
+                fields[k] = pickle.loads(
+                    dtype_header["type-serialized"]
+                ).deserialize(dtype_header, frames[start:stop],)
+            else:
+                fields[k] = dtype
+        return cls(fields)
 
 
 class Decimal64Dtype(_BaseDtype):
@@ -337,7 +402,14 @@ class Decimal64Dtype(_BaseDtype):
         return cls(precision, -metadata.exponent)
 
     def serialize(self) -> Tuple[dict, list]:
-        return {"precision": self.precision, "scale": self.scale}, []
+        return (
+            {
+                "type-serialized": pickle.dumps(type(self)),
+                "precision": self.precision,
+                "scale": self.scale,
+            },
+            [],
+        )
 
     @classmethod
     def deserialize(cls, header: dict, frames: list):
