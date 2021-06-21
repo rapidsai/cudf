@@ -601,12 +601,10 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseColumnScalar)
   bool mask[] = {0, 1, 1, 1, 0, 1};
   cudf::test::fixed_width_column_wrapper<bool> mask_w(mask, mask + 6);
 
-  std::cout << "GERA_DEBUG strings2 " << std::endl;
   cudf::test::print(strings2);
 
   auto results = cudf::copy_if_else(strings2, strings1, mask_w);
 
-  std::cout << std::endl << "GERA_DEBUG result " << std::endl;
   cudf::test::print(*results);
 
   std::vector<const char*> h_expected;
