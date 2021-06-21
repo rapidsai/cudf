@@ -28,6 +28,7 @@ from cudf._lib.types cimport underlying_type_t_type_id, dtype_from_column_view
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.table cimport Table
 from cudf._lib.interop import to_arrow
 
@@ -52,6 +53,7 @@ from cudf._lib.cpp.scalar.scalar cimport (
     string_scalar,
     fixed_point_scalar,
     list_scalar,
+    struct_scalar
 )
 from cudf.utils.dtypes import _decimal_to_int64, is_list_dtype, is_struct_dtype
 cimport cudf._lib.cpp.types as libcudf_types
@@ -301,14 +303,15 @@ cdef _get_py_dict_from_struct(unique_ptr[scalar]& s):
     if not s.get()[0].is_valid():
         return cudf.NA
 
-    cdef column_view struct_col_view = (<struct_scalar*>s.get()).view()
-    cdef Column struct_col = Column.from_column_view(struct_col_view, None)
-    cdef Table to_arrow_table = Table({"col": struct_col})
+    cdef table_view struct_table_view = (<struct_scalar*>s.get()).view()
+    '''
+    cdef Table to_arrow_table = Table.from_table_view(struct_col_view, None)
 
     arrow_table = to_arrow(to_arrow_table, [["col", []]])
     result = arrow_table['col'].to_pylist()
 
     return _nested_na_replace_dict(result)
+    '''
 
 cdef _get_py_list_from_list(unique_ptr[scalar]& s):
 
