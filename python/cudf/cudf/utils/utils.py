@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
-import functools
 import decimal
+import functools
 from collections.abc import Sequence
 from typing import FrozenSet, Set, Union
 

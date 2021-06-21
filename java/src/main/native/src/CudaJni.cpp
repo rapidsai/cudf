@@ -15,6 +15,7 @@
  */
 
 #include <rmm/device_buffer.hpp>
+
 #include "jni_utils.hpp"
 
 namespace {
@@ -49,7 +50,7 @@ void auto_set_device(JNIEnv *env) {
 }
 
 /** Fills all the bytes in the buffer 'buf' with 'value'. */
-void device_memset_async(JNIEnv *env, rmm::device_buffer& buf, char value) {
+void device_memset_async(JNIEnv *env, rmm::device_buffer &buf, char value) {
   cudaError_t cuda_status = cudaMemsetAsync((void *)buf.data(), value, buf.size());
   jni_cuda_check(env, cuda_status);
 }
