@@ -49,13 +49,13 @@ namespace strings {
  *        can be stored by the index type
  *        (i.e., `input.size() * repeat_times > numeric_limits<size_type>::max()`).
  *
- * @param str The scalar containing the string to repeat.
+ * @param input The scalar containing the string to repeat.
  * @param repeat_times The number of times the `input` string is copied to the output.
  * @param mr Device memory resource used to allocate the returned string scalar.
  * @return New string scalar in which the string is repeated from the input.
  */
 std::unique_ptr<string_scalar> repeat_string(
-  string_scalar const& str,
+  string_scalar const& input,
   size_type repeat_times,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -82,13 +82,13 @@ std::unique_ptr<string_scalar> repeat_string(
  * out is ['aaaaaa', null, '', 'bbcbbcbbc']
  * @endcode
  *
- * @param strings The column containing strings to repeat.
+ * @param input The column containing strings to repeat.
  * @param repeat_times The number of times each input string is copied to the output.
  * @param mr Device memory resource used to allocate the returned strings column.
  * @return New column with concatenated results.
  */
 std::unique_ptr<column> repeat_strings(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   size_type repeat_times,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -120,14 +120,14 @@ std::unique_ptr<column> repeat_strings(
  * @throw cudf::logic_error if the input `repeat_times` column has data type other than integer.
  * @throw cudf::logic_error if the input columns have different sizes.
  *
- * @param strings The column containing strings to repeat.
+ * @param input The column containing strings to repeat.
  * @param repeat_times The column containing numbers of times that the corresponding input strings
  *        are copied to the output.
  * @param mr Device memory resource used to allocate the returned strings column.
  * @return New column with concatenated results.
  */
 std::unique_ptr<column> repeat_strings(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   column_view const& repeat_times,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
