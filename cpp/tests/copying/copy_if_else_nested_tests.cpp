@@ -134,7 +134,7 @@ TYPED_TEST(TypedCopyIfElseNestedTest, LongerStructsWithNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result_column->view(), lhs_structs_column->view());
 }
 
-TYPED_TEST(TypedCopyIfElseNestedTest, StructsWithScalars1)
+TYPED_TEST(TypedCopyIfElseNestedTest, TwoScalarStructs)
 {
   using T = TypeParam;
 
@@ -153,19 +153,21 @@ TYPED_TEST(TypedCopyIfElseNestedTest, StructsWithScalars1)
   auto lhs_scalar =
     cudf::make_struct_scalar(cudf::host_span<cudf::column_view const>{lhs_children});
 
-  auto rhs_ints_child     = ints{0, 11, 22, 33, 44, 55, 66};
-  auto rhs_strings_child  = strings{"00", "11", "22", "33", "44", "55", "66"};
+  auto rhs_ints_child     = ints{22};
+  auto rhs_strings_child  = strings{"22"};
   auto rhs_structs_column = structs{{rhs_ints_child, rhs_strings_child}}.release();
+  auto rhs_children       = std::vector<column_view>{rhs_structs_column->view()};
+  auto rhs_scalar =
+    cudf::make_struct_scalar(cudf::host_span<cudf::column_view const>{rhs_children});
 
   auto selector_column = bools{1, 1, 0, 1, 1, 0, 1}.release();
 
-  auto result_column =
-    copy_if_else(*lhs_scalar, rhs_structs_column->view(), selector_column->view());
+  auto result_column = copy_if_else(*lhs_scalar, *rhs_scalar, selector_column->view());
 
   cudf::test::print(*result_column);
 
-  auto expected_ints    = ints{1, 1, 22, 3, 4, 55, 6};
-  auto expected_strings = strings{"1", "1", "22", "3", "4", "55", "6"};
+  auto expected_ints    = ints{1, 1, 22, 1, 1, 22, 1};
+  auto expected_strings = strings{"1", "1", "22", "1", "1", "22", "1"};
   auto expected_result  = structs{{expected_ints, expected_strings}}.release();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result_column->view(), expected_result->view());

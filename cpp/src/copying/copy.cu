@@ -238,7 +238,9 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
 
   if constexpr (std::is_same<Left, cudf::scalar>::value &&
                 std::is_same<Right, cudf::scalar>::value) {
-    return cudf::make_column_from_scalar(lhs, 1, stream, mr);
+    auto lhs_col = cudf::make_column_from_scalar(lhs, size, stream, mr);
+    auto rhs_col = cudf::make_column_from_scalar(rhs, size, stream, mr);
+    return scatter_gather_based_if_else(lhs_col, rhs_col, size, is_left, stream, mr);
   }
 
   if constexpr (std::is_same<Left, cudf::scalar>::value &&
