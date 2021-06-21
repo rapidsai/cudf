@@ -88,7 +88,9 @@ def check_packed_serialization(df):
         )
         for b in buffers:
             assert isinstance(b, pickle.PickleBuffer)
-        loaded = unpack(pickle.loads(serialbytes, buffers=buffers))
+        loaded = DataFrame._from_table(
+            unpack(pickle.loads(serialbytes, buffers=buffers))
+        )
         assert_eq(loaded, df)
 
 
@@ -112,7 +114,31 @@ def test_pickle_packed_dataframe_categorical():
     np.random.seed(0)
 
     df = DataFrame()
-    df["keys"] = pd.Categorical("aaabababac")
+    df["keys"] = pd.Categorical(
+        ["a", "a", "a", "b", "a", "b", "a", "b", "a", "c"]
+    )
+    df["vals"] = np.random.random(len(df))
+
+    check_packed_serialization(df)
+
+
+def test_pickle_packed_dataframe_list():
+    np.random.seed(0)
+
+    df = DataFrame()
+    df["keys"] = Series(list([i, i + 1, i + 2] for i in range(10)))
+    df["vals"] = np.random.random(len(df))
+
+    check_packed_serialization(df)
+
+
+def test_pickle_packed_dataframe_struct():
+    np.random.seed(0)
+
+    df = DataFrame()
+    df["keys"] = Series(
+        list({"0": i, "1": i + 1, "2": i + 2} for i in range(10))
+    )
     df["vals"] = np.random.random(len(df))
 
     check_packed_serialization(df)
