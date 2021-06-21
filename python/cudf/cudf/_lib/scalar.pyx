@@ -1,6 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import decimal
-
 import numpy as np
 import pandas as pd
 
@@ -14,42 +13,37 @@ from libc.stdint cimport (
     uint32_t,
     uint64_t,
 )
-from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
+from libcpp cimport bool
 
 import cudf
-from cudf._lib.types import (
-    cudf_to_np_types,
-    datetime_unit_map,
-    duration_unit_map,
-)
-
-from cudf._lib.cpp.scalar.scalar cimport (
-    duration_scalar,
-    fixed_point_scalar,
-    numeric_scalar,
-    scalar,
-    string_scalar,
-    timestamp_scalar,
-)
-from cudf._lib.cpp.wrappers.decimals cimport decimal64, scale_type
-from cudf._lib.cpp.wrappers.durations cimport (
-    duration_ms,
-    duration_ns,
-    duration_s,
-    duration_us,
-)
-from cudf._lib.cpp.wrappers.timestamps cimport (
-    timestamp_ms,
-    timestamp_ns,
-    timestamp_s,
-    timestamp_us,
-)
+from cudf._lib.types import cudf_to_np_types, duration_unit_map
+from cudf._lib.types import datetime_unit_map
 from cudf._lib.types cimport underlying_type_t_type_id
 
+from cudf._lib.cpp.wrappers.timestamps cimport (
+    timestamp_s,
+    timestamp_ms,
+    timestamp_us,
+    timestamp_ns
+)
+from cudf._lib.cpp.wrappers.durations cimport(
+    duration_s,
+    duration_ms,
+    duration_us,
+    duration_ns
+)
+from cudf._lib.cpp.wrappers.decimals cimport decimal64, scale_type
+from cudf._lib.cpp.scalar.scalar cimport (
+    scalar,
+    numeric_scalar,
+    timestamp_scalar,
+    duration_scalar,
+    string_scalar,
+    fixed_point_scalar
+)
 from cudf.utils.dtypes import _decimal_to_int64
-
 cimport cudf._lib.cpp.types as libcudf_types
 
 

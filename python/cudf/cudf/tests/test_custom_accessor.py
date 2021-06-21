@@ -2,8 +2,8 @@
 
 import pandas as pd
 import pytest
-
 import cudf as gd
+
 from cudf.tests.utils import assert_eq
 
 

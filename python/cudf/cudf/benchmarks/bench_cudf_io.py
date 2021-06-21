@@ -1,12 +1,10 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+import pytest
+import cudf
 import glob
 import io
-
-import pytest
 from conftest import option
-
-import cudf
 
 
 def get_dataset_dir():

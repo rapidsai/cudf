@@ -1,16 +1,16 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from libcpp cimport bool
+from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
-from libcpp.vector cimport vector
+from libcpp cimport bool
 
-from cudf._lib.cpp.aggregation cimport aggregation
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport null_order, null_policy, order, size_type
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.aggregation cimport aggregation
+from cudf._lib.cpp.types cimport size_type, order, null_order, null_policy
 
 
 cdef extern from "cudf/groupby.hpp" \

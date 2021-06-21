@@ -3,8 +3,8 @@
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
-cimport cudf._lib.cpp.io.types as cudf_io_types
 from cudf._lib.cpp.types cimport size_type
+cimport cudf._lib.cpp.io.types as cudf_io_types
 
 
 cdef extern from "cudf/io/avro.hpp" \

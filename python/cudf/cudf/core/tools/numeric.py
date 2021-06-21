@@ -6,18 +6,19 @@ import numpy as np
 import pandas as pd
 
 import cudf
-import cudf._lib as libcudf
 from cudf.core.column import as_column
 from cudf.utils.dtypes import (
     can_convert_to_column,
-    is_categorical_dtype,
-    is_datetime_dtype,
-    is_list_dtype,
     is_numerical_dtype,
-    is_string_dtype,
-    is_struct_dtype,
+    is_datetime_dtype,
     is_timedelta_dtype,
+    is_categorical_dtype,
+    is_string_dtype,
+    is_list_dtype,
+    is_struct_dtype,
 )
+
+import cudf._lib as libcudf
 
 
 def to_numeric(arg, errors="raise", downcast=None):

@@ -6,9 +6,9 @@ import pytest
 
 from dask import dataframe as dd
 
-import cudf
-
 import dask_cudf as dgd
+
+import cudf
 
 
 def _make_random_frame(nelem, npartitions=2):

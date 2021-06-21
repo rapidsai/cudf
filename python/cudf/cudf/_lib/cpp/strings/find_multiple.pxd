@@ -1,10 +1,8 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-from libcpp.memory cimport unique_ptr
-
-from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-
+from libcpp.memory cimport unique_ptr
+from cudf._lib.cpp.column.column cimport column
 
 cdef extern from "cudf/strings/find_multiple.hpp" namespace "cudf::strings" \
         nogil:

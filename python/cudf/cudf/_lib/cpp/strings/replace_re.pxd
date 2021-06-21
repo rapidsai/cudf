@@ -1,15 +1,14 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.types cimport size_type
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
-from libcpp.vector cimport vector
-
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.types cimport size_type
-
+from libcpp.string cimport string
+from libcpp.vector cimport vector
 
 cdef extern from "cudf/strings/replace_re.hpp" namespace "cudf::strings" nogil:
 

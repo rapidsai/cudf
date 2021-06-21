@@ -4,28 +4,19 @@ from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
 from libcpp.map cimport map
 from libcpp.memory cimport unique_ptr
-from libcpp.pair cimport pair
-from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
-
-from cudf._lib.cpp.io.types cimport (
-    data_sink,
-    datasource,
-    host_buffer,
-    io_type,
-    sink_info,
-    source_info,
-)
+from libcpp.pair cimport pair
+from libcpp.string cimport string
+from cudf._lib.cpp.io.types cimport source_info, io_type, host_buffer
+from cudf._lib.cpp.io.types cimport sink_info, data_sink, datasource
 from cudf._lib.io.datasource cimport Datasource
 
 import codecs
 import errno
 import io
 import os
-
 import cudf
-
 
 # Converts the Python source input to libcudf++ IO source_info
 # with the appropriate type and source values

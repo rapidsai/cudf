@@ -20,8 +20,8 @@
 #include <string>
 #include "cudf_kafka/kafka_consumer.hpp"
 
-#include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/csv.hpp>
 
 namespace kafka = cudf::io::external::kafka;
 

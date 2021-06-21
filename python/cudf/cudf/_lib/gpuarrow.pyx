@@ -4,26 +4,22 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from pyarrow._cuda cimport CudaBuffer
 from pyarrow.includes.libarrow_cuda cimport CCudaBufferReader
-
 from cudf._lib.cpp.gpuarrow cimport CCudaMessageReader
-
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
-
 from pyarrow.includes.common cimport GetResultValue
 from pyarrow.includes.libarrow cimport (
-    CBufferReader,
-    CIpcReadOptions,
     CMessage,
+    CBufferReader,
     CMessageReader,
-    CRecordBatchStreamReader,
+    CIpcReadOptions,
+    CRecordBatchStreamReader
 )
 from pyarrow.lib cimport (
+    _CRecordBatchReader,
     Buffer,
     Schema,
-    _CRecordBatchReader,
-    pyarrow_wrap_schema,
+    pyarrow_wrap_schema
 )
-
 import pyarrow as pa
 
 

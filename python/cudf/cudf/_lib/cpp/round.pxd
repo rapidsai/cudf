@@ -6,7 +6,6 @@ from libcpp.memory cimport unique_ptr
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 
-
 cdef extern from "cudf/round.hpp" namespace "cudf" nogil:
 
     ctypedef enum rounding_method "cudf::rounding_method":

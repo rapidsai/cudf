@@ -4,26 +4,23 @@ import pandas as pd
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
 from libcpp.vector cimport vector
-
+from libcpp.utility cimport move
 from enum import IntEnum
 
 from cudf._lib.column cimport Column
+from cudf._lib.table cimport Table
+
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.search cimport lower_bound, upper_bound
-from cudf._lib.cpp.sorting cimport (
-    is_sorted as cpp_is_sorted,
-    rank,
-    rank_method,
-    sorted_order,
-)
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport null_order, null_policy, order
+from cudf._lib.cpp.search cimport lower_bound, upper_bound
+from cudf._lib.cpp.sorting cimport(
+    rank, rank_method, sorted_order, is_sorted as cpp_is_sorted
+)
 from cudf._lib.sort cimport underlying_type_t_rank_method
-from cudf._lib.table cimport Table
+from cudf._lib.cpp.types cimport order, null_order, null_policy
 
 
 def is_sorted(

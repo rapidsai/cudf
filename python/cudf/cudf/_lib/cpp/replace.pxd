@@ -2,12 +2,14 @@
 
 from libcpp.memory cimport unique_ptr
 
-from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
+from cudf._lib.types import np_to_cudf_types, cudf_to_np_types
 
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 from cudf._lib.cpp.scalar.scalar cimport scalar
-
+from cudf._lib.cpp.column.column cimport column
+from cudf._lib.cpp.column.column_view cimport (
+    column_view,
+    mutable_column_view
+)
 
 cdef extern from "cudf/replace.hpp" namespace "cudf" nogil:
 

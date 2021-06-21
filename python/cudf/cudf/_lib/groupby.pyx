@@ -1,33 +1,33 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from collections import defaultdict
-
-import numpy as np
 from pandas.core.groupby.groupby import DataError
-
-import rmm
-
 from cudf.utils.dtypes import (
     is_categorical_dtype,
-    is_decimal_dtype,
-    is_interval_dtype,
-    is_list_dtype,
     is_string_dtype,
+    is_list_dtype,
+    is_interval_dtype,
     is_struct_dtype,
+    is_decimal_dtype,
 )
 
-from libcpp cimport bool
-from libcpp.memory cimport unique_ptr
+import numpy as np
+import rmm
+
 from libcpp.pair cimport pair
+from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
+from libcpp cimport bool
 
-cimport cudf._lib.cpp.groupby as libcudf_groupby
-cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.aggregation cimport Aggregation, make_aggregation
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.table.table cimport table, table_view
 from cudf._lib.table cimport Table
+from cudf._lib.aggregation cimport Aggregation, make_aggregation
+
+from cudf._lib.cpp.table.table cimport table, table_view
+cimport cudf._lib.cpp.types as libcudf_types
+cimport cudf._lib.cpp.groupby as libcudf_groupby
+
 
 # The sets below define the possible aggregations that can be performed on
 # different dtypes. These strings must be elements of the AggregationKind enum.

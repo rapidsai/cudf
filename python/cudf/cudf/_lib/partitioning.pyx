@@ -1,20 +1,22 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp cimport bool
-from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
-from libcpp.utility cimport move
+from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
+from libcpp.utility cimport move
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.partitioning cimport partition as cpp_partition
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.table cimport Table
 
-from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
+from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.cpp.column.column_view cimport column_view
 
+from cudf._lib.cpp.partitioning cimport (
+    partition as cpp_partition,
+)
+from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 cimport cudf._lib.cpp.types as libcudf_types
 
 

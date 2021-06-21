@@ -3,57 +3,56 @@
 import numpy as np
 
 from cudf._lib.column cimport Column
-
 from cudf._lib.scalar import as_device_scalar
-
 from cudf._lib.scalar cimport DeviceScalar
-
 from cudf._lib.types import np_to_cudf_types
-
 from cudf._lib.types cimport underlying_type_t_type_id
 
 from cudf.core.column.column import as_column
-
-from libcpp.memory cimport unique_ptr
-from libcpp.string cimport string
-from libcpp.utility cimport move
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.strings.convert.convert_booleans cimport (
-    from_booleans as cpp_from_booleans,
     to_booleans as cpp_to_booleans,
+    from_booleans as cpp_from_booleans
 )
 from cudf._lib.cpp.strings.convert.convert_datetime cimport (
-    from_timestamps as cpp_from_timestamps,
-    is_timestamp as cpp_is_timestamp,
     to_timestamps as cpp_to_timestamps,
-)
-from cudf._lib.cpp.strings.convert.convert_durations cimport (
-    from_durations as cpp_from_durations,
-    to_durations as cpp_to_durations,
+    from_timestamps as cpp_from_timestamps,
+    is_timestamp as cpp_is_timestamp
 )
 from cudf._lib.cpp.strings.convert.convert_floats cimport (
-    from_floats as cpp_from_floats,
     to_floats as cpp_to_floats,
+    from_floats as cpp_from_floats
 )
 from cudf._lib.cpp.strings.convert.convert_integers cimport (
+    to_integers as cpp_to_integers,
     from_integers as cpp_from_integers,
     hex_to_integers as cpp_hex_to_integers,
-    is_hex as cpp_is_hex,
-    to_integers as cpp_to_integers,
+    is_hex as cpp_is_hex
 )
 from cudf._lib.cpp.strings.convert.convert_ipv4 cimport (
-    integers_to_ipv4 as cpp_integers_to_ipv4,
     ipv4_to_integers as cpp_ipv4_to_integers,
-    is_ipv4 as cpp_is_ipv4,
+    integers_to_ipv4 as cpp_integers_to_ipv4,
+    is_ipv4 as cpp_is_ipv4
 )
 from cudf._lib.cpp.strings.convert.convert_urls cimport (
-    url_decode as cpp_url_decode,
     url_encode as cpp_url_encode,
+    url_decode as cpp_url_decode
 )
-from cudf._lib.cpp.types cimport data_type, type_id
+from cudf._lib.cpp.strings.convert.convert_durations cimport (
+    to_durations as cpp_to_durations,
+    from_durations as cpp_from_durations
+)
+from cudf._lib.cpp.types cimport (
+    type_id,
+    data_type,
+)
+
+from libcpp.memory cimport unique_ptr
+from libcpp.utility cimport move
+from libcpp.string cimport string
 
 
 def floating_to_string(Column input_col):

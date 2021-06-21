@@ -2,30 +2,27 @@
 
 from enum import Enum
 
+import pandas as pd
 import numba
 import numpy as np
-import pandas as pd
-
-from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
-from libcpp.utility cimport move
+from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
-
-from cudf._lib.types import NullHandling, cudf_to_np_types, np_to_cudf_types
+from libcpp.utility cimport move
 from cudf.utils import cudautils
 
+from cudf._lib.types import np_to_cudf_types, cudf_to_np_types, NullHandling
 from cudf._lib.types cimport (
     underlying_type_t_interpolation,
     underlying_type_t_null_policy,
     underlying_type_t_type_id,
 )
+from cudf._lib.types import Interpolation
 
 from numba.np import numpy_support
 
-from cudf._lib.types import Interpolation
-
-cimport cudf._lib.cpp.aggregation as libcudf_aggregation
 cimport cudf._lib.cpp.types as libcudf_types
+cimport cudf._lib.cpp.aggregation as libcudf_aggregation
 
 
 class AggregationKind(Enum):

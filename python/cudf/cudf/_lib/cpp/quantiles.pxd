@@ -1,18 +1,19 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp cimport bool
-from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
+from libcpp.memory cimport unique_ptr
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
+
 from cudf._lib.cpp.types cimport (
     interpolation,
     null_order,
-    order,
     order_info,
+    order,
     sorted,
 )
 
