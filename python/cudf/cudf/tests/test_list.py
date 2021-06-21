@@ -377,6 +377,7 @@ def test_list_getitem(data):
 def test_list_scalar_host_construction(data):
     slr = cudf.Scalar(data)
     assert slr.value == data
+    assert slr.device_value.value == data
 
 
 @pytest.mark.parametrize(
