@@ -260,7 +260,7 @@ struct dispatch_repeat_strings_separately_fn {
     // Generate output strings without null mask.
     auto [offsets_column, chars_column] = make_strings_children(fn, strings_count, stream, mr);
 
-    // If only one input column has null, we just copy its null mask and null count.
+    // If only one input column has nulls, we just copy its null mask and null count.
     if (strings_has_nulls ^ rtimes_has_nulls) {
       auto const& col = strings_has_nulls ? input.parent() : repeat_times;
       return std::make_tuple(std::move(offsets_column),
