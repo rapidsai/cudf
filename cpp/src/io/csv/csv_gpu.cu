@@ -432,13 +432,12 @@ struct decode_op {
    *
    * @return bool Whether the parsed value is valid.
    */
-  template <
-    typename T,
-    typename std::enable_if_t<std::is_integral<T>::value and !std::is_same<T, bool>::value and
-                              !cudf::is_fixed_point<T>()> * = nullptr>
+  template <typename T,
+            typename std::enable_if_t<std::is_integral_v<T> and !std::is_same_v<T, bool> and
+                                      !cudf::is_fixed_point<T>()> * = nullptr>
   __host__ __device__ __forceinline__ bool operator()(void *out_buffer,
                                                       size_t row,
-                                                      const data_type output_type,
+                                                      const data_type,
                                                       char const *begin,
                                                       char const *end,
                                                       parse_options_view const &opts,
@@ -482,10 +481,10 @@ struct decode_op {
   /**
    * @brief Dispatch for boolean type types.
    */
-  template <typename T, typename std::enable_if_t<std::is_same<T, bool>::value> * = nullptr>
+  template <typename T, typename std::enable_if_t<std::is_same_v<T, bool>> * = nullptr>
   __host__ __device__ __forceinline__ bool operator()(void *out_buffer,
                                                       size_t row,
-                                                      const data_type output_type,
+                                                      const data_type,
                                                       char const *begin,
                                                       char const *end,
                                                       parse_options_view const &opts,
@@ -506,10 +505,10 @@ struct decode_op {
    * @brief Dispatch for floating points, which are set to NaN if the input
    * is not valid. In such case, the validity mask is set to zero too.
    */
-  template <typename T, typename std::enable_if_t<std::is_floating_point<T>::value> * = nullptr>
+  template <typename T, typename std::enable_if_t<std::is_floating_point_v<T>> * = nullptr>
   __host__ __device__ __forceinline__ bool operator()(void *out_buffer,
                                                       size_t row,
-                                                      const data_type output_type,
+                                                      const data_type,
                                                       char const *begin,
                                                       char const *end,
                                                       parse_options_view const &opts,
@@ -524,13 +523,12 @@ struct decode_op {
   /**
    * @brief Dispatch for all other types.
    */
-  template <
-    typename T,
-    typename std::enable_if_t<!std::is_integral<T>::value and !std::is_floating_point<T>::value and
-                              !cudf::is_fixed_point<T>()> * = nullptr>
+  template <typename T,
+            typename std::enable_if_t<!std::is_integral_v<T> and !std::is_floating_point_v<T> and
+                                      !cudf::is_fixed_point<T>()> * = nullptr>
   __host__ __device__ __forceinline__ bool operator()(void *out_buffer,
                                                       size_t row,
-                                                      const data_type output_type,
+                                                      const data_type,
                                                       char const *begin,
                                                       char const *end,
                                                       parse_options_view const &opts,

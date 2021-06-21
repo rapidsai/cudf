@@ -352,20 +352,20 @@ TYPED_TEST(CsvReaderNumericTypeTest, SingleColumn)
 
 TYPED_TEST(CsvFixedPointReaderTest, SingleColumnNegativeScale)
 {
-  this->run_tests({"1.23", "8.76", "5.43", "-0.12", "0.25", "-0.23", "-0.27", "0.00", "0.00"},
+  this->run_tests({"1.23", "876e-2", "5.43e1", "-0.12", "0.25", "-0.23", "-0.27", "0.00", "0.00"},
                   numeric::scale_type{-2});
 }
 
 TYPED_TEST(CsvFixedPointReaderTest, SingleColumnNoScale)
 {
-  this->run_tests({"123", "-876", "543", "-12", "25", "-23", "-27", "0", "0"},
+  this->run_tests({"123", "-87600e-2", "54.3e1", "-12", "25", "-23", "-27", "0", "0"},
                   numeric::scale_type{0});
 }
 
 TYPED_TEST(CsvFixedPointReaderTest, SingleColumnPositiveScale)
 {
   this->run_tests(
-    {"123000", "-876000", "543000", "-12000", "25000", "-23000", "-27000", "0000", "0000"},
+    {"123000", "-87600000e-2", "54300e1", "-12000", "25000", "-23000", "-27000", "0000", "0000"},
     numeric::scale_type{3});
 }
 
