@@ -196,13 +196,6 @@ fi
 
 # Both regular and Project Flash proceed here
 
-# set environment variable for numpy 1.16
-# will be enabled for later versions by default
-np_ver=$(python -c "import numpy; print('.'.join(numpy.__version__.split('.')[:-1]))")
-if [ "$np_ver" == "1.16" ];then
-    export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
-fi
-
 ################################################################################
 # BUILD - Build libcudf examples
 ################################################################################
@@ -210,6 +203,13 @@ fi
 # If examples grows too large to build, should move to cpu side
 gpuci_logger "Building libcudf examples"
 $WORKSPACE/cpp/examples/build.sh
+
+# set environment variable for numpy 1.16
+# will be enabled for later versions by default
+np_ver=$(python -c "import numpy; print('.'.join(numpy.__version__.split('.')[:-1]))")
+if [ "$np_ver" == "1.16" ];then
+    export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
+fi
 
 ################################################################################
 # TEST - Run py.test, notebooks
