@@ -105,10 +105,6 @@ std::unique_ptr<column> repeat_strings(
  *  - Any null row (from either the input strings column or the `repeat_times` column) will always
  *    result in a null output string.
  *
- * Note that this function cannot handle the cases when the size of the output column exceeds the
- * maximum value that can be indexed by size_type (offset_type). In such situations, an exception
- * may be thrown, or the output result is undefined.
- *
  * @code{.pseudo}
  * Example:
  * strs         = ['aa', null, '', 'bbc-']
