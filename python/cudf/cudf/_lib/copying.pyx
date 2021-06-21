@@ -818,10 +818,9 @@ cdef class PackedColumns:
 
     def serialize(self):
         header = {}
+        frames = []
 
         header["column-names"] = self.column_names
-        # we probably want to split dtypes into their own header/frames
-        header["column-dtypes"] = self.column_dtypes
         header["index-names"] = self.index_names
         header["gpu-data-ptr"] = self.gpu_data_ptr
         header["gpu-data-size"] = self.gpu_data_size
@@ -829,10 +828,22 @@ cdef class PackedColumns:
             <uint8_t[:self.metadata_size]>self.c_metadata_ptr()
         )
 
-        return header, []
+        column_dtypes = {}
+        for name, dtype in self.column_dtypes.items():
+            dtype_header, dtype_frames = dtype.serialize()
+            column_dtypes[name] = (
+                dtype_header,
+                (len(frames), len(frames) + len(dtype_frames)),
+            )
+            frames.extend(dtype_frames)
+        header["column-dtypes"] = column_dtypes
+
+        return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
+        import pickle
+
         cdef PackedColumns p = PackedColumns.__new__(PackedColumns)
 
         dbuf = DeviceBuffer(
@@ -850,8 +861,15 @@ cdef class PackedColumns:
 
         p.c_obj = move(data_)
         p.column_names = header["column-names"]
-        p.column_dtypes = header["column-dtypes"]
         p.index_names = header["index-names"]
+
+        column_dtypes = {}
+        for name, dtype in header["column-dtypes"].items():
+            dtype_header, (start, stop) = dtype
+            column_dtypes[name] = pickle.loads(
+                dtype_header["type-serialized"]
+            ).deserialize(dtype_header, frames[start:stop])
+        p.column_dtypes = column_dtypes
 
         return p
 
