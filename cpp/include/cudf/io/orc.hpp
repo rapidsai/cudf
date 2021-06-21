@@ -63,6 +63,9 @@ class orc_reader_options {
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
+  // Whether to convert decimals to float64
+  bool _decimals_as_float64 = false;
+
   friend orc_reader_options_builder;
 
   /**
@@ -128,6 +131,11 @@ class orc_reader_options {
    */
   data_type get_timestamp_type() const { return _timestamp_type; }
 
+  /**
+   * @brief Whether to convert decimals to float64.
+   */
+  bool is_enabled_decimals_as_float64() const { return _decimals_as_float64; }
+
   // Setters
 
   /**
@@ -191,6 +199,13 @@ class orc_reader_options {
    * @param type Type of timestamp.
    */
   void set_timestamp_type(data_type type) { _timestamp_type = type; }
+
+  /**
+   * @brief Enable/Disable conversion of decimals to float64.
+   *
+   * @param val Boolean value to enable/disable.
+   */
+  void set_decimals_as_float64(bool val) { _decimals_as_float64 = val; }
 };
 
 class orc_reader_options_builder {
@@ -292,6 +307,18 @@ class orc_reader_options_builder {
   orc_reader_options_builder& timestamp_type(data_type type)
   {
     options._timestamp_type = type;
+    return *this;
+  }
+
+  /**
+   * @brief Enable/Disable conversion of decimals to float64.
+   *
+   * @param val Boolean value to enable/disable.
+   * @return this for chaining.
+   */
+  orc_reader_options_builder& decimals_as_float64(bool val)
+  {
+    options._decimals_as_float64 = val;
     return *this;
   }
 
