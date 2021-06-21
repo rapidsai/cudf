@@ -3813,8 +3813,6 @@ class SingleColumnFrame(Frame):
         else:
             return self._binaryop(other, "truediv", reflect=True)
 
-    __div__ = __truediv__
-
     def __and__(self, other):
         return self._bitwise_binop(other, "and")
 

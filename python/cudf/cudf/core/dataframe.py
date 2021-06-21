@@ -1593,6 +1593,41 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     elif right_column.nullable:
                         right_column = right_column.fillna(fill_value)
 
+            # For bitwise operations we must verify whether the input column
+            # types are valid, and if so, whether we need to coerce the output
+            # columns to booleans.
+            coerce_to_bool = False
+            _BITWISE_OPS = {"and", "or", "xor"}
+            if fn_apply in _BITWISE_OPS:
+                err_msg = (
+                    f"Operation 'bitwise {fn_apply}' not supported between "
+                    f"{left_column.dtype.type.__name__} and {{}}"
+                )
+                if right_column is None:
+                    raise TypeError(err_msg.format(type(None)))
+
+                try:
+                    left_is_bool = np.issubdtype(left_column.dtype, np.bool_)
+                    right_is_bool = np.issubdtype(right_column.dtype, np.bool_)
+                except TypeError:
+                    raise TypeError(err_msg.format(type(right_column)))
+
+                coerce_to_bool = left_is_bool or right_is_bool
+
+                if not (
+                    (
+                        left_is_bool
+                        or np.issubdtype(left_column.dtype, np.integer)
+                    )
+                    and (
+                        right_is_bool
+                        or np.issubdtype(right_column.dtype, np.integer)
+                    )
+                ):
+                    raise TypeError(
+                        err_msg.format(right_column.dtype.type.__name__)
+                    )
+
             outcol = left_column.binary_operator(
                 fn_apply, right_column, reflect=reflect
             )
@@ -1618,6 +1653,10 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
             if output_mask is not None:
                 outcol = outcol.set_mask(output_mask)
+
+            if coerce_to_bool:
+                outcol = outcol.astype(np.bool_)
+
             output[col] = outcol
 
         # TODO: Figure out how to handle this depending on whether or not the
@@ -1905,6 +1944,15 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
     def __rtruediv__(self, other):
         return self._binaryop(other, "truediv", reflect=True)
+
+    def __and__(self, other):
+        return self._binaryop(other, "and")
+
+    def __or__(self, other):
+        return self._binaryop(other, "or")
+
+    def __xor__(self, other):
+        return self._binaryop(other, "xor")
 
     # Binary rich comparison operations.
     def __eq__(self, other):
@@ -2653,15 +2701,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
     # Alias for rtruediv
     rdiv = rtruediv
-
-    def __and__(self, other):
-        return self._apply_op("__and__", other)
-
-    def __or__(self, other):
-        return self._apply_op("__or__", other)
-
-    def __xor__(self, other):
-        return self._apply_op("__xor__", other)
 
     def __invert__(self):
         return self._apply_op("__invert__")
