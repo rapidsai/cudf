@@ -1491,7 +1491,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if isinstance(rhs, Sequence):
             # TODO: Consider validating sequence length (pandas does).
             operands = {
-                name: (left, right)
+                name: (left, right, reflect, fill_value)
                 for right, (name, left) in zip(rhs, lhs._data.items())
             }
         elif isinstance(rhs, DataFrame):
@@ -1507,12 +1507,24 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             lhs, rhs = _align_indices(lhs, rhs)
 
             operands = {
-                name: (lcol, rhs._data[name] if name in rhs._data else None,)
+                name: (
+                    lcol,
+                    rhs._data[name]
+                    if name in rhs._data
+                    else (fill_value or None),
+                    reflect,
+                    fill_value if name in rhs._data else None,
+                )
                 for name, lcol in lhs._data.items()
             }
             for name, col in rhs._data.items():
                 if name not in lhs._data:
-                    operands[name] = (col, None)
+                    operands[name] = (
+                        col,
+                        (fill_value or None),
+                        not reflect,
+                        None,
+                    )
         elif isinstance(rhs, Series):
             # Note: This logic will need updating if any of the user-facing
             # binop methods (e.g. DataFrame.add) ever support axis=0/rows.
@@ -1532,14 +1544,16 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     # which results in nans, the pandas output.
                     left = as_column(np.nan, length=lhs._num_rows)
                     right = right_dict[col]
-                operands[col] = (left, right)
-
+                operands[col] = (left, right, reflect, fill_value)
         else:
             return NotImplemented
 
         # Now actually perform the binop on the columns in left and right.
         output = {}
-        for col, (left_column, right_column) in operands.items():
+        for (
+            col,
+            (left_column, right_column, reflect, fill_value),
+        ) in operands.items():
             if right_column is cudf.NA:
                 right_column = cudf.Scalar(
                     right_column, dtype=left_column.dtype
@@ -1569,8 +1583,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     # that nulls that are present in both left_column and
                     # right_column are not filled.
                     if left_column.nullable and right_column.nullable:
-                        # Note: left_column is a Frame, while right_column is
-                        # already a column.
                         lmask = as_column(left_column.nullmask)
                         rmask = as_column(right_column.nullmask)
                         output_mask = (lmask | rmask).data
@@ -1589,7 +1601,10 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             # objects that are Series-like objects. The output shares the
             # left_column's name unless the right_column is a _differently_
             # named Series-like object.
-            # TODO: Figure out how to handle names correctly.
+            # TODO: Figure out how to handle names correctly. This code path
+            # can only occur for Series, not DataFrame (mismatched columns of a
+            # DataFrame result in separate outputs) so this issue has to be
+            # handled later in the refactor.
             # if (
             #     isinstance(other, (SingleColumnFrame, pd.Series, pd.Index))
             #     and self.name != other.name
@@ -1602,7 +1617,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             #     data=outcol, name=result_name)
 
             if output_mask is not None:
-                outcol = outcol._column.set_mask(output_mask)
+                outcol = outcol.set_mask(output_mask)
             output[col] = outcol
 
         # TODO: Figure out how to handle this depending on whether or not the
@@ -1613,13 +1628,15 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         self,
         other,
         fn,
-        # fill_value=None,
+        fill_value=None,
         reflect=False,
         # lhs=None,
         # *args,
         # **kwargs,
     ):
-        return self._colwise_binop(self, other, fn, reflect=reflect)
+        return self._colwise_binop(
+            self, other, fn, fill_value=fill_value, reflect=reflect
+        )
 
     # unary, binary, rbinary, orderedcompare, unorderedcompare
     def _apply_op(self, fn, other=None, fill_value=None):
@@ -1751,7 +1768,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("add", other, fill_value)
+        return self._binaryop(other, "add", fill_value)
 
     def update(
         self,
@@ -1940,7 +1957,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("radd", other, fill_value)
+        return self._binaryop(other, "add", fill_value, reflect=True)
 
     def sub(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -1993,7 +2010,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("sub", other, fill_value)
+        return self._binaryop(other, "sub", fill_value)
 
     def rsub(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -2051,7 +2068,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("rsub", other, fill_value)
+        return self._binaryop(other, "sub", fill_value, reflect=True)
 
     def mul(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -2106,7 +2123,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("mul", other, fill_value)
+        return self._binaryop(other, "mul", fill_value)
 
     def rmul(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -2161,7 +2178,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("rmul", other, fill_value)
+        return self._binaryop(other, "mul", fill_value, reflect=True)
 
     def mod(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -2214,7 +2231,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("mod", other, fill_value)
+        return self._binaryop(other, "mod", fill_value)
 
     def rmod(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -2267,7 +2284,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("rmod", other, fill_value)
+        return self._binaryop(other, "mod", fill_value, reflect=True)
 
     def pow(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -2320,7 +2337,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("pow", other, fill_value)
+        return self._binaryop(other, "pow", fill_value)
 
     def rpow(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -2373,7 +2390,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("rpow", other, fill_value)
+        return self._binaryop(other, "pow", fill_value, reflect=True)
 
     def floordiv(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -2426,7 +2443,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("floordiv", other, fill_value)
+        return self._binaryop(other, "floordiv", fill_value)
 
     def rfloordiv(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -2489,7 +2506,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("rfloordiv", other, fill_value)
+        return self._binaryop(other, "floordiv", fill_value, reflect=True)
 
     def truediv(self, other, axis="columns", level=None, fill_value=None):
         """
@@ -2547,7 +2564,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("truediv", other, fill_value)
+        return self._binaryop(other, "truediv", fill_value)
 
     # Alias for truediv
     div = truediv
@@ -2613,7 +2630,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
-        return self._apply_op("rtruediv", other, fill_value)
+        return self._binaryop(other, "truediv", fill_value, reflect=True)
 
     # Alias for rtruediv
     rdiv = rtruediv
