@@ -119,6 +119,8 @@ std::unique_ptr<column> repeat_strings(
  *
  * @throw cudf::logic_error if the input `repeat_times` column has data type other than integer.
  * @throw cudf::logic_error if the input columns have different sizes.
+ * @throw cudf::logic_error if size of the output column exceeds the maximum value that can be
+ *        indexed by size_type (offset_type).
  *
  * @param input The column containing strings to repeat.
  * @param repeat_times The column containing numbers of times that the corresponding input strings
