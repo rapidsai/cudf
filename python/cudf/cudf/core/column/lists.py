@@ -16,12 +16,12 @@ from cudf._lib.lists import (
     sort_lists,
 )
 from cudf._lib.table import Table
-from cudf._typing import BinaryOperand
+from cudf._typing import BinaryOperand, Dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethodsMixin
 from cudf.core.dtypes import ListDtype
-from cudf.utils.dtypes import is_list_dtype, is_numerical_dtype
+from cudf.utils.dtypes import _is_non_decimal_numeric_dtype, is_list_dtype
 
 
 class ListColumn(ColumnBase):
@@ -76,7 +76,10 @@ class ListColumn(ColumnBase):
 
     @property
     def base_size(self):
-        return len(self.base_children[0]) - 1
+        # in some cases, libcudf will return an empty ListColumn with no
+        # indices; in these cases, we must manually set the base_size to 0 to
+        # avoid it being negative
+        return max(0, len(self.base_children[0]) - 1)
 
     def binary_operator(
         self, binop: str, other: BinaryOperand, reflect: bool = False
@@ -232,6 +235,23 @@ class ListColumn(ColumnBase):
         raise NotImplementedError(
             "Lists are not yet supported via `__cuda_array_interface__`"
         )
+
+    def _with_type_metadata(
+        self: "cudf.core.column.ListColumn", dtype: Dtype
+    ) -> "cudf.core.column.ListColumn":
+        if isinstance(dtype, ListDtype):
+            return column.build_list_column(
+                indices=self.base_children[0],
+                elements=self.base_children[1]._with_type_metadata(
+                    dtype.element_type
+                ),
+                mask=self.base_mask,
+                size=self.size,
+                offset=self.offset,
+                null_count=self.null_count,
+            )
+
+        return self
 
 
 class ListMethods(ColumnMethodsMixin):
@@ -405,7 +425,7 @@ class ListMethods(ColumnMethodsMixin):
             raise ValueError(
                 "lists_indices and list column is of different " "size."
             )
-        if not is_numerical_dtype(
+        if not _is_non_decimal_numeric_dtype(
             lists_indices_col.children[1].dtype
         ) or not np.issubdtype(
             lists_indices_col.children[1].dtype, np.integer
