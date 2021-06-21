@@ -205,7 +205,7 @@ struct compute_size_and_repeat_separately_fn {
     // When the input string is null, `repeat_times` is also set to 0.
     // This makes sure that if `repeat_times > 0` then we will always have a valid input string,
     // and if `repeat_times <= 0` we will never copy anything to the output.
-    auto const repeat_times = is_valid ? repeat_times_dv.element<IntType>(idx) : 0;
+    auto const repeat_times = is_valid ? repeat_times_dv.element<IntType>(idx) : IntType{0};
 
     if (!d_chars) {
       d_offsets[idx] =
@@ -221,7 +221,7 @@ struct compute_size_and_repeat_separately_fn {
       if (str_size > 0) {
         auto const input_ptr = d_str.data();
         auto output_ptr      = d_chars + d_offsets[idx];
-        for (size_type repeat_idx = 0; repeat_idx < repeat_times; ++repeat_idx) {
+        for (IntType repeat_idx = 0; repeat_idx < repeat_times; ++repeat_idx) {
           output_ptr = copy_and_increment(output_ptr, input_ptr, str_size);
         }
       }
@@ -231,9 +231,12 @@ struct compute_size_and_repeat_separately_fn {
 
 /**
  * @brief The dispatch functions for repeating strings with separate repeating times.
+ *
+ * The functions expect that the input `repeat_times` column has a non-bool integer data type (i.e.,
+ * it has `cudf::is_index_type` data type).
  */
 struct dispatch_repeat_strings_separately_fn {
-  template <class T, std::enable_if_t<std::is_integral<T>::value>* = nullptr>
+  template <class T, std::enable_if_t<cudf::is_index_type<T>()>* = nullptr>
   std::tuple<std::unique_ptr<column>, std::unique_ptr<column>, rmm::device_buffer, size_type>
   operator()(strings_column_view const& input,
              column_view const& repeat_times,
@@ -274,7 +277,7 @@ struct dispatch_repeat_strings_separately_fn {
       std::move(offsets_column), std::move(chars_column), rmm::device_buffer{0, stream, mr}, 0);
   }
 
-  template <class T, std::enable_if_t<not std::is_integral<T>::value>* = nullptr>
+  template <class T, std::enable_if_t<!cudf::is_index_type<T>()>* = nullptr>
   std::tuple<std::unique_ptr<column>, std::unique_ptr<column>, rmm::device_buffer, size_type>
   operator()(strings_column_view const&,
              column_view const&,
