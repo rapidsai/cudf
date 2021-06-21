@@ -174,51 +174,6 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
 
 namespace {
 /**
- * @brief Check if the size of the output strings column exceeds the maximum indexable value.
- */
-template <typename SizeCompFunc>
-bool is_output_overflow(SizeCompFunc size_comp_fn,
-                        size_type strings_count,
-                        rmm::cuda_stream_view stream)
-{
-  // Firstly, compute size of the output strings.
-  auto string_sizes      = rmm::device_uvector<size_type>(strings_count + 1, stream);
-  size_comp_fn.d_offsets = string_sizes.begin();
-
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
-                     strings_count,
-                     size_comp_fn);
-
-  static constexpr int64_t max_offset = static_cast<int64_t>(std::numeric_limits<size_type>::max());
-
-  // Compute offsets of the output strings and detect overflow at the same time.
-  auto has_overflow = rmm::device_uvector<bool>(1, stream);
-  CUDA_TRY(cudaMemsetAsync(has_overflow.begin(), 0, sizeof(bool), stream.value()));
-
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream),
-    string_sizes.begin(),
-    string_sizes.end(),
-    string_sizes.begin(),
-    size_type{0},
-    [overflow = has_overflow.begin()] __device__(auto const lhs, auto const rhs) {
-      auto const sum = static_cast<int64_t>(lhs) + static_cast<int64_t>(rhs);
-      if (sum > max_offset) {
-        *overflow = true;
-        return 0;
-      }
-      return static_cast<size_type>(sum);
-    });
-
-  bool result;
-  CUDA_TRY(cudaMemcpyAsync(
-    &result, has_overflow.begin(), sizeof(bool), cudaMemcpyDeviceToHost, stream.value()));
-  stream.synchronize();
-  return result;
-}
-
-/**
  * @brief Functor to compute string sizes and repeat the input strings, each string is repeated by a
  * separate number of times.
  */
@@ -273,6 +228,51 @@ struct compute_size_and_repeat_separately_fn {
     }
   }
 };
+
+/**
+ * @brief Check if the size of the output strings column exceeds the maximum indexable value.
+ */
+template <typename SizeCompFunc>
+bool is_output_overflow(SizeCompFunc size_comp_fn,
+                        size_type strings_count,
+                        rmm::cuda_stream_view stream)
+{
+  // Firstly, compute size of the output strings.
+  auto string_sizes      = rmm::device_uvector<size_type>(strings_count + 1, stream);
+  size_comp_fn.d_offsets = string_sizes.begin();
+
+  thrust::for_each_n(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     strings_count,
+                     size_comp_fn);
+
+  static constexpr int64_t max_offset = static_cast<int64_t>(std::numeric_limits<size_type>::max());
+
+  // Compute offsets of the output strings and detect overflow at the same time.
+  auto has_overflow = rmm::device_uvector<bool>(1, stream);
+  CUDA_TRY(cudaMemsetAsync(has_overflow.begin(), 0, sizeof(bool), stream.value()));
+
+  thrust::exclusive_scan(
+    rmm::exec_policy(stream),
+    string_sizes.begin(),
+    string_sizes.end(),
+    string_sizes.begin(),
+    size_type{0},
+    [overflow = has_overflow.begin()] __device__(auto const lhs, auto const rhs) {
+      auto const sum = static_cast<int64_t>(lhs) + static_cast<int64_t>(rhs);
+      if (sum > max_offset) {
+        *overflow = true;
+        return 0;
+      }
+      return static_cast<size_type>(sum);
+    });
+
+  bool result;
+  CUDA_TRY(cudaMemcpyAsync(
+    &result, has_overflow.begin(), sizeof(bool), cudaMemcpyDeviceToHost, stream.value()));
+  stream.synchronize();
+  return result;
+}
 
 /**
  * @brief The dispatch functions for repeating strings with separate repeating times.
