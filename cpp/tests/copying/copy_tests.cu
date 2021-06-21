@@ -640,6 +640,10 @@ TEST_F(StringsCopyIfElseTest, CopyIfElseScalarScalar)
     }
   }
   cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end(), valids);
+
+  std::cout << "GERA: expecting result: " << std::endl;
+  cudf::test::print(expected);
+
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 

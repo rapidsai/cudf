@@ -180,6 +180,19 @@ class logical_not {
   Predicate _pred;
 };
 
+template <typename Filter>
+std::unique_ptr<column> scatter_if_else_scalar_lhs(cudf::scalar lhs,
+                                                   cudf::column_view rhs,
+                                                   size_type size,
+                                                   Filter is_left,
+                                                   rmm::cuda_stream_view stream,
+                                                   rmm::mr::device_memory_resource* mr)
+{
+  cudf::make_column_from_scalar(lhs, size, stream, mr);
+
+  return std::unique_ptr<column>(nullptr);
+}
+
 /**
  * @brief Implementation of copy_if_else() with gather()/scatter().
  *
@@ -230,30 +243,38 @@ std::unique_ptr<column> scatter_gather_based_if_else(Left const& lhs,
   }
 
   if constexpr (std::is_same<Left, cudf::scalar>::value &&
+                std::is_same<Right, cudf::scalar>::value) {
+    return cudf::make_column_from_scalar(lhs, 1, stream, mr);
+  }
+
+  if constexpr (std::is_same<Left, cudf::scalar>::value &&
                 std::is_same<Right, cudf::column_view>::value) {
-    auto scatter_map_lhs = rmm::device_uvector<size_type>{static_cast<std::size_t>(1), stream};
-    auto const scatter_map_end = thrust::copy_if(rmm::exec_policy(stream),
-                                                 thrust::make_counting_iterator(size_type{0}),
-                                                 thrust::make_counting_iterator(size_type{1}),
-                                                 scatter_map_lhs.begin(),
-                                                 logical_not{is_left});
+    // auto result = cudf::detail::scatter(
+    //   table_view{std::vector<column_view>{scatter_src_rhs->get_column(0).view()}},
+    //   scatter_scalar_map.begin(),
+    //   scatter_scalar_map_end,
+    //   table_view{std::vector<column_view>{rhs}},
+    //   false,
+    //   stream,
+    //   mr);
 
-    auto const scatter_src_rhs = cudf::detail::gather(table_view{std::vector<column_view>{rhs}},
-                                                      scatter_map_lhs.begin(),
-                                                      scatter_map_end,
-                                                      out_of_bounds_policy::DONT_CHECK,
-                                                      stream);
+    // return std::move(result->release()[0]);
+    return scatter_if_else_scalar_lhs(lhs, rhs, size, is_left, stream, mr);
+  }
 
-    auto result = cudf::detail::scatter(
-      table_view{std::vector<column_view>{scatter_src_rhs->get_column(0).view()}},
-      scatter_map_lhs.begin(),
-      scatter_map_end,
-      table_view{std::vector<column_view>{rhs}},
-      false,
-      stream,
-      mr);
+  if constexpr (std::is_same<Left, cudf::column_view>::value &&
+                std::is_same<Right, cudf::scalar>::value) {
+    // auto result = cudf::detail::scatter(
+    //   table_view{std::vector<column_view>{scatter_src_rhs->get_column(0).view()}},
+    //   scatter_scalar_map.begin(),
+    //   scatter_scalar_map_end,
+    //   table_view{std::vector<column_view>{rhs}},
+    //   false,
+    //   stream,
+    //   mr);
 
-    return std::move(result->release()[0]);
+    // return std::move(result->release()[0]);
+    return scatter_if_else_scalar_lhs(rhs, lhs, size, logical_not{is_left}, stream, mr);
   }
 
   // Bail out for Scalars.
