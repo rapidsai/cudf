@@ -3826,16 +3826,6 @@ class SingleColumnFrame(Frame):
         """
         return cudf.core.algorithms.factorize(self, na_sentinel=na_sentinel)
 
-    @property
-    def _copy_construct_defaults(self):
-        """A default dictionary of kwargs to be used for copy construction."""
-        raise NotImplementedError
-
-    def _copy_construct(self, **kwargs):
-        """Shallow copy this object by replacing certain ctor args.
-        """
-        return self.__class__(**{**self._copy_construct_defaults, **kwargs})
-
     def _binaryop(
         self, other, fn, fill_value=None, reflect=False, *args, **kwargs,
     ):
@@ -3862,6 +3852,10 @@ class SingleColumnFrame(Frame):
         SingleColumnFrame
             A new instance containing the result of the operation.
         """
+
+        # TODO: Scalar multiplication of a RangeIndex in pandas results in
+        # another RangeIndex, rather than conversion to an int index. That
+        # needs to be fixed by overriding the __mul__ operator for RangeIndex.
 
         # Get the appropriate name for output operations involving two objects
         # that are Series-like objects. The output shares the lhs's name unless
