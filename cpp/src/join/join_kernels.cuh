@@ -68,14 +68,13 @@ constexpr auto remap_sentinel_hash(H hash, S sentinel)
  * @brief Builds a hash table from a row hasher that maps the hash
  * values of each row to its respective row index.
  *
- * @tparam multimap_type The type of the hash table
+ * @tparam multimap_view_type The type of the hash table view
  *
  * @param[in,out] multi_map The hash table to be built to insert rows into
  * @param[in] hash_build Row hasher for the build table
  * @param[in] build_table_num_rows The number of rows in the build table
  * @param[in] row_bitmask Bitmask where bit `i` indicates the presence of a null
  * value in row `i` of input keys. This is nullptr if nulls are equal.
- * @param[out] error Pointer used to set an error code if the insert fails
  */
 template <typename multimap_view_type>
 __global__ void build_hash_table(multimap_view_type multi_map,
@@ -110,10 +109,10 @@ __global__ void build_hash_table(multimap_view_type multi_map,
  * by probing the hash map with the probe table and counting the number of matches.
  *
  * @tparam JoinKind The type of join to be performed
- * @tparam multimap_type The datatype of the hash table
  * @tparam block_size The number of threads per block for this kernel
+ * @tparam multimap_view_type The datatype of the hash table view
  *
- * @param[in] multi_map The hash table built on the build table
+ * @param[in] multi_map The view of the hash table built on the build table
  * @param[in] build_table The build table
  * @param[in] probe_table The probe table
  * @param[in] hash_probe Row hasher for the probe table
@@ -285,11 +284,11 @@ __device__ void flush_output_cache(const unsigned int activemask,
  * Join operation.
  *
  * @tparam JoinKind The type of join to be performed
- * @tparam multimap_type The type of the hash table
  * @tparam block_size The number of threads per block for this kernel
  * @tparam output_cache_size The side of the shared memory buffer to cache join output results
+ * @tparam multimap_type The type of the hash table view
  *
- * @param[in] multi_map The hash table built from the build table
+ * @param[in] multi_map The view of the hash table built from the build table
  * @param[in] build_table The build table
  * @param[in] probe_table The probe table
  * @param[in] hash_probe Row hasher for the probe table
