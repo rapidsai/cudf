@@ -958,7 +958,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
   // build chars column
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  auto chars_column = create_chars_child_column(strings_count, bytes, stream, mr);
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
   auto d_chars      = chars_column->mutable_view().template data<char>();
   // fill in chars column with timestamps
   // dispatcher is called to handle the different timestamp types
