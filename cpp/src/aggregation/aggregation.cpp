@@ -155,6 +155,18 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
 }
 
 std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, merge_lists_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, merge_sets_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   data_type col_type, lead_lag_aggregation const& agg)
 {
   return visit(col_type, static_cast<aggregation const&>(agg));
@@ -266,6 +278,16 @@ void aggregation_finalizer::visit(collect_list_aggregation const& agg)
 }
 
 void aggregation_finalizer::visit(collect_set_aggregation const& agg)
+{
+  visit(static_cast<aggregation const&>(agg));
+}
+
+void aggregation_finalizer::visit(merge_lists_aggregation const& agg)
+{
+  visit(static_cast<aggregation const&>(agg));
+}
+
+void aggregation_finalizer::visit(merge_sets_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
 }
@@ -470,6 +492,24 @@ template std::unique_ptr<aggregation> make_collect_set_aggregation<aggregation>(
   null_policy null_handling, null_equality nulls_equal, nan_equality nans_equal);
 template std::unique_ptr<rolling_aggregation> make_collect_set_aggregation<rolling_aggregation>(
   null_policy null_handling, null_equality nulls_equal, nan_equality nans_equal);
+
+/// Factory to create a MERGE_LISTS aggregation
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_merge_lists_aggregation()
+{
+  return std::make_unique<detail::merge_lists_aggregation>();
+}
+template std::unique_ptr<aggregation> make_merge_lists_aggregation<aggregation>();
+
+/// Factory to create a MERGE_SETS aggregation
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_merge_sets_aggregation(null_equality nulls_equal,
+                                                  nan_equality nans_equal)
+{
+  return std::make_unique<detail::merge_sets_aggregation>(nulls_equal, nans_equal);
+}
+template std::unique_ptr<aggregation> make_merge_sets_aggregation<aggregation>(null_equality,
+                                                                               nan_equality);
 
 /// Factory to create a LAG aggregation
 template <typename Base = aggregation>
