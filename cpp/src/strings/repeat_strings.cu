@@ -155,22 +155,22 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
 
   // Check for overflow (whether the total size of the output strings column exceeds
   // numeric_limits<size_type>::max().
-  size_type size_start, size_end;
-  CUDA_TRY(cudaMemcpyAsync(&size_start,
-                           input.offsets().template data<size_type>() + input.offset(),
-                           sizeof(size_type),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-  CUDA_TRY(
-    cudaMemcpyAsync(&size_end,
-                    input.offsets().template data<size_type>() + input.offset() + strings_count,
-                    sizeof(size_type),
-                    cudaMemcpyDeviceToHost,
-                    stream.value()));
-  stream.synchronize();
+  //  size_type size_start, size_end;
+  //  CUDA_TRY(cudaMemcpyAsync(&size_start,
+  //                           input.offsets().template data<size_type>() + input.offset(),
+  //                           sizeof(size_type),
+  //                           cudaMemcpyDeviceToHost,
+  //                           stream.value()));
+  //  CUDA_TRY(
+  //    cudaMemcpyAsync(&size_end,
+  //                    input.offsets().template data<size_type>() + input.offset() + strings_count,
+  //                    sizeof(size_type),
+  //                    cudaMemcpyDeviceToHost,
+  //                    stream.value()));
+  //  stream.synchronize();
 
-  CUDF_EXPECTS(size_end - size_start <= std::numeric_limits<size_type>::max() / repeat_times,
-               "The output strings have total size that exceeds the maximum allowed size.");
+  //  CUDF_EXPECTS(size_end - size_start <= std::numeric_limits<size_type>::max() / repeat_times,
+  //               "The output strings have total size that exceeds the maximum allowed size.");
 
   auto const strings_dv_ptr = column_device_view::create(input.parent(), stream);
   auto const fn = compute_size_and_repeat_fn{*strings_dv_ptr, repeat_times, input.has_nulls()};
@@ -316,11 +316,11 @@ struct dispatch_repeat_strings_separately_fn {
 
     // Check for overflow (whether the total size of the output strings column exceeds
     // numeric_limits<size_type>::max().
-    if (is_output_overflow(fn, strings_count, stream)) {
-      CUDF_FAIL(
-        "Size of the output strings column exceeds the maximum value that can be indexed by "
-        "size_type (offset_type)");
-    }
+    //    if (is_output_overflow(fn, strings_count, stream)) {
+    //      CUDF_FAIL(
+    //        "Size of the output strings column exceeds the maximum value that can be indexed by "
+    //        "size_type (offset_type)");
+    //    }
 
     // Repeat the strings in each row.
     // Note that this cannot handle the cases when the size of the output column exceeds the maximum

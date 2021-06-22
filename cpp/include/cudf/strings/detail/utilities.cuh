@@ -137,7 +137,7 @@ __device__ inline char* copy_string(char* buffer, const string_view& d_string)
  * @return offsets child column and chars child column for a strings column
  */
 template <typename SizeAndExecuteFunction>
-auto make_strings_children(
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_strings_children(
   SizeAndExecuteFunction size_and_exec_fn,
   size_type exec_size,
   size_type strings_count,
@@ -148,7 +148,7 @@ auto make_strings_children(
     data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view          = offsets_column->mutable_view();
   auto d_offsets             = offsets_view.template data<int32_t>();
-  size_and_exec_fn.d_offsets = d_offsets;
+  size_and_exec_fn.d_offsets = &d_offsets[1];
 
   // This is called twice -- once for offsets and once for chars.
   // Reducing the number of places size_and_exec_fn is inlined speeds up compile time.
@@ -159,10 +159,40 @@ auto make_strings_children(
                        size_and_exec_fn);
   };
 
-  // Compute the offsets values
+  // Compute the string sizes and offset values
   for_each_fn(size_and_exec_fn);
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+
+  auto has_overflow = rmm::device_uvector<bool>(1, stream);
+  CUDA_TRY(cudaMemsetAsync(has_overflow.begin(), 0, sizeof(bool), stream.value()));
+
+  static constexpr int64_t max_offset = static_cast<int64_t>(std::numeric_limits<size_type>::max());
+  CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(offset_type), stream.value()));
+  thrust::inclusive_scan(
+    rmm::exec_policy(stream),
+    d_offsets + 1,
+    d_offsets + 1 + strings_count,
+    d_offsets + 1,
+    [overflow = has_overflow.begin()] __device__(auto const lhs, auto const rhs) {
+      auto const sum = static_cast<int64_t>(lhs) + static_cast<int64_t>(rhs);
+      if (sum > max_offset) {
+        *overflow = true;
+        return 0;
+      }
+      return static_cast<size_type>(sum);
+    });
+
+  bool is_overflow;
+  CUDA_TRY(cudaMemcpyAsync(
+    &is_overflow, has_overflow.begin(), sizeof(bool), cudaMemcpyDeviceToHost, stream.value()));
+  stream.synchronize();
+  if (is_overflow) {
+    CUDF_FAIL(
+      "Size of the output strings column exceeds the maximum value that can be indexed by "
+      "size_type (offset_type)");
+  }
+
+  //  thrust::exclusive_scan(
+  //    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
 
   // Now build the chars column
   auto const bytes = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
@@ -196,7 +226,7 @@ auto make_strings_children(
  * @return offsets child column and chars child column for a strings column
  */
 template <typename SizeAndExecuteFunction>
-auto make_strings_children(
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_strings_children(
   SizeAndExecuteFunction size_and_exec_fn,
   size_type strings_count,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -238,7 +268,7 @@ make_strings_children_with_null_mask(
     data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto offsets_view          = offsets_column->mutable_view();
   auto d_offsets             = offsets_view.template data<int32_t>();
-  size_and_exec_fn.d_offsets = d_offsets;
+  size_and_exec_fn.d_offsets = &d_offsets[1];
 
   auto validities               = rmm::device_uvector<int8_t>(strings_count, stream);
   size_and_exec_fn.d_validities = validities.begin();
@@ -255,8 +285,37 @@ make_strings_children_with_null_mask(
   for_each_fn(size_and_exec_fn);
 
   // Compute the offsets from string sizes
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+  //  thrust::exclusive_scan(
+  //    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
+
+  auto has_overflow = rmm::device_uvector<bool>(1, stream);
+  CUDA_TRY(cudaMemsetAsync(has_overflow.begin(), 0, sizeof(bool), stream.value()));
+
+  static constexpr int64_t max_offset = static_cast<int64_t>(std::numeric_limits<size_type>::max());
+  CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(offset_type), stream.value()));
+  thrust::inclusive_scan(
+    rmm::exec_policy(stream),
+    d_offsets + 1,
+    d_offsets + 1 + strings_count,
+    d_offsets + 1,
+    [overflow = has_overflow.begin()] __device__(auto const lhs, auto const rhs) {
+      auto const sum = static_cast<int64_t>(lhs) + static_cast<int64_t>(rhs);
+      if (sum > max_offset) {
+        *overflow = true;
+        return 0;
+      }
+      return static_cast<size_type>(sum);
+    });
+
+  bool is_overflow;
+  CUDA_TRY(cudaMemcpyAsync(
+    &is_overflow, has_overflow.begin(), sizeof(bool), cudaMemcpyDeviceToHost, stream.value()));
+  stream.synchronize();
+  if (is_overflow) {
+    CUDF_FAIL(
+      "Size of the output strings column exceeds the maximum value that can be indexed by "
+      "size_type (offset_type)");
+  }
 
   // Now build the chars column
   auto const bytes  = cudf::detail::get_value<int32_t>(offsets_view, strings_count, stream);
