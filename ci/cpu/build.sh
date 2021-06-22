@@ -43,7 +43,7 @@ gpuci_logger "Activate conda env"
 conda activate rapids
 gpuci_conda_retry remove --force arrow-cpp pyarrow "arrow-cpp-proc * cuda"
 # gpuci_conda_retry install -y "your-pkg=1.0.0"
-gpuci_conda_retry install -y "arrow-cpp=4.0.1 pyarrow=4.0.1"
+gpuci_conda_retry install -y "arrow-cpp=4.0.1 pyarrow=4.0.1 arrow-cpp-proc * cuda"
 
 # Remove rapidsai-nightly channel if we are building main branch
 if [ "$SOURCE_BRANCH" = "main" ]; then
