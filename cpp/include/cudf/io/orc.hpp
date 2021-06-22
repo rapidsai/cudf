@@ -205,7 +205,10 @@ class orc_reader_options {
    *
    * @param val Vector of column names.
    */
-  void set_decimal_cols_as_float(std::vector<std::string> val) { _decimal_cols_as_float = val; }
+  void set_decimal_cols_as_float(std::vector<std::string> val)
+  {
+    _decimal_cols_as_float = std::move(val);
+  }
 };
 
 class orc_reader_options_builder {
@@ -318,7 +321,7 @@ class orc_reader_options_builder {
    */
   orc_reader_options_builder& decimal_cols_as_float(std::vector<std::string> val)
   {
-    options._decimal_cols_as_float = val;
+    options._decimal_cols_as_float = std::move(val);
     return *this;
   }
 

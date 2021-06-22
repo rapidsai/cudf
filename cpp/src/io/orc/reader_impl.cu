@@ -217,14 +217,13 @@ size_t gather_stream_info(const size_t stripe_index,
 /**
  * @brief Determines if a column should be converted from decimal to float
  */
-bool convert_decimal_column_to_float(const std::vector<std::string> &columns_to_convert,
-                                     std::unique_ptr<cudf::io::orc::metadata> &metadata,
-                                     int column_index)
+bool should_convert_decimal_column_to_float(const std::vector<std::string> &columns_to_convert,
+                                            std::unique_ptr<cudf::io::orc::metadata> &metadata,
+                                            int column_index)
 {
-  return static_cast<bool>(std::find(columns_to_convert.begin(),
-                                     columns_to_convert.end(),
-                                     metadata->get_column_name(column_index)) !=
-                           columns_to_convert.end());
+  return (std::find(columns_to_convert.begin(),
+                    columns_to_convert.end(),
+                    metadata->get_column_name(column_index)) != columns_to_convert.end());
 }
 
 }  // namespace
@@ -444,10 +443,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   for (const auto &col : _selected_columns) {
     // If the column type is orc::DECIMAL see if the user
     // desires it to be converted to float64 or not
-    bool decimal_as_float64 = false;
-    if (_metadata->ff.types[col].kind == orc::DECIMAL &&
-        convert_decimal_column_to_float(_decimal_cols_as_float, _metadata, col))
-      decimal_as_float64 = true;
+    auto const decimal_as_float64 =
+      should_convert_decimal_column_to_float(_decimal_cols_as_float, _metadata, col);
 
     auto col_type = to_type_id(
       _metadata->ff.types[col], _use_np_dtypes, _timestamp_type.id(), decimal_as_float64);
@@ -546,23 +543,15 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
       // Update chunks to reference streams pointers
       for (size_t j = 0; j < num_columns; j++) {
-        auto &chunk         = chunks[i * num_columns + j];
-        chunk.start_row     = stripe_start_row;
-        chunk.num_rows      = stripe_info->numberOfRows;
-        chunk.encoding_kind = stripe_footer->columns[_selected_columns[j]].kind;
-        chunk.type_kind     = _metadata->ff.types[_selected_columns[j]].kind;
-
-        bool decimal_as_float64 = false;
-        if (convert_decimal_column_to_float(
-              _decimal_cols_as_float, _metadata, _selected_columns[j]))
-          decimal_as_float64 = true;
-
-        if (decimal_as_float64) {
-          chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale.value_or(0) |
-                                orc::gpu::orc_decimal2float64_scale;
-        } else {
-          chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale.value_or(0);
-        }
+        auto &chunk                   = chunks[i * num_columns + j];
+        chunk.start_row               = stripe_start_row;
+        chunk.num_rows                = stripe_info->numberOfRows;
+        chunk.encoding_kind           = stripe_footer->columns[_selected_columns[j]].kind;
+        chunk.type_kind               = _metadata->ff.types[_selected_columns[j]].kind;
+        auto const decimal_as_float64 = should_convert_decimal_column_to_float(
+          _decimal_cols_as_float, _metadata, _selected_columns[j]);
+        chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale.value_or(0) |
+                              (decimal_as_float64 ? orc::gpu::orc_decimal2float64_scale : 0);
         chunk.rowgroup_id = num_rowgroups;
         chunk.dtype_len   = (column_types[j].id() == type_id::STRING)
                             ? sizeof(std::pair<const char *, size_t>)
