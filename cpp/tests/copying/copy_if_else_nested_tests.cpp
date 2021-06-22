@@ -149,7 +149,7 @@ TYPED_TEST(TypedCopyIfElseNestedTest, TwoScalarStructs)
   auto lhs_children = std::vector<column_view>{{ints{1}, strings{"1"}}};
   auto lhs_scalar   = cudf::make_struct_scalar(lhs_children);
 
-  auto rhs_children = std::vector<column_view>{{ints{1}, strings{"1"}}};
+  auto rhs_children = std::vector<column_view>{{ints{22}, strings{"22"}}};
   auto rhs_scalar   = cudf::make_struct_scalar(rhs_children);
 
   auto selector_column = bools{1, 1, 0, 1, 1, 0, 1}.release();
