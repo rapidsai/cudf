@@ -17,6 +17,8 @@
 #pragma once
 
 #ifdef CUFILE_FOUND
+#include "thread_pool.hpp"
+
 #include <cufile.h>
 #include <cudf_test/file_utilities.hpp>
 #endif
@@ -205,6 +207,7 @@ class cufile_input_impl final : public cufile_input {
  private:
   cufile_shim const *shim = nullptr;
   cufile_registered_file const cf_file;
+  thread_pool pool;
 };
 
 /**

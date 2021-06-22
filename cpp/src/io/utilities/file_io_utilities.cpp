@@ -168,8 +168,9 @@ void cufile_registered_file::register_handle()
 cufile_registered_file::~cufile_registered_file() { shim->handle_deregister(cf_handle); }
 
 cufile_input_impl::cufile_input_impl(std::string const &filepath)
-  : shim{cufile_shim::instance()}, cf_file(shim, filepath, O_RDONLY | O_DIRECT)
+  : shim{cufile_shim::instance()}, cf_file(shim, filepath, O_RDONLY | O_DIRECT), pool(16)
 {
+  pool.sleep_duration = 10;
 }
 
 std::unique_ptr<datasource::buffer> cufile_input_impl::read(size_t offset,
@@ -195,23 +196,25 @@ size_t cufile_input_impl::read(size_t offset,
     return shim->read(cf_file.handle(), dst, size, offset, 0);
   };
 
-  std::vector<std::future<int>> threads;
-  constexpr size_t n_threads = 16;
-  size_t slice_size          = size / n_threads;
-  size_t slice_offset        = 0;
-  for (size_t t = 0; t < n_threads; ++t) {
+  std::vector<std::future<int>> slice_tasks;
+  constexpr size_t n_slices = 8;
+  size_t slice_size         = size / n_slices;
+  size_t slice_offset       = 0;
+  for (size_t t = 0; t < n_slices; ++t) {
     void *dst_slice = dst + slice_offset;
 
-    if (t == n_threads - 1) { slice_size += size % n_threads; }
-    threads.push_back(
-      std::async(std::launch::async, read_slice, dst_slice, slice_size, offset + slice_offset));
+    if (t == n_slices - 1) { slice_size += size % n_slices; }
+    // threads.push_back(
+    //   std::async(std::launch::async, read_slice, dst_slice, slice_size, offset + slice_offset));
+    slice_tasks.push_back(pool.submit(read_slice, dst_slice, slice_size, offset + slice_offset));
 
     slice_offset += slice_size;
   }
-  for (auto &thread : threads) {
+  for (auto &thread : slice_tasks) {
     thread.wait();
     CUDF_EXPECTS(thread.get() != -1, "cuFile error reading from a file");
   }
+  // read_slice(dst, size, offset);
 
   // always read the requested size for now
   return size;
