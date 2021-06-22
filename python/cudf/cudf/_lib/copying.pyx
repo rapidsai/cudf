@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
+import pickle
+
 import pandas as pd
 
 from libcpp cimport bool
@@ -842,8 +844,6 @@ cdef class PackedColumns:
 
     @classmethod
     def deserialize(cls, header, frames):
-        import pickle
-
         cdef PackedColumns p = PackedColumns.__new__(PackedColumns)
 
         dbuf = DeviceBuffer(
