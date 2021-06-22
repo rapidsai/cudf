@@ -539,7 +539,22 @@ class OrcDecompressor {
 
 /**
  * @brief Stores orc id for a column and adjacent number of children of the column
- * in case of struct or number of children in list column.
+ * in case of struct or number of children in list column. If list has struct column,
+ * then all child columns of that struct are treated as child column of list.
+ *
+ * @code{.pseudo}
+ * Consider following data where a struct has two members and a list column
+ * {"struct": [{"a": 1, "b": 2}, {"a":3, "b":5}], "list":[[1, 2], [2, 3]]}
+ *
+ * `orc_column_meta` for struct column would be
+ * id = 0
+ * num_children = 2
+ *
+ * `orc_column_meta` for list column would be
+ * id = 3
+ * num_children = 1
+ * @endcode
+ *
  */
 struct orc_column_meta {
   orc_column_meta(uint32_t _id, uint32_t _num_children) : id(_id), num_children(_num_children){};
@@ -582,11 +597,14 @@ class metadata {
    *
    * @param[in] use_names List of column names to select
    * @param[out] has_timestamp_column Whether there is a orc::TIMESTAMP column
+   * @param[out] has_list_column Whether there is a orc::LIST column
    *
    * @return Vector of list of ORC column meta
    */
   std::vector<std::vector<orc_column_meta>> select_columns(
-    std::vector<std::string> const &use_names, bool &has_timestamp_column) const;
+    std::vector<std::string> const &use_names,
+    bool &has_timestamp_column,
+    bool &has_list_column) const;
 
   size_t get_total_rows() const { return ff.numberOfRows; }
   int get_num_stripes() const { return ff.stripes.size(); }

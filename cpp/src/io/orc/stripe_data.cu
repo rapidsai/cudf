@@ -1758,6 +1758,7 @@ __global__ void __launch_bounds__(block_size)
           }
         }
       }
+      // Aggregate num of elements for the chunk
       if (s->chunk.type_kind == LIST) {
         list_child_elements = block_reduce(temp_storage.bk_uint64).Sum(list_child_elements);
       }
@@ -1782,7 +1783,9 @@ __global__ void __launch_bounds__(block_size)
     }
     __syncthreads();
   }
-  if (t == 0) { atomicAdd(&chunks[chunk_id].num_child_rows, s->num_child_rows); }
+  if (t == 0 and s->chunk.type_kind == LIST) {
+    atomicAdd(&chunks[chunk_id].num_child_rows, s->num_child_rows);
+  }
 }
 
 /**

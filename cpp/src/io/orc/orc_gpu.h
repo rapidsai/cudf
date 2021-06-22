@@ -112,7 +112,7 @@ struct RowGroup {
   uint32_t chunk_id;        // Column chunk this entry belongs to
   uint32_t strm_offset[2];  // Index offset for CI_DATA and CI_DATA2 streams
   uint16_t run_pos[2];      // Run position for CI_DATA and CI_DATA2
-  bool valid_row_group;     // To check if it is a valid rowgroup case of nested columns
+  bool valid_row_group;     // To check if it is a valid rowgroup
 };
 
 /**

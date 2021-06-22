@@ -814,17 +814,8 @@ def test_orc_string_stream_offset_issue():
     assert_eq(df, cudf.read_orc(buffer))
 
 
-@pytest.mark.parametrize(
-    "columns",
-    [
-        None,
-        ["lvl3_list", "list_nests_struct", "struct_nests_list"],
-        ["lvl3_list", "lvl1_struct", "lvl2_struct"],
-    ],
-)
-@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 20000])
-@pytest.mark.parametrize("use_index", [True, False])
-def test_lists_struct_nests(columns, num_rows, use_index):
+@pytest.fixture
+def list_struct_buff():
     rd = random.Random(0)
     np.random.seed(seed=0)
 
@@ -918,20 +909,59 @@ def test_lists_struct_nests(columns, num_rows, use_index):
     writer.writerows(tuples)
     writer.close()
 
-    gdf = cudf.read_orc(
-        buff, columns=columns, num_rows=num_rows, use_index=use_index
-    )
-    # pyarrow_tbl = pd.read_orc(buff)
-    pyarrow_tbl = pyarrow.orc.ORCFile(buff).read()
-    # breakpoint()
-    pyarrow_tbl = (
-        pyarrow_tbl[0:num_rows]
-        if columns is None
-        else pyarrow_tbl.select(columns)[0:num_rows]
+    return buff
+
+
+@pytest.mark.parametrize(
+    "columns",
+    [
+        None,
+        ["lvl3_list", "list_nests_struct", "lvl2_struct", "struct_nests_list"],
+        ["lvl1_struct", "lvl2_struct"],
+    ],
+)
+@pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 20000])
+@pytest.mark.parametrize("use_index", [True, False])
+@pytest.mark.parametrize("skip_rows", [0, 101, 1007])
+def test_lists_struct_nests(
+    list_struct_buff, columns, num_rows, use_index, skip_rows
+):
+
+    has_lists = (
+        any("list" in col_name for col_name in columns) if columns else True
     )
 
-    if num_rows > 0:
-        # pyarrow_tbl = pyarrow.Table.from_pandas(pyarrow_tbl)
-        assert_eq(True, pyarrow_tbl.equals(gdf.to_arrow()))
+    if has_lists and skip_rows > 0:
+        with pytest.raises(
+            RuntimeError, match="skip_rows is not supported by list column"
+        ):
+            cudf.read_orc(
+                list_struct_buff,
+                columns=columns,
+                num_rows=num_rows,
+                use_index=use_index,
+                skiprows=skip_rows,
+            )
     else:
-        assert_eq(pyarrow_tbl.to_pandas(), gdf)
+        gdf = cudf.read_orc(
+            list_struct_buff,
+            columns=columns,
+            num_rows=num_rows,
+            use_index=use_index,
+            skiprows=skip_rows,
+        )
+
+        # pyarrow_tbl = pd.read_orc(buff)
+        pyarrow_tbl = pyarrow.orc.ORCFile(list_struct_buff).read()
+        # breakpoint()
+        pyarrow_tbl = (
+            pyarrow_tbl[skip_rows : skip_rows + num_rows]
+            if columns is None
+            else pyarrow_tbl.select(columns)[skip_rows : skip_rows + num_rows]
+        )
+
+        if num_rows > 0:
+            # pyarrow_tbl = pyarrow.Table.from_pandas(pyarrow_tbl)
+            assert_eq(True, pyarrow_tbl.equals(gdf.to_arrow()))
+        else:
+            assert_eq(pyarrow_tbl.to_pandas(), gdf)
