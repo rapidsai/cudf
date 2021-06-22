@@ -21,6 +21,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/json.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -964,8 +965,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
     cudf::detail::get_value<offset_type>(offsets_view, col.size(), stream);
 
   // allocate output string column
-  auto chars = cudf::make_fixed_width_column(
-    data_type{type_id::INT8}, output_size, mask_state::UNALLOCATED, stream, mr);
+  auto chars = create_chars_child_column(output_size, stream, mr);
 
   // potential optimization : if we know that all outputs are valid, we could skip creating
   // the validity mask altogether

@@ -198,6 +198,7 @@ add_library(cudf
     src/groupby/sort/group_argmin.cu
     src/groupby/sort/aggregate.cpp
     src/groupby/sort/group_collect.cu
+    src/groupby/sort/group_merge_lists.cu
     src/groupby/sort/group_count.cu
     src/groupby/sort/group_max.cu
     src/groupby/sort/group_min.cu
@@ -365,8 +366,6 @@ add_library(cudf
     src/strings/regex/regexec.cu
     src/strings/repeat_strings.cu
     src/strings/replace/backref_re.cu
-    src/strings/replace/backref_re_large.cu
-    src/strings/replace/backref_re_medium.cu
     src/strings/replace/multi_re.cu
     src/strings/replace/replace.cu
     src/strings/replace/replace_re.cu

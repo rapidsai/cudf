@@ -921,6 +921,46 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * This is an evolving API and most likely be removed in future releases. Please use with the
+   * caveat that this will not exist in the near future.
+   * @param options the Parquet writer options.
+   * @param consumer a class that will be called when host buffers are ready with Parquet
+   *                 formatted data in them.
+   * @param columnViews ColumnViews to write to Parquet
+   */
+  public static void writeColumnViewsToParquet(ParquetWriterOptions options,
+                                               HostBufferConsumer consumer,
+                                               ColumnView... columnViews) {
+    assert columnViews != null && columnViews.length > 0 : "ColumnViews can't be null or empty";
+    long rows = columnViews[0].getRowCount();
+
+    for (ColumnView columnView : columnViews) {
+      assert (null != columnView) : "ColumnViews can't be null";
+      assert (rows == columnView.getRowCount()) : "All columns should have the same number of " +
+          "rows " + columnView.getType();
+    }
+
+    // Since Arrays are mutable objects make a copy
+    long[] viewPointers = new long[columnViews.length];
+    for (int i = 0; i < columnViews.length; i++) {
+      viewPointers[i] = columnViews[i].getNativeView();
+    }
+
+    long nativeHandle = createCudfTableView(viewPointers);
+    try {
+      try (ParquetTableWriter writer = new ParquetTableWriter(options, consumer)) {
+        long total = 0;
+        for (ColumnView cv : columnViews) {
+          total += cv.getDeviceMemorySize();
+        }
+        writeParquetChunk(writer.handle, nativeHandle, total);
+      }
+    } finally {
+      deleteCudfTable(nativeHandle);
+    }
+  }
+
+  /**
    * Writes this table to a Parquet file on the host
    *
    * @param options parameters for the writer
