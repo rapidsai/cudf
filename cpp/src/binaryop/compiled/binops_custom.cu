@@ -53,7 +53,7 @@ struct scalar_as_column_device_view {
     CUDF_FAIL("Unsupported type");
   }
 };
-// specialization for string_view
+// specialization for cudf::string_view
 template <>
 scalar_as_column_device_view::return_type scalar_as_column_device_view::
 operator()<cudf::string_view>(scalar const& s,
@@ -80,6 +80,23 @@ operator()<cudf::string_view>(scalar const& s,
                            0,
                            {offsets_column->view(), chars_column_v});
   return std::pair{column_device_view::create(col_v, stream), std::move(offsets_column)};
+}
+
+/**
+ * @brief Converts scalar to column_device_view with single element.
+ *
+ * @param scal    scalar to convert
+ * @param stream  CUDA stream used for device memory operations and kernel launches.
+ * @param mr      Device memory resource used to allocate the returned column's device memory
+ * @return        pair with column_device_view and column containing any auxilary data to create
+ * column_view from scalar
+ */
+auto scalar_to_column_device_view(
+  scalar const& scal,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  return type_dispatcher(scal.type(), scalar_as_column_device_view{}, scal, stream, mr);
 }
 
 void operator_dispatcher(mutable_column_device_view& out,
@@ -152,11 +169,7 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
 {
-  auto [lhsd, aux] = type_dispatcher(lhs.type(),
-                                     scalar_as_column_device_view{},
-                                     lhs,
-                                     stream,
-                                     rmm::mr::get_current_device_resource());
+  auto [lhsd, aux] = scalar_to_column_device_view(lhs, stream);
   auto rhsd        = column_device_view::create(rhs, stream);
   auto outd        = mutable_column_device_view::create(out, stream);
   operator_dispatcher(*outd, *lhsd, *rhsd, true, false, op, stream);
@@ -169,11 +182,7 @@ void binary_operation(mutable_column_view& out,
                       rmm::cuda_stream_view stream)
 {
   auto lhsd        = column_device_view::create(lhs, stream);
-  auto [rhsd, aux] = type_dispatcher(rhs.type(),
-                                     scalar_as_column_device_view{},
-                                     rhs,
-                                     stream,
-                                     rmm::mr::get_current_device_resource());
+  auto [rhsd, aux] = scalar_to_column_device_view(rhs, stream);
   auto outd        = mutable_column_device_view::create(out, stream);
   operator_dispatcher(*outd, *lhsd, *rhsd, false, true, op, stream);
 }

@@ -588,7 +588,7 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          rmm::mr::device_memory_resource* mr)
 {
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
-    return binops::compiled::binary_operation(lhs, rhs, op, output_type, stream, mr);
+    return experimental::binary_operation(lhs, rhs, op, output_type, mr);
 
   if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
     return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
@@ -615,7 +615,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          rmm::mr::device_memory_resource* mr)
 {
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
-    return binops::compiled::binary_operation(lhs, rhs, op, output_type, stream, mr);
+    return experimental::binary_operation(lhs, rhs, op, output_type, mr);
 
   if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
     return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
@@ -644,7 +644,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
   CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes don't match");
 
   if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING)
-    return binops::compiled::binary_operation(lhs, rhs, op, output_type, stream, mr);
+    return experimental::binary_operation(lhs, rhs, op, output_type, mr);
 
   if (is_fixed_point(lhs.type()) or is_fixed_point(rhs.type()))
     return fixed_point_binary_operation(lhs, rhs, op, output_type, stream, mr);
@@ -773,6 +773,11 @@ std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
+  if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING and
+      output_type.id() == type_id::STRING and
+      (op == binary_operator::NULL_MAX or op == binary_operator::NULL_MIN))
+    return binops::compiled::string_null_min_max(lhs, rhs, op, output_type, stream, mr);
+
   if (not binops::compiled::is_supported_operation(output_type, lhs.type(), rhs.type(), op))
     CUDF_FAIL("Unsupported operator for these types");
 
@@ -803,6 +808,11 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
+  if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING and
+      output_type.id() == type_id::STRING and
+      (op == binary_operator::NULL_MAX or op == binary_operator::NULL_MIN))
+    return binops::compiled::string_null_min_max(lhs, rhs, op, output_type, stream, mr);
+
   if (not binops::compiled::is_supported_operation(output_type, lhs.type(), rhs.type(), op))
     CUDF_FAIL("Unsupported operator for these types");
 
@@ -834,6 +844,11 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(lhs.size() == rhs.size(), "Column sizes don't match");
+
+  if (lhs.type().id() == type_id::STRING and rhs.type().id() == type_id::STRING and
+      output_type.id() == type_id::STRING and
+      (op == binary_operator::NULL_MAX or op == binary_operator::NULL_MIN))
+    return binops::compiled::string_null_min_max(lhs, rhs, op, output_type, stream, mr);
 
   if (not binops::compiled::is_supported_operation(output_type, lhs.type(), rhs.type(), op))
     CUDF_FAIL("Unsupported operator for these types");

@@ -51,6 +51,30 @@ inline bool is_null_dependent(binary_operator op)
 
 namespace compiled {
 
+std::unique_ptr<column> string_null_min_max(
+  scalar const& lhs,
+  column_view const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+std::unique_ptr<column> string_null_min_max(
+  column_view const& lhs,
+  scalar const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+std::unique_ptr<column> string_null_min_max(
+  column_view const& lhs,
+  column_view const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /**
  * @brief Performs a binary operation between a string scalar and a string
  * column.
