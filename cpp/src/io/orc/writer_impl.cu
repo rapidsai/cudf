@@ -799,6 +799,7 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
 std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
   const table_device_view &table,
   host_span<orc_column_view const> columns,
+  device_2dspan<rows_range const> rowgroup_bounds,
   host_span<stripe_rowgroups const> stripe_bounds)
 {
   auto const num_rowgroups = stripes_size(stripe_bounds);
@@ -858,14 +859,10 @@ std::vector<std::vector<uint8_t>> writer::impl::gather_statistic_blobs(
 
   rmm::device_uvector<column_device_view> leaf_column_views =
     create_leaf_column_device_views<stats_column_desc>(
-      stat_desc, table, stream);  // what needs to be passed here?
+      stat_desc, table, stream);  // what needs to be passed here? all but list and struct columns?
 
-  gpu::orc_init_statistics_groups(stat_groups.data(),
-                                  stat_desc.device_ptr(),
-                                  columns.size(),
-                                  num_rowgroups,
-                                  row_index_stride_,
-                                  stream);
+  gpu::orc_init_statistics_groups(
+    stat_groups.data(), stat_desc.device_ptr(), rowgroup_bounds, stream);
 
   detail::calculate_group_statistics<detail::io_file_format::ORC>(
     stat_chunks.data(), stat_groups.data(), num_chunks, stream);
@@ -1347,7 +1344,8 @@ void writer::impl::write(table_view const &table)
   // Gather column statistics
   std::vector<ColStatsBlob> column_stats;
   if (enable_statistics_ && table.num_columns() > 0 && num_rows > 0) {
-    column_stats = gather_statistic_blobs(*d_table, orc_table.columns, stripe_bounds);
+    column_stats =
+      gather_statistic_blobs(*d_table, orc_table.columns, rowgroup_bounds, stripe_bounds);
   }
 
   // Allocate intermediate output stream buffer

@@ -402,9 +402,7 @@ void BuildStripeDictionaries(StripeDictionary *stripes_dev,
  */
 void orc_init_statistics_groups(statistics_group *groups,
                                 const stats_column_desc *cols,
-                                uint32_t num_columns,
-                                uint32_t num_rowgroups,
-                                uint32_t row_index_stride,
+                                device_2dspan<rows_range const> rowgroup_bounds,
                                 rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**

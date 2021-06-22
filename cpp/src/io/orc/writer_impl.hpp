@@ -316,6 +316,7 @@ class writer::impl {
    *
    * @param table Table information to be written
    * @param columns List of columns
+   * @param rowgroup_bounds List of rowgroup boundaries
    * @param stripe_bounds List of stripe boundaries
    *
    * @return The statistic blobs
@@ -323,6 +324,7 @@ class writer::impl {
   std::vector<std::vector<uint8_t>> gather_statistic_blobs(
     const table_device_view& table,
     host_span<orc_column_view const> columns,
+    device_2dspan<rows_range const> rowgroup_bounds,
     host_span<stripe_rowgroups const> stripe_bounds);
 
   /**
