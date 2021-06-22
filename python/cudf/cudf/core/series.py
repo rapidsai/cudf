@@ -1331,10 +1331,7 @@ class Series(SingleColumnFrame, Serializable):
     def _binaryop(
         self, other, fn, fill_value=None, reflect=False, can_reindex=False
     ):
-        if isinstance(other, cudf.DataFrame):
-            return NotImplemented
-
-        if isinstance(other, Series):
+        if isinstance(other, SingleColumnFrame):
             if (
                 not can_reindex
                 and fn in cudf.utils.utils._EQUALITY_OPS
@@ -1347,7 +1344,7 @@ class Series(SingleColumnFrame, Serializable):
         else:
             lhs = self
 
-        return super()._binaryop(other, fn, fill_value, reflect, lhs)
+        return super(Series, lhs)._binaryop(other, fn, fill_value, reflect)
 
     def add(self, other, fill_value=None, axis=0):
         """

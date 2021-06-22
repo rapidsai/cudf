@@ -6,7 +6,7 @@ import copy
 import functools
 import warnings
 from collections import abc
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, TypeVar, Union
+from typing import Any, Dict, Optional, Tuple, TypeVar, Union
 
 import cupy
 import numpy as np
@@ -24,9 +24,11 @@ from cudf.core.column import (
     build_categorical_column,
     column_empty,
 )
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import merge
 from cudf.utils.dtypes import (
     _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
     find_common_type,
     is_categorical_dtype,
     is_column_like,
@@ -38,10 +40,6 @@ from cudf.utils.dtypes import (
 )
 
 T = TypeVar("T", bound="Frame")
-
-if TYPE_CHECKING:
-    from cudf.core.column_accessor import ColumnAccessor
-
 
 _truediv_int_dtype_corrections = {
     np.int8: np.float32,
@@ -3453,25 +3451,6 @@ class Frame(libcudf.table.Table):
                 fn_apply, right_column, reflect=reflect
             )
 
-            # Get the appropriate name for output operations involving two
-            # objects that are Series-like objects. The output shares the
-            # left_column's name unless the right_column is a _differently_
-            # named Series-like object.
-            # TODO: Figure out how to handle names correctly. This code path
-            # can only occur for Series, not DataFrame (mismatched columns of a
-            # DataFrame result in separate outputs) so this issue has to be
-            # handled later in the refactor.
-            # if (
-            #     isinstance(other, (SingleColumnFrame, pd.Series, pd.Index))
-            #     and self.name != other.name
-            # ):
-            #     result_name = None
-            # else:
-            #     result_name = self.name
-
-            # output = left_column._copy_construct(
-            #     data=outcol, name=result_name)
-
             if output_mask is not None:
                 outcol = outcol.set_mask(output_mask)
 
@@ -3777,14 +3756,7 @@ class SingleColumnFrame(Frame):
         return self.__class__(**{**self._copy_construct_defaults, **kwargs})
 
     def _binaryop(
-        self,
-        other,
-        fn,
-        fill_value=None,
-        reflect=False,
-        lhs=None,
-        *args,
-        **kwargs,
+        self, other, fn, fill_value=None, reflect=False, *args, **kwargs,
     ):
         """Perform a binary operation between two single column frames.
 
@@ -3809,37 +3781,6 @@ class SingleColumnFrame(Frame):
         SingleColumnFrame
             A new instance containing the result of the operation.
         """
-        if lhs is None:
-            lhs = self
-
-        rhs = self._normalize_binop_value(other)
-
-        if fn == "truediv":
-            truediv_type = _truediv_int_dtype_corrections.get(lhs.dtype.type)
-            if truediv_type is not None:
-                lhs = lhs.astype(truediv_type)
-
-        output_mask = None
-        if fill_value is not None:
-            if is_scalar(rhs):
-                if lhs.nullable:
-                    lhs = lhs.fillna(fill_value)
-            else:
-                # If both columns are nullable, pandas semantics dictate that
-                # nulls that are present in both lhs and rhs are not filled.
-                if lhs.nullable and rhs.nullable:
-                    # Note: lhs is a Frame, while rhs is already a column.
-                    lmask = as_column(lhs._column.nullmask)
-                    rmask = as_column(rhs.nullmask)
-                    output_mask = (lmask | rmask).data
-                    lhs = lhs.fillna(fill_value)
-                    rhs = rhs.fillna(fill_value)
-                elif lhs.nullable:
-                    lhs = lhs.fillna(fill_value)
-                elif rhs.nullable:
-                    rhs = rhs.fillna(fill_value)
-
-        outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
 
         # Get the appropriate name for output operations involving two objects
         # that are Series-like objects. The output shares the lhs's name unless
@@ -3852,11 +3793,27 @@ class SingleColumnFrame(Frame):
         else:
             result_name = self.name
 
-        output = lhs._copy_construct(data=outcol, name=result_name)
+        # This needs to be tested correctly
+        if isinstance(other, SingleColumnFrame):
+            other = other._column
+        elif not _is_scalar_or_zero_d_array(other):
+            try:
+                other = as_column(other)
+            except Exception:
+                # TODO: This is a pretty heavy-handed approach, but I'm not
+                # sure we have a better way of determining whether an input can
+                # be coerced into an appropriate type. We should probably
+                # assess employing something similar for DataFrame as well.
+                return NotImplemented
 
-        if output_mask is not None:
-            output._column = output._column.set_mask(output_mask)
-        return output
+        operands = {result_name: (self._column, other, reflect, fill_value)}
+
+        result = self._from_data(
+            ColumnAccessor(type(self)._colwise_binop(operands, fn)),
+            index=self._index,
+        )
+        result.name = result_name
+        return result
 
     def _normalize_binop_value(self, other):
         """Returns a *column* (not a Series) or scalar for performing

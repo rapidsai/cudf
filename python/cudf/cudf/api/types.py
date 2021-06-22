@@ -120,6 +120,7 @@ def is_scalar(val):
     return (
         isinstance(val, DeviceScalar)
         or isinstance(val, cudf.Scalar)
+        or isinstance(val, cudf.core.tools.datetimes.DateOffset)
         or pd_types.is_scalar(val)
     )
 
