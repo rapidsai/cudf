@@ -188,7 +188,7 @@ class reader::impl {
    * types
    * @return List of columns' data types
    */
-  std::vector<data_type> parse_column_types(const std::vector<std::string> &types_as_strings);
+  std::vector<data_type> parse_column_types(std::vector<std::string> const& types_as_strings);
 
   /**
    * @brief Converts the row-column data and outputs to column bufferrs.
