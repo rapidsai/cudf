@@ -24,6 +24,8 @@
 
 namespace cudf {
 
+// Implementation note: avoid using double dispatch for this function
+// as it increases code paths to NxN for N types.
 bool column_types_equal(column_view const& lhs, column_view const& rhs)
 {
   if (lhs.type().id() == type_id::DICTIONARY32 and rhs.type().id() == type_id::DICTIONARY32) {
