@@ -63,11 +63,8 @@ class orc_reader_options {
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
 
-  // Whether to convert decimals to float64
-  bool _decimals_as_float64 = false;
-  // For decimals as int, optional forced decimal scale;
-  // -1 is auto (column scale), >=0: number of fractional digits
-  size_type _forced_decimals_scale = -1;
+  // Columns that should be converted from Decimal to Float64
+  std::vector<std::string> _decimal_cols_as_float;
 
   friend orc_reader_options_builder;
 
@@ -135,14 +132,9 @@ class orc_reader_options {
   data_type get_timestamp_type() const { return _timestamp_type; }
 
   /**
-   * @brief Whether to convert decimals to float64.
+   * @brief Columns that should be converted from Decimal to Float64.
    */
-  bool is_enabled_decimals_as_float64() const { return _decimals_as_float64; }
-
-  /**
-   * @brief Returns whether decimal scale is inferred or forced to have limited fractional digits.
-   */
-  size_type get_forced_decimals_scale() const { return _forced_decimals_scale; }
+  std::vector<std::string> get_decimal_cols_as_float() const { return _decimal_cols_as_float; }
 
   // Setters
 
@@ -209,18 +201,11 @@ class orc_reader_options {
   void set_timestamp_type(data_type type) { _timestamp_type = type; }
 
   /**
-   * @brief Enable/Disable conversion of decimals to float64.
+   * @brief Set columns that should be converted from Decimal to Float64
    *
-   * @param val Boolean value to enable/disable.
+   * @param val Vector of column names.
    */
-  void set_decimals_as_float64(bool val) { _decimals_as_float64 = val; }
-
-  /**
-   * @brief Sets whether decimal scale is inferred or forced to have limited fractional digits.
-   *
-   * @param val Length of fractional digits.
-   */
-  void set_forced_decimals_scale(size_type val) { _forced_decimals_scale = val; }
+  void set_decimal_cols_as_float(std::vector<std::string> val) { _decimal_cols_as_float = val; }
 };
 
 class orc_reader_options_builder {
@@ -326,26 +311,14 @@ class orc_reader_options_builder {
   }
 
   /**
-   * @brief Enable/Disable conversion of decimals to float64.
+   * @brief Columns that should be converted from decimals to float64.
    *
-   * @param val Boolean value to enable/disable.
+   * @param val Vector of column names.
    * @return this for chaining.
    */
-  orc_reader_options_builder& decimals_as_float64(bool val)
+  orc_reader_options_builder& decimal_cols_as_float(std::vector<std::string> val)
   {
-    options._decimals_as_float64 = val;
-    return *this;
-  }
-
-  /**
-   * @brief Sets whether decimal scale is inferred or forced to have limited fractional digits.
-   *
-   * @param val Length of fractional digits.
-   * @return this for chaining.
-   */
-  orc_reader_options_builder& forced_decimals_scale(size_type val)
-  {
-    options._forced_decimals_scale = val;
+    options._decimal_cols_as_float = val;
     return *this;
   }
 

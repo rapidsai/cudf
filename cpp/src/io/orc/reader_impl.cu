@@ -73,11 +73,7 @@ constexpr type_id to_type_id(const orc::SchemaType &schema,
     case orc::DATE:
       // There isn't a (DAYS -> np.dtype) mapping
       return (use_np_dtypes) ? type_id::TIMESTAMP_MILLISECONDS : type_id::TIMESTAMP_DAYS;
-    // case orc::DECIMAL: return type_id::DECIMAL64;
-    // XXX: Randy and I need to discuss this logic
-    case orc::DECIMAL:
-      // There isn't an arbitrary-precision type in cuDF, so map as float or int
-      return (decimals_as_float64) ? type_id::FLOAT64 : type_id::INT64;
+    case orc::DECIMAL: return (decimals_as_float64) ? type_id::FLOAT64 : type_id::DECIMAL64;
     default: break;
   }
 
@@ -216,6 +212,19 @@ size_t gather_stream_info(const size_t stripe_index,
   }
 
   return dst_offset;
+}
+
+/**
+ * @brief Determines if a column should be converted from decimal to float
+ */
+bool convert_decimal_column_to_float(const std::vector<std::string> &columns_to_convert,
+                                     std::unique_ptr<cudf::io::orc::metadata> &metadata,
+                                     int column_index)
+{
+  return static_cast<bool>(std::find(columns_to_convert.begin(),
+                                     columns_to_convert.end(),
+                                     metadata->get_column_name(column_index)) !=
+                           columns_to_convert.end());
 }
 
 }  // namespace
@@ -410,8 +419,7 @@ reader::impl::impl(std::unique_ptr<datasource> source,
   _use_np_dtypes = options.is_enabled_use_np_dtypes();
 
   // Control decimals conversion (float64 or int64 with optional scale)
-  _decimals_as_float64   = options.is_enabled_decimals_as_float64();
-  _decimals_as_int_scale = options.get_forced_decimals_scale();
+  _decimal_cols_as_float = options.get_decimal_cols_as_float();
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,
@@ -434,8 +442,15 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   // Get a list of column data types
   std::vector<data_type> column_types;
   for (const auto &col : _selected_columns) {
+    // If the column type is orc::DECIMAL see if the user
+    // desires it to be converted to float64 or not
+    bool decimal_as_float64 = false;
+    if (_metadata->ff.types[col].kind == orc::DECIMAL &&
+        convert_decimal_column_to_float(_decimal_cols_as_float, _metadata, col))
+      decimal_as_float64 = true;
+
     auto col_type = to_type_id(
-      _metadata->ff.types[col], _use_np_dtypes, _timestamp_type.id(), _decimals_as_float64);
+      _metadata->ff.types[col], _use_np_dtypes, _timestamp_type.id(), decimal_as_float64);
     CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
     // Remove this once we support Decimal128 data type
     CUDF_EXPECTS((col_type != type_id::DECIMAL64) or (_metadata->ff.types[col].precision <= 18),
@@ -536,17 +551,17 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         chunk.num_rows      = stripe_info->numberOfRows;
         chunk.encoding_kind = stripe_footer->columns[_selected_columns[j]].kind;
         chunk.type_kind     = _metadata->ff.types[_selected_columns[j]].kind;
-        // chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale.value_or(0);
-        if (_decimals_as_float64) {
-          printf("first\n");
+
+        bool decimal_as_float64 = false;
+        if (convert_decimal_column_to_float(
+              _decimal_cols_as_float, _metadata, _selected_columns[j]))
+          decimal_as_float64 = true;
+
+        if (decimal_as_float64) {
           chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale.value_or(0) |
                                 orc::gpu::orc_decimal2float64_scale;
-        } else if (_decimals_as_int_scale < 0) {
-          printf("second\n");
-          chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale.value_or(0);
         } else {
-          printf("third, _decimals_as_int_scale: %d\n", _decimals_as_int_scale);
-          chunk.decimal_scale = _decimals_as_int_scale;
+          chunk.decimal_scale = _metadata->ff.types[_selected_columns[j]].scale.value_or(0);
         }
         chunk.rowgroup_id = num_rowgroups;
         chunk.dtype_len   = (column_types[j].id() == type_id::STRING)

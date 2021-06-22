@@ -1042,7 +1042,6 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
       int128_s v     = decode_varint128(bs, pos);
 
       if (col_scale & orc_decimal2float64_scale) {
-        printf("cuda using this section, col_scale: %d\n", col_scale);
         double f      = Int128ToDouble_rn(v.lo, v.hi);
         int32_t scale = (t < numvals) ? val_scale : 0;
         if (scale >= 0)
@@ -1050,7 +1049,10 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
         else
           vals.f64[t] = f * kPow10[min(-scale, 39)];
       } else {
-        int32_t scale = (t < numvals) ? (col_scale & ~orc_decimal2float64_scale) - val_scale : 0;
+        // Since cuDF column stores just one scale, value needs to
+        // be adjusted to col_scale from val_scale. So the difference
+        // of them will be used to add 0s or remove digits.
+        int32_t scale = (t < numvals) ? col_scale - val_scale : 0;
         if (scale >= 0) {
           scale       = min(scale, 27);
           vals.i64[t] = ((int64_t)v.lo * kPow5i[scale]) << scale;
@@ -1074,34 +1076,6 @@ static __device__ int Decode_Decimals(orc_bytestream_s *bs,
           }
           vals.i64[t] = (is_negative) ? -(int64_t)lo : (int64_t)lo;
         }
-      }
-
-      // Since cuDF column stores just one scale, value needs to
-      // be adjusted to col_scale from val_scale. So the difference
-      // of them will be used to add 0s or remove digits.
-      int32_t scale = (t < numvals) ? col_scale - val_scale : 0;
-      if (scale >= 0) {
-        scale       = min(scale, 27);
-        vals.i64[t] = ((int64_t)v.lo * kPow5i[scale]) << scale;
-      } else  // if (scale < 0)
-      {
-        bool is_negative = (v.hi < 0);
-        uint64_t hi = v.hi, lo = v.lo;
-        scale = min(-scale, 27);
-        if (is_negative) {
-          hi = (~hi) + (lo == 0);
-          lo = (~lo) + 1;
-        }
-        lo = (lo >> (uint32_t)scale) | ((uint64_t)hi << (64 - scale));
-        hi >>= (int32_t)scale;
-        if (hi != 0) {
-          // Use intermediate float
-          lo = __double2ull_rn(Int128ToDouble_rn(lo, hi) / __ll2double_rn(kPow5i[scale]));
-          hi = 0;
-        } else {
-          lo /= kPow5i[scale];
-        }
-        vals.i64[t] = (is_negative) ? -(int64_t)lo : (int64_t)lo;
       }
     }
     // There is nothing to read, so break

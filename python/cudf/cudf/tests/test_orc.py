@@ -281,19 +281,14 @@ def test_orc_read_rows(datadir, skiprows, num_rows):
     pdf = orcfile.read().to_pandas()
     gdf = cudf.read_orc(
         path, engine="cudf", skiprows=skiprows, num_rows=num_rows
-    ).to_pandas()
-
-    # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
-    # This is because cuDF returns as float64 as it lacks an equivalent dtype
-    pdf = pdf.apply(pd.to_numeric)
+    )
 
     # Slice rows out of the whole dataframe for comparison as PyArrow doesn't
     # have an API to read a subsection of rows from the file
     pdf = pdf[skiprows : skiprows + num_rows]
-    # pdf = pdf.reset_index(drop=True)
+    pdf = pdf.reset_index(drop=True)
 
-    # assert_eq(pdf, gdf)
-    np.testing.assert_allclose(pdf, gdf)
+    assert_eq(pdf, gdf)
 
 
 def test_orc_read_skiprows(tmpdir):
@@ -811,29 +806,11 @@ def test_orc_reader_decimal(datadir):
 
     pdf = orcfile.read().to_pandas()
     gdf = cudf.read_orc(
-        path, engine="cudf", decimals_as_float=True
+        path, engine="cudf", decimal_cols_as_float=["_col0"]
     ).to_pandas()
 
     # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
-    # This is because cuDF returns as float64 as it lacks an equivalent dtype
+    # This is because cuDF returns as float64 because of
     pdf = pdf.apply(pd.to_numeric)
 
-    print("pdf")
-    print("dtypes: " + str(pdf.dtypes))
-    print(pdf.head())
-    print("gdf")
-    print("dtype: " + str(gdf.dtypes))
-    print(gdf.head())
-
-    # # np.testing.assert_allclose(pdf, gdf)
-    # assert_eq(pdf, gdf)
-
-
-def test_orc_reader_decimal_as_int(datadir):
-    path = datadir / "TestOrcFile.decimal.orc"
-
-    gdf = cudf.read_orc(
-        path, engine="cudf", decimals_as_float=False, force_decimal_scale=2
-    ).to_pandas()
-
-    assert gdf["_col0"][0] == -100050  # -1000.5
+    assert_eq(pdf, gdf)

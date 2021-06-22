@@ -130,11 +130,10 @@ class reader::impl {
   std::unique_ptr<cudf::io::orc::metadata> _metadata;
 
   std::vector<int> _selected_columns;
-  bool _use_index                  = true;
-  bool _use_np_dtypes              = true;
-  bool _has_timestamp_column       = false;
-  bool _decimals_as_float64        = true;
-  size_type _decimals_as_int_scale = -1;
+  bool _use_index            = true;
+  bool _use_np_dtypes        = true;
+  bool _has_timestamp_column = false;
+  std::vector<std::string> _decimal_cols_as_float;
   data_type _timestamp_type{type_id::EMPTY};
 };
 
