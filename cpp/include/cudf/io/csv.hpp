@@ -574,7 +574,13 @@ class csv_reader_options {
    *
    * @param types Vector of dtypes in which the column needs to be read.
    */
-  void set_dtypes(std::vector<std::string> types) { _dtypes = std::move(types); }
+  [
+    [deprecated("The string-based interface will be deprecated."
+                "Use dtypes(std::vector<data_type>) instead.")]] void
+  set_dtypes(std::vector<std::string> types)
+  {
+    _dtypes = std::move(types);
+  }
 
   /**
    * @brief Sets additional values to recognize as boolean true values.
@@ -991,7 +997,10 @@ class csv_reader_options_builder {
    * @param types Vector of dtypes in which the column needs to be read.
    * @return this for chaining.
    */
-  csv_reader_options_builder& dtypes(std::vector<std::string> types)
+  [
+    [deprecated("The string-based interface will be deprecated."
+                "Use dtypes(std::vector<data_type>) instead.")]] csv_reader_options_builder&
+  dtypes(std::vector<std::string> types)
   {
     options._dtypes = std::move(types);
     return *this;
