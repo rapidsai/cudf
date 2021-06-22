@@ -1,6 +1,5 @@
 
 #include <cudf/column/column_view.hpp>
-#include <cudf/scalar/scalar.hpp>
 
 namespace cudf {
 
