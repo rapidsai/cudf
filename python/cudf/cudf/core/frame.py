@@ -41,18 +41,6 @@ from cudf.utils.dtypes import (
 
 T = TypeVar("T", bound="Frame")
 
-_truediv_int_dtype_corrections = {
-    np.int8: np.float32,
-    np.int16: np.float32,
-    np.int32: np.float32,
-    np.int64: np.float64,
-    np.uint8: np.float32,
-    np.uint16: np.float32,
-    np.uint32: np.float64,
-    np.uint64: np.float64,
-    np.bool_: np.float32,
-}
-
 
 class Frame(libcudf.table.Table):
     """
@@ -3397,9 +3385,17 @@ class Frame(libcudf.table.Table):
                     fn_apply = "div"
 
                 # Division with integer types results in a suitable float.
-                truediv_type = _truediv_int_dtype_corrections.get(
-                    left_column.dtype.type
-                )
+                truediv_type = {
+                    np.int8: np.float32,
+                    np.int16: np.float32,
+                    np.int32: np.float32,
+                    np.int64: np.float64,
+                    np.uint8: np.float32,
+                    np.uint16: np.float32,
+                    np.uint32: np.float64,
+                    np.uint64: np.float64,
+                    np.bool_: np.float32,
+                }.get(left_column.dtype.type)
                 if truediv_type is not None:
                     left_column = left_column.astype(truediv_type)
 

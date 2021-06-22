@@ -57,38 +57,6 @@ from cudf.utils.utils import GetAttrGetItemMixin
 T = TypeVar("T", bound="DataFrame")
 
 
-_reverse_op = {
-    "add": "radd",
-    "radd": "add",
-    "sub": "rsub",
-    "rsub": "sub",
-    "mul": "rmul",
-    "rmul": "mul",
-    "mod": "rmod",
-    "rmod": "mod",
-    "pow": "rpow",
-    "rpow": "pow",
-    "floordiv": "rfloordiv",
-    "rfloordiv": "floordiv",
-    "truediv": "rtruediv",
-    "rtruediv": "truediv",
-    "__add__": "__radd__",
-    "__radd__": "__add__",
-    "__sub__": "__rsub__",
-    "__rsub__": "__sub__",
-    "__mul__": "__rmul__",
-    "__rmul__": "__mul__",
-    "__mod__": "__rmod__",
-    "__rmod__": "__mod__",
-    "__pow__": "__rpow__",
-    "__rpow__": "__pow__",
-    "__floordiv__": "__rfloordiv__",
-    "__rfloordiv__": "__floordiv__",
-    "__truediv__": "__rtruediv__",
-    "__rtruediv__": "__truediv__",
-}
-
-
 _cupy_nan_methods_map = {
     "min": "nanmin",
     "max": "nanmax",
