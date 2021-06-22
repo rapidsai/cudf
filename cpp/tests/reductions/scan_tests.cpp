@@ -99,7 +99,7 @@ struct ScanTest : public cudf::test::BaseFixture {
                  null_policy null_handling,
                  numeric::scale_type scale)
   {
-    bool const do_print = false;
+    bool const do_print = false;  // set true for debugging
 
     auto col_in = this->make_column(v, b, scale);
     std::unique_ptr<cudf::column> col_out;
@@ -111,15 +111,16 @@ struct ScanTest : public cudf::test::BaseFixture {
       expected_col_out = this->make_expected(v, b, agg, inclusive, null_handling, scale);
       col_out          = cudf::scan(*col_in, agg, inclusive, null_handling);
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_col_out, *col_out);
-    }
 
-    if constexpr (do_print) {
-      auto int_values      = cudf::test::to_host<T>(*col_in);
-      auto expected_values = cudf::test::to_host<T>(*expected_col_out);
-      auto host_result     = cudf::test::to_host<T>(*col_out);
-      this->print(std::get<0>(int_values), "input = ");
-      this->print(std::get<0>(expected_values), "expected = ");
-      this->print(std::get<0>(host_result), "result = ");
+      if constexpr (do_print) {
+        std::cout << "input = ";
+        cudf::test::print(*col_in);
+        std::cout << "expected = ";
+        cudf::test::print(*expected_col_out);
+        std::cout << "result = ";
+        cudf::test::print(*col_out);
+        std::cout << std::endl;
+      }
     }
   }
 
@@ -286,14 +287,6 @@ struct ScanTest : public cudf::test::BaseFixture {
 
     return nullable ? this->make_column(expected, b_out, scale)
                     : this->make_column(expected, {}, scale);
-  }
-
-  template <typename Ti>
-  void print(thrust::host_vector<Ti> const& v, const char* msg = nullptr)
-  {
-    std::cout << msg << " {";
-    std::for_each(v.begin(), v.end(), [](Ti i) { std::cout << ", " << i; });
-    std::cout << "}" << std::endl;
   }
 };
 
