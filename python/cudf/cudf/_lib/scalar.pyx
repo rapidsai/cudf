@@ -18,7 +18,7 @@ from libcpp.utility cimport move
 from libcpp cimport bool
 
 import cudf
-from cudf.core.dtypes import ListDtype
+from cudf.core.dtypes import ListDtype, StructDtype
 from cudf._lib.types import (
     cudf_to_np_types,
     duration_unit_map
@@ -174,6 +174,12 @@ cdef class DeviceScalar:
             raise TypeError(
                 "Must pass a dtype when constructing from a fixed-point scalar"
             )
+        elif cdtype.id() == libcudf_types.STRUCT:
+            struct_table_view = (<struct_scalar*>s.get_raw_ptr())[0].view()
+            s._dtype = StructDtype({
+                str(i): dtype_from_column_view(struct_table_view.column(i))
+                for i in range(struct_table_view.num_columns())
+            })
         elif cdtype.id() == libcudf_types.LIST:
             if (
                 <list_scalar*>s.get_raw_ptr()
@@ -304,6 +310,15 @@ cdef _get_py_dict_from_struct(unique_ptr[scalar]& s):
         return cudf.NA
 
     cdef table_view struct_table_view = (<struct_scalar*>s.get()).view()
+    columns = list(range(struct_table_view.num_columns()))
+
+    cdef Table to_arrow_table = Table.from_table_view(
+        struct_table_view,
+        None,
+        column_names=columns
+    )
+
+    # arrow_table = to_arrow(to_arrow_table, [columns + [[]]])
     '''
     cdef Table to_arrow_table = Table.from_table_view(struct_col_view, None)
 
