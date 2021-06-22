@@ -170,6 +170,11 @@ def read_orc_statistics(
 def _filter_stripes(
     filters, filepath_or_buffer, stripes=None, skip_rows=None, num_rows=None
 ):
+    # Multiple sources are passed as a list. If a single source is passed,
+    # wrap it in a list for unified processing downstream.
+    if not is_list_like(filepath_or_buffer):
+        filepath_or_buffer = [filepath_or_buffer]
+
     # Prepare filters
     filters = ioutils._prepare_filters(filters)
 
@@ -246,6 +251,19 @@ def read_orc(
     # wrap it in a list for unified processing downstream.
     if not is_list_like(filepath_or_buffer):
         filepath_or_buffer = [filepath_or_buffer]
+
+    # Each source must have a correlating stripe list. If a single stripe list
+    # is provided rather than a list of list of stripes then extrapolate that
+    # stripe list across all input sources
+    if stripes is not None:
+        if any(not isinstance(stripe, list) for stripe in stripes):
+            stripes = [stripes]
+
+        # Must ensure a stripe for each source is specified, unless None
+        if len(stripes) is not len(filepath_or_buffer):
+            raise ValueError(
+                "A list of stripes must be provided for each input source"
+            )
 
     filepaths_or_buffers = []
     for source in filepath_or_buffer:
